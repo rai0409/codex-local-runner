@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+tasks/latest_task.json
+tasks/latest_prompt.txt
+tasks/runs/

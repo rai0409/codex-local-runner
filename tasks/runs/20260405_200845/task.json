@@ -1,8 +1,0 @@
-{
-  "repo_path": "/home/rai/codex-local-runner",
-  "goal": "smoke test",
-  "notes": "",
-  "allowed_files": [],
-  "forbidden_files": [],
-  "validation_commands": []
-}
