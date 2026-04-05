@@ -1,0 +1,10 @@
+{
+  "repo_path": "/home/rai/codex-local-runner",
+  "goal": "smoke test",
+  "notes": "rerun after codex exec fix",
+  "allowed_files": [
+    "run_codex.py"
+  ],
+  "forbidden_files": [],
+  "validation_commands": []
+}

@@ -1,0 +1,18 @@
+{
+  "timestamp": "20260405_214330",
+  "repo_path": "/home/rai/codex-local-runner",
+  "run_dir": "/home/rai/codex-local-runner/tasks/runs/20260405_214330",
+  "started_at": "2026-04-05T21:43:30",
+  "finished_at": "2026-04-05T21:43:30",
+  "command": [
+    "codex",
+    "exec",
+    "You are Codex running locally in a user-specified repository.\n\nFollow the goal exactly and keep changes minimal.\nRespect allowed and forbidden file constraints.\nRun listed validation commands when practical.\nExplain what you changed and any remaining risks.\n\n## Task Input\nRepository path:\n/home/rai/codex-local-runner\n\nGoal:\nsmoke test\n\nAllowed files:\n- run_codex.py\n\nForbidden files:\n- none\n\nValidation commands:\n- none\n\nNotes:\nrerun after codex exec fix\n"
+  ],
+  "cwd": "/home/rai/codex-local-runner",
+  "codex_path": "/home/rai/.npm-global/bin/codex",
+  "success": false,
+  "return_code": 1,
+  "timed_out": false,
+  "timeout_seconds": 600
+}

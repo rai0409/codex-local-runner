@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Codex Local Runner</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      label {
+        display: block;
+        margin-top: 12px;
+        font-weight: 600;
+      }
+      input,
+      textarea,
+      button {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        margin-top: 6px;
+      }
+      textarea {
+        min-height: 120px;
+      }
+      .messages {
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px solid #ccc;
+      }
+      .result {
+        margin-top: 16px;
+        padding: 10px;
+        border: 1px solid #999;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        border: 1px solid #ddd;
+        padding: 8px;
+        background: #f9f9f9;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Codex Local Runner</h1>
+
+    {% if errors %}
+    <div class="messages">
+      <strong>Errors</strong>
+      <ul>
+        {% for item in errors %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if warnings %}
+    <div class="messages">
+      <strong>Warnings</strong>
+      <ul>
+        {% for item in warnings %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/run">
+      <label for="repo_path">repo_path</label>
+      <input id="repo_path" name="repo_path" type="text" value="{{ form_data.repo_path }}" />
+
+      <label for="goal">goal</label>
+      <textarea id="goal" name="goal" rows="8">{{ form_data.goal }}</textarea>
+
+      <label for="allowed_files">allowed_files (one per line)</label>
+      <textarea id="allowed_files" name="allowed_files" rows="6">{{ form_data.allowed_files }}</textarea>
+
+      <label for="forbidden_files">forbidden_files (one per line)</label>
+      <textarea id="forbidden_files" name="forbidden_files" rows="6">{{ form_data.forbidden_files }}</textarea>
+
+      <label for="validation_commands">validation_commands (one per line)</label>
+      <textarea id="validation_commands" name="validation_commands" rows="6">{{ form_data.validation_commands }}</textarea>
+
+      <label for="notes">notes</label>
+      <textarea id="notes" name="notes" rows="8">{{ form_data.notes }}</textarea>
+
+      <button type="submit">Run Codex</button>
+    </form>
+
+    {% if result %}
+    <div class="result">
+      <h2>Run Result</h2>
+      <p>status: {{ "success" if result.success else "failure" }}</p>
+      <p>return_code: {{ result.return_code }}</p>
+      <p>run_directory: {{ result.run_dir or "(not created)" }}</p>
+      <p>stdout_path: {{ result.stdout_path or "(not created)" }}</p>
+      <p>stderr_path: {{ result.stderr_path or "(not created)" }}</p>
+
+      {% if result.error %}
+      <p><strong>error:</strong> {{ result.error }}</p>
+      {% endif %}
+
+      <h3>Latest Prompt</h3>
+      <pre>{{ latest_prompt }}</pre>
+    </div>
+    {% endif %}
+  </body>
+</html>
