@@ -45,7 +45,7 @@ http://<your-computer-ip>:8765
 2. Saves latest task to `tasks/latest_task.json`.
 3. Builds prompt and saves to `tasks/latest_prompt.txt`.
 4. If `codex` is available in PATH, creates run artifacts under `tasks/runs/YYYYMMDD_HHMMSS/`.
-5. Runs `codex -` with prompt passed through stdin using `cwd=repo_path` (with a timeout).
+5. Runs `codex exec` non-interactively using the generated prompt and `cwd=repo_path` (with a timeout).
 6. Saves:
    - `task.json`
    - `prompt.txt`
@@ -54,3 +54,10 @@ http://<your-computer-ip>:8765
    - `meta.json`
 
 If `codex` is missing from PATH, the app shows an error and does not create a run directory.
+
+## Verified Current Status
+
+- Mobile and PC access confirmed
+- Mobile form submission confirmed
+- Non-interactive Codex execution confirmed via `codex exec`
+- Per-run artifacts are saved under `tasks/runs/YYYYMMDD_.../`
