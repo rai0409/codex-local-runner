@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "task_statuses": [
+    "pending",
+    "accepted",
+    "failed"
+  ],
+  "routing": [
+    {
+      "repo": "codex-local-runner",
+      "responsibility": "control-plane / orchestration kernel"
+    },
+    {
+      "repo": "internal_automation",
+      "responsibility": "automation / notification / review queue"
+    },
+    {
+      "repo": "chatbot",
+      "responsibility": "retrieval / evidence / citation-backed lookup"
+    },
+    {
+      "repo": "contract-ingest",
+      "responsibility": "document parsing / extraction"
+    },
+    {
+      "repo": "topix1000_disclosure_platform",
+      "responsibility": "financial ETL / disclosure ingestion"
+    },
+    {
+      "repo": "booking_zoom_connect",
+      "responsibility": "booking backend / workflow state handling"
+    },
+    {
+      "repo": "ai_router",
+      "responsibility": "routing logic / policy experimentation"
+    },
+    {
+      "repo": "Jstocks-prediction",
+      "responsibility": "financial prediction workflow"
+    },
+    {
+      "repo": "ccr-python",
+      "responsibility": "code execution / runtime support"
+    }
+  ]
+}

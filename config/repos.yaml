@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "repos": [
+    {
+      "name": "codex-local-runner",
+      "logical_role": "self-managed control-plane kernel"
+    },
+    {
+      "name": "internal_automation",
+      "logical_role": "managed repository"
+    },
+    {
+      "name": "chatbot",
+      "logical_role": "managed repository"
+    },
+    {
+      "name": "contract-ingest",
+      "logical_role": "managed repository"
+    },
+    {
+      "name": "topix1000_disclosure_platform",
+      "logical_role": "managed repository"
+    },
+    {
+      "name": "booking_zoom_connect",
+      "logical_role": "managed repository"
+    },
+    {
+      "name": "ai_router",
+      "logical_role": "managed repository"
+    },
+    {
+      "name": "Jstocks-prediction",
+      "logical_role": "managed repository"
+    },
+    {
+      "name": "ccr-python",
+      "logical_role": "managed repository"
+    }
+  ]
+}

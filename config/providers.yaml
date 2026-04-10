@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "providers": [
+    {
+      "name": "codex_cli",
+      "adapter": "adapters.codex_cli.CodexCliAdapter",
+      "dispatch_mode": "orchestration_accept_only",
+      "enabled": true
+    },
+    {
+      "name": "chatgpt_tasks",
+      "adapter": "adapters.chatgpt_tasks.ChatgptTasksAdapter",
+      "dispatch_mode": "orchestration_accept_only",
+      "enabled": true
+    },
+    {
+      "name": "local_llm",
+      "adapter": "adapters.local_llm.LocalLlmAdapter",
+      "dispatch_mode": "orchestration_accept_only",
+      "enabled": true
+    }
+  ]
+}

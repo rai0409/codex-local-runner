@@ -1,63 +1,74 @@
 # codex-local-runner
 
-Minimal local-only Flask app to submit a Codex task from a phone or PC browser, build a prompt, and run Codex CLI inside a target repository.
+`codex-local-runner` is a local-only repository.
+In Phase 1, it also works as a logical **control-plane** kernel for coarse-grained orchestration.
 
-## Purpose
+## Scope
 
-- Personal local tool
-- Single-user only
-- No database, auth, Docker, or external integrations
-- Easy to inspect and modify
+- Keep existing local Flask runner behavior (`app.py`) for direct Codex execution.
+- Add a provider-agnostic orchestration skeleton under `orchestrator/` and `adapters/`.
+- Keep dispatch semantics intake-only in Phase 1.
 
-## Prerequisites
+## Current Architecture (Phase 1)
 
-- Python 3.11+
-- Codex CLI installed and available as `codex` in your PATH
+1. Provider adapter layer: `adapters/*`
+2. Task bus layer: `orchestrator/task_bus.py`
+3. Provider config: `config/providers.yaml`
+4. Routing config: `config/routing_rules.yaml`
+5. Managed repos config: `config/repos.yaml`
+6. CLI entrypoint: `python -m orchestrator.main`
 
-## Setup
+Registered Phase 1 adapters:
+- `codex_cli`
+- `chatgpt_tasks`
+- `local_llm`
+
+## Task Status Policy
+
+Phase 1 allows only:
+
+- `pending`
+- `accepted`
+- `failed`
+
+`accepted` means orchestration intake accepted. It does not mean provider execution success.
+
+## Dispatch CLI
+
+Help:
 
 ```bash
-cd codex-local-runner
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+python -m orchestrator.main --help
 ```
 
-## Run
+Example:
 
 ```bash
-python app.py
+python -m orchestrator.main \
+  --repo codex-local-runner \
+  --task-type orchestration \
+  --goal "phase1 dispatch artifact check" \
+  --provider codex_cli
 ```
 
-The app listens on `0.0.0.0:8765`.
+Artifacts are written under `tasks/control_plane_dispatches/<timestamp>/`:
 
-## Access From Same LAN
+- `request.json`
+- `result.json`
 
-Open from another device on the same LAN:
+`request.json` and `result.json` include `job_id`.
+`result.json` also includes `dispatcher` and `artifacts`.
+Provider resolution is validated against `config/providers.yaml` before acceptance.
+Unknown, disabled, or unsupported providers fail explicitly with `status=failed`.
 
-```text
-http://<your-computer-ip>:8765
-```
+## Existing Flask Runner (unchanged)
 
-## What Happens On Submit
+- Run: `python app.py`
+- Listens on `0.0.0.0:8765`
+- Browser form submission persists task/prompt and runs `codex exec` via existing flow
 
-1. Validates `repo_path` and `goal`, checks repo path existence, and warns when `.git` is missing.
-2. Saves latest task to `tasks/latest_task.json`.
-3. Builds prompt and saves to `tasks/latest_prompt.txt`.
-4. If `codex` is available in PATH, creates run artifacts under `tasks/runs/YYYYMMDD_HHMMSS/`.
-5. Runs `codex exec` non-interactively using the generated prompt and `cwd=repo_path` (with a timeout).
-6. Saves:
-   - `task.json`
-   - `prompt.txt`
-   - `stdout.txt`
-   - `stderr.txt`
-   - `meta.json`
+## License
 
-If `codex` is missing from PATH, the app shows an error and does not create a run directory.
-
-## Verified Current Status
-
-- Mobile and PC access confirmed
-- Mobile form submission confirmed
-- Non-interactive Codex execution confirmed via `codex exec`
-- Per-run artifacts are saved under `tasks/runs/YYYYMMDD_.../`
+This repository is source-available for personal study, research, and evaluation.
+Commercial use requires prior written permission and a separate paid license.
+See `LICENSE` for details.
