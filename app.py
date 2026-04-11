@@ -28,13 +28,22 @@ def _split_lines(value: str) -> list[str]:
     return [line.strip() for line in value.splitlines() if line.strip()]
 
 
-def _verify_not_run(reason: str, summary: str) -> dict[str, object]:
+def _not_run_reason_for_execution_status(execution_status: str) -> str:
+    if execution_status == "not_started":
+        return "validation_not_run_execution_status_not_started"
+    if execution_status == "timed_out":
+        return "validation_not_run_execution_status_timed_out"
+    if execution_status == "failed":
+        return "validation_not_run_execution_status_failed"
+    return "validation_not_run_execution_status_unknown"
+
+
+def _verify_not_run(reason: str) -> dict[str, object]:
     return {
         "status": "not_run",
         "success": True,
         "commands": [],
         "error": "",
-        "summary": summary,
         "reason": reason,
     }
 
@@ -159,8 +168,7 @@ def run():
         else:
             non_completed_status = execution_status or "unknown"
             result["verify"] = _verify_not_run(
-                reason=f"execution_status_{non_completed_status}",
-                summary=f"validation not run: execution status is {non_completed_status}.",
+                reason=_not_run_reason_for_execution_status(non_completed_status),
             )
     finally:
         if worktree_result["cleanup_needed"]:

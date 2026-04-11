@@ -36,7 +36,7 @@ class ValidationResult(TypedDict, total=False):
     commands: list[ValidationCommandResult]
     command_results: list[ValidationObservedCommandResult]
     error: str
-    summary: ValidationSummary | str
+    summary: ValidationSummary
     reason: str
 
 
@@ -47,8 +47,7 @@ def run_validation_commands(validation_commands: list[str], cwd: str) -> Validat
             "success": True,
             "commands": [],
             "error": "",
-            "summary": "validation not run: no validation commands provided.",
-            "reason": "no_validation_commands",
+            "reason": "validation_not_run_execution_status_unknown",
         }
 
     command_results: list[ValidationCommandResult] = []
@@ -96,7 +95,7 @@ def run_validation_commands(validation_commands: list[str], cwd: str) -> Validat
             "command_results": observed_command_results,
             "error": f"{failed_count} validation command(s) failed.",
             "summary": summary,
-            "reason": "",
+            "reason": "validation_failed",
         }
 
     return {
@@ -106,5 +105,5 @@ def run_validation_commands(validation_commands: list[str], cwd: str) -> Validat
         "command_results": observed_command_results,
         "error": "",
         "summary": summary,
-        "reason": "",
+        "reason": "validation_passed",
     }

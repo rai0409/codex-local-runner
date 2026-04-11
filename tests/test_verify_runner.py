@@ -20,11 +20,11 @@ class ValidationRunnerTests(unittest.TestCase):
                 "success": True,
                 "commands": [],
                 "error": "",
-                "summary": "validation not run: no validation commands provided.",
-                "reason": "no_validation_commands",
+                "reason": "validation_not_run_execution_status_unknown",
             },
         )
         self.assertNotIn("command_results", result)
+        self.assertNotIn("summary", result)
 
     def test_one_successful_validation_command_returns_passed(self) -> None:
         with mock.patch(
@@ -49,7 +49,7 @@ class ValidationRunnerTests(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["error"], "")
         self.assertEqual(result["summary"], {"total": 1, "passed": 1, "failed": 0})
-        self.assertEqual(result["reason"], "")
+        self.assertEqual(result["reason"], "validation_passed")
         self.assertEqual(len(result["commands"]), 1)
         self.assertEqual(
             set(result["commands"][0].keys()),
@@ -88,7 +88,7 @@ class ValidationRunnerTests(unittest.TestCase):
         self.assertFalse(result["commands"][0]["success"])
         self.assertEqual(result["error"], "1 validation command(s) failed.")
         self.assertEqual(result["summary"], {"total": 1, "passed": 0, "failed": 1})
-        self.assertEqual(result["reason"], "")
+        self.assertEqual(result["reason"], "validation_failed")
         self.assertEqual(result["command_results"][0]["status"], "failed")
 
     def test_validation_commands_continue_in_order(self) -> None:
@@ -119,6 +119,7 @@ class ValidationRunnerTests(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertEqual([item["command"] for item in result["command_results"]], ["cmd1", "cmd2"])
         self.assertEqual(result["summary"], {"total": 2, "passed": 1, "failed": 1})
+        self.assertEqual(result["reason"], "validation_failed")
         self.assertEqual(
             set(result.keys()),
             {"status", "success", "commands", "command_results", "error", "summary", "reason"},
