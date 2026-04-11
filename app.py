@@ -7,6 +7,8 @@ from flask import Flask, render_template, request
 
 from prompt_builder import build_prompt
 from run_codex import run_codex
+from workspace.worktree import cleanup_git_worktree
+from workspace.worktree import prepare_git_worktree
 
 app = Flask(__name__)
 
@@ -52,7 +54,7 @@ def _validate_task(task: dict) -> tuple[list[str], list[str]]:
         if not repo_path.exists():
             errors.append("repo_path does not exist.")
         elif not (repo_path / ".git").exists():
-            warnings.append("Warning: .git was not found in repo_path.")
+            errors.append("repo_path must be a git repository (.git directory is required).")
 
     return errors, warnings
 
@@ -112,7 +114,33 @@ def run():
     )
     LATEST_PROMPT_PATH.write_text(prompt, encoding="utf-8")
 
-    result = run_codex(task=task, prompt=prompt, work_root=str(TASKS_DIR / "runs"))
+    source_repo_path = str(task.get("repo_path", "")).strip()
+    worktree_result = prepare_git_worktree(
+        source_repo_path=source_repo_path,
+        worktree_parent=str(TASKS_DIR / "worktrees"),
+    )
+    if not worktree_result["created"]:
+        errors = [worktree_result["error"] or "failed to prepare git worktree"]
+        return render_template(
+            "index.html",
+            form_data=form_data,
+            errors=errors,
+            warnings=warnings,
+        )
+
+    run_task = dict(task)
+    run_task["repo_path"] = worktree_result["worktree_path"]
+    try:
+        result = run_codex(task=run_task, prompt=prompt, work_root=str(TASKS_DIR / "runs"))
+    finally:
+        if worktree_result["cleanup_needed"]:
+            cleanup_result = cleanup_git_worktree(
+                source_repo_path=source_repo_path,
+                worktree_path=worktree_result["worktree_path"],
+                branch_name=worktree_result["branch_name"],
+            )
+            if cleanup_result["error"]:
+                warnings.append(f"Warning: failed to cleanup worktree: {cleanup_result['error']}")
 
     return render_template(
         "index.html",
