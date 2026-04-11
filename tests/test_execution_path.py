@@ -320,6 +320,11 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(len(output_dirs), 1)
         return json.loads((output_dirs[0] / "result.json").read_text(encoding="utf-8"))
 
+    def _read_single_request(self, output_root: str) -> dict:
+        output_dirs = list(Path(output_root).iterdir())
+        self.assertEqual(len(output_dirs), 1)
+        return json.loads((output_dirs[0] / "request.json").read_text(encoding="utf-8"))
+
     def test_accepted_status_is_kept_when_execution_fails(self) -> None:
         with tempfile.TemporaryDirectory() as output_root:
             with mock.patch(
@@ -382,6 +387,63 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["execution"]["status"], "not_started")
+
+    def test_validation_commands_are_routed_to_execution_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                    "return_code": 0,
+                    "verify": {
+                        "status": "not_run",
+                        "success": True,
+                        "commands": [],
+                        "error": "",
+                        "summary": "validation not run: no validation commands provided.",
+                        "reason": "no_validation_commands",
+                    },
+                },
+            ) as execute_mock:
+                with mock.patch(
+                    "sys.argv",
+                    [
+                        "main.py",
+                        "--repo",
+                        "codex-local-runner",
+                        "--task-type",
+                        "orchestration",
+                        "--goal",
+                        "verify semantics",
+                        "--provider",
+                        "codex_cli",
+                        "--output-root",
+                        output_root,
+                        "--validation-command",
+                        "echo one",
+                        "--validation-command",
+                        "echo two",
+                    ],
+                ):
+                    rc = orchestrator_main.main()
+
+            request_payload = self._read_single_request(output_root)
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        execute_mock.assert_called_once()
+        self.assertEqual(
+            execute_mock.call_args.args[0]["validation_commands"],
+            ["echo one", "echo two"],
+        )
+        self.assertEqual(request_payload["validation_commands"], ["echo one", "echo two"])
+        self.assertNotIn("validation_command", request_payload)
 
 
 @unittest.skipUnless(importlib.util.find_spec("flask") is not None, "flask is not installed")

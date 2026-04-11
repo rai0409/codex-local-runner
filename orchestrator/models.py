@@ -15,4 +15,5 @@ class DispatchRequest:
     task_type: str
     goal: str
     provider: str
+    validation_commands: list[str]
     metadata: dict[str, Any]

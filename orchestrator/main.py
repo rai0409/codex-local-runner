@@ -23,6 +23,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repos-config", default="config/repos.yaml")
     parser.add_argument("--output-root", default="tasks/control_plane_dispatches")
     parser.add_argument("--execution-repo-path", default=".")
+    parser.add_argument(
+        "--validation-command",
+        dest="validation_commands",
+        action="append",
+        default=[],
+    )
     return parser
 
 
@@ -32,6 +38,9 @@ def _write_json(path: Path, payload: dict) -> None:
 
 def main() -> int:
     args = _build_parser().parse_args()
+    validation_commands = [
+        str(command).strip() for command in args.validation_commands if str(command).strip()
+    ]
 
     providers = load_yaml_file(args.providers_config)
     routing = load_yaml_file(args.routing_config)
@@ -54,6 +63,7 @@ def main() -> int:
         task_type=args.task_type,
         goal=args.goal,
         provider=args.provider,
+        validation_commands=validation_commands,
         metadata={
             "routing_rules_version": routing.get("version"),
             "repos_version": repos.get("version"),
@@ -67,6 +77,7 @@ def main() -> int:
         "task_type": request.task_type,
         "goal": request.goal,
         "provider": request.provider,
+        "validation_commands": request.validation_commands,
         "metadata": request.metadata,
     }
     request_path = out_dir / "request.json"
@@ -110,6 +121,7 @@ def main() -> int:
                     "prompt": request.goal,
                     "repo_path": args.execution_repo_path,
                     "work_dir": str(out_dir),
+                    "validation_commands": request.validation_commands,
                 }
                 execution_result = resolved_adapter.execute(execution_payload)
             except NotImplementedError as exc:
