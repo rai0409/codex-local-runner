@@ -17,25 +17,22 @@ class CodexCliExecutionTests(unittest.TestCase):
         adapter = CodexCliAdapter()
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_dir:
             execution_dir = Path(work_dir) / "execution_runs" / "20260101_000000"
-            execution_dir.mkdir(parents=True, exist_ok=True)
-            meta_path = execution_dir / "meta.json"
-            meta_path.write_text(
-                json.dumps(
-                    {
-                        "started_at": "2026-01-01T00:00:00",
-                        "finished_at": "2026-01-01T00:00:01",
-                    }
-                ),
-                encoding="utf-8",
-            )
             with mock.patch(
                 "adapters.codex_cli.run_codex",
                 return_value={
+                    "status": "completed",
                     "success": True,
                     "return_code": 0,
+                    "started_at": "2026-01-01T00:00:00",
+                    "finished_at": "2026-01-01T00:00:01",
+                    "artifacts": [
+                        {"name": "stdout", "path": str(execution_dir / "stdout.txt")},
+                        {"name": "stderr", "path": str(execution_dir / "stderr.txt")},
+                        {"name": "meta", "path": str(execution_dir / "meta.json")},
+                    ],
                     "stdout_path": str(execution_dir / "stdout.txt"),
                     "stderr_path": str(execution_dir / "stderr.txt"),
-                    "meta_path": str(meta_path),
+                    "meta_path": str(execution_dir / "meta.json"),
                     "error": "",
                 },
             ):
@@ -49,6 +46,8 @@ class CodexCliExecutionTests(unittest.TestCase):
                 )
 
         self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["started_at"], "2026-01-01T00:00:00")
+        self.assertEqual(result["finished_at"], "2026-01-01T00:00:01")
         self.assertIsNone(result["error"])
         self.assertEqual(len(result["artifacts"]), 3)
 
@@ -58,8 +57,17 @@ class CodexCliExecutionTests(unittest.TestCase):
             with mock.patch(
                 "adapters.codex_cli.run_codex",
                 return_value={
+                    "status": "failed",
                     "success": False,
                     "return_code": 2,
+                    "started_at": "2026-01-01T00:00:00",
+                    "finished_at": "2026-01-01T00:00:01",
+                    "artifacts": [
+                        {
+                            "name": "stderr",
+                            "path": str(Path(work_dir) / "execution_runs" / "stderr.txt"),
+                        }
+                    ],
                     "stdout_path": str(Path(work_dir) / "execution_runs" / "stdout.txt"),
                     "stderr_path": str(Path(work_dir) / "execution_runs" / "stderr.txt"),
                     "meta_path": str(Path(work_dir) / "execution_runs" / "meta.json"),
@@ -76,6 +84,8 @@ class CodexCliExecutionTests(unittest.TestCase):
                 )
 
         self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["started_at"], "2026-01-01T00:00:00")
+        self.assertEqual(result["finished_at"], "2026-01-01T00:00:01")
         self.assertIn("execution failed", result["error"])
 
     def test_stub_adapters_do_not_execute(self) -> None:
