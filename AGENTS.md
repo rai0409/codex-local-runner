@@ -9,10 +9,12 @@
 
 - Do not rename repository/package/import paths/directories.
 - Dispatch is intake-only and may return only `pending`, `accepted`, or `failed`.
+- Top-level `accepted`/`failed` remains orchestration acceptance only.
 - Provider adapters are stubs and must raise `NotImplementedError` when executed.
 - Do not fake provider execution success.
 - Registered adapter stubs: `codex_cli`, `chatgpt_tasks`, `local_llm`.
 - Provider names are resolved through `config/providers.yaml`; invalid providers fail explicitly.
+- PR2 allows minimal `codex_cli` execution result tracking via `result.json.execution`.
 
 ## Managed Repositories
 

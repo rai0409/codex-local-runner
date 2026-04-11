@@ -22,6 +22,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--routing-config", default="config/routing_rules.yaml")
     parser.add_argument("--repos-config", default="config/repos.yaml")
     parser.add_argument("--output-root", default="tasks/control_plane_dispatches")
+    parser.add_argument("--execution-repo-path", default=".")
     return parser
 
 
@@ -87,6 +88,14 @@ def main() -> int:
                 str(request_path),
                 str(result_path),
             ],
+            "execution": {
+                "adapter": request.provider,
+                "status": "not_started",
+                "started_at": None,
+                "finished_at": None,
+                "artifacts": [],
+                "error": str(exc),
+            },
         }
     else:
         request_payload["metadata"]["resolved_adapter"] = resolved_adapter.__class__.__name__
@@ -95,6 +104,42 @@ def main() -> int:
             str(request_path),
             str(result_path),
         ]
+        if result_payload["status"] == "accepted":
+            try:
+                execution_payload = {
+                    "prompt": request.goal,
+                    "repo_path": args.execution_repo_path,
+                    "work_dir": str(out_dir),
+                }
+                execution_result = resolved_adapter.execute(execution_payload)
+            except NotImplementedError as exc:
+                execution_result = {
+                    "adapter": resolved_adapter.name,
+                    "status": "not_implemented",
+                    "started_at": None,
+                    "finished_at": None,
+                    "artifacts": [],
+                    "error": str(exc),
+                }
+            except Exception as exc:
+                execution_result = {
+                    "adapter": resolved_adapter.name,
+                    "status": "failed",
+                    "started_at": None,
+                    "finished_at": None,
+                    "artifacts": [],
+                    "error": f"Unexpected execution error ({type(exc).__name__}): {exc}",
+                }
+        else:
+            execution_result = {
+                "adapter": resolved_adapter.name,
+                "status": "not_started",
+                "started_at": None,
+                "finished_at": None,
+                "artifacts": [],
+                "error": "acceptance failed before execution",
+            }
+        result_payload["execution"] = execution_result
 
     _write_json(request_path, request_payload)
     _write_json(result_path, result_payload)
