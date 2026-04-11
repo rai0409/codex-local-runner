@@ -7,6 +7,7 @@ from flask import Flask, render_template, request
 
 from prompt_builder import build_prompt
 from run_codex import run_codex
+from verify.runner import run_validation_commands
 from workspace.worktree import cleanup_git_worktree
 from workspace.worktree import prepare_git_worktree
 
@@ -25,6 +26,17 @@ TEXT_FIELDS = ("repo_path", "goal", "notes")
 
 def _split_lines(value: str) -> list[str]:
     return [line.strip() for line in value.splitlines() if line.strip()]
+
+
+def _verify_not_run(reason: str, summary: str) -> dict[str, object]:
+    return {
+        "status": "not_run",
+        "success": True,
+        "commands": [],
+        "error": "",
+        "summary": summary,
+        "reason": reason,
+    }
 
 
 def _normalize_form(form_data: dict[str, str]) -> dict:
@@ -132,6 +144,24 @@ def run():
     run_task["repo_path"] = worktree_result["worktree_path"]
     try:
         result = run_codex(task=run_task, prompt=prompt, work_root=str(TASKS_DIR / "runs"))
+        execution_status = str(result.get("status", "")).strip()
+        if execution_status == "completed":
+            raw_validation_commands = task.get("validation_commands", [])
+            validation_commands = (
+                [str(command) for command in raw_validation_commands]
+                if isinstance(raw_validation_commands, list)
+                else []
+            )
+            result["verify"] = run_validation_commands(
+                validation_commands=validation_commands,
+                cwd=worktree_result["worktree_path"],
+            )
+        else:
+            non_completed_status = execution_status or "unknown"
+            result["verify"] = _verify_not_run(
+                reason=f"execution_status_{non_completed_status}",
+                summary=f"validation not run: execution status is {non_completed_status}.",
+            )
     finally:
         if worktree_result["cleanup_needed"]:
             cleanup_result = cleanup_git_worktree(

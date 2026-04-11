@@ -95,39 +95,46 @@ class CodexCliExecutionTests(unittest.TestCase):
                         "error": "",
                     },
                 ):
-                    with mock.patch(
-                        "adapters.codex_cli.run_codex",
-                        return_value={
-                            "status": "failed",
-                            "success": False,
-                            "return_code": 2,
-                            "started_at": "2026-01-01T00:00:00",
-                            "finished_at": "2026-01-01T00:00:01",
-                            "artifacts": [
+                    with mock.patch("adapters.codex_cli.run_validation_commands") as verify_mock:
+                        with mock.patch(
+                            "adapters.codex_cli.run_codex",
+                            return_value={
+                                "status": "failed",
+                                "success": False,
+                                "return_code": 2,
+                                "started_at": "2026-01-01T00:00:00",
+                                "finished_at": "2026-01-01T00:00:01",
+                                "artifacts": [
+                                    {
+                                        "name": "stderr",
+                                        "path": str(Path(work_dir) / "execution_runs" / "stderr.txt"),
+                                    }
+                                ],
+                                "stdout_path": str(Path(work_dir) / "execution_runs" / "stdout.txt"),
+                                "stderr_path": str(Path(work_dir) / "execution_runs" / "stderr.txt"),
+                                "meta_path": str(Path(work_dir) / "execution_runs" / "meta.json"),
+                                "error": "execution failed",
+                            },
+                        ):
+                            result = adapter.execute(
                                 {
-                                    "name": "stderr",
-                                    "path": str(Path(work_dir) / "execution_runs" / "stderr.txt"),
+                                    "prompt": "test prompt",
+                                    "repo_path": repo_dir,
+                                    "work_dir": work_dir,
+                                    "timeout_seconds": 30,
                                 }
-                            ],
-                            "stdout_path": str(Path(work_dir) / "execution_runs" / "stdout.txt"),
-                            "stderr_path": str(Path(work_dir) / "execution_runs" / "stderr.txt"),
-                            "meta_path": str(Path(work_dir) / "execution_runs" / "meta.json"),
-                            "error": "execution failed",
-                        },
-                    ):
-                        result = adapter.execute(
-                            {
-                                "prompt": "test prompt",
-                                "repo_path": repo_dir,
-                                "work_dir": work_dir,
-                                "timeout_seconds": 30,
-                            }
-                        )
+                            )
 
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["started_at"], "2026-01-01T00:00:00")
         self.assertEqual(result["finished_at"], "2026-01-01T00:00:01")
         self.assertIn("execution failed", result["error"])
+        verify_mock.assert_not_called()
+        self.assertEqual(result["verify"]["status"], "not_run")
+        self.assertEqual(
+            set(result["verify"].keys()),
+            {"status", "success", "commands", "error", "summary", "reason"},
+        )
 
     def test_codex_cli_execute_uses_prepared_worktree_path(self) -> None:
         adapter = CodexCliAdapter()
@@ -153,27 +160,47 @@ class CodexCliExecutionTests(unittest.TestCase):
                     },
                 ) as cleanup_mock:
                     with mock.patch(
-                        "adapters.codex_cli.run_codex",
+                        "adapters.codex_cli.run_validation_commands",
                         return_value={
-                            "status": "completed",
+                            "status": "passed",
                             "success": True,
-                            "return_code": 0,
-                            "started_at": "2026-01-01T00:00:00",
-                            "finished_at": "2026-01-01T00:00:01",
-                            "artifacts": [],
-                            "stdout_path": "",
-                            "stderr_path": "",
-                            "meta_path": "",
+                            "commands": [
+                                {
+                                    "command": "echo verify",
+                                    "return_code": 0,
+                                    "stdout": "ok\n",
+                                    "stderr": "",
+                                    "success": True,
+                                }
+                            ],
                             "error": "",
+                            "summary": "all validation commands passed.",
+                            "reason": "",
                         },
-                    ) as run_codex_mock:
-                        result = adapter.execute(
-                            {
-                                "prompt": "test prompt",
-                                "repo_path": "/source/repo",
-                                "work_dir": work_dir,
-                            }
-                        )
+                    ) as verify_mock:
+                        with mock.patch(
+                            "adapters.codex_cli.run_codex",
+                            return_value={
+                                "status": "completed",
+                                "success": True,
+                                "return_code": 0,
+                                "started_at": "2026-01-01T00:00:00",
+                                "finished_at": "2026-01-01T00:00:01",
+                                "artifacts": [],
+                                "stdout_path": "",
+                                "stderr_path": "",
+                                "meta_path": "",
+                                "error": "",
+                            },
+                        ) as run_codex_mock:
+                            result = adapter.execute(
+                                {
+                                    "prompt": "test prompt",
+                                    "repo_path": "/source/repo",
+                                    "work_dir": work_dir,
+                                    "validation_commands": ["echo verify"],
+                                }
+                            )
 
         prepare_mock.assert_called_once_with(
             source_repo_path="/source/repo",
@@ -189,7 +216,12 @@ class CodexCliExecutionTests(unittest.TestCase):
             worktree_path="/prepared/worktree",
             branch_name="codex-run/20260101_000000",
         )
+        verify_mock.assert_called_once_with(
+            validation_commands=["echo verify"],
+            cwd="/prepared/worktree",
+        )
         self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["verify"]["status"], "passed")
 
     def test_codex_cli_execute_fails_when_worktree_preparation_fails(self) -> None:
         adapter = CodexCliAdapter()
@@ -205,18 +237,75 @@ class CodexCliExecutionTests(unittest.TestCase):
                     "error": "source repo path is not a git working tree: not a git repository",
                 },
             ):
-                with mock.patch("adapters.codex_cli.run_codex") as run_codex_mock:
-                    result = adapter.execute(
-                        {
-                            "prompt": "test prompt",
-                            "repo_path": "/source/repo",
-                            "work_dir": work_dir,
-                        }
-                    )
+                with mock.patch("adapters.codex_cli.run_validation_commands") as verify_mock:
+                    with mock.patch("adapters.codex_cli.run_codex") as run_codex_mock:
+                        result = adapter.execute(
+                            {
+                                "prompt": "test prompt",
+                                "repo_path": "/source/repo",
+                                "work_dir": work_dir,
+                            }
+                        )
 
         run_codex_mock.assert_not_called()
+        verify_mock.assert_not_called()
         self.assertEqual(result["status"], "failed")
         self.assertIn("not a git working tree", result["error"])
+        self.assertEqual(result["verify"]["status"], "not_run")
+        self.assertEqual(result["verify"]["reason"], "worktree_prepare_failed")
+
+    def test_codex_cli_execute_timed_out_sets_verify_not_run(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_dir:
+            with mock.patch(
+                "adapters.codex_cli.prepare_git_worktree",
+                return_value={
+                    "source_repo_path": repo_dir,
+                    "worktree_path": "/prepared/worktree",
+                    "branch_name": "codex-run/20260101_000000",
+                    "created": True,
+                    "cleanup_needed": True,
+                    "error": "",
+                },
+            ):
+                with mock.patch(
+                    "adapters.codex_cli.cleanup_git_worktree",
+                    return_value={
+                        "worktree_path": "/prepared/worktree",
+                        "branch_name": "codex-run/20260101_000000",
+                        "cleaned": True,
+                        "error": "",
+                    },
+                ):
+                    with mock.patch("adapters.codex_cli.run_validation_commands") as verify_mock:
+                        with mock.patch(
+                            "adapters.codex_cli.run_codex",
+                            return_value={
+                                "status": "timed_out",
+                                "success": False,
+                                "return_code": None,
+                                "started_at": "2026-01-01T00:00:00",
+                                "finished_at": "2026-01-01T00:10:00",
+                                "artifacts": [],
+                                "stdout_path": "",
+                                "stderr_path": "",
+                                "meta_path": "",
+                                "error": "timed out",
+                            },
+                        ):
+                            result = adapter.execute(
+                                {
+                                    "prompt": "test prompt",
+                                    "repo_path": repo_dir,
+                                    "work_dir": work_dir,
+                                    "validation_commands": ["echo verify"],
+                                }
+                            )
+
+        verify_mock.assert_not_called()
+        self.assertEqual(result["status"], "timed_out")
+        self.assertEqual(result["verify"]["status"], "not_run")
+        self.assertEqual(result["verify"]["reason"], "execution_status_timed_out")
 
     def test_stub_adapters_do_not_execute(self) -> None:
         with self.assertRaises(NotImplementedError):
@@ -230,6 +319,11 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         output_dirs = list(Path(output_root).iterdir())
         self.assertEqual(len(output_dirs), 1)
         return json.loads((output_dirs[0] / "result.json").read_text(encoding="utf-8"))
+
+    def _read_single_request(self, output_root: str) -> dict:
+        output_dirs = list(Path(output_root).iterdir())
+        self.assertEqual(len(output_dirs), 1)
+        return json.loads((output_dirs[0] / "request.json").read_text(encoding="utf-8"))
 
     def test_accepted_status_is_kept_when_execution_fails(self) -> None:
         with tempfile.TemporaryDirectory() as output_root:
@@ -294,6 +388,63 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["execution"]["status"], "not_started")
 
+    def test_validation_commands_are_routed_to_execution_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                    "return_code": 0,
+                    "verify": {
+                        "status": "not_run",
+                        "success": True,
+                        "commands": [],
+                        "error": "",
+                        "summary": "validation not run: no validation commands provided.",
+                        "reason": "no_validation_commands",
+                    },
+                },
+            ) as execute_mock:
+                with mock.patch(
+                    "sys.argv",
+                    [
+                        "main.py",
+                        "--repo",
+                        "codex-local-runner",
+                        "--task-type",
+                        "orchestration",
+                        "--goal",
+                        "verify semantics",
+                        "--provider",
+                        "codex_cli",
+                        "--output-root",
+                        output_root,
+                        "--validation-command",
+                        "echo one",
+                        "--validation-command",
+                        "echo two",
+                    ],
+                ):
+                    rc = orchestrator_main.main()
+
+            request_payload = self._read_single_request(output_root)
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        execute_mock.assert_called_once()
+        self.assertEqual(
+            execute_mock.call_args.args[0]["validation_commands"],
+            ["echo one", "echo two"],
+        )
+        self.assertEqual(request_payload["validation_commands"], ["echo one", "echo two"])
+        self.assertNotIn("validation_command", request_payload)
+
 
 @unittest.skipUnless(importlib.util.find_spec("flask") is not None, "flask is not installed")
 class AppWorktreeIntegrationTests(unittest.TestCase):
@@ -330,34 +481,55 @@ class AppWorktreeIntegrationTests(unittest.TestCase):
                                     },
                                 ):
                                     with mock.patch(
-                                        "app.run_codex",
+                                        "app.run_validation_commands",
                                         return_value={
-                                            "status": "completed",
+                                            "status": "passed",
                                             "success": True,
-                                            "return_code": 0,
-                                            "started_at": "2026-01-01T00:00:00",
-                                            "finished_at": "2026-01-01T00:00:01",
-                                            "artifacts": [],
+                                            "commands": [
+                                                {
+                                                    "command": "echo verify",
+                                                    "return_code": 0,
+                                                    "stdout": "ok\n",
+                                                    "stderr": "",
+                                                    "success": True,
+                                                }
+                                            ],
                                             "error": "",
                                         },
-                                    ) as run_codex_mock:
-                                        client = app_module.app.test_client()
-                                        response = client.post(
-                                            "/run",
-                                            data={
-                                                "repo_path": repo_dir,
-                                                "goal": "execute in worktree",
-                                                "allowed_files": "",
-                                                "forbidden_files": "",
-                                                "validation_commands": "",
-                                                "notes": "",
+                                    ) as verify_mock:
+                                        with mock.patch(
+                                            "app.run_codex",
+                                            return_value={
+                                                "status": "completed",
+                                                "success": True,
+                                                "return_code": 0,
+                                                "started_at": "2026-01-01T00:00:00",
+                                                "finished_at": "2026-01-01T00:00:01",
+                                                "artifacts": [],
+                                                "error": "",
                                             },
-                                        )
+                                        ) as run_codex_mock:
+                                            client = app_module.app.test_client()
+                                            response = client.post(
+                                                "/run",
+                                                data={
+                                                    "repo_path": repo_dir,
+                                                    "goal": "execute in worktree",
+                                                    "allowed_files": "",
+                                                    "forbidden_files": "",
+                                                    "validation_commands": "echo verify",
+                                                    "notes": "",
+                                                },
+                                            )
 
         self.assertEqual(response.status_code, 200)
         run_codex_mock.assert_called_once()
         run_call = run_codex_mock.call_args.kwargs
         self.assertEqual(run_call["task"]["repo_path"], "/prepared/worktree")
+        verify_mock.assert_called_once_with(
+            validation_commands=["echo verify"],
+            cwd="/prepared/worktree",
+        )
 
 
 if __name__ == "__main__":
