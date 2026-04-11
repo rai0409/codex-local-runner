@@ -24,6 +24,7 @@ class ValidationRunnerTests(unittest.TestCase):
                 "reason": "no_validation_commands",
             },
         )
+        self.assertNotIn("command_results", result)
 
     def test_one_successful_validation_command_returns_passed(self) -> None:
         with mock.patch(
@@ -47,13 +48,19 @@ class ValidationRunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "passed")
         self.assertTrue(result["success"])
         self.assertEqual(result["error"], "")
-        self.assertEqual(result["summary"], "all validation commands passed.")
+        self.assertEqual(result["summary"], {"total": 1, "passed": 1, "failed": 0})
         self.assertEqual(result["reason"], "")
         self.assertEqual(len(result["commands"]), 1)
         self.assertEqual(
             set(result["commands"][0].keys()),
             {"command", "return_code", "stdout", "stderr", "success"},
         )
+        self.assertEqual(len(result["command_results"]), 1)
+        self.assertEqual(
+            set(result["command_results"][0].keys()),
+            {"command", "status", "return_code", "stdout", "stderr"},
+        )
+        self.assertEqual(result["command_results"][0]["status"], "passed")
         self.assertEqual(result["commands"][0]["command"], "echo ok")
         self.assertEqual(result["commands"][0]["return_code"], 0)
         self.assertEqual(result["commands"][0]["stdout"], "ok\n")
@@ -80,8 +87,9 @@ class ValidationRunnerTests(unittest.TestCase):
         self.assertEqual(result["commands"][0]["stderr"], "failed")
         self.assertFalse(result["commands"][0]["success"])
         self.assertEqual(result["error"], "1 validation command(s) failed.")
-        self.assertEqual(result["summary"], "1 validation command(s) failed.")
+        self.assertEqual(result["summary"], {"total": 1, "passed": 0, "failed": 1})
         self.assertEqual(result["reason"], "")
+        self.assertEqual(result["command_results"][0]["status"], "failed")
 
     def test_validation_commands_continue_in_order(self) -> None:
         with mock.patch(
@@ -109,10 +117,11 @@ class ValidationRunnerTests(unittest.TestCase):
         self.assertEqual(run_mock.call_count, 2)
         self.assertEqual(result["status"], "failed")
         self.assertFalse(result["success"])
-        self.assertEqual([item["command"] for item in result["commands"]], ["cmd1", "cmd2"])
+        self.assertEqual([item["command"] for item in result["command_results"]], ["cmd1", "cmd2"])
+        self.assertEqual(result["summary"], {"total": 2, "passed": 1, "failed": 1})
         self.assertEqual(
             set(result.keys()),
-            {"status", "success", "commands", "error", "summary", "reason"},
+            {"status", "success", "commands", "command_results", "error", "summary", "reason"},
         )
 
 
