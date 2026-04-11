@@ -56,7 +56,7 @@ class CodexCliExecutionTests(unittest.TestCase):
                             "meta_path": str(execution_dir / "meta.json"),
                             "error": "",
                         },
-                    ):
+                    ) as run_codex_mock:
                         result = adapter.execute(
                             {
                                 "prompt": "test prompt",
@@ -71,6 +71,13 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["finished_at"], "2026-01-01T00:00:01")
         self.assertIsNone(result["error"])
         self.assertEqual(len(result["artifacts"]), 3)
+        run_codex_mock.assert_called_once()
+        self.assertEqual(result["attempt_count"], 1)
+        self.assertEqual(
+            result["retry"],
+            {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
+        )
+        self.assertEqual(result["verify"]["status"], "not_run")
 
     def test_codex_cli_execute_failure_is_reported(self) -> None:
         adapter = CodexCliAdapter()
@@ -115,7 +122,7 @@ class CodexCliExecutionTests(unittest.TestCase):
                                 "meta_path": str(Path(work_dir) / "execution_runs" / "meta.json"),
                                 "error": "execution failed",
                             },
-                        ):
+                        ) as run_codex_mock:
                             result = adapter.execute(
                                 {
                                     "prompt": "test prompt",
@@ -129,6 +136,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["started_at"], "2026-01-01T00:00:00")
         self.assertEqual(result["finished_at"], "2026-01-01T00:00:01")
         self.assertIn("execution failed", result["error"])
+        run_codex_mock.assert_called_once()
         verify_mock.assert_not_called()
         self.assertEqual(result["verify"]["status"], "not_run")
         self.assertEqual(
@@ -137,6 +145,11 @@ class CodexCliExecutionTests(unittest.TestCase):
         )
         self.assertNotIn("command_results", result["verify"])
         self.assertNotIn("summary", result["verify"])
+        self.assertEqual(result["attempt_count"], 1)
+        self.assertEqual(
+            result["retry"],
+            {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
+        )
 
     def test_codex_cli_execute_uses_prepared_worktree_path(self) -> None:
         adapter = CodexCliAdapter()
@@ -236,6 +249,11 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["verify"]["summary"], {"total": 1, "passed": 1, "failed": 0})
         self.assertEqual(result["verify"]["command_results"][0]["status"], "passed")
         self.assertEqual(result["verify"]["reason"], "validation_passed")
+        self.assertEqual(result["attempt_count"], 1)
+        self.assertEqual(
+            result["retry"],
+            {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
+        )
 
     def test_codex_cli_execute_fails_when_worktree_preparation_fails(self) -> None:
         adapter = CodexCliAdapter()
@@ -269,6 +287,11 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["verify"]["reason"], "validation_not_run_execution_status_failed")
         self.assertNotIn("command_results", result["verify"])
         self.assertNotIn("summary", result["verify"])
+        self.assertEqual(result["attempt_count"], 1)
+        self.assertEqual(
+            result["retry"],
+            {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
+        )
 
     def test_codex_cli_execute_timed_out_sets_verify_not_run(self) -> None:
         adapter = CodexCliAdapter()
@@ -308,7 +331,7 @@ class CodexCliExecutionTests(unittest.TestCase):
                                 "meta_path": "",
                                 "error": "timed out",
                             },
-                        ):
+                        ) as run_codex_mock:
                             result = adapter.execute(
                                 {
                                     "prompt": "test prompt",
@@ -319,11 +342,287 @@ class CodexCliExecutionTests(unittest.TestCase):
                             )
 
         verify_mock.assert_not_called()
+        run_codex_mock.assert_called_once()
         self.assertEqual(result["status"], "timed_out")
         self.assertEqual(result["verify"]["status"], "not_run")
         self.assertEqual(result["verify"]["reason"], "validation_not_run_execution_status_timed_out")
         self.assertNotIn("command_results", result["verify"])
         self.assertNotIn("summary", result["verify"])
+        self.assertEqual(result["attempt_count"], 1)
+        self.assertEqual(
+            result["retry"],
+            {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
+        )
+
+    def test_codex_cli_retries_once_when_verify_failed_and_second_attempt_passes(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_dir:
+            with mock.patch(
+                "adapters.codex_cli.prepare_git_worktree",
+                return_value={
+                    "source_repo_path": repo_dir,
+                    "worktree_path": "/prepared/worktree",
+                    "branch_name": "codex-run/20260101_000000",
+                    "created": True,
+                    "cleanup_needed": True,
+                    "error": "",
+                },
+            ):
+                with mock.patch(
+                    "adapters.codex_cli.cleanup_git_worktree",
+                    return_value={
+                        "worktree_path": "/prepared/worktree",
+                        "branch_name": "codex-run/20260101_000000",
+                        "cleaned": True,
+                        "error": "",
+                    },
+                ):
+                    with mock.patch(
+                        "adapters.codex_cli.run_codex",
+                        side_effect=[
+                            {
+                                "status": "completed",
+                                "success": True,
+                                "return_code": 0,
+                                "started_at": "2026-01-01T00:00:00",
+                                "finished_at": "2026-01-01T00:00:01",
+                                "artifacts": [],
+                                "stdout_path": "",
+                                "stderr_path": "",
+                                "meta_path": "",
+                                "error": "",
+                            },
+                            {
+                                "status": "completed",
+                                "success": True,
+                                "return_code": 0,
+                                "started_at": "2026-01-01T00:00:02",
+                                "finished_at": "2026-01-01T00:00:03",
+                                "artifacts": [],
+                                "stdout_path": "",
+                                "stderr_path": "",
+                                "meta_path": "",
+                                "error": "",
+                            },
+                        ],
+                    ) as run_codex_mock:
+                        with mock.patch(
+                            "adapters.codex_cli.run_validation_commands",
+                            side_effect=[
+                                {
+                                    "status": "failed",
+                                    "success": False,
+                                    "commands": [
+                                        {
+                                            "command": "echo verify",
+                                            "return_code": 1,
+                                            "stdout": "",
+                                            "stderr": "first failure",
+                                            "success": False,
+                                        }
+                                    ],
+                                    "command_results": [
+                                        {
+                                            "command": "echo verify",
+                                            "status": "failed",
+                                            "return_code": 1,
+                                            "stdout": "",
+                                            "stderr": "first failure",
+                                        }
+                                    ],
+                                    "error": "first failure",
+                                    "summary": {"total": 1, "passed": 0, "failed": 1},
+                                    "reason": "validation_failed",
+                                },
+                                {
+                                    "status": "passed",
+                                    "success": True,
+                                    "commands": [
+                                        {
+                                            "command": "echo verify",
+                                            "return_code": 0,
+                                            "stdout": "ok\n",
+                                            "stderr": "",
+                                            "success": True,
+                                        }
+                                    ],
+                                    "command_results": [
+                                        {
+                                            "command": "echo verify",
+                                            "status": "passed",
+                                            "return_code": 0,
+                                            "stdout": "ok\n",
+                                            "stderr": "",
+                                        }
+                                    ],
+                                    "error": "",
+                                    "summary": {"total": 1, "passed": 1, "failed": 0},
+                                    "reason": "validation_passed",
+                                },
+                            ],
+                        ) as verify_mock:
+                            result = adapter.execute(
+                                {
+                                    "prompt": "test prompt",
+                                    "repo_path": repo_dir,
+                                    "work_dir": work_dir,
+                                    "validation_commands": ["echo verify"],
+                                }
+                            )
+
+        self.assertEqual(run_codex_mock.call_count, 2)
+        self.assertEqual(verify_mock.call_count, 2)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["started_at"], "2026-01-01T00:00:02")
+        self.assertEqual(result["finished_at"], "2026-01-01T00:00:03")
+        self.assertEqual(result["verify"]["status"], "passed")
+        self.assertEqual(result["verify"]["reason"], "validation_passed")
+        self.assertEqual(result["verify"]["error"], "")
+        self.assertIn("commands", result["verify"])
+        self.assertIn("command_results", result["verify"])
+        self.assertIn("summary", result["verify"])
+        self.assertEqual(result["verify"]["summary"], {"total": 1, "passed": 1, "failed": 0})
+        self.assertEqual(len(result["verify"]["command_results"]), result["verify"]["summary"]["total"])
+        self.assertEqual(len(result["verify"]["command_results"]), 1)
+        self.assertEqual(result["verify"]["command_results"][0]["status"], "passed")
+        self.assertEqual(result["attempt_count"], 2)
+        self.assertEqual(
+            result["retry"],
+            {"attempted": True, "trigger": "verify_failed", "outcome": "retry_succeeded"},
+        )
+
+    def test_codex_cli_retry_outcome_failed_when_second_attempt_verify_fails(self) -> None:
+        adapter = CodexCliAdapter()
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as work_dir:
+            with mock.patch(
+                "adapters.codex_cli.prepare_git_worktree",
+                return_value={
+                    "source_repo_path": repo_dir,
+                    "worktree_path": "/prepared/worktree",
+                    "branch_name": "codex-run/20260101_000000",
+                    "created": True,
+                    "cleanup_needed": True,
+                    "error": "",
+                },
+            ):
+                with mock.patch(
+                    "adapters.codex_cli.cleanup_git_worktree",
+                    return_value={
+                        "worktree_path": "/prepared/worktree",
+                        "branch_name": "codex-run/20260101_000000",
+                        "cleaned": True,
+                        "error": "",
+                    },
+                ):
+                    with mock.patch(
+                        "adapters.codex_cli.run_codex",
+                        side_effect=[
+                            {
+                                "status": "completed",
+                                "success": True,
+                                "return_code": 0,
+                                "started_at": "2026-01-01T00:00:00",
+                                "finished_at": "2026-01-01T00:00:01",
+                                "artifacts": [],
+                                "stdout_path": "",
+                                "stderr_path": "",
+                                "meta_path": "",
+                                "error": "",
+                            },
+                            {
+                                "status": "completed",
+                                "success": True,
+                                "return_code": 0,
+                                "started_at": "2026-01-01T00:00:02",
+                                "finished_at": "2026-01-01T00:00:03",
+                                "artifacts": [],
+                                "stdout_path": "",
+                                "stderr_path": "",
+                                "meta_path": "",
+                                "error": "",
+                            },
+                        ],
+                    ):
+                        with mock.patch(
+                            "adapters.codex_cli.run_validation_commands",
+                            side_effect=[
+                                {
+                                    "status": "failed",
+                                    "success": False,
+                                    "commands": [
+                                        {
+                                            "command": "echo verify",
+                                            "return_code": 1,
+                                            "stdout": "",
+                                            "stderr": "first failure",
+                                            "success": False,
+                                        }
+                                    ],
+                                    "command_results": [
+                                        {
+                                            "command": "echo verify",
+                                            "status": "failed",
+                                            "return_code": 1,
+                                            "stdout": "",
+                                            "stderr": "first failure",
+                                        }
+                                    ],
+                                    "error": "first failure",
+                                    "summary": {"total": 1, "passed": 0, "failed": 1},
+                                    "reason": "validation_failed",
+                                },
+                                {
+                                    "status": "failed",
+                                    "success": False,
+                                    "commands": [
+                                        {
+                                            "command": "echo verify",
+                                            "return_code": 1,
+                                            "stdout": "",
+                                            "stderr": "second failure",
+                                            "success": False,
+                                        }
+                                    ],
+                                    "command_results": [
+                                        {
+                                            "command": "echo verify",
+                                            "status": "failed",
+                                            "return_code": 1,
+                                            "stdout": "",
+                                            "stderr": "second failure",
+                                        }
+                                    ],
+                                    "error": "second failure",
+                                    "summary": {"total": 1, "passed": 0, "failed": 1},
+                                    "reason": "validation_failed",
+                                },
+                            ],
+                        ):
+                            result = adapter.execute(
+                                {
+                                    "prompt": "test prompt",
+                                    "repo_path": repo_dir,
+                                    "work_dir": work_dir,
+                                    "validation_commands": ["echo verify"],
+                                }
+                            )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["verify"]["status"], "failed")
+        self.assertEqual(result["verify"]["reason"], "validation_failed")
+        self.assertEqual(result["verify"]["error"], "second failure")
+        self.assertIn("commands", result["verify"])
+        self.assertIn("command_results", result["verify"])
+        self.assertIn("summary", result["verify"])
+        self.assertEqual(result["verify"]["summary"], {"total": 1, "passed": 0, "failed": 1})
+        self.assertEqual(len(result["verify"]["command_results"]), result["verify"]["summary"]["total"])
+        self.assertEqual(len(result["verify"]["command_results"]), 1)
+        self.assertEqual(result["verify"]["command_results"][0]["status"], "failed")
+        self.assertEqual(result["attempt_count"], 2)
+        self.assertEqual(
+            result["retry"],
+            {"attempted": True, "trigger": "verify_failed", "outcome": "retry_failed"},
+        )
 
     def test_stub_adapters_do_not_execute(self) -> None:
         with self.assertRaises(NotImplementedError):
