@@ -133,9 +133,10 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["verify"]["status"], "not_run")
         self.assertEqual(
             set(result["verify"].keys()),
-            {"status", "success", "commands", "error", "summary", "reason"},
+            {"status", "success", "commands", "error", "reason"},
         )
         self.assertNotIn("command_results", result["verify"])
+        self.assertNotIn("summary", result["verify"])
 
     def test_codex_cli_execute_uses_prepared_worktree_path(self) -> None:
         adapter = CodexCliAdapter()
@@ -185,7 +186,7 @@ class CodexCliExecutionTests(unittest.TestCase):
                             ],
                             "error": "",
                             "summary": {"total": 1, "passed": 1, "failed": 0},
-                            "reason": "",
+                            "reason": "validation_passed",
                         },
                     ) as verify_mock:
                         with mock.patch(
@@ -234,6 +235,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["verify"]["status"], "passed")
         self.assertEqual(result["verify"]["summary"], {"total": 1, "passed": 1, "failed": 0})
         self.assertEqual(result["verify"]["command_results"][0]["status"], "passed")
+        self.assertEqual(result["verify"]["reason"], "validation_passed")
 
     def test_codex_cli_execute_fails_when_worktree_preparation_fails(self) -> None:
         adapter = CodexCliAdapter()
@@ -264,8 +266,9 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertIn("not a git working tree", result["error"])
         self.assertEqual(result["verify"]["status"], "not_run")
-        self.assertEqual(result["verify"]["reason"], "worktree_prepare_failed")
+        self.assertEqual(result["verify"]["reason"], "validation_not_run_execution_status_failed")
         self.assertNotIn("command_results", result["verify"])
+        self.assertNotIn("summary", result["verify"])
 
     def test_codex_cli_execute_timed_out_sets_verify_not_run(self) -> None:
         adapter = CodexCliAdapter()
@@ -318,8 +321,9 @@ class CodexCliExecutionTests(unittest.TestCase):
         verify_mock.assert_not_called()
         self.assertEqual(result["status"], "timed_out")
         self.assertEqual(result["verify"]["status"], "not_run")
-        self.assertEqual(result["verify"]["reason"], "execution_status_timed_out")
+        self.assertEqual(result["verify"]["reason"], "validation_not_run_execution_status_timed_out")
         self.assertNotIn("command_results", result["verify"])
+        self.assertNotIn("summary", result["verify"])
 
     def test_stub_adapters_do_not_execute(self) -> None:
         with self.assertRaises(NotImplementedError):
@@ -419,8 +423,7 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
                         "success": True,
                         "commands": [],
                         "error": "",
-                        "summary": "validation not run: no validation commands provided.",
-                        "reason": "no_validation_commands",
+                        "reason": "validation_not_run_execution_status_unknown",
                     },
                 },
             ) as execute_mock:
@@ -519,7 +522,7 @@ class AppWorktreeIntegrationTests(unittest.TestCase):
                                             ],
                                             "error": "",
                                             "summary": {"total": 1, "passed": 1, "failed": 0},
-                                            "reason": "",
+                                            "reason": "validation_passed",
                                         },
                                     ) as verify_mock:
                                         with mock.patch(

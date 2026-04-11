@@ -10,13 +10,22 @@ from workspace.worktree import cleanup_git_worktree
 from workspace.worktree import prepare_git_worktree
 
 
-def _verify_not_run(reason: str, summary: str) -> dict[str, Any]:
+def _not_run_reason_for_execution_status(execution_status: str) -> str:
+    if execution_status == "not_started":
+        return "validation_not_run_execution_status_not_started"
+    if execution_status == "timed_out":
+        return "validation_not_run_execution_status_timed_out"
+    if execution_status == "failed":
+        return "validation_not_run_execution_status_failed"
+    return "validation_not_run_execution_status_unknown"
+
+
+def _verify_not_run(reason: str) -> dict[str, Any]:
     return {
         "status": "not_run",
         "success": True,
         "commands": [],
         "error": "",
-        "summary": summary,
         "reason": reason,
     }
 
@@ -51,10 +60,7 @@ class CodexCliAdapter(ProviderAdapter):
                 "artifacts": [],
                 "error": worktree_result["error"] or "failed to prepare git worktree",
                 "return_code": None,
-                "verify": _verify_not_run(
-                    reason="worktree_prepare_failed",
-                    summary="validation not run: worktree preparation failed.",
-                ),
+                "verify": _verify_not_run(reason="validation_not_run_execution_status_failed"),
             }
 
         cleanup_error = ""
@@ -74,8 +80,7 @@ class CodexCliAdapter(ProviderAdapter):
                 )
             else:
                 verify_result = _verify_not_run(
-                    reason=f"execution_status_{execution_status}",
-                    summary=f"validation not run: execution status is {execution_status}.",
+                    reason=_not_run_reason_for_execution_status(execution_status),
                 )
         finally:
             if worktree_result["cleanup_needed"]:
