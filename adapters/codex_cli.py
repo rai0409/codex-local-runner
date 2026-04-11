@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -26,32 +25,26 @@ class CodexCliAdapter(ProviderAdapter):
             work_root=str(work_dir / "execution_runs"),
         )
 
-        meta_path = str(execution_result.get("meta_path", "")).strip()
-        started_at = None
-        finished_at = None
-        if meta_path:
-            meta_file = Path(meta_path)
-            if meta_file.exists():
-                try:
-                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
-                    started_at = meta.get("started_at")
-                    finished_at = meta.get("finished_at")
-                except Exception:
-                    started_at = None
-                    finished_at = None
-
-        artifacts = [
-            str(execution_result.get("stdout_path", "")),
-            str(execution_result.get("stderr_path", "")),
-            str(execution_result.get("meta_path", "")),
-        ]
-        artifacts = [item for item in artifacts if item]
+        artifacts: list[str] = []
+        for item in execution_result.get("artifacts", []):
+            if isinstance(item, dict):
+                path = str(item.get("path", "")).strip()
+                if path:
+                    artifacts.append(path)
+        if not artifacts:
+            artifacts = [
+                str(execution_result.get("stdout_path", "")),
+                str(execution_result.get("stderr_path", "")),
+                str(execution_result.get("meta_path", "")),
+            ]
+            artifacts = [item for item in artifacts if item]
 
         return {
             "adapter": self.name,
-            "status": "completed" if execution_result.get("success") else "failed",
-            "started_at": started_at,
-            "finished_at": finished_at,
+            "status": execution_result.get("status")
+            or ("completed" if execution_result.get("success") else "failed"),
+            "started_at": execution_result.get("started_at"),
+            "finished_at": execution_result.get("finished_at"),
             "artifacts": artifacts,
             "error": execution_result.get("error") or None,
             "return_code": execution_result.get("return_code"),
