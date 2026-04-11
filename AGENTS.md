@@ -2,8 +2,8 @@
 
 ## Repository Role
 
-- This repository remains `codex-local-runner`.
-- In Phase 1, it also acts as a logical control-plane orchestration kernel.
+- `codex-local-runner` is a local execution + orchestration repository.
+- Phase 1 keeps acceptance semantics stable while adding minimal execution plumbing.
 
 ## Phase 1 Rules
 
@@ -29,3 +29,36 @@
 - ccr-python
 
 Detailed external repo metadata is intentionally omitted in Phase 1 unless confirmed inside this repository.
+
+## AI/Codex Operation Rules
+
+- Principle: `1 task = 1 decision`.
+- Do not ask Codex to solve multiple major deliverables in one run.
+- Large tasks must be split before implementation starts.
+- If a task has `3+` follow-up correction rounds, start a fresh Codex run with a narrowed prompt.
+
+### Task Modes
+
+- `Scout`: read/inspect only; no code changes.
+- `Implement`: add or change behavior for one scoped deliverable.
+- `Repair`: fix a specific regression or failing behavior.
+- `Polish`: non-behavioral cleanup (docs, naming, comments, readability).
+
+Rules:
+- Do not mix modes in one Codex run.
+- A single run must declare exactly one mode.
+
+### Prompt Contract (Required)
+
+Every Codex prompt must explicitly include:
+- goal
+- allowed files
+- forbidden files
+- expected artifact/output
+- allowed validation commands
+- explicitly out-of-scope items
+
+### Artifact Hygiene
+
+- Generated artifacts/logs/caches must not be committed.
+- Never commit `__pycache__/`, `*.pyc`, temporary logs, or local build/cache output.
