@@ -60,6 +60,9 @@ Artifacts are written under `tasks/control_plane_dispatches/<timestamp>/`:
 `result.json` also includes `dispatcher` and `artifacts`.
 Provider resolution is validated against `config/providers.yaml` before acceptance.
 Unknown, disabled, or unsupported providers fail explicitly with `status=failed`.
+PR2 adds minimal `codex_cli` execution only, tracked under `result.json.execution`.
+Top-level `status` remains acceptance-only; execution outcome is separate.
+`chatgpt_tasks` and `local_llm` remain non-executing stubs in PR2.
 
 ## Existing Flask Runner (unchanged)
 

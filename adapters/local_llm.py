@@ -11,3 +11,6 @@ class LocalLlmAdapter(ProviderAdapter):
 
     def dispatch(self, payload: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError("local_llm provider execution is not implemented in Phase 1")
+
+    def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError("local_llm provider execution is not implemented in PR2")
