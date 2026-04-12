@@ -1,19 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Iterable
 
+from orchestrator.policy_loader import get_change_category_names
 from orchestrator.schemas import CategoryClassificationResult
-
-CATEGORY_NAMES: tuple[str, ...] = (
-    "docs_only",
-    "ci_only",
-    "test_only",
-    "contract_guard_only",
-    "runtime_fix_low_risk",
-    "runtime_fix_high_risk",
-    "contract_extension",
-    "feature",
-)
 
 _RUNTIME_SENSITIVE_EXACT = {"run_codex.py", "app.py"}
 _RUNTIME_SENSITIVE_PREFIXES = ("adapters/", "verify/", "workspace/")
@@ -77,9 +68,14 @@ def infer_observed_category(changed_files: Iterable[str]) -> str:
 def validate_declared_category(
     declared_category: str,
     changed_files: Iterable[str],
+    *,
+    change_categories_policy: Mapping[str, object] | None = None,
 ) -> tuple[bool, str]:
     declared = str(declared_category).strip()
-    if declared not in CATEGORY_NAMES:
+    category_names = set(
+        get_change_category_names(change_categories_policy=change_categories_policy)
+    )
+    if declared not in category_names:
         return False, "declared_category_unsupported"
 
     observed = infer_observed_category(changed_files)
@@ -93,13 +89,17 @@ def classify_changes(
     *,
     declared_category: str,
     changed_files: Iterable[str],
+    change_categories_policy: Mapping[str, object] | None = None,
 ) -> CategoryClassificationResult:
     declared = str(declared_category).strip()
     paths = _normalize_paths(changed_files)
     observed = infer_observed_category(paths)
+    category_names = set(
+        get_change_category_names(change_categories_policy=change_categories_policy)
+    )
 
     reasons: list[str] = []
-    declared_supported = declared in CATEGORY_NAMES
+    declared_supported = declared in category_names
     declared_matches_observed = declared_supported and declared == observed
 
     if not declared_supported:

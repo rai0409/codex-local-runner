@@ -3,25 +3,11 @@ from __future__ import annotations
 import unittest
 
 from orchestrator.merge_gate import apply_merge_gate
+from orchestrator.policy_loader import load_merge_gate_policy
 from orchestrator.schemas import RubricEvaluationResult
 
 
 class MergeGateTests(unittest.TestCase):
-    def _policy(self) -> dict:
-        return {
-            "require_ci_green": True,
-            "require_rubric_all_pass": True,
-            "require_declared_equals_observed_category": True,
-            "require_no_forbidden_paths_touched": True,
-            "require_diff_size_within_limit": True,
-            "auto_merge_categories": [
-                "docs_only",
-                "ci_only",
-                "test_only",
-                "contract_guard_only",
-            ],
-        }
-
     def _rubric(self, observed_category: str) -> RubricEvaluationResult:
         return RubricEvaluationResult(
             declared_category=observed_category,
@@ -43,17 +29,21 @@ class MergeGateTests(unittest.TestCase):
         )
 
     def test_merge_gate_passes_for_safe_auto_merge_category(self) -> None:
-        result = apply_merge_gate(rubric=self._rubric("docs_only"), policy=self._policy())
+        result = apply_merge_gate(rubric=self._rubric("docs_only"))
 
         self.assertTrue(result.passed)
         self.assertTrue(result.auto_merge_allowed)
         self.assertEqual(result.fail_reasons, ())
 
-    def test_merge_gate_rejects_high_risk_category_even_if_other_checks_pass(self) -> None:
-        result = apply_merge_gate(
-            rubric=self._rubric("runtime_fix_high_risk"),
-            policy=self._policy(),
+    def test_merge_gate_auto_merge_categories_are_loaded_from_yaml(self) -> None:
+        policy = load_merge_gate_policy()
+        self.assertEqual(
+            set(policy["auto_merge_categories"]),
+            {"docs_only", "ci_only", "test_only", "contract_guard_only"},
         )
+
+    def test_merge_gate_rejects_high_risk_category_even_if_other_checks_pass(self) -> None:
+        result = apply_merge_gate(rubric=self._rubric("runtime_fix_high_risk"))
 
         self.assertFalse(result.passed)
         self.assertFalse(result.auto_merge_allowed)

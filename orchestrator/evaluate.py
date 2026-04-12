@@ -1,79 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from fnmatch import fnmatch
 from typing import Iterable
 
+from orchestrator.policy_loader import get_change_category_policy
 from orchestrator.schemas import RubricEvaluationResult
-
-_CATEGORY_RULES: dict[str, dict[str, tuple[str, ...]]] = {
-    "docs_only": {
-        "allowed_paths": ("docs/**",),
-        "forbidden_paths": (
-            "run_codex.py",
-            "app.py",
-            "adapters/**",
-            "verify/**",
-            "workspace/**",
-            "orchestrator/**",
-            "tests/**",
-            ".github/workflows/**",
-        ),
-    },
-    "ci_only": {
-        "allowed_paths": (".github/workflows/**",),
-        "forbidden_paths": (
-            "run_codex.py",
-            "app.py",
-            "adapters/**",
-            "verify/**",
-            "workspace/**",
-            "orchestrator/**",
-            "tests/**",
-            "docs/**",
-        ),
-    },
-    "test_only": {
-        "allowed_paths": ("tests/**",),
-        "forbidden_paths": (
-            "run_codex.py",
-            "app.py",
-            "adapters/**",
-            "verify/**",
-            "workspace/**",
-            "orchestrator/**",
-            "docs/**",
-            ".github/workflows/**",
-        ),
-    },
-    "contract_guard_only": {
-        "allowed_paths": ("docs/**", "tests/**"),
-        "forbidden_paths": (
-            "run_codex.py",
-            "app.py",
-            "adapters/**",
-            "verify/**",
-            "workspace/**",
-            "orchestrator/**",
-            ".github/workflows/**",
-        ),
-    },
-    "runtime_fix_low_risk": {
-        "allowed_paths": ("orchestrator/**", "config/**", "prompts/**", "skills/**", "tasks/**"),
-        "forbidden_paths": ("run_codex.py", "app.py", "adapters/**", "verify/**", "workspace/**"),
-    },
-    "runtime_fix_high_risk": {
-        "allowed_paths": ("**",),
-        "forbidden_paths": (),
-    },
-    "contract_extension": {
-        "allowed_paths": ("adapters/**", "docs/**", "tests/**"),
-        "forbidden_paths": ("verify/**", "workspace/**"),
-    },
-    "feature": {
-        "allowed_paths": ("**",),
-        "forbidden_paths": (),
-    },
-}
 
 _RUNTIME_SENSITIVE_EXACT = {"run_codex.py", "app.py"}
 _RUNTIME_SENSITIVE_PREFIXES = ("adapters/", "verify/", "workspace/")
@@ -114,16 +46,20 @@ def evaluate_rubric(
     ci_green: bool,
     rollback_metadata_recorded: bool,
     diff_line_limit: int = 400,
+    change_categories_policy: Mapping[str, object] | None = None,
 ) -> RubricEvaluationResult:
     paths = _normalize_paths(changed_files)
-    rules = _CATEGORY_RULES.get(observed_category)
+    rules = get_change_category_policy(
+        observed_category,
+        change_categories_policy=change_categories_policy,
+    )
 
     if rules is None:
         allowed_files_only = False
         forbidden_files_untouched = False
     else:
-        allowed_patterns = rules["allowed_paths"]
-        forbidden_patterns = rules["forbidden_paths"]
+        allowed_patterns = tuple(str(item) for item in rules.get("allowed_paths", ()))
+        forbidden_patterns = tuple(str(item) for item in rules.get("forbidden_paths", ()))
         allowed_files_only = all(_matches_any(path, allowed_patterns) for path in paths)
         forbidden_files_untouched = not any(
             _matches_any(path, forbidden_patterns) for path in paths
