@@ -810,6 +810,18 @@ class CodexCliExecutionTests(unittest.TestCase):
 
 
 class OrchestratorExecutionSemanticsTests(unittest.TestCase):
+    def _fake_evaluation_result(self, job_id: str) -> dict:
+        return {
+            "job_id": job_id,
+            "classification": {
+                "declared_category": "feature",
+                "observed_category": "feature",
+            },
+            "rubric": {"merge_eligible": False},
+            "merge_gate": {"passed": False},
+            "assumptions": {"fallbacks_used": []},
+        }
+
     def _single_output_dir(self, output_root: str) -> Path:
         output_dirs = list(Path(output_root).iterdir())
         self.assertEqual(len(output_dirs), 1)
@@ -862,6 +874,7 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(result["status"], "accepted")
         self.assertEqual(result["execution"]["status"], "failed")
+        self.assertEqual(set(result["persistence"].keys()), {"evaluation_artifacts", "ledger"})
         self.assertIn("merge_eligible", rubric)
         self.assertIn("required_tests_declared", rubric)
         self.assertIn("passed", merge_gate)
@@ -893,6 +906,10 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["execution"]["status"], "not_started")
+        self.assertEqual(
+            result["persistence"],
+            {"evaluation_artifacts": "skipped", "ledger": "skipped"},
+        )
         self.assertFalse((output_dir / "rubric.json").exists())
         self.assertFalse((output_dir / "merge_gate.json").exists())
 
@@ -1001,6 +1018,106 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(result_payload["execution"]["review_recommendation"], "no_review_needed")
         self.assertEqual(result_payload["execution"]["review_handoff_summary"]["final_status"], "completed")
         self.assertEqual(result_payload["execution"]["reviewer_handoff"]["execution"]["status"], "completed")
+        self.assertEqual(set(result_payload["persistence"].keys()), {"evaluation_artifacts", "ledger"})
+
+    def test_persistence_written_when_accepted_and_persistence_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._fake_evaluation_result("job-persist-ok"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation") as record_mock:
+                            with mock.patch(
+                                "sys.argv",
+                                [
+                                    "main.py",
+                                    "--repo",
+                                    "codex-local-runner",
+                                    "--task-type",
+                                    "orchestration",
+                                    "--goal",
+                                    "persistence observability",
+                                    "--provider",
+                                    "codex_cli",
+                                    "--output-root",
+                                    output_root,
+                                ],
+                            ):
+                                rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(
+            result_payload["persistence"],
+            {"evaluation_artifacts": "written", "ledger": "written"},
+        )
+        record_mock.assert_called_once()
+
+    def test_persistence_evaluation_failure_remains_non_fatal(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._fake_evaluation_result("job-persist-fail"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        side_effect=RuntimeError("persist failed"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch(
+                                "sys.argv",
+                                [
+                                    "main.py",
+                                    "--repo",
+                                    "codex-local-runner",
+                                    "--task-type",
+                                    "orchestration",
+                                    "--goal",
+                                    "persistence observability",
+                                    "--provider",
+                                    "codex_cli",
+                                    "--output-root",
+                                    output_root,
+                                ],
+                            ):
+                                rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(
+            result_payload["persistence"],
+            {"evaluation_artifacts": "failed", "ledger": "written"},
+        )
 
     def test_accepted_flow_records_ledger_row(self) -> None:
         with tempfile.TemporaryDirectory() as output_root:
@@ -1093,31 +1210,43 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
                 },
             ):
                 with mock.patch(
-                    "orchestrator.main.record_job_evaluation",
-                    side_effect=RuntimeError("ledger write failed"),
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._fake_evaluation_result("job-ledger-fail"),
                 ):
                     with mock.patch(
-                        "sys.argv",
-                        [
-                            "main.py",
-                            "--repo",
-                            "codex-local-runner",
-                            "--task-type",
-                            "orchestration",
-                            "--goal",
-                            "record ledger",
-                            "--provider",
-                            "codex_cli",
-                            "--output-root",
-                            output_root,
-                        ],
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
                     ):
-                        rc = orchestrator_main.main()
+                        with mock.patch(
+                            "orchestrator.main.record_job_evaluation",
+                            side_effect=RuntimeError("ledger write failed"),
+                        ):
+                            with mock.patch(
+                                "sys.argv",
+                                [
+                                    "main.py",
+                                    "--repo",
+                                    "codex-local-runner",
+                                    "--task-type",
+                                    "orchestration",
+                                    "--goal",
+                                    "record ledger",
+                                    "--provider",
+                                    "codex_cli",
+                                    "--output-root",
+                                    output_root,
+                                ],
+                            ):
+                                rc = orchestrator_main.main()
 
             result_payload = self._read_single_result(output_root)
         self.assertEqual(rc, 0)
         self.assertEqual(result_payload["status"], "accepted")
         self.assertEqual(result_payload["execution"]["status"], "completed")
+        self.assertEqual(
+            result_payload["persistence"],
+            {"evaluation_artifacts": "written", "ledger": "failed"},
+        )
 
 
 @unittest.skipUnless(importlib.util.find_spec("flask") is not None, "flask is not installed")
