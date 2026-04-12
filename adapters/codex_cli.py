@@ -100,6 +100,32 @@ def _build_review_handoff_summary(
     }
 
 
+def _build_reviewer_handoff(
+    *,
+    review_handoff_summary: dict[str, Any],
+    final_status: str,
+    attempt_count: int,
+    return_code: int | None,
+    verify_result: dict[str, Any],
+) -> dict[str, Any]:
+    validation: dict[str, Any] = {
+        "verify_status": verify_result["status"],
+        "verify_reason": verify_result["reason"],
+    }
+    if "summary" in verify_result:
+        validation["summary"] = verify_result["summary"]
+
+    reviewer_handoff = {
+        "summary": review_handoff_summary,
+        "execution": {
+            "status": final_status,
+            "attempt_count": attempt_count,
+            "return_code": return_code,
+        },
+        "validation": validation,
+    }
+    return reviewer_handoff
+
 class CodexCliAdapter(ProviderAdapter):
     def __init__(self) -> None:
         super().__init__(name="codex_cli")
@@ -125,6 +151,8 @@ class CodexCliAdapter(ProviderAdapter):
             early_verify = _verify_not_run(reason="validation_not_run_execution_status_failed")
             early_retry = _retry_not_attempted()
             early_status = "failed"
+            early_attempt_count = 1
+            early_return_code = None
             early_result_interpretation = "execution_not_completed"
             early_review_recommendation = "review_recommended"
             review_handoff_summary = _build_review_handoff_summary(
@@ -136,6 +164,13 @@ class CodexCliAdapter(ProviderAdapter):
                 result_interpretation=early_result_interpretation,
                 review_recommendation=early_review_recommendation,
             )
+            reviewer_handoff = _build_reviewer_handoff(
+                review_handoff_summary=review_handoff_summary,
+                final_status=early_status,
+                attempt_count=early_attempt_count,
+                return_code=early_return_code,
+                verify_result=early_verify,
+            )
             return {
                 "adapter": self.name,
                 "status": early_status,
@@ -143,13 +178,14 @@ class CodexCliAdapter(ProviderAdapter):
                 "finished_at": None,
                 "artifacts": [],
                 "error": worktree_result["error"] or "failed to prepare git worktree",
-                "return_code": None,
+                "return_code": early_return_code,
                 "verify": early_verify,
-                "attempt_count": 1,
+                "attempt_count": early_attempt_count,
                 "retry": early_retry,
                 "result_interpretation": early_result_interpretation,
                 "review_recommendation": early_review_recommendation,
                 "review_handoff_summary": review_handoff_summary,
+                "reviewer_handoff": reviewer_handoff,
             }
 
         cleanup_error = ""
@@ -249,6 +285,14 @@ class CodexCliAdapter(ProviderAdapter):
             result_interpretation=result_interpretation,
             review_recommendation=review_recommendation,
         )
+        final_return_code = execution_result.get("return_code")
+        reviewer_handoff = _build_reviewer_handoff(
+            review_handoff_summary=review_handoff_summary,
+            final_status=execution_status,
+            attempt_count=attempt_count,
+            return_code=final_return_code,
+            verify_result=verify_result,
+        )
         return {
             "adapter": self.name,
             "status": execution_status,
@@ -256,11 +300,12 @@ class CodexCliAdapter(ProviderAdapter):
             "finished_at": execution_result.get("finished_at"),
             "artifacts": artifacts,
             "error": execution_error or None,
-            "return_code": execution_result.get("return_code"),
+            "return_code": final_return_code,
             "verify": verify_result,
             "attempt_count": attempt_count,
             "retry": retry,
             "result_interpretation": result_interpretation,
             "review_recommendation": review_recommendation,
             "review_handoff_summary": review_handoff_summary,
+            "reviewer_handoff": reviewer_handoff,
         }

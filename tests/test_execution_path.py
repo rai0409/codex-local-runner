@@ -9,6 +9,7 @@ from unittest import mock
 
 from adapters.chatgpt_tasks import ChatgptTasksAdapter
 from adapters.codex_cli import _build_review_handoff_summary
+from adapters.codex_cli import _build_reviewer_handoff
 from adapters.codex_cli import CodexCliAdapter
 from adapters.codex_cli import _derive_result_interpretation
 from adapters.codex_cli import _derive_review_recommendation
@@ -38,6 +39,29 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(summary["retry_outcome"], result["retry"]["outcome"])
         self.assertEqual(summary["result_interpretation"], result["result_interpretation"])
         self.assertEqual(summary["review_recommendation"], result["review_recommendation"])
+
+    def _assert_reviewer_handoff_consistency(self, result: dict) -> None:
+        handoff = result["reviewer_handoff"]
+        self.assertEqual(set(handoff.keys()), {"summary", "execution", "validation"})
+        self.assertEqual(handoff["summary"], result["review_handoff_summary"])
+
+        execution = handoff["execution"]
+        self.assertEqual(set(execution.keys()), {"status", "attempt_count", "return_code"})
+        self.assertEqual(execution["status"], result["status"])
+        self.assertEqual(execution["attempt_count"], result["attempt_count"])
+        self.assertEqual(execution["return_code"], result["return_code"])
+
+        validation = handoff["validation"]
+        self.assertEqual(validation["verify_status"], result["verify"]["status"])
+        self.assertEqual(validation["verify_reason"], result["verify"]["reason"])
+        if "summary" in result["verify"]:
+            self.assertEqual(set(validation.keys()), {"verify_status", "verify_reason", "summary"})
+            self.assertEqual(validation["summary"], result["verify"]["summary"])
+        else:
+            self.assertEqual(set(validation.keys()), {"verify_status", "verify_reason"})
+
+        self.assertNotIn("diff", handoff)
+        self.assertNotIn("tests", handoff)
 
     def test_codex_cli_execute_completed(self) -> None:
         adapter = CodexCliAdapter()
@@ -106,6 +130,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["result_interpretation"], "completed_verified_passed")
         self.assertEqual(result["review_recommendation"], "no_review_needed")
         self._assert_review_handoff_summary_consistency(result)
+        self._assert_reviewer_handoff_consistency(result)
 
     def test_codex_cli_execute_failure_is_reported(self) -> None:
         adapter = CodexCliAdapter()
@@ -181,6 +206,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["result_interpretation"], "execution_not_completed")
         self.assertEqual(result["review_recommendation"], "review_recommended")
         self._assert_review_handoff_summary_consistency(result)
+        self._assert_reviewer_handoff_consistency(result)
 
     def test_codex_cli_execute_uses_prepared_worktree_path(self) -> None:
         adapter = CodexCliAdapter()
@@ -288,6 +314,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["result_interpretation"], "completed_verified_passed")
         self.assertEqual(result["review_recommendation"], "no_review_needed")
         self._assert_review_handoff_summary_consistency(result)
+        self._assert_reviewer_handoff_consistency(result)
 
     def test_codex_cli_execute_fails_when_worktree_preparation_fails(self) -> None:
         adapter = CodexCliAdapter()
@@ -329,6 +356,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["result_interpretation"], "execution_not_completed")
         self.assertEqual(result["review_recommendation"], "review_recommended")
         self._assert_review_handoff_summary_consistency(result)
+        self._assert_reviewer_handoff_consistency(result)
 
     def test_codex_cli_execute_timed_out_sets_verify_not_run(self) -> None:
         adapter = CodexCliAdapter()
@@ -393,6 +421,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["result_interpretation"], "execution_not_completed")
         self.assertEqual(result["review_recommendation"], "review_recommended")
         self._assert_review_handoff_summary_consistency(result)
+        self._assert_reviewer_handoff_consistency(result)
 
     def test_codex_cli_retries_once_when_verify_failed_and_second_attempt_passes(self) -> None:
         adapter = CodexCliAdapter()
@@ -533,6 +562,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["result_interpretation"], "completed_verified_passed_after_retry")
         self.assertEqual(result["review_recommendation"], "review_recommended")
         self._assert_review_handoff_summary_consistency(result)
+        self._assert_reviewer_handoff_consistency(result)
 
     def test_codex_cli_retry_outcome_failed_when_second_attempt_verify_fails(self) -> None:
         adapter = CodexCliAdapter()
@@ -669,6 +699,7 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(result["result_interpretation"], "completed_verified_failed_after_retry")
         self.assertEqual(result["review_recommendation"], "review_recommended_after_retry_failure")
         self._assert_review_handoff_summary_consistency(result)
+        self._assert_reviewer_handoff_consistency(result)
 
     def test_result_interpretation_completed_verify_failed_without_retry(self) -> None:
         interpretation = _derive_result_interpretation(
@@ -723,6 +754,33 @@ class CodexCliExecutionTests(unittest.TestCase):
         self.assertEqual(summary["retry_outcome"], 789)
         self.assertIs(summary["result_interpretation"], interpretation_marker)
         self.assertEqual(summary["review_recommendation"], [])
+
+    def test_reviewer_handoff_completed_verify_failed_without_retry(self) -> None:
+        summary = _build_review_handoff_summary(
+            final_status="completed",
+            final_verify_status="failed",
+            final_verify_reason="validation_failed",
+            retry_attempted=False,
+            retry_outcome="not_attempted",
+            result_interpretation="completed_verified_failed",
+            review_recommendation="review_recommended",
+        )
+        handoff = _build_reviewer_handoff(
+            review_handoff_summary=summary,
+            final_status="completed",
+            attempt_count=1,
+            return_code=1,
+            verify_result={"status": "failed", "reason": "validation_failed"},
+        )
+
+        self.assertEqual(
+            handoff,
+            {
+                "summary": summary,
+                "execution": {"status": "completed", "attempt_count": 1, "return_code": 1},
+                "validation": {"verify_status": "failed", "verify_reason": "validation_failed"},
+            },
+        )
 
     def test_stub_adapters_do_not_execute(self) -> None:
         with self.assertRaises(NotImplementedError):
