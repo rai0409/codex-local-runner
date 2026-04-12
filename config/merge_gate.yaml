@@ -1,0 +1,10 @@
+require_ci_green: true
+require_rubric_all_pass: true
+require_declared_equals_observed_category: true
+require_no_forbidden_paths_touched: true
+require_diff_size_within_limit: true
+auto_merge_categories:
+  - docs_only
+  - ci_only
+  - test_only
+  - contract_guard_only
