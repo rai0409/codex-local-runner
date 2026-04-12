@@ -1,0 +1,116 @@
+categories:
+  docs_only:
+    description: "Documentation-only changes under docs/."
+    allowed_paths:
+      - "docs/**"
+    forbidden_paths:
+      - "run_codex.py"
+      - "app.py"
+      - "adapters/**"
+      - "verify/**"
+      - "workspace/**"
+      - "orchestrator/**"
+      - "tests/**"
+      - ".github/workflows/**"
+    required_tests: []
+    auto_merge_allowed: true
+
+  ci_only:
+    description: "CI-only changes under .github/workflows/."
+    allowed_paths:
+      - ".github/workflows/**"
+    forbidden_paths:
+      - "run_codex.py"
+      - "app.py"
+      - "adapters/**"
+      - "verify/**"
+      - "workspace/**"
+      - "orchestrator/**"
+      - "tests/**"
+      - "docs/**"
+    required_tests:
+      - "contract_suite"
+    auto_merge_allowed: true
+
+  test_only:
+    description: "Test-only changes under tests/."
+    allowed_paths:
+      - "tests/**"
+    forbidden_paths:
+      - "run_codex.py"
+      - "app.py"
+      - "adapters/**"
+      - "verify/**"
+      - "workspace/**"
+      - "orchestrator/**"
+      - "docs/**"
+      - ".github/workflows/**"
+    required_tests:
+      - "contract_suite"
+    auto_merge_allowed: true
+
+  contract_guard_only:
+    description: "Contract-guard changes limited to docs/ and tests/."
+    allowed_paths:
+      - "docs/**"
+      - "tests/**"
+    forbidden_paths:
+      - "run_codex.py"
+      - "app.py"
+      - "adapters/**"
+      - "verify/**"
+      - "workspace/**"
+      - "orchestrator/**"
+      - ".github/workflows/**"
+    required_tests:
+      - "contract_suite"
+    auto_merge_allowed: true
+
+  runtime_fix_low_risk:
+    description: "Runtime-adjacent fixes outside runtime-sensitive paths."
+    allowed_paths:
+      - "orchestrator/**"
+      - "config/**"
+      - "prompts/**"
+      - "skills/**"
+      - "tasks/**"
+    forbidden_paths:
+      - "run_codex.py"
+      - "app.py"
+      - "adapters/**"
+      - "verify/**"
+      - "workspace/**"
+    required_tests:
+      - "contract_suite"
+    auto_merge_allowed: false
+
+  runtime_fix_high_risk:
+    description: "Fixes touching runtime-sensitive execution paths."
+    allowed_paths:
+      - "**"
+    forbidden_paths: []
+    required_tests:
+      - "contract_suite"
+    auto_merge_allowed: false
+
+  contract_extension:
+    description: "Changes that extend contract-producing runtime behavior."
+    allowed_paths:
+      - "adapters/**"
+      - "docs/**"
+      - "tests/**"
+    forbidden_paths:
+      - "verify/**"
+      - "workspace/**"
+    required_tests:
+      - "contract_suite"
+    auto_merge_allowed: false
+
+  feature:
+    description: "General feature work not in narrow deterministic categories."
+    allowed_paths:
+      - "**"
+    forbidden_paths: []
+    required_tests:
+      - "contract_suite"
+    auto_merge_allowed: false
