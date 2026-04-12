@@ -43,7 +43,27 @@ class CodexCliExecutionTests(unittest.TestCase):
     def _assert_reviewer_handoff_consistency(self, result: dict) -> None:
         handoff = result["reviewer_handoff"]
         self.assertEqual(set(handoff.keys()), {"summary", "execution", "validation"})
-        self.assertEqual(handoff["summary"], result["review_handoff_summary"])
+        summary = handoff["summary"]
+        self.assertEqual(
+            set(summary.keys()),
+            {
+                "final_status",
+                "final_verify_status",
+                "final_verify_reason",
+                "retry_attempted",
+                "retry_outcome",
+                "result_interpretation",
+                "review_recommendation",
+            },
+        )
+        self.assertEqual(summary, result["review_handoff_summary"])
+        self.assertEqual(summary["final_status"], result["status"])
+        self.assertEqual(summary["final_verify_status"], result["verify"]["status"])
+        self.assertEqual(summary["final_verify_reason"], result["verify"]["reason"])
+        self.assertEqual(summary["retry_attempted"], result["retry"]["attempted"])
+        self.assertEqual(summary["retry_outcome"], result["retry"]["outcome"])
+        self.assertEqual(summary["result_interpretation"], result["result_interpretation"])
+        self.assertEqual(summary["review_recommendation"], result["review_recommendation"])
 
         execution = handoff["execution"]
         self.assertEqual(set(execution.keys()), {"status", "attempt_count", "return_code"})
