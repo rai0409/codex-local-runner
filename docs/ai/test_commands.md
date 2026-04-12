@@ -24,7 +24,7 @@ Typical steps:
 
 Repository-specific command placeholders (fill as needed):
 - `<cache cleanup command(s) for this repo>`
-- `<broader scoped test command(s)>`
+- Current CI-enforced contract suite: `python -m unittest tests.test_execution_path tests.test_verify_runner tests.test_run_codex_contract tests.test_worktree -v`
 
 ## Level 3: Full Clean Rebuild/Revalidation
 
@@ -38,7 +38,7 @@ Typical steps:
 
 Repository-specific command placeholders (fill as needed):
 - `<clean environment bootstrap command(s)>`
-- `<full test/validation command(s)>`
+- `python -m unittest tests.test_execution_path tests.test_verify_runner tests.test_run_codex_contract tests.test_worktree -v`
 
 ## Guardrails
 
