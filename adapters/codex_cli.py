@@ -79,6 +79,27 @@ def _derive_review_recommendation(result_interpretation: str) -> str:
     raise ValueError(f"unsupported result_interpretation: {result_interpretation}")
 
 
+def _build_review_handoff_summary(
+    *,
+    final_status: str,
+    final_verify_status: str,
+    final_verify_reason: str,
+    retry_attempted: bool,
+    retry_outcome: str,
+    result_interpretation: str,
+    review_recommendation: str,
+) -> dict[str, Any]:
+    return {
+        "final_status": final_status,
+        "final_verify_status": final_verify_status,
+        "final_verify_reason": final_verify_reason,
+        "retry_attempted": retry_attempted,
+        "retry_outcome": retry_outcome,
+        "result_interpretation": result_interpretation,
+        "review_recommendation": review_recommendation,
+    }
+
+
 class CodexCliAdapter(ProviderAdapter):
     def __init__(self) -> None:
         super().__init__(name="codex_cli")
@@ -101,19 +122,34 @@ class CodexCliAdapter(ProviderAdapter):
             worktree_parent=str(work_dir / "worktrees"),
         )
         if not worktree_result["created"]:
+            early_verify = _verify_not_run(reason="validation_not_run_execution_status_failed")
+            early_retry = _retry_not_attempted()
+            early_status = "failed"
+            early_result_interpretation = "execution_not_completed"
+            early_review_recommendation = "review_recommended"
+            review_handoff_summary = _build_review_handoff_summary(
+                final_status=early_status,
+                final_verify_status=early_verify["status"],
+                final_verify_reason=early_verify["reason"],
+                retry_attempted=early_retry["attempted"],
+                retry_outcome=early_retry["outcome"],
+                result_interpretation=early_result_interpretation,
+                review_recommendation=early_review_recommendation,
+            )
             return {
                 "adapter": self.name,
-                "status": "failed",
+                "status": early_status,
                 "started_at": None,
                 "finished_at": None,
                 "artifacts": [],
                 "error": worktree_result["error"] or "failed to prepare git worktree",
                 "return_code": None,
-                "verify": _verify_not_run(reason="validation_not_run_execution_status_failed"),
+                "verify": early_verify,
                 "attempt_count": 1,
-                "retry": _retry_not_attempted(),
-                "result_interpretation": "execution_not_completed",
-                "review_recommendation": "review_recommended",
+                "retry": early_retry,
+                "result_interpretation": early_result_interpretation,
+                "review_recommendation": early_review_recommendation,
+                "review_handoff_summary": review_handoff_summary,
             }
 
         cleanup_error = ""
@@ -199,6 +235,20 @@ class CodexCliAdapter(ProviderAdapter):
             verify_result=verify_result,
             retry=retry,
         )
+        review_recommendation = _derive_review_recommendation(result_interpretation)
+        final_verify_status = verify_result["status"]
+        final_verify_reason = verify_result["reason"]
+        retry_attempted = retry["attempted"]
+        retry_outcome = retry["outcome"]
+        review_handoff_summary = _build_review_handoff_summary(
+            final_status=execution_status,
+            final_verify_status=final_verify_status,
+            final_verify_reason=final_verify_reason,
+            retry_attempted=retry_attempted,
+            retry_outcome=retry_outcome,
+            result_interpretation=result_interpretation,
+            review_recommendation=review_recommendation,
+        )
         return {
             "adapter": self.name,
             "status": execution_status,
@@ -211,5 +261,6 @@ class CodexCliAdapter(ProviderAdapter):
             "attempt_count": attempt_count,
             "retry": retry,
             "result_interpretation": result_interpretation,
-            "review_recommendation": _derive_review_recommendation(result_interpretation),
+            "review_recommendation": review_recommendation,
+            "review_handoff_summary": review_handoff_summary,
         }
