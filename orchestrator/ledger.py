@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 DEFAULT_LEDGER_DB_PATH = "state/jobs.db"
 
@@ -12,6 +13,19 @@ def _connect(db_path: str | Path = DEFAULT_LEDGER_DB_PATH) -> sqlite3.Connection
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _connect_readonly(db_path: str | Path = DEFAULT_LEDGER_DB_PATH) -> sqlite3.Connection | None:
+    path = Path(db_path)
+    if not path.exists():
+        return None
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    return {key: row[key] for key in row.keys()}
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
@@ -129,3 +143,43 @@ def record_job_evaluation(
             },
         )
         conn.commit()
+
+
+def get_job_by_id(
+    job_id: str, db_path: str | Path = DEFAULT_LEDGER_DB_PATH
+) -> dict[str, Any] | None:
+    conn = _connect_readonly(db_path)
+    if conn is None:
+        return None
+    with conn:
+        try:
+            row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+        except sqlite3.OperationalError:
+            return None
+    if row is None:
+        return None
+    return _row_to_dict(row)
+
+
+def get_latest_job(db_path: str | Path = DEFAULT_LEDGER_DB_PATH) -> dict[str, Any] | None:
+    conn = _connect_readonly(db_path)
+    if conn is None:
+        return None
+    with conn:
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM jobs
+                ORDER BY
+                    CASE WHEN created_at IS NULL THEN 1 ELSE 0 END ASC,
+                    created_at DESC,
+                    rowid DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+    if row is None:
+        return None
+    return _row_to_dict(row)

@@ -24,4 +24,16 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run contract suite
-        run: python -m unittest tests.test_execution_path tests.test_verify_runner tests.test_run_codex_contract tests.test_worktree -v
+        run: |
+          python -m unittest \
+            tests.test_execution_path \
+            tests.test_verify_runner \
+            tests.test_run_codex_contract \
+            tests.test_worktree \
+            tests.test_policy_loader \
+            tests.test_classify \
+            tests.test_evaluate \
+            tests.test_merge_gate \
+            tests.test_evaluate_job \
+            tests.test_ledger \
+            -v

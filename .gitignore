@@ -4,4 +4,6 @@ __pycache__/
 tasks/latest_task.json
 tasks/latest_prompt.txt
 tasks/runs/
+tasks/control_plane_dispatches/
+state/jobs.db
 .codex

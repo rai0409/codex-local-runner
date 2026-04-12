@@ -23,6 +23,17 @@ Registered Phase 1 adapters:
 - `chatgpt_tasks`
 - `local_llm`
 
+## Deterministic Policy Layer
+
+The repository now includes a deterministic policy/evaluation layer:
+
+- Change classification (`orchestrator/classify.py`)
+- Rubric evaluation (`orchestrator/evaluate.py`)
+- Merge-gate evaluation (`orchestrator/merge_gate.py`)
+- YAML policy sources:
+  - `config/change_categories.yaml`
+  - `config/merge_gate.yaml`
+
 ## Task Status Policy
 
 Phase 1 allows only:
@@ -55,14 +66,36 @@ Artifacts are written under `tasks/control_plane_dispatches/<timestamp>/`:
 
 - `request.json`
 - `result.json`
+- `rubric.json` (for accepted jobs)
+- `merge_gate.json` (for accepted jobs)
 
 `request.json` and `result.json` include `job_id`.
 `result.json` also includes `dispatcher` and `artifacts`.
 Provider resolution is validated against `config/providers.yaml` before acceptance.
 Unknown, disabled, or unsupported providers fail explicitly with `status=failed`.
 PR2 adds minimal `codex_cli` execution only, tracked under `result.json.execution`.
-Top-level `status` remains acceptance-only; execution outcome is separate.
+Top-level `status` remains orchestration acceptance-only; execution outcome remains separate under `result.json.execution`.
 `chatgpt_tasks` and `local_llm` remain non-executing stubs in PR2.
+
+Accepted/recordable jobs are also written to a minimal runtime ledger at `state/jobs.db`.
+
+## Read-Only Evaluation CLI
+
+You can evaluate an already-written job directory without mutating orchestration behavior:
+
+```bash
+python scripts/evaluate_job.py --job-dir <path>
+```
+
+## Read-Only Ledger Inspection CLI
+
+You can inspect a recorded job from `state/jobs.db` and referenced artifacts without mutation:
+
+```bash
+python scripts/inspect_job.py --job-id <id>
+python scripts/inspect_job.py --latest
+python scripts/inspect_job.py --job-id <id> --json
+```
 
 ## Existing Flask Runner (unchanged)
 

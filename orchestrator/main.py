@@ -156,6 +156,11 @@ def main() -> int:
             }
         result_payload["execution"] = execution_result
 
+    result_payload["persistence"] = {
+        "evaluation_artifacts": "skipped",
+        "ledger": "skipped",
+    }
+
     _write_json(request_path, request_payload)
     _write_json(result_path, result_payload)
     if result_payload["status"] == "accepted":
@@ -164,7 +169,9 @@ def main() -> int:
             evaluation_result = evaluate_job_directory(out_dir)
             persist_evaluation_artifacts(out_dir, evaluation_result=evaluation_result)
         except Exception:
-            pass
+            result_payload["persistence"]["evaluation_artifacts"] = "failed"
+        else:
+            result_payload["persistence"]["evaluation_artifacts"] = "written"
         if evaluation_result is None:
             try:
                 evaluation_result = evaluate_job_directory(out_dir)
@@ -209,7 +216,11 @@ def main() -> int:
                     ),
                 )
             except Exception:
-                pass
+                result_payload["persistence"]["ledger"] = "failed"
+            else:
+                result_payload["persistence"]["ledger"] = "written"
+
+    _write_json(result_path, result_payload)
 
     print(f"dispatch_dir={out_dir}")
     print(f"request_path={request_path}")
