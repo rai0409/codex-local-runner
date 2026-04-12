@@ -30,6 +30,41 @@ def _verify_not_run(reason: str) -> dict[str, Any]:
     }
 
 
+def _retry_not_attempted() -> dict[str, Any]:
+    return {
+        "attempted": False,
+        "trigger": "not_applicable",
+        "outcome": "not_attempted",
+    }
+
+
+def _derive_result_interpretation(
+    execution_status: str,
+    verify_result: dict[str, Any],
+    retry: dict[str, Any],
+) -> str:
+    if execution_status != "completed":
+        return "execution_not_completed"
+
+    verify_status = str(verify_result.get("status", "")).strip()
+    retry_attempted = bool(retry.get("attempted"))
+    retry_outcome = str(retry.get("outcome", "")).strip()
+
+    if verify_status == "passed":
+        if retry_attempted and retry_outcome == "retry_succeeded":
+            return "completed_verified_passed_after_retry"
+        return "completed_verified_passed"
+
+    if verify_status == "failed":
+        if retry_attempted and retry_outcome == "retry_failed":
+            return "completed_verified_failed_after_retry"
+        return "completed_verified_failed"
+
+    if retry_attempted and retry_outcome == "retry_failed":
+        return "completed_verified_failed_after_retry"
+    return "completed_verified_passed"
+
+
 class CodexCliAdapter(ProviderAdapter):
     def __init__(self) -> None:
         super().__init__(name="codex_cli")
@@ -61,9 +96,14 @@ class CodexCliAdapter(ProviderAdapter):
                 "error": worktree_result["error"] or "failed to prepare git worktree",
                 "return_code": None,
                 "verify": _verify_not_run(reason="validation_not_run_execution_status_failed"),
+                "attempt_count": 1,
+                "retry": _retry_not_attempted(),
+                "result_interpretation": "execution_not_completed",
             }
 
         cleanup_error = ""
+        attempt_count = 1
+        retry = _retry_not_attempted()
         try:
             execution_result = run_codex(
                 task={"repo_path": worktree_result["worktree_path"]},
@@ -82,6 +122,33 @@ class CodexCliAdapter(ProviderAdapter):
                 verify_result = _verify_not_run(
                     reason=_not_run_reason_for_execution_status(execution_status),
                 )
+
+            if execution_status == "completed" and verify_result.get("status") == "failed":
+                attempt_count = 2
+                retry = {
+                    "attempted": True,
+                    "trigger": "verify_failed",
+                    "outcome": "retry_failed",
+                }
+                execution_result = run_codex(
+                    task={"repo_path": worktree_result["worktree_path"]},
+                    prompt=prompt,
+                    work_root=str(work_dir / "execution_runs"),
+                )
+                execution_status = execution_result.get("status") or (
+                    "completed" if execution_result.get("success") else "failed"
+                )
+                if execution_status == "completed":
+                    verify_result = run_validation_commands(
+                        validation_commands=validation_commands,
+                        cwd=worktree_result["worktree_path"],
+                    )
+                else:
+                    verify_result = _verify_not_run(
+                        reason=_not_run_reason_for_execution_status(execution_status),
+                    )
+                if verify_result.get("status") == "passed":
+                    retry["outcome"] = "retry_succeeded"
         finally:
             if worktree_result["cleanup_needed"]:
                 cleanup_result = cleanup_git_worktree(
@@ -121,4 +188,11 @@ class CodexCliAdapter(ProviderAdapter):
             "error": execution_error or None,
             "return_code": execution_result.get("return_code"),
             "verify": verify_result,
+            "attempt_count": attempt_count,
+            "retry": retry,
+            "result_interpretation": _derive_result_interpretation(
+                execution_status=execution_status,
+                verify_result=verify_result,
+                retry=retry,
+            ),
         }

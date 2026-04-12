@@ -9,6 +9,7 @@ from unittest import mock
 
 from adapters.chatgpt_tasks import ChatgptTasksAdapter
 from adapters.codex_cli import CodexCliAdapter
+from adapters.codex_cli import _derive_result_interpretation
 from adapters.local_llm import LocalLlmAdapter
 from orchestrator import main as orchestrator_main
 
@@ -78,6 +79,7 @@ class CodexCliExecutionTests(unittest.TestCase):
             {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
         )
         self.assertEqual(result["verify"]["status"], "not_run")
+        self.assertEqual(result["result_interpretation"], "completed_verified_passed")
 
     def test_codex_cli_execute_failure_is_reported(self) -> None:
         adapter = CodexCliAdapter()
@@ -150,6 +152,7 @@ class CodexCliExecutionTests(unittest.TestCase):
             result["retry"],
             {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
         )
+        self.assertEqual(result["result_interpretation"], "execution_not_completed")
 
     def test_codex_cli_execute_uses_prepared_worktree_path(self) -> None:
         adapter = CodexCliAdapter()
@@ -254,6 +257,7 @@ class CodexCliExecutionTests(unittest.TestCase):
             result["retry"],
             {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
         )
+        self.assertEqual(result["result_interpretation"], "completed_verified_passed")
 
     def test_codex_cli_execute_fails_when_worktree_preparation_fails(self) -> None:
         adapter = CodexCliAdapter()
@@ -292,6 +296,7 @@ class CodexCliExecutionTests(unittest.TestCase):
             result["retry"],
             {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
         )
+        self.assertEqual(result["result_interpretation"], "execution_not_completed")
 
     def test_codex_cli_execute_timed_out_sets_verify_not_run(self) -> None:
         adapter = CodexCliAdapter()
@@ -353,6 +358,7 @@ class CodexCliExecutionTests(unittest.TestCase):
             result["retry"],
             {"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
         )
+        self.assertEqual(result["result_interpretation"], "execution_not_completed")
 
     def test_codex_cli_retries_once_when_verify_failed_and_second_attempt_passes(self) -> None:
         adapter = CodexCliAdapter()
@@ -490,6 +496,7 @@ class CodexCliExecutionTests(unittest.TestCase):
             result["retry"],
             {"attempted": True, "trigger": "verify_failed", "outcome": "retry_succeeded"},
         )
+        self.assertEqual(result["result_interpretation"], "completed_verified_passed_after_retry")
 
     def test_codex_cli_retry_outcome_failed_when_second_attempt_verify_fails(self) -> None:
         adapter = CodexCliAdapter()
@@ -623,6 +630,16 @@ class CodexCliExecutionTests(unittest.TestCase):
             result["retry"],
             {"attempted": True, "trigger": "verify_failed", "outcome": "retry_failed"},
         )
+        self.assertEqual(result["result_interpretation"], "completed_verified_failed_after_retry")
+
+    def test_result_interpretation_completed_verify_failed_without_retry(self) -> None:
+        interpretation = _derive_result_interpretation(
+            execution_status="completed",
+            verify_result={"status": "failed"},
+            retry={"attempted": False, "trigger": "not_applicable", "outcome": "not_attempted"},
+        )
+
+        self.assertEqual(interpretation, "completed_verified_failed")
 
     def test_stub_adapters_do_not_execute(self) -> None:
         with self.assertRaises(NotImplementedError):
