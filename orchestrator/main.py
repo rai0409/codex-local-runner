@@ -7,6 +7,9 @@ from pathlib import Path
 
 from adapters import get_registered_adapters, resolve_adapter
 from orchestrator.config_loader import load_yaml_file
+from orchestrator.job_evaluator import evaluate_job_directory
+from orchestrator.job_evaluator import persist_evaluation_artifacts
+from orchestrator.ledger import record_job_evaluation
 from orchestrator.models import TASK_STATUS_FAILED
 from orchestrator.models import DispatchRequest
 from orchestrator.task_bus import dispatch
@@ -155,6 +158,58 @@ def main() -> int:
 
     _write_json(request_path, request_payload)
     _write_json(result_path, result_payload)
+    if result_payload["status"] == "accepted":
+        evaluation_result = None
+        try:
+            evaluation_result = evaluate_job_directory(out_dir)
+            persist_evaluation_artifacts(out_dir, evaluation_result=evaluation_result)
+        except Exception:
+            pass
+        if evaluation_result is None:
+            try:
+                evaluation_result = evaluate_job_directory(out_dir)
+            except Exception:
+                evaluation_result = None
+        if evaluation_result is not None:
+            rubric_path = out_dir / "rubric.json"
+            merge_gate_path = out_dir / "merge_gate.json"
+            classification_path = out_dir / "classification.json"
+
+            accepted_at = result_payload.get("accepted_at")
+            created_at: str | None = None
+            if isinstance(accepted_at, str) and accepted_at.strip():
+                created_at = accepted_at.strip()
+            else:
+                execution_payload = result_payload.get("execution")
+                if isinstance(execution_payload, dict):
+                    started_at = execution_payload.get("started_at")
+                    if isinstance(started_at, str) and started_at.strip():
+                        created_at = started_at.strip()
+            try:
+                classification = evaluation_result["classification"]
+                rubric = evaluation_result["rubric"]
+                merge_gate = evaluation_result["merge_gate"]
+                record_job_evaluation(
+                    job_id=str(evaluation_result["job_id"]),
+                    repo=str(request_payload.get("repo", "")),
+                    task_type=str(request_payload.get("task_type", "")),
+                    provider=str(request_payload.get("provider", "")),
+                    accepted_status=str(result_payload.get("status", "")),
+                    declared_category=str(classification.get("declared_category", "")),
+                    observed_category=str(classification.get("observed_category", "")),
+                    merge_eligible=bool(rubric.get("merge_eligible", False)),
+                    merge_gate_passed=bool(merge_gate.get("passed", False)),
+                    created_at=created_at,
+                    request_path=str(request_path),
+                    result_path=str(result_path),
+                    rubric_path=str(rubric_path) if rubric_path.exists() else None,
+                    merge_gate_path=str(merge_gate_path) if merge_gate_path.exists() else None,
+                    classification_path=(
+                        str(classification_path) if classification_path.exists() else None
+                    ),
+                )
+            except Exception:
+                pass
 
     print(f"dispatch_dir={out_dir}")
     print(f"request_path={request_path}")
