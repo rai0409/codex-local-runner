@@ -6,6 +6,24 @@ from orchestrator.evaluate import evaluate_rubric
 
 
 class EvaluateTests(unittest.TestCase):
+    def test_rubric_path_checks_reflect_yaml_policy(self) -> None:
+        result = evaluate_rubric(
+            declared_category="docs_only",
+            observed_category="docs_only",
+            changed_files=["docs/reviewer_handoff.md"],
+            additions=10,
+            deletions=2,
+            required_tests_declared=True,
+            required_tests_executed=True,
+            required_tests_passed=True,
+            ci_green=True,
+            rollback_metadata_recorded=True,
+        )
+
+        self.assertTrue(result.allowed_files_only)
+        self.assertTrue(result.forbidden_files_untouched)
+        self.assertTrue(result.merge_eligible)
+
     def test_rubric_fails_when_forbidden_files_are_touched(self) -> None:
         result = evaluate_rubric(
             declared_category="docs_only",
