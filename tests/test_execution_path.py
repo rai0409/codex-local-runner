@@ -810,15 +810,18 @@ class CodexCliExecutionTests(unittest.TestCase):
 
 
 class OrchestratorExecutionSemanticsTests(unittest.TestCase):
-    def _read_single_result(self, output_root: str) -> dict:
+    def _single_output_dir(self, output_root: str) -> Path:
         output_dirs = list(Path(output_root).iterdir())
         self.assertEqual(len(output_dirs), 1)
-        return json.loads((output_dirs[0] / "result.json").read_text(encoding="utf-8"))
+        return output_dirs[0]
+
+    def _read_single_result(self, output_root: str) -> dict:
+        output_dir = self._single_output_dir(output_root)
+        return json.loads((output_dir / "result.json").read_text(encoding="utf-8"))
 
     def _read_single_request(self, output_root: str) -> dict:
-        output_dirs = list(Path(output_root).iterdir())
-        self.assertEqual(len(output_dirs), 1)
-        return json.loads((output_dirs[0] / "request.json").read_text(encoding="utf-8"))
+        output_dir = self._single_output_dir(output_root)
+        return json.loads((output_dir / "request.json").read_text(encoding="utf-8"))
 
     def test_accepted_status_is_kept_when_execution_fails(self) -> None:
         with tempfile.TemporaryDirectory() as output_root:
@@ -852,10 +855,17 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
                     rc = orchestrator_main.main()
 
             result = self._read_single_result(output_root)
+            output_dir = self._single_output_dir(output_root)
+            rubric = json.loads((output_dir / "rubric.json").read_text(encoding="utf-8"))
+            merge_gate = json.loads((output_dir / "merge_gate.json").read_text(encoding="utf-8"))
 
         self.assertEqual(rc, 0)
         self.assertEqual(result["status"], "accepted")
         self.assertEqual(result["execution"]["status"], "failed")
+        self.assertIn("merge_eligible", rubric)
+        self.assertIn("required_tests_declared", rubric)
+        self.assertIn("passed", merge_gate)
+        self.assertIn("auto_merge_allowed", merge_gate)
 
     def test_acceptance_failure_sets_execution_not_started(self) -> None:
         with tempfile.TemporaryDirectory() as output_root:
@@ -878,10 +888,13 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
                 rc = orchestrator_main.main()
 
             result = self._read_single_result(output_root)
+            output_dir = self._single_output_dir(output_root)
 
         self.assertEqual(rc, 1)
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["execution"]["status"], "not_started")
+        self.assertFalse((output_dir / "rubric.json").exists())
+        self.assertFalse((output_dir / "merge_gate.json").exists())
 
     def test_validation_commands_are_routed_to_execution_payload(self) -> None:
         with tempfile.TemporaryDirectory() as output_root:
@@ -895,12 +908,45 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
                     "artifacts": [],
                     "error": None,
                     "return_code": 0,
+                    "attempt_count": 1,
+                    "retry": {
+                        "attempted": False,
+                        "trigger": "not_applicable",
+                        "outcome": "not_attempted",
+                    },
                     "verify": {
                         "status": "not_run",
                         "success": True,
                         "commands": [],
                         "error": "",
                         "reason": "validation_not_run_execution_status_unknown",
+                    },
+                    "result_interpretation": "completed_verified_passed",
+                    "review_recommendation": "no_review_needed",
+                    "review_handoff_summary": {
+                        "final_status": "completed",
+                        "final_verify_status": "not_run",
+                        "final_verify_reason": "validation_not_run_execution_status_unknown",
+                        "retry_attempted": False,
+                        "retry_outcome": "not_attempted",
+                        "result_interpretation": "completed_verified_passed",
+                        "review_recommendation": "no_review_needed",
+                    },
+                    "reviewer_handoff": {
+                        "summary": {
+                            "final_status": "completed",
+                            "final_verify_status": "not_run",
+                            "final_verify_reason": "validation_not_run_execution_status_unknown",
+                            "retry_attempted": False,
+                            "retry_outcome": "not_attempted",
+                            "result_interpretation": "completed_verified_passed",
+                            "review_recommendation": "no_review_needed",
+                        },
+                        "execution": {"status": "completed", "attempt_count": 1, "return_code": 0},
+                        "validation": {
+                            "verify_status": "not_run",
+                            "verify_reason": "validation_not_run_execution_status_unknown",
+                        },
                     },
                 },
             ) as execute_mock:
@@ -928,6 +974,9 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
 
             request_payload = self._read_single_request(output_root)
             result_payload = self._read_single_result(output_root)
+            output_dir = self._single_output_dir(output_root)
+            rubric = json.loads((output_dir / "rubric.json").read_text(encoding="utf-8"))
+            merge_gate = json.loads((output_dir / "merge_gate.json").read_text(encoding="utf-8"))
 
         self.assertEqual(rc, 0)
         self.assertEqual(result_payload["status"], "accepted")
@@ -938,6 +987,137 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         )
         self.assertEqual(request_payload["validation_commands"], ["echo one", "echo two"])
         self.assertNotIn("validation_command", request_payload)
+        self.assertTrue(rubric["required_tests_declared"])
+        self.assertFalse(rubric["required_tests_executed"])
+        self.assertFalse(rubric["required_tests_passed"])
+        self.assertFalse(rubric["ci_required_checks_green"])
+        self.assertFalse(rubric["rollback_metadata_recorded"])
+        self.assertIn("passed", merge_gate)
+        self.assertIn("auto_merge_allowed", merge_gate)
+        self.assertEqual(
+            result_payload["execution"]["result_interpretation"],
+            "completed_verified_passed",
+        )
+        self.assertEqual(result_payload["execution"]["review_recommendation"], "no_review_needed")
+        self.assertEqual(result_payload["execution"]["review_handoff_summary"]["final_status"], "completed")
+        self.assertEqual(result_payload["execution"]["reviewer_handoff"]["execution"]["status"], "completed")
+
+    def test_accepted_flow_records_ledger_row(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "failed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": "simulated execution failure",
+                },
+            ):
+                with mock.patch("orchestrator.main.record_job_evaluation") as record_mock:
+                    with mock.patch(
+                        "sys.argv",
+                        [
+                            "main.py",
+                            "--repo",
+                            "codex-local-runner",
+                            "--task-type",
+                            "orchestration",
+                            "--goal",
+                            "record ledger",
+                            "--provider",
+                            "codex_cli",
+                            "--output-root",
+                            output_root,
+                        ],
+                    ):
+                        rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+            output_dir = self._single_output_dir(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        record_mock.assert_called_once()
+        kwargs = record_mock.call_args.kwargs
+        self.assertEqual(kwargs["accepted_status"], "accepted")
+        self.assertEqual(kwargs["request_path"], str(output_dir / "request.json"))
+        self.assertEqual(kwargs["result_path"], str(output_dir / "result.json"))
+        self.assertEqual(kwargs["rubric_path"], str(output_dir / "rubric.json"))
+        self.assertEqual(kwargs["merge_gate_path"], str(output_dir / "merge_gate.json"))
+        self.assertIsNone(kwargs["classification_path"])
+
+    def test_acceptance_failure_skips_ledger_recording(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch("orchestrator.main.record_job_evaluation") as record_mock:
+                with mock.patch(
+                    "sys.argv",
+                    [
+                        "main.py",
+                        "--repo",
+                        "codex-local-runner",
+                        "--task-type",
+                        "orchestration",
+                        "--goal",
+                        "record ledger",
+                        "--provider",
+                        "unknown_provider",
+                        "--output-root",
+                        output_root,
+                    ],
+                ):
+                    rc = orchestrator_main.main()
+
+            result = self._read_single_result(output_root)
+            output_dir = self._single_output_dir(output_root)
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["execution"]["status"], "not_started")
+        record_mock.assert_not_called()
+        self.assertFalse((output_dir / "rubric.json").exists())
+        self.assertFalse((output_dir / "merge_gate.json").exists())
+
+    def test_ledger_write_failure_does_not_flip_accepted_status(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.record_job_evaluation",
+                    side_effect=RuntimeError("ledger write failed"),
+                ):
+                    with mock.patch(
+                        "sys.argv",
+                        [
+                            "main.py",
+                            "--repo",
+                            "codex-local-runner",
+                            "--task-type",
+                            "orchestration",
+                            "--goal",
+                            "record ledger",
+                            "--provider",
+                            "codex_cli",
+                            "--output-root",
+                            output_root,
+                        ],
+                    ):
+                        rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(result_payload["execution"]["status"], "completed")
 
 
 @unittest.skipUnless(importlib.util.find_spec("flask") is not None, "flask is not installed")
