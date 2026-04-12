@@ -65,6 +65,20 @@ def _derive_result_interpretation(
     return "completed_verified_passed"
 
 
+def _derive_review_recommendation(result_interpretation: str) -> str:
+    if result_interpretation == "completed_verified_passed":
+        return "no_review_needed"
+    if result_interpretation == "completed_verified_passed_after_retry":
+        return "review_recommended"
+    if result_interpretation == "completed_verified_failed_after_retry":
+        return "review_recommended_after_retry_failure"
+    if result_interpretation == "completed_verified_failed":
+        return "review_recommended"
+    if result_interpretation == "execution_not_completed":
+        return "review_recommended"
+    raise ValueError(f"unsupported result_interpretation: {result_interpretation}")
+
+
 class CodexCliAdapter(ProviderAdapter):
     def __init__(self) -> None:
         super().__init__(name="codex_cli")
@@ -99,6 +113,7 @@ class CodexCliAdapter(ProviderAdapter):
                 "attempt_count": 1,
                 "retry": _retry_not_attempted(),
                 "result_interpretation": "execution_not_completed",
+                "review_recommendation": "review_recommended",
             }
 
         cleanup_error = ""
@@ -179,6 +194,11 @@ class CodexCliAdapter(ProviderAdapter):
             else:
                 execution_error = f"Worktree cleanup failed: {cleanup_error}"
 
+        result_interpretation = _derive_result_interpretation(
+            execution_status=execution_status,
+            verify_result=verify_result,
+            retry=retry,
+        )
         return {
             "adapter": self.name,
             "status": execution_status,
@@ -190,9 +210,6 @@ class CodexCliAdapter(ProviderAdapter):
             "verify": verify_result,
             "attempt_count": attempt_count,
             "retry": retry,
-            "result_interpretation": _derive_result_interpretation(
-                execution_status=execution_status,
-                verify_result=verify_result,
-                retry=retry,
-            ),
+            "result_interpretation": result_interpretation,
+            "review_recommendation": _derive_review_recommendation(result_interpretation),
         }
