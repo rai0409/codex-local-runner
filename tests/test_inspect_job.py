@@ -7,7 +7,11 @@ import sys
 import tempfile
 import unittest
 
+from orchestrator.ledger import record_execution_target
 from orchestrator.ledger import record_job_evaluation
+from orchestrator.ledger import record_merge_execution_outcome
+from orchestrator.ledger import record_rollback_execution_outcome
+from orchestrator.ledger import record_rollback_traceability_for_candidate
 
 
 class InspectJobCliTests(unittest.TestCase):
@@ -101,8 +105,12 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertEqual(payload["job_id"], "job-json")
         self.assertIn("paths", payload)
         self.assertIn("fail_reasons", payload)
+        self.assertIn("rollback_trace", payload)
+        self.assertIn("rollback_execution", payload)
         self.assertIn("rubric", payload["paths"])
         self.assertIn("merge_gate", payload["paths"])
+        self.assertFalse(payload["rollback_trace"]["recorded"])
+        self.assertFalse(payload["rollback_execution"]["recorded"])
 
     def test_missing_job_exits_clearly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -220,6 +228,97 @@ class InspectJobCliTests(unittest.TestCase):
 
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("one of the arguments --job-id --latest is required", proc.stderr)
+
+    def test_inspect_surfaces_rollback_traceability_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "state" / "jobs.db"
+            self._seed_job(db_path=db_path, job_id="job-rollback-trace")
+            candidate_key = record_execution_target(
+                db_path=db_path,
+                job_id="job-rollback-trace",
+                repo="codex-local-runner",
+                target_ref="refs/heads/main",
+                source_sha="a" * 40,
+                base_sha="b" * 40,
+                created_at="2026-04-12T00:00:00+00:00",
+            )
+            record_merge_execution_outcome(
+                db_path=db_path,
+                job_id="job-rollback-trace",
+                repo="codex-local-runner",
+                target_ref="refs/heads/main",
+                source_sha="a" * 40,
+                base_sha="b" * 40,
+                execution_status="succeeded",
+                executed_at="2026-04-12T00:10:00+00:00",
+                pre_merge_sha="b" * 40,
+                post_merge_sha="c" * 40,
+                merge_result_sha="c" * 40,
+                merge_error=None,
+            )
+            record_rollback_traceability_for_candidate(
+                candidate_idempotency_key=candidate_key,
+                db_path=db_path,
+            )
+
+            proc = self._run(["--job-id", "job-rollback-trace", "--db-path", str(db_path), "--json"])
+
+        self.assertEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["rollback_trace"]["recorded"])
+        self.assertTrue(payload["rollback_trace"]["rollback_eligible"])
+        self.assertEqual(payload["rollback_trace"]["pre_merge_sha"], "b" * 40)
+        self.assertEqual(payload["rollback_trace"]["post_merge_sha"], "c" * 40)
+
+    def test_inspect_surfaces_rollback_execution_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "state" / "jobs.db"
+            self._seed_job(db_path=db_path, job_id="job-rollback-execution")
+            candidate_key = record_execution_target(
+                db_path=db_path,
+                job_id="job-rollback-execution",
+                repo="codex-local-runner",
+                target_ref="refs/heads/main",
+                source_sha="a" * 40,
+                base_sha="b" * 40,
+                created_at="2026-04-12T00:00:00+00:00",
+            )
+            record_merge_execution_outcome(
+                db_path=db_path,
+                job_id="job-rollback-execution",
+                repo="codex-local-runner",
+                target_ref="refs/heads/main",
+                source_sha="a" * 40,
+                base_sha="b" * 40,
+                execution_status="succeeded",
+                executed_at="2026-04-12T00:10:00+00:00",
+                pre_merge_sha="b" * 40,
+                post_merge_sha="c" * 40,
+                merge_result_sha="c" * 40,
+                merge_error=None,
+            )
+            trace = record_rollback_traceability_for_candidate(
+                candidate_idempotency_key=candidate_key,
+                db_path=db_path,
+            )
+            record_rollback_execution_outcome(
+                rollback_trace_id=str(trace["rollback_trace_id"]),
+                execution_status="succeeded",
+                attempted_at="2026-04-12T00:20:00+00:00",
+                current_head_sha="c" * 40,
+                rollback_result_sha="d" * 40,
+                rollback_error=None,
+                consistency_check_passed=True,
+                db_path=db_path,
+            )
+
+            proc = self._run(["--job-id", "job-rollback-execution", "--db-path", str(db_path), "--json"])
+
+        self.assertEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["rollback_execution"]["recorded"])
+        self.assertEqual(payload["rollback_execution"]["status"], "succeeded")
+        self.assertEqual(payload["rollback_execution"]["rollback_result_sha"], "d" * 40)
 
 
 if __name__ == "__main__":

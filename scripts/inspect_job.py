@@ -12,8 +12,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from orchestrator.ledger import DEFAULT_LEDGER_DB_PATH  # noqa: E402
+from orchestrator.ledger import get_rollback_execution_by_job_id  # noqa: E402
 from orchestrator.ledger import get_job_by_id  # noqa: E402
 from orchestrator.ledger import get_latest_job  # noqa: E402
+from orchestrator.ledger import get_rollback_trace_by_job_id  # noqa: E402
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -58,9 +60,17 @@ def _read_fail_reasons(path_value: Any) -> list[str]:
     return [str(item) for item in raw]
 
 
-def _build_output(row: dict[str, Any]) -> dict[str, Any]:
+def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     rubric_path = row.get("rubric_path")
     merge_gate_path = row.get("merge_gate_path")
+    rollback_trace = get_rollback_trace_by_job_id(
+        str(row.get("job_id", "")),
+        db_path=db_path,
+    )
+    rollback_execution = get_rollback_execution_by_job_id(
+        str(row.get("job_id", "")),
+        db_path=db_path,
+    )
     return {
         "job_id": row.get("job_id"),
         "repo": row.get("repo"),
@@ -81,6 +91,27 @@ def _build_output(row: dict[str, Any]) -> dict[str, Any]:
         "fail_reasons": {
             "rubric": _read_fail_reasons(rubric_path),
             "merge_gate": _read_fail_reasons(merge_gate_path),
+        },
+        "rollback_trace": {
+            "recorded": rollback_trace is not None,
+            "rollback_trace_id": rollback_trace.get("rollback_trace_id") if rollback_trace else None,
+            "rollback_eligible": (
+                _as_optional_bool(rollback_trace.get("rollback_eligible"))
+                if rollback_trace
+                else None
+            ),
+            "ineligible_reason": rollback_trace.get("ineligible_reason") if rollback_trace else None,
+            "pre_merge_sha": rollback_trace.get("pre_merge_sha") if rollback_trace else None,
+            "post_merge_sha": rollback_trace.get("post_merge_sha") if rollback_trace else None,
+        },
+        "rollback_execution": {
+            "recorded": rollback_execution is not None,
+            "status": rollback_execution.get("execution_status") if rollback_execution else None,
+            "attempted_at": rollback_execution.get("attempted_at") if rollback_execution else None,
+            "rollback_result_sha": (
+                rollback_execution.get("rollback_result_sha") if rollback_execution else None
+            ),
+            "rollback_error": rollback_execution.get("rollback_error") if rollback_execution else None,
         },
     }
 
@@ -117,6 +148,15 @@ def _format_human(output: dict[str, Any]) -> str:
             if output["fail_reasons"]["merge_gate"]
             else "none"
         ),
+        f"rollback_trace_recorded: {_fmt(output['rollback_trace'].get('recorded'))}",
+        f"rollback_eligible: {_fmt(output['rollback_trace'].get('rollback_eligible'))}",
+        f"rollback_ineligible_reason: {_fmt(output['rollback_trace'].get('ineligible_reason'))}",
+        f"rollback_pre_merge_sha: {_fmt(output['rollback_trace'].get('pre_merge_sha'))}",
+        f"rollback_post_merge_sha: {_fmt(output['rollback_trace'].get('post_merge_sha'))}",
+        f"rollback_execution_recorded: {_fmt(output['rollback_execution'].get('recorded'))}",
+        f"rollback_execution_status: {_fmt(output['rollback_execution'].get('status'))}",
+        f"rollback_result_sha: {_fmt(output['rollback_execution'].get('rollback_result_sha'))}",
+        f"rollback_error: {_fmt(output['rollback_execution'].get('rollback_error'))}",
     ]
     return "\n".join(lines)
 
@@ -135,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Job not found: {args.job_id}", file=sys.stderr)
             return 1
 
-    output = _build_output(row)
+    output = _build_output(row, db_path=str(args.db_path))
     if args.as_json:
         print(json.dumps(output, ensure_ascii=False, sort_keys=True))
     else:
