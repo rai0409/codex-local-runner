@@ -2,19 +2,21 @@
 
 ## Repository Role
 
-- `codex-local-runner` is a local execution + orchestration repository.
-- Phase 1 keeps acceptance semantics stable while adding minimal execution plumbing.
+- `codex-local-runner` is a local-first execution + orchestration repository.
+- The repository acts as an auditable control-plane with constrained local merge/rollback execution paths.
 
 ## Phase 1 Rules
 
 - Do not rename repository/package/import paths/directories.
 - Dispatch is intake-only and may return only `pending`, `accepted`, or `failed`.
 - Top-level `accepted`/`failed` remains orchestration acceptance only.
-- Provider adapters are stubs and must raise `NotImplementedError` when executed.
-- Do not fake provider execution success.
-- Registered adapter stubs: `codex_cli`, `chatgpt_tasks`, `local_llm`.
+- Do not fake provider execution or merge/rollback success.
+- Keep execution outcomes under `result.json.execution`; do not reinterpret acceptance.
 - Provider names are resolved through `config/providers.yaml`; invalid providers fail explicitly.
-- PR2 allows minimal `codex_cli` execution result tracking via `result.json.execution`.
+- `codex_cli` execution is supported; non-primary adapters may remain stubs.
+- Execution-target identity, merge receipts, merge execution outcomes, rollback traceability, and rollback execution outcomes are persistent state in `state/jobs.db`.
+- Read-only inspection/listing tooling is visibility-only and must not be used as authorization.
+- Merge/rollback execution remains local-only: no remote push, no GitHub API integration.
 
 ## Managed Repositories
 

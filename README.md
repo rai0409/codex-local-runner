@@ -1,15 +1,15 @@
 # codex-local-runner
 
-`codex-local-runner` is a local-only repository.
-In Phase 1, it also works as a logical **control-plane** kernel for coarse-grained orchestration.
+`codex-local-runner` is a local-first, auditable control-plane for constrained orchestration and execution.
+It remains local-only.
 
 ## Scope
 
 - Keep existing local Flask runner behavior (`app.py`) for direct Codex execution.
-- Add a provider-agnostic orchestration skeleton under `orchestrator/` and `adapters/`.
-- Keep dispatch semantics intake-only in Phase 1.
+- Keep provider-agnostic orchestration under `orchestrator/` and `adapters/`.
+- Keep top-level dispatch semantics intake-oriented (`accepted`/`failed`) while execution outcomes remain separate.
 
-## Current Architecture (Phase 1)
+## Current Architecture
 
 1. Provider adapter layer: `adapters/*`
 2. Task bus layer: `orchestrator/task_bus.py`
@@ -34,6 +34,17 @@ The repository now includes a deterministic policy/evaluation layer:
   - `config/change_categories.yaml`
   - `config/merge_gate.yaml`
 
+## Accepted-Job Artifacts and Ledger
+
+Accepted jobs write artifacts under `tasks/control_plane_dispatches/<timestamp>/`:
+
+- `request.json`
+- `result.json`
+- `rubric.json`
+- `merge_gate.json`
+
+Runtime state is persisted in SQLite at `state/jobs.db`, including accepted-job visibility, execution-target identity, merge receipts, merge execution outcomes, rollback traces, and rollback execution outcomes.
+
 ## Task Status Policy
 
 Phase 1 allows only:
@@ -43,6 +54,7 @@ Phase 1 allows only:
 - `failed`
 
 `accepted` means orchestration intake accepted. It does not mean provider execution success.
+Execution outcomes stay under `result.json.execution`.
 
 ## Dispatch CLI
 
@@ -62,22 +74,90 @@ python -m orchestrator.main \
   --provider codex_cli
 ```
 
-Artifacts are written under `tasks/control_plane_dispatches/<timestamp>/`:
+## Constrained Local Merge Execution
 
-- `request.json`
-- `result.json`
-- `rubric.json` (for accepted jobs)
-- `merge_gate.json` (for accepted jobs)
+Constrained merge execution is optional and local-only.
 
-`request.json` and `result.json` include `job_id`.
-`result.json` also includes `dispatcher` and `artifacts`.
-Provider resolution is validated against `config/providers.yaml` before acceptance.
-Unknown, disabled, or unsupported providers fail explicitly with `status=failed`.
-PR2 adds minimal `codex_cli` execution only, tracked under `result.json.execution`.
-Top-level `status` remains orchestration acceptance-only; execution outcome remains separate under `result.json.execution`.
-`chatgpt_tasks` and `local_llm` remain non-executing stubs in PR2.
+Requirements:
+- `--execute-merge`
+- execution-target identity fields: `--target-ref`, `--source-sha`, `--base-sha`
+- persisted execution-target identity must match the request identity
+- duplicate success for the same candidate identity is skipped
 
-Accepted/recordable jobs are also written to a minimal runtime ledger at `state/jobs.db`.
+Behavior:
+- local `git merge --no-ff --no-edit` only
+- no remote push
+- no GitHub API integration
+
+Example:
+
+```bash
+python -m orchestrator.main \
+  --repo codex-local-runner \
+  --task-type orchestration \
+  --goal "constrained local merge" \
+  --provider codex_cli \
+  --execution-repo-path /path/to/repo \
+  --target-ref refs/heads/main \
+  --source-sha <source_sha> \
+  --base-sha <base_sha> \
+  --execute-merge
+```
+
+## Rollback Traceability and Constrained Local Rollback
+
+Rollback is trace-driven.
+
+`rollback_eligible` means:
+- a persisted rollback trace exists
+- merge execution status is `succeeded`
+- pre/post merge linkage is complete in persisted facts
+
+Constrained rollback execution is optional and local-only.
+
+Requirements:
+- `--execute-rollback`
+- `--rollback-trace-id <id>`
+- trace must exist and have `rollback_eligible=true`
+- trace linkage must include pre/post merge SHAs
+- current-state consistency checks must pass (target ref drift and post-merge head checks)
+- duplicate success for the same rollback trace is skipped
+
+Behavior:
+- local `git revert --no-edit -m 1 <post_merge_sha>` only
+- no remote push
+- no GitHub API integration
+- no reset/rebase rollback flow
+
+Example:
+
+```bash
+python -m orchestrator.main \
+  --repo codex-local-runner \
+  --task-type orchestration \
+  --goal "constrained local rollback" \
+  --provider codex_cli \
+  --execution-repo-path /path/to/repo \
+  --execute-rollback \
+  --rollback-trace-id <rollback_trace_id>
+```
+
+## Persistence Observability
+
+`result.json.persistence` is additive observability and uses:
+
+- `written`: persistence was attempted and completed
+- `failed`: persistence was attempted and failed non-fatally
+- `skipped`: persistence was not attempted in the current flow
+
+Current keys include:
+- `evaluation_artifacts`
+- `ledger`
+- `execution_target`
+- `merge_execution`
+- `merge_receipt`
+- `rollback_trace`
+- `rollback_execution`
 
 ## Read-Only Evaluation CLI
 
@@ -87,7 +167,7 @@ You can evaluate an already-written job directory without mutating orchestration
 python scripts/evaluate_job.py --job-dir <path>
 ```
 
-## Read-Only Ledger Inspection CLI
+## Read-Only Inspection CLI
 
 You can inspect a recorded job from `state/jobs.db` and referenced artifacts without mutation:
 
@@ -96,6 +176,15 @@ python scripts/inspect_job.py --job-id <id>
 python scripts/inspect_job.py --latest
 python scripts/inspect_job.py --job-id <id> --json
 ```
+
+Read-only candidate visibility is also available:
+
+```bash
+python scripts/list_merge_candidates.py
+python scripts/list_merge_candidates.py --latest 20 --json
+```
+
+These CLIs are visibility-only. They are not execution authorization.
 
 ## Existing Flask Runner (unchanged)
 
