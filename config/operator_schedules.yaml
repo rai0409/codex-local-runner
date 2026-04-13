@@ -1,0 +1,17 @@
+schedules:
+  - schedule_id: daily_operator_summary
+    enabled: true
+    timezone: Asia/Tokyo
+    trigger:
+      type: daily_times
+      times:
+        - "09:00"
+        - "17:00"
+    target:
+      repo: codex-local-runner
+    job_selector:
+      accepted_status: accepted
+    delivery:
+      method: placeholder_operator_summary
+    decision:
+      mode: human_review_required
