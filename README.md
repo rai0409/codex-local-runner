@@ -148,6 +148,30 @@ python -m orchestrator.main \
   --rollback-trace-id <rollback_trace_id>
 ```
 
+## Local Human Review Decision Gate
+
+Use the local explicit decision CLI for operator review:
+
+- `keep`: bookkeeping-only explicit human outcome
+- `rollback`: explicit rollback request through the existing constrained rollback path
+
+Primary target mode is `--job-id`:
+
+```bash
+python scripts/operator_review_decision.py --job-id <job_id> --decision keep
+python scripts/operator_review_decision.py --job-id <job_id> --decision rollback --execution-repo-path /path/to/repo
+```
+
+Optional advanced direct-trace mode:
+
+```bash
+python scripts/operator_review_decision.py --rollback-trace-id <rollback_trace_id> --decision rollback --execution-repo-path /path/to/repo
+```
+
+Notes:
+- `keep` does not trigger merge, rollback, redispatch, or any other execution.
+- `rollback` remains subject to existing rollback eligibility and current-state consistency checks; the result may still be `skipped`/`failed` if guardrails deny execution.
+
 ## Persistence Observability
 
 `result.json.persistence` is additive observability and uses:
