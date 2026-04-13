@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
@@ -8,6 +9,10 @@ import subprocess
 import sys
 from typing import Any
 from typing import Mapping
+from urllib.error import HTTPError
+from urllib.error import URLError
+from urllib.request import Request
+from urllib.request import urlopen
 from zoneinfo import ZoneInfo
 
 from orchestrator.ledger import DEFAULT_LEDGER_DB_PATH
@@ -18,6 +23,7 @@ from orchestrator.operator_schedules import load_operator_schedules
 
 DEFAULT_WINDOW_STATE_PATH = "state/operator_summary_windows.json"
 DEFAULT_NOTIFICATION_LOG_PATH = "state/operator_summary_notifications.jsonl"
+WEBHOOK_URL_ENV_VAR = "OPERATOR_SUMMARY_WEBHOOK_URL"
 
 
 class JsonlNotifier:
@@ -29,6 +35,35 @@ class JsonlNotifier:
         with self._log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(dict(payload), ensure_ascii=False, sort_keys=True))
             handle.write("\n")
+
+
+class WebhookNotifier:
+    def __init__(self, *, webhook_url: str, timeout_seconds: float = 10.0) -> None:
+        normalized = str(webhook_url).strip()
+        if not normalized:
+            raise ValueError(
+                f"delivery.method=webhook_operator_summary requires {WEBHOOK_URL_ENV_VAR}"
+            )
+        self._webhook_url = normalized
+        self._timeout_seconds = timeout_seconds
+
+    def notify(self, payload: Mapping[str, Any]) -> None:
+        body = json.dumps(dict(payload), ensure_ascii=False, sort_keys=True).encode("utf-8")
+        request = Request(
+            self._webhook_url,
+            data=body,
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self._timeout_seconds) as response:  # noqa: S310
+                status_code = getattr(response, "status", None) or response.getcode()
+        except HTTPError as exc:
+            raise RuntimeError(f"webhook delivery failed with HTTP {exc.code}") from exc
+        except URLError as exc:
+            raise RuntimeError(f"webhook delivery connection failed: {exc.reason}") from exc
+        if status_code < 200 or status_code >= 300:
+            raise RuntimeError(f"webhook delivery failed with HTTP {status_code}")
 
 
 def _parse_now_utc(now_utc: datetime | None = None) -> datetime:
@@ -156,10 +191,12 @@ def _build_summary_for_job(*, job_id: str, db_path: str) -> tuple[Path, Path]:
     return (json_path, html_path)
 
 
-def _get_notifier(*, method: str, notification_log_path: str) -> JsonlNotifier:
+def _get_notifier(*, method: str, notification_log_path: str) -> JsonlNotifier | WebhookNotifier:
     normalized = str(method).strip()
     if normalized == "placeholder_operator_summary":
         return JsonlNotifier(log_path=notification_log_path)
+    if normalized == "webhook_operator_summary":
+        return WebhookNotifier(webhook_url=os.getenv(WEBHOOK_URL_ENV_VAR, ""))
     raise ValueError(f"unsupported delivery.method: {normalized}")
 
 
@@ -247,10 +284,23 @@ def run_scheduled_operator_summary_delivery(
             )
             continue
 
-        notifier = _get_notifier(
-            method=str(delivery.get("method", "")),
-            notification_log_path=notification_log_path,
-        )
+        try:
+            notifier = _get_notifier(
+                method=str(delivery.get("method", "")),
+                notification_log_path=notification_log_path,
+            )
+        except Exception as exc:
+            deliveries.append(
+                {
+                    "schedule_id": schedule_id,
+                    "window_key": key,
+                    "status": "failed",
+                    "reason": "notification_config_error",
+                    "job_id": job_row.get("job_id"),
+                    "error": str(exc),
+                }
+            )
+            continue
 
         payload = {
             "schedule_id": schedule_id,
@@ -260,7 +310,7 @@ def run_scheduled_operator_summary_delivery(
                 if isinstance(schedule.get("decision"), Mapping)
                 else None
             ),
-            "target_repo": (
+            "repo": (
                 schedule.get("target", {}).get("repo")
                 if isinstance(schedule.get("target"), Mapping)
                 else None
