@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -822,6 +823,18 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
             "assumptions": {"fallbacks_used": []},
         }
 
+    def _candidate_evaluation_result(self, job_id: str) -> dict:
+        return {
+            "job_id": job_id,
+            "classification": {
+                "declared_category": "docs_only",
+                "observed_category": "docs_only",
+            },
+            "rubric": {"merge_eligible": True},
+            "merge_gate": {"passed": True, "auto_merge_allowed": True},
+            "assumptions": {"fallbacks_used": []},
+        }
+
     def _single_output_dir(self, output_root: str) -> Path:
         output_dirs = list(Path(output_root).iterdir())
         self.assertEqual(len(output_dirs), 1)
@@ -834,6 +847,74 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
     def _read_single_request(self, output_root: str) -> dict:
         output_dir = self._single_output_dir(output_root)
         return json.loads((output_dir / "request.json").read_text(encoding="utf-8"))
+
+    def _run_git(self, repo_dir: str, args: list[str]) -> str:
+        proc = subprocess.run(
+            ["git", "-C", repo_dir, *args],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return proc.stdout.strip()
+
+    def _git_commit(self, repo_dir: str, message: str) -> None:
+        self._run_git(
+            repo_dir,
+            [
+                "-c",
+                "user.name=Test User",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                message,
+            ],
+        )
+
+    def _init_mergeable_repo(self, repo_dir: str) -> dict[str, str]:
+        self._run_git(repo_dir, ["init"])
+        self._run_git(repo_dir, ["checkout", "-b", "main"])
+        (Path(repo_dir) / "README.md").write_text("base\n", encoding="utf-8")
+        self._run_git(repo_dir, ["add", "README.md"])
+        self._git_commit(repo_dir, "base")
+        base_sha = self._run_git(repo_dir, ["rev-parse", "HEAD"])
+
+        self._run_git(repo_dir, ["checkout", "-b", "feature"])
+        (Path(repo_dir) / "feature.txt").write_text("feature\n", encoding="utf-8")
+        self._run_git(repo_dir, ["add", "feature.txt"])
+        self._git_commit(repo_dir, "feature")
+        source_sha = self._run_git(repo_dir, ["rev-parse", "HEAD"])
+
+        self._run_git(repo_dir, ["checkout", "main"])
+        return {
+            "target_ref": "refs/heads/main",
+            "base_sha": base_sha,
+            "source_sha": source_sha,
+        }
+
+    def _init_repo_with_merge_commit(self, repo_dir: str) -> dict[str, str]:
+        identity = self._init_mergeable_repo(repo_dir)
+        self._run_git(
+            repo_dir,
+            [
+                "-c",
+                "user.name=Test User",
+                "-c",
+                "user.email=test@example.com",
+                "merge",
+                "--no-ff",
+                "--no-edit",
+                identity["source_sha"],
+            ],
+        )
+        post_merge_sha = self._run_git(repo_dir, ["rev-parse", "HEAD"])
+        return {
+            "target_ref": identity["target_ref"],
+            "pre_merge_sha": identity["base_sha"],
+            "post_merge_sha": post_merge_sha,
+            "source_sha": identity["source_sha"],
+            "base_sha": identity["base_sha"],
+        }
 
     def test_accepted_status_is_kept_when_execution_fails(self) -> None:
         with tempfile.TemporaryDirectory() as output_root:
@@ -874,7 +955,10 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(result["status"], "accepted")
         self.assertEqual(result["execution"]["status"], "failed")
-        self.assertEqual(set(result["persistence"].keys()), {"evaluation_artifacts", "ledger"})
+        self.assertEqual(
+            set(result["persistence"].keys()),
+            {"evaluation_artifacts", "ledger", "execution_target", "merge_execution", "merge_receipt"},
+        )
         self.assertIn("merge_eligible", rubric)
         self.assertIn("required_tests_declared", rubric)
         self.assertIn("passed", merge_gate)
@@ -908,7 +992,13 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(result["execution"]["status"], "not_started")
         self.assertEqual(
             result["persistence"],
-            {"evaluation_artifacts": "skipped", "ledger": "skipped"},
+            {
+                "evaluation_artifacts": "skipped",
+                "ledger": "skipped",
+                "execution_target": "skipped",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+            },
         )
         self.assertFalse((output_dir / "rubric.json").exists())
         self.assertFalse((output_dir / "merge_gate.json").exists())
@@ -1018,7 +1108,10 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(result_payload["execution"]["review_recommendation"], "no_review_needed")
         self.assertEqual(result_payload["execution"]["review_handoff_summary"]["final_status"], "completed")
         self.assertEqual(result_payload["execution"]["reviewer_handoff"]["execution"]["status"], "completed")
-        self.assertEqual(set(result_payload["persistence"].keys()), {"evaluation_artifacts", "ledger"})
+        self.assertEqual(
+            set(result_payload["persistence"].keys()),
+            {"evaluation_artifacts", "ledger", "execution_target", "merge_execution", "merge_receipt"},
+        )
 
     def test_persistence_written_when_accepted_and_persistence_succeeds(self) -> None:
         with tempfile.TemporaryDirectory() as output_root:
@@ -1066,7 +1159,13 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(result_payload["status"], "accepted")
         self.assertEqual(
             result_payload["persistence"],
-            {"evaluation_artifacts": "written", "ledger": "written"},
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "skipped",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+            },
         )
         record_mock.assert_called_once()
 
@@ -1116,7 +1215,13 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(result_payload["status"], "accepted")
         self.assertEqual(
             result_payload["persistence"],
-            {"evaluation_artifacts": "failed", "ledger": "written"},
+            {
+                "evaluation_artifacts": "failed",
+                "ledger": "written",
+                "execution_target": "skipped",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+            },
         )
 
     def test_accepted_flow_records_ledger_row(self) -> None:
@@ -1245,8 +1350,1385 @@ class OrchestratorExecutionSemanticsTests(unittest.TestCase):
         self.assertEqual(result_payload["execution"]["status"], "completed")
         self.assertEqual(
             result_payload["persistence"],
-            {"evaluation_artifacts": "written", "ledger": "failed"},
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "failed",
+                "execution_target": "skipped",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+            },
         )
+
+    def test_execution_target_capture_written_for_accepted_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-candidate-written"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target") as capture_mock:
+                                with mock.patch(
+                                    "sys.argv",
+                                    [
+                                        "main.py",
+                                        "--repo",
+                                        "codex-local-runner",
+                                        "--task-type",
+                                        "orchestration",
+                                        "--goal",
+                                        "capture execution target",
+                                        "--provider",
+                                        "codex_cli",
+                                        "--output-root",
+                                        output_root,
+                                        "--target-ref",
+                                        "refs/heads/main",
+                                        "--source-sha",
+                                        "a" * 40,
+                                        "--base-sha",
+                                        "b" * 40,
+                                    ],
+                                ):
+                                    rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "written",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+            },
+        )
+        capture_mock.assert_called_once()
+        self.assertEqual(capture_mock.call_args.kwargs["target_ref"], "refs/heads/main")
+        self.assertEqual(capture_mock.call_args.kwargs["source_sha"], "a" * 40)
+        self.assertEqual(capture_mock.call_args.kwargs["base_sha"], "b" * 40)
+
+    def test_execution_target_capture_skipped_when_identity_prereqs_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-candidate-skipped"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target") as capture_mock:
+                                with mock.patch(
+                                    "sys.argv",
+                                    [
+                                        "main.py",
+                                        "--repo",
+                                        "codex-local-runner",
+                                        "--task-type",
+                                        "orchestration",
+                                        "--goal",
+                                        "capture execution target",
+                                        "--provider",
+                                        "codex_cli",
+                                        "--output-root",
+                                        output_root,
+                                    ],
+                                ):
+                                    rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "skipped",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+            },
+        )
+        capture_mock.assert_not_called()
+
+    def test_execution_target_capture_failure_remains_non_fatal(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-candidate-failed"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch(
+                                "orchestrator.main.record_execution_target",
+                                side_effect=RuntimeError("capture failed"),
+                            ):
+                                with mock.patch(
+                                    "sys.argv",
+                                    [
+                                        "main.py",
+                                        "--repo",
+                                        "codex-local-runner",
+                                        "--task-type",
+                                        "orchestration",
+                                        "--goal",
+                                        "capture execution target",
+                                        "--provider",
+                                        "codex_cli",
+                                        "--output-root",
+                                        output_root,
+                                        "--target-ref",
+                                        "refs/heads/main",
+                                        "--source-sha",
+                                        "a" * 40,
+                                        "--base-sha",
+                                        "b" * 40,
+                                    ],
+                                ):
+                                    rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(result_payload["execution"]["status"], "completed")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "failed",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+            },
+        )
+
+    def test_merge_receipt_written_when_attempt_signal_is_present(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                    "merge_attempt": {
+                        "status": "failed",
+                        "attempted_at": "2026-01-01T00:00:02+00:00",
+                        "result_sha": None,
+                        "error": "simulated conflict",
+                    },
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-merge-receipt-written"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target"):
+                                with mock.patch(
+                                    "orchestrator.main.record_merge_attempt_receipt"
+                                ) as receipt_mock:
+                                    with mock.patch(
+                                        "sys.argv",
+                                        [
+                                            "main.py",
+                                            "--repo",
+                                            "codex-local-runner",
+                                            "--task-type",
+                                            "orchestration",
+                                            "--goal",
+                                            "record merge receipt",
+                                            "--provider",
+                                            "codex_cli",
+                                            "--output-root",
+                                            output_root,
+                                            "--target-ref",
+                                            "refs/heads/main",
+                                            "--source-sha",
+                                            "a" * 40,
+                                            "--base-sha",
+                                            "b" * 40,
+                                        ],
+                                    ):
+                                        rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "written",
+                "merge_execution": "skipped",
+                "merge_receipt": "written",
+            },
+        )
+        receipt_mock.assert_called_once()
+        self.assertEqual(receipt_mock.call_args.kwargs["merge_attempt_status"], "failed")
+        self.assertEqual(
+            receipt_mock.call_args.kwargs["merge_attempted_at"],
+            "2026-01-01T00:00:02+00:00",
+        )
+
+    def test_merge_receipt_skipped_when_no_trustworthy_attempt_signal(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-merge-receipt-skipped"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target"):
+                                with mock.patch(
+                                    "orchestrator.main.record_merge_attempt_receipt"
+                                ) as receipt_mock:
+                                    with mock.patch(
+                                        "sys.argv",
+                                        [
+                                            "main.py",
+                                            "--repo",
+                                            "codex-local-runner",
+                                            "--task-type",
+                                            "orchestration",
+                                            "--goal",
+                                            "record merge receipt",
+                                            "--provider",
+                                            "codex_cli",
+                                            "--output-root",
+                                            output_root,
+                                            "--target-ref",
+                                            "refs/heads/main",
+                                            "--source-sha",
+                                            "a" * 40,
+                                            "--base-sha",
+                                            "b" * 40,
+                                        ],
+                                    ):
+                                        rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "written",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+            },
+        )
+        receipt_mock.assert_not_called()
+
+    def test_merge_receipt_skips_when_signal_present_but_linkage_identity_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                    "merge_attempt": {
+                        "status": "attempted",
+                        "attempted_at": "2026-01-01T00:00:02+00:00",
+                        "result_sha": None,
+                        "error": None,
+                    },
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-merge-receipt-no-linkage"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target") as target_mock:
+                                with mock.patch(
+                                    "orchestrator.main.record_merge_attempt_receipt"
+                                ) as receipt_mock:
+                                    with mock.patch(
+                                        "sys.argv",
+                                        [
+                                            "main.py",
+                                            "--repo",
+                                            "codex-local-runner",
+                                            "--task-type",
+                                            "orchestration",
+                                            "--goal",
+                                            "record merge receipt",
+                                            "--provider",
+                                            "codex_cli",
+                                            "--output-root",
+                                            output_root,
+                                        ],
+                                    ):
+                                        rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "skipped",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+            },
+        )
+        target_mock.assert_not_called()
+        receipt_mock.assert_not_called()
+
+    def test_merge_receipt_write_failure_remains_non_fatal(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root:
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                    "merge_attempt": {
+                        "status": "failed",
+                        "attempted_at": "2026-01-01T00:00:02+00:00",
+                        "result_sha": None,
+                        "error": "simulated conflict",
+                    },
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-merge-receipt-failed"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target"):
+                                with mock.patch(
+                                    "orchestrator.main.record_merge_attempt_receipt",
+                                    side_effect=RuntimeError("receipt write failed"),
+                                ):
+                                    with mock.patch(
+                                        "sys.argv",
+                                        [
+                                            "main.py",
+                                            "--repo",
+                                            "codex-local-runner",
+                                            "--task-type",
+                                            "orchestration",
+                                            "--goal",
+                                            "record merge receipt",
+                                            "--provider",
+                                            "codex_cli",
+                                            "--output-root",
+                                            output_root,
+                                            "--target-ref",
+                                            "refs/heads/main",
+                                            "--source-sha",
+                                            "a" * 40,
+                                            "--base-sha",
+                                            "b" * 40,
+                                        ],
+                                    ):
+                                        rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(result_payload["execution"]["status"], "completed")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "written",
+                "merge_execution": "skipped",
+                "merge_receipt": "failed",
+            },
+        )
+
+    def test_constrained_merge_execution_succeeds_with_persisted_target_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            merge_identity = self._init_mergeable_repo(repo_dir)
+            candidate_key = "c" * 64
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-merge-exec-success"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target"):
+                                with mock.patch(
+                                    "orchestrator.main.get_execution_target_by_identity",
+                                    return_value={"candidate_idempotency_key": candidate_key},
+                                ):
+                                    with mock.patch(
+                                        "orchestrator.main.get_merge_execution_by_candidate_idempotency_key",
+                                        return_value=None,
+                                    ):
+                                        with mock.patch(
+                                            "orchestrator.main.record_merge_execution_outcome"
+                                        ) as merge_state_mock:
+                                            with mock.patch(
+                                                "orchestrator.main.record_merge_attempt_receipt"
+                                            ) as receipt_mock:
+                                                with mock.patch(
+                                                    "orchestrator.main.record_rollback_traceability_for_candidate",
+                                                    return_value={
+                                                        "rollback_trace_id": "rt-1",
+                                                        "rollback_eligible": 1,
+                                                        "ineligible_reason": None,
+                                                    },
+                                                ) as rollback_trace_mock:
+                                                    with mock.patch(
+                                                        "sys.argv",
+                                                        [
+                                                            "main.py",
+                                                            "--repo",
+                                                            "codex-local-runner",
+                                                            "--task-type",
+                                                            "orchestration",
+                                                            "--goal",
+                                                            "execute constrained merge",
+                                                            "--provider",
+                                                            "codex_cli",
+                                                            "--output-root",
+                                                            output_root,
+                                                            "--execution-repo-path",
+                                                            repo_dir,
+                                                            "--target-ref",
+                                                            merge_identity["target_ref"],
+                                                            "--source-sha",
+                                                            merge_identity["source_sha"],
+                                                            "--base-sha",
+                                                            merge_identity["base_sha"],
+                                                            "--execute-merge",
+                                                        ],
+                                                    ):
+                                                        rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+            post_sha = self._run_git(repo_dir, ["rev-parse", "HEAD"])
+
+        merge_execution = result_payload["execution"]["merge_execution"]
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(merge_execution["status"], "succeeded")
+        self.assertTrue(merge_execution["attempted"])
+        self.assertEqual(merge_execution["candidate_idempotency_key"], candidate_key)
+        self.assertEqual(merge_execution["pre_merge_sha"], merge_identity["base_sha"])
+        self.assertEqual(merge_execution["post_merge_sha"], post_sha)
+        self.assertEqual(merge_execution["merge_result_sha"], post_sha)
+        self.assertTrue(merge_execution["rollback_trace"]["recorded"])
+        self.assertTrue(merge_execution["rollback_trace"]["eligible"])
+        self.assertEqual(merge_execution["rollback_trace"]["rollback_trace_id"], "rt-1")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "written",
+                "merge_execution": "written",
+                "merge_receipt": "written",
+                "rollback_trace": "written",
+            },
+        )
+        merge_state_mock.assert_called_once()
+        self.assertEqual(merge_state_mock.call_args.kwargs["pre_merge_sha"], merge_identity["base_sha"])
+        self.assertEqual(merge_state_mock.call_args.kwargs["post_merge_sha"], post_sha)
+        receipt_mock.assert_called_once()
+        self.assertEqual(receipt_mock.call_args.kwargs["merge_attempt_status"], "succeeded")
+        rollback_trace_mock.assert_called_once()
+
+    def test_constrained_merge_execution_skips_when_persisted_identity_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            merge_identity = self._init_mergeable_repo(repo_dir)
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-merge-exec-skip-missing"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target"):
+                                with mock.patch(
+                                    "orchestrator.main.get_execution_target_by_identity",
+                                    return_value=None,
+                                ):
+                                    with mock.patch(
+                                        "orchestrator.main.execute_constrained_merge"
+                                    ) as execute_merge_mock:
+                                        with mock.patch(
+                                            "sys.argv",
+                                            [
+                                                "main.py",
+                                                "--repo",
+                                                "codex-local-runner",
+                                                "--task-type",
+                                                "orchestration",
+                                                "--goal",
+                                                "execute constrained merge",
+                                                "--provider",
+                                                "codex_cli",
+                                                "--output-root",
+                                                output_root,
+                                                "--execution-repo-path",
+                                                repo_dir,
+                                                "--target-ref",
+                                                merge_identity["target_ref"],
+                                                "--source-sha",
+                                                merge_identity["source_sha"],
+                                                "--base-sha",
+                                                merge_identity["base_sha"],
+                                                "--execute-merge",
+                                            ],
+                                        ):
+                                            rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(result_payload["execution"]["merge_execution"]["status"], "skipped")
+        self.assertEqual(
+            result_payload["execution"]["merge_execution"]["error"],
+            "execution_target_not_persisted_or_mismatched",
+        )
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "written",
+                "merge_execution": "skipped",
+                "merge_receipt": "skipped",
+                "rollback_trace": "skipped",
+            },
+        )
+        execute_merge_mock.assert_not_called()
+
+    def test_constrained_merge_execution_is_protected_from_duplicate_success(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            merge_identity = self._init_mergeable_repo(repo_dir)
+            candidate_key = "c" * 64
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-merge-exec-idempotent"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target"):
+                                with mock.patch(
+                                    "orchestrator.main.get_execution_target_by_identity",
+                                    return_value={"candidate_idempotency_key": candidate_key},
+                                ):
+                                    with mock.patch(
+                                        "orchestrator.main.get_merge_execution_by_candidate_idempotency_key",
+                                        return_value={
+                                            "execution_status": "succeeded",
+                                            "executed_at": "2026-01-01T00:00:02+00:00",
+                                            "pre_merge_sha": merge_identity["base_sha"],
+                                            "post_merge_sha": "d" * 40,
+                                            "merge_result_sha": "d" * 40,
+                                        },
+                                    ):
+                                        with mock.patch(
+                                            "orchestrator.main.execute_constrained_merge"
+                                        ) as execute_merge_mock:
+                                            with mock.patch(
+                                                "orchestrator.main.record_merge_execution_outcome"
+                                            ) as merge_state_mock:
+                                                with mock.patch(
+                                                    "orchestrator.main.record_merge_attempt_receipt"
+                                                ) as receipt_mock:
+                                                    with mock.patch(
+                                                        "orchestrator.main.record_rollback_traceability_for_candidate",
+                                                        return_value={
+                                                            "rollback_trace_id": "rt-duplicate",
+                                                            "rollback_eligible": 0,
+                                                            "ineligible_reason": "merge_execution_not_succeeded",
+                                                        },
+                                                    ) as rollback_trace_mock:
+                                                        with mock.patch(
+                                                            "sys.argv",
+                                                            [
+                                                                "main.py",
+                                                                "--repo",
+                                                                "codex-local-runner",
+                                                                "--task-type",
+                                                                "orchestration",
+                                                                "--goal",
+                                                                "execute constrained merge",
+                                                                "--provider",
+                                                                "codex_cli",
+                                                                "--output-root",
+                                                                output_root,
+                                                                "--execution-repo-path",
+                                                                repo_dir,
+                                                                "--target-ref",
+                                                                merge_identity["target_ref"],
+                                                                "--source-sha",
+                                                                merge_identity["source_sha"],
+                                                                "--base-sha",
+                                                                merge_identity["base_sha"],
+                                                                "--execute-merge",
+                                                            ],
+                                                        ):
+                                                            rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(result_payload["execution"]["merge_execution"]["status"], "skipped")
+        self.assertEqual(
+            result_payload["execution"]["merge_execution"]["error"],
+            "already_merged_for_candidate",
+        )
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "written",
+                "merge_execution": "written",
+                "merge_receipt": "written",
+                "rollback_trace": "written",
+            },
+        )
+        execute_merge_mock.assert_not_called()
+        merge_state_mock.assert_called_once()
+        receipt_mock.assert_called_once()
+        self.assertEqual(receipt_mock.call_args.kwargs["merge_attempt_status"], "skipped")
+        rollback_trace_mock.assert_called_once()
+        self.assertFalse(result_payload["execution"]["merge_execution"]["rollback_trace"]["eligible"])
+
+    def test_merge_execution_success_with_receipt_persistence_failure_is_visible(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            merge_identity = self._init_mergeable_repo(repo_dir)
+            candidate_key = "c" * 64
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-merge-exec-receipt-fail"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target"):
+                                with mock.patch(
+                                    "orchestrator.main.get_execution_target_by_identity",
+                                    return_value={"candidate_idempotency_key": candidate_key},
+                                ):
+                                    with mock.patch(
+                                        "orchestrator.main.get_merge_execution_by_candidate_idempotency_key",
+                                        return_value=None,
+                                    ):
+                                        with mock.patch(
+                                            "orchestrator.main.record_merge_execution_outcome"
+                                        ):
+                                            with mock.patch(
+                                                "orchestrator.main.record_merge_attempt_receipt",
+                                                side_effect=RuntimeError("receipt persistence failed"),
+                                            ):
+                                                with mock.patch(
+                                                    "orchestrator.main.record_rollback_traceability_for_candidate",
+                                                    return_value={
+                                                        "rollback_trace_id": "rt-receipt-failed",
+                                                        "rollback_eligible": 1,
+                                                        "ineligible_reason": None,
+                                                    },
+                                                ) as rollback_trace_mock:
+                                                    with mock.patch(
+                                                        "sys.argv",
+                                                        [
+                                                            "main.py",
+                                                            "--repo",
+                                                            "codex-local-runner",
+                                                            "--task-type",
+                                                            "orchestration",
+                                                            "--goal",
+                                                            "execute constrained merge",
+                                                            "--provider",
+                                                            "codex_cli",
+                                                            "--output-root",
+                                                            output_root,
+                                                            "--execution-repo-path",
+                                                            repo_dir,
+                                                            "--target-ref",
+                                                            merge_identity["target_ref"],
+                                                            "--source-sha",
+                                                            merge_identity["source_sha"],
+                                                            "--base-sha",
+                                                            merge_identity["base_sha"],
+                                                            "--execute-merge",
+                                                        ],
+                                                    ):
+                                                        rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(result_payload["execution"]["merge_execution"]["status"], "succeeded")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "written",
+                "merge_execution": "written",
+                "merge_receipt": "failed",
+                "rollback_trace": "written",
+            },
+        )
+        rollback_trace_mock.assert_called_once()
+
+    def test_merge_execution_rollback_trace_persistence_failure_is_visible(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            merge_identity = self._init_mergeable_repo(repo_dir)
+            candidate_key = "c" * 64
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-merge-exec-rollback-trace-fail"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.record_execution_target"):
+                                with mock.patch(
+                                    "orchestrator.main.get_execution_target_by_identity",
+                                    return_value={"candidate_idempotency_key": candidate_key},
+                                ):
+                                    with mock.patch(
+                                        "orchestrator.main.get_merge_execution_by_candidate_idempotency_key",
+                                        return_value=None,
+                                    ):
+                                        with mock.patch(
+                                            "orchestrator.main.record_merge_execution_outcome"
+                                        ):
+                                            with mock.patch(
+                                                "orchestrator.main.record_merge_attempt_receipt",
+                                                return_value="receipt-1",
+                                            ):
+                                                with mock.patch(
+                                                    "orchestrator.main.record_rollback_traceability_for_candidate",
+                                                    side_effect=RuntimeError("rollback trace write failed"),
+                                                ):
+                                                    with mock.patch(
+                                                        "sys.argv",
+                                                        [
+                                                            "main.py",
+                                                            "--repo",
+                                                            "codex-local-runner",
+                                                            "--task-type",
+                                                            "orchestration",
+                                                            "--goal",
+                                                            "execute constrained merge",
+                                                            "--provider",
+                                                            "codex_cli",
+                                                            "--output-root",
+                                                            output_root,
+                                                            "--execution-repo-path",
+                                                            repo_dir,
+                                                            "--target-ref",
+                                                            merge_identity["target_ref"],
+                                                            "--source-sha",
+                                                            merge_identity["source_sha"],
+                                                            "--base-sha",
+                                                            merge_identity["base_sha"],
+                                                            "--execute-merge",
+                                                        ],
+                                                    ):
+                                                        rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        self.assertEqual(result_payload["execution"]["merge_execution"]["status"], "succeeded")
+        self.assertEqual(
+            result_payload["persistence"],
+            {
+                "evaluation_artifacts": "written",
+                "ledger": "written",
+                "execution_target": "written",
+                "merge_execution": "written",
+                "merge_receipt": "written",
+                "rollback_trace": "failed",
+            },
+        )
+        self.assertFalse(result_payload["execution"]["merge_execution"]["rollback_trace"]["recorded"])
+        self.assertFalse(result_payload["execution"]["merge_execution"]["rollback_trace"]["eligible"])
+
+    def test_constrained_rollback_execution_succeeds_with_eligible_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            merge_state = self._init_repo_with_merge_commit(repo_dir)
+            trace_id = "trace-rollback-success"
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-rollback-exec-success"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.get_rollback_trace_by_id", return_value={
+                                "rollback_trace_id": trace_id,
+                                "candidate_idempotency_key": "c" * 64,
+                                "job_id": "job-rollback-exec-success",
+                                "repo": "codex-local-runner",
+                                "target_ref": merge_state["target_ref"],
+                                "source_sha": merge_state["source_sha"],
+                                "base_sha": merge_state["base_sha"],
+                                "pre_merge_sha": merge_state["pre_merge_sha"],
+                                "post_merge_sha": merge_state["post_merge_sha"],
+                                "rollback_eligible": 1,
+                                "ineligible_reason": None,
+                            }):
+                                with mock.patch(
+                                    "orchestrator.main.get_rollback_execution_by_trace_id",
+                                    return_value=None,
+                                ):
+                                    with mock.patch(
+                                        "orchestrator.main.record_rollback_execution_outcome"
+                                    ) as record_rollback_mock:
+                                        with mock.patch(
+                                            "sys.argv",
+                                            [
+                                                "main.py",
+                                                "--repo",
+                                                "codex-local-runner",
+                                                "--task-type",
+                                                "orchestration",
+                                                "--goal",
+                                                "execute constrained rollback",
+                                                "--provider",
+                                                "codex_cli",
+                                                "--output-root",
+                                                output_root,
+                                                "--execution-repo-path",
+                                                repo_dir,
+                                                "--execute-rollback",
+                                                "--rollback-trace-id",
+                                                trace_id,
+                                            ],
+                                        ):
+                                            rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+            head_after = self._run_git(repo_dir, ["rev-parse", "HEAD"])
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["status"], "accepted")
+        rollback_execution = result_payload["execution"]["rollback_execution"]
+        self.assertEqual(rollback_execution["status"], "succeeded")
+        self.assertTrue(rollback_execution["attempted"])
+        self.assertEqual(rollback_execution["rollback_trace_id"], trace_id)
+        self.assertEqual(rollback_execution["rollback_result_sha"], head_after)
+        self.assertEqual(
+            result_payload["persistence"]["rollback_execution"],
+            "written",
+        )
+        record_rollback_mock.assert_called_once()
+
+    def test_constrained_rollback_execution_skips_when_trace_is_ineligible(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            merge_state = self._init_repo_with_merge_commit(repo_dir)
+            trace_id = "trace-rollback-ineligible"
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-rollback-exec-ineligible"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.get_rollback_trace_by_id", return_value={
+                                "rollback_trace_id": trace_id,
+                                "repo": "codex-local-runner",
+                                "target_ref": merge_state["target_ref"],
+                                "pre_merge_sha": merge_state["pre_merge_sha"],
+                                "post_merge_sha": merge_state["post_merge_sha"],
+                                "rollback_eligible": 0,
+                                "ineligible_reason": "merge_execution_not_succeeded",
+                            }):
+                                with mock.patch(
+                                    "orchestrator.main.execute_constrained_rollback"
+                                ) as execute_rollback_mock:
+                                    with mock.patch(
+                                        "orchestrator.main.record_rollback_execution_outcome"
+                                    ) as record_rollback_mock:
+                                        with mock.patch(
+                                            "sys.argv",
+                                            [
+                                                "main.py",
+                                                "--repo",
+                                                "codex-local-runner",
+                                                "--task-type",
+                                                "orchestration",
+                                                "--goal",
+                                                "execute constrained rollback",
+                                                "--provider",
+                                                "codex_cli",
+                                                "--output-root",
+                                                output_root,
+                                                "--execution-repo-path",
+                                                repo_dir,
+                                                "--execute-rollback",
+                                                "--rollback-trace-id",
+                                                trace_id,
+                                            ],
+                                        ):
+                                            rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["execution"]["rollback_execution"]["status"], "skipped")
+        self.assertEqual(
+            result_payload["execution"]["rollback_execution"]["error"],
+            "merge_execution_not_succeeded",
+        )
+        self.assertEqual(result_payload["persistence"]["rollback_execution"], "written")
+        execute_rollback_mock.assert_not_called()
+        record_rollback_mock.assert_called_once()
+
+    def test_constrained_rollback_execution_skips_on_current_state_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            trace_id = "trace-rollback-mismatch"
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-rollback-exec-mismatch"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.get_rollback_trace_by_id", return_value={
+                                "rollback_trace_id": trace_id,
+                                "candidate_idempotency_key": "c" * 64,
+                                "job_id": "job-rollback-exec-mismatch",
+                                "repo": "codex-local-runner",
+                                "target_ref": "refs/heads/main",
+                                "source_sha": "a" * 40,
+                                "base_sha": "b" * 40,
+                                "pre_merge_sha": "b" * 40,
+                                "post_merge_sha": "c" * 40,
+                                "rollback_eligible": 1,
+                                "ineligible_reason": None,
+                            }):
+                                with mock.patch(
+                                    "orchestrator.main.get_rollback_execution_by_trace_id",
+                                    return_value=None,
+                                ):
+                                    with mock.patch(
+                                        "orchestrator.main.execute_constrained_rollback",
+                                        return_value={
+                                            "status": "skipped",
+                                            "attempted": False,
+                                            "attempted_at": "2026-01-01T00:00:02+00:00",
+                                            "consistency_check_passed": False,
+                                            "current_head_sha": "d" * 40,
+                                            "rollback_result_sha": None,
+                                            "error": "current_head_mismatch_post_merge",
+                                        },
+                                    ) as execute_rollback_mock:
+                                        with mock.patch(
+                                            "orchestrator.main.record_rollback_execution_outcome"
+                                        ) as record_rollback_mock:
+                                            with mock.patch(
+                                                "sys.argv",
+                                                [
+                                                    "main.py",
+                                                    "--repo",
+                                                    "codex-local-runner",
+                                                    "--task-type",
+                                                    "orchestration",
+                                                    "--goal",
+                                                    "execute constrained rollback",
+                                                    "--provider",
+                                                    "codex_cli",
+                                                    "--output-root",
+                                                    output_root,
+                                                    "--execution-repo-path",
+                                                    repo_dir,
+                                                    "--execute-rollback",
+                                                    "--rollback-trace-id",
+                                                    trace_id,
+                                                ],
+                                            ):
+                                                rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["execution"]["rollback_execution"]["status"], "skipped")
+        self.assertEqual(
+            result_payload["execution"]["rollback_execution"]["error"],
+            "current_head_mismatch_post_merge",
+        )
+        self.assertEqual(result_payload["persistence"]["rollback_execution"], "written")
+        execute_rollback_mock.assert_called_once()
+        record_rollback_mock.assert_called_once()
+
+    def test_constrained_rollback_execution_is_protected_from_duplicate_success(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            trace_id = "trace-rollback-duplicate"
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-rollback-exec-duplicate"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.get_rollback_trace_by_id", return_value={
+                                "rollback_trace_id": trace_id,
+                                "candidate_idempotency_key": "c" * 64,
+                                "job_id": "job-rollback-exec-duplicate",
+                                "repo": "codex-local-runner",
+                                "target_ref": "refs/heads/main",
+                                "source_sha": "a" * 40,
+                                "base_sha": "b" * 40,
+                                "pre_merge_sha": "b" * 40,
+                                "post_merge_sha": "c" * 40,
+                                "rollback_eligible": 1,
+                                "ineligible_reason": None,
+                            }):
+                                with mock.patch(
+                                    "orchestrator.main.get_rollback_execution_by_trace_id",
+                                    return_value={
+                                        "execution_status": "succeeded",
+                                        "attempted_at": "2026-01-01T00:00:03+00:00",
+                                        "current_head_sha": "c" * 40,
+                                        "rollback_result_sha": "d" * 40,
+                                        "consistency_check_passed": 1,
+                                    },
+                                ):
+                                    with mock.patch(
+                                        "orchestrator.main.execute_constrained_rollback"
+                                    ) as execute_rollback_mock:
+                                        with mock.patch(
+                                            "orchestrator.main.record_rollback_execution_outcome"
+                                        ) as record_rollback_mock:
+                                            with mock.patch(
+                                                "sys.argv",
+                                                [
+                                                    "main.py",
+                                                    "--repo",
+                                                    "codex-local-runner",
+                                                    "--task-type",
+                                                    "orchestration",
+                                                    "--goal",
+                                                    "execute constrained rollback",
+                                                    "--provider",
+                                                    "codex_cli",
+                                                    "--output-root",
+                                                    output_root,
+                                                    "--execution-repo-path",
+                                                    repo_dir,
+                                                    "--execute-rollback",
+                                                    "--rollback-trace-id",
+                                                    trace_id,
+                                                ],
+                                            ):
+                                                rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["execution"]["rollback_execution"]["status"], "skipped")
+        self.assertEqual(
+            result_payload["execution"]["rollback_execution"]["error"],
+            "already_rolled_back_for_trace",
+        )
+        self.assertEqual(result_payload["persistence"]["rollback_execution"], "written")
+        execute_rollback_mock.assert_not_called()
+        record_rollback_mock.assert_called_once()
+
+    def test_rollback_execution_persistence_failure_is_visible(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, tempfile.TemporaryDirectory() as repo_dir:
+            trace_id = "trace-rollback-persist-fail"
+            with mock.patch(
+                "adapters.codex_cli.CodexCliAdapter.execute",
+                return_value={
+                    "adapter": "codex_cli",
+                    "status": "completed",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "finished_at": "2026-01-01T00:00:01+00:00",
+                    "artifacts": [],
+                    "error": None,
+                },
+            ):
+                with mock.patch(
+                    "orchestrator.main.evaluate_job_directory",
+                    return_value=self._candidate_evaluation_result("job-rollback-exec-persist-fail"),
+                ):
+                    with mock.patch(
+                        "orchestrator.main.persist_evaluation_artifacts",
+                        return_value=("rubric.json", "merge_gate.json"),
+                    ):
+                        with mock.patch("orchestrator.main.record_job_evaluation"):
+                            with mock.patch("orchestrator.main.get_rollback_trace_by_id", return_value={
+                                "rollback_trace_id": trace_id,
+                                "candidate_idempotency_key": "c" * 64,
+                                "job_id": "job-rollback-exec-persist-fail",
+                                "repo": "codex-local-runner",
+                                "target_ref": "refs/heads/main",
+                                "source_sha": "a" * 40,
+                                "base_sha": "b" * 40,
+                                "pre_merge_sha": "b" * 40,
+                                "post_merge_sha": "c" * 40,
+                                "rollback_eligible": 1,
+                                "ineligible_reason": None,
+                            }):
+                                with mock.patch(
+                                    "orchestrator.main.get_rollback_execution_by_trace_id",
+                                    return_value=None,
+                                ):
+                                    with mock.patch(
+                                        "orchestrator.main.execute_constrained_rollback",
+                                        return_value={
+                                            "status": "succeeded",
+                                            "attempted": True,
+                                            "attempted_at": "2026-01-01T00:00:03+00:00",
+                                            "consistency_check_passed": True,
+                                            "current_head_sha": "c" * 40,
+                                            "rollback_result_sha": "d" * 40,
+                                            "error": None,
+                                        },
+                                    ):
+                                        with mock.patch(
+                                            "orchestrator.main.record_rollback_execution_outcome",
+                                            side_effect=RuntimeError("rollback execution persist failed"),
+                                        ):
+                                            with mock.patch(
+                                                "sys.argv",
+                                                [
+                                                    "main.py",
+                                                    "--repo",
+                                                    "codex-local-runner",
+                                                    "--task-type",
+                                                    "orchestration",
+                                                    "--goal",
+                                                    "execute constrained rollback",
+                                                    "--provider",
+                                                    "codex_cli",
+                                                    "--output-root",
+                                                    output_root,
+                                                    "--execution-repo-path",
+                                                    repo_dir,
+                                                    "--execute-rollback",
+                                                    "--rollback-trace-id",
+                                                    trace_id,
+                                                ],
+                                            ):
+                                                rc = orchestrator_main.main()
+
+            result_payload = self._read_single_result(output_root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(result_payload["execution"]["rollback_execution"]["status"], "succeeded")
+        self.assertEqual(result_payload["persistence"]["rollback_execution"], "failed")
 
 
 @unittest.skipUnless(importlib.util.find_spec("flask") is not None, "flask is not installed")
