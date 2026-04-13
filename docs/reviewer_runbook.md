@@ -69,51 +69,7 @@ Use `review_recommendation` as a review hint:
 - it does not approve, reject, or score the run by itself
 - it should be read together with `summary`, and with `execution` or `validation` when needed
 
-## Control-Plane Execution Guardrails (Operator Notes)
+## Scope Boundary
 
-This repository also has constrained local merge/rollback execution paths.
-These paths are separate from `reviewer_handoff` and are controlled by persisted state, not by read-only summaries.
-
-### When Rollback Is Allowed
-
-Rollback execution is allowed only when all are true:
-
-- a persisted rollback trace record exists (`rollback_trace_id`)
-- that trace has `rollback_eligible = true`
-- trace linkage includes both pre/post merge identities
-- request repo and trace repo are consistent
-- current-state consistency checks pass in the local repo
-
-### What `rollback_eligible` Means
-
-`rollback_eligible` is fact-based eligibility from persisted merge execution linkage.
-It indicates that the system has a successful merge execution record with complete pre/post linkage for that candidate identity.
-It is not derived from candidate visibility, policy output alone, or inspect output alone.
-
-### Why Current-State Consistency Checks Exist
-
-Before rollback, the runner verifies that current local state still matches the recorded post-merge identity and target ref.
-If drift is detected, rollback is skipped/failed explicitly to avoid ambiguous or unsafe local history changes.
-
-### Visibility Is Not Authorization
-
-`scripts/inspect_job.py`, `scripts/evaluate_job.py`, and `scripts/list_merge_candidates.py` are read-only visibility tools.
-They do not authorize merge or rollback execution.
-Execution authorization comes from persisted execution/rollback trace records and invariant checks in orchestration flow.
-
-### `written` / `failed` / `skipped`
-
-For persistence observability fields:
-
-- `written`: persistence was attempted and succeeded
-- `failed`: persistence was attempted and failed non-fatally
-- `skipped`: persistence was not attempted in the current control flow
-
-### Intentional Non-Goals
-
-Current implementation intentionally does not:
-
-- push to remotes
-- call GitHub APIs
-- treat visibility output as authorization
-- use destructive reset/rebase rollback flows
+This runbook is reviewer-facing only.
+For control-plane operator guardrails (merge/rollback execution constraints and persistence semantics), use [operator_runbook.md](operator_runbook.md).
