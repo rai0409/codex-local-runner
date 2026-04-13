@@ -9,6 +9,12 @@ It remains local-only.
 - Keep provider-agnostic orchestration under `orchestrator/` and `adapters/`.
 - Keep top-level dispatch semantics intake-oriented (`accepted`/`failed`) while execution outcomes remain separate.
 
+## Docs by Audience
+
+- Reviewer-facing handoff contract: [docs/reviewer_handoff.md](docs/reviewer_handoff.md)
+- Reviewer-facing consumption runbook: [docs/reviewer_runbook.md](docs/reviewer_runbook.md)
+- Operator-facing control-plane runbook: [docs/operator_runbook.md](docs/operator_runbook.md)
+
 ## Current Architecture
 
 1. Provider adapter layer: `adapters/*`
@@ -166,6 +172,8 @@ You can evaluate an already-written job directory without mutating orchestration
 ```bash
 python scripts/evaluate_job.py --job-dir <path>
 ```
+
+Operational guidance for these read-only visibility surfaces is in [docs/operator_runbook.md](docs/operator_runbook.md).
 
 ## Read-Only Inspection CLI
 
