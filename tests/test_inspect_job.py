@@ -116,6 +116,7 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertIn("retry_metadata", payload["machine_review"])
         self.assertIn("advisory", payload["machine_review"])
         self.assertIn("execution_bridge", payload["machine_review"])
+        self.assertIn("mode_visibility", payload["machine_review"])
         self.assertEqual(payload["machine_review"]["advisory"]["display_recommendation"], None)
         self.assertEqual(payload["machine_review"]["advisory"]["decision_confidence"], None)
         self.assertEqual(payload["machine_review"]["advisory"]["operator_attention_flags"], [])
@@ -132,6 +133,21 @@ class InspectJobCliTests(unittest.TestCase):
             payload["machine_review"]["execution_bridge"][
                 "requires_explicit_operator_decision"
             ]
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["current_mode"],
+            "manual_review_only",
+        )
+        self.assertIsNone(
+            payload["machine_review"]["mode_visibility"]["next_possible_mode"]
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["mode_basis"],
+            ["explicit_operator_decision_required"],
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["mode_blockers"],
+            ["explicit_operator_gate_required", "execution_not_implemented"],
         )
 
     def test_missing_job_exits_clearly(self) -> None:
@@ -432,6 +448,28 @@ class InspectJobCliTests(unittest.TestCase):
                 "requires_explicit_operator_decision"
             ]
         )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["current_mode"],
+            "manual_review_only",
+        )
+        self.assertIsNone(
+            payload["machine_review"]["mode_visibility"]["next_possible_mode"]
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["mode_basis"],
+            [
+                "ledger_backed_machine_review_visible",
+                "explicit_operator_decision_required",
+            ],
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["mode_blockers"],
+            [
+                "rollback_execution_failed_retry_candidate",
+                "explicit_operator_gate_required",
+                "execution_not_implemented",
+            ],
+        )
 
     def test_inspect_handles_older_machine_review_payload_without_retry_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -505,6 +543,84 @@ class InspectJobCliTests(unittest.TestCase):
                 "requires_explicit_operator_decision"
             ]
         )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["current_mode"],
+            "manual_review_only",
+        )
+        self.assertIsNone(
+            payload["machine_review"]["mode_visibility"]["next_possible_mode"]
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["mode_basis"],
+            [
+                "ledger_backed_machine_review_visible",
+                "explicit_operator_decision_required",
+            ],
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["mode_blockers"],
+            [
+                "validation_passed_and_merge_policy_green",
+                "explicit_operator_gate_required",
+                "execution_not_implemented",
+            ],
+        )
+
+    def test_inspect_handles_machine_review_payload_without_advisory_or_execution_bridge_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            db_path = tmp_root / "state" / "jobs.db"
+            job_id = "job-machine-review-no-advisory-bridge"
+            self._seed_job(db_path=db_path, job_id=job_id)
+            machine_payload_path = tmp_root / "artifacts" / f"{job_id}_machine_review_payload.json"
+            machine_payload_path.parent.mkdir(parents=True, exist_ok=True)
+            machine_payload_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "job_id": job_id,
+                        "recommended_action": "escalate",
+                        "policy_version": "deterministic_review_policy.v1",
+                        "policy_reasons": ["validation_status_missing"],
+                        "requires_human_review": True,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            record_machine_review_payload_path(
+                db_path=db_path,
+                job_id=job_id,
+                machine_review_payload_path=str(machine_payload_path),
+            )
+
+            proc = self._run(["--job-id", job_id, "--db-path", str(db_path), "--json"])
+
+        self.assertEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["current_mode"],
+            "manual_review_only",
+        )
+        self.assertIsNone(
+            payload["machine_review"]["mode_visibility"]["next_possible_mode"]
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["mode_basis"],
+            [
+                "ledger_backed_machine_review_visible",
+                "explicit_operator_decision_required",
+            ],
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"]["mode_blockers"],
+            [
+                "validation_status_missing",
+                "explicit_operator_gate_required",
+                "execution_not_implemented",
+            ],
+        )
 
     def test_inspect_keeps_machine_review_unrecorded_without_ledger_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -565,6 +681,18 @@ class InspectJobCliTests(unittest.TestCase):
                     "execution_not_implemented",
                 ],
                 "requires_explicit_operator_decision": True,
+            },
+        )
+        self.assertEqual(
+            payload["machine_review"]["mode_visibility"],
+            {
+                "current_mode": "manual_review_only",
+                "next_possible_mode": None,
+                "mode_basis": ["explicit_operator_decision_required"],
+                "mode_blockers": [
+                    "explicit_operator_gate_required",
+                    "execution_not_implemented",
+                ],
             },
         )
 

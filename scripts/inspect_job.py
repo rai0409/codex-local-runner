@@ -228,6 +228,45 @@ def _derive_execution_bridge(
     }
 
 
+def _derive_mode_visibility(
+    *,
+    machine_review_recorded: bool,
+    advisory: dict[str, Any],
+    execution_bridge: dict[str, Any],
+) -> dict[str, Any]:
+    mode_basis: list[str] = []
+    if machine_review_recorded:
+        mode_basis.append("ledger_backed_machine_review_visible")
+    if execution_bridge.get("requires_explicit_operator_decision") is True:
+        mode_basis.append("explicit_operator_decision_required")
+
+    blockers: list[str] = []
+    raw_bridge_blockers = execution_bridge.get("eligibility_blockers")
+    if isinstance(raw_bridge_blockers, (list, tuple)):
+        blockers.extend(str(item) for item in raw_bridge_blockers if str(item))
+
+    raw_advisory_flags = advisory.get("operator_attention_flags")
+    if isinstance(raw_advisory_flags, (list, tuple)):
+        for item in raw_advisory_flags:
+            tag = str(item)
+            if tag and tag not in blockers:
+                blockers.append(tag)
+
+    for foundational_blocker in (
+        "explicit_operator_gate_required",
+        "execution_not_implemented",
+    ):
+        if foundational_blocker not in blockers:
+            blockers.append(foundational_blocker)
+
+    return {
+        "current_mode": "manual_review_only",
+        "next_possible_mode": None,
+        "mode_basis": mode_basis,
+        "mode_blockers": blockers,
+    }
+
+
 def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     rubric_path = row.get("rubric_path")
     merge_gate_path = row.get("merge_gate_path")
@@ -260,6 +299,11 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
         machine_review_payload,
         retry_metadata=retry_metadata,
         advisory=advisory,
+    )
+    mode_visibility = _derive_mode_visibility(
+        machine_review_recorded=machine_review_recorded,
+        advisory=advisory,
+        execution_bridge=execution_bridge,
     )
     return {
         "job_id": row.get("job_id"),
@@ -333,6 +377,7 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
             "retry_metadata": retry_metadata,
             "advisory": advisory,
             "execution_bridge": execution_bridge,
+            "mode_visibility": mode_visibility,
         },
     }
 
@@ -460,6 +505,34 @@ def _format_human(output: dict[str, Any]) -> str:
             output["machine_review"]["execution_bridge"].get(
                 "requires_explicit_operator_decision"
             )
+        ),
+        f"mode_visibility_current_mode: {_fmt(output['machine_review']['mode_visibility'].get('current_mode'))}",
+        f"mode_visibility_next_possible_mode: {_fmt(output['machine_review']['mode_visibility'].get('next_possible_mode'))}",
+        "mode_visibility_mode_basis: "
+        + (
+            ", ".join(
+                [
+                    str(v)
+                    for v in output["machine_review"]["mode_visibility"].get(
+                        "mode_basis", []
+                    )
+                ]
+            )
+            if output["machine_review"]["mode_visibility"].get("mode_basis")
+            else "none"
+        ),
+        "mode_visibility_mode_blockers: "
+        + (
+            ", ".join(
+                [
+                    str(v)
+                    for v in output["machine_review"]["mode_visibility"].get(
+                        "mode_blockers", []
+                    )
+                ]
+            )
+            if output["machine_review"]["mode_visibility"].get("mode_blockers")
+            else "none"
         ),
     ]
     return "\n".join(lines)
