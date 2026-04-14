@@ -194,6 +194,18 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
                 "validation_passed_and_merge_policy_green",
                 machine_payload["policy_reasons"],
             )
+            self.assertEqual(
+                machine_payload["retry_metadata"]["retry_recommended"],
+                False,
+            )
+            self.assertEqual(
+                machine_payload["retry_metadata"]["retry_basis"],
+                [],
+            )
+            self.assertIn(
+                "validation_passed_and_merge_policy_green",
+                machine_payload["retry_metadata"]["retry_blockers"],
+            )
             self.assertIn("operator_summary_json", machine_payload["artifact_references"])
             self.assertIn("operator_summary_html", machine_payload["artifact_references"])
             self.assertIn("machine_review_payload", machine_payload["artifact_references"])
@@ -457,6 +469,9 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
 
         self.assertEqual(payload["recommended_action"], "escalate")
         self.assertIn("validation_not_run", payload["policy_reasons"])
+        self.assertIsNone(payload["retry_metadata"]["retry_recommended"])
+        self.assertEqual(payload["retry_metadata"]["retry_basis"], [])
+        self.assertIn("validation_not_run", payload["retry_metadata"]["retry_blockers"])
 
     def test_machine_policy_escalates_for_unrecognized_validation_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -518,6 +533,12 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
 
         self.assertEqual(payload["recommended_action"], "retry")
         self.assertIn("rollback_execution_failed_retry_candidate", payload["policy_reasons"])
+        self.assertEqual(payload["retry_metadata"]["retry_recommended"], True)
+        self.assertIn(
+            "rollback_execution_failed_retry_candidate",
+            payload["retry_metadata"]["retry_basis"],
+        )
+        self.assertEqual(payload["retry_metadata"]["retry_blockers"], [])
 
 
 if __name__ == "__main__":

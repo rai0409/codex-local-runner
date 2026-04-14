@@ -75,6 +75,116 @@ def _read_json_object(path_value: Any) -> dict[str, Any] | None:
     return payload
 
 
+def _read_retry_metadata(machine_review_payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(machine_review_payload, dict):
+        return {
+            "retry_recommended": None,
+            "retry_basis": [],
+            "retry_blockers": [],
+        }
+
+    raw = machine_review_payload.get("retry_metadata")
+    if not isinstance(raw, dict):
+        return {
+            "retry_recommended": None,
+            "retry_basis": [],
+            "retry_blockers": [],
+        }
+
+    raw_retry_recommended = raw.get("retry_recommended")
+    retry_recommended = (
+        _as_optional_bool(raw_retry_recommended)
+        if raw_retry_recommended is not None
+        else None
+    )
+    raw_retry_basis = raw.get("retry_basis")
+    retry_basis = (
+        [str(item) for item in raw_retry_basis]
+        if isinstance(raw_retry_basis, (list, tuple))
+        else []
+    )
+    raw_retry_blockers = raw.get("retry_blockers")
+    retry_blockers = (
+        [str(item) for item in raw_retry_blockers]
+        if isinstance(raw_retry_blockers, (list, tuple))
+        else []
+    )
+    return {
+        "retry_recommended": retry_recommended,
+        "retry_basis": retry_basis,
+        "retry_blockers": retry_blockers,
+    }
+
+
+def _derive_recommendation_advisory(
+    machine_review_payload: dict[str, Any] | None,
+    *,
+    retry_metadata: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(machine_review_payload, dict):
+        return {
+            "display_recommendation": None,
+            "decision_confidence": None,
+            "operator_attention_flags": [],
+            "execution_allowed": False,
+        }
+
+    raw_recommendation = machine_review_payload.get("recommended_action")
+    display_recommendation = (
+        str(raw_recommendation).strip().lower()
+        if raw_recommendation is not None
+        else ""
+    )
+    if display_recommendation not in {"keep", "rollback", "retry", "escalate"}:
+        display_recommendation = None
+
+    requires_human_review = _as_optional_bool(
+        machine_review_payload.get("requires_human_review")
+    )
+    policy_reasons_raw = machine_review_payload.get("policy_reasons")
+    policy_reasons = (
+        [str(item) for item in policy_reasons_raw]
+        if isinstance(policy_reasons_raw, (list, tuple))
+        else []
+    )
+    retry_basis = [
+        str(item) for item in retry_metadata.get("retry_basis", [])
+    ] if isinstance(retry_metadata.get("retry_basis"), (list, tuple)) else []
+    retry_blockers = [
+        str(item) for item in retry_metadata.get("retry_blockers", [])
+    ] if isinstance(retry_metadata.get("retry_blockers"), (list, tuple)) else []
+
+    operator_attention_flags: list[str] = []
+    for tag in [*policy_reasons, *retry_basis, *retry_blockers]:
+        if tag and tag not in operator_attention_flags:
+            operator_attention_flags.append(tag)
+
+    decision_confidence: str | None
+    if display_recommendation is None:
+        decision_confidence = None
+    elif requires_human_review is True:
+        decision_confidence = "low"
+    elif display_recommendation == "retry":
+        retry_recommended = retry_metadata.get("retry_recommended")
+        if retry_recommended is True:
+            decision_confidence = "medium" if not retry_blockers else "low"
+        elif retry_recommended is False:
+            decision_confidence = "low"
+        else:
+            decision_confidence = None
+    elif display_recommendation in {"keep", "rollback"}:
+        decision_confidence = "medium"
+    else:
+        decision_confidence = "low"
+
+    return {
+        "display_recommendation": display_recommendation,
+        "decision_confidence": decision_confidence,
+        "operator_attention_flags": operator_attention_flags,
+        "execution_allowed": False,
+    }
+
+
 def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     rubric_path = row.get("rubric_path")
     merge_gate_path = row.get("merge_gate_path")
@@ -97,6 +207,11 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
         _read_json_object(machine_review_payload_path)
         if machine_review_recorded
         else None
+    )
+    retry_metadata = _read_retry_metadata(machine_review_payload)
+    advisory = _derive_recommendation_advisory(
+        machine_review_payload,
+        retry_metadata=retry_metadata,
     )
     return {
         "job_id": row.get("job_id"),
@@ -167,6 +282,8 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
                 if machine_review_payload is not None
                 else None
             ),
+            "retry_metadata": retry_metadata,
+            "advisory": advisory,
         },
     }
 
@@ -223,6 +340,44 @@ def _format_human(output: dict[str, Any]) -> str:
             else "none"
         ),
         f"requires_human_review: {_fmt(output['machine_review'].get('requires_human_review'))}",
+        f"retry_recommended: {_fmt(output['machine_review']['retry_metadata'].get('retry_recommended'))}",
+        "retry_basis: "
+        + (
+            ", ".join(
+                [str(v) for v in output["machine_review"]["retry_metadata"].get("retry_basis", [])]
+            )
+            if output["machine_review"]["retry_metadata"].get("retry_basis")
+            else "none"
+        ),
+        "retry_blockers: "
+        + (
+            ", ".join(
+                [
+                    str(v)
+                    for v in output["machine_review"]["retry_metadata"].get(
+                        "retry_blockers", []
+                    )
+                ]
+            )
+            if output["machine_review"]["retry_metadata"].get("retry_blockers")
+            else "none"
+        ),
+        f"advisory_display_recommendation: {_fmt(output['machine_review']['advisory'].get('display_recommendation'))}",
+        f"advisory_decision_confidence: {_fmt(output['machine_review']['advisory'].get('decision_confidence'))}",
+        "advisory_attention_flags: "
+        + (
+            ", ".join(
+                [
+                    str(v)
+                    for v in output["machine_review"]["advisory"].get(
+                        "operator_attention_flags", []
+                    )
+                ]
+            )
+            if output["machine_review"]["advisory"].get("operator_attention_flags")
+            else "none"
+        ),
+        f"advisory_execution_allowed: {_fmt(output['machine_review']['advisory'].get('execution_allowed'))}",
     ]
     return "\n".join(lines)
 

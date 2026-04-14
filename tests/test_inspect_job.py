@@ -112,6 +112,13 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertIn("merge_gate", payload["paths"])
         self.assertFalse(payload["rollback_trace"]["recorded"])
         self.assertFalse(payload["rollback_execution"]["recorded"])
+        self.assertIn("machine_review", payload)
+        self.assertIn("retry_metadata", payload["machine_review"])
+        self.assertIn("advisory", payload["machine_review"])
+        self.assertEqual(payload["machine_review"]["advisory"]["display_recommendation"], None)
+        self.assertEqual(payload["machine_review"]["advisory"]["decision_confidence"], None)
+        self.assertEqual(payload["machine_review"]["advisory"]["operator_attention_flags"], [])
+        self.assertFalse(payload["machine_review"]["advisory"]["execution_allowed"])
 
     def test_missing_job_exits_clearly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -338,6 +345,11 @@ class InspectJobCliTests(unittest.TestCase):
                         "policy_version": "deterministic_review_policy.v1",
                         "policy_reasons": ["rollback_execution_failed_retry_candidate"],
                         "requires_human_review": True,
+                        "retry_metadata": {
+                            "retry_recommended": True,
+                            "retry_basis": ["rollback_execution_failed_retry_candidate"],
+                            "retry_blockers": [],
+                        },
                     },
                     ensure_ascii=False,
                     indent=2,
@@ -364,6 +376,87 @@ class InspectJobCliTests(unittest.TestCase):
             ["rollback_execution_failed_retry_candidate"],
         )
         self.assertTrue(payload["machine_review"]["requires_human_review"])
+        self.assertEqual(
+            payload["machine_review"]["retry_metadata"]["retry_recommended"],
+            True,
+        )
+        self.assertEqual(
+            payload["machine_review"]["retry_metadata"]["retry_basis"],
+            ["rollback_execution_failed_retry_candidate"],
+        )
+        self.assertEqual(
+            payload["machine_review"]["retry_metadata"]["retry_blockers"],
+            [],
+        )
+        self.assertEqual(
+            payload["machine_review"]["advisory"]["display_recommendation"],
+            "retry",
+        )
+        self.assertEqual(
+            payload["machine_review"]["advisory"]["decision_confidence"],
+            "low",
+        )
+        self.assertIn(
+            "rollback_execution_failed_retry_candidate",
+            payload["machine_review"]["advisory"]["operator_attention_flags"],
+        )
+        self.assertFalse(payload["machine_review"]["advisory"]["execution_allowed"])
+
+    def test_inspect_handles_older_machine_review_payload_without_retry_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            db_path = tmp_root / "state" / "jobs.db"
+            job_id = "job-machine-review-old-payload"
+            self._seed_job(db_path=db_path, job_id=job_id)
+            machine_payload_path = tmp_root / "artifacts" / f"{job_id}_machine_review_payload.json"
+            machine_payload_path.parent.mkdir(parents=True, exist_ok=True)
+            machine_payload_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "job_id": job_id,
+                        "recommended_action": "keep",
+                        "policy_version": "deterministic_review_policy.v1",
+                        "policy_reasons": ["validation_passed_and_merge_policy_green"],
+                        "requires_human_review": True,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            record_machine_review_payload_path(
+                db_path=db_path,
+                job_id=job_id,
+                machine_review_payload_path=str(machine_payload_path),
+            )
+
+            proc = self._run(["--job-id", job_id, "--db-path", str(db_path), "--json"])
+
+        self.assertEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(
+            payload["machine_review"]["retry_metadata"]["retry_recommended"],
+            None,
+        )
+        self.assertEqual(payload["machine_review"]["retry_metadata"]["retry_basis"], [])
+        self.assertEqual(
+            payload["machine_review"]["retry_metadata"]["retry_blockers"],
+            [],
+        )
+        self.assertEqual(
+            payload["machine_review"]["advisory"]["display_recommendation"],
+            "keep",
+        )
+        self.assertEqual(
+            payload["machine_review"]["advisory"]["decision_confidence"],
+            "low",
+        )
+        self.assertIn(
+            "validation_passed_and_merge_policy_green",
+            payload["machine_review"]["advisory"]["operator_attention_flags"],
+        )
+        self.assertFalse(payload["machine_review"]["advisory"]["execution_allowed"])
 
     def test_inspect_keeps_machine_review_unrecorded_without_ledger_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -397,6 +490,23 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertIsNone(payload["machine_review"]["policy_version"])
         self.assertEqual(payload["machine_review"]["policy_reasons"], [])
         self.assertIsNone(payload["machine_review"]["requires_human_review"])
+        self.assertEqual(
+            payload["machine_review"]["retry_metadata"],
+            {
+                "retry_recommended": None,
+                "retry_basis": [],
+                "retry_blockers": [],
+            },
+        )
+        self.assertEqual(
+            payload["machine_review"]["advisory"],
+            {
+                "display_recommendation": None,
+                "decision_confidence": None,
+                "operator_attention_flags": [],
+                "execution_allowed": False,
+            },
+        )
 
 
 if __name__ == "__main__":
