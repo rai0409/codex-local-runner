@@ -130,6 +130,78 @@ class OperatorReviewDecisionCliTests(unittest.TestCase):
         self.assertEqual(record["decision"], "keep")
         self.assertIsNone(get_rollback_execution_by_job_id("job-keep", db_path=db_path))
 
+    def test_retry_decision_is_recorded_as_bookkeeping_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            db_path = root / "state" / "jobs.db"
+            decision_log_path = root / "state" / "operator_review_decisions.jsonl"
+            self._seed_job(db_path=db_path, job_id="job-retry")
+
+            proc = self._run(
+                [
+                    "--job-id",
+                    "job-retry",
+                    "--decision",
+                    "retry",
+                    "--db-path",
+                    str(db_path),
+                    "--decision-log-path",
+                    str(decision_log_path),
+                    "--json",
+                ]
+            )
+
+            outcome = json.loads(proc.stdout)
+            lines = decision_log_path.read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertEqual(outcome["decision"], "retry")
+        self.assertEqual(outcome["decision_status"], "recorded")
+        self.assertEqual(
+            outcome["decision_effect"],
+            "bookkeeping_only_retry_requested_no_execution",
+        )
+        self.assertEqual(outcome["rollback_execution"]["status"], "not_requested")
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(json.loads(lines[0])["decision"], "retry")
+        self.assertIsNone(get_rollback_execution_by_job_id("job-retry", db_path=db_path))
+
+    def test_escalate_decision_is_recorded_as_bookkeeping_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            db_path = root / "state" / "jobs.db"
+            decision_log_path = root / "state" / "operator_review_decisions.jsonl"
+            self._seed_job(db_path=db_path, job_id="job-escalate")
+
+            proc = self._run(
+                [
+                    "--job-id",
+                    "job-escalate",
+                    "--decision",
+                    "escalate",
+                    "--db-path",
+                    str(db_path),
+                    "--decision-log-path",
+                    str(decision_log_path),
+                    "--json",
+                ]
+            )
+
+            outcome = json.loads(proc.stdout)
+            lines = decision_log_path.read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertEqual(outcome["decision"], "escalate")
+        self.assertEqual(outcome["decision_status"], "recorded")
+        self.assertEqual(
+            outcome["decision_effect"],
+            "bookkeeping_only_escalation_requested_no_execution",
+        )
+        self.assertEqual(outcome["rollback_execution"]["status"], "not_requested")
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(json.loads(lines[0])["decision"], "escalate")
+        self.assertIsNone(get_rollback_execution_by_job_id("job-escalate", db_path=db_path))
+
     def test_rollback_decision_calls_existing_constrained_rollback_path(self) -> None:
         module = self._load_script_module()
         with tempfile.TemporaryDirectory() as tmp_dir:

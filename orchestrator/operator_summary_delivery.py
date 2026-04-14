@@ -144,7 +144,7 @@ def _select_latest_job_for_schedule(
     return None
 
 
-def _expected_summary_paths(job_row: Mapping[str, Any]) -> tuple[Path, Path] | None:
+def _expected_summary_paths(job_row: Mapping[str, Any]) -> tuple[Path, Path, Path] | None:
     result_path_value = job_row.get("result_path")
     job_id = str(job_row.get("job_id", "")).strip()
     if not job_id:
@@ -156,10 +156,11 @@ def _expected_summary_paths(job_row: Mapping[str, Any]) -> tuple[Path, Path] | N
     return (
         base_dir / f"{job_id}_operator_summary.json",
         base_dir / f"{job_id}_operator_summary.html",
+        base_dir / f"{job_id}_machine_review_payload.json",
     )
 
 
-def _build_summary_for_job(*, job_id: str, db_path: str) -> tuple[Path, Path]:
+def _build_summary_for_job(*, job_id: str, db_path: str) -> tuple[Path, Path, Path]:
     repo_root = Path(__file__).resolve().parents[1]
     script_path = repo_root / "scripts" / "build_operator_summary.py"
     proc = subprocess.run(
@@ -181,14 +182,20 @@ def _build_summary_for_job(*, job_id: str, db_path: str) -> tuple[Path, Path]:
 
     json_path: Path | None = None
     html_path: Path | None = None
+    machine_payload_path: Path | None = None
     for line in proc.stdout.splitlines():
         if line.startswith("summary_json_path="):
             json_path = Path(line.split("=", 1)[1].strip())
         if line.startswith("summary_html_path="):
             html_path = Path(line.split("=", 1)[1].strip())
+        if line.startswith("machine_review_payload_path="):
+            machine_payload_path = Path(line.split("=", 1)[1].strip())
     if json_path is None or html_path is None:
         raise RuntimeError(f"summary build output missing paths for job_id={job_id}")
-    return (json_path, html_path)
+    if machine_payload_path is None:
+        # Conservative fallback for older builder output.
+        machine_payload_path = json_path.resolve().parent / f"{job_id}_machine_review_payload.json"
+    return (json_path, html_path, machine_payload_path)
 
 
 def _get_notifier(*, method: str, notification_log_path: str) -> JsonlNotifier | WebhookNotifier:
@@ -261,15 +268,16 @@ def run_scheduled_operator_summary_delivery(
             )
             continue
 
-        json_path, html_path = expected_paths
-        reused = json_path.exists() and html_path.exists()
+        json_path, html_path, machine_payload_path = expected_paths
+        reused = json_path.exists() and html_path.exists() and machine_payload_path.exists()
         if not reused:
-            built_json_path, built_html_path = _build_summary_for_job(
+            built_json_path, built_html_path, built_machine_payload_path = _build_summary_for_job(
                 job_id=str(job_row.get("job_id", "")).strip(),
                 db_path=db_path,
             )
             json_path = built_json_path
             html_path = built_html_path
+            machine_payload_path = built_machine_payload_path
 
         delivery = schedule.get("delivery")
         if not isinstance(delivery, Mapping):
@@ -319,6 +327,7 @@ def run_scheduled_operator_summary_delivery(
             "accepted_status": job_row.get("accepted_status"),
             "summary_json_path": str(json_path),
             "summary_html_path": str(html_path),
+            "machine_review_payload_path": str(machine_payload_path),
             "summary_reused": reused,
             "notified_at": now.isoformat(timespec="seconds"),
         }

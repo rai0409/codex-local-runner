@@ -9,6 +9,7 @@ import unittest
 
 from orchestrator.ledger import record_execution_target
 from orchestrator.ledger import record_job_evaluation
+from orchestrator.ledger import record_machine_review_payload_path
 from orchestrator.ledger import record_merge_execution_outcome
 from orchestrator.ledger import record_rollback_execution_outcome
 from orchestrator.ledger import record_rollback_traceability_for_candidate
@@ -319,6 +320,83 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertTrue(payload["rollback_execution"]["recorded"])
         self.assertEqual(payload["rollback_execution"]["status"], "succeeded")
         self.assertEqual(payload["rollback_execution"]["rollback_result_sha"], "d" * 40)
+
+    def test_inspect_surfaces_machine_review_recommendation_when_payload_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            db_path = tmp_root / "state" / "jobs.db"
+            job_id = "job-machine-review"
+            self._seed_job(db_path=db_path, job_id=job_id)
+            machine_payload_path = tmp_root / "artifacts" / f"{job_id}_machine_review_payload.json"
+            machine_payload_path.parent.mkdir(parents=True, exist_ok=True)
+            machine_payload_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "job_id": job_id,
+                        "recommended_action": "retry",
+                        "policy_version": "deterministic_review_policy.v1",
+                        "policy_reasons": ["rollback_execution_failed_retry_candidate"],
+                        "requires_human_review": True,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            record_machine_review_payload_path(
+                db_path=db_path,
+                job_id=job_id,
+                machine_review_payload_path=str(machine_payload_path),
+            )
+
+            proc = self._run(["--job-id", job_id, "--db-path", str(db_path), "--json"])
+
+        self.assertEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["machine_review"]["recommended_action"], "retry")
+        self.assertEqual(
+            payload["machine_review"]["policy_version"],
+            "deterministic_review_policy.v1",
+        )
+        self.assertEqual(
+            payload["machine_review"]["policy_reasons"],
+            ["rollback_execution_failed_retry_candidate"],
+        )
+        self.assertTrue(payload["machine_review"]["requires_human_review"])
+
+    def test_inspect_keeps_machine_review_unrecorded_without_ledger_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            db_path = tmp_root / "state" / "jobs.db"
+            job_id = "job-machine-review-unrecorded"
+            self._seed_job(db_path=db_path, job_id=job_id)
+            loose_payload_path = tmp_root / "state" / f"{job_id}_machine_review_payload.json"
+            loose_payload_path.write_text(
+                json.dumps(
+                    {
+                        "job_id": job_id,
+                        "recommended_action": "keep",
+                        "policy_version": "deterministic_review_policy.v1",
+                        "policy_reasons": ["validation_passed_and_merge_policy_green"],
+                        "requires_human_review": True,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            proc = self._run(["--job-id", job_id, "--db-path", str(db_path), "--json"])
+
+        self.assertEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertIsNone(payload["paths"]["machine_review_payload"])
+        self.assertFalse(payload["machine_review"]["recorded"])
+        self.assertIsNone(payload["machine_review"]["recommended_action"])
+        self.assertIsNone(payload["machine_review"]["policy_version"])
+        self.assertEqual(payload["machine_review"]["policy_reasons"], [])
+        self.assertIsNone(payload["machine_review"]["requires_human_review"])
 
 
 if __name__ == "__main__":
