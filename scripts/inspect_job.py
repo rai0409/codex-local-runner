@@ -60,6 +60,21 @@ def _read_fail_reasons(path_value: Any) -> list[str]:
     return [str(item) for item in raw]
 
 
+def _read_json_object(path_value: Any) -> dict[str, Any] | None:
+    if not isinstance(path_value, str) or not path_value.strip():
+        return None
+    path = Path(path_value)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
 def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     rubric_path = row.get("rubric_path")
     merge_gate_path = row.get("merge_gate_path")
@@ -70,6 +85,18 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     rollback_execution = get_rollback_execution_by_job_id(
         str(row.get("job_id", "")),
         db_path=db_path,
+    )
+    machine_review_payload_path_value = row.get("machine_review_payload_path")
+    machine_review_payload_path = (
+        str(machine_review_payload_path_value).strip()
+        if isinstance(machine_review_payload_path_value, str)
+        else ""
+    )
+    machine_review_recorded = machine_review_payload_path != ""
+    machine_review_payload = (
+        _read_json_object(machine_review_payload_path)
+        if machine_review_recorded
+        else None
     )
     return {
         "job_id": row.get("job_id"),
@@ -87,6 +114,11 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
             "result": row.get("result_path"),
             "rubric": rubric_path,
             "merge_gate": merge_gate_path,
+            "machine_review_payload": (
+                machine_review_payload_path
+                if machine_review_recorded
+                else None
+            ),
         },
         "fail_reasons": {
             "rubric": _read_fail_reasons(rubric_path),
@@ -112,6 +144,29 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
                 rollback_execution.get("rollback_result_sha") if rollback_execution else None
             ),
             "rollback_error": rollback_execution.get("rollback_error") if rollback_execution else None,
+        },
+        "machine_review": {
+            "recorded": machine_review_recorded,
+            "recommended_action": (
+                machine_review_payload.get("recommended_action")
+                if machine_review_payload is not None
+                else None
+            ),
+            "policy_version": (
+                machine_review_payload.get("policy_version")
+                if machine_review_payload is not None
+                else None
+            ),
+            "policy_reasons": (
+                machine_review_payload.get("policy_reasons")
+                if machine_review_payload is not None
+                else []
+            ),
+            "requires_human_review": (
+                _as_optional_bool(machine_review_payload.get("requires_human_review"))
+                if machine_review_payload is not None
+                else None
+            ),
         },
     }
 
@@ -140,6 +195,7 @@ def _format_human(output: dict[str, Any]) -> str:
         f"result_path: {_fmt(output['paths'].get('result'))}",
         f"rubric_path: {_fmt(output['paths'].get('rubric'))}",
         f"merge_gate_path: {_fmt(output['paths'].get('merge_gate'))}",
+        f"machine_review_payload_path: {_fmt(output['paths'].get('machine_review_payload'))}",
         "rubric_fail_reasons: "
         + (", ".join(output["fail_reasons"]["rubric"]) if output["fail_reasons"]["rubric"] else "none"),
         "merge_gate_fail_reasons: "
@@ -157,6 +213,16 @@ def _format_human(output: dict[str, Any]) -> str:
         f"rollback_execution_status: {_fmt(output['rollback_execution'].get('status'))}",
         f"rollback_result_sha: {_fmt(output['rollback_execution'].get('rollback_result_sha'))}",
         f"rollback_error: {_fmt(output['rollback_execution'].get('rollback_error'))}",
+        f"machine_review_recorded: {_fmt(output['machine_review'].get('recorded'))}",
+        f"recommended_action: {_fmt(output['machine_review'].get('recommended_action'))}",
+        f"policy_version: {_fmt(output['machine_review'].get('policy_version'))}",
+        "policy_reasons: "
+        + (
+            ", ".join([str(v) for v in output["machine_review"].get("policy_reasons", [])])
+            if output["machine_review"].get("policy_reasons")
+            else "none"
+        ),
+        f"requires_human_review: {_fmt(output['machine_review'].get('requires_human_review'))}",
     ]
     return "\n".join(lines)
 

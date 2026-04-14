@@ -19,6 +19,9 @@ from orchestrator.ledger import get_job_by_id  # noqa: E402
 from orchestrator.ledger import get_latest_job  # noqa: E402
 from orchestrator.ledger import get_rollback_execution_by_job_id  # noqa: E402
 from orchestrator.ledger import get_rollback_trace_by_job_id  # noqa: E402
+from orchestrator.ledger import record_machine_review_payload_path  # noqa: E402
+
+DETERMINISTIC_REVIEW_POLICY_VERSION = "deterministic_review_policy.v1"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -135,6 +138,201 @@ def _build_summary(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     }
 
 
+def _build_machine_review_payload(
+    summary: dict[str, Any],
+    *,
+    summary_json_path: Path,
+    summary_html_path: Path,
+    machine_payload_path: Path,
+) -> dict[str, Any]:
+    merge = summary.get("merge")
+    rollback = summary.get("rollback")
+    validation = summary.get("validation")
+    paths = summary.get("paths")
+
+    merge_eligible = None
+    merge_gate_passed = None
+    if isinstance(merge, dict):
+        merge_eligible = merge.get("merge_eligible")
+        merge_gate_passed = merge.get("merge_gate_passed")
+
+    rollback_eligible = None
+    rollback_trace_recorded = None
+    rollback_execution_status = None
+    rollback_trace_id = None
+    if isinstance(rollback, dict):
+        rollback_eligible = rollback.get("rollback_eligible")
+        rollback_trace_recorded = rollback.get("trace_recorded")
+        rollback_execution_status = rollback.get("rollback_execution_status")
+        rollback_trace_id = rollback.get("rollback_trace_id")
+
+    verify_status = None
+    verify_reason = None
+    if isinstance(validation, dict):
+        verify_status = validation.get("verify_status")
+        verify_reason = validation.get("verify_reason")
+
+    artifact_references: dict[str, Any] = {
+        "operator_summary_json": str(summary_json_path),
+        "operator_summary_html": str(summary_html_path),
+        "machine_review_payload": str(machine_payload_path),
+    }
+    if isinstance(paths, dict):
+        for key in ("request", "result", "rubric", "merge_gate", "classification"):
+            artifact_references[key] = paths.get(key)
+
+    payload = {
+        "schema_version": "1.0",
+        "action_vocabulary": ("keep", "rollback", "retry", "escalate"),
+        "job_id": summary.get("job_id"),
+        "repo": summary.get("repo"),
+        "accepted_status": summary.get("accepted_status"),
+        "merge_eligible": merge_eligible,
+        "merge_gate_passed": merge_gate_passed,
+        "rollback_eligible": rollback_eligible,
+        "rollback_trace_id": rollback_trace_id,
+        "validation": {
+            "verify_status": verify_status,
+            "verify_reason": verify_reason,
+        },
+        "guardrail_flags": {
+            "rollback_trace_recorded": rollback_trace_recorded,
+            "rollback_execution_status": rollback_execution_status,
+        },
+        "artifact_references": artifact_references,
+        # Conservative default for operator-in-the-loop review.
+        "requires_human_review": True,
+        "recommended_action": None,
+    }
+    policy_result = _evaluate_deterministic_review_policy(payload)
+    payload["policy_version"] = policy_result["policy_version"]
+    payload["policy_reasons"] = policy_result["policy_reasons"]
+    payload["recommended_action"] = policy_result["recommended_action"]
+    return payload
+
+
+def _normalize_verify_status(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def _evaluate_deterministic_review_policy(payload: dict[str, Any]) -> dict[str, Any]:
+    accepted_status = str(payload.get("accepted_status", "")).strip().lower()
+    merge_eligible = _as_optional_bool(payload.get("merge_eligible"))
+    merge_gate_passed = _as_optional_bool(payload.get("merge_gate_passed"))
+    rollback_eligible = _as_optional_bool(payload.get("rollback_eligible"))
+    rollback_trace_id = str(payload.get("rollback_trace_id") or "").strip()
+
+    validation = payload.get("validation")
+    verify_status = ""
+    if isinstance(validation, dict):
+        verify_status = _normalize_verify_status(validation.get("verify_status"))
+
+    guardrail_flags = payload.get("guardrail_flags")
+    rollback_trace_recorded = None
+    rollback_execution_status = ""
+    if isinstance(guardrail_flags, dict):
+        rollback_trace_recorded = _as_optional_bool(
+            guardrail_flags.get("rollback_trace_recorded")
+        )
+        rollback_execution_status = str(
+            guardrail_flags.get("rollback_execution_status") or ""
+        ).strip().lower()
+
+    reasons: list[str] = []
+    recommended_action = "escalate"
+
+    if accepted_status != "accepted":
+        reasons.append("accepted_status_not_accepted")
+        return {
+            "policy_version": DETERMINISTIC_REVIEW_POLICY_VERSION,
+            "recommended_action": recommended_action,
+            "policy_reasons": reasons,
+        }
+
+    # A previously completed rollback means no additional rollback action should be recommended.
+    if rollback_execution_status == "succeeded":
+        reasons.append("rollback_already_succeeded")
+        return {
+            "policy_version": DETERMINISTIC_REVIEW_POLICY_VERSION,
+            "recommended_action": "keep",
+            "policy_reasons": reasons,
+        }
+
+    # If rollback was attempted and failed, retry is representable as a recommendation only.
+    # This does not trigger execution; operator decision remains explicit.
+    if rollback_execution_status == "failed":
+        if (
+            rollback_eligible is True
+            and rollback_trace_recorded is True
+            and rollback_trace_id
+        ):
+            reasons.append("rollback_execution_failed_retry_candidate")
+            return {
+                "policy_version": DETERMINISTIC_REVIEW_POLICY_VERSION,
+                "recommended_action": "retry",
+                "policy_reasons": reasons,
+            }
+        reasons.append("rollback_execution_failed_but_retry_not_clear")
+        return {
+            "policy_version": DETERMINISTIC_REVIEW_POLICY_VERSION,
+            "recommended_action": recommended_action,
+            "policy_reasons": reasons,
+        }
+
+    if rollback_execution_status == "skipped":
+        reasons.append("rollback_execution_state_requires_human_review")
+        return {
+            "policy_version": DETERMINISTIC_REVIEW_POLICY_VERSION,
+            "recommended_action": recommended_action,
+            "policy_reasons": reasons,
+        }
+
+    if verify_status == "passed":
+        if merge_eligible is True and merge_gate_passed is True:
+            reasons.append("validation_passed_and_merge_policy_green")
+            recommended_action = "keep"
+        else:
+            reasons.append("validation_passed_but_policy_flags_not_green")
+        return {
+            "policy_version": DETERMINISTIC_REVIEW_POLICY_VERSION,
+            "recommended_action": recommended_action,
+            "policy_reasons": reasons,
+        }
+
+    if verify_status == "failed":
+        if (
+            rollback_eligible is True
+            and rollback_trace_recorded is True
+            and rollback_trace_id
+        ):
+            reasons.append("validation_failed_and_rollback_eligible")
+            recommended_action = "rollback"
+        elif rollback_eligible is False:
+            reasons.append("validation_failed_but_rollback_not_eligible")
+        else:
+            reasons.append("validation_failed_with_unclear_rollback_eligibility")
+        return {
+            "policy_version": DETERMINISTIC_REVIEW_POLICY_VERSION,
+            "recommended_action": recommended_action,
+            "policy_reasons": reasons,
+        }
+
+    if verify_status == "not_run":
+        reasons.append("validation_not_run")
+    elif verify_status == "":
+        reasons.append("validation_status_missing")
+    else:
+        reasons.append("validation_status_unrecognized")
+
+    return {
+        "policy_version": DETERMINISTIC_REVIEW_POLICY_VERSION,
+        "recommended_action": recommended_action,
+        "policy_reasons": reasons,
+    }
+
+
 def _to_html(summary: dict[str, Any]) -> str:
     def line(label: str, value: Any) -> str:
         text = "<missing>" if value is None else str(value)
@@ -231,15 +429,32 @@ def main(argv: list[str] | None = None) -> int:
     job_id = str(summary.get("job_id", "unknown-job"))
     json_path = output_dir / f"{job_id}_operator_summary.json"
     html_path = output_dir / f"{job_id}_operator_summary.html"
+    machine_payload_path = output_dir / f"{job_id}_machine_review_payload.json"
 
     json_path.write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     html_path.write_text(_to_html(summary), encoding="utf-8")
+    machine_payload = _build_machine_review_payload(
+        summary,
+        summary_json_path=json_path,
+        summary_html_path=html_path,
+        machine_payload_path=machine_payload_path,
+    )
+    machine_payload_path.write_text(
+        json.dumps(machine_payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    record_machine_review_payload_path(
+        job_id=job_id,
+        machine_review_payload_path=str(machine_payload_path.resolve()),
+        db_path=args.db_path,
+    )
 
     print(f"summary_json_path={json_path}")
     print(f"summary_html_path={html_path}")
+    print(f"machine_review_payload_path={machine_payload_path}")
     return 0
 
 

@@ -182,6 +182,7 @@ class RunOperatorSummaryDeliveryCliTests(unittest.TestCase):
 
             summary_json = result_path.parent / "job-due_operator_summary.json"
             summary_html = result_path.parent / "job-due_operator_summary.html"
+            machine_payload_json = result_path.parent / "job-due_machine_review_payload.json"
             self.assertEqual(proc.returncode, 0, msg=proc.stderr)
             payload = json.loads(proc.stdout)
             self.assertEqual(payload["due_count"], 1)
@@ -189,6 +190,7 @@ class RunOperatorSummaryDeliveryCliTests(unittest.TestCase):
             self.assertEqual(payload["deliveries"][0]["status"], "written")
             self.assertTrue(summary_json.exists())
             self.assertTrue(summary_html.exists())
+            self.assertTrue(machine_payload_json.exists())
             self.assertTrue(notification_log_path.exists())
 
     def test_disabled_schedule_is_not_delivered(self) -> None:
@@ -307,11 +309,16 @@ class RunOperatorSummaryDeliveryCliTests(unittest.TestCase):
 
             existing_json = result_path.parent / "job-reuse_operator_summary.json"
             existing_html = result_path.parent / "job-reuse_operator_summary.html"
+            existing_machine = result_path.parent / "job-reuse_machine_review_payload.json"
             existing_json.write_text(
                 json.dumps({"sentinel": "reuse"}, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
             existing_html.write_text("<html>reuse</html>", encoding="utf-8")
+            existing_machine.write_text(
+                json.dumps({"sentinel": "reuse-machine"}, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
 
             proc = self._run(
                 [
@@ -336,6 +343,10 @@ class RunOperatorSummaryDeliveryCliTests(unittest.TestCase):
             self.assertEqual(payload["delivery_count"], 1)
             self.assertTrue(payload["deliveries"][0]["summary_reused"])
             self.assertEqual(json.loads(existing_json.read_text(encoding="utf-8"))["sentinel"], "reuse")
+            self.assertEqual(
+                json.loads(existing_machine.read_text(encoding="utf-8"))["sentinel"],
+                "reuse-machine",
+            )
             self.assertEqual(notification["summary_reused"], True)
 
     def test_default_stub_path_remains_unchanged_even_when_webhook_env_exists(self) -> None:
@@ -402,6 +413,7 @@ class RunOperatorSummaryDeliveryCliTests(unittest.TestCase):
             self.assertEqual(sent["accepted_status"], "accepted")
             self.assertIn("summary_json_path", sent)
             self.assertIn("summary_html_path", sent)
+            self.assertIn("machine_review_payload_path", sent)
             self.assertIn("summary_reused", sent)
             self.assertNotIn("execute_merge", sent)
             self.assertNotIn("execute_rollback", sent)

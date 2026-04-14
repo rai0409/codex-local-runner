@@ -16,6 +16,7 @@ from orchestrator.ledger import get_rollback_trace_by_id
 from orchestrator.ledger import get_rollback_trace_by_job_id
 from orchestrator.ledger import record_execution_target
 from orchestrator.ledger import record_job_evaluation
+from orchestrator.ledger import record_machine_review_payload_path
 from orchestrator.ledger import record_merge_execution_outcome
 from orchestrator.ledger import record_merge_attempt_receipt
 from orchestrator.ledger import record_rollback_execution_outcome
@@ -214,6 +215,47 @@ class LedgerTests(unittest.TestCase):
             self.assertIsNone(row["rubric_path"])
             self.assertIsNone(row["merge_gate_path"])
             self.assertIsNone(row["classification_path"])
+
+    def test_record_machine_review_payload_path_updates_jobs_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "jobs.db"
+            record_job_evaluation(
+                db_path=db_path,
+                job_id="job-machine-review-ref",
+                repo="codex-local-runner",
+                task_type="orchestration",
+                provider="codex_cli",
+                accepted_status="accepted",
+                declared_category="docs_only",
+                observed_category="docs_only",
+                merge_eligible=True,
+                merge_gate_passed=True,
+                created_at="2026-04-14T00:00:00+00:00",
+                request_path="/tmp/request.json",
+                result_path="/tmp/result.json",
+                rubric_path=None,
+                merge_gate_path=None,
+            )
+            payload_path = Path(tmp_dir) / "artifacts" / "job-machine-review-ref_machine_review_payload.json"
+            record_machine_review_payload_path(
+                db_path=db_path,
+                job_id="job-machine-review-ref",
+                machine_review_payload_path=str(payload_path),
+            )
+            row = self._fetch_one(db_path, "job-machine-review-ref")
+
+        assert row is not None
+        self.assertEqual(row["machine_review_payload_path"], str(payload_path))
+
+    def test_record_machine_review_payload_path_requires_existing_job(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "jobs.db"
+            with self.assertRaisesRegex(ValueError, "job not found"):
+                record_machine_review_payload_path(
+                    db_path=db_path,
+                    job_id="missing-job",
+                    machine_review_payload_path="/tmp/missing_machine_review_payload.json",
+                )
 
     def test_execution_target_capture_persists_identity_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

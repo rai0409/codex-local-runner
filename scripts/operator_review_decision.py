@@ -27,14 +27,16 @@ DEFAULT_REVIEW_DECISION_LOG_PATH = "state/operator_review_decisions.jsonl"
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Record explicit local operator Keep/Rollback decision "
+            "Record explicit local operator review decision "
             "(local-first, explicit human action only)"
         ),
         epilog=(
             "Primary flow (recommended):\n"
             "  python scripts/operator_review_decision.py --job-id <job_id> --decision keep\n"
             "  python scripts/operator_review_decision.py --job-id <job_id> --decision rollback "
-            "--execution-repo-path /path/to/repo\n\n"
+            "--execution-repo-path /path/to/repo\n"
+            "  python scripts/operator_review_decision.py --job-id <job_id> --decision retry\n"
+            "  python scripts/operator_review_decision.py --job-id <job_id> --decision escalate\n\n"
             "Advanced direct-trace flow:\n"
             "  python scripts/operator_review_decision.py --rollback-trace-id <trace_id> "
             "--decision rollback --execution-repo-path /path/to/repo"
@@ -53,11 +55,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--decision",
         required=True,
-        choices=("keep", "rollback"),
+        choices=("keep", "rollback", "retry", "escalate"),
         help=(
             "Explicit human decision. "
             "'keep' is bookkeeping-only (no execution). "
-            "'rollback' requests existing constrained rollback with guardrails."
+            "'rollback' requests existing constrained rollback with guardrails. "
+            "'retry'/'escalate' are representation-only bookkeeping decisions."
         ),
     )
     parser.add_argument("--db-path", default=DEFAULT_LEDGER_DB_PATH)
@@ -87,6 +90,16 @@ def _append_decision_record(path: str, record: dict[str, Any]) -> None:
     with out_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True))
         handle.write("\n")
+
+
+def _decision_effect(decision: str) -> str:
+    mapping = {
+        "keep": "bookkeeping_only_no_execution",
+        "rollback": "rollback_requested_guardrails_apply",
+        "retry": "bookkeeping_only_retry_requested_no_execution",
+        "escalate": "bookkeeping_only_escalation_requested_no_execution",
+    }
+    return mapping.get(str(decision).strip().lower(), "unsupported_decision")
 
 
 def _resolve_target(
@@ -158,7 +171,7 @@ def apply_operator_decision(
         "repo": repo,
         "decision_status": "recorded",
         "decision_error": None,
-        "decision_effect": "bookkeeping_only_no_execution" if normalized_decision == "keep" else "rollback_requested_guardrails_apply",
+        "decision_effect": _decision_effect(normalized_decision),
         "decision_log": "skipped",
         "rollback_execution": {
             "status": "not_requested",
@@ -181,9 +194,9 @@ def apply_operator_decision(
         else:
             outcome["decision_error"] = "target_not_found"
 
-    elif normalized_decision == "keep":
-        # Explicit keep is a human decision record only.
-        # It does not trigger merge, rollback, redispatch, or any downstream execution.
+    elif normalized_decision in {"keep", "retry", "escalate"}:
+        # Explicit keep/retry/escalate are human decision records only.
+        # They do not trigger merge, rollback, redispatch, or any downstream execution.
         pass
 
     elif normalized_decision == "rollback":
@@ -280,6 +293,8 @@ def apply_operator_decision(
     decision_record = {
         "decided_at": outcome["decided_at"],
         "decision": outcome["decision"],
+        "decision_effect": outcome.get("decision_effect"),
+        "target_mode": outcome.get("target_mode"),
         "job_id": outcome["job_id"],
         "rollback_trace_id": outcome["rollback_trace_id"],
         "repo": outcome["repo"],

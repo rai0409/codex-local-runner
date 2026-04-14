@@ -48,10 +48,17 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             result_path TEXT NOT NULL,
             rubric_path TEXT NULL,
             merge_gate_path TEXT NULL,
-            classification_path TEXT NULL
+            classification_path TEXT NULL,
+            machine_review_payload_path TEXT NULL
         )
         """
     )
+    jobs_columns = {
+        str(row["name"])
+        for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+    }
+    if "machine_review_payload_path" not in jobs_columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN machine_review_payload_path TEXT NULL")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS execution_targets (
@@ -297,6 +304,51 @@ def record_job_evaluation(
                 "rubric_path": rubric_path,
                 "merge_gate_path": merge_gate_path,
                 "classification_path": classification_path,
+            },
+        )
+        conn.commit()
+
+
+def record_machine_review_payload_path(
+    *,
+    job_id: str,
+    machine_review_payload_path: str | None,
+    db_path: str | Path = DEFAULT_LEDGER_DB_PATH,
+) -> None:
+    normalized_job_id = str(job_id).strip()
+    if not normalized_job_id:
+        raise ValueError("job_id is required for machine review path persistence")
+
+    normalized_path = (
+        str(machine_review_payload_path).strip()
+        if machine_review_payload_path is not None
+        else None
+    )
+    if normalized_path == "":
+        normalized_path = None
+
+    with _connect(db_path) as conn:
+        _ensure_schema(conn)
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM jobs
+            WHERE job_id = ?
+            LIMIT 1
+            """,
+            (normalized_job_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("job not found for machine review path persistence")
+        conn.execute(
+            """
+            UPDATE jobs
+            SET machine_review_payload_path = :machine_review_payload_path
+            WHERE job_id = :job_id
+            """,
+            {
+                "machine_review_payload_path": normalized_path,
+                "job_id": normalized_job_id,
             },
         )
         conn.commit()
