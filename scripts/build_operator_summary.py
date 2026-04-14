@@ -208,7 +208,45 @@ def _build_machine_review_payload(
     payload["policy_version"] = policy_result["policy_version"]
     payload["policy_reasons"] = policy_result["policy_reasons"]
     payload["recommended_action"] = policy_result["recommended_action"]
+    payload["retry_metadata"] = _build_retry_metadata(
+        recommended_action=policy_result["recommended_action"],
+        policy_reasons=policy_result["policy_reasons"],
+    )
     return payload
+
+
+def _build_retry_metadata(
+    *,
+    recommended_action: Any,
+    policy_reasons: Any,
+) -> dict[str, Any]:
+    normalized_action = str(recommended_action or "").strip().lower()
+    normalized_reasons = (
+        [str(reason) for reason in policy_reasons]
+        if isinstance(policy_reasons, (list, tuple))
+        else []
+    )
+
+    if normalized_action == "retry":
+        return {
+            "retry_recommended": True,
+            "retry_basis": normalized_reasons,
+            "retry_blockers": [],
+        }
+
+    if normalized_action in {"keep", "rollback"}:
+        return {
+            "retry_recommended": False,
+            "retry_basis": [],
+            "retry_blockers": normalized_reasons,
+        }
+
+    # For escalate/unknown actions, keep recommendation conservative.
+    return {
+        "retry_recommended": None,
+        "retry_basis": [],
+        "retry_blockers": normalized_reasons,
+    }
 
 
 def _normalize_verify_status(value: Any) -> str:
