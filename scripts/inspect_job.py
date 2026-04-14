@@ -185,6 +185,49 @@ def _derive_recommendation_advisory(
     }
 
 
+def _derive_execution_bridge(
+    machine_review_payload: dict[str, Any] | None,
+    *,
+    retry_metadata: dict[str, Any],
+    advisory: dict[str, Any],
+) -> dict[str, Any]:
+    policy_reasons = []
+    if isinstance(machine_review_payload, dict):
+        raw_policy_reasons = machine_review_payload.get("policy_reasons")
+        if isinstance(raw_policy_reasons, (list, tuple)):
+            policy_reasons = [str(item) for item in raw_policy_reasons]
+
+    retry_blockers = []
+    raw_retry_blockers = retry_metadata.get("retry_blockers")
+    if isinstance(raw_retry_blockers, (list, tuple)):
+        retry_blockers = [str(item) for item in raw_retry_blockers]
+
+    advisory_flags = []
+    raw_advisory_flags = advisory.get("operator_attention_flags")
+    if isinstance(raw_advisory_flags, (list, tuple)):
+        advisory_flags = [str(item) for item in raw_advisory_flags]
+
+    blockers: list[str] = []
+    for tag in [*policy_reasons, *retry_blockers, *advisory_flags]:
+        if tag and tag not in blockers:
+            blockers.append(tag)
+
+    # Current repository posture is explicitly human-gated and non-executing.
+    for foundational_blocker in (
+        "explicit_operator_gate_required",
+        "execution_not_implemented",
+    ):
+        if foundational_blocker not in blockers:
+            blockers.append(foundational_blocker)
+
+    return {
+        "eligible_for_bounded_execution": False,
+        "eligibility_basis": [],
+        "eligibility_blockers": blockers,
+        "requires_explicit_operator_decision": True,
+    }
+
+
 def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     rubric_path = row.get("rubric_path")
     merge_gate_path = row.get("merge_gate_path")
@@ -212,6 +255,11 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     advisory = _derive_recommendation_advisory(
         machine_review_payload,
         retry_metadata=retry_metadata,
+    )
+    execution_bridge = _derive_execution_bridge(
+        machine_review_payload,
+        retry_metadata=retry_metadata,
+        advisory=advisory,
     )
     return {
         "job_id": row.get("job_id"),
@@ -284,6 +332,7 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
             ),
             "retry_metadata": retry_metadata,
             "advisory": advisory,
+            "execution_bridge": execution_bridge,
         },
     }
 
@@ -378,6 +427,40 @@ def _format_human(output: dict[str, Any]) -> str:
             else "none"
         ),
         f"advisory_execution_allowed: {_fmt(output['machine_review']['advisory'].get('execution_allowed'))}",
+        "execution_bridge_eligible_for_bounded_execution: "
+        + _fmt(output["machine_review"]["execution_bridge"].get("eligible_for_bounded_execution")),
+        "execution_bridge_eligibility_basis: "
+        + (
+            ", ".join(
+                [
+                    str(v)
+                    for v in output["machine_review"]["execution_bridge"].get(
+                        "eligibility_basis", []
+                    )
+                ]
+            )
+            if output["machine_review"]["execution_bridge"].get("eligibility_basis")
+            else "none"
+        ),
+        "execution_bridge_eligibility_blockers: "
+        + (
+            ", ".join(
+                [
+                    str(v)
+                    for v in output["machine_review"]["execution_bridge"].get(
+                        "eligibility_blockers", []
+                    )
+                ]
+            )
+            if output["machine_review"]["execution_bridge"].get("eligibility_blockers")
+            else "none"
+        ),
+        "execution_bridge_requires_explicit_operator_decision: "
+        + _fmt(
+            output["machine_review"]["execution_bridge"].get(
+                "requires_explicit_operator_decision"
+            )
+        ),
     ]
     return "\n".join(lines)
 

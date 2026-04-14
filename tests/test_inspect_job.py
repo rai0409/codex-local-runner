@@ -115,10 +115,24 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertIn("machine_review", payload)
         self.assertIn("retry_metadata", payload["machine_review"])
         self.assertIn("advisory", payload["machine_review"])
+        self.assertIn("execution_bridge", payload["machine_review"])
         self.assertEqual(payload["machine_review"]["advisory"]["display_recommendation"], None)
         self.assertEqual(payload["machine_review"]["advisory"]["decision_confidence"], None)
         self.assertEqual(payload["machine_review"]["advisory"]["operator_attention_flags"], [])
         self.assertFalse(payload["machine_review"]["advisory"]["execution_allowed"])
+        self.assertFalse(
+            payload["machine_review"]["execution_bridge"]["eligible_for_bounded_execution"]
+        )
+        self.assertEqual(payload["machine_review"]["execution_bridge"]["eligibility_basis"], [])
+        self.assertEqual(
+            payload["machine_review"]["execution_bridge"]["eligibility_blockers"],
+            ["explicit_operator_gate_required", "execution_not_implemented"],
+        )
+        self.assertTrue(
+            payload["machine_review"]["execution_bridge"][
+                "requires_explicit_operator_decision"
+            ]
+        )
 
     def test_missing_job_exits_clearly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -401,6 +415,23 @@ class InspectJobCliTests(unittest.TestCase):
             payload["machine_review"]["advisory"]["operator_attention_flags"],
         )
         self.assertFalse(payload["machine_review"]["advisory"]["execution_allowed"])
+        self.assertFalse(
+            payload["machine_review"]["execution_bridge"]["eligible_for_bounded_execution"]
+        )
+        self.assertEqual(payload["machine_review"]["execution_bridge"]["eligibility_basis"], [])
+        self.assertEqual(
+            payload["machine_review"]["execution_bridge"]["eligibility_blockers"],
+            [
+                "rollback_execution_failed_retry_candidate",
+                "explicit_operator_gate_required",
+                "execution_not_implemented",
+            ],
+        )
+        self.assertTrue(
+            payload["machine_review"]["execution_bridge"][
+                "requires_explicit_operator_decision"
+            ]
+        )
 
     def test_inspect_handles_older_machine_review_payload_without_retry_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -457,6 +488,23 @@ class InspectJobCliTests(unittest.TestCase):
             payload["machine_review"]["advisory"]["operator_attention_flags"],
         )
         self.assertFalse(payload["machine_review"]["advisory"]["execution_allowed"])
+        self.assertFalse(
+            payload["machine_review"]["execution_bridge"]["eligible_for_bounded_execution"]
+        )
+        self.assertEqual(payload["machine_review"]["execution_bridge"]["eligibility_basis"], [])
+        self.assertEqual(
+            payload["machine_review"]["execution_bridge"]["eligibility_blockers"],
+            [
+                "validation_passed_and_merge_policy_green",
+                "explicit_operator_gate_required",
+                "execution_not_implemented",
+            ],
+        )
+        self.assertTrue(
+            payload["machine_review"]["execution_bridge"][
+                "requires_explicit_operator_decision"
+            ]
+        )
 
     def test_inspect_keeps_machine_review_unrecorded_without_ledger_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -505,6 +553,18 @@ class InspectJobCliTests(unittest.TestCase):
                 "decision_confidence": None,
                 "operator_attention_flags": [],
                 "execution_allowed": False,
+            },
+        )
+        self.assertEqual(
+            payload["machine_review"]["execution_bridge"],
+            {
+                "eligible_for_bounded_execution": False,
+                "eligibility_basis": [],
+                "eligibility_blockers": [
+                    "explicit_operator_gate_required",
+                    "execution_not_implemented",
+                ],
+                "requires_explicit_operator_decision": True,
             },
         )
 
