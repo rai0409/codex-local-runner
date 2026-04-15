@@ -8,3 +8,23 @@ auto_merge_categories:
   - ci_only
   - test_only
   - contract_guard_only
+auto_progression:
+  policy_eligible_categories:
+    - docs_only
+    - test_only
+  auto_pr_candidate_categories:
+    - docs_only
+  max_changed_files: 8
+  max_total_diff_lines: 120
+  generated_path_patterns:
+    - "**/__pycache__/**"
+    - "**/*.pyc"
+    - "dist/**"
+    - "build/**"
+  binary_file_extensions:
+    - ".png"
+    - ".jpg"
+    - ".jpeg"
+    - ".gif"
+    - ".pdf"
+    - ".zip"

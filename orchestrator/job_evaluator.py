@@ -205,7 +205,12 @@ def evaluate_job_directory(job_dir: str | Path) -> dict[str, Any]:
         ci_green=ci_green,
         rollback_metadata_recorded=rollback_metadata_recorded,
     )
-    merge_gate = apply_merge_gate(rubric=rubric)
+    merge_gate = apply_merge_gate(
+        rubric=rubric,
+        changed_files=changed_files,
+        additions=additions,
+        deletions=deletions,
+    )
 
     return {
         "job_id": job_id,

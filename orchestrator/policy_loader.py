@@ -35,6 +35,22 @@ def _as_string_tuple(value: Any, *, context: str) -> tuple[str, ...]:
     return tuple(result)
 
 
+def _as_non_negative_int(value: Any, *, context: str, default: int) -> int:
+    if value is None:
+        return int(default)
+    if isinstance(value, bool):
+        raise ValueError(f"{context} must be an integer")
+    if isinstance(value, int):
+        if value < 0:
+            raise ValueError(f"{context} must be non-negative")
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if text and text.isdigit():
+            return int(text)
+    raise ValueError(f"{context} must be a non-negative integer")
+
+
 def _load_yaml_policy_file(path: str, *, context: str) -> Mapping[str, Any]:
     text = Path(path).read_text(encoding="utf-8")
     try:
@@ -107,6 +123,18 @@ def get_change_category_policy(
 @lru_cache(maxsize=1)
 def load_merge_gate_policy(path: str = MERGE_GATE_PATH) -> dict[str, Any]:
     raw = _load_yaml_policy_file(path, context="merge_gate policy")
+    auto_progression_raw = _as_mapping(
+        raw.get("auto_progression", {}),
+        context="merge_gate.auto_progression",
+    )
+    policy_eligible_categories = _as_string_tuple(
+        auto_progression_raw.get("policy_eligible_categories", []),
+        context="merge_gate.auto_progression.policy_eligible_categories",
+    )
+    auto_pr_candidate_categories = _as_string_tuple(
+        auto_progression_raw.get("auto_pr_candidate_categories", []),
+        context="merge_gate.auto_progression.auto_pr_candidate_categories",
+    )
     return {
         "require_ci_green": bool(raw.get("require_ci_green", True)),
         "require_rubric_all_pass": bool(raw.get("require_rubric_all_pass", True)),
@@ -121,4 +149,26 @@ def load_merge_gate_policy(path: str = MERGE_GATE_PATH) -> dict[str, Any]:
             raw.get("auto_merge_categories", []),
             context="merge_gate.auto_merge_categories",
         ),
+        "auto_progression": {
+            "policy_eligible_categories": policy_eligible_categories,
+            "auto_pr_candidate_categories": auto_pr_candidate_categories,
+            "max_changed_files": _as_non_negative_int(
+                auto_progression_raw.get("max_changed_files"),
+                context="merge_gate.auto_progression.max_changed_files",
+                default=0,
+            ),
+            "max_total_diff_lines": _as_non_negative_int(
+                auto_progression_raw.get("max_total_diff_lines"),
+                context="merge_gate.auto_progression.max_total_diff_lines",
+                default=0,
+            ),
+            "generated_path_patterns": _as_string_tuple(
+                auto_progression_raw.get("generated_path_patterns", []),
+                context="merge_gate.auto_progression.generated_path_patterns",
+            ),
+            "binary_file_extensions": _as_string_tuple(
+                auto_progression_raw.get("binary_file_extensions", []),
+                context="merge_gate.auto_progression.binary_file_extensions",
+            ),
+        },
     }
