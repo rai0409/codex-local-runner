@@ -1,0 +1,20 @@
+{
+  "repo": "codex-local-runner",
+  "version": 1,
+  "bundles": [
+    {
+      "bundle_id": "2026-04-14_prompt7c",
+      "archive_path": "prompts/archive/2026-04-14_prompt7c",
+      "prompt_source_path": "prompts/archive/2026-04-14_prompt7c/prompt.md",
+      "run_record_path": "prompts/examples/good/2026-04-7c-mode-visibility-run-record.md",
+      "decision": "pass",
+      "task_type": "inspect_read_only_extension",
+      "status": "completed",
+      "notes": [
+        "mode_visibility remained inspect-only",
+        "no runtime progression introduced",
+        "bundle treated as baseline archive example"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+python -m compileall scripts/inspect_job.py tests/test_inspect_job.py
+python -m unittest tests.test_build_operator_summary tests.test_inspect_job tests.test_operator_review_decision -v

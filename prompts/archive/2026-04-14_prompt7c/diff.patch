@@ -1,0 +1,9 @@
+commit 750bc7f91af3f46dfa709268c7b8b095890fd67c
+Merge: 2945056 6cf7491
+Author: rai0409 <91727923+rai0409@users.noreply.github.com>
+Date:   Tue Apr 14 21:40:32 2026 +0900
+
+    Merge pull request #29 from rai0409/feat/mode-visibility-7c
+    
+    add read-only mode visibility to inspect output
+
