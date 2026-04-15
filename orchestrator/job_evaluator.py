@@ -7,6 +7,8 @@ from typing import Any
 
 from orchestrator.classify import classify_changes
 from orchestrator.evaluate import evaluate_rubric
+from orchestrator.github_backend import GitHubStateBackend
+from orchestrator.github_backend import resolve_github_state_backend
 from orchestrator.merge_gate import apply_merge_gate
 
 
@@ -91,7 +93,7 @@ def _derive_int_signal(
     request_payload: dict[str, Any],
     result_payload: dict[str, Any],
     key: str,
-) -> tuple[int, str]:
+) -> tuple[int | None, str]:
     candidates: list[tuple[str, Any]] = [
         (f"result.{key}", result_payload.get(key)),
     ]
@@ -110,7 +112,7 @@ def _derive_int_signal(
             if stripped and stripped.lstrip("-").isdigit():
                 return int(stripped), source
 
-    return 0, f"fallback_{key}_zero"
+    return None, f"fallback_{key}_missing"
 
 
 def _derive_job_id(job_dir: Path, request_payload: dict[str, Any], result_payload: dict[str, Any]) -> tuple[str, str]:
@@ -125,7 +127,11 @@ def _derive_job_id(job_dir: Path, request_payload: dict[str, Any], result_payloa
     return job_dir.name, "fallback_job_dir_name"
 
 
-def evaluate_job_directory(job_dir: str | Path) -> dict[str, Any]:
+def evaluate_job_directory(
+    job_dir: str | Path,
+    *,
+    github_state_backend: GitHubStateBackend | None = None,
+) -> dict[str, Any]:
     job_dir_path = Path(job_dir)
     request_path = job_dir_path / "request.json"
     result_path = job_dir_path / "result.json"
@@ -164,16 +170,18 @@ def evaluate_job_directory(job_dir: str | Path) -> dict[str, Any]:
     if verify_source.startswith("fallback_"):
         assumptions["fallbacks_used"].append(verify_source)
 
-    additions, additions_source = _derive_int_signal(
+    additions_signal, additions_source = _derive_int_signal(
         request_payload=request_payload,
         result_payload=result_payload,
         key="additions",
     )
-    deletions, deletions_source = _derive_int_signal(
+    deletions_signal, deletions_source = _derive_int_signal(
         request_payload=request_payload,
         result_payload=result_payload,
         key="deletions",
     )
+    additions = additions_signal if additions_signal is not None else 0
+    deletions = deletions_signal if deletions_signal is not None else 0
     assumptions["additions_source"] = additions_source
     assumptions["deletions_source"] = deletions_source
     if additions_source.startswith("fallback_"):
@@ -193,6 +201,16 @@ def evaluate_job_directory(job_dir: str | Path) -> dict[str, Any]:
         declared_category=declared_category,
         changed_files=changed_files,
     )
+    github_backend = github_state_backend or resolve_github_state_backend()
+    github_signals = github_backend.collect(
+        request_payload=request_payload,
+        result_payload=result_payload,
+    )
+    assumptions["github_backend"] = github_signals.get("backend")
+    assumptions["github_mode"] = github_signals.get("mode")
+    assumptions["github_state_source"] = github_signals.get("state_source")
+    if not github_signals.get("state_available", False):
+        assumptions["fallbacks_used"].append("github_state_unavailable")
     rubric = evaluate_rubric(
         declared_category=declared_category,
         observed_category=classification.observed_category,
@@ -210,6 +228,8 @@ def evaluate_job_directory(job_dir: str | Path) -> dict[str, Any]:
         changed_files=changed_files,
         additions=additions,
         deletions=deletions,
+        diff_line_stats_present=(additions_signal is not None and deletions_signal is not None),
+        github_signals=github_signals,
     )
 
     return {
