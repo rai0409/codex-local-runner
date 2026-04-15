@@ -566,6 +566,61 @@ class InspectJobCliTests(unittest.TestCase):
             ],
         )
 
+    def test_inspect_surfaces_recovery_policy_shape_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            db_path = tmp_root / "state" / "jobs.db"
+            job_id = "job-recovery-policy-shape"
+            self._seed_job(db_path=db_path, job_id=job_id)
+            machine_payload_path = tmp_root / "artifacts" / f"{job_id}_machine_review_payload.json"
+            machine_payload_path.parent.mkdir(parents=True, exist_ok=True)
+            machine_payload_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "1.1",
+                        "job_id": job_id,
+                        "policy_version": "deterministic_review_policy.v2",
+                        "score_total": 8.4,
+                        "dimension_scores": {
+                            "correctness": 3.1,
+                            "scope_control": 1.8,
+                            "safety": 2.0,
+                            "repo_alignment": 1.5,
+                        },
+                        "failure_codes": ["insufficient_tests"],
+                        "recovery_decision": "revise_current_state",
+                        "decision_basis": ["required_tests_not_passed"],
+                        "requires_human_review": True,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            record_machine_review_payload_path(
+                db_path=db_path,
+                job_id=job_id,
+                machine_review_payload_path=str(machine_payload_path),
+            )
+
+            proc = self._run(["--job-id", job_id, "--db-path", str(db_path), "--json"])
+
+        self.assertEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["machine_review"]["recovery_decision"], "revise_current_state")
+        self.assertEqual(payload["machine_review"]["recommended_action"], "revise_current_state")
+        self.assertEqual(payload["machine_review"]["score_total"], 8.4)
+        self.assertEqual(
+            payload["machine_review"]["dimension_scores"]["scope_control"],
+            1.8,
+        )
+        self.assertEqual(payload["machine_review"]["failure_codes"], ["insufficient_tests"])
+        self.assertEqual(payload["machine_review"]["decision_basis"], ["required_tests_not_passed"])
+        self.assertEqual(
+            payload["machine_review"]["advisory"]["display_recommendation"],
+            "revise_current_state",
+        )
+
     def test_inspect_handles_machine_review_payload_without_advisory_or_execution_bridge_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_root = Path(tmp_dir)
