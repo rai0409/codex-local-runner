@@ -197,9 +197,7 @@ class CodexCliAdapter(ProviderAdapter):
                 prompt=prompt,
                 work_root=str(work_dir / "execution_runs"),
             )
-            execution_status = execution_result.get("status") or (
-                "completed" if execution_result.get("success") else "failed"
-            )
+            execution_status = str(execution_result["status"])
             if execution_status == "completed":
                 verify_result = run_validation_commands(
                     validation_commands=validation_commands,
@@ -222,9 +220,7 @@ class CodexCliAdapter(ProviderAdapter):
                     prompt=prompt,
                     work_root=str(work_dir / "execution_runs"),
                 )
-                execution_status = execution_result.get("status") or (
-                    "completed" if execution_result.get("success") else "failed"
-                )
+                execution_status = str(execution_result["status"])
                 if execution_status == "completed":
                     verify_result = run_validation_commands(
                         validation_commands=validation_commands,
@@ -246,20 +242,13 @@ class CodexCliAdapter(ProviderAdapter):
                 cleanup_error = cleanup_result["error"]
 
         artifacts: list[str] = []
-        for item in execution_result.get("artifacts", []):
+        for item in execution_result["artifacts"]:
             if isinstance(item, dict):
                 path = str(item.get("path", "")).strip()
                 if path:
                     artifacts.append(path)
-        if not artifacts:
-            artifacts = [
-                str(execution_result.get("stdout_path", "")),
-                str(execution_result.get("stderr_path", "")),
-                str(execution_result.get("meta_path", "")),
-            ]
-            artifacts = [item for item in artifacts if item]
 
-        execution_error = str(execution_result.get("error", "")).strip()
+        execution_error = str(execution_result["error"]).strip()
         if cleanup_error and execution_status != "completed":
             if execution_error:
                 execution_error = f"{execution_error}\nWorktree cleanup failed: {cleanup_error}"
@@ -285,7 +274,7 @@ class CodexCliAdapter(ProviderAdapter):
             result_interpretation=result_interpretation,
             review_recommendation=review_recommendation,
         )
-        final_return_code = execution_result.get("return_code")
+        final_return_code = execution_result["return_code"]
         reviewer_handoff = _build_reviewer_handoff(
             review_handoff_summary=review_handoff_summary,
             final_status=execution_status,
@@ -296,8 +285,8 @@ class CodexCliAdapter(ProviderAdapter):
         return {
             "adapter": self.name,
             "status": execution_status,
-            "started_at": execution_result.get("started_at"),
-            "finished_at": execution_result.get("finished_at"),
+            "started_at": execution_result["started_at"],
+            "finished_at": execution_result["finished_at"],
             "artifacts": artifacts,
             "error": execution_error or None,
             "return_code": final_return_code,

@@ -116,6 +116,67 @@ def _read_retry_metadata(machine_review_payload: dict[str, Any] | None) -> dict[
     }
 
 
+def _read_recovery_policy(machine_review_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(machine_review_payload, dict):
+        return None
+
+    if isinstance(machine_review_payload.get("recovery_policy"), dict):
+        return dict(machine_review_payload["recovery_policy"])
+
+    required = (
+        "score_total",
+        "dimension_scores",
+        "failure_codes",
+        "recovery_decision",
+        "decision_basis",
+        "requires_human_review",
+    )
+    if not all(key in machine_review_payload for key in required):
+        return None
+
+    return {
+        "score_total": machine_review_payload.get("score_total"),
+        "dimension_scores": machine_review_payload.get("dimension_scores"),
+        "failure_codes": machine_review_payload.get("failure_codes"),
+        "recovery_decision": machine_review_payload.get("recovery_decision"),
+        "decision_basis": machine_review_payload.get("decision_basis"),
+        "requires_human_review": machine_review_payload.get("requires_human_review"),
+    }
+
+
+def _policy_reasons(machine_review_payload: dict[str, Any] | None) -> list[str]:
+    if not isinstance(machine_review_payload, dict):
+        return []
+    raw_policy_reasons = machine_review_payload.get("policy_reasons")
+    if isinstance(raw_policy_reasons, (list, tuple)):
+        return [str(item) for item in raw_policy_reasons]
+    recovery_policy = _read_recovery_policy(machine_review_payload)
+    if isinstance(recovery_policy, dict):
+        raw_failure_codes = recovery_policy.get("failure_codes")
+        if isinstance(raw_failure_codes, (list, tuple)):
+            return [str(item) for item in raw_failure_codes]
+    return []
+
+
+def _display_recommendation(machine_review_payload: dict[str, Any] | None) -> str | None:
+    if not isinstance(machine_review_payload, dict):
+        return None
+    raw = machine_review_payload.get("recovery_decision")
+    if raw is None:
+        raw = machine_review_payload.get("recommended_action")
+    normalized = str(raw).strip().lower() if raw is not None else ""
+    if normalized in {
+        "keep",
+        "revise_current_state",
+        "reset_and_retry",
+        "escalate",
+        "rollback",
+        "retry",
+    }:
+        return normalized
+    return None
+
+
 def _derive_recommendation_advisory(
     machine_review_payload: dict[str, Any] | None,
     *,
@@ -129,24 +190,18 @@ def _derive_recommendation_advisory(
             "execution_allowed": False,
         }
 
-    raw_recommendation = machine_review_payload.get("recommended_action")
-    display_recommendation = (
-        str(raw_recommendation).strip().lower()
-        if raw_recommendation is not None
-        else ""
-    )
-    if display_recommendation not in {"keep", "rollback", "retry", "escalate"}:
-        display_recommendation = None
+    display_recommendation = _display_recommendation(machine_review_payload)
 
     requires_human_review = _as_optional_bool(
         machine_review_payload.get("requires_human_review")
     )
-    policy_reasons_raw = machine_review_payload.get("policy_reasons")
-    policy_reasons = (
-        [str(item) for item in policy_reasons_raw]
-        if isinstance(policy_reasons_raw, (list, tuple))
-        else []
-    )
+    if requires_human_review is None:
+        recovery_policy = _read_recovery_policy(machine_review_payload)
+        if isinstance(recovery_policy, dict):
+            requires_human_review = _as_optional_bool(
+                recovery_policy.get("requires_human_review")
+            )
+    policy_reasons = _policy_reasons(machine_review_payload)
     retry_basis = [
         str(item) for item in retry_metadata.get("retry_basis", [])
     ] if isinstance(retry_metadata.get("retry_basis"), (list, tuple)) else []
@@ -164,7 +219,7 @@ def _derive_recommendation_advisory(
         decision_confidence = None
     elif requires_human_review is True:
         decision_confidence = "low"
-    elif display_recommendation == "retry":
+    elif display_recommendation in {"retry", "reset_and_retry"}:
         retry_recommended = retry_metadata.get("retry_recommended")
         if retry_recommended is True:
             decision_confidence = "medium" if not retry_blockers else "low"
@@ -191,11 +246,7 @@ def _derive_execution_bridge(
     retry_metadata: dict[str, Any],
     advisory: dict[str, Any],
 ) -> dict[str, Any]:
-    policy_reasons = []
-    if isinstance(machine_review_payload, dict):
-        raw_policy_reasons = machine_review_payload.get("policy_reasons")
-        if isinstance(raw_policy_reasons, (list, tuple)):
-            policy_reasons = [str(item) for item in raw_policy_reasons]
+    policy_reasons = _policy_reasons(machine_review_payload)
 
     retry_blockers = []
     raw_retry_blockers = retry_metadata.get("retry_blockers")
@@ -305,6 +356,39 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
         advisory=advisory,
         execution_bridge=execution_bridge,
     )
+    recovery_policy = _read_recovery_policy(machine_review_payload)
+    recovery_decision = (
+        machine_review_payload.get("recovery_decision")
+        if machine_review_payload is not None
+        else None
+    )
+    if recovery_decision is None and recovery_policy is not None:
+        recovery_decision = recovery_policy.get("recovery_decision")
+    recommended_action = (
+        machine_review_payload.get("recommended_action")
+        if machine_review_payload is not None
+        else None
+    )
+    if recommended_action is None:
+        recommended_action = recovery_decision
+    failure_codes = []
+    if machine_review_payload is not None:
+        raw_failure_codes = machine_review_payload.get("failure_codes")
+        if isinstance(raw_failure_codes, (list, tuple)):
+            failure_codes = [str(item) for item in raw_failure_codes]
+    if not failure_codes and isinstance(recovery_policy, dict):
+        nested_failure_codes = recovery_policy.get("failure_codes")
+        if isinstance(nested_failure_codes, (list, tuple)):
+            failure_codes = [str(item) for item in nested_failure_codes]
+    decision_basis = []
+    if machine_review_payload is not None:
+        raw_decision_basis = machine_review_payload.get("decision_basis")
+        if isinstance(raw_decision_basis, (list, tuple)):
+            decision_basis = [str(item) for item in raw_decision_basis]
+    if not decision_basis and isinstance(recovery_policy, dict):
+        nested_decision_basis = recovery_policy.get("decision_basis")
+        if isinstance(nested_decision_basis, (list, tuple)):
+            decision_basis = [str(item) for item in nested_decision_basis]
     return {
         "job_id": row.get("job_id"),
         "repo": row.get("repo"),
@@ -354,26 +438,36 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
         },
         "machine_review": {
             "recorded": machine_review_recorded,
-            "recommended_action": (
-                machine_review_payload.get("recommended_action")
-                if machine_review_payload is not None
-                else None
-            ),
+            "recommended_action": recommended_action,
+            "recovery_decision": recovery_decision,
             "policy_version": (
                 machine_review_payload.get("policy_version")
                 if machine_review_payload is not None
                 else None
             ),
-            "policy_reasons": (
-                machine_review_payload.get("policy_reasons")
+            "policy_reasons": _policy_reasons(machine_review_payload),
+            "score_total": (
+                machine_review_payload.get("score_total")
                 if machine_review_payload is not None
-                else []
+                else None
+            ),
+            "dimension_scores": (
+                machine_review_payload.get("dimension_scores")
+                if machine_review_payload is not None
+                else None
+            ),
+            "failure_codes": (
+                failure_codes
+            ),
+            "decision_basis": (
+                decision_basis
             ),
             "requires_human_review": (
                 _as_optional_bool(machine_review_payload.get("requires_human_review"))
                 if machine_review_payload is not None
                 else None
             ),
+            "recovery_policy": recovery_policy,
             "retry_metadata": retry_metadata,
             "advisory": advisory,
             "execution_bridge": execution_bridge,
@@ -426,7 +520,27 @@ def _format_human(output: dict[str, Any]) -> str:
         f"rollback_error: {_fmt(output['rollback_execution'].get('rollback_error'))}",
         f"machine_review_recorded: {_fmt(output['machine_review'].get('recorded'))}",
         f"recommended_action: {_fmt(output['machine_review'].get('recommended_action'))}",
+        f"recovery_decision: {_fmt(output['machine_review'].get('recovery_decision'))}",
         f"policy_version: {_fmt(output['machine_review'].get('policy_version'))}",
+        f"score_total: {_fmt(output['machine_review'].get('score_total'))}",
+        "dimension_scores: "
+        + (
+            json.dumps(output["machine_review"].get("dimension_scores"), ensure_ascii=False, sort_keys=True)
+            if output["machine_review"].get("dimension_scores") is not None
+            else "<missing>"
+        ),
+        "failure_codes: "
+        + (
+            ", ".join([str(v) for v in output["machine_review"].get("failure_codes", [])])
+            if output["machine_review"].get("failure_codes")
+            else "none"
+        ),
+        "decision_basis: "
+        + (
+            ", ".join([str(v) for v in output["machine_review"].get("decision_basis", [])])
+            if output["machine_review"].get("decision_basis")
+            else "none"
+        ),
         "policy_reasons: "
         + (
             ", ".join([str(v) for v in output["machine_review"].get("policy_reasons", [])])
