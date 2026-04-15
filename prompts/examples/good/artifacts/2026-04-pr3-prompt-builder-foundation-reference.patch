@@ -1,0 +1,494 @@
+diff --git a/automation/planning/task_classifier.py b/automation/planning/task_classifier.py
+new file mode 100644
+index 0000000..8dc29ed
+--- /dev/null
++++ b/automation/planning/task_classifier.py
+@@ -0,0 +1,29 @@
++from __future__ import annotations
++
++from typing import Any
++
++SUPPORTED_TASK_TYPES: tuple[str, ...] = (
++    "inspect_read_only",
++    "docs_only",
++    "test_only",
++    "correction_from_current_state",
++    "regenerate_after_reset",
++)
++
++_FALLBACK_TASK_TYPE = "docs_only"
++_ALIAS_MAP = {
++    "inspect_read_only_extension": "inspect_read_only",
++}
++
++
++def classify_task_type(task_type: Any) -> str:
++    """Return a supported task type using deterministic normalization."""
++    normalized = str(task_type or "").strip().lower().replace("-", "_").replace(" ", "_")
++    if not normalized:
++        return _FALLBACK_TASK_TYPE
++
++    canonical = _ALIAS_MAP.get(normalized, normalized)
++    if canonical in SUPPORTED_TASK_TYPES:
++        return canonical
++
++    return _FALLBACK_TASK_TYPE
+diff --git a/automation/planning/template_registry.py b/automation/planning/template_registry.py
+new file mode 100644
+index 0000000..4dfb581
+--- /dev/null
++++ b/automation/planning/template_registry.py
+@@ -0,0 +1,30 @@
++from __future__ import annotations
++
++from pathlib import Path
++
++from automation.planning.task_classifier import classify_task_type
++
++_TEMPLATE_FILES = {
++    "inspect_read_only": "inspect_read_only.md",
++    "docs_only": "docs_only.md",
++    "test_only": "test_only.md",
++    "correction_from_current_state": "correction_from_current_state.md",
++    "regenerate_after_reset": "regenerate_after_reset.md",
++}
++
++
++def _template_dir() -> Path:
++    return Path(__file__).resolve().parents[2] / "prompts" / "templates"
++
++
++def get_template_name(task_type: str) -> str:
++    normalized = classify_task_type(task_type)
++    return _TEMPLATE_FILES[normalized]
++
++
++def get_template_path(task_type: str) -> Path:
++    return _template_dir() / get_template_name(task_type)
++
++
++def load_template(task_type: str) -> str:
++    return get_template_path(task_type).read_text(encoding="utf-8").strip()
+diff --git a/automation/planning/prompt_builder.py b/automation/planning/prompt_builder.py
+new file mode 100644
+index 0000000..57dec1a
+--- /dev/null
++++ b/automation/planning/prompt_builder.py
+@@ -0,0 +1,126 @@
++from __future__ import annotations
++
++from pathlib import Path
++from typing import Any
++from typing import Mapping
++
++from automation.planning.task_classifier import classify_task_type
++from automation.planning.template_registry import load_template
++
++_DEFAULT_REPO_PROFILE = "prompts/repo_profiles/codex_local_runner.md"
++_CANONICAL_TASK_TYPES = {
++    "inspect_read_only",
++    "correction_from_current_state",
++    "regenerate_after_reset",
++}
++
++
++def _repo_root() -> Path:
++    return Path(__file__).resolve().parents[2]
++
++
++def _read_text(path: str) -> str:
++    return (_repo_root() / path).read_text(encoding="utf-8").strip()
++
++
++def _as_list(value: Any) -> list[str]:
++    if not isinstance(value, (list, tuple)):
++        return []
++    normalized: list[str] = []
++    for item in value:
++        text = str(item).strip()
++        if text:
++            normalized.append(text)
++    return normalized
++
++
++def _render_bullets(items: list[str], *, empty: str = "(none)") -> str:
++    if not items:
++        return f"- {empty}"
++    return "\n".join(f"- {item}" for item in items)
++
++
++def _render_commands(items: list[str]) -> str:
++    if not items:
++        return "```bash\n# (none provided)\n```"
++    return "```bash\n" + "\n".join(items) + "\n```"
++
++
++def _include_canonical_vocabulary(task: Mapping[str, Any], *, task_type: str) -> bool:
++    explicit = task.get("include_canonical_vocabulary")
++    if isinstance(explicit, bool):
++        return explicit
++    return task_type in _CANONICAL_TASK_TYPES
++
++
++def build_prompt(task: Mapping[str, Any]) -> str:
++    """Build a deterministic prompt string from file-based template and block assets."""
++    task_type = classify_task_type(task.get("task_type"))
++
++    repository = str(task.get("repository") or "codex-local-runner").strip()
++    mode = str(task.get("mode") or "Implement").strip()
++    primary_goal = str(task.get("primary_goal") or "(not provided)").strip()
++
++    read_files = _as_list(task.get("read_files"))
++    non_goals = _as_list(task.get("non_goals"))
++    repo_constraints = _as_list(task.get("repo_constraints"))
++    allowed_files = _as_list(task.get("allowed_files"))
++    forbidden_files = _as_list(task.get("forbidden_files"))
++    implementation_requirements = _as_list(task.get("implementation_requirements"))
++    validation_commands = _as_list(task.get("validation_commands"))
++    success_criteria = _as_list(task.get("success_criteria"))
++    final_output_requirements = _as_list(task.get("final_output_requirements"))
++
++    repo_profile_path = str(task.get("repo_profile_path") or _DEFAULT_REPO_PROFILE).strip()
++
++    repo_context_block = _read_text("prompts/blocks/repo_context.md")
++    hard_constraints_block = _read_text("prompts/blocks/hard_constraints.md")
++    canonical_vocabulary_block = _read_text("prompts/blocks/canonical_vocabulary.md")
++    validation_block = _read_text("prompts/blocks/validation_block.md")
++    output_requirements_block = _read_text("prompts/blocks/output_requirements.md")
++    repo_profile_text = _read_text(repo_profile_path)
++    template_text = load_template(task_type)
++
++    canonical_section = canonical_vocabulary_block
++    if not _include_canonical_vocabulary(task, task_type=task_type):
++        canonical_section = "Not required for this task type."
++
++    sections = [
++        "## 1. Repository Identity / Read-First Requirement\n"
++        f"Repository: {repository}\n"
++        "Read these files first (proof required):\n"
++        f"{_render_bullets(read_files)}\n\n"
++        f"{repo_context_block}\n\n"
++        "Repo profile:\n"
++        f"{repo_profile_text}",
++        "## 2. Mode\n"
++        f"{mode}",
++        "## 3. Primary Goal\n"
++        f"{primary_goal}",
++        "## 4. Non-Goals\n"
++        f"{_render_bullets(non_goals)}",
++        "## 5. Repo-Grounded Constraints\n"
++        f"{_render_bullets(repo_constraints)}\n\n"
++        f"{hard_constraints_block}",
++        "## 6. Canonical Vocabulary / Compatibility Notes\n"
++        f"{canonical_section}",
++        "## 7. Allowed Files\n"
++        f"{_render_bullets(allowed_files)}",
++        "## 8. Forbidden Files\n"
++        f"{_render_bullets(forbidden_files)}",
++        "## 9. Implementation Requirements\n"
++        f"Task type: `{task_type}`\n\n"
++        f"{_render_bullets(implementation_requirements)}\n\n"
++        "Template guidance:\n"
++        f"{template_text}",
++        "## 10. Validation Commands\n"
++        f"{validation_block}\n\n"
++        f"{_render_commands(validation_commands)}",
++        "## 11. Success Criteria\n"
++        f"{_render_bullets(success_criteria)}",
++        "## 12. Final Output Requirements\n"
++        f"{output_requirements_block}\n\n"
++        f"{_render_bullets(final_output_requirements)}",
++    ]
++
++    return "\n\n".join(sections).strip() + "\n"
+diff --git a/prompts/blocks/repo_context.md b/prompts/blocks/repo_context.md
+new file mode 100644
+index 0000000..306e85e
+--- /dev/null
++++ b/prompts/blocks/repo_context.md
+@@ -0,0 +1,4 @@
++Repository identity and posture:
++- `codex-local-runner` is local-first and auditable.
++- Prompt/assets are guidance assets, not execution authority.
++- Preserve narrow scope and conservative semantics.
+diff --git a/prompts/blocks/hard_constraints.md b/prompts/blocks/hard_constraints.md
+new file mode 100644
+index 0000000..0ba8d2b
+--- /dev/null
++++ b/prompts/blocks/hard_constraints.md
+@@ -0,0 +1,5 @@
++Hard constraints:
++- Keep the diff narrow and file-bounded.
++- Do not imply execution authorization from inspect/visibility fields.
++- Do not redesign orchestration/runtime behavior in prompt-planning tasks.
++- Keep proof-of-reading and validation requirements explicit.
+diff --git a/prompts/blocks/canonical_vocabulary.md b/prompts/blocks/canonical_vocabulary.md
+new file mode 100644
+index 0000000..9210db2
+--- /dev/null
++++ b/prompts/blocks/canonical_vocabulary.md
+@@ -0,0 +1,13 @@
++Use canonical review/policy vocabulary first:
++- `recovery_decision`
++- `failure_codes`
++- `decision_basis`
++
++Compatibility-only aliases (secondary only):
++- `recommended_action`
++- `policy_reasons`
++
++Rules:
++- Canonical vocabulary must appear first and drive template guidance.
++- Compatibility aliases may appear only for backward-readable context.
++- Do not elevate compatibility aliases into primary decision vocabulary.
+diff --git a/prompts/blocks/validation_block.md b/prompts/blocks/validation_block.md
+new file mode 100644
+index 0000000..a731528
+--- /dev/null
++++ b/prompts/blocks/validation_block.md
+@@ -0,0 +1,4 @@
++Validation requirements:
++- Include exact commands.
++- Report exact pass/fail results.
++- If a required test target is missing, state the substitution precisely.
+diff --git a/prompts/blocks/output_requirements.md b/prompts/blocks/output_requirements.md
+new file mode 100644
+index 0000000..f1b399e
+--- /dev/null
++++ b/prompts/blocks/output_requirements.md
+@@ -0,0 +1,7 @@
++Final output must include:
++- files inspected and why
++- exact files changed
++- unified diff
++- validation commands run
++- exact test results
++- compatibility notes
+diff --git a/prompts/templates/inspect_read_only.md b/prompts/templates/inspect_read_only.md
+new file mode 100644
+index 0000000..6565a3e
+--- /dev/null
++++ b/prompts/templates/inspect_read_only.md
+@@ -0,0 +1,4 @@
++Template: inspect_read_only
++- Keep implementation read-only and visibility-focused.
++- Do not introduce execution authorization or runtime side effects.
++- Reinforce source-of-truth boundaries and explicit human gate.
+diff --git a/prompts/templates/docs_only.md b/prompts/templates/docs_only.md
+new file mode 100644
+index 0000000..be546b9
+--- /dev/null
++++ b/prompts/templates/docs_only.md
+@@ -0,0 +1,4 @@
++Template: docs_only
++- Limit changes to documentation or metadata assets.
++- Do not modify execution/runtime modules.
++- Keep wording aligned with current repository posture.
+diff --git a/prompts/templates/test_only.md b/prompts/templates/test_only.md
+new file mode 100644
+index 0000000..f2b7c42
+--- /dev/null
++++ b/prompts/templates/test_only.md
+@@ -0,0 +1,4 @@
++Template: test_only
++- Limit changes to tests needed for the scoped task.
++- Avoid behavior changes outside test scaffolding.
++- Keep assertions deterministic and contract-focused.
+diff --git a/prompts/templates/correction_from_current_state.md b/prompts/templates/correction_from_current_state.md
+new file mode 100644
+index 0000000..1ddd334
+--- /dev/null
++++ b/prompts/templates/correction_from_current_state.md
+@@ -0,0 +1,4 @@
++Template: correction_from_current_state
++- Patch the current state with the smallest safe correction.
++- Preserve already-correct behavior.
++- Do not reset scope or add new workflow branches.
+diff --git a/prompts/templates/regenerate_after_reset.md b/prompts/templates/regenerate_after_reset.md
+new file mode 100644
+index 0000000..9f41205
+--- /dev/null
++++ b/prompts/templates/regenerate_after_reset.md
+@@ -0,0 +1,4 @@
++Template: regenerate_after_reset
++- Assume prior attempt is discarded and rebuild narrowly.
++- Prevent previously observed failure patterns explicitly.
++- Keep scope strict and repository-grounded.
+diff --git a/tests/test_prompt_builder.py b/tests/test_prompt_builder.py
+new file mode 100644
+index 0000000..db6d752
+--- /dev/null
++++ b/tests/test_prompt_builder.py
+@@ -0,0 +1,84 @@
++from __future__ import annotations
++
++import unittest
++
++from automation.planning.prompt_builder import build_prompt
++from automation.planning.template_registry import get_template_name
++
++
++class PromptBuilderTests(unittest.TestCase):
++    def _base_task(self) -> dict[str, object]:
++        return {
++            "task_type": "inspect_read_only",
++            "repository": "codex-local-runner",
++            "mode": "Implement",
++            "primary_goal": "Create a narrow prompt for inspect-only update.",
++            "read_files": ["README.md", "AGENTS.md"],
++            "non_goals": ["no execution runtime"],
++            "repo_constraints": ["accepted-vs-execution separation remains intact"],
++            "allowed_files": ["scripts/inspect_job.py", "tests/test_inspect_job.py"],
++            "forbidden_files": ["run_codex.py"],
++            "implementation_requirements": ["keep diff minimal"],
++            "validation_commands": ["pytest -q tests/test_inspect_job.py"],
++            "success_criteria": ["deterministic output"],
++            "final_output_requirements": ["files inspected and why"],
++        }
++
++    def test_same_input_produces_same_prompt(self) -> None:
++        task = self._base_task()
++        prompt_a = build_prompt(task)
++        prompt_b = build_prompt(task)
++        self.assertEqual(prompt_a, prompt_b)
++
++    def test_template_selected_for_known_task_types(self) -> None:
++        self.assertEqual(get_template_name("inspect_read_only"), "inspect_read_only.md")
++        self.assertEqual(get_template_name("docs_only"), "docs_only.md")
++        self.assertEqual(get_template_name("test_only"), "test_only.md")
++        self.assertEqual(
++            get_template_name("correction_from_current_state"),
++            "correction_from_current_state.md",
++        )
++        self.assertEqual(
++            get_template_name("regenerate_after_reset"),
++            "regenerate_after_reset.md",
++        )
++
++    def test_unknown_task_type_falls_back_to_docs_only_template(self) -> None:
++        task = self._base_task()
++        task["task_type"] = "unknown_type"
++        prompt = build_prompt(task)
++        self.assertIn("Task type: `docs_only`", prompt)
++        self.assertIn("Template: docs_only", prompt)
++
++    def test_required_sections_are_present_in_order(self) -> None:
++        prompt = build_prompt(self._base_task())
++        headings = [
++            "## 1. Repository Identity / Read-First Requirement",
++            "## 2. Mode",
++            "## 3. Primary Goal",
++            "## 4. Non-Goals",
++            "## 5. Repo-Grounded Constraints",
++            "## 6. Canonical Vocabulary / Compatibility Notes",
++            "## 7. Allowed Files",
++            "## 8. Forbidden Files",
++            "## 9. Implementation Requirements",
++            "## 10. Validation Commands",
++            "## 11. Success Criteria",
++            "## 12. Final Output Requirements",
++        ]
++        indices = [prompt.index(heading) for heading in headings]
++        self.assertEqual(indices, sorted(indices))
++
++    def test_prompt_prefers_canonical_vocabulary_over_compatibility_aliases(self) -> None:
++        prompt = build_prompt(self._base_task())
++        self.assertLess(prompt.index("`recovery_decision`"), prompt.index("`recommended_action`"))
++        self.assertLess(prompt.index("`failure_codes`"), prompt.index("`policy_reasons`"))
++
++    def test_prompt_keeps_execution_authorization_out_of_scope(self) -> None:
++        prompt = build_prompt(self._base_task())
++        self.assertIn("Do not imply execution authorization", prompt)
++        self.assertIn("visibility-focused", prompt)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_task_classifier.py b/tests/test_task_classifier.py
+new file mode 100644
+index 0000000..d4318d9
+--- /dev/null
++++ b/tests/test_task_classifier.py
+@@ -0,0 +1,33 @@
++from __future__ import annotations
++
++import unittest
++
++from automation.planning.task_classifier import classify_task_type
++
++
++class TaskClassifierTests(unittest.TestCase):
++    def test_known_task_types_are_preserved(self) -> None:
++        self.assertEqual(classify_task_type("inspect_read_only"), "inspect_read_only")
++        self.assertEqual(classify_task_type("docs_only"), "docs_only")
++        self.assertEqual(classify_task_type("test_only"), "test_only")
++        self.assertEqual(
++            classify_task_type("correction_from_current_state"),
++            "correction_from_current_state",
++        )
++        self.assertEqual(classify_task_type("regenerate_after_reset"), "regenerate_after_reset")
++
++    def test_alias_and_separator_normalization(self) -> None:
++        self.assertEqual(classify_task_type("inspect-read-only"), "inspect_read_only")
++        self.assertEqual(classify_task_type("inspect read only"), "inspect_read_only")
++        self.assertEqual(
++            classify_task_type("inspect_read_only_extension"),
++            "inspect_read_only",
++        )
++
++    def test_unknown_task_type_deterministically_falls_back_to_docs_only(self) -> None:
++        self.assertEqual(classify_task_type("not_a_real_type"), "docs_only")
++        self.assertEqual(classify_task_type(None), "docs_only")
++
++
++if __name__ == "__main__":
++    unittest.main()
+
+———
+
+Validation commands run
+
+python -m py_compile automation/planning/task_classifier.py automation/planning/template_registry.py automation/
+planning/prompt_builder.py
+pytest -q tests/test_prompt_builder.py tests/test_task_classifier.py
+python -m pytest -q tests/test_prompt_builder.py tests/test_task_classifier.py
+python -m unittest tests.test_prompt_builder tests.test_task_classifier -v
+
+Exact test results
+
+- python -m py_compile ... -> passed.
+- pytest -q ... -> failed: pytest: command not found.
+- python -m pytest -q ... -> failed: No module named pytest.
+- Fallback python -m unittest ... -v -> passed:
+    - Ran 9 tests in 0.006s
+    - OK
+
+———
+
+Example assembled prompt output
+
+    - failure_codes
+    - decision_basis
+- Includes compatibility-only aliases second:
+    - recommended_action
+    - policy_reasons
+- Includes explicit allowed/forbidden file lists, validation command block, and final deliverables block.
+
+———
+
+Backward compatibility notes
+
+- No execution/orchestration modules were changed.
+- No execution behavior introduced.
+- New foundation is additive and file-based.
+- Unknown task types deterministically fall back to docs_only.
+- Compatibility vocabulary remains available but not promoted.
+
+———
+
+Short PR summary
+
+Added a minimal, deterministic prompt-building foundation under automation/planning plus file-based prompt blocks/
+templates. It now classifies task type, selects template, assembles prompts in the required 12-section order, injects
+repo profile/constraints/validation/output blocks, and enforces canonical policy vocabulary precedence with tested
+docs_only fallback.
