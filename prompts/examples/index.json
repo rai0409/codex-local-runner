@@ -1,0 +1,51 @@
+{
+  "repo": "codex-local-runner",
+  "version": 1,
+  "examples": [
+    {
+      "id": "7a-inspect-advisory",
+      "kind": "good",
+      "task_type": "inspect_read_only_extension",
+      "title": "Add inspect-time advisory as read-only derived layer",
+      "prompt_path": "prompts/examples/good/prompt7a_advisory_readonly.md",
+      "run_record_path": "prompts/examples/good/2026-04-7a-inspect-advisory-run-record.md",
+      "decision": "pass",
+      "status": "completed",
+      "notes": [
+        "advisory remained inspect-time only",
+        "execution semantics unchanged",
+        "operator_review_decision.py unchanged"
+      ]
+    },
+    {
+      "id": "7b-execution-bridge",
+      "kind": "good",
+      "task_type": "inspect_read_only_extension",
+      "title": "Add inspect-time execution_bridge as conservative visibility",
+      "prompt_path": "prompts/examples/good/prompt7b_execution_bridge_readonly.md",
+      "run_record_path": "prompts/examples/good/2026-04-7b-execution-bridge-run-record.md",
+      "decision": "pass",
+      "status": "completed",
+      "notes": [
+        "eligible_for_bounded_execution remained false",
+        "requires_explicit_operator_decision remained true",
+        "no runtime execution path added"
+      ]
+    },
+    {
+      "id": "7c-mode-visibility",
+      "kind": "good",
+      "task_type": "inspect_read_only_extension",
+      "title": "Add inspect-time mode_visibility for current repository maturity",
+      "prompt_path": "prompts/examples/good/prompt7c_mode_visibility_readonly.md",
+      "run_record_path": "prompts/examples/good/2026-04-7c-mode-visibility-run-record.md",
+      "decision": "pass",
+      "status": "completed",
+      "notes": [
+        "current_mode remained manual_review_only",
+        "next_possible_mode remained null",
+        "no mode transition semantics introduced"
+      ]
+    }
+  ]
+}
