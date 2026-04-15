@@ -1,0 +1,128 @@
+{
+  "repo": "codex-local-runner",
+  "version": 1,
+  "examples": [
+    {
+      "id": "7a-inspect-advisory",
+      "kind": "good",
+      "task_type": "inspect_read_only_extension",
+      "title": "Add inspect-time advisory as read-only derived layer",
+      "prompt_path": "prompts/examples/good/prompt7a_advisory_readonly.md",
+      "run_record_path": "prompts/examples/good/2026-04-7a-inspect-advisory-run-record.md",
+      "decision": "pass",
+      "status": "completed",
+      "notes": [
+        "advisory remained inspect-time only",
+        "execution semantics unchanged",
+        "operator_review_decision.py unchanged"
+      ]
+    },
+    {
+      "id": "7b-execution-bridge",
+      "kind": "good",
+      "task_type": "inspect_read_only_extension",
+      "title": "Add inspect-time execution_bridge as conservative visibility",
+      "prompt_path": "prompts/examples/good/prompt7b_execution_bridge_readonly.md",
+      "run_record_path": "prompts/examples/good/2026-04-7b-execution-bridge-run-record.md",
+      "decision": "pass",
+      "status": "completed",
+      "notes": [
+        "eligible_for_bounded_execution remained false",
+        "requires_explicit_operator_decision remained true",
+        "no runtime execution path added"
+      ]
+    },
+    {
+      "id": "7c-mode-visibility",
+      "kind": "good",
+      "task_type": "inspect_read_only_extension",
+      "title": "Add inspect-time mode_visibility for current repository maturity",
+      "prompt_path": "prompts/examples/good/prompt7c_mode_visibility_readonly.md",
+      "run_record_path": "prompts/examples/good/2026-04-7c-mode-visibility-run-record.md",
+      "decision": "pass",
+      "status": "completed",
+      "notes": [
+        "current_mode remained manual_review_only",
+        "next_possible_mode remained null",
+        "no mode transition semantics introduced"
+      ]
+    }
+  ],
+  "archive_assets": [
+    {
+      "asset_id": "7a-inspect-advisory",
+      "kind": "good",
+      "title": "Inspect advisory read-only preserved assets",
+      "source_prompt_path": "prompts/examples/good/prompt7a_advisory_readonly.md",
+      "run_record_path": "prompts/examples/good/2026-04-7a-inspect-advisory-run-record.md",
+      "reference_patch_path": null,
+      "asset_status": "complete",
+      "notes": [
+        "source prompt and run record are both preserved"
+      ]
+    },
+    {
+      "asset_id": "7b-execution-bridge",
+      "kind": "good",
+      "title": "Inspect execution_bridge read-only preserved assets",
+      "source_prompt_path": "prompts/examples/good/prompt7b_execution_bridge_readonly.md",
+      "run_record_path": "prompts/examples/good/2026-04-7b-execution-bridge-run-record.md",
+      "reference_patch_path": null,
+      "asset_status": "complete",
+      "notes": [
+        "source prompt and run record are both preserved"
+      ]
+    },
+    {
+      "asset_id": "7c-mode-visibility",
+      "kind": "good",
+      "title": "Inspect mode_visibility read-only preserved assets",
+      "source_prompt_path": "prompts/examples/good/prompt7c_mode_visibility_readonly.md",
+      "run_record_path": "prompts/examples/good/2026-04-7c-mode-visibility-run-record.md",
+      "reference_patch_path": null,
+      "asset_status": "complete",
+      "notes": [
+        "source prompt and run record are both preserved"
+      ]
+    },
+    {
+      "asset_id": "pr1-execution-authority",
+      "kind": "good",
+      "title": "PR-1 execution authority historical artifacts",
+      "source_prompt_path": null,
+      "run_record_path": "prompts/examples/good/2026-04-pr1-execution-authority-run-record.md",
+      "reference_patch_path": "prompts/examples/good/artifacts/2026-04-pr1-execution-authority-reference.patch",
+      "asset_status": "partial",
+      "notes": [
+        "historical run record and reference patch are preserved",
+        "standalone source prompt is not present in current repo snapshot"
+      ]
+    },
+    {
+      "asset_id": "pr2-deterministic-recovery-policy",
+      "kind": "good",
+      "title": "PR-2 deterministic recovery policy source prompt",
+      "source_prompt_path": "prompts/examples/good/2026-04-pr2-deterministic-recovery-policy-prompt.md",
+      "run_record_path": null,
+      "reference_patch_path": null,
+      "asset_status": "partial",
+      "notes": [
+        "source prompt is preserved",
+        "run record and reference patch are not present in current repo snapshot"
+      ]
+    },
+    {
+      "asset_id": "pr3-prompt-builder-foundation",
+      "kind": "good",
+      "title": "PR-3 prompt-builder foundation historical artifacts",
+      "source_prompt_path": "prompts/examples/good/2026-04-pr3-prompt-builder-foundation-prompt.md",
+      "run_record_path": null,
+      "reference_patch_path": "prompts/examples/good/artifacts/2026-04-pr3-prompt-builder-foundation-reference.patch",
+      "asset_status": "partial",
+      "notes": [
+        "source prompt and reference patch are preserved",
+        "run record is not present in current repo snapshot"
+      ]
+    }
+  ]
+}
