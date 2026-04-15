@@ -63,6 +63,10 @@ class EvaluateJobTests(unittest.TestCase):
         self.assertIn("rubric", payload)
         self.assertIn("merge_gate", payload)
         self.assertIn("assumptions", payload)
+        self.assertIn("progression_state", payload["merge_gate"])
+        self.assertIn("policy_eligible", payload["merge_gate"])
+        self.assertIn("auto_pr_candidate", payload["merge_gate"])
+        self.assertIn("progression_fail_reasons", payload["merge_gate"])
 
     def test_human_readable_mode_output_shape(self) -> None:
         with tempfile.TemporaryDirectory() as job_dir:

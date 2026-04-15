@@ -38,3 +38,7 @@ class MergeGateResult:
     passed: bool
     fail_reasons: tuple[str, ...]
     auto_merge_allowed: bool
+    progression_state: str
+    policy_eligible: bool
+    auto_pr_candidate: bool
+    progression_fail_reasons: tuple[str, ...] = ()

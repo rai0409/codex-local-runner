@@ -43,6 +43,16 @@ class PolicyLoaderTests(unittest.TestCase):
             set(policy["auto_merge_categories"]),
             {"docs_only", "ci_only", "test_only", "contract_guard_only"},
         )
+        self.assertEqual(
+            set(policy["auto_progression"]["policy_eligible_categories"]),
+            {"docs_only", "test_only"},
+        )
+        self.assertEqual(
+            set(policy["auto_progression"]["auto_pr_candidate_categories"]),
+            {"docs_only"},
+        )
+        self.assertEqual(policy["auto_progression"]["max_changed_files"], 8)
+        self.assertEqual(policy["auto_progression"]["max_total_diff_lines"], 120)
 
 
 if __name__ == "__main__":
