@@ -1,3 +1,11 @@
+"""Canonical prompt-builder implementation for codex-local-runner.
+
+Compatibility note:
+- Root-level ``prompt_builder.py`` is a thin wrapper and should remain
+  compatibility-only.
+- ``build_prompt(task, base_rules_path=...)`` preserves the historical app path.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -53,8 +61,44 @@ def _include_canonical_vocabulary(task: Mapping[str, Any], *, task_type: str) ->
     return task_type in _CANONICAL_TASK_TYPES
 
 
-def build_prompt(task: Mapping[str, Any]) -> str:
-    """Build a deterministic prompt string from file-based template and block assets."""
+def _legacy_render_list(values: Any) -> str:
+    cleaned = [str(value).strip() for value in list(values) if str(value).strip()]
+    if not cleaned:
+        return "- none"
+    return "\n".join(f"- {item}" for item in cleaned)
+
+
+def _build_legacy_prompt(task: Mapping[str, Any], *, base_rules_path: str) -> str:
+    base_rules = Path(base_rules_path).read_text(encoding="utf-8").strip()
+    goal = str(task.get("goal", "")).strip()
+    repo_path = str(task.get("repo_path", "")).strip()
+    notes = str(task.get("notes", "")).strip() or "(none)"
+
+    allowed_files = _legacy_render_list(task.get("allowed_files", []))
+    forbidden_files = _legacy_render_list(task.get("forbidden_files", []))
+    validation_commands = _legacy_render_list(task.get("validation_commands", []))
+
+    return (
+        f"{base_rules}\n\n"
+        "## Task Input\n"
+        f"Repository path:\n{repo_path}\n\n"
+        f"Goal:\n{goal}\n\n"
+        "Allowed files:\n"
+        f"{allowed_files}\n\n"
+        "Forbidden files:\n"
+        f"{forbidden_files}\n\n"
+        "Validation commands:\n"
+        f"{validation_commands}\n\n"
+        "Notes:\n"
+        f"{notes}\n"
+    )
+
+
+def build_prompt(task: Mapping[str, Any], base_rules_path: str | None = None) -> str:
+    """Build a prompt from canonical planning assets or legacy base-rules mode."""
+    if base_rules_path is not None:
+        return _build_legacy_prompt(task, base_rules_path=base_rules_path)
+
     task_type = classify_task_type(task.get("task_type"))
 
     repository = str(task.get("repository") or "codex-local-runner").strip()
