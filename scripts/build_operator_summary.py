@@ -81,6 +81,97 @@ def _derive_validation_status(result_payload: dict[str, Any] | None) -> dict[str
     return {"verify_status": None, "verify_reason": None}
 
 
+def _normalize_string_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    normalized: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _default_write_authority_surface() -> dict[str, Any]:
+    return {
+        "state": None,
+        "allowed_categories": [],
+    }
+
+
+def _default_merge_gate_contract_surface() -> dict[str, Any]:
+    return {
+        "lifecycle_state": None,
+        "write_authority": _default_write_authority_surface(),
+        "failure_type": None,
+        "retry_recommended": None,
+        "retry_recommendation": None,
+        "retry_budget_remaining": None,
+        "escalation_required": None,
+        "next_action_readiness": None,
+        "primary_fail_reasons": [],
+    }
+
+
+def _derive_merge_gate_contract_surface(
+    merge_gate_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    surface = _default_merge_gate_contract_surface()
+    if not isinstance(merge_gate_payload, dict):
+        return surface
+
+    raw_lifecycle_state = merge_gate_payload.get("lifecycle_state")
+    if raw_lifecycle_state is not None:
+        text = str(raw_lifecycle_state).strip()
+        surface["lifecycle_state"] = text if text else None
+
+    raw_write_authority = merge_gate_payload.get("write_authority")
+    if isinstance(raw_write_authority, dict):
+        raw_state = raw_write_authority.get("state")
+        if raw_state is not None:
+            text = str(raw_state).strip()
+            surface["write_authority"]["state"] = text if text else None
+        surface["write_authority"]["allowed_categories"] = _normalize_string_list(
+            raw_write_authority.get("allowed_categories")
+        )
+
+    replan_input = merge_gate_payload.get("replan_input")
+    if isinstance(replan_input, dict):
+        raw_failure_type = replan_input.get("failure_type")
+        if raw_failure_type is not None:
+            text = str(raw_failure_type).strip()
+            surface["failure_type"] = text if text else None
+        surface["retry_recommended"] = _as_optional_bool(replan_input.get("retry_recommended"))
+
+        raw_retry_recommendation = replan_input.get("retry_recommendation")
+        if raw_retry_recommendation is not None:
+            text = str(raw_retry_recommendation).strip()
+            surface["retry_recommendation"] = text if text else None
+
+        raw_retry_budget_remaining = replan_input.get("retry_budget_remaining")
+        if isinstance(raw_retry_budget_remaining, bool):
+            surface["retry_budget_remaining"] = None
+        elif isinstance(raw_retry_budget_remaining, int):
+            surface["retry_budget_remaining"] = raw_retry_budget_remaining
+        elif isinstance(raw_retry_budget_remaining, str) and raw_retry_budget_remaining.strip().isdigit():
+            surface["retry_budget_remaining"] = int(raw_retry_budget_remaining.strip())
+        else:
+            surface["retry_budget_remaining"] = None
+
+        surface["escalation_required"] = _as_optional_bool(replan_input.get("escalation_required"))
+
+        raw_next_action_readiness = replan_input.get("next_action_readiness")
+        if raw_next_action_readiness is not None:
+            text = str(raw_next_action_readiness).strip()
+            surface["next_action_readiness"] = text if text else None
+
+        surface["primary_fail_reasons"] = _normalize_string_list(
+            replan_input.get("primary_fail_reasons")
+        )
+
+    return surface
+
+
 def _derive_output_dir(row: dict[str, Any], *, out_dir_arg: str | None) -> Path:
     if out_dir_arg:
         return Path(out_dir_arg)
@@ -94,6 +185,8 @@ def _derive_output_dir(row: dict[str, Any], *, out_dir_arg: str | None) -> Path:
 
 def _build_summary(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     result_payload = _read_json(row.get("result_path"))
+    merge_gate_payload = _read_json(row.get("merge_gate_path"))
+    merge_gate_surface = _derive_merge_gate_contract_surface(merge_gate_payload)
     rollback_trace = get_rollback_trace_by_job_id(str(row.get("job_id", "")), db_path=db_path)
     rollback_execution = get_rollback_execution_by_job_id(str(row.get("job_id", "")), db_path=db_path)
 
@@ -106,6 +199,15 @@ def _build_summary(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
         "declared_category": row.get("declared_category"),
         "observed_category": row.get("observed_category"),
         "validation": validation,
+        "lifecycle_state": merge_gate_surface["lifecycle_state"],
+        "write_authority": merge_gate_surface["write_authority"],
+        "failure_type": merge_gate_surface["failure_type"],
+        "retry_recommended": merge_gate_surface["retry_recommended"],
+        "retry_recommendation": merge_gate_surface["retry_recommendation"],
+        "retry_budget_remaining": merge_gate_surface["retry_budget_remaining"],
+        "escalation_required": merge_gate_surface["escalation_required"],
+        "next_action_readiness": merge_gate_surface["next_action_readiness"],
+        "primary_fail_reasons": merge_gate_surface["primary_fail_reasons"],
         "merge": {
             "merge_eligible": _as_optional_bool(row.get("merge_eligible")),
             "merge_gate_passed": _as_optional_bool(row.get("merge_gate_passed")),
@@ -456,6 +558,15 @@ def _build_machine_review_payload(
         "requires_human_review": bool(policy_output.get("requires_human_review", True)),
         "recommended_action": recovery_decision,
         "policy_reasons": failure_codes,
+        "lifecycle_state": summary.get("lifecycle_state"),
+        "write_authority": summary.get("write_authority"),
+        "failure_type": summary.get("failure_type"),
+        "retry_recommended": summary.get("retry_recommended"),
+        "retry_recommendation": summary.get("retry_recommendation"),
+        "retry_budget_remaining": summary.get("retry_budget_remaining"),
+        "escalation_required": summary.get("escalation_required"),
+        "next_action_readiness": summary.get("next_action_readiness"),
+        "primary_fail_reasons": summary.get("primary_fail_reasons"),
     }
     payload["retry_metadata"] = _build_retry_metadata(
         recovery_decision=recovery_decision,
@@ -517,6 +628,28 @@ def _to_html(summary: dict[str, Any]) -> str:
     if isinstance(validation, dict):
         rows.append(line("verify_status", validation.get("verify_status")))
         rows.append(line("verify_reason", validation.get("verify_reason")))
+    rows.append(line("lifecycle_state", summary.get("lifecycle_state")))
+    write_authority = summary.get("write_authority")
+    if isinstance(write_authority, dict):
+        rows.append(line("write_authority.state", write_authority.get("state")))
+        rows.append(
+            line(
+                "write_authority.allowed_categories",
+                ", ".join(_normalize_string_list(write_authority.get("allowed_categories"))) or None,
+            )
+        )
+    rows.append(line("failure_type", summary.get("failure_type")))
+    rows.append(line("retry_recommended", summary.get("retry_recommended")))
+    rows.append(line("retry_recommendation", summary.get("retry_recommendation")))
+    rows.append(line("retry_budget_remaining", summary.get("retry_budget_remaining")))
+    rows.append(line("escalation_required", summary.get("escalation_required")))
+    rows.append(line("next_action_readiness", summary.get("next_action_readiness")))
+    rows.append(
+        line(
+            "primary_fail_reasons",
+            ", ".join(_normalize_string_list(summary.get("primary_fail_reasons"))) or None,
+        )
+    )
 
     merge = summary.get("merge", {})
     if isinstance(merge, dict):
