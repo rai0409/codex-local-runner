@@ -68,10 +68,14 @@ class EvaluateJobTests(unittest.TestCase):
         self.assertIn("policy_eligible", payload["merge_gate"])
         self.assertIn("auto_pr_candidate", payload["merge_gate"])
         self.assertIn("lifecycle_state", payload["merge_gate"])
+        self.assertIn("write_authority", payload["merge_gate"])
         self.assertIn("progression_fail_reasons", payload["merge_gate"])
         self.assertIn("github_progression", payload["merge_gate"])
+        self.assertIn("replan_input", payload["merge_gate"])
         self.assertEqual(payload["merge_gate"]["github_progression"]["mode"], "read_only")
         self.assertFalse(payload["merge_gate"]["github_progression"]["write_actions_allowed"])
+        self.assertEqual(payload["merge_gate"]["write_authority"]["state"], "disabled")
+        self.assertFalse(payload["merge_gate"]["write_authority"]["write_actions_allowed"])
 
     def test_human_readable_mode_output_shape(self) -> None:
         with tempfile.TemporaryDirectory() as job_dir:
@@ -165,6 +169,8 @@ class EvaluateJobTests(unittest.TestCase):
             "diff_line_stats_missing",
             result["merge_gate"]["progression_fail_reasons"],
         )
+        self.assertEqual(result["merge_gate"]["replan_input"]["failure_type"], "missing_signal")
+        self.assertEqual(result["merge_gate"]["replan_input"]["retry_recommendation"], "retry")
 
     def test_evaluation_does_not_mutate_source_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as job_dir:
@@ -263,6 +269,7 @@ class EvaluateJobTests(unittest.TestCase):
         self.assertEqual(github_progression["mergeability"]["state"], "clean")
         self.assertEqual(github_progression["progression"]["state"], "ready")
         self.assertEqual(result["merge_gate"]["lifecycle_state"], "manual_only")
+        self.assertEqual(result["merge_gate"]["write_authority"]["state"], "disabled")
         self.assertIn("policy_link", github_progression)
 
     def test_evaluation_can_use_injected_live_read_only_backend(self) -> None:
@@ -300,6 +307,38 @@ class EvaluateJobTests(unittest.TestCase):
         self.assertFalse(github_progression["write_actions_allowed"])
         self.assertEqual(github_progression["progression"]["state"], "ready")
         self.assertEqual(result["merge_gate"]["lifecycle_state"], "manual_only")
+        self.assertEqual(result["merge_gate"]["write_authority"]["state"], "disabled")
+
+    def test_retry_budget_uses_execution_attempt_count_signal(self) -> None:
+        with tempfile.TemporaryDirectory() as job_dir:
+            self._write_job(
+                job_dir,
+                request_payload={
+                    "job_id": "job-retry-budget",
+                    "declared_category": "docs_only",
+                    "changed_files": ["docs/reviewer_runbook.md"],
+                    "validation_commands": ["echo verify"],
+                },
+                result_payload={
+                    "job_id": "job-retry-budget",
+                    "execution": {
+                        "status": "completed",
+                        "attempt_count": 2,
+                        "verify": {"status": "failed"},
+                    },
+                    "additions": 5,
+                    "deletions": 1,
+                },
+            )
+            result = evaluate_job_directory(job_dir)
+
+        self.assertEqual(
+            result["assumptions"]["prior_attempt_count_source"],
+            "result.execution.attempt_count",
+        )
+        self.assertEqual(result["merge_gate"]["replan_input"]["prior_attempt_count"], 2)
+        self.assertEqual(result["merge_gate"]["replan_input"]["retry_budget_remaining"], 0)
+        self.assertEqual(result["merge_gate"]["replan_input"]["retry_recommendation"], "escalate")
 
 
 if __name__ == "__main__":

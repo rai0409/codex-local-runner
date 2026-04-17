@@ -43,5 +43,7 @@ class MergeGateResult:
     policy_eligible: bool
     auto_pr_candidate: bool
     lifecycle_state: str = "manual_only"
+    write_authority: dict[str, Any] | None = None
     progression_fail_reasons: tuple[str, ...] = ()
     github_progression: dict[str, Any] | None = None
+    replan_input: dict[str, Any] | None = None

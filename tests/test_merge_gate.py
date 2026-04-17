@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import unittest
 
 from orchestrator.github_backend import ArtifactGitHubStateBackend
@@ -55,6 +56,20 @@ class MergeGateTests(unittest.TestCase):
             result_payload={"github_state": github_state},
         )
 
+    def _policy_with_write_authority(self, **overrides: object) -> dict[str, object]:
+        policy = copy.deepcopy(load_merge_gate_policy())
+        write_authority = dict(policy.get("write_authority", {}))
+        write_authority.update(overrides)
+        policy["write_authority"] = write_authority
+        return policy
+
+    def _policy_with_retry_replan(self, **overrides: object) -> dict[str, object]:
+        policy = copy.deepcopy(load_merge_gate_policy())
+        retry_replan = dict(policy.get("retry_replan", {}))
+        retry_replan.update(overrides)
+        policy["retry_replan"] = retry_replan
+        return policy
+
     def test_merge_gate_passes_for_safe_auto_merge_category(self) -> None:
         result = apply_merge_gate(
             rubric=self._rubric("docs_only"),
@@ -70,6 +85,9 @@ class MergeGateTests(unittest.TestCase):
         self.assertTrue(result.auto_pr_candidate)
         self.assertEqual(result.progression_state, "auto_pr_candidate")
         self.assertEqual(result.lifecycle_state, "auto_pr_candidate")
+        assert result.write_authority is not None
+        self.assertEqual(result.write_authority["state"], "disabled")
+        self.assertFalse(result.write_authority["write_actions_allowed"])
         self.assertEqual(result.progression_fail_reasons, ())
         assert result.github_progression is not None
         self.assertEqual(result.github_progression["mode"], "read_only")
@@ -81,7 +99,7 @@ class MergeGateTests(unittest.TestCase):
         policy = load_merge_gate_policy()
         self.assertEqual(
             set(policy["auto_merge_categories"]),
-            {"docs_only", "test_only"},
+            {"docs_only", "ci_only", "test_only", "contract_guard_only"},
         )
 
     def test_merge_gate_rejects_high_risk_category_even_if_other_checks_pass(self) -> None:
@@ -489,6 +507,338 @@ class MergeGateTests(unittest.TestCase):
         )
 
         self.assertEqual(result.lifecycle_state, "merge_blocked")
+
+    def test_write_authority_disabled_blocks_write_path(self) -> None:
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        assert result.write_authority is not None
+        self.assertEqual(result.write_authority["state"], "disabled")
+        self.assertIn(
+            "write_authority_disabled",
+            result.write_authority["conservative_reasons"],
+        )
+        self.assertFalse(result.write_authority["write_actions_allowed"])
+
+    def test_write_authority_category_allowlist_blocks_unsafe_category(self) -> None:
+        policy = self._policy_with_write_authority(
+            enabled=True,
+            dry_run=False,
+            kill_switch=False,
+            allowed_categories=("docs_only",),
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("runtime_fix_high_risk"),
+            policy=policy,
+            changed_files=("adapters/codex_cli.py",),
+            additions=2,
+            deletions=1,
+        )
+
+        assert result.write_authority is not None
+        self.assertEqual(result.write_authority["state"], "blocked")
+        self.assertIn(
+            "write_category_not_allowed",
+            result.write_authority["conservative_reasons"],
+        )
+        self.assertFalse(result.write_authority["write_actions_allowed"])
+
+    def test_lifecycle_state_alone_does_not_grant_write_permission(self) -> None:
+        policy = self._policy_with_write_authority(
+            enabled=True,
+            dry_run=False,
+            kill_switch=False,
+            allowed_categories=("test_only",),
+            required_lifecycle_states=("policy_eligible",),
+        )
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("test_only"),
+            policy=policy,
+            changed_files=("tests/test_merge_gate.py",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        self.assertEqual(result.lifecycle_state, "policy_eligible")
+        assert result.write_authority is not None
+        self.assertEqual(result.write_authority["state"], "write_preparable")
+        self.assertIn(
+            "write_auto_pr_candidate_required",
+            result.write_authority["conservative_reasons"],
+        )
+        self.assertFalse(result.write_authority["write_actions_allowed"])
+
+    def test_write_authority_dry_run_blocks_irreversible_behavior(self) -> None:
+        policy = self._policy_with_write_authority(
+            enabled=True,
+            dry_run=True,
+            kill_switch=False,
+            allowed_categories=("docs_only",),
+            required_lifecycle_states=("approved_for_merge",),
+        )
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            policy=policy,
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        assert result.write_authority is not None
+        self.assertEqual(result.write_authority["state"], "dry_run_only")
+        self.assertFalse(result.write_authority["write_actions_allowed"])
+        self.assertEqual(result.write_authority["conservative_reasons"], ())
+
+    def test_write_authority_kill_switch_blocks_write_path(self) -> None:
+        policy = self._policy_with_write_authority(
+            enabled=True,
+            dry_run=False,
+            kill_switch=True,
+            allowed_categories=("docs_only",),
+        )
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            policy=policy,
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        assert result.write_authority is not None
+        self.assertEqual(result.write_authority["state"], "blocked")
+        self.assertIn(
+            "write_kill_switch_enabled",
+            result.write_authority["conservative_reasons"],
+        )
+        self.assertFalse(result.write_authority["write_actions_allowed"])
+
+    def test_write_authority_missing_github_readiness_blocks(self) -> None:
+        policy = self._policy_with_write_authority(
+            enabled=True,
+            dry_run=False,
+            kill_switch=False,
+            allowed_categories=("docs_only",),
+            required_lifecycle_states=("approved_for_merge",),
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            policy=policy,
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+        )
+
+        assert result.write_authority is not None
+        self.assertEqual(result.write_authority["state"], "write_preparable")
+        self.assertIn(
+            "write_github_state_unavailable",
+            result.write_authority["conservative_reasons"],
+        )
+        self.assertFalse(result.write_authority["write_actions_allowed"])
+
+    def test_write_authority_can_reach_write_allowed_when_all_guards_pass(self) -> None:
+        policy = self._policy_with_write_authority(
+            enabled=True,
+            dry_run=False,
+            kill_switch=False,
+            allowed_categories=("docs_only",),
+            required_lifecycle_states=("approved_for_merge",),
+        )
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            policy=policy,
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        assert result.write_authority is not None
+        self.assertEqual(result.lifecycle_state, "approved_for_merge")
+        self.assertEqual(result.write_authority["state"], "write_allowed")
+        self.assertTrue(result.write_authority["write_actions_allowed"])
+        self.assertEqual(result.write_authority["conservative_reasons"], ())
+        assert result.github_progression is not None
+        self.assertEqual(result.github_progression["mode"], "read_only")
+        self.assertFalse(result.github_progression["write_actions_allowed"])
+
+    def test_replan_input_classifies_missing_signal_as_retriable(self) -> None:
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=4,
+            deletions=1,
+            diff_line_stats_present=False,
+            prior_attempt_count=1,
+        )
+
+        assert result.replan_input is not None
+        self.assertEqual(result.replan_input["failure_type"], "missing_signal")
+        self.assertEqual(result.replan_input["retry_budget_total"], 2)
+        self.assertEqual(result.replan_input["retry_budget_remaining"], 1)
+        self.assertEqual(result.replan_input["retry_recommendation"], "retry")
+        self.assertFalse(result.replan_input["budget_exhausted"])
+        self.assertFalse(result.replan_input["escalation_required"])
+
+    def test_replan_input_budget_exhaustion_escalates(self) -> None:
+        policy = self._policy_with_retry_replan(max_attempts=2)
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            policy=policy,
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=4,
+            deletions=1,
+            diff_line_stats_present=False,
+            prior_attempt_count=2,
+        )
+
+        assert result.replan_input is not None
+        self.assertEqual(result.replan_input["failure_type"], "missing_signal")
+        self.assertEqual(result.replan_input["retry_budget_remaining"], 0)
+        self.assertTrue(result.replan_input["budget_exhausted"])
+        self.assertEqual(result.replan_input["retry_recommendation"], "escalate")
+        self.assertTrue(result.replan_input["escalation_required"])
+
+    def test_replan_input_non_retriable_policy_failure_does_not_retry(self) -> None:
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only", forbidden_files_untouched=False),
+            changed_files=("docs/reviewer_handoff.md", "orchestrator/main.py"),
+            additions=10,
+            deletions=1,
+            prior_attempt_count=0,
+        )
+
+        assert result.replan_input is not None
+        self.assertEqual(result.replan_input["failure_type"], "policy_failure")
+        self.assertFalse(result.replan_input["retriable_failure_type"])
+        self.assertEqual(result.replan_input["retry_recommendation"], "escalate")
+        self.assertTrue(result.replan_input["escalation_required"])
+
+    def test_replan_input_lifecycle_and_write_authority_blocking_are_distinct(self) -> None:
+        pending_checks = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "pending",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        lifecycle_blocked = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=pending_checks,
+        )
+        assert lifecycle_blocked.replan_input is not None
+        self.assertEqual(lifecycle_blocked.replan_input["failure_type"], "lifecycle_blocked")
+
+        policy = self._policy_with_write_authority(
+            enabled=True,
+            dry_run=False,
+            kill_switch=True,
+            allowed_categories=("docs_only",),
+            required_lifecycle_states=("approved_for_merge",),
+        )
+        clean_ready = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        write_blocked = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            policy=policy,
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=clean_ready,
+        )
+        assert write_blocked.replan_input is not None
+        self.assertEqual(
+            write_blocked.replan_input["failure_type"],
+            "write_authority_blocked",
+        )
+        self.assertEqual(write_blocked.replan_input["retry_recommendation"], "escalate")
+
+    def test_replan_input_execution_failure_is_retriable_when_budget_available(self) -> None:
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            execution_status="failed",
+            prior_attempt_count=1,
+        )
+
+        assert result.replan_input is not None
+        self.assertEqual(result.replan_input["failure_type"], "execution_failure")
+        self.assertEqual(result.replan_input["retry_recommendation"], "retry")
+        self.assertTrue(result.replan_input["retry_recommended"])
 
 
 if __name__ == "__main__":
