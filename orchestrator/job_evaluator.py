@@ -88,6 +88,36 @@ def _derive_verify_flags(result_payload: dict[str, Any]) -> tuple[bool, bool, st
     return False, False, "fallback_unknown_verify_status"
 
 
+def _derive_prior_attempt_count(result_payload: dict[str, Any]) -> tuple[int, str]:
+    execution = result_payload.get("execution")
+    if not isinstance(execution, dict):
+        return 0, "fallback_zero_prior_attempt_count"
+
+    raw = execution.get("attempt_count")
+    if isinstance(raw, bool):
+        return 0, "fallback_zero_prior_attempt_count"
+    if isinstance(raw, int):
+        return max(raw, 0), "result.execution.attempt_count"
+    if isinstance(raw, str):
+        text = raw.strip()
+        if text and text.isdigit():
+            return int(text), "result.execution.attempt_count"
+    return 0, "fallback_zero_prior_attempt_count"
+
+
+def _derive_execution_status(result_payload: dict[str, Any]) -> tuple[str | None, str]:
+    execution = result_payload.get("execution")
+    if not isinstance(execution, dict):
+        return None, "fallback_no_execution_status"
+    raw = execution.get("status")
+    if raw is None:
+        return None, "fallback_no_execution_status"
+    status = str(raw).strip()
+    if not status:
+        return None, "fallback_no_execution_status"
+    return status, "result.execution.status"
+
+
 def _derive_int_signal(
     *,
     request_payload: dict[str, Any],
@@ -170,6 +200,16 @@ def evaluate_job_directory(
     if verify_source.startswith("fallback_"):
         assumptions["fallbacks_used"].append(verify_source)
 
+    prior_attempt_count, prior_attempt_count_source = _derive_prior_attempt_count(result_payload)
+    assumptions["prior_attempt_count_source"] = prior_attempt_count_source
+    if prior_attempt_count_source.startswith("fallback_"):
+        assumptions["fallbacks_used"].append(prior_attempt_count_source)
+
+    execution_status, execution_status_source = _derive_execution_status(result_payload)
+    assumptions["execution_status_source"] = execution_status_source
+    if execution_status_source.startswith("fallback_"):
+        assumptions["fallbacks_used"].append(execution_status_source)
+
     additions_signal, additions_source = _derive_int_signal(
         request_payload=request_payload,
         result_payload=result_payload,
@@ -230,6 +270,8 @@ def evaluate_job_directory(
         deletions=deletions,
         diff_line_stats_present=(additions_signal is not None and deletions_signal is not None),
         github_signals=github_signals,
+        prior_attempt_count=prior_attempt_count,
+        execution_status=execution_status,
     )
 
     return {

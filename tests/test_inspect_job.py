@@ -106,6 +106,7 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertEqual(payload["job_id"], "job-json")
         self.assertIn("paths", payload)
         self.assertIn("fail_reasons", payload)
+        self.assertIn("replan_input", payload)
         self.assertIn("rollback_trace", payload)
         self.assertIn("rollback_execution", payload)
         self.assertIn("rubric", payload["paths"])
@@ -149,6 +150,8 @@ class InspectJobCliTests(unittest.TestCase):
             payload["machine_review"]["mode_visibility"]["mode_blockers"],
             ["explicit_operator_gate_required", "execution_not_implemented"],
         )
+        self.assertIsNone(payload["replan_input"]["failure_type"])
+        self.assertEqual(payload["replan_input"]["primary_fail_reasons"], [])
 
     def test_missing_job_exits_clearly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -187,6 +190,56 @@ class InspectJobCliTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["fail_reasons"]["rubric"], ["required_tests_not_passed"])
         self.assertEqual(payload["fail_reasons"]["merge_gate"], ["category_not_auto_merge_allowed"])
+
+    def test_replan_input_is_loaded_from_merge_gate_artifact_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            db_path = tmp_root / "state" / "jobs.db"
+            merge_gate_path = tmp_root / "merge_gate.json"
+            merge_gate_path.write_text(
+                json.dumps(
+                    {
+                        "fail_reasons": ["required_tests_not_passed"],
+                        "replan_input": {
+                            "failure_type": "execution_failure",
+                            "current_state": "manual_only",
+                            "lifecycle_state": "manual_only",
+                            "write_authority_state": "disabled",
+                            "category": "docs_only",
+                            "changed_files": ["docs/reviewer_runbook.md"],
+                            "prior_attempt_count": 1,
+                            "retry_budget_total": 2,
+                            "retry_budget_remaining": 1,
+                            "budget_exhausted": False,
+                            "primary_fail_reasons": ["required_tests_not_passed"],
+                            "retry_recommendation": "retry",
+                            "next_action_readiness": "retry_preparable",
+                            "retry_recommended": True,
+                            "escalation_required": False,
+                            "retriable_failure_type": True,
+                            "retriable_failure_types": [
+                                "execution_failure",
+                                "missing_signal",
+                            ],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            self._seed_job(
+                db_path=db_path,
+                job_id="job-replan",
+                merge_gate_path=str(merge_gate_path),
+            )
+
+            proc = self._run(["--job-id", "job-replan", "--db-path", str(db_path), "--json"])
+
+        self.assertEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["replan_input"]["failure_type"], "execution_failure")
+        self.assertEqual(payload["replan_input"]["retry_recommendation"], "retry")
+        self.assertEqual(payload["replan_input"]["retry_budget_remaining"], 1)
 
     def test_handles_null_or_missing_artifact_paths_without_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
