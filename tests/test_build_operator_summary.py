@@ -7,8 +7,8 @@ import sys
 import tempfile
 import unittest
 
-from orchestrator.ledger import record_execution_target
 from orchestrator.ledger import get_rollback_execution_by_job_id
+from orchestrator.ledger import record_execution_target
 from orchestrator.ledger import record_job_evaluation
 from orchestrator.ledger import record_merge_execution_outcome
 from orchestrator.ledger import record_rollback_execution_outcome
@@ -174,37 +174,49 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
             self.assertEqual(payload["merge"]["merge_gate_passed"], True)
             self.assertIn("request", payload["paths"])
             self.assertIn("result", payload["paths"])
-            self.assertEqual(machine_payload["schema_version"], "1.0")
+            self.assertEqual(machine_payload["schema_version"], "1.1")
             self.assertEqual(
                 machine_payload["action_vocabulary"],
-                ["keep", "rollback", "retry", "escalate"],
+                ["keep", "revise_current_state", "reset_and_retry", "escalate"],
             )
+
             self.assertEqual(machine_payload["job_id"], "job-summary-1")
             self.assertEqual(machine_payload["repo"], "codex-local-runner")
             self.assertEqual(machine_payload["accepted_status"], "accepted")
             self.assertEqual(machine_payload["merge_eligible"], True)
             self.assertEqual(machine_payload["rollback_eligible"], None)
             self.assertEqual(machine_payload["requires_human_review"], True)
-            self.assertEqual(machine_payload["recommended_action"], "keep")
+            self.assertEqual(machine_payload["recommended_action"], "escalate")
             self.assertEqual(
                 machine_payload["policy_version"],
-                "deterministic_review_policy.v1",
-            )
-            self.assertIn(
-                "validation_passed_and_merge_policy_green",
-                machine_payload["policy_reasons"],
+                "deterministic_review_policy.v2",
             )
             self.assertEqual(
+                machine_payload["policy_reasons"],
+                ["contract_drift", "insufficient_tests"],
+            )
+            self.assertIsNone(
                 machine_payload["retry_metadata"]["retry_recommended"],
-                False,
             )
             self.assertEqual(
                 machine_payload["retry_metadata"]["retry_basis"],
                 [],
             )
-            self.assertIn(
-                "validation_passed_and_merge_policy_green",
+            self.assertEqual(
                 machine_payload["retry_metadata"]["retry_blockers"],
+                [
+                    "execution_status_missing",
+                    "validation_passed",
+                    "required_tests_not_declared",
+                    "forbidden_path_signal_missing",
+                    "diff_size_signal_missing",
+                    "changed_files_missing_or_empty",
+                    "runtime_semantics_signal_missing",
+                    "contract_shape_signal_missing",
+                    "reviewer_fields_signal_missing",
+                    "prompt_contract_signal_missing",
+                    "blocking_failure_code:contract_drift",
+                ],
             )
             self.assertIn("operator_summary_json", machine_payload["artifact_references"])
             self.assertIn("operator_summary_html", machine_payload["artifact_references"])
@@ -289,14 +301,14 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
                 str(expected_machine_payload_path),
             )
             self.assertTrue(payload["machine_review"]["recorded"])
-            self.assertEqual(payload["machine_review"]["recommended_action"], "keep")
+            self.assertEqual(payload["machine_review"]["recommended_action"], "escalate")
             self.assertEqual(
                 payload["machine_review"]["policy_version"],
-                "deterministic_review_policy.v1",
+                "deterministic_review_policy.v2",
             )
-            self.assertIn(
-                "validation_passed_and_merge_policy_green",
+            self.assertEqual(
                 payload["machine_review"]["policy_reasons"],
+                ["contract_drift", "insufficient_tests"],
             )
             self.assertTrue(payload["machine_review"]["requires_human_review"])
 
@@ -415,8 +427,9 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
                 db_path=db_path,
             )
 
-        self.assertEqual(payload["recommended_action"], "rollback")
-        self.assertIn("validation_failed_and_rollback_eligible", payload["policy_reasons"])
+        self.assertEqual(payload["recommended_action"], "escalate")
+        self.assertIn("contract_drift", payload["policy_reasons"])
+        self.assertIn("insufficient_tests", payload["policy_reasons"])
         self.assertIsNone(rollback_execution)
 
     def test_machine_policy_escalates_when_failed_validation_but_rollback_ineligible(self) -> None:
@@ -448,7 +461,8 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
             )
 
         self.assertEqual(payload["recommended_action"], "escalate")
-        self.assertIn("validation_failed_but_rollback_not_eligible", payload["policy_reasons"])
+        self.assertIn("contract_drift", payload["policy_reasons"])
+        self.assertIn("insufficient_tests", payload["policy_reasons"])
 
     def test_machine_policy_escalates_when_validation_not_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -468,10 +482,18 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
             )
 
         self.assertEqual(payload["recommended_action"], "escalate")
-        self.assertIn("validation_not_run", payload["policy_reasons"])
+        self.assertIn("contract_drift", payload["policy_reasons"])
+        self.assertIn("insufficient_tests", payload["policy_reasons"])
         self.assertIsNone(payload["retry_metadata"]["retry_recommended"])
         self.assertEqual(payload["retry_metadata"]["retry_basis"], [])
-        self.assertIn("validation_not_run", payload["retry_metadata"]["retry_blockers"])
+        self.assertIn(
+            "blocking_failure_code:contract_drift",
+            payload["retry_metadata"]["retry_blockers"],
+        )
+        self.assertIn(
+            "validation_not_run",
+            payload["retry_metadata"]["retry_blockers"],
+        )
 
     def test_machine_policy_escalates_for_unrecognized_validation_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -491,7 +513,8 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
             )
 
         self.assertEqual(payload["recommended_action"], "escalate")
-        self.assertIn("validation_status_unrecognized", payload["policy_reasons"])
+        self.assertIn("contract_drift", payload["policy_reasons"])
+        self.assertIn("insufficient_tests", payload["policy_reasons"])
 
     def test_machine_policy_recommends_retry_when_prior_rollback_failed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -531,14 +554,19 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
                 out_dir=tmp_root / "out",
             )
 
-        self.assertEqual(payload["recommended_action"], "retry")
-        self.assertIn("rollback_execution_failed_retry_candidate", payload["policy_reasons"])
-        self.assertEqual(payload["retry_metadata"]["retry_recommended"], True)
+        self.assertEqual(payload["recommended_action"], "escalate")
+        self.assertIn("contract_drift", payload["policy_reasons"])
+        self.assertIn("insufficient_tests", payload["policy_reasons"])
+        self.assertIsNone(payload["retry_metadata"]["retry_recommended"])
+        self.assertEqual(payload["retry_metadata"]["retry_basis"], [])
         self.assertIn(
-            "rollback_execution_failed_retry_candidate",
-            payload["retry_metadata"]["retry_basis"],
+            "blocking_failure_code:contract_drift",
+            payload["retry_metadata"]["retry_blockers"],
         )
-        self.assertEqual(payload["retry_metadata"]["retry_blockers"], [])
+        self.assertIn(
+            "validation_failed",
+            payload["retry_metadata"]["retry_blockers"],
+        )
 
 
 if __name__ == "__main__":
