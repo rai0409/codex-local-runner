@@ -27,7 +27,32 @@ REASON_RUNTIME_SENSITIVE_PATH_TOUCHED = "runtime_sensitive_paths_touched"
 REASON_CONTRACT_SENSITIVE_PATH_TOUCHED = "contract_shape_related_paths_touched"
 REASON_POLICY_CATEGORY_CONSTRAINTS_MISSING = "policy_category_constraints_missing"
 REASON_CATEGORY_NOT_AUTO_MERGE_ALLOWED = "category_not_auto_merge_allowed"
+REASON_WRITE_AUTHORITY_DISABLED = "write_authority_disabled"
+REASON_WRITE_KILL_SWITCH_ENABLED = "write_kill_switch_enabled"
+REASON_WRITE_CATEGORY_NOT_ALLOWED = "write_category_not_allowed"
+REASON_WRITE_POLICY_NOT_ELIGIBLE = "write_policy_not_eligible"
+REASON_WRITE_AUTO_PR_NOT_CANDIDATE = "write_auto_pr_candidate_required"
+REASON_WRITE_LIFECYCLE_NOT_READY = "write_lifecycle_not_ready"
+REASON_WRITE_GITHUB_STATE_UNAVAILABLE = "write_github_state_unavailable"
+REASON_WRITE_TARGET_IDENTITY_MISSING = "write_target_identity_missing"
+REASON_WRITE_CHECKS_NOT_PASSING = "write_checks_not_passing"
+REASON_WRITE_REVIEW_NOT_APPROVED = "write_review_not_approved"
+REASON_WRITE_MERGEABILITY_NOT_CLEAN = "write_mergeability_not_clean"
+FAILURE_TYPE_NONE = "none"
+FAILURE_TYPE_EXECUTION_FAILURE = "execution_failure"
+FAILURE_TYPE_POLICY_FAILURE = "policy_failure"
+FAILURE_TYPE_MISSING_SIGNAL = "missing_signal"
+FAILURE_TYPE_LIFECYCLE_BLOCKED = "lifecycle_blocked"
+FAILURE_TYPE_WRITE_AUTHORITY_BLOCKED = "write_authority_blocked"
+FAILURE_TYPE_MERGEABILITY_FAILURE = "mergeability_failure"
+FAILURE_TYPE_REVIEW_BLOCKED = "review_blocked"
 _MERGE_BLOCKED_STATES = {"blocked", "behind", "dirty", "draft"}
+_MISSING_SIGNAL_REASONS = {
+    REASON_CHANGED_FILES_MISSING,
+    REASON_DIFF_STATS_MISSING,
+    REASON_WRITE_GITHUB_STATE_UNAVAILABLE,
+    REASON_WRITE_TARGET_IDENTITY_MISSING,
+}
 
 
 def _policy_bool(policy: Mapping[str, Any], key: str, default: bool) -> bool:
@@ -141,6 +166,64 @@ def _policy_auto_progression(policy: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _policy_write_authority(policy: Mapping[str, Any]) -> dict[str, Any]:
+    raw = policy.get("write_authority", {})
+    if not isinstance(raw, Mapping):
+        raw = {}
+
+    def _tuple(key: str, default: tuple[str, ...]) -> tuple[str, ...]:
+        value = raw.get(key, default)
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            normalized = tuple(str(item).strip() for item in value if str(item).strip())
+            if normalized:
+                return normalized
+        return default
+
+    return {
+        "enabled": bool(raw.get("enabled", False)),
+        "dry_run": bool(raw.get("dry_run", True)),
+        "kill_switch": bool(raw.get("kill_switch", True)),
+        "allowed_categories": _tuple("allowed_categories", ("docs_only",)),
+        "required_lifecycle_states": _tuple("required_lifecycle_states", ("approved_for_merge",)),
+    }
+
+
+def _policy_retry_replan(policy: Mapping[str, Any]) -> dict[str, Any]:
+    raw = policy.get("retry_replan", {})
+    if not isinstance(raw, Mapping):
+        raw = {}
+
+    raw_max_attempts = raw.get("max_attempts", 2)
+    if isinstance(raw_max_attempts, bool):
+        max_attempts = 2
+    elif isinstance(raw_max_attempts, int):
+        max_attempts = max(raw_max_attempts, 0)
+    elif isinstance(raw_max_attempts, str) and raw_max_attempts.strip().isdigit():
+        max_attempts = int(raw_max_attempts.strip())
+    else:
+        max_attempts = 2
+
+    retriable = raw.get(
+        "retriable_failure_types",
+        (FAILURE_TYPE_EXECUTION_FAILURE, FAILURE_TYPE_MISSING_SIGNAL),
+    )
+    retriable_failure_types: tuple[str, ...] = ()
+    if isinstance(retriable, Sequence) and not isinstance(retriable, (str, bytes)):
+        retriable_failure_types = tuple(
+            str(item).strip() for item in retriable if str(item).strip()
+        )
+    if not retriable_failure_types:
+        retriable_failure_types = (
+            FAILURE_TYPE_EXECUTION_FAILURE,
+            FAILURE_TYPE_MISSING_SIGNAL,
+        )
+
+    return {
+        "max_attempts": max_attempts,
+        "retriable_failure_types": retriable_failure_types,
+    }
+
+
 def _normalize_paths(changed_files: Sequence[str] | None) -> tuple[str, ...]:
     if not changed_files:
         return ()
@@ -231,6 +314,91 @@ def _derive_lifecycle_state(
     if mergeability_state == "clean":
         return "approved_for_merge"
     return "checks_green"
+
+
+def _derive_write_authority_receipt(
+    *,
+    policy: Mapping[str, Any],
+    observed_category: str,
+    progression_state: str,
+    lifecycle_state: str,
+    policy_eligible: bool,
+    auto_pr_candidate: bool,
+    github_progression: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    authority_policy = _policy_write_authority(policy)
+    enabled = bool(authority_policy["enabled"])
+    dry_run = bool(authority_policy["dry_run"])
+    kill_switch = bool(authority_policy["kill_switch"])
+    allowed_categories = tuple(authority_policy["allowed_categories"])
+    required_lifecycle_states = tuple(authority_policy["required_lifecycle_states"])
+    category_allowed = str(observed_category).strip() in set(allowed_categories)
+
+    reasons: list[str] = []
+    state = "disabled"
+
+    if not enabled:
+        _append_reason(reasons, REASON_WRITE_AUTHORITY_DISABLED)
+    elif kill_switch:
+        state = "blocked"
+        _append_reason(reasons, REASON_WRITE_KILL_SWITCH_ENABLED)
+    elif not category_allowed:
+        state = "blocked"
+        _append_reason(reasons, REASON_WRITE_CATEGORY_NOT_ALLOWED)
+    else:
+        snapshot = _as_mapping(github_progression)
+        target = _as_mapping(snapshot.get("target"))
+        checks = _as_mapping(snapshot.get("checks"))
+        review = _as_mapping(snapshot.get("review"))
+        mergeability = _as_mapping(snapshot.get("mergeability"))
+
+        checks_state = _normalized_text(checks.get("state", "unknown")).lower() or "unknown"
+        review_state = _normalized_text(review.get("state", "unknown")).lower() or "unknown"
+        mergeability_state = (
+            _normalized_text(mergeability.get("state", "unknown")).lower() or "unknown"
+        )
+
+        if not policy_eligible:
+            _append_reason(reasons, REASON_WRITE_POLICY_NOT_ELIGIBLE)
+        if not auto_pr_candidate:
+            _append_reason(reasons, REASON_WRITE_AUTO_PR_NOT_CANDIDATE)
+        if lifecycle_state not in required_lifecycle_states:
+            _append_reason(reasons, REASON_WRITE_LIFECYCLE_NOT_READY)
+        if not bool(snapshot.get("state_available", False)):
+            _append_reason(reasons, REASON_WRITE_GITHUB_STATE_UNAVAILABLE)
+        if not _normalized_text(target.get("repository")) or not _normalized_text(target.get("target_ref")):
+            _append_reason(reasons, REASON_WRITE_TARGET_IDENTITY_MISSING)
+        if checks_state != "passing":
+            _append_reason(reasons, REASON_WRITE_CHECKS_NOT_PASSING)
+        if review_state != "approved":
+            _append_reason(reasons, REASON_WRITE_REVIEW_NOT_APPROVED)
+        if mergeability_state != "clean":
+            _append_reason(reasons, REASON_WRITE_MERGEABILITY_NOT_CLEAN)
+
+        if reasons:
+            state = "write_preparable"
+        elif dry_run:
+            state = "dry_run_only"
+        else:
+            state = "write_allowed"
+
+    return {
+        "state": state,
+        "enabled": enabled,
+        "dry_run": dry_run,
+        "kill_switch": kill_switch,
+        "write_actions_allowed": state == "write_allowed",
+        "allowed_categories": allowed_categories,
+        "required_lifecycle_states": required_lifecycle_states,
+        "category_allowed": category_allowed,
+        "conservative_reasons": tuple(reasons),
+        "policy_link": {
+            "progression_state": str(progression_state),
+            "lifecycle_state": str(lifecycle_state),
+            "policy_eligible": bool(policy_eligible),
+            "auto_pr_candidate": bool(auto_pr_candidate),
+        },
+    }
 
 
 def _derive_progression_policy(
@@ -350,6 +518,157 @@ def _derive_progression_policy(
     return progression_state, policy_eligible, auto_pr_candidate, ()
 
 
+def _normalized_reason_tuple(*groups: Any) -> tuple[str, ...]:
+    reasons: list[str] = []
+    for group in groups:
+        if not isinstance(group, (list, tuple)):
+            continue
+        for item in group:
+            reason = str(item).strip()
+            if reason and reason not in reasons:
+                reasons.append(reason)
+    return tuple(reasons)
+
+
+def _derive_failure_type(
+    *,
+    fail_reasons: tuple[str, ...],
+    progression_fail_reasons: tuple[str, ...],
+    lifecycle_state: str,
+    write_authority: Mapping[str, Any] | None,
+    github_progression: Mapping[str, Any] | None,
+    execution_status: str | None,
+) -> str:
+    execution_state = _normalized_text(execution_status).lower()
+    if execution_state in {"failed", "timed_out", "not_started", "not_implemented"}:
+        return FAILURE_TYPE_EXECUTION_FAILURE
+
+    policy_reasons = _normalized_reason_tuple(fail_reasons, progression_fail_reasons)
+    write_reasons = _normalized_reason_tuple(
+        _as_mapping(write_authority).get("conservative_reasons")
+    )
+    all_reasons = _normalized_reason_tuple(policy_reasons, write_reasons)
+
+    if any(reason in _MISSING_SIGNAL_REASONS for reason in all_reasons):
+        return FAILURE_TYPE_MISSING_SIGNAL
+
+    snapshot = _as_mapping(github_progression)
+    mergeability_state = _normalized_text(
+        _as_mapping(snapshot.get("mergeability")).get("state", "unknown")
+    ).lower() or "unknown"
+    review_state = _normalized_text(
+        _as_mapping(snapshot.get("review")).get("state", "unknown")
+    ).lower() or "unknown"
+
+    if mergeability_state in _MERGE_BLOCKED_STATES:
+        return FAILURE_TYPE_MERGEABILITY_FAILURE
+    if review_state == "changes_requested":
+        return FAILURE_TYPE_REVIEW_BLOCKED
+
+    if policy_reasons:
+        return FAILURE_TYPE_POLICY_FAILURE
+
+    if lifecycle_state in {
+        "pr_preparable",
+        "checks_pending",
+        "checks_green",
+        "review_pending",
+        "merge_blocked",
+    }:
+        return FAILURE_TYPE_LIFECYCLE_BLOCKED
+
+    write_state = _normalized_text(_as_mapping(write_authority).get("state", "")).lower()
+    if write_state in {"disabled", "blocked", "write_preparable"} and write_reasons:
+        return FAILURE_TYPE_WRITE_AUTHORITY_BLOCKED
+
+    return FAILURE_TYPE_NONE
+
+
+def _derive_replan_input(
+    *,
+    policy: Mapping[str, Any],
+    observed_category: str,
+    changed_files: tuple[str, ...],
+    progression_state: str,
+    lifecycle_state: str,
+    fail_reasons: tuple[str, ...],
+    progression_fail_reasons: tuple[str, ...],
+    write_authority: Mapping[str, Any] | None,
+    github_progression: Mapping[str, Any] | None,
+    prior_attempt_count: int,
+    execution_status: str | None,
+) -> dict[str, Any]:
+    try:
+        normalized_prior_attempt_count = max(int(prior_attempt_count), 0)
+    except (TypeError, ValueError):
+        normalized_prior_attempt_count = 0
+    retry_policy = _policy_retry_replan(policy)
+    max_attempts = int(retry_policy["max_attempts"])
+    retry_budget_remaining = max(max_attempts - normalized_prior_attempt_count, 0)
+    retriable_failure_types = tuple(retry_policy["retriable_failure_types"])
+
+    failure_type = _derive_failure_type(
+        fail_reasons=fail_reasons,
+        progression_fail_reasons=progression_fail_reasons,
+        lifecycle_state=lifecycle_state,
+        write_authority=write_authority,
+        github_progression=github_progression,
+        execution_status=execution_status,
+    )
+    retriable_failure_type = failure_type in set(retriable_failure_types)
+
+    primary_fail_reasons = _normalized_reason_tuple(
+        fail_reasons,
+        progression_fail_reasons,
+        _as_mapping(write_authority).get("conservative_reasons"),
+        _as_mapping(_as_mapping(github_progression).get("progression")).get("conservative_reasons"),
+    )
+
+    retry_recommendation = "not_required"
+    next_action_readiness = "no_action_required"
+    budget_exhausted = False
+    escalation_required = False
+    retry_recommended = False
+
+    if failure_type != FAILURE_TYPE_NONE:
+        if not retriable_failure_type:
+            retry_recommendation = "escalate"
+            next_action_readiness = "manual_escalation_required"
+            escalation_required = True
+        elif retry_budget_remaining <= 0:
+            retry_recommendation = "escalate"
+            next_action_readiness = "manual_escalation_required"
+            budget_exhausted = True
+            escalation_required = True
+        else:
+            retry_recommendation = "retry"
+            next_action_readiness = "retry_preparable"
+            retry_recommended = True
+
+    return {
+        "failure_type": failure_type,
+        "current_state": str(progression_state),
+        "lifecycle_state": str(lifecycle_state),
+        "write_authority_state": _normalized_text(
+            _as_mapping(write_authority).get("state", "")
+        )
+        or "unknown",
+        "category": str(observed_category).strip(),
+        "changed_files": changed_files,
+        "prior_attempt_count": normalized_prior_attempt_count,
+        "retry_budget_total": max_attempts,
+        "retry_budget_remaining": retry_budget_remaining,
+        "budget_exhausted": budget_exhausted,
+        "primary_fail_reasons": primary_fail_reasons,
+        "retry_recommendation": retry_recommendation,
+        "next_action_readiness": next_action_readiness,
+        "retry_recommended": retry_recommended,
+        "escalation_required": escalation_required,
+        "retriable_failure_type": retriable_failure_type,
+        "retriable_failure_types": retriable_failure_types,
+    }
+
+
 def apply_merge_gate(
     *,
     rubric: RubricEvaluationResult,
@@ -359,6 +678,8 @@ def apply_merge_gate(
     deletions: int = 0,
     diff_line_stats_present: bool = True,
     github_signals: Mapping[str, Any] | None = None,
+    prior_attempt_count: int = 0,
+    execution_status: str | None = None,
 ) -> MergeGateResult:
     effective_policy = policy if policy is not None else load_merge_gate_policy()
     fail_reasons: list[str] = []
@@ -417,6 +738,28 @@ def apply_merge_gate(
         auto_pr_candidate=auto_pr_candidate,
         github_progression=github_progression,
     )
+    write_authority = _derive_write_authority_receipt(
+        policy=effective_policy,
+        observed_category=str(rubric.observed_category),
+        progression_state=progression_state,
+        lifecycle_state=lifecycle_state,
+        policy_eligible=policy_eligible,
+        auto_pr_candidate=auto_pr_candidate,
+        github_progression=github_progression,
+    )
+    replan_input = _derive_replan_input(
+        policy=effective_policy,
+        observed_category=str(rubric.observed_category),
+        changed_files=normalized_changed_files,
+        progression_state=progression_state,
+        lifecycle_state=lifecycle_state,
+        fail_reasons=tuple(deduped),
+        progression_fail_reasons=progression_fail_reasons,
+        write_authority=write_authority,
+        github_progression=github_progression,
+        prior_attempt_count=prior_attempt_count,
+        execution_status=execution_status,
+    )
     return MergeGateResult(
         passed=passed,
         fail_reasons=tuple(deduped),
@@ -425,6 +768,8 @@ def apply_merge_gate(
         policy_eligible=policy_eligible,
         auto_pr_candidate=auto_pr_candidate,
         lifecycle_state=lifecycle_state,
+        write_authority=write_authority,
         progression_fail_reasons=progression_fail_reasons,
         github_progression=github_progression,
+        replan_input=replan_input,
     )
