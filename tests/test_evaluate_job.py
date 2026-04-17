@@ -67,6 +67,7 @@ class EvaluateJobTests(unittest.TestCase):
         self.assertIn("progression_state", payload["merge_gate"])
         self.assertIn("policy_eligible", payload["merge_gate"])
         self.assertIn("auto_pr_candidate", payload["merge_gate"])
+        self.assertIn("lifecycle_state", payload["merge_gate"])
         self.assertIn("progression_fail_reasons", payload["merge_gate"])
         self.assertIn("github_progression", payload["merge_gate"])
         self.assertEqual(payload["merge_gate"]["github_progression"]["mode"], "read_only")
@@ -261,6 +262,7 @@ class EvaluateJobTests(unittest.TestCase):
         self.assertEqual(github_progression["review"]["state"], "approved")
         self.assertEqual(github_progression["mergeability"]["state"], "clean")
         self.assertEqual(github_progression["progression"]["state"], "ready")
+        self.assertEqual(result["merge_gate"]["lifecycle_state"], "manual_only")
         self.assertIn("policy_link", github_progression)
 
     def test_evaluation_can_use_injected_live_read_only_backend(self) -> None:
@@ -297,6 +299,7 @@ class EvaluateJobTests(unittest.TestCase):
         self.assertEqual(github_progression["source"]["kind"], "live_read_only")
         self.assertFalse(github_progression["write_actions_allowed"])
         self.assertEqual(github_progression["progression"]["state"], "ready")
+        self.assertEqual(result["merge_gate"]["lifecycle_state"], "manual_only")
 
 
 if __name__ == "__main__":

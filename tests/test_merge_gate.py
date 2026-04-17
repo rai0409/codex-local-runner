@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from orchestrator.github_backend import ArtifactGitHubStateBackend
 from orchestrator.merge_gate import apply_merge_gate
 from orchestrator.policy_loader import load_merge_gate_policy
 from orchestrator.schemas import RubricEvaluationResult
@@ -47,10 +48,17 @@ class MergeGateTests(unittest.TestCase):
             warnings=(),
         )
 
+    def _github_signals(self, github_state: dict[str, object]) -> dict[str, object]:
+        backend = ArtifactGitHubStateBackend()
+        return backend.collect(
+            request_payload={"repo": "codex-local-runner"},
+            result_payload={"github_state": github_state},
+        )
+
     def test_merge_gate_passes_for_safe_auto_merge_category(self) -> None:
         result = apply_merge_gate(
             rubric=self._rubric("docs_only"),
-            changed_files=("docs/reviewer_handoff.md",),
+            changed_files=("docs/reviewer_runbook.md",),
             additions=10,
             deletions=2,
         )
@@ -61,13 +69,19 @@ class MergeGateTests(unittest.TestCase):
         self.assertTrue(result.policy_eligible)
         self.assertTrue(result.auto_pr_candidate)
         self.assertEqual(result.progression_state, "auto_pr_candidate")
+        self.assertEqual(result.lifecycle_state, "auto_pr_candidate")
         self.assertEqual(result.progression_fail_reasons, ())
+        assert result.github_progression is not None
+        self.assertEqual(result.github_progression["mode"], "read_only")
+        self.assertFalse(result.github_progression["write_actions_allowed"])
+        self.assertEqual(result.github_progression["progression"]["state"], "unavailable")
+        self.assertFalse(result.github_progression["policy_link"]["auto_pr_candidate_ready"])
 
     def test_merge_gate_auto_merge_categories_are_loaded_from_yaml(self) -> None:
         policy = load_merge_gate_policy()
         self.assertEqual(
             set(policy["auto_merge_categories"]),
-            {"docs_only", "ci_only", "test_only", "contract_guard_only"},
+            {"docs_only", "test_only"},
         )
 
     def test_merge_gate_rejects_high_risk_category_even_if_other_checks_pass(self) -> None:
@@ -84,6 +98,7 @@ class MergeGateTests(unittest.TestCase):
         self.assertFalse(result.policy_eligible)
         self.assertFalse(result.auto_pr_candidate)
         self.assertEqual(result.progression_state, "manual_only")
+        self.assertEqual(result.lifecycle_state, "manual_only")
 
     def test_policy_eligible_for_narrow_safe_category_when_signals_pass(self) -> None:
         result = apply_merge_gate(
@@ -96,6 +111,7 @@ class MergeGateTests(unittest.TestCase):
         self.assertTrue(result.policy_eligible)
         self.assertFalse(result.auto_pr_candidate)
         self.assertEqual(result.progression_state, "policy_eligible")
+        self.assertEqual(result.lifecycle_state, "policy_eligible")
 
     def test_policy_manual_only_when_declared_observed_mismatch(self) -> None:
         result = apply_merge_gate(
@@ -103,13 +119,14 @@ class MergeGateTests(unittest.TestCase):
                 observed_category="docs_only",
                 declared_category="test_only",
             ),
-            changed_files=("docs/reviewer_handoff.md",),
+            changed_files=("docs/reviewer_runbook.md",),
             additions=10,
             deletions=1,
         )
 
         self.assertFalse(result.policy_eligible)
         self.assertEqual(result.progression_state, "manual_only")
+        self.assertEqual(result.lifecycle_state, "manual_only")
         self.assertIn(
             "declared_category_does_not_match_observed_category",
             result.progression_fail_reasons,
@@ -159,7 +176,7 @@ class MergeGateTests(unittest.TestCase):
         rubric = self._rubric("docs_only")
         kwargs = {
             "rubric": rubric,
-            "changed_files": ("docs/reviewer_handoff.md",),
+            "changed_files": ("docs/reviewer_runbook.md",),
             "additions": 4,
             "deletions": 1,
         }
@@ -173,7 +190,7 @@ class MergeGateTests(unittest.TestCase):
             with self.subTest(category=category):
                 result = apply_merge_gate(
                     rubric=self._rubric(category),
-                    changed_files=("docs/reviewer_handoff.md",),
+                    changed_files=("docs/reviewer_runbook.md",),
                     additions=5,
                     deletions=1,
                 )
@@ -206,6 +223,272 @@ class MergeGateTests(unittest.TestCase):
         self.assertIn("generated_path_touched", generated_result.progression_fail_reasons)
         self.assertEqual(binary_result.progression_state, "manual_only")
         self.assertIn("binary_file_touched", binary_result.progression_fail_reasons)
+
+    def test_policy_manual_only_when_ci_signal_not_green(self) -> None:
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only", ci_required_checks_green=False),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=5,
+            deletions=1,
+        )
+
+        self.assertFalse(result.policy_eligible)
+        self.assertEqual(result.progression_state, "manual_only")
+        self.assertIn("required_ci_checks_not_green", result.progression_fail_reasons)
+
+    def test_policy_manual_only_when_diff_line_stats_missing(self) -> None:
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=0,
+            deletions=0,
+            diff_line_stats_present=False,
+        )
+
+        self.assertFalse(result.policy_eligible)
+        self.assertEqual(result.progression_state, "manual_only")
+        self.assertIn("diff_line_stats_missing", result.progression_fail_reasons)
+
+    def test_runtime_or_contract_sensitive_paths_remain_manual_only(self) -> None:
+        runtime_sensitive = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("adapters/codex_cli.py",),
+            additions=1,
+            deletions=0,
+        )
+        contract_sensitive = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_handoff.md",),
+            additions=1,
+            deletions=0,
+        )
+
+        self.assertEqual(runtime_sensitive.progression_state, "manual_only")
+        self.assertIn("runtime_sensitive_paths_touched", runtime_sensitive.progression_fail_reasons)
+        self.assertEqual(contract_sensitive.progression_state, "manual_only")
+        self.assertIn(
+            "contract_shape_related_paths_touched",
+            contract_sensitive.progression_fail_reasons,
+        )
+
+    def test_progression_fail_reasons_are_stable_machine_usable_values(self) -> None:
+        result = apply_merge_gate(
+            rubric=self._rubric(
+                observed_category="docs_only",
+                declared_category="test_only",
+                forbidden_files_untouched=False,
+                diff_size_within_limit=False,
+                required_tests_declared=False,
+                required_tests_executed=False,
+                required_tests_passed=False,
+                ci_required_checks_green=False,
+            ),
+            changed_files=("build/generated_doc.md", "docs/diagram.png"),
+            additions=200,
+            deletions=0,
+            diff_line_stats_present=False,
+        )
+
+        self.assertEqual(
+            result.progression_fail_reasons,
+            (
+                "declared_category_does_not_match_observed_category",
+                "observed_category_forbidden_paths_touched",
+                "diff_size_limit_exceeded",
+                "required_tests_not_declared",
+                "required_tests_not_executed",
+                "required_tests_not_passed",
+                "required_ci_checks_not_green",
+                "diff_line_stats_missing",
+                "total_diff_lines_exceeded",
+                "generated_path_touched",
+                "binary_file_touched",
+            ),
+        )
+
+    def test_auto_pr_candidate_can_be_marked_ready_only_with_github_signals(self) -> None:
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks": ["unit"],
+                "passing_checks": ["unit"],
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        assert result.github_progression is not None
+        self.assertEqual(result.progression_state, "auto_pr_candidate")
+        self.assertEqual(result.lifecycle_state, "approved_for_merge")
+        self.assertEqual(result.github_progression["progression"]["state"], "ready")
+        self.assertTrue(
+            result.github_progression["policy_link"]["ready_for_future_auto_pr_progression"]
+        )
+        self.assertTrue(result.github_progression["policy_link"]["auto_pr_candidate_ready"])
+
+    def test_lifecycle_state_stays_auto_pr_candidate_without_github_readiness(self) -> None:
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+        )
+
+        self.assertEqual(result.progression_state, "auto_pr_candidate")
+        self.assertEqual(result.lifecycle_state, "auto_pr_candidate")
+
+    def test_lifecycle_state_stays_auto_pr_candidate_when_target_identity_missing(self) -> None:
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "required_checks_state": "passing",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        self.assertEqual(result.lifecycle_state, "auto_pr_candidate")
+
+    def test_lifecycle_state_uses_pending_checks_conservatively(self) -> None:
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "pending",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        self.assertEqual(result.lifecycle_state, "checks_pending")
+
+    def test_lifecycle_state_does_not_promote_when_checks_state_missing(self) -> None:
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        self.assertEqual(result.lifecycle_state, "pr_preparable")
+
+    def test_lifecycle_state_requires_sufficient_review_signal(self) -> None:
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "review_state": "pending",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        self.assertEqual(result.lifecycle_state, "review_pending")
+
+    def test_lifecycle_state_does_not_promote_when_review_signal_missing(self) -> None:
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        self.assertEqual(result.lifecycle_state, "review_pending")
+
+    def test_lifecycle_state_does_not_promote_when_mergeability_unknown(self) -> None:
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "review_state": "approved",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        self.assertEqual(result.lifecycle_state, "checks_green")
+
+    def test_lifecycle_state_stays_blocked_on_explicit_merge_block(self) -> None:
+        github_signals = self._github_signals(
+            {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks_state": "passing",
+                "review_state": "approved",
+                "mergeability_state": "blocked",
+                "is_draft": False,
+            }
+        )
+        result = apply_merge_gate(
+            rubric=self._rubric("docs_only"),
+            changed_files=("docs/reviewer_runbook.md",),
+            additions=2,
+            deletions=1,
+            github_signals=github_signals,
+        )
+
+        self.assertEqual(result.lifecycle_state, "merge_blocked")
 
 
 if __name__ == "__main__":
