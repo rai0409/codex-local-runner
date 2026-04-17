@@ -97,6 +97,24 @@ def _default_replan_input() -> dict[str, Any]:
     }
 
 
+def _default_write_authority_surface() -> dict[str, Any]:
+    return {
+        "state": None,
+        "allowed_categories": [],
+    }
+
+
+def _normalize_string_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    normalized: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
 def _read_replan_input(path_value: Any) -> dict[str, Any]:
     payload = _read_json_object(path_value)
     if not isinstance(payload, dict):
@@ -154,6 +172,47 @@ def _read_replan_input(path_value: Any) -> dict[str, Any]:
         result["retriable_failure_types"] = [str(item) for item in retriable_failure_types]
 
     return result
+
+
+def _read_merge_gate_contract(
+    path_value: Any,
+    *,
+    replan_input: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = _read_json_object(path_value)
+    normalized_replan = replan_input if isinstance(replan_input, dict) else _default_replan_input()
+
+    lifecycle_state: str | None = None
+    write_authority = _default_write_authority_surface()
+    if isinstance(payload, dict):
+        raw_lifecycle_state = payload.get("lifecycle_state")
+        if raw_lifecycle_state is not None:
+            text = str(raw_lifecycle_state).strip()
+            lifecycle_state = text if text else None
+
+        raw_write_authority = payload.get("write_authority")
+        if isinstance(raw_write_authority, dict):
+            raw_state = raw_write_authority.get("state")
+            if raw_state is not None:
+                text = str(raw_state).strip()
+                write_authority["state"] = text if text else None
+            write_authority["allowed_categories"] = _normalize_string_list(
+                raw_write_authority.get("allowed_categories")
+            )
+
+    return {
+        "lifecycle_state": lifecycle_state,
+        "write_authority": write_authority,
+        "failure_type": normalized_replan.get("failure_type"),
+        "retry_recommended": _as_optional_bool(normalized_replan.get("retry_recommended")),
+        "retry_recommendation": normalized_replan.get("retry_recommendation"),
+        "retry_budget_remaining": normalized_replan.get("retry_budget_remaining"),
+        "escalation_required": _as_optional_bool(normalized_replan.get("escalation_required")),
+        "next_action_readiness": normalized_replan.get("next_action_readiness"),
+        "primary_fail_reasons": _normalize_string_list(
+            normalized_replan.get("primary_fail_reasons")
+        ),
+    }
 
 
 def _read_retry_metadata(machine_review_payload: dict[str, Any] | None) -> dict[str, Any]:
@@ -403,6 +462,10 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     rubric_path = row.get("rubric_path")
     merge_gate_path = row.get("merge_gate_path")
     replan_input = _read_replan_input(merge_gate_path)
+    merge_gate_contract = _read_merge_gate_contract(
+        merge_gate_path,
+        replan_input=replan_input,
+    )
     rollback_trace = get_rollback_trace_by_job_id(
         str(row.get("job_id", "")),
         db_path=db_path,
@@ -497,6 +560,15 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
             "rubric": _read_fail_reasons(rubric_path),
             "merge_gate": _read_fail_reasons(merge_gate_path),
         },
+        "lifecycle_state": merge_gate_contract["lifecycle_state"],
+        "write_authority": merge_gate_contract["write_authority"],
+        "failure_type": merge_gate_contract["failure_type"],
+        "retry_recommended": merge_gate_contract["retry_recommended"],
+        "retry_recommendation": merge_gate_contract["retry_recommendation"],
+        "retry_budget_remaining": merge_gate_contract["retry_budget_remaining"],
+        "escalation_required": merge_gate_contract["escalation_required"],
+        "next_action_readiness": merge_gate_contract["next_action_readiness"],
+        "primary_fail_reasons": merge_gate_contract["primary_fail_reasons"],
         "replan_input": replan_input,
         "rollback_trace": {
             "recorded": rollback_trace is not None,
@@ -592,10 +664,26 @@ def _format_human(output: dict[str, Any]) -> str:
             if output["fail_reasons"]["merge_gate"]
             else "none"
         ),
-        f"replan_failure_type: {_fmt(output['replan_input'].get('failure_type'))}",
-        f"replan_retry_recommendation: {_fmt(output['replan_input'].get('retry_recommendation'))}",
-        f"replan_retry_budget_remaining: {_fmt(output['replan_input'].get('retry_budget_remaining'))}",
-        f"replan_escalation_required: {_fmt(output['replan_input'].get('escalation_required'))}",
+        f"lifecycle_state: {_fmt(output.get('lifecycle_state'))}",
+        f"write_authority_state: {_fmt(output['write_authority'].get('state'))}",
+        "write_authority_allowed_categories: "
+        + (
+            ", ".join([str(v) for v in output["write_authority"].get("allowed_categories", [])])
+            if output["write_authority"].get("allowed_categories")
+            else "none"
+        ),
+        f"failure_type: {_fmt(output.get('failure_type'))}",
+        f"retry_recommended: {_fmt(output.get('retry_recommended'))}",
+        f"retry_recommendation: {_fmt(output.get('retry_recommendation'))}",
+        f"retry_budget_remaining: {_fmt(output.get('retry_budget_remaining'))}",
+        f"escalation_required: {_fmt(output.get('escalation_required'))}",
+        f"next_action_readiness: {_fmt(output.get('next_action_readiness'))}",
+        "primary_fail_reasons: "
+        + (
+            ", ".join([str(v) for v in output.get("primary_fail_reasons", [])])
+            if output.get("primary_fail_reasons")
+            else "none"
+        ),
         f"rollback_trace_recorded: {_fmt(output['rollback_trace'].get('recorded'))}",
         f"rollback_eligible: {_fmt(output['rollback_trace'].get('rollback_eligible'))}",
         f"rollback_ineligible_reason: {_fmt(output['rollback_trace'].get('ineligible_reason'))}",

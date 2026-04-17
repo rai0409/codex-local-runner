@@ -49,9 +49,11 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
         created_at: str,
         verify_status: str | None,
         verify_reason: str | None,
+        merge_gate_payload: dict[str, object] | None = None,
     ) -> tuple[Path, Path]:
         request_path = db_path.parent / f"{job_id}_request.json"
         result_path = db_path.parent / f"{job_id}_result.json"
+        merge_gate_path = db_path.parent / f"{job_id}_merge_gate.json"
         request_path.parent.mkdir(parents=True, exist_ok=True)
         request_path.write_text(
             json.dumps({"job_id": job_id}, ensure_ascii=False, indent=2),
@@ -64,6 +66,11 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
             json.dumps({"job_id": job_id, "execution": execution}, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        if merge_gate_payload is not None:
+            merge_gate_path.write_text(
+                json.dumps(merge_gate_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
         record_job_evaluation(
             db_path=db_path,
             job_id=job_id,
@@ -79,7 +86,7 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
             request_path=str(request_path),
             result_path=str(result_path),
             rubric_path=None,
-            merge_gate_path=None,
+            merge_gate_path=str(merge_gate_path) if merge_gate_payload is not None else None,
             classification_path=None,
         )
         return request_path, result_path
@@ -170,6 +177,16 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
             self.assertEqual(payload["repo"], "codex-local-runner")
             self.assertEqual(payload["accepted_status"], "accepted")
             self.assertEqual(payload["validation"]["verify_status"], "passed")
+            self.assertIsNone(payload["lifecycle_state"])
+            self.assertEqual(payload["write_authority"]["state"], None)
+            self.assertEqual(payload["write_authority"]["allowed_categories"], [])
+            self.assertEqual(payload["failure_type"], None)
+            self.assertEqual(payload["retry_recommended"], None)
+            self.assertEqual(payload["retry_recommendation"], None)
+            self.assertEqual(payload["retry_budget_remaining"], None)
+            self.assertEqual(payload["escalation_required"], None)
+            self.assertEqual(payload["next_action_readiness"], None)
+            self.assertEqual(payload["primary_fail_reasons"], [])
             self.assertEqual(payload["merge"]["merge_eligible"], True)
             self.assertEqual(payload["merge"]["merge_gate_passed"], True)
             self.assertIn("request", payload["paths"])
@@ -218,6 +235,16 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
                     "blocking_failure_code:contract_drift",
                 ],
             )
+            self.assertEqual(machine_payload["lifecycle_state"], None)
+            self.assertEqual(machine_payload["write_authority"]["state"], None)
+            self.assertEqual(machine_payload["write_authority"]["allowed_categories"], [])
+            self.assertEqual(machine_payload["failure_type"], None)
+            self.assertEqual(machine_payload["retry_recommended"], None)
+            self.assertEqual(machine_payload["retry_recommendation"], None)
+            self.assertEqual(machine_payload["retry_budget_remaining"], None)
+            self.assertEqual(machine_payload["escalation_required"], None)
+            self.assertEqual(machine_payload["next_action_readiness"], None)
+            self.assertEqual(machine_payload["primary_fail_reasons"], [])
             self.assertIn("operator_summary_json", machine_payload["artifact_references"])
             self.assertIn("operator_summary_html", machine_payload["artifact_references"])
             self.assertIn("machine_review_payload", machine_payload["artifact_references"])
@@ -394,6 +421,90 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
         self.assertTrue(payload["rollback"]["trace_recorded"])
         self.assertEqual(payload["rollback"]["rollback_eligible"], True)
         self.assertEqual(payload["rollback"]["rollback_execution_status"], "succeeded")
+
+    def test_build_and_inspect_surface_merge_gate_contract_fields_consistently(self) -> None:
+        merge_gate_payload = {
+            "lifecycle_state": "review_pending",
+            "write_authority": {
+                "state": "write_preparable",
+                "allowed_categories": ["docs_only"],
+            },
+            "replan_input": {
+                "failure_type": "lifecycle_blocked",
+                "retry_recommended": False,
+                "retry_recommendation": "escalate",
+                "retry_budget_remaining": 0,
+                "escalation_required": True,
+                "next_action_readiness": "manual_escalation_required",
+                "primary_fail_reasons": ["write_lifecycle_not_ready"],
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            db_path = tmp_root / "state" / "jobs.db"
+            job_id = "job-contract-alignment"
+            self._seed_job(
+                db_path=db_path,
+                job_id=job_id,
+                created_at="2026-04-13T00:00:00+00:00",
+                verify_status="passed",
+                verify_reason="all_commands_passed",
+                merge_gate_payload=merge_gate_payload,
+            )
+            out_dir = tmp_root / "out"
+            build_proc = self._run(
+                ["--job-id", job_id, "--db-path", str(db_path), "--out-dir", str(out_dir)]
+            )
+            inspect_proc = self._run_inspect(
+                ["--job-id", job_id, "--db-path", str(db_path), "--json"]
+            )
+
+            self.assertEqual(build_proc.returncode, 0, msg=build_proc.stderr)
+            self.assertEqual(inspect_proc.returncode, 0, msg=inspect_proc.stderr)
+            machine_payload = json.loads(
+                (out_dir / f"{job_id}_machine_review_payload.json").read_text(encoding="utf-8")
+            )
+            inspect_payload = json.loads(inspect_proc.stdout)
+
+        self.assertEqual(machine_payload["lifecycle_state"], "review_pending")
+        self.assertEqual(machine_payload["write_authority"]["state"], "write_preparable")
+        self.assertEqual(
+            machine_payload["write_authority"]["allowed_categories"],
+            ["docs_only"],
+        )
+        self.assertEqual(machine_payload["failure_type"], "lifecycle_blocked")
+        self.assertEqual(machine_payload["retry_recommended"], False)
+        self.assertEqual(machine_payload["retry_recommendation"], "escalate")
+        self.assertEqual(machine_payload["retry_budget_remaining"], 0)
+        self.assertEqual(machine_payload["escalation_required"], True)
+        self.assertEqual(
+            machine_payload["next_action_readiness"],
+            "manual_escalation_required",
+        )
+        self.assertEqual(
+            machine_payload["primary_fail_reasons"],
+            ["write_lifecycle_not_ready"],
+        )
+
+        self.assertEqual(inspect_payload["lifecycle_state"], "review_pending")
+        self.assertEqual(inspect_payload["write_authority"]["state"], "write_preparable")
+        self.assertEqual(
+            inspect_payload["write_authority"]["allowed_categories"],
+            ["docs_only"],
+        )
+        self.assertEqual(inspect_payload["failure_type"], "lifecycle_blocked")
+        self.assertEqual(inspect_payload["retry_recommended"], False)
+        self.assertEqual(inspect_payload["retry_recommendation"], "escalate")
+        self.assertEqual(inspect_payload["retry_budget_remaining"], 0)
+        self.assertEqual(inspect_payload["escalation_required"], True)
+        self.assertEqual(
+            inspect_payload["next_action_readiness"],
+            "manual_escalation_required",
+        )
+        self.assertEqual(
+            inspect_payload["primary_fail_reasons"],
+            ["write_lifecycle_not_ready"],
+        )
 
     def test_machine_policy_recommends_rollback_for_failed_validation_when_eligible(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
