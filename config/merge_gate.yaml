@@ -28,3 +28,41 @@ auto_progression:
     - ".gif"
     - ".pdf"
     - ".zip"
+  runtime_sensitive_path_patterns:
+    - "run_codex.py"
+    - "app.py"
+    - "adapters/**"
+    - "verify/**"
+    - "workspace/**"
+  contract_sensitive_path_patterns:
+    - "docs/reviewer_handoff.md"
+    - "adapters/codex_cli.py"
+  category_thresholds:
+    docs_only:
+      max_changed_files: 4
+      max_total_diff_lines: 80
+      requires_ci_green: true
+      required_tests:
+        - "contract_suite"
+      forbidden_paths:
+        - "docs/reviewer_handoff.md"
+    test_only:
+      max_changed_files: 6
+      max_total_diff_lines: 120
+      requires_ci_green: true
+      required_tests:
+        - "contract_suite"
+      forbidden_paths: []
+write_authority:
+  enabled: false
+  dry_run: true
+  kill_switch: true
+  allowed_categories:
+    - docs_only
+  required_lifecycle_states:
+    - approved_for_merge
+retry_replan:
+  max_attempts: 2
+  retriable_failure_types:
+    - execution_failure
+    - missing_signal

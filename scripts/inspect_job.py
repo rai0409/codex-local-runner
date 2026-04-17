@@ -75,6 +75,87 @@ def _read_json_object(path_value: Any) -> dict[str, Any] | None:
     return payload
 
 
+def _default_replan_input() -> dict[str, Any]:
+    return {
+        "failure_type": None,
+        "current_state": None,
+        "lifecycle_state": None,
+        "write_authority_state": None,
+        "category": None,
+        "changed_files": [],
+        "prior_attempt_count": None,
+        "retry_budget_total": None,
+        "retry_budget_remaining": None,
+        "budget_exhausted": None,
+        "primary_fail_reasons": [],
+        "retry_recommendation": None,
+        "next_action_readiness": None,
+        "retry_recommended": None,
+        "escalation_required": None,
+        "retriable_failure_type": None,
+        "retriable_failure_types": [],
+    }
+
+
+def _read_replan_input(path_value: Any) -> dict[str, Any]:
+    payload = _read_json_object(path_value)
+    if not isinstance(payload, dict):
+        return _default_replan_input()
+
+    raw = payload.get("replan_input")
+    if not isinstance(raw, dict):
+        return _default_replan_input()
+
+    result = _default_replan_input()
+    for key in (
+        "failure_type",
+        "current_state",
+        "lifecycle_state",
+        "write_authority_state",
+        "category",
+        "retry_recommendation",
+        "next_action_readiness",
+    ):
+        if raw.get(key) is not None:
+            text = str(raw.get(key)).strip()
+            result[key] = text if text else None
+
+    for key in (
+        "prior_attempt_count",
+        "retry_budget_total",
+        "retry_budget_remaining",
+    ):
+        value = raw.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            result[key] = value
+        elif isinstance(value, str) and value.strip().isdigit():
+            result[key] = int(value.strip())
+
+    for key in (
+        "budget_exhausted",
+        "retry_recommended",
+        "escalation_required",
+        "retriable_failure_type",
+    ):
+        result[key] = _as_optional_bool(raw.get(key))
+
+    changed_files = raw.get("changed_files")
+    if isinstance(changed_files, (list, tuple)):
+        result["changed_files"] = [str(item) for item in changed_files]
+
+    primary_fail_reasons = raw.get("primary_fail_reasons")
+    if isinstance(primary_fail_reasons, (list, tuple)):
+        result["primary_fail_reasons"] = [str(item) for item in primary_fail_reasons]
+
+    retriable_failure_types = raw.get("retriable_failure_types")
+    if isinstance(retriable_failure_types, (list, tuple)):
+        result["retriable_failure_types"] = [str(item) for item in retriable_failure_types]
+
+    return result
+
+
 def _read_retry_metadata(machine_review_payload: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(machine_review_payload, dict):
         return {
@@ -321,6 +402,7 @@ def _derive_mode_visibility(
 def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     rubric_path = row.get("rubric_path")
     merge_gate_path = row.get("merge_gate_path")
+    replan_input = _read_replan_input(merge_gate_path)
     rollback_trace = get_rollback_trace_by_job_id(
         str(row.get("job_id", "")),
         db_path=db_path,
@@ -415,6 +497,7 @@ def _build_output(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
             "rubric": _read_fail_reasons(rubric_path),
             "merge_gate": _read_fail_reasons(merge_gate_path),
         },
+        "replan_input": replan_input,
         "rollback_trace": {
             "recorded": rollback_trace is not None,
             "rollback_trace_id": rollback_trace.get("rollback_trace_id") if rollback_trace else None,
@@ -509,6 +592,10 @@ def _format_human(output: dict[str, Any]) -> str:
             if output["fail_reasons"]["merge_gate"]
             else "none"
         ),
+        f"replan_failure_type: {_fmt(output['replan_input'].get('failure_type'))}",
+        f"replan_retry_recommendation: {_fmt(output['replan_input'].get('retry_recommendation'))}",
+        f"replan_retry_budget_remaining: {_fmt(output['replan_input'].get('retry_budget_remaining'))}",
+        f"replan_escalation_required: {_fmt(output['replan_input'].get('escalation_required'))}",
         f"rollback_trace_recorded: {_fmt(output['rollback_trace'].get('recorded'))}",
         f"rollback_eligible: {_fmt(output['rollback_trace'].get('rollback_eligible'))}",
         f"rollback_ineligible_reason: {_fmt(output['rollback_trace'].get('ineligible_reason'))}",

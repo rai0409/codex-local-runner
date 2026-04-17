@@ -53,6 +53,42 @@ class PolicyLoaderTests(unittest.TestCase):
         )
         self.assertEqual(policy["auto_progression"]["max_changed_files"], 8)
         self.assertEqual(policy["auto_progression"]["max_total_diff_lines"], 120)
+        self.assertEqual(
+            set(policy["auto_progression"]["runtime_sensitive_path_patterns"]),
+            {"run_codex.py", "app.py", "adapters/**", "verify/**", "workspace/**"},
+        )
+        self.assertEqual(
+            set(policy["auto_progression"]["contract_sensitive_path_patterns"]),
+            {"docs/reviewer_handoff.md", "adapters/codex_cli.py"},
+        )
+        self.assertEqual(
+            policy["auto_progression"]["category_thresholds"]["docs_only"]["max_changed_files"],
+            4,
+        )
+        self.assertEqual(
+            policy["auto_progression"]["category_thresholds"]["docs_only"]["max_total_diff_lines"],
+            80,
+        )
+        self.assertEqual(
+            policy["auto_progression"]["category_thresholds"]["test_only"]["max_changed_files"],
+            6,
+        )
+        self.assertEqual(policy["write_authority"]["enabled"], False)
+        self.assertEqual(policy["write_authority"]["dry_run"], True)
+        self.assertEqual(policy["write_authority"]["kill_switch"], True)
+        self.assertEqual(
+            tuple(policy["write_authority"]["allowed_categories"]),
+            ("docs_only",),
+        )
+        self.assertEqual(
+            tuple(policy["write_authority"]["required_lifecycle_states"]),
+            ("approved_for_merge",),
+        )
+        self.assertEqual(policy["retry_replan"]["max_attempts"], 2)
+        self.assertEqual(
+            tuple(policy["retry_replan"]["retriable_failure_types"]),
+            ("execution_failure", "missing_signal"),
+        )
 
 
 if __name__ == "__main__":
