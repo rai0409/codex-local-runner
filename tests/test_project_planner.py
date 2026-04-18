@@ -133,6 +133,7 @@ class ProjectPlannerTests(unittest.TestCase):
                     "rollback_notes",
                     "tier_category",
                     "depends_on",
+                    "bounded_step_contract",
                 },
             )
 
@@ -152,6 +153,65 @@ class ProjectPlannerTests(unittest.TestCase):
             has_docs = any(path.startswith("docs/") for path in touched_files)
             has_orchestrator = any(path.startswith("orchestrator/") for path in touched_files)
             self.assertFalse(has_docs and has_orchestrator)
+
+    def test_bounded_step_contract_contains_required_fields(self) -> None:
+        artifacts = generate_planning_artifacts(self._simple_intake(), repo_root=self._repo_root())
+        first = artifacts["pr_plan"]["prs"][0]
+        contract = first["bounded_step_contract"]
+
+        self.assertEqual(contract["schema_version"], "v1")
+        self.assertEqual(contract["step_id"], first["pr_id"])
+        self.assertIn("title", contract)
+        self.assertIn("purpose", contract)
+        self.assertIn("scope_in", contract)
+        self.assertIn("scope_out", contract)
+        self.assertIn("files_or_areas_to_inspect", contract)
+        self.assertIn("invariants_to_preserve", contract)
+        self.assertIn("validation_expectations", contract)
+        self.assertIn("progression_metadata", contract)
+        self.assertIn("boundedness", contract)
+
+    def test_atomic_overscoped_step_is_detected_by_boundedness_contract(self) -> None:
+        intake = self._simple_intake()
+        intake["requested_changes"] = [
+            {
+                "summary": "Keep this change atomic even when overscoped",
+                "atomic": True,
+                "touched_files": [
+                    "docs/guide_01.md",
+                    "docs/guide_02.md",
+                    "docs/guide_03.md",
+                    "docs/guide_04.md",
+                    "docs/guide_05.md",
+                    "docs/guide_06.md",
+                    "docs/guide_07.md",
+                ],
+                "validation_commands": ["python3 -m unittest tests.test_project_planner -v"],
+            }
+        ]
+        artifacts = generate_planning_artifacts(intake, repo_root=self._repo_root())
+        statuses = [
+            pr["bounded_step_contract"]["boundedness"]["status"]
+            for pr in artifacts["pr_plan"]["prs"]
+        ]
+
+        self.assertIn("overscoped", statuses)
+        self.assertTrue(
+            any("bounded_step_overscoped" in warning for warning in artifacts["pr_plan"]["planning_warnings"])
+        )
+
+    def test_underspecified_step_is_detected_by_boundedness_contract(self) -> None:
+        intake = self._simple_intake()
+        intake["requested_changes"] = [{"summary": "No explicit files provided"}]
+        artifacts = generate_planning_artifacts(intake, repo_root=self._repo_root())
+        first = artifacts["pr_plan"]["prs"][0]
+        boundedness = first["bounded_step_contract"]["boundedness"]
+
+        self.assertEqual(boundedness["status"], "underspecified")
+        self.assertIn("missing_scope_in", boundedness["issues"])
+        self.assertTrue(
+            any("bounded_step_underspecified" in warning for warning in artifacts["pr_plan"]["planning_warnings"])
+        )
 
     def test_sensitive_path_detection_influences_tiering_and_separation(self) -> None:
         intake = self._simple_intake()

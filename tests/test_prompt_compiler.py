@@ -138,6 +138,8 @@ class PromptCompilerTests(unittest.TestCase):
             unit["validation_commands"],
             ["python3 -m unittest tests.test_codex_executor_adapter -v"],
         )
+        self.assertIn("bounded_step_contract", unit)
+        self.assertIn("pr_implementation_prompt_contract", unit)
 
     def test_optional_planner_metadata_is_preserved(self) -> None:
         units = compile_prompt_units(self._artifacts())
@@ -151,6 +153,45 @@ class PromptCompilerTests(unittest.TestCase):
                 ["legacy replan_input.* remains available"],
             )
             self.assertEqual(unit["planning_warnings"], ["none"])
+
+    def test_bounded_step_contract_shape_is_explicit_and_stable(self) -> None:
+        units = compile_prompt_units(self._artifacts())
+        contract = units[0]["bounded_step_contract"]
+
+        self.assertEqual(contract["schema_version"], "v1")
+        self.assertEqual(contract["step_id"], "proj-compiler-plan-v1-pr-01")
+        self.assertEqual(
+            contract["scope_in"],
+            [
+                "automation/planning/prompt_compiler.py",
+                "tests/test_prompt_compiler.py",
+            ],
+        )
+        self.assertEqual(contract["boundedness"]["status"], "bounded")
+        self.assertTrue(contract["boundedness"]["is_bounded"])
+
+    def test_prompt_contract_contains_required_explicit_sections(self) -> None:
+        units = compile_prompt_units(self._artifacts())
+        contract = units[0]["pr_implementation_prompt_contract"]
+
+        self.assertEqual(contract["schema_version"], "v1")
+        self.assertEqual(contract["source_step_id"], "proj-compiler-plan-v1-pr-01")
+        self.assertIn("task_scope", contract)
+        self.assertIn("repository_context", contract)
+        self.assertIn("hard_constraints", contract)
+        self.assertIn("files_or_areas_to_inspect", contract)
+        self.assertIn("required_tests", contract)
+        self.assertIn("required_final_output", contract)
+        self.assertIn("definition_of_done", contract)
+        self.assertIn("progression_metadata", contract)
+        self.assertEqual(
+            contract["progression_metadata"]["planned_step_id"],
+            contract["source_step_id"],
+        )
+        self.assertEqual(
+            contract["progression_metadata"]["strict_scope_files"],
+            contract["task_scope"]["scope_in"],
+        )
 
     def test_load_and_write_compiled_prompt_units(self) -> None:
         artifacts = self._artifacts()

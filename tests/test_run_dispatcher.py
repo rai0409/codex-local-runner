@@ -5,8 +5,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from automation.observability.run_audit import RunAuditLogger
+import automation.scheduler.run_dispatcher as run_dispatcher_module
 from automation.scheduler.run_dispatcher import DispatchRequest
 from automation.scheduler.run_dispatcher import RunDispatcher
 
@@ -71,6 +73,9 @@ class _FakeRunner:
             "action_consumable": outcome.get("action_consumable", True),
             "unsupported_reason": outcome.get("unsupported_reason"),
         }
+        handoff_overrides = outcome.get("handoff_overrides")
+        if isinstance(handoff_overrides, dict):
+            handoff_payload.update(handoff_overrides)
         manifest_payload = {
             "job_id": resolved_job_id,
             "run_status": outcome.get("run_status", "completed"),
@@ -159,6 +164,18 @@ class RunDispatcherTests(unittest.TestCase):
 
     def _pause_payload(self, run_root: Path) -> dict[str, object]:
         return json.loads((run_root / "pause_state.json").read_text(encoding="utf-8"))
+
+    def _write_executor_receipt(
+        self,
+        run_root: Path,
+        filename: str,
+        payload: dict[str, object],
+    ) -> None:
+        run_root.mkdir(parents=True, exist_ok=True)
+        (run_root / filename).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
 
     def test_dispatch_of_explicit_requested_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -488,6 +505,100 @@ class RunDispatcherTests(unittest.TestCase):
         self.assertEqual(len(executor.calls), 0)
         self.assertEqual(audit["records"][-1]["routing_reason"], "authority_requested_lane_not_allowed")
 
+    def test_canonical_handoff_requested_lane_routes_consistently(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            runner = _FakeRunner(
+                [
+                    {
+                        "next_action": "proceed_to_pr",
+                        "action_consumable": True,
+                        "reason": "ready",
+                        "handoff_overrides": {
+                            "requested_execution": {
+                                "requested_lanes": {"proceed_to_pr": "github_deterministic"},
+                            }
+                        },
+                    }
+                ]
+            )
+            executor = _FakeActionExecutor()
+            dispatcher = RunDispatcher(runner=runner, action_executor=executor, audit_logger=RunAuditLogger(now=self._fixed_now))
+            result = dispatcher.dispatch_once(
+                self._request(
+                    artifacts_input_dir=root / "planning",
+                    output_dir=root / "exec",
+                )
+            )
+
+        self.assertEqual(result["dispatch_status"], "executed")
+        self.assertEqual(len(executor.calls), 1)
+
+    def test_conflicting_policy_and_handoff_lane_requests_escalate_conservatively(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            runner = _FakeRunner(
+                [
+                    {
+                        "next_action": "proceed_to_pr",
+                        "action_consumable": True,
+                        "reason": "ready",
+                        "handoff_overrides": {
+                            "requested_execution": {
+                                "requested_lanes": {"proceed_to_pr": "github_deterministic"},
+                            }
+                        },
+                    }
+                ]
+            )
+            executor = _FakeActionExecutor()
+            dispatcher = RunDispatcher(runner=runner, action_executor=executor, audit_logger=RunAuditLogger(now=self._fixed_now))
+            result = dispatcher.dispatch_once(
+                self._request(
+                    artifacts_input_dir=root / "planning",
+                    output_dir=root / "exec",
+                    policy_snapshot={"requested_execution_lane": "llm_backed"},
+                )
+            )
+            run_root = root / "exec" / "job-1"
+            audit = self._audit_payload(run_root)
+
+        self.assertEqual(result["dispatch_status"], "escalated")
+        self.assertEqual(len(executor.calls), 0)
+        self.assertEqual(audit["records"][-1]["routing_reason"], "authority_requested_lane_conflict")
+
+    def test_allowed_requested_lane_routes_normally(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            runner = _FakeRunner([{"next_action": "proceed_to_pr", "action_consumable": True, "reason": "ready"}])
+            executor = _FakeActionExecutor()
+            dispatcher = RunDispatcher(runner=runner, action_executor=executor, audit_logger=RunAuditLogger(now=self._fixed_now))
+            result = dispatcher.dispatch_once(
+                self._request(
+                    artifacts_input_dir=root / "planning",
+                    output_dir=root / "exec",
+                    policy_snapshot={"requested_execution_lane": "github_deterministic"},
+                )
+            )
+
+        self.assertEqual(result["dispatch_status"], "executed")
+        self.assertEqual(len(executor.calls), 1)
+
+    def test_control_action_is_authority_routed_to_escalation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            runner = _FakeRunner([{"next_action": "escalate_to_human", "action_consumable": True, "reason": "manual hold"}])
+            executor = _FakeActionExecutor()
+            dispatcher = RunDispatcher(runner=runner, action_executor=executor, audit_logger=RunAuditLogger(now=self._fixed_now))
+            result = dispatcher.dispatch_once(
+                self._request(artifacts_input_dir=root / "planning", output_dir=root / "exec")
+            )
+            audit = self._audit_payload(root / "exec" / "job-1")
+
+        self.assertEqual(result["dispatch_status"], "escalated")
+        self.assertEqual(len(executor.calls), 0)
+        self.assertEqual(audit["records"][-1]["routing_reason"], "authority_control_action_no_executor_route")
+
     def test_routes_proceed_to_merge_only_with_explicit_pr_number(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -744,6 +855,246 @@ class RunDispatcherTests(unittest.TestCase):
         self.assertEqual(result["dispatch_status"], "executed")
         self.assertEqual(runner.call_count, 2)
         self.assertEqual(len(executor.calls), 1)
+
+    def test_retry_short_circuit_on_existing_update_already_applied_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_root = root / "exec" / "job-1"
+            self._write_executor_receipt(
+                run_root,
+                "pr_update_receipt.json",
+                {
+                    "job_id": "job-1",
+                    "requested_action": "github.pr.update",
+                    "attempted": False,
+                    "succeeded": True,
+                    "refusal_reason": None,
+                    "whether_human_required": False,
+                    "executed_at": "2026-04-18T13:59:00",
+                    "write_idempotency": {"dedupe_status": "already_applied"},
+                    "evidence_used_summary": {"write_result": {"status": "already_applied"}},
+                },
+            )
+            runner = _FakeRunner(
+                [
+                    {
+                        "next_action": "signal_recollect",
+                        "action_consumable": True,
+                        "reason": "missing or incomplete artifacts/signals require recollection",
+                        "retry_budget_remaining": 1,
+                        "updated_retry_context": {
+                            "prior_attempt_count": 0,
+                            "prior_retry_class": None,
+                            "missing_signal_count": 1,
+                            "retry_budget_remaining": 1,
+                        },
+                    }
+                ]
+            )
+            executor = _FakeActionExecutor()
+            dispatcher = RunDispatcher(
+                runner=runner,
+                action_executor=executor,
+                audit_logger=RunAuditLogger(now=self._fixed_now),
+                now=self._fixed_now,
+            )
+            result = dispatcher.dispatch_once(
+                self._request(
+                    artifacts_input_dir=root / "planning",
+                    output_dir=root / "exec",
+                    max_retry_dispatches=1,
+                )
+            )
+            audit = self._audit_payload(run_root)
+
+        self.assertEqual(result["dispatch_status"], "executed")
+        self.assertEqual(runner.call_count, 1)
+        self.assertEqual(len(executor.calls), 0)
+        self.assertEqual(audit["records"][-1]["scheduler_action_taken"], "short_circuit")
+        self.assertEqual(
+            audit["records"][-1]["routing_reason"],
+            "short_circuit_existing_terminal_write_result:github.pr.update:already_applied",
+        )
+
+    def test_retry_short_circuit_on_existing_terminal_refusal_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_root = root / "exec" / "job-1"
+            self._write_executor_receipt(
+                run_root,
+                "merge_receipt.json",
+                {
+                    "job_id": "job-1",
+                    "requested_action": "proceed_to_merge",
+                    "attempted": False,
+                    "succeeded": False,
+                    "refusal_reason": "idempotency_precondition_changed:head_sha_changed",
+                    "whether_human_required": True,
+                    "executed_at": "2026-04-18T13:59:30",
+                },
+            )
+            runner = _FakeRunner(
+                [
+                    {
+                        "next_action": "same_prompt_retry",
+                        "action_consumable": True,
+                        "reason": "execution failure",
+                        "retry_budget_remaining": 1,
+                    }
+                ]
+            )
+            executor = _FakeActionExecutor()
+            dispatcher = RunDispatcher(
+                runner=runner,
+                action_executor=executor,
+                audit_logger=RunAuditLogger(now=self._fixed_now),
+                now=self._fixed_now,
+            )
+            result = dispatcher.dispatch_once(
+                self._request(
+                    artifacts_input_dir=root / "planning",
+                    output_dir=root / "exec",
+                    max_retry_dispatches=1,
+                )
+            )
+            audit = self._audit_payload(run_root)
+
+        self.assertEqual(result["dispatch_status"], "escalated")
+        self.assertEqual(runner.call_count, 1)
+        self.assertEqual(len(executor.calls), 0)
+        self.assertEqual(audit["records"][-1]["scheduler_action_taken"], "short_circuit")
+        self.assertEqual(
+            audit["records"][-1]["routing_reason"],
+            "short_circuit_existing_terminal_refusal:proceed_to_merge:idempotency_precondition_changed:head_sha_changed",
+        )
+
+    def test_routing_resolution_is_carried_forward_for_same_step_retry_reentry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            runner = _FakeRunner(
+                [
+                    {
+                        "next_action": "same_prompt_retry",
+                        "action_consumable": True,
+                        "reason": "execution failure",
+                        "retry_budget_remaining": 1,
+                        "updated_retry_context": {
+                            "prior_attempt_count": 0,
+                            "prior_retry_class": None,
+                            "missing_signal_count": 0,
+                            "retry_budget_remaining": 1,
+                        },
+                    },
+                    {
+                        "next_action": "same_prompt_retry",
+                        "action_consumable": True,
+                        "reason": "execution failure",
+                        "retry_budget_remaining": 1,
+                        "updated_retry_context": {
+                            "prior_attempt_count": 0,
+                            "prior_retry_class": None,
+                            "missing_signal_count": 0,
+                            "retry_budget_remaining": 1,
+                        },
+                    },
+                ]
+            )
+            dispatcher = RunDispatcher(
+                runner=runner,
+                action_executor=_FakeActionExecutor(),
+                audit_logger=RunAuditLogger(now=self._fixed_now),
+                now=self._fixed_now,
+            )
+            original_resolver = run_dispatcher_module.resolve_action_routing
+            resolver_calls = 0
+
+            def _counting_resolver(*args, **kwargs):
+                nonlocal resolver_calls
+                resolver_calls += 1
+                return original_resolver(*args, **kwargs)
+
+            with patch(
+                "automation.scheduler.run_dispatcher.resolve_action_routing",
+                side_effect=_counting_resolver,
+            ):
+                result = dispatcher.dispatch_once(
+                    self._request(
+                        artifacts_input_dir=root / "planning",
+                        output_dir=root / "exec",
+                        max_retry_dispatches=1,
+                    )
+                )
+
+        self.assertEqual(result["dispatch_status"], "escalated")
+        self.assertEqual(runner.call_count, 2)
+        self.assertEqual(resolver_calls, 1)
+
+    def test_routing_cache_uses_canonical_lane_fingerprint_for_equivalent_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            runner = _FakeRunner(
+                [
+                    {
+                        "next_action": "same_prompt_retry",
+                        "action_consumable": True,
+                        "reason": "execution failure",
+                        "retry_budget_remaining": 1,
+                        "handoff_overrides": {"requested_execution_lane": "llm_backed"},
+                        "updated_retry_context": {
+                            "prior_attempt_count": 0,
+                            "prior_retry_class": None,
+                            "missing_signal_count": 0,
+                            "retry_budget_remaining": 1,
+                        },
+                    },
+                    {
+                        "next_action": "same_prompt_retry",
+                        "action_consumable": True,
+                        "reason": "execution failure",
+                        "retry_budget_remaining": 1,
+                        "handoff_overrides": {
+                            "requested_execution": {
+                                "requested_lane": "llm_backed",
+                            }
+                        },
+                        "updated_retry_context": {
+                            "prior_attempt_count": 0,
+                            "prior_retry_class": None,
+                            "missing_signal_count": 0,
+                            "retry_budget_remaining": 1,
+                        },
+                    },
+                ]
+            )
+            dispatcher = RunDispatcher(
+                runner=runner,
+                action_executor=_FakeActionExecutor(),
+                audit_logger=RunAuditLogger(now=self._fixed_now),
+                now=self._fixed_now,
+            )
+            original_resolver = run_dispatcher_module.resolve_action_routing
+            resolver_calls = 0
+
+            def _counting_resolver(*args, **kwargs):
+                nonlocal resolver_calls
+                resolver_calls += 1
+                return original_resolver(*args, **kwargs)
+
+            with patch(
+                "automation.scheduler.run_dispatcher.resolve_action_routing",
+                side_effect=_counting_resolver,
+            ):
+                result = dispatcher.dispatch_once(
+                    self._request(
+                        artifacts_input_dir=root / "planning",
+                        output_dir=root / "exec",
+                        max_retry_dispatches=1,
+                    )
+                )
+
+        self.assertEqual(result["dispatch_status"], "escalated")
+        self.assertEqual(runner.call_count, 2)
+        self.assertEqual(resolver_calls, 1)
 
     def test_escalates_on_retry_budget_exhausted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

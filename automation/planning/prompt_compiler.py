@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 from typing import Mapping
 
+from automation.planning.planned_step_contract import build_bounded_planned_step_contract
+from automation.planning.prompt_contract import build_pr_implementation_prompt_contract
 from automation.planning.project_planner import PR_PLAN_FILENAME
 from automation.planning.project_planner import PROJECT_BRIEF_FILENAME
 from automation.planning.project_planner import REPO_FACTS_FILENAME
@@ -210,6 +212,26 @@ def compile_prompt_units(artifacts: Mapping[str, Mapping[str, Any]]) -> list[dic
         if not isinstance(pr_raw, Mapping):
             continue
         pr = dict(pr_raw)
+        bounded_step_contract = build_bounded_planned_step_contract(pr)
+        non_goals = _build_non_goals(pr)
+        constraints = _build_constraints(
+            project_brief=project_brief,
+            repo_facts=repo_facts,
+            pr_plan=pr_plan,
+            pr=pr,
+        )
+        validation = _build_validation(pr, repo_facts)
+        required_final_output = _build_required_final_output()
+        implementation_prompt_contract = build_pr_implementation_prompt_contract(
+            project_brief=project_brief,
+            repo_facts=repo_facts,
+            pr_plan=pr_plan,
+            bounded_step_contract=bounded_step_contract,
+            non_goals=non_goals,
+            constraints=constraints,
+            required_tests=validation,
+            output_requirements=required_final_output,
+        )
         prompt_markdown = _compile_prompt_markdown(
             project_brief=project_brief,
             repo_facts=repo_facts,
@@ -231,6 +253,8 @@ def compile_prompt_units(artifacts: Mapping[str, Mapping[str, Any]]) -> list[dic
             "canonical_surface_notes": _normalize_string_list(pr_plan.get("canonical_surface_notes")),
             "compatibility_notes": _normalize_string_list(pr_plan.get("compatibility_notes")),
             "planning_warnings": _normalize_string_list(pr_plan.get("planning_warnings")),
+            "bounded_step_contract": bounded_step_contract,
+            "pr_implementation_prompt_contract": implementation_prompt_contract,
             "codex_task_prompt_md": prompt_markdown,
         }
         units.append(unit)

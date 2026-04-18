@@ -16,6 +16,16 @@ from automation.execution.codex_executor_adapter import CodexExecutorAdapter
 from automation.planning.prompt_compiler import compile_prompt_units
 from automation.planning.prompt_compiler import load_planning_artifacts
 
+_UNIT_PROGRESSION_SCHEMA_VERSION = "v1"
+
+_UNIT_STATE_PLANNED = "planned"
+_UNIT_STATE_PROMPT_READY = "prompt_ready"
+_UNIT_STATE_EXECUTION_READY = "execution_ready"
+_UNIT_STATE_EXECUTION_COMPLETED = "execution_completed"
+_UNIT_STATE_REVIEWED = "reviewed"
+_UNIT_STATE_ADVANCED = "advanced"
+_UNIT_STATE_ESCALATED = "escalated"
+
 
 def _iso_now(now: Callable[[], datetime]) -> str:
     return now().isoformat(timespec="seconds")
@@ -125,6 +135,167 @@ def _validate_pr_unit_order(units: list[dict[str, Any]], *, pr_plan: Mapping[str
                     f"dependency order violation for {pr_id}: depends_on={dependency} not yet processed"
                 )
         seen.add(pr_id)
+
+
+def _normalize_contract_payload(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _extract_bounded_step_handoff(pr_id: str, contract: Mapping[str, Any]) -> dict[str, Any]:
+    progression = (
+        dict(contract.get("progression_metadata"))
+        if isinstance(contract.get("progression_metadata"), Mapping)
+        else {}
+    )
+    boundedness = (
+        dict(contract.get("boundedness"))
+        if isinstance(contract.get("boundedness"), Mapping)
+        else {}
+    )
+    planned_step_id = _normalize_text(
+        progression.get("planned_step_id") or contract.get("step_id"),
+        default=pr_id,
+    )
+    tier_category = _normalize_text(
+        progression.get("tier_category") or contract.get("tier_category"),
+        default="",
+    )
+    strict_scope_files = _normalize_string_list(
+        progression.get("strict_scope_files") or contract.get("scope_in"),
+        sort_items=True,
+    )
+    forbidden_files = _normalize_string_list(
+        progression.get("forbidden_files") or contract.get("scope_out"),
+        sort_items=True,
+    )
+    depends_on = _normalize_string_list(
+        progression.get("depends_on") or contract.get("depends_on"),
+        sort_items=False,
+    )
+    validation_expectations = _normalize_string_list(
+        contract.get("validation_expectations"),
+        sort_items=False,
+    )
+    boundedness_status = _normalize_text(boundedness.get("status"), default="unknown")
+    return {
+        "schema_version": _normalize_text(contract.get("schema_version"), default=""),
+        "planned_step_id": planned_step_id,
+        "title": _normalize_text(contract.get("title"), default=""),
+        "purpose": _normalize_text(contract.get("purpose"), default=""),
+        "tier_category": tier_category,
+        "depends_on": depends_on,
+        "strict_scope_files": strict_scope_files,
+        "forbidden_files": forbidden_files,
+        "validation_expectations": validation_expectations,
+        "boundedness_status": boundedness_status,
+        "is_bounded": bool(boundedness.get("is_bounded", False)),
+    }
+
+
+def _extract_prompt_contract_handoff(pr_id: str, contract: Mapping[str, Any]) -> dict[str, Any]:
+    progression = (
+        dict(contract.get("progression_metadata"))
+        if isinstance(contract.get("progression_metadata"), Mapping)
+        else {}
+    )
+    task_scope = dict(contract.get("task_scope")) if isinstance(contract.get("task_scope"), Mapping) else {}
+    source_step_id = _normalize_text(contract.get("source_step_id"), default=pr_id)
+    strict_scope_files = _normalize_string_list(
+        progression.get("strict_scope_files") or task_scope.get("scope_in"),
+        sort_items=True,
+    )
+    forbidden_files = _normalize_string_list(
+        progression.get("forbidden_files") or task_scope.get("scope_out"),
+        sort_items=True,
+    )
+    depends_on = _normalize_string_list(
+        progression.get("depends_on") or task_scope.get("depends_on"),
+        sort_items=False,
+    )
+    tier_category = _normalize_text(
+        progression.get("tier_category") or task_scope.get("tier_category"),
+        default="",
+    )
+    required_tests = _normalize_string_list(contract.get("required_tests"), sort_items=False)
+    return {
+        "schema_version": _normalize_text(contract.get("schema_version"), default=""),
+        "source_step_id": source_step_id,
+        "source_plan_id": _normalize_text(contract.get("source_plan_id"), default=""),
+        "tier_category": tier_category,
+        "depends_on": depends_on,
+        "strict_scope_files": strict_scope_files,
+        "forbidden_files": forbidden_files,
+        "required_tests": required_tests,
+        "requires_explicit_validation": bool(progression.get("requires_explicit_validation", False)),
+        "scope_drift_detection_ready": bool(progression.get("scope_drift_detection_ready", False)),
+        "category_mismatch_detection_ready": bool(progression.get("category_mismatch_detection_ready", False)),
+    }
+
+
+def _build_unit_contract_handoff(
+    *,
+    pr_id: str,
+    bounded_step_contract: Mapping[str, Any],
+    prompt_contract: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "bounded_step": _extract_bounded_step_handoff(pr_id, bounded_step_contract),
+        "pr_implementation_prompt": _extract_prompt_contract_handoff(pr_id, prompt_contract),
+    }
+
+
+def _new_unit_progression_payload(
+    *,
+    pr_id: str,
+    now: Callable[[], datetime],
+    contract_handoff: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema_version": _UNIT_PROGRESSION_SCHEMA_VERSION,
+        "pr_id": pr_id,
+        "current_state": _UNIT_STATE_PLANNED,
+        "checkpoints": [
+            {
+                "state": _UNIT_STATE_PLANNED,
+                "at": _iso_now(now),
+                "reason": "unit_registered_from_compiled_plan",
+            }
+        ],
+        "contract_handoff": dict(contract_handoff),
+    }
+
+
+def _append_progression_checkpoint(
+    payload: dict[str, Any],
+    *,
+    state: str,
+    now: Callable[[], datetime],
+    reason: str,
+    metadata: Mapping[str, Any] | None = None,
+) -> None:
+    checkpoints = payload.get("checkpoints")
+    if not isinstance(checkpoints, list):
+        checkpoints = []
+        payload["checkpoints"] = checkpoints
+    entry: dict[str, Any] = {
+        "state": state,
+        "at": _iso_now(now),
+        "reason": reason,
+    }
+    if isinstance(metadata, Mapping) and metadata:
+        entry["metadata"] = dict(metadata)
+    checkpoints.append(entry)
+    payload["current_state"] = state
+
+
+def _resolve_review_terminal_state(decision_payload: Mapping[str, Any]) -> str:
+    next_action = _normalize_text(decision_payload.get("next_action"), default="")
+    result_acceptance = _normalize_text(decision_payload.get("result_acceptance"), default="")
+    if next_action in {"escalate_to_human", "rollback_required"}:
+        return _UNIT_STATE_ESCALATED
+    if result_acceptance == "accept_current_result" and next_action in {"proceed_to_pr", "proceed_to_merge"}:
+        return _UNIT_STATE_ADVANCED
+    return _UNIT_STATE_REVIEWED
 
 
 class DryRunCodexExecutionTransport(CodexExecutionTransport):
@@ -363,6 +534,7 @@ class PlannedExecutionRunner:
         finished_at = started_at
         run_status = "dry_run_completed" if dry_run else "completed"
         manifest_units: list[dict[str, Any]] = []
+        unit_progression_registry: dict[str, dict[str, Any]] = {}
 
         for unit in units:
             pr_id = _normalize_text(unit.get("pr_id"))
@@ -374,6 +546,49 @@ class PlannedExecutionRunner:
                 _normalize_text(unit.get("codex_task_prompt_md"), default=""),
                 encoding="utf-8",
             )
+            bounded_step_contract_path = unit_dir / "bounded_step_contract.json"
+            bounded_step_contract = (
+                _normalize_contract_payload(unit.get("bounded_step_contract"))
+            )
+            _write_json(bounded_step_contract_path, bounded_step_contract)
+            implementation_prompt_contract_path = unit_dir / "pr_implementation_prompt_contract.json"
+            implementation_prompt_contract = (
+                _normalize_contract_payload(unit.get("pr_implementation_prompt_contract"))
+            )
+            _write_json(implementation_prompt_contract_path, implementation_prompt_contract)
+            contract_handoff = _build_unit_contract_handoff(
+                pr_id=pr_id,
+                bounded_step_contract=bounded_step_contract,
+                prompt_contract=implementation_prompt_contract,
+            )
+            step_handoff = (
+                dict(contract_handoff.get("bounded_step"))
+                if isinstance(contract_handoff.get("bounded_step"), Mapping)
+                else {}
+            )
+            prompt_handoff = (
+                dict(contract_handoff.get("pr_implementation_prompt"))
+                if isinstance(contract_handoff.get("pr_implementation_prompt"), Mapping)
+                else {}
+            )
+            unit_progression_path = unit_dir / "unit_progression.json"
+            unit_progression = _new_unit_progression_payload(
+                pr_id=pr_id,
+                now=self.now,
+                contract_handoff=contract_handoff,
+            )
+            _append_progression_checkpoint(
+                unit_progression,
+                state=_UNIT_STATE_PROMPT_READY,
+                now=self.now,
+                reason="prompt_and_contract_artifacts_persisted",
+                metadata={
+                    "compiled_prompt_path": str(compiled_prompt_path),
+                    "bounded_step_contract_path": str(bounded_step_contract_path),
+                    "pr_implementation_prompt_contract_path": str(implementation_prompt_contract_path),
+                },
+            )
+            _write_json(unit_progression_path, unit_progression)
 
             launch_response = dict(
                 self.adapter.launch_job(
@@ -383,13 +598,42 @@ class PlannedExecutionRunner:
                     work_dir=str(unit_dir),
                     metadata={
                         "dry_run": dry_run,
-                        "tier_category": _normalize_text(unit.get("tier_category"), default=""),
-                        "depends_on": _normalize_string_list(unit.get("depends_on")),
-                        "validation_commands": _normalize_string_list(unit.get("validation_commands")),
+                        "planned_step_id": _normalize_text(step_handoff.get("planned_step_id"), default=pr_id),
+                        "source_step_id": _normalize_text(prompt_handoff.get("source_step_id"), default=pr_id),
+                        "tier_category": _normalize_text(
+                            step_handoff.get("tier_category") or prompt_handoff.get("tier_category"),
+                            default="",
+                        ),
+                        "depends_on": _normalize_string_list(
+                            step_handoff.get("depends_on") or prompt_handoff.get("depends_on"),
+                            sort_items=False,
+                        ),
+                        "strict_scope_files": _normalize_string_list(
+                            step_handoff.get("strict_scope_files") or prompt_handoff.get("strict_scope_files"),
+                            sort_items=True,
+                        ),
+                        "forbidden_files": _normalize_string_list(
+                            step_handoff.get("forbidden_files") or prompt_handoff.get("forbidden_files"),
+                            sort_items=True,
+                        ),
+                        "validation_commands": _normalize_string_list(
+                            step_handoff.get("validation_expectations") or prompt_handoff.get("required_tests"),
+                            sort_items=False,
+                        ),
+                        "boundedness_status": _normalize_text(step_handoff.get("boundedness_status"), default="unknown"),
+                        "requires_explicit_validation": bool(prompt_handoff.get("requires_explicit_validation", False)),
                     },
                 )
             )
             run_id = _normalize_text(launch_response.get("run_id"), default="")
+            _append_progression_checkpoint(
+                unit_progression,
+                state=_UNIT_STATE_EXECUTION_READY,
+                now=self.now,
+                reason="execution_launch_attempted",
+                metadata={"run_id": run_id, "launch_succeeded": bool(run_id)},
+            )
+            _write_json(unit_progression_path, unit_progression)
 
             status_response = (
                 dict(self.adapter.poll_status(run_id=run_id))
@@ -425,6 +669,22 @@ class PlannedExecutionRunner:
             ).lower()
             unit_failed = _unit_is_failure(execution_status=execution_status, dry_run=dry_run)
             receipt_status = "failed" if unit_failed else "recorded"
+            _append_progression_checkpoint(
+                unit_progression,
+                state=_UNIT_STATE_EXECUTION_COMPLETED,
+                now=self.now,
+                reason="execution_result_persisted",
+                metadata={
+                    "execution_status": execution_status,
+                    "verify_status": _normalize_text(
+                        normalized_result.get("execution", {}).get("verify", {}).get("status"),
+                        default="",
+                    ),
+                    "receipt_status": receipt_status,
+                    "result_path": str(result_path),
+                },
+            )
+            _write_json(unit_progression_path, unit_progression)
 
             receipt = {
                 "job_id": resolved_job_id,
@@ -434,14 +694,28 @@ class PlannedExecutionRunner:
                 "run_id": run_id,
                 "execution_status": execution_status,
                 "compiled_prompt_path": str(compiled_prompt_path),
+                "bounded_step_contract_path": str(bounded_step_contract_path),
+                "pr_implementation_prompt_contract_path": str(implementation_prompt_contract_path),
                 "result_path": str(result_path),
                 "stdout_path": _normalize_text(normalized_result.get("execution", {}).get("stdout_path"), default=""),
                 "stderr_path": _normalize_text(normalized_result.get("execution", {}).get("stderr_path"), default=""),
-                "tier_category": _normalize_text(unit.get("tier_category"), default=""),
-                "depends_on": _normalize_string_list(unit.get("depends_on")),
+                "tier_category": _normalize_text(
+                    step_handoff.get("tier_category") or prompt_handoff.get("tier_category"),
+                    default="",
+                ),
+                "depends_on": _normalize_string_list(
+                    step_handoff.get("depends_on") or prompt_handoff.get("depends_on"),
+                    sort_items=False,
+                ),
                 "canonical_surface_notes": _normalize_string_list(unit.get("canonical_surface_notes")),
                 "compatibility_notes": _normalize_string_list(unit.get("compatibility_notes")),
                 "planning_warnings": _normalize_string_list(unit.get("planning_warnings")),
+                "contract_handoff": contract_handoff,
+                "unit_progression_path": str(unit_progression_path),
+                "unit_progression_state": _normalize_text(
+                    unit_progression.get("current_state"),
+                    default=_UNIT_STATE_EXECUTION_COMPLETED,
+                ),
                 "started_at": _iso_now(self.now),
                 "finished_at": _iso_now(self.now),
             }
@@ -452,11 +726,23 @@ class PlannedExecutionRunner:
                 {
                     "pr_id": pr_id,
                     "compiled_prompt_path": str(compiled_prompt_path),
+                    "bounded_step_contract_path": str(bounded_step_contract_path),
+                    "pr_implementation_prompt_contract_path": str(implementation_prompt_contract_path),
                     "result_path": str(result_path),
                     "receipt_path": str(receipt_path),
                     "status": receipt_status,
+                    "unit_progression_path": str(unit_progression_path),
+                    "unit_progression_state": _normalize_text(
+                        unit_progression.get("current_state"),
+                        default=_UNIT_STATE_EXECUTION_COMPLETED,
+                    ),
+                    "contract_handoff": contract_handoff,
                 }
             )
+            unit_progression_registry[pr_id] = {
+                "path": str(unit_progression_path),
+                "payload": unit_progression,
+            }
 
             if unit_failed:
                 run_status = "failed"
@@ -512,6 +798,53 @@ class PlannedExecutionRunner:
             "job_id": resolved_job_id,
         }
         _write_json(decision_path, decision_payload)
+        review_terminal_state = _resolve_review_terminal_state(decision_payload)
+        for entry in manifest_units:
+            pr_id = _normalize_text(entry.get("pr_id"), default="")
+            progression_record = (
+                dict(unit_progression_registry.get(pr_id))
+                if isinstance(unit_progression_registry.get(pr_id), Mapping)
+                else {}
+            )
+            progression_payload = (
+                dict(progression_record.get("payload"))
+                if isinstance(progression_record.get("payload"), Mapping)
+                else None
+            )
+            progression_path_text = _normalize_text(
+                progression_record.get("path") or entry.get("unit_progression_path"),
+                default="",
+            )
+            if progression_payload is None or not progression_path_text:
+                continue
+
+            _append_progression_checkpoint(
+                progression_payload,
+                state=_UNIT_STATE_REVIEWED,
+                now=self.now,
+                reason="review_progression_outcome_evaluated",
+                metadata={
+                    "next_action": _normalize_text(decision_payload.get("next_action"), default=""),
+                    "progression_outcome": _normalize_text(decision_payload.get("progression_outcome"), default=""),
+                    "progression_rule_id": _normalize_text(decision_payload.get("progression_rule_id"), default=""),
+                    "result_acceptance": _normalize_text(decision_payload.get("result_acceptance"), default=""),
+                },
+            )
+            if review_terminal_state in {_UNIT_STATE_ADVANCED, _UNIT_STATE_ESCALATED}:
+                _append_progression_checkpoint(
+                    progression_payload,
+                    state=review_terminal_state,
+                    now=self.now,
+                    reason="review_terminal_state_resolved",
+                    metadata={
+                        "next_action": _normalize_text(decision_payload.get("next_action"), default=""),
+                    },
+                )
+            _write_json(Path(progression_path_text), progression_payload)
+            entry["unit_progression_state"] = _normalize_text(
+                progression_payload.get("current_state"),
+                default=review_terminal_state,
+            )
 
         handoff_path = run_root / "action_handoff.json"
         handoff_error = ""
@@ -593,6 +926,14 @@ class PlannedExecutionRunner:
         }
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
+        manifest["progression_summary"] = {
+            "final_unit_state": review_terminal_state,
+            "units_reviewed": len(manifest_units),
+            "next_action": _normalize_text(decision_payload.get("next_action"), default=""),
+            "progression_outcome": _normalize_text(decision_payload.get("progression_outcome"), default=""),
+            "result_acceptance": _normalize_text(decision_payload.get("result_acceptance"), default=""),
+            "progression_rule_id": _normalize_text(decision_payload.get("progression_rule_id"), default=""),
+        }
 
         manifest["handoff_summary"] = {
             "next_action": _normalize_text(handoff_payload.get("next_action"), default=""),

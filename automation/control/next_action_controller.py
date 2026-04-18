@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any
 from typing import Mapping
 
+from automation.control.review_progression import evaluate_review_progression_outcome
 from automation.control.retry_context import normalize_retry_context
 from automation.control.retry_context import update_retry_context
+from automation.planning.planned_step_contract import BOUNDED_STATUS_BOUNDED
 
 ALLOWED_NEXT_ACTIONS = {
     "same_prompt_retry",
@@ -20,6 +22,41 @@ ALLOWED_NEXT_ACTIONS = {
     "proceed_to_merge",
     "rollback_required",
 }
+
+_REFUSAL_OR_CONFLICT_FAILURE_TYPES = {
+    "auth_failure",
+    "permission_denied",
+    "forbidden",
+    "api_failure",
+    "unsupported_query",
+    "precondition_changed",
+    "conflict",
+    "needs_human",
+    "terminal_refusal",
+    "requested_lane_conflict",
+    "routing_conflict",
+    "routing_refused",
+}
+
+_REFUSAL_OR_CONFLICT_MESSAGE_TOKENS = (
+    "requested_lane_conflict",
+    "lane_not_allowed",
+    "routing_conflict",
+    "routing_refused",
+    "precondition_changed",
+    "needs_human",
+    "terminal refusal",
+    "terminal_refusal",
+    "permission denied",
+    "forbidden",
+    "auth_failure",
+)
+
+_REFUSAL_OR_CONFLICT_REASON_FIELDS = (
+    "refusal_reason",
+    "routing_reason",
+    "failure_reason",
+)
 
 
 def _normalize_text(value: Any, *, default: str = "") -> str:
@@ -61,11 +98,38 @@ def _as_non_negative_int(value: Any, *, default: int) -> int:
     return default
 
 
+def _has_refusal_or_conflict_surface(
+    *,
+    result: Mapping[str, Any],
+    execution: Mapping[str, Any],
+    failure_type: str,
+    failure_message: str,
+) -> bool:
+    if failure_type in _REFUSAL_OR_CONFLICT_FAILURE_TYPES:
+        return True
+    if any(token in failure_message for token in _REFUSAL_OR_CONFLICT_MESSAGE_TOKENS):
+        return True
+    for field in _REFUSAL_OR_CONFLICT_REASON_FIELDS:
+        result_reason = _normalize_text(result.get(field), default="").lower()
+        if result_reason and any(token in result_reason for token in _REFUSAL_OR_CONFLICT_MESSAGE_TOKENS):
+            return True
+        execution_reason = _normalize_text(execution.get(field), default="").lower()
+        if execution_reason and any(token in execution_reason for token in _REFUSAL_OR_CONFLICT_MESSAGE_TOKENS):
+            return True
+    return False
+
+
 def _read_json_object(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"expected JSON object: {path}")
     return payload
+
+
+def _read_json_object_if_exists(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    return _read_json_object(path)
 
 
 def _load_manifest(run_dir: Path) -> dict[str, Any]:
@@ -96,6 +160,127 @@ def _build_pr_plan_index(pr_plan: Mapping[str, Any]) -> dict[str, dict[str, Any]
     return index
 
 
+def _get_contract_progression_metadata(contract: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(contract, Mapping):
+        return {}
+    return dict(contract.get("progression_metadata")) if isinstance(contract.get("progression_metadata"), Mapping) else {}
+
+
+def _extract_expected_scope_files(
+    *,
+    unit: Mapping[str, Any],
+    pr_plan_unit: Mapping[str, Any] | None,
+) -> list[str]:
+    bounded_contract = _as_mapping(unit.get("bounded_step_contract"))
+    prompt_contract = _as_mapping(unit.get("pr_implementation_prompt_contract"))
+    bounded_progression = _get_contract_progression_metadata(bounded_contract)
+    prompt_progression = _get_contract_progression_metadata(prompt_contract)
+    task_scope = (
+        dict(prompt_contract.get("task_scope"))
+        if isinstance(prompt_contract, Mapping) and isinstance(prompt_contract.get("task_scope"), Mapping)
+        else {}
+    )
+    sources = (
+        bounded_progression.get("strict_scope_files"),
+        bounded_contract.get("scope_in") if isinstance(bounded_contract, Mapping) else None,
+        prompt_progression.get("strict_scope_files"),
+        task_scope.get("scope_in"),
+        pr_plan_unit.get("touched_files") if isinstance(pr_plan_unit, Mapping) else None,
+    )
+    for source in sources:
+        items = _normalize_string_list(source, sort_items=True)
+        if items:
+            return items
+    return []
+
+
+def _extract_expected_tier_category(
+    *,
+    unit: Mapping[str, Any],
+    pr_plan_unit: Mapping[str, Any] | None,
+) -> str:
+    bounded_contract = _as_mapping(unit.get("bounded_step_contract"))
+    prompt_contract = _as_mapping(unit.get("pr_implementation_prompt_contract"))
+    bounded_progression = _get_contract_progression_metadata(bounded_contract)
+    prompt_progression = _get_contract_progression_metadata(prompt_contract)
+    task_scope = (
+        dict(prompt_contract.get("task_scope"))
+        if isinstance(prompt_contract, Mapping) and isinstance(prompt_contract.get("task_scope"), Mapping)
+        else {}
+    )
+    candidates = (
+        bounded_progression.get("tier_category"),
+        bounded_contract.get("tier_category") if isinstance(bounded_contract, Mapping) else None,
+        prompt_progression.get("tier_category"),
+        task_scope.get("tier_category"),
+        pr_plan_unit.get("tier_category") if isinstance(pr_plan_unit, Mapping) else None,
+    )
+    for item in candidates:
+        text = _normalize_text(item, default="")
+        if text:
+            return text
+    return ""
+
+
+def _has_contract_identity_mismatch(unit: Mapping[str, Any]) -> bool:
+    pr_id = _normalize_text(unit.get("pr_id"), default="")
+    if not pr_id:
+        return True
+
+    bounded_contract = _as_mapping(unit.get("bounded_step_contract"))
+    if isinstance(bounded_contract, Mapping):
+        step_id = _normalize_text(bounded_contract.get("step_id"), default="")
+        bounded_progression = _get_contract_progression_metadata(bounded_contract)
+        progression_step_id = _normalize_text(bounded_progression.get("planned_step_id"), default="")
+        if step_id and step_id != pr_id:
+            return True
+        if progression_step_id and progression_step_id != pr_id:
+            return True
+
+    prompt_contract = _as_mapping(unit.get("pr_implementation_prompt_contract"))
+    if isinstance(prompt_contract, Mapping):
+        source_step_id = _normalize_text(prompt_contract.get("source_step_id"), default="")
+        prompt_progression = _get_contract_progression_metadata(prompt_contract)
+        progression_step_id = _normalize_text(prompt_progression.get("planned_step_id"), default="")
+        if source_step_id and source_step_id != pr_id:
+            return True
+        if progression_step_id and progression_step_id != pr_id:
+            return True
+
+    return False
+
+
+def _has_contract_progression_metadata(unit: Mapping[str, Any]) -> bool:
+    bounded_contract = _as_mapping(unit.get("bounded_step_contract"))
+    prompt_contract = _as_mapping(unit.get("pr_implementation_prompt_contract"))
+    bounded_progression = _get_contract_progression_metadata(bounded_contract)
+    prompt_progression = _get_contract_progression_metadata(prompt_contract)
+    return bool(bounded_progression) and bool(prompt_progression)
+
+
+def _is_bounded_contract_ready(unit: Mapping[str, Any]) -> bool:
+    bounded_contract = _as_mapping(unit.get("bounded_step_contract"))
+    if not isinstance(bounded_contract, Mapping):
+        return False
+    boundedness = (
+        dict(bounded_contract.get("boundedness"))
+        if isinstance(bounded_contract.get("boundedness"), Mapping)
+        else {}
+    )
+    status = _normalize_text(boundedness.get("status"), default="")
+    return status == BOUNDED_STATUS_BOUNDED
+
+
+def _uses_contract_sidecars(unit: Mapping[str, Any]) -> bool:
+    bounded_path = _normalize_text(unit.get("bounded_step_contract_path"), default="")
+    prompt_path = _normalize_text(unit.get("pr_implementation_prompt_contract_path"), default="")
+    if bounded_path or prompt_path:
+        return True
+    return isinstance(unit.get("bounded_step_contract"), Mapping) or isinstance(
+        unit.get("pr_implementation_prompt_contract"), Mapping
+    )
+
+
 def _load_unit_payloads(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
     raw_units = manifest.get("pr_units")
     if not isinstance(raw_units, list) or not raw_units:
@@ -111,9 +296,25 @@ def _load_unit_payloads(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
 
         receipt_path = Path(_normalize_text(raw.get("receipt_path"), default=""))
         result_path = Path(_normalize_text(raw.get("result_path"), default=""))
+        bounded_step_contract_path_text = _normalize_text(raw.get("bounded_step_contract_path"), default="")
+        prompt_contract_path_text = _normalize_text(raw.get("pr_implementation_prompt_contract_path"), default="")
+        bounded_step_contract_path = (
+            Path(bounded_step_contract_path_text) if bounded_step_contract_path_text else None
+        )
+        prompt_contract_path = Path(prompt_contract_path_text) if prompt_contract_path_text else None
 
         receipt = _read_json_object(receipt_path) if receipt_path.exists() else None
         result = _read_json_object(result_path) if result_path.exists() else None
+        bounded_step_contract = (
+            _read_json_object_if_exists(bounded_step_contract_path)
+            if bounded_step_contract_path is not None
+            else None
+        )
+        prompt_contract = (
+            _read_json_object_if_exists(prompt_contract_path)
+            if prompt_contract_path is not None
+            else None
+        )
 
         units.append(
             {
@@ -122,8 +323,12 @@ def _load_unit_payloads(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "compiled_prompt_path": _normalize_text(raw.get("compiled_prompt_path"), default=""),
                 "receipt_path": str(receipt_path),
                 "result_path": str(result_path),
+                "bounded_step_contract_path": str(bounded_step_contract_path) if bounded_step_contract_path else "",
+                "pr_implementation_prompt_contract_path": str(prompt_contract_path) if prompt_contract_path else "",
                 "receipt": receipt,
                 "result": result,
+                "bounded_step_contract": bounded_step_contract,
+                "pr_implementation_prompt_contract": prompt_contract,
             }
         )
 
@@ -134,8 +339,6 @@ def _load_unit_payloads(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _is_scope_drift(unit: Mapping[str, Any], pr_plan_unit: Mapping[str, Any] | None) -> bool:
-    if not isinstance(pr_plan_unit, Mapping):
-        return False
     result = unit.get("result")
     if not isinstance(result, Mapping):
         return False
@@ -144,7 +347,9 @@ def _is_scope_drift(unit: Mapping[str, Any], pr_plan_unit: Mapping[str, Any] | N
     if not changed_files:
         return False
 
-    planned_files = set(_normalize_string_list(pr_plan_unit.get("touched_files"), sort_items=True))
+    planned_files = set(
+        _extract_expected_scope_files(unit=unit, pr_plan_unit=pr_plan_unit)
+    )
     if not planned_files:
         return False
 
@@ -152,10 +357,7 @@ def _is_scope_drift(unit: Mapping[str, Any], pr_plan_unit: Mapping[str, Any] | N
 
 
 def _is_category_mismatch(unit: Mapping[str, Any], pr_plan_unit: Mapping[str, Any] | None) -> bool:
-    if not isinstance(pr_plan_unit, Mapping):
-        return False
-
-    expected_tier = _normalize_text(pr_plan_unit.get("tier_category"), default="")
+    expected_tier = _extract_expected_tier_category(unit=unit, pr_plan_unit=pr_plan_unit)
     if not expected_tier:
         return False
 
@@ -197,16 +399,28 @@ def _collect_run_signals(
     observed_attempt_count = 0
     scope_drift = 0
     category_mismatch = 0
+    refusal_or_conflict = 0
+    contract_missing = 0
+    contract_identity_conflict = 0
+    unbounded_contract = 0
+    missing_progression_metadata = 0
+    contract_gating_required = any(_uses_contract_sidecars(unit) for unit in units)
 
     for unit in units:
         pr_id = _normalize_text(unit.get("pr_id"), default="")
         receipt = _as_mapping(unit.get("receipt"))
         result = _as_mapping(unit.get("result"))
+        bounded_step_contract = _as_mapping(unit.get("bounded_step_contract"))
+        prompt_contract = _as_mapping(unit.get("pr_implementation_prompt_contract"))
 
         if receipt is None:
             missing_artifacts += 1
         if result is None:
             missing_artifacts += 1
+        if contract_gating_required and bounded_step_contract is None:
+            contract_missing += 1
+        if contract_gating_required and prompt_contract is None:
+            contract_missing += 1
 
         if receipt is not None:
             receipt_pr = _normalize_text(receipt.get("pr_id"), default="")
@@ -217,6 +431,16 @@ def _collect_run_signals(
             result_pr = _normalize_text(result.get("pr_id"), default="")
             if result_pr and result_pr != pr_id:
                 contradictory += 1
+
+        if contract_gating_required and _has_contract_identity_mismatch(unit):
+            contract_identity_conflict += 1
+            all_completed_and_passed = False
+        if contract_gating_required and not _has_contract_progression_metadata(unit):
+            missing_progression_metadata += 1
+            all_completed_and_passed = False
+        if contract_gating_required and not _is_bounded_contract_ready(unit):
+            unbounded_contract += 1
+            all_completed_and_passed = False
 
         if _is_scope_drift(unit, pr_plan_index.get(pr_id)):
             scope_drift += 1
@@ -236,9 +460,19 @@ def _collect_run_signals(
         verify_status = _normalize_text(verify.get("status"), default="")
 
         failure_type = _normalize_text(result.get("failure_type"), default="")
+        failure_message = _normalize_text(result.get("failure_message"), default="").lower()
 
         if failure_type == "rollback_required":
             explicit_rollback += 1
+
+        if _has_refusal_or_conflict_surface(
+            result=result,
+            execution=execution,
+            failure_type=failure_type,
+            failure_message=failure_message,
+        ):
+            refusal_or_conflict += 1
+            all_completed_and_passed = False
 
         if execution_status in {"failed", "timed_out"} or failure_type == "execution_failure":
             execution_failure += 1
@@ -266,62 +500,19 @@ def _collect_run_signals(
         "validation_failure": validation_failure,
         "missing_signals": missing_signals,
         "explicit_rollback": explicit_rollback,
+        "refusal_or_conflict": refusal_or_conflict,
         "all_completed_and_passed": all_completed_and_passed,
         "observed_attempt_count": observed_attempt_count,
         "scope_drift": scope_drift,
         "category_mismatch": category_mismatch,
+        "contract_missing": contract_missing,
+        "contract_identity_conflict": contract_identity_conflict,
+        "unbounded_contract": unbounded_contract,
+        "missing_progression_metadata": missing_progression_metadata,
+        "contract_gating_required": contract_gating_required,
         "is_dry_run": is_dry_run,
         "run_status": run_status,
     }
-
-
-def _decide_action(signals: Mapping[str, Any], retry_ctx: Mapping[str, Any]) -> tuple[str, str]:
-    budget = _as_non_negative_int(retry_ctx.get("retry_budget_remaining"), default=0)
-    prior_retry_class = _normalize_text(retry_ctx.get("prior_retry_class"), default="")
-    missing_signal_count = _as_non_negative_int(retry_ctx.get("missing_signal_count"), default=0)
-
-    if _as_non_negative_int(signals.get("category_mismatch"), default=0) > 0:
-        return "roadmap_replan", "tier/category mismatch detected against pr_plan intent"
-
-    if _as_non_negative_int(signals.get("scope_drift"), default=0) > 0:
-        return "prompt_recompile", "scope drift detected against pr_plan touched_files"
-
-    if _as_non_negative_int(signals.get("explicit_rollback"), default=0) > 0:
-        return "rollback_required", "explicit rollback requirement signaled by normalized result"
-
-    if _as_non_negative_int(signals.get("contradictory"), default=0) > 0:
-        return "escalate_to_human", "contradictory artifact identities detected"
-
-    if _as_non_negative_int(signals.get("validation_failure"), default=0) > 0:
-        if budget <= 0:
-            return "escalate_to_human", "validation failure with exhausted retry budget"
-        if prior_retry_class == "repair_prompt_retry":
-            return "escalate_to_human", "repair_prompt_retry already attempted and failed"
-        return "repair_prompt_retry", "validation/test failure after execution completion"
-
-    if _as_non_negative_int(signals.get("execution_failure"), default=0) > 0:
-        if budget <= 0:
-            return "escalate_to_human", "execution failure with exhausted retry budget"
-        if prior_retry_class == "same_prompt_retry":
-            return "escalate_to_human", "same_prompt_retry already attempted and failed"
-        return "same_prompt_retry", "explicit execution/tool failure with valid planned scope"
-
-    missing_total = _as_non_negative_int(signals.get("missing_artifacts"), default=0) + _as_non_negative_int(
-        signals.get("missing_signals"),
-        default=0,
-    )
-    if missing_total > 0:
-        if missing_signal_count >= 2:
-            return "escalate_to_human", "missing or incomplete execution signals observed repeatedly"
-        return "signal_recollect", "missing or incomplete artifacts/signals require recollection"
-
-    if bool(signals.get("all_completed_and_passed", False)) and not bool(signals.get("is_dry_run", False)):
-        return "proceed_to_pr", "all units completed with passing verification signals"
-
-    if bool(signals.get("is_dry_run", False)) and _normalize_text(signals.get("run_status"), default="") == "dry_run_completed":
-        return "signal_recollect", "dry_run_completed does not imply execution success"
-
-    return "escalate_to_human", "unable to derive a safe deterministic automated next action"
 
 
 def evaluate_next_action(
@@ -338,7 +529,12 @@ def evaluate_next_action(
     retry_ctx = normalize_retry_context(retry_context, policy_snapshot=policy_snapshot)
     signals = _collect_run_signals(manifest=manifest, units=units, pr_plan_index=pr_plan_index)
 
-    next_action, reason = _decide_action(signals, retry_ctx)
+    progression = evaluate_review_progression_outcome(
+        signals=signals,
+        retry_context=retry_ctx,
+    )
+    next_action = _normalize_text(progression.get("next_action"), default="")
+    reason = _normalize_text(progression.get("reason"), default="")
     if next_action not in ALLOWED_NEXT_ACTIONS:
         raise ValueError(f"unsupported next_action computed: {next_action}")
 
@@ -356,6 +552,9 @@ def evaluate_next_action(
     return {
         "next_action": next_action,
         "reason": reason,
+        "progression_outcome": _normalize_text(progression.get("outcome"), default=""),
+        "result_acceptance": _normalize_text(progression.get("result_acceptance"), default=""),
+        "progression_rule_id": _normalize_text(progression.get("rule_id"), default=""),
         "retry_budget_remaining": _as_non_negative_int(
             updated_retry_context.get("retry_budget_remaining"),
             default=0,
