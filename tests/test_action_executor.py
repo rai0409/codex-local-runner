@@ -461,6 +461,61 @@ class ActionExecutorTests(unittest.TestCase):
         self.assertEqual(receipt["refusal_reason"], "authority_requested_lane_not_allowed")
         self.assertEqual(len(write_backend.pr_calls), 0)
 
+    def test_canonical_handoff_lane_intent_is_enforced_consistently(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            run_dir = self._write_run_artifacts(
+                Path(tmp_dir),
+                handoff={
+                    "job_id": "job-1",
+                    "next_action": "proceed_to_pr",
+                    "reason": "all units completed",
+                    "action_consumable": True,
+                    "whether_human_required": False,
+                    "requested_execution": {
+                        "requested_lanes": {"proceed_to_pr": "github_deterministic"},
+                    },
+                },
+                next_action={"next_action": "proceed_to_pr"},
+            )
+            write_backend = _FakeWriteBackend()
+            read_backend = _FakeReadBackend()
+            receipt = self._build_executor(read_backend, write_backend).execute_from_run_dir(
+                run_dir,
+                head_branch="feature/test",
+                write_authority=self._write_authority_allowed(),
+            )
+
+        self.assertTrue(receipt["succeeded"])
+        self.assertIsNone(receipt["refusal_reason"])
+
+    def test_canonical_handoff_lane_disallowed_for_github_action_refuses(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            run_dir = self._write_run_artifacts(
+                Path(tmp_dir),
+                handoff={
+                    "job_id": "job-1",
+                    "next_action": "proceed_to_pr",
+                    "reason": "all units completed",
+                    "action_consumable": True,
+                    "whether_human_required": False,
+                    "requested_execution": {
+                        "requested_lanes": {"proceed_to_pr": "llm_backed"},
+                    },
+                },
+                next_action={"next_action": "proceed_to_pr"},
+            )
+            write_backend = _FakeWriteBackend()
+            read_backend = _FakeReadBackend()
+            receipt = self._build_executor(read_backend, write_backend).execute_from_run_dir(
+                run_dir,
+                head_branch="feature/test",
+                write_authority=self._write_authority_allowed(),
+            )
+
+        self.assertFalse(receipt["succeeded"])
+        self.assertEqual(receipt["refusal_reason"], "authority_requested_lane_not_allowed")
+        self.assertEqual(len(write_backend.pr_calls), 0)
+
     def test_github_pr_update_routes_through_action_executor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             run_dir = self._write_run_artifacts(

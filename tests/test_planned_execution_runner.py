@@ -304,16 +304,36 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
                 unit_dir = run_root / pr_id
                 self.assertTrue(unit_dir.exists())
                 self.assertTrue((unit_dir / "compiled_prompt.md").exists())
+                self.assertTrue((unit_dir / "bounded_step_contract.json").exists())
+                self.assertTrue((unit_dir / "pr_implementation_prompt_contract.json").exists())
+                self.assertTrue((unit_dir / "unit_progression.json").exists())
                 self.assertTrue((unit_dir / "result.json").exists())
                 self.assertTrue((unit_dir / "execution_receipt.json").exists())
 
                 result_payload = json.loads((unit_dir / "result.json").read_text(encoding="utf-8"))
                 receipt_payload = json.loads((unit_dir / "execution_receipt.json").read_text(encoding="utf-8"))
                 prompt_text = (unit_dir / "compiled_prompt.md").read_text(encoding="utf-8")
+                bounded_step_contract = json.loads(
+                    (unit_dir / "bounded_step_contract.json").read_text(encoding="utf-8")
+                )
+                prompt_contract = json.loads(
+                    (unit_dir / "pr_implementation_prompt_contract.json").read_text(encoding="utf-8")
+                )
+                unit_progression_payload = json.loads(
+                    (unit_dir / "unit_progression.json").read_text(encoding="utf-8")
+                )
 
                 self.assertEqual(result_payload["pr_id"], pr_id)
                 self.assertEqual(receipt_payload["pr_id"], pr_id)
                 self.assertIn(f"Execute exactly one PR slice: {pr_id}", prompt_text)
+                self.assertEqual(bounded_step_contract["step_id"], pr_id)
+                self.assertEqual(prompt_contract["source_step_id"], pr_id)
+                self.assertEqual(unit_progression_payload["pr_id"], pr_id)
+                self.assertIn("contract_handoff", unit_progression_payload)
+                self.assertEqual(
+                    prompt_contract["progression_metadata"]["planned_step_id"],
+                    pr_id,
+                )
 
             decision_payload = json.loads((run_root / "next_action.json").read_text(encoding="utf-8"))
             handoff_payload = json.loads((run_root / "action_handoff.json").read_text(encoding="utf-8"))
@@ -321,9 +341,46 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
             self.assertIn("next_action", decision_payload)
             self.assertIn("reason", decision_payload)
             self.assertIn("updated_retry_context", decision_payload)
+            self.assertIn("progression_outcome", decision_payload)
+            self.assertIn("progression_rule_id", decision_payload)
             self.assertEqual(handoff_payload["job_id"], manifest["job_id"])
             self.assertIn("action_consumable", handoff_payload)
             self.assertIn("handoff_created_at", handoff_payload)
+
+    def test_launch_metadata_uses_structured_contract_surfaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            transport = _RecordingDryRunTransport()
+            runner = PlannedExecutionRunner(adapter=CodexExecutorAdapter(transport=transport))
+            manifest = runner.run(
+                artifacts_input_dir=artifacts_dir,
+                output_dir=out_dir,
+                dry_run=True,
+                stop_on_failure=True,
+            )
+
+            first = manifest["pr_units"][0]
+            unit_dir = Path(first["compiled_prompt_path"]).parent
+            bounded = json.loads((unit_dir / "bounded_step_contract.json").read_text(encoding="utf-8"))
+            prompt_contract = json.loads(
+                (unit_dir / "pr_implementation_prompt_contract.json").read_text(encoding="utf-8")
+            )
+            run_ids = sorted(transport._runs.keys())  # type: ignore[attr-defined]
+            first_run = transport._runs[run_ids[0]]  # type: ignore[attr-defined]
+            metadata = first_run["metadata"]
+
+        self.assertEqual(metadata["planned_step_id"], bounded["step_id"])
+        self.assertEqual(metadata["source_step_id"], prompt_contract["source_step_id"])
+        self.assertEqual(
+            metadata["strict_scope_files"],
+            bounded["progression_metadata"]["strict_scope_files"],
+        )
+        self.assertEqual(
+            metadata["validation_commands"],
+            bounded["validation_expectations"],
+        )
 
     def test_manifest_generation_and_required_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -347,6 +404,7 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertEqual(manifest["run_status"], "dry_run_completed")
         self.assertGreaterEqual(len(manifest["pr_units"]), 1)
         self.assertIn("decision_summary", manifest)
+        self.assertIn("progression_summary", manifest)
         self.assertIn("manifest_path", manifest)
         self.assertIn("next_action_path", manifest)
         self.assertIn("action_handoff_path", manifest)
@@ -360,6 +418,7 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
             manifest["handoff_summary"]["next_action"],
             "signal_recollect",
         )
+        self.assertEqual(manifest["progression_summary"]["final_unit_state"], "reviewed")
 
     def test_stop_on_failure_behavior(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -452,6 +511,7 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertEqual(handoff_payload["next_action"], "proceed_to_pr")
         self.assertTrue(handoff_payload["action_consumable"])
         self.assertFalse(decision_payload["whether_human_required"])
+        self.assertEqual(manifest["progression_summary"]["final_unit_state"], "advanced")
 
     def test_invalid_cli_input_handling(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -518,13 +578,44 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
 
             for entry in manifest["pr_units"]:
                 self.assertIn("compiled_prompt_path", entry)
+                self.assertIn("bounded_step_contract_path", entry)
+                self.assertIn("pr_implementation_prompt_contract_path", entry)
                 self.assertIn("result_path", entry)
                 self.assertIn("receipt_path", entry)
+                self.assertIn("unit_progression_path", entry)
+                self.assertIn("unit_progression_state", entry)
                 self.assertIn("status", entry)
                 self.assertTrue(Path(entry["compiled_prompt_path"]).exists())
+                self.assertTrue(Path(entry["bounded_step_contract_path"]).exists())
+                self.assertTrue(Path(entry["pr_implementation_prompt_contract_path"]).exists())
                 self.assertTrue(Path(entry["result_path"]).exists())
                 self.assertTrue(Path(entry["receipt_path"]).exists())
+                self.assertTrue(Path(entry["unit_progression_path"]).exists())
             self.assertTrue(Path(manifest["action_handoff_path"]).exists())
+
+    def test_unit_progression_checkpoint_surface_is_explicit_and_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+
+            transport = _RecordingLiveTransport()
+            runner = PlannedExecutionRunner(adapter=CodexExecutorAdapter(transport=transport))
+            manifest = runner.run(
+                artifacts_input_dir=artifacts_dir,
+                output_dir=out_dir,
+                dry_run=False,
+                stop_on_failure=True,
+            )
+            first = manifest["pr_units"][0]
+            progression = json.loads(Path(first["unit_progression_path"]).read_text(encoding="utf-8"))
+            checkpoints = progression["checkpoints"]
+            states = [entry["state"] for entry in checkpoints]
+
+        self.assertEqual(progression["schema_version"], "v1")
+        self.assertEqual(states[:4], ["planned", "prompt_ready", "execution_ready", "execution_completed"])
+        self.assertIn("reviewed", states)
+        self.assertEqual(progression["current_state"], "advanced")
 
     def test_result_shape_compatibility_with_current_expectations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

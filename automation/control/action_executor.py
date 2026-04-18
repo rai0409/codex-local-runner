@@ -8,8 +8,9 @@ from typing import Any
 from typing import Callable
 from typing import Mapping
 
-from automation.control.execution_authority import evaluate_action_authority
+from automation.control.execution_authority import resolve_action_routing
 from automation.control.execution_authority import LANE_GITHUB_DETERMINISTIC
+from automation.control.execution_authority import ROUTING_CLASS_EXECUTOR
 from automation.github.merge_executor import BoundedMergeExecutor
 from automation.github.pr_creator import DraftPRCreator
 from automation.github.pr_updater import BoundedPRUpdater
@@ -348,17 +349,19 @@ class ActionExecutor:
         if requested_action not in _SUPPORTED_ACTIONS:
             return _refuse(f"unsupported_action:{requested_action or 'missing'}")
 
-        authority_eval = evaluate_action_authority(
+        routing_selection = resolve_action_routing(
             requested_action,
             policy_snapshot=policy_snapshot,
             handoff_payload=handoff,
         )
-        if not bool(authority_eval.get("known_action")):
+        if not bool(routing_selection.get("known_action")):
             return _refuse("authority_action_unclassified")
-        if not bool(authority_eval.get("allowed")):
-            reason = _normalize_text(authority_eval.get("reason"), default="lane_not_allowed")
+        if not bool(routing_selection.get("allowed")):
+            reason = _normalize_text(routing_selection.get("reason"), default="lane_not_allowed")
             return _refuse(f"authority_{reason}")
-        if _normalize_text(authority_eval.get("resolved_lane"), default="") != LANE_GITHUB_DETERMINISTIC:
+        if _normalize_text(routing_selection.get("routing_class"), default="") != ROUTING_CLASS_EXECUTOR:
+            return _refuse("authority_routing_mismatch:executor_requires_executor_class")
+        if _normalize_text(routing_selection.get("resolved_lane"), default="") != LANE_GITHUB_DETERMINISTIC:
             return _refuse("authority_routing_mismatch:executor_requires_github_deterministic")
 
         if not _as_bool(handoff.get("action_consumable")):

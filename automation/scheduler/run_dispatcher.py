@@ -15,10 +15,14 @@ from automation.control.retry_decision import DECISION_RETRY_NOW
 from automation.control.retry_decision import DECISION_TERMINAL_REFUSAL
 from automation.control.retry_decision import evaluate_retry_decision
 from automation.control.retry_context_store import FileRetryContextStore
-from automation.control.execution_authority import evaluate_action_authority
+from automation.control.execution_authority import normalize_requested_lane_input
+from automation.control.execution_authority import resolve_action_routing
 from automation.control.execution_authority import LANE_DETERMINISTIC_PYTHON
 from automation.control.execution_authority import LANE_GITHUB_DETERMINISTIC
 from automation.control.execution_authority import LANE_LLM_BACKED
+from automation.control.execution_authority import ROUTING_CLASS_CONTROL
+from automation.control.execution_authority import ROUTING_CLASS_EXECUTOR
+from automation.control.execution_authority import ROUTING_CLASS_RETRY
 from automation.observability.run_audit import RunAuditLogger
 from automation.scheduler.pause_state import build_pause_payload
 from automation.scheduler.pause_state import classify_pause_condition
@@ -27,22 +31,6 @@ from automation.scheduler.pause_state import is_pause_resume_eligible
 from automation.scheduler.pause_state import load_pause_payload
 from automation.scheduler.pause_state import mark_pause_resumed
 from automation.scheduler.pause_state import persist_pause_payload
-
-_RETRY_ROUTABLE_ACTIONS = {
-    "same_prompt_retry",
-    "repair_prompt_retry",
-    "signal_recollect",
-    "wait_for_checks",
-    "prompt_recompile",
-    "roadmap_replan",
-}
-_EXECUTOR_ROUTABLE_ACTIONS = {
-    "proceed_to_pr",
-    "github.pr.update",
-    "proceed_to_merge",
-    "rollback_required",
-}
-
 
 def _normalize_text(value: Any, *, default: str = "") -> str:
     if value is None:
@@ -84,6 +72,35 @@ def _as_mapping(value: Any) -> Mapping[str, Any] | None:
     return value if isinstance(value, Mapping) else None
 
 
+_EXECUTOR_RECEIPT_FILENAMES = (
+    "pr_creation_receipt.json",
+    "pr_update_receipt.json",
+    "merge_receipt.json",
+    "rollback_receipt.json",
+)
+
+_EXECUTOR_ACTION_TOKENS = {
+    "proceed_to_pr",
+    "github.pr.update",
+    "proceed_to_merge",
+    "rollback_required",
+}
+
+_DETERMINISTIC_WRITE_RESULT_STATUSES = {"already_applied", "no_op"}
+
+_DETERMINISTIC_REFUSAL_PREFIXES = (
+    "idempotency_",
+    "write_authority_blocked",
+    "write_action_not_allowed",
+    "write_category_not_allowed",
+    "merge_pr_number_missing_or_invalid",
+    "update_pr_number_missing_or_invalid",
+    "pr_update_missing_or_invalid",
+    "rollback_target_missing_or_ambiguous",
+    "unsupported_action",
+)
+
+
 def _read_json_object(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -112,6 +129,96 @@ def _extract_run_id_from_manifest(manifest: Mapping[str, Any]) -> str | None:
         if run_id:
             return run_id
     return None
+
+
+def _routing_cache_key(
+    *,
+    action: str,
+    policy_snapshot: Mapping[str, Any] | None,
+    handoff_payload: Mapping[str, Any] | None,
+) -> tuple[str, str, str]:
+    normalized = normalize_requested_lane_input(
+        action,
+        policy_snapshot=policy_snapshot,
+        handoff_payload=handoff_payload,
+    )
+    fingerprint = _normalize_text(normalized.get("routing_input_fingerprint"), default="_") or "_"
+    return (
+        _normalize_text(action, default=""),
+        fingerprint,
+        "",
+    )
+
+
+def _load_terminal_executor_receipt_candidates(run_root: Path) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for filename in _EXECUTOR_RECEIPT_FILENAMES:
+        path = run_root / filename
+        if not path.exists():
+            continue
+        try:
+            payload = _read_json_object(path)
+        except Exception:
+            continue
+        requested_action = _normalize_text(payload.get("requested_action"), default="")
+        if requested_action not in _EXECUTOR_ACTION_TOKENS:
+            continue
+        succeeded = _as_bool(payload.get("succeeded"))
+        refusal_reason = _normalize_text(payload.get("refusal_reason"), default="")
+        idempotency = payload.get("write_idempotency")
+        idempotency_payload = idempotency if isinstance(idempotency, Mapping) else {}
+        dedupe_status = _normalize_text(idempotency_payload.get("dedupe_status"), default="")
+        evidence = payload.get("evidence_used_summary")
+        evidence_payload = evidence if isinstance(evidence, Mapping) else {}
+        write_result = evidence_payload.get("write_result")
+        write_result_payload = write_result if isinstance(write_result, Mapping) else {}
+        write_result_status = _normalize_text(write_result_payload.get("status"), default="")
+        terminal_reason = ""
+        dispatch_status = ""
+        human_required = _as_bool(payload.get("whether_human_required"))
+        if succeeded and (
+            write_result_status in _DETERMINISTIC_WRITE_RESULT_STATUSES
+            or dedupe_status == "already_applied"
+        ):
+            dispatch_status = "executed"
+            terminal_reason = (
+                f"short_circuit_existing_terminal_write_result:{requested_action}:{write_result_status or dedupe_status}"
+            )
+        elif not succeeded and refusal_reason and any(
+            refusal_reason.startswith(prefix) for prefix in _DETERMINISTIC_REFUSAL_PREFIXES
+        ):
+            dispatch_status = "escalated"
+            terminal_reason = f"short_circuit_existing_terminal_refusal:{requested_action}:{refusal_reason}"
+            human_required = True
+
+        if not dispatch_status or not terminal_reason:
+            continue
+        candidates.append(
+            {
+                "dispatch_status": dispatch_status,
+                "routing_reason": terminal_reason,
+                "whether_human_required": human_required,
+                "executed_at": _normalize_text(payload.get("executed_at"), default=""),
+                "receipt_path": str(path),
+                "requested_action": requested_action,
+            }
+        )
+    return candidates
+
+
+def _select_retry_short_circuit_candidate(run_root: Path) -> dict[str, Any] | None:
+    candidates = _load_terminal_executor_receipt_candidates(run_root)
+    if not candidates:
+        return None
+    ordered = sorted(
+        candidates,
+        key=lambda item: (
+            _normalize_text(item.get("executed_at"), default=""),
+            _normalize_text(item.get("requested_action"), default=""),
+            _normalize_text(item.get("receipt_path"), default=""),
+        ),
+    )
+    return dict(ordered[-1])
 
 
 def _resolve_retry_details(
@@ -354,6 +461,7 @@ class RunDispatcher:
         retries_performed = 0
         manifests: list[dict[str, Any]] = []
         last_audit: dict[str, Any] | None = None
+        routing_cache: dict[tuple[str, str, str], dict[str, Any]] = {}
 
         retry_store = FileRetryContextStore(output_root / "retry_context_store.json")
         requested_job_id = _normalize_text(request.job_id, default="")
@@ -463,12 +571,21 @@ class RunDispatcher:
                     "audit": last_audit,
                 }
 
-            authority_eval = evaluate_action_authority(
-                action,
-                policy_snapshot=request.policy_snapshot,
+            routing_key = _routing_cache_key(
+                action=action,
+                policy_snapshot=request.policy_snapshot if isinstance(request.policy_snapshot, Mapping) else None,
                 handoff_payload=handoff_payload,
             )
-            if not bool(authority_eval.get("known_action")):
+            if routing_key in routing_cache:
+                routing_selection = dict(routing_cache[routing_key])
+            else:
+                routing_selection = resolve_action_routing(
+                    action,
+                    policy_snapshot=request.policy_snapshot,
+                    handoff_payload=handoff_payload,
+                )
+                routing_cache[routing_key] = dict(routing_selection)
+            if not bool(routing_selection.get("known_action")):
                 last_audit = self._record_audit(
                     run_root=run_root,
                     job_id=job_id,
@@ -488,8 +605,8 @@ class RunDispatcher:
                     "manifests": manifests,
                     "audit": last_audit,
                 }
-            if not bool(authority_eval.get("allowed")):
-                reason = _normalize_text(authority_eval.get("reason"), default="lane_not_allowed")
+            if not bool(routing_selection.get("allowed")):
+                reason = _normalize_text(routing_selection.get("reason"), default="lane_not_allowed")
                 last_audit = self._record_audit(
                     run_root=run_root,
                     job_id=job_id,
@@ -509,8 +626,9 @@ class RunDispatcher:
                     "manifests": manifests,
                     "audit": last_audit,
                 }
-            resolved_lane = _normalize_text(authority_eval.get("resolved_lane"), default="")
-            if action in _EXECUTOR_ROUTABLE_ACTIONS and resolved_lane != LANE_GITHUB_DETERMINISTIC:
+            resolved_lane = _normalize_text(routing_selection.get("resolved_lane"), default="")
+            routing_class = _normalize_text(routing_selection.get("routing_class"), default="")
+            if routing_class == ROUTING_CLASS_EXECUTOR and resolved_lane != LANE_GITHUB_DETERMINISTIC:
                 last_audit = self._record_audit(
                     run_root=run_root,
                     job_id=job_id,
@@ -530,7 +648,7 @@ class RunDispatcher:
                     "manifests": manifests,
                     "audit": last_audit,
                 }
-            if action in _RETRY_ROUTABLE_ACTIONS and resolved_lane not in {
+            if routing_class == ROUTING_CLASS_RETRY and resolved_lane not in {
                 LANE_LLM_BACKED,
                 LANE_DETERMINISTIC_PYTHON,
             }:
@@ -553,6 +671,79 @@ class RunDispatcher:
                     "manifests": manifests,
                     "audit": last_audit,
                 }
+            if routing_class == ROUTING_CLASS_CONTROL and resolved_lane != LANE_DETERMINISTIC_PYTHON:
+                last_audit = self._record_audit(
+                    run_root=run_root,
+                    job_id=job_id,
+                    scheduler_action_taken="escalate",
+                    execution_attempted=False,
+                    retry_attempted=False,
+                    routed_action=action,
+                    routing_reason="authority_routing_mismatch:control_requires_deterministic_python",
+                    retry_class=retry_class,
+                    retry_budget_remaining=retry_budget_remaining,
+                    whether_human_required=True,
+                    outcome_status="escalated",
+                )
+                return {
+                    "job_id": job_id,
+                    "dispatch_status": "escalated",
+                    "manifests": manifests,
+                    "audit": last_audit,
+                }
+            if routing_class not in {ROUTING_CLASS_RETRY, ROUTING_CLASS_EXECUTOR, ROUTING_CLASS_CONTROL}:
+                last_audit = self._record_audit(
+                    run_root=run_root,
+                    job_id=job_id,
+                    scheduler_action_taken="escalate",
+                    execution_attempted=False,
+                    retry_attempted=False,
+                    routed_action=action,
+                    routing_reason="authority_routing_class_unresolved",
+                    retry_class=retry_class,
+                    retry_budget_remaining=retry_budget_remaining,
+                    whether_human_required=True,
+                    outcome_status="escalated",
+                )
+                return {
+                    "job_id": job_id,
+                    "dispatch_status": "escalated",
+                    "manifests": manifests,
+                    "audit": last_audit,
+                }
+
+            if routing_class == ROUTING_CLASS_RETRY:
+                short_circuit = _select_retry_short_circuit_candidate(run_root)
+                if isinstance(short_circuit, Mapping):
+                    resolved_dispatch_status = _normalize_text(
+                        short_circuit.get("dispatch_status"),
+                        default="escalated",
+                    )
+                    if resolved_dispatch_status not in {"executed", "escalated"}:
+                        resolved_dispatch_status = "escalated"
+                    last_audit = self._record_audit(
+                        run_root=run_root,
+                        job_id=job_id,
+                        scheduler_action_taken="short_circuit",
+                        execution_attempted=False,
+                        retry_attempted=False,
+                        routed_action=action,
+                        routing_reason=_normalize_text(
+                            short_circuit.get("routing_reason"),
+                            default="short_circuit_terminal_result",
+                        ),
+                        retry_class=retry_class,
+                        retry_budget_remaining=retry_budget_remaining,
+                        whether_human_required=_as_bool(short_circuit.get("whether_human_required")),
+                        outcome_status=resolved_dispatch_status,
+                    )
+                    return {
+                        "job_id": job_id,
+                        "dispatch_status": resolved_dispatch_status,
+                        "manifests": manifests,
+                        "audit": last_audit,
+                        "short_circuit": dict(short_circuit),
+                    }
 
             pause_match = classify_pause_condition(
                 next_action=action,
@@ -610,7 +801,7 @@ class RunDispatcher:
                     "pause_state": persisted_pause,
                 }
 
-            if action in _RETRY_ROUTABLE_ACTIONS:
+            if routing_class == ROUTING_CLASS_RETRY:
                 retry_policy_override = None
                 policy_snapshot = request.policy_snapshot if isinstance(request.policy_snapshot, Mapping) else {}
                 if isinstance(policy_snapshot.get("retry_policy"), Mapping):
@@ -813,7 +1004,28 @@ class RunDispatcher:
                     "audit": last_audit,
                 }
 
-            if action not in _EXECUTOR_ROUTABLE_ACTIONS:
+            if routing_class == ROUTING_CLASS_CONTROL:
+                last_audit = self._record_audit(
+                    run_root=run_root,
+                    job_id=job_id,
+                    scheduler_action_taken="escalate",
+                    execution_attempted=False,
+                    retry_attempted=False,
+                    routed_action=action,
+                    routing_reason="authority_control_action_no_executor_route",
+                    retry_class=retry_class,
+                    retry_budget_remaining=retry_budget_remaining,
+                    whether_human_required=True,
+                    outcome_status="escalated",
+                )
+                return {
+                    "job_id": job_id,
+                    "dispatch_status": "escalated",
+                    "manifests": manifests,
+                    "audit": last_audit,
+                }
+
+            if routing_class != ROUTING_CLASS_EXECUTOR:
                 last_audit = self._record_audit(
                     run_root=run_root,
                     job_id=job_id,

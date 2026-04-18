@@ -7,6 +7,8 @@ import subprocess
 from typing import Any
 from typing import Mapping
 
+from automation.planning.planned_step_contract import BOUNDED_STATUS_BOUNDED
+from automation.planning.planned_step_contract import build_bounded_planned_step_contract
 from orchestrator.policy_loader import load_change_categories_policy
 from orchestrator.policy_loader import load_merge_gate_policy
 
@@ -634,20 +636,36 @@ def _build_pr_plan(
                     default="Revert this PR slice commit if validation fails.",
                 )
 
-                prs.append(
-                    {
-                        "pr_id": pr_id,
-                        "title": f"[{subsystem}] {item.get('summary')}",
-                        "exact_scope": exact_scope,
-                        "touched_files": chunk,
-                        "forbidden_files": forbidden,
-                        "acceptance_criteria": acceptance_criteria,
-                        "validation_commands": validation_commands,
-                        "rollback_notes": rollback_notes,
-                        "tier_category": tier_category,
-                        "depends_on": depends_on,
-                    }
+                pr_payload = {
+                    "pr_id": pr_id,
+                    "title": f"[{subsystem}] {item.get('summary')}",
+                    "exact_scope": exact_scope,
+                    "touched_files": chunk,
+                    "forbidden_files": forbidden,
+                    "acceptance_criteria": acceptance_criteria,
+                    "validation_commands": validation_commands,
+                    "rollback_notes": rollback_notes,
+                    "tier_category": tier_category,
+                    "depends_on": depends_on,
+                }
+                bounded_step_contract = build_bounded_planned_step_contract(
+                    pr_payload,
+                    soft_file_cap=_SOFT_FILE_CAP,
                 )
+                pr_payload["bounded_step_contract"] = bounded_step_contract
+                boundedness = (
+                    bounded_step_contract.get("boundedness")
+                    if isinstance(bounded_step_contract.get("boundedness"), Mapping)
+                    else {}
+                )
+                bounded_status = _normalize_text(boundedness.get("status"), default=BOUNDED_STATUS_BOUNDED)
+                if bounded_status != BOUNDED_STATUS_BOUNDED:
+                    issues = _normalize_string_list(boundedness.get("issues"), sort_items=False)
+                    planning_warnings.append(
+                        f"{pr_id}: bounded_step_{bounded_status} ({', '.join(issues) if issues else 'no_issues_provided'})"
+                    )
+
+                prs.append(pr_payload)
                 item_pr_ids.append(pr_id)
 
     return {
