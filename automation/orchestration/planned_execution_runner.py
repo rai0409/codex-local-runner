@@ -8,6 +8,9 @@ from typing import Any
 from typing import Callable
 from typing import Mapping
 
+from automation.control.action_handoff import build_action_handoff_payload
+from automation.control.next_action_controller import evaluate_next_action_from_run_dir
+from automation.control.retry_context_store import FileRetryContextStore
 from automation.execution.codex_executor_adapter import CodexExecutionTransport
 from automation.execution.codex_executor_adapter import CodexExecutorAdapter
 from automation.planning.prompt_compiler import compile_prompt_units
@@ -39,6 +42,42 @@ def _normalize_string_list(value: Any, *, sort_items: bool = False) -> list[str]
     if sort_items:
         return sorted(result)
     return result
+
+
+def _as_optional_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if text and text.lstrip("-").isdigit():
+            return int(text)
+    return None
+
+
+def _as_non_negative_int(value: Any, *, default: int = 0) -> int:
+    maybe = _as_optional_int(value)
+    if maybe is None:
+        return default
+    return max(0, maybe)
+
+
+def _merge_retry_context_inputs(
+    *,
+    persisted: Mapping[str, Any] | None,
+    explicit: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    has_persisted = isinstance(persisted, Mapping)
+    has_explicit = isinstance(explicit, Mapping)
+    if not has_persisted and not has_explicit:
+        return None
+    merged: dict[str, Any] = {}
+    if has_persisted:
+        merged.update(dict(persisted or {}))
+    if has_explicit:
+        merged.update(dict(explicit or {}))
+    return merged
 
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -178,39 +217,109 @@ class PlannedExecutionRunner:
             status = "failed"
 
         verify_reason = "validation_not_run_dry_run" if dry_run else "validation_not_run"
+        raw_verify = status_response.get("verify")
+        if not isinstance(raw_verify, Mapping):
+            raw_verify = artifact_response.get("verify")
+        if not isinstance(raw_verify, Mapping):
+            raw_verify = {}
+
+        verify_status = _normalize_text(raw_verify.get("status"), default="").lower()
+        if verify_status not in {"passed", "failed", "not_run"}:
+            verify_status = "not_run"
+        verify_commands = _normalize_string_list(raw_verify.get("commands"))
+        if not verify_commands:
+            verify_commands = _normalize_string_list(unit.get("validation_commands"))
+        normalized_verify_reason = _normalize_text(raw_verify.get("reason"), default="")
+        if not normalized_verify_reason:
+            normalized_verify_reason = verify_reason
+        verify_payload: dict[str, Any] = {
+            "status": verify_status,
+            "commands": verify_commands,
+            "reason": normalized_verify_reason,
+        }
+        command_results = raw_verify.get("command_results")
+        if isinstance(command_results, list):
+            verify_payload["command_results"] = command_results
 
         failure_type: str | None = None
         failure_message: str | None = None
+        status_error = _normalize_text(
+            status_response.get("error") or launch_response.get("error"),
+            default="",
+        )
+        status_failure_type = _normalize_text(
+            status_response.get("failure_type") or launch_response.get("failure_type"),
+            default="",
+        )
+        status_failure_message = _normalize_text(
+            status_response.get("failure_message") or launch_response.get("failure_message"),
+            default="",
+        )
         if status in {"failed", "timed_out"}:
-            failure_type = "execution_failure"
-            failure_message = _normalize_text(status_response.get("error"), default=f"execution_status={status}")
+            failure_type = status_failure_type or "execution_failure"
+            failure_message = status_failure_message or status_error or f"execution_status={status}"
         elif status in {"not_started", "running"}:
-            failure_type = "missing_signal"
+            failure_type = status_failure_type or "missing_signal"
             failure_message = (
-                "dry_run_execution_not_performed" if dry_run else f"execution_status={status}"
+                status_failure_message
+                or ("dry_run_execution_not_performed" if dry_run else f"execution_status={status}")
             )
+        elif verify_status == "failed":
+            failure_type = status_failure_type or "evaluation_failure"
+            failure_message = status_failure_message or normalized_verify_reason or "validation_failed"
+        elif verify_status == "not_run":
+            failure_type = status_failure_type or "missing_signal"
+            failure_message = status_failure_message or normalized_verify_reason or "validation_not_run"
 
+        raw_cost = status_response.get("cost") if isinstance(status_response.get("cost"), Mapping) else {}
+        if not raw_cost:
+            raw_cost = artifact_response.get("cost") if isinstance(artifact_response.get("cost"), Mapping) else {}
         return {
             "status": status,
-            "attempt_count": 0 if dry_run else 1,
-            "started_at": _iso_now(self.now),
-            "finished_at": _iso_now(self.now),
-            "stdout_path": _normalize_text(artifact_response.get("stdout_path"), default=""),
-            "stderr_path": _normalize_text(artifact_response.get("stderr_path"), default=""),
-            "verify": {
-                "status": "not_run",
-                "commands": _normalize_string_list(unit.get("validation_commands")),
-                "reason": verify_reason,
-            },
-            "changed_files": [],
-            "additions": 0,
-            "deletions": 0,
-            "generated_patch_summary": "",
+            "attempt_count": _as_non_negative_int(
+                status_response.get("attempt_count") or launch_response.get("attempt_count"),
+                default=0 if dry_run else 1,
+            ),
+            "started_at": _normalize_text(
+                status_response.get("started_at") or launch_response.get("started_at"),
+                default=_iso_now(self.now),
+            ),
+            "finished_at": _normalize_text(
+                status_response.get("finished_at") or launch_response.get("finished_at"),
+                default=_iso_now(self.now),
+            ),
+            "stdout_path": _normalize_text(
+                status_response.get("stdout_path") or artifact_response.get("stdout_path"),
+                default="",
+            ),
+            "stderr_path": _normalize_text(
+                status_response.get("stderr_path") or artifact_response.get("stderr_path"),
+                default="",
+            ),
+            "verify": verify_payload,
+            "changed_files": _normalize_string_list(
+                status_response.get("changed_files") or artifact_response.get("changed_files"),
+                sort_items=True,
+            ),
+            "additions": _as_non_negative_int(
+                status_response.get("additions") or artifact_response.get("additions"),
+                default=0,
+            ),
+            "deletions": _as_non_negative_int(
+                status_response.get("deletions") or artifact_response.get("deletions"),
+                default=0,
+            ),
+            "generated_patch_summary": _normalize_text(
+                status_response.get("generated_patch_summary")
+                or artifact_response.get("generated_patch_summary"),
+                default="",
+            ),
             "failure_type": failure_type,
             "failure_message": failure_message,
+            "error": status_error,
             "cost": {
-                "tokens_input": 0,
-                "tokens_output": 0,
+                "tokens_input": _as_non_negative_int(raw_cost.get("tokens_input"), default=0),
+                "tokens_output": _as_non_negative_int(raw_cost.get("tokens_output"), default=0),
             },
         }
 
@@ -222,10 +331,10 @@ class PlannedExecutionRunner:
         job_id: str | None = None,
         dry_run: bool = True,
         stop_on_failure: bool = True,
+        retry_context: Mapping[str, Any] | None = None,
+        policy_snapshot: Mapping[str, Any] | None = None,
+        github_read_evidence: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        if not dry_run:
-            raise ValueError("non-dry-run execution is not supported in this phase")
-
         artifacts_root = Path(artifacts_input_dir)
         output_root = Path(output_dir)
 
@@ -239,13 +348,20 @@ class PlannedExecutionRunner:
 
         project_brief = artifacts.get("project_brief", {})
         resolved_job_id = _normalize_text(job_id, default=_normalize_text(project_brief.get("project_id"), default="planned-execution"))
+        retry_context_store_path = output_root / "retry_context_store.json"
+        retry_context_store = FileRetryContextStore(retry_context_store_path)
+        persisted_retry_context = retry_context_store.get(resolved_job_id)
+        effective_retry_context = _merge_retry_context_inputs(
+            persisted=persisted_retry_context,
+            explicit=retry_context,
+        )
 
         run_root = output_root / resolved_job_id
         run_root.mkdir(parents=True, exist_ok=True)
 
         started_at = _iso_now(self.now)
         finished_at = started_at
-        run_status = "dry_run_completed"
+        run_status = "dry_run_completed" if dry_run else "completed"
         manifest_units: list[dict[str, Any]] = []
 
         for unit in units:
@@ -269,6 +385,7 @@ class PlannedExecutionRunner:
                         "dry_run": dry_run,
                         "tier_category": _normalize_text(unit.get("tier_category"), default=""),
                         "depends_on": _normalize_string_list(unit.get("depends_on")),
+                        "validation_commands": _normalize_string_list(unit.get("validation_commands")),
                     },
                 )
             )
@@ -349,7 +466,7 @@ class PlannedExecutionRunner:
             finished_at = _iso_now(self.now)
 
         if run_status != "failed":
-            run_status = "dry_run_completed"
+            run_status = "dry_run_completed" if dry_run else "completed"
 
         manifest = {
             "job_id": resolved_job_id,
@@ -363,5 +480,140 @@ class PlannedExecutionRunner:
         }
 
         manifest_path = run_root / "manifest.json"
+        _write_json(manifest_path, manifest)
+        decision_path = run_root / "next_action.json"
+        decision_error = ""
+        try:
+            decision = evaluate_next_action_from_run_dir(
+                run_root,
+                retry_context=effective_retry_context,
+                policy_snapshot=policy_snapshot,
+                pr_plan=artifacts.get("pr_plan"),
+            )
+        except Exception as exc:
+            # Keep deterministic run-level decision handling even when the controller cannot evaluate.
+            decision_error = str(exc).strip() or "next_action_evaluation_failed"
+            decision = {
+                "next_action": "escalate_to_human",
+                "reason": f"controller_evaluation_failed: {decision_error}",
+                "retry_budget_remaining": 0,
+                "whether_human_required": True,
+                "updated_retry_context": {
+                    "prior_attempt_count": 0,
+                    "prior_retry_class": None,
+                    "missing_signal_count": 0,
+                    "retry_budget_remaining": 0,
+                },
+            }
+
+        decision_payload = {
+            **decision,
+            "evaluated_at": _iso_now(self.now),
+            "job_id": resolved_job_id,
+        }
+        _write_json(decision_path, decision_payload)
+
+        handoff_path = run_root / "action_handoff.json"
+        handoff_error = ""
+        retry_context_store_error = ""
+        try:
+            handoff_payload = build_action_handoff_payload(
+                job_id=resolved_job_id,
+                decision_payload=decision_payload,
+                now=self.now,
+                external_evidence=github_read_evidence,
+            )
+        except Exception as exc:
+            handoff_error = str(exc).strip() or "action_handoff_generation_failed"
+            handoff_payload = {
+                "handoff_schema_version": "v1",
+                "job_id": resolved_job_id,
+                "next_action": _normalize_text(decision_payload.get("next_action"), default=""),
+                "reason": f"action_handoff_generation_failed: {handoff_error}",
+                "whether_human_required": True,
+                "retry_budget_remaining": _as_non_negative_int(
+                    decision_payload.get("retry_budget_remaining"),
+                    default=0,
+                ),
+                "updated_retry_context": (
+                    dict(decision_payload.get("updated_retry_context"))
+                    if isinstance(decision_payload.get("updated_retry_context"), Mapping)
+                    else {
+                        "prior_attempt_count": 0,
+                        "prior_retry_class": None,
+                        "missing_signal_count": 0,
+                        "retry_budget_remaining": 0,
+                    }
+                ),
+                "action_consumable": False,
+                "unsupported_reason": "action_handoff_generation_failed",
+                "retry_class": None,
+                "evidence_summary": {
+                    "provided": bool(github_read_evidence),
+                    "items_total": 0,
+                    "items": [],
+                    "status_counts": {
+                        "success": 0,
+                        "empty": 0,
+                        "not_found": 0,
+                        "auth_failure": 0,
+                        "api_failure": 0,
+                        "unsupported_query": 0,
+                    },
+                },
+                "evidence_constraints": [],
+                "handoff_created_at": _iso_now(self.now),
+            }
+        _write_json(handoff_path, handoff_payload)
+
+        try:
+            retry_context_to_store = (
+                dict(handoff_payload.get("updated_retry_context"))
+                if isinstance(handoff_payload.get("updated_retry_context"), Mapping)
+                else {
+                    "prior_attempt_count": 0,
+                    "prior_retry_class": None,
+                    "missing_signal_count": 0,
+                    "retry_budget_remaining": 0,
+                }
+            )
+            retry_context_store.set(
+                job_id=resolved_job_id,
+                retry_context=retry_context_to_store,
+                updated_at=_normalize_text(handoff_payload.get("handoff_created_at"), default=_iso_now(self.now)),
+            )
+        except Exception as exc:
+            retry_context_store_error = str(exc).strip() or "retry_context_store_update_failed"
+
+        manifest["decision_summary"] = {
+            "next_action": _normalize_text(decision_payload.get("next_action"), default=""),
+            "whether_human_required": bool(decision_payload.get("whether_human_required", False)),
+            "decision_path": str(decision_path),
+            "evaluated_at": _normalize_text(decision_payload.get("evaluated_at"), default=""),
+        }
+        if decision_error:
+            manifest["decision_summary"]["decision_error"] = decision_error
+
+        manifest["handoff_summary"] = {
+            "next_action": _normalize_text(handoff_payload.get("next_action"), default=""),
+            "action_consumable": bool(handoff_payload.get("action_consumable", False)),
+            "unsupported_reason": _normalize_text(handoff_payload.get("unsupported_reason"), default=""),
+            "handoff_path": str(handoff_path),
+            "handoff_created_at": _normalize_text(handoff_payload.get("handoff_created_at"), default=""),
+            "evidence_constraints_count": len(
+                handoff_payload.get("evidence_constraints")
+                if isinstance(handoff_payload.get("evidence_constraints"), list)
+                else []
+            ),
+        }
+        if handoff_error:
+            manifest["handoff_summary"]["handoff_error"] = handoff_error
+        if retry_context_store_error:
+            manifest["handoff_summary"]["retry_context_store_error"] = retry_context_store_error
+
+        manifest["manifest_path"] = str(manifest_path)
+        manifest["next_action_path"] = str(decision_path)
+        manifest["action_handoff_path"] = str(handoff_path)
+        manifest["retry_context_store_path"] = str(retry_context_store_path)
         _write_json(manifest_path, manifest)
         return manifest

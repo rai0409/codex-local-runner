@@ -6,6 +6,7 @@ import unittest
 
 from automation.execution.codex_executor_adapter import CodexExecutorAdapter
 from automation.execution.codex_executor_adapter import normalize_result_json
+from automation.execution.codex_executor_adapter import select_execution_transport
 from orchestrator.job_evaluator import evaluate_job_directory
 
 
@@ -69,6 +70,47 @@ class CodexExecutorAdapterTests(unittest.TestCase):
         self.assertEqual(len(transport.launch_calls), 1)
         self.assertEqual(len(transport.poll_calls), 1)
         self.assertEqual(len(transport.collect_calls), 1)
+
+    def test_select_execution_transport_dry_run(self) -> None:
+        dry_run_transport = _FakeTransport()
+        live_transport = _FakeTransport()
+        selected, mode = select_execution_transport(
+            mode="dry-run",
+            dry_run_transport=dry_run_transport,
+            live_transport=live_transport,
+            live_transport_enabled=True,
+        )
+        self.assertIs(selected, dry_run_transport)
+        self.assertEqual(mode, "dry-run")
+
+    def test_select_execution_transport_live_requires_gate(self) -> None:
+        with self.assertRaises(ValueError):
+            select_execution_transport(
+                mode="live",
+                dry_run_transport=_FakeTransport(),
+                live_transport=_FakeTransport(),
+                live_transport_enabled=False,
+            )
+
+    def test_select_execution_transport_live_selected_when_enabled(self) -> None:
+        live_transport = _FakeTransport()
+        selected, mode = select_execution_transport(
+            mode="live",
+            dry_run_transport=_FakeTransport(),
+            live_transport=live_transport,
+            live_transport_enabled=True,
+        )
+        self.assertIs(selected, live_transport)
+        self.assertEqual(mode, "live")
+
+    def test_select_execution_transport_invalid_mode(self) -> None:
+        with self.assertRaises(ValueError):
+            select_execution_transport(
+                mode="unexpected",
+                dry_run_transport=_FakeTransport(),
+                live_transport=_FakeTransport(),
+                live_transport_enabled=True,
+            )
 
     def test_result_normalization_successful_execution(self) -> None:
         normalized = normalize_result_json(

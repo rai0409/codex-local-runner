@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from typing import Literal
 from typing import Mapping
 from typing import Protocol
 
@@ -23,6 +24,25 @@ class CodexExecutionTransport(Protocol):
 
     def collect_artifacts(self, *, run_id: str) -> Mapping[str, Any]:
         ...
+
+
+def select_execution_transport(
+    *,
+    mode: str,
+    dry_run_transport: CodexExecutionTransport,
+    live_transport: CodexExecutionTransport | None = None,
+    live_transport_enabled: bool = False,
+) -> tuple[CodexExecutionTransport, Literal["dry-run", "live"]]:
+    normalized_mode = _normalize_text(mode, default="dry-run").lower()
+    if normalized_mode in {"dry-run", "dry_run"}:
+        return dry_run_transport, "dry-run"
+    if normalized_mode == "live":
+        if not live_transport_enabled:
+            raise ValueError("live transport mode requires explicit enablement")
+        if live_transport is None:
+            raise ValueError("live transport mode requested but live transport is unavailable")
+        return live_transport, "live"
+    raise ValueError(f"unsupported transport mode: {mode}")
 
 
 def _normalize_text(value: Any, *, default: str = "") -> str:
