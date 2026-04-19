@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 
+from orchestrator.github_backend import LiveReadOnlyGitHubStateBackend
 from orchestrator.job_evaluator import evaluate_job_directory
 from orchestrator.job_evaluator import persist_evaluation_artifacts
 
@@ -63,6 +64,18 @@ class EvaluateJobTests(unittest.TestCase):
         self.assertIn("rubric", payload)
         self.assertIn("merge_gate", payload)
         self.assertIn("assumptions", payload)
+        self.assertIn("progression_state", payload["merge_gate"])
+        self.assertIn("policy_eligible", payload["merge_gate"])
+        self.assertIn("auto_pr_candidate", payload["merge_gate"])
+        self.assertIn("lifecycle_state", payload["merge_gate"])
+        self.assertIn("write_authority", payload["merge_gate"])
+        self.assertIn("progression_fail_reasons", payload["merge_gate"])
+        self.assertIn("github_progression", payload["merge_gate"])
+        self.assertIn("replan_input", payload["merge_gate"])
+        self.assertEqual(payload["merge_gate"]["github_progression"]["mode"], "read_only")
+        self.assertFalse(payload["merge_gate"]["github_progression"]["write_actions_allowed"])
+        self.assertEqual(payload["merge_gate"]["write_authority"]["state"], "disabled")
+        self.assertFalse(payload["merge_gate"]["write_authority"]["write_actions_allowed"])
 
     def test_human_readable_mode_output_shape(self) -> None:
         with tempfile.TemporaryDirectory() as job_dir:
@@ -144,10 +157,20 @@ class EvaluateJobTests(unittest.TestCase):
             result["assumptions"]["rollback_metadata_source"],
             "fallback_false_no_rollback_signal",
         )
-        self.assertEqual(result["assumptions"]["additions_source"], "fallback_additions_zero")
-        self.assertEqual(result["assumptions"]["deletions_source"], "fallback_deletions_zero")
+        self.assertEqual(result["assumptions"]["github_backend"], "artifact_read_only")
+        self.assertEqual(result["assumptions"]["github_mode"], "read_only")
+        self.assertEqual(result["assumptions"]["github_state_source"], "none")
+        self.assertEqual(result["assumptions"]["additions_source"], "fallback_additions_missing")
+        self.assertEqual(result["assumptions"]["deletions_source"], "fallback_deletions_missing")
         self.assertIn("fallback_feature", result["assumptions"]["fallbacks_used"])
         self.assertIn("fallback_empty_tuple", result["assumptions"]["fallbacks_used"])
+        self.assertIn("github_state_unavailable", result["assumptions"]["fallbacks_used"])
+        self.assertIn(
+            "diff_line_stats_missing",
+            result["merge_gate"]["progression_fail_reasons"],
+        )
+        self.assertEqual(result["merge_gate"]["replan_input"]["failure_type"], "missing_signal")
+        self.assertEqual(result["merge_gate"]["replan_input"]["retry_recommendation"], "retry")
 
     def test_evaluation_does_not_mutate_source_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as job_dir:
@@ -200,6 +223,122 @@ class EvaluateJobTests(unittest.TestCase):
         self.assertEqual(second_written, ("rubric.json", "merge_gate.json"))
         self.assertEqual(rubric_first, rubric_second)
         self.assertEqual(merge_first, merge_second)
+
+    def test_github_signals_are_emitted_in_merge_gate_output(self) -> None:
+        with tempfile.TemporaryDirectory() as job_dir:
+            self._write_job(
+                job_dir,
+                request_payload={
+                    "job_id": "job-github-signals",
+                    "repo": "codex-local-runner",
+                    "declared_category": "docs_only",
+                    "changed_files": ["docs/reviewer_handoff.md"],
+                    "validation_commands": ["echo verify"],
+                    "metadata": {
+                        "execution_target": {
+                            "target_ref": "refs/heads/main",
+                            "source_sha": "a" * 40,
+                            "base_sha": "b" * 40,
+                        }
+                    },
+                },
+                result_payload={
+                    "job_id": "job-github-signals",
+                    "execution": {"verify": {"status": "passed"}},
+                    "github_state": {
+                        "repository": "rai0409/codex-local-runner",
+                        "required_checks": ["unit", "lint"],
+                        "passing_checks": ["lint", "unit"],
+                        "review_state": "approved",
+                        "required_approvals": 1,
+                        "approvals": 1,
+                        "mergeability_state": "clean",
+                        "is_draft": False,
+                        "pr_number": 101,
+                    },
+                },
+            )
+            result = evaluate_job_directory(job_dir)
+
+        github_progression = result["merge_gate"]["github_progression"]
+        self.assertEqual(github_progression["mode"], "read_only")
+        self.assertFalse(github_progression["write_actions_allowed"])
+        self.assertEqual(github_progression["target"]["repository"], "rai0409/codex-local-runner")
+        self.assertEqual(github_progression["checks"]["state"], "passing")
+        self.assertEqual(github_progression["review"]["state"], "approved")
+        self.assertEqual(github_progression["mergeability"]["state"], "clean")
+        self.assertEqual(github_progression["progression"]["state"], "ready")
+        self.assertEqual(result["merge_gate"]["lifecycle_state"], "manual_only")
+        self.assertEqual(result["merge_gate"]["write_authority"]["state"], "disabled")
+        self.assertIn("policy_link", github_progression)
+
+    def test_evaluation_can_use_injected_live_read_only_backend(self) -> None:
+        backend = LiveReadOnlyGitHubStateBackend(
+            fetch_state=lambda **_: {
+                "repository": "rai0409/codex-local-runner",
+                "target_ref": "refs/heads/main",
+                "required_checks": ["unit"],
+                "passing_checks": ["unit"],
+                "review_state": "approved",
+                "mergeability_state": "clean",
+                "is_draft": False,
+            }
+        )
+        with tempfile.TemporaryDirectory() as job_dir:
+            self._write_job(
+                job_dir,
+                request_payload={
+                    "job_id": "job-live-backend",
+                    "repo": "codex-local-runner",
+                    "declared_category": "docs_only",
+                    "changed_files": ["docs/reviewer_runbook.md"],
+                    "validation_commands": ["echo verify"],
+                    "metadata": {"execution_target": {"target_ref": "refs/heads/main"}},
+                },
+                result_payload={"job_id": "job-live-backend", "execution": {"verify": {"status": "passed"}}},
+            )
+            result = evaluate_job_directory(job_dir, github_state_backend=backend)
+
+        self.assertEqual(result["assumptions"]["github_backend"], "live_read_only")
+        self.assertEqual(result["assumptions"]["github_mode"], "read_only")
+        github_progression = result["merge_gate"]["github_progression"]
+        self.assertEqual(github_progression["backend"], "live_read_only")
+        self.assertEqual(github_progression["source"]["kind"], "live_read_only")
+        self.assertFalse(github_progression["write_actions_allowed"])
+        self.assertEqual(github_progression["progression"]["state"], "ready")
+        self.assertEqual(result["merge_gate"]["lifecycle_state"], "manual_only")
+        self.assertEqual(result["merge_gate"]["write_authority"]["state"], "disabled")
+
+    def test_retry_budget_uses_execution_attempt_count_signal(self) -> None:
+        with tempfile.TemporaryDirectory() as job_dir:
+            self._write_job(
+                job_dir,
+                request_payload={
+                    "job_id": "job-retry-budget",
+                    "declared_category": "docs_only",
+                    "changed_files": ["docs/reviewer_runbook.md"],
+                    "validation_commands": ["echo verify"],
+                },
+                result_payload={
+                    "job_id": "job-retry-budget",
+                    "execution": {
+                        "status": "completed",
+                        "attempt_count": 2,
+                        "verify": {"status": "failed"},
+                    },
+                    "additions": 5,
+                    "deletions": 1,
+                },
+            )
+            result = evaluate_job_directory(job_dir)
+
+        self.assertEqual(
+            result["assumptions"]["prior_attempt_count_source"],
+            "result.execution.attempt_count",
+        )
+        self.assertEqual(result["merge_gate"]["replan_input"]["prior_attempt_count"], 2)
+        self.assertEqual(result["merge_gate"]["replan_input"]["retry_budget_remaining"], 0)
+        self.assertEqual(result["merge_gate"]["replan_input"]["retry_recommendation"], "escalate")
 
 
 if __name__ == "__main__":

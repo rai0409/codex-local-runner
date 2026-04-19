@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -38,3 +39,11 @@ class MergeGateResult:
     passed: bool
     fail_reasons: tuple[str, ...]
     auto_merge_allowed: bool
+    progression_state: str
+    policy_eligible: bool
+    auto_pr_candidate: bool
+    lifecycle_state: str = "manual_only"
+    write_authority: dict[str, Any] | None = None
+    progression_fail_reasons: tuple[str, ...] = ()
+    github_progression: dict[str, Any] | None = None
+    replan_input: dict[str, Any] | None = None
