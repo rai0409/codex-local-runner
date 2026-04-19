@@ -125,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
             retry_context=retry_context,
             policy_snapshot=policy_snapshot,
             github_read_evidence=github_read_evidence,
+            execution_repo_path=str(Path(args.repo_path).resolve()) if args.repo_path else None,
         )
     except Exception as exc:
         print(str(exc), file=sys.stderr)

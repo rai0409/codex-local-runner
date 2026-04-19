@@ -58,6 +58,12 @@ _REFUSAL_OR_CONFLICT_REASON_FIELDS = (
     "failure_reason",
 )
 
+_CHECKPOINT_CONSERVATIVE_DECISIONS = {
+    "manual_review_required",
+    "escalate",
+    "global_stop_recommended",
+}
+
 
 def _normalize_text(value: Any, *, default: str = "") -> str:
     if value is None:
@@ -281,6 +287,283 @@ def _uses_contract_sidecars(unit: Mapping[str, Any]) -> bool:
     )
 
 
+def _resolve_checkpoint_decision_path(
+    *,
+    raw_unit: Mapping[str, Any],
+    result_path: Path,
+) -> Path | None:
+    explicit_path = _normalize_text(raw_unit.get("checkpoint_decision_path"), default="")
+    if explicit_path:
+        return Path(explicit_path)
+    inferred_path = result_path.parent / "checkpoint_decision.json"
+    if inferred_path.exists():
+        return inferred_path
+    return None
+
+
+def _checkpoint_requires_conservative_stop(unit: Mapping[str, Any]) -> bool:
+    checkpoint = _as_mapping(unit.get("checkpoint_decision"))
+    if not isinstance(checkpoint, Mapping):
+        return False
+    decision = _normalize_text(checkpoint.get("decision"), default="")
+    if decision in _CHECKPOINT_CONSERVATIVE_DECISIONS:
+        return True
+    return bool(checkpoint.get("global_stop_recommended", False))
+
+
+def _apply_run_state_guardrail(
+    *,
+    decision: Mapping[str, Any],
+    run_state: Mapping[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(decision)
+    current_next_action = _normalize_text(normalized.get("next_action"), default="")
+    execution_intent_action = current_next_action in {
+        "proceed_to_commit",
+        "proceed_to_pr",
+        "proceed_to_merge",
+        "proceed_to_rollback",
+        "rollback_required",
+    }
+    next_run_action = _normalize_text(run_state.get("next_run_action"), default="")
+    global_stop_recommended = bool(run_state.get("global_stop_recommended", False)) or bool(
+        run_state.get("global_stop", False)
+    )
+    rollback_evaluation_pending = bool(run_state.get("rollback_evaluation_pending", False)) or (
+        next_run_action == "evaluate_rollback"
+    )
+    loop_next_safe_action = _normalize_text(run_state.get("next_safe_action"), default="")
+    loop_blocked_reason = _normalize_text(run_state.get("loop_blocked_reason"), default="")
+    loop_terminal = bool(run_state.get("terminal", False))
+    loop_manual_required = bool(run_state.get("loop_manual_intervention_required", False))
+    loop_replan_required = bool(run_state.get("loop_replan_required", False))
+    authority_validation_blocked = bool(run_state.get("authority_validation_blocked", False))
+    execution_authority_blocked = bool(run_state.get("execution_authority_blocked", False))
+    validation_blocked = bool(run_state.get("validation_blocked", False))
+    authority_validation_blocked_reason = _normalize_text(
+        run_state.get("authority_validation_blocked_reason"),
+        default="",
+    )
+    remote_github_blocked = bool(run_state.get("remote_github_blocked", False))
+    remote_github_manual_required = bool(run_state.get("remote_github_manual_required", False))
+    remote_github_missing_or_ambiguous = bool(run_state.get("remote_github_missing_or_ambiguous", False))
+    remote_github_blocked_reason = _normalize_text(
+        run_state.get("remote_github_blocked_reason"),
+        default="",
+    )
+    rollback_aftermath_blocked = bool(run_state.get("rollback_aftermath_blocked", False))
+    rollback_aftermath_manual_required = bool(
+        run_state.get("rollback_aftermath_manual_required", False)
+    )
+    rollback_aftermath_missing_or_ambiguous = bool(
+        run_state.get("rollback_aftermath_missing_or_ambiguous", False)
+    )
+    rollback_validation_failed = bool(run_state.get("rollback_validation_failed", False))
+    rollback_remote_followup_required = bool(
+        run_state.get("rollback_remote_followup_required", False)
+    )
+    rollback_manual_followup_required = bool(
+        run_state.get("rollback_manual_followup_required", False)
+    )
+    rollback_aftermath_blocked_reason = _normalize_text(
+        run_state.get("rollback_aftermath_blocked_reason"),
+        default="",
+    )
+    policy_status = _normalize_text(run_state.get("policy_status"), default="")
+    policy_blocked = bool(run_state.get("policy_blocked", False))
+    policy_manual_required = bool(run_state.get("policy_manual_required", False))
+    policy_replan_required = bool(run_state.get("policy_replan_required", False))
+    policy_resume_allowed = bool(run_state.get("policy_resume_allowed", False))
+    policy_terminal = bool(run_state.get("policy_terminal", False))
+    policy_blocked_reason = _normalize_text(run_state.get("policy_blocked_reason"), default="")
+    policy_blocked_reasons = [
+        _normalize_text(item, default="")
+        for item in run_state.get("policy_blocked_reasons", [])
+        if _normalize_text(item, default="")
+    ] if isinstance(run_state.get("policy_blocked_reasons"), list) else []
+    policy_disallowed_actions = {
+        _normalize_text(item, default="")
+        for item in run_state.get("policy_disallowed_actions", [])
+        if _normalize_text(item, default="")
+    } if isinstance(run_state.get("policy_disallowed_actions"), list) else set()
+    policy_has_surface = any(
+        key in run_state
+        for key in (
+            "policy_status",
+            "policy_blocked",
+            "policy_manual_required",
+            "policy_replan_required",
+            "policy_terminal",
+        )
+    )
+
+    if (
+        execution_intent_action
+        and policy_has_surface
+        and current_next_action not in {"escalate_to_human", "roadmap_replan", "rollback_required"}
+    ):
+        policy_reason = policy_blocked_reason or (policy_blocked_reasons[0] if policy_blocked_reasons else "")
+        reason_tail = f" ({policy_reason})" if policy_reason else ""
+        if policy_terminal:
+            normalized["next_action"] = "escalate_to_human"
+            normalized["reason"] = (
+                "run_state_policy_guardrail: terminal policy state denies execution-intent continuation"
+                f"{reason_tail}"
+            )
+            normalized["progression_outcome"] = "conservative_escalation"
+            normalized["result_acceptance"] = "reject_current_result"
+            normalized["progression_rule_id"] = "run_state_policy_guardrail_terminal"
+        elif policy_replan_required:
+            normalized["next_action"] = "roadmap_replan"
+            normalized["reason"] = (
+                "run_state_policy_guardrail: policy requires replanning before execution-intent continuation"
+                f"{reason_tail}"
+            )
+            normalized["progression_outcome"] = "conservative_escalation"
+            normalized["result_acceptance"] = "reject_current_result"
+            normalized["progression_rule_id"] = "run_state_policy_guardrail_replan_required"
+        elif policy_status == "manual_only" or policy_manual_required:
+            normalized["next_action"] = "escalate_to_human"
+            normalized["reason"] = (
+                "run_state_policy_guardrail: policy classified state as manual-only for execution-intent actions"
+                f"{reason_tail}"
+            )
+            normalized["progression_outcome"] = "conservative_escalation"
+            normalized["result_acceptance"] = "reject_current_result"
+            normalized["progression_rule_id"] = "run_state_policy_guardrail_manual_only"
+        elif current_next_action in policy_disallowed_actions:
+            normalized["next_action"] = "escalate_to_human"
+            normalized["reason"] = (
+                "run_state_policy_guardrail: policy disallowed current execution-intent action"
+                f"{reason_tail}"
+            )
+            normalized["progression_outcome"] = "conservative_escalation"
+            normalized["result_acceptance"] = "reject_current_result"
+            normalized["progression_rule_id"] = "run_state_policy_guardrail_action_disallowed"
+        elif policy_blocked:
+            normalized["next_action"] = "escalate_to_human"
+            normalized["reason"] = (
+                "run_state_policy_guardrail: policy blocked execution-intent continuation"
+                f"{reason_tail}"
+            )
+            normalized["progression_outcome"] = "conservative_escalation"
+            normalized["result_acceptance"] = "reject_current_result"
+            normalized["progression_rule_id"] = "run_state_policy_guardrail_blocked"
+        elif policy_status == "resume_eligible" and not policy_resume_allowed:
+            normalized["next_action"] = "escalate_to_human"
+            normalized["reason"] = (
+                "run_state_policy_guardrail: policy marked state non-resumable for execution-intent continuation"
+                f"{reason_tail}"
+            )
+            normalized["progression_outcome"] = "conservative_escalation"
+            normalized["result_acceptance"] = "reject_current_result"
+            normalized["progression_rule_id"] = "run_state_policy_guardrail_resume_denied"
+    elif global_stop_recommended and current_next_action not in {"escalate_to_human", "rollback_required"}:
+        normalized["next_action"] = "escalate_to_human"
+        normalized["reason"] = "run_state_guardrail: global stop recommended by orchestration state"
+        normalized["progression_outcome"] = "conservative_escalation"
+        normalized["result_acceptance"] = "reject_current_result"
+        normalized["progression_rule_id"] = "run_state_guardrail_global_stop"
+    elif rollback_evaluation_pending and current_next_action not in {"rollback_required", "escalate_to_human"}:
+        normalized["next_action"] = "rollback_required"
+        normalized["reason"] = "run_state_guardrail: rollback evaluation pending at run level"
+        normalized["progression_outcome"] = "reject_current_result"
+        normalized["result_acceptance"] = "reject_current_result"
+        normalized["progression_rule_id"] = "run_state_guardrail_rollback_pending"
+    elif loop_next_safe_action == "execute_rollback" and current_next_action not in {
+        "rollback_required",
+        "escalate_to_human",
+    }:
+        normalized["next_action"] = "rollback_required"
+        normalized["reason"] = "run_state_guardrail: loop selected rollback as next safe action"
+        normalized["progression_outcome"] = "reject_current_result"
+        normalized["result_acceptance"] = "reject_current_result"
+        normalized["progression_rule_id"] = "run_state_guardrail_loop_rollback"
+    elif (
+        execution_intent_action
+        and (
+            authority_validation_blocked
+            or execution_authority_blocked
+            or validation_blocked
+        )
+    ) and current_next_action not in {"escalate_to_human", "rollback_required"}:
+        reason_tail = f" ({authority_validation_blocked_reason})" if authority_validation_blocked_reason else ""
+        normalized["next_action"] = "escalate_to_human"
+        normalized["reason"] = (
+            "run_state_guardrail: execution authority/validation gate blocked automatic continuation"
+            f"{reason_tail}"
+        )
+        normalized["progression_outcome"] = "conservative_escalation"
+        normalized["result_acceptance"] = "reject_current_result"
+        normalized["progression_rule_id"] = "run_state_guardrail_authority_validation_blocked"
+    elif (
+        execution_intent_action
+        and (
+            remote_github_blocked
+            or remote_github_manual_required
+            or remote_github_missing_or_ambiguous
+        )
+    ) and current_next_action not in {"escalate_to_human", "rollback_required"}:
+        reason_tail = f" ({remote_github_blocked_reason})" if remote_github_blocked_reason else ""
+        normalized["next_action"] = "escalate_to_human"
+        normalized["reason"] = (
+            "run_state_guardrail: remote/github delivery truth blocked automatic continuation"
+            f"{reason_tail}"
+        )
+        normalized["progression_outcome"] = "conservative_escalation"
+        normalized["result_acceptance"] = "reject_current_result"
+        normalized["progression_rule_id"] = "run_state_guardrail_remote_github_blocked"
+    elif (
+        execution_intent_action
+        and (
+            rollback_aftermath_blocked
+            or rollback_aftermath_manual_required
+            or rollback_aftermath_missing_or_ambiguous
+            or rollback_validation_failed
+            or rollback_remote_followup_required
+            or rollback_manual_followup_required
+        )
+    ) and current_next_action not in {"escalate_to_human", "rollback_required"}:
+        reason_tail = f" ({rollback_aftermath_blocked_reason})" if rollback_aftermath_blocked_reason else ""
+        normalized["next_action"] = "escalate_to_human"
+        normalized["reason"] = (
+            "run_state_guardrail: rollback aftermath truth is not safely closed for automatic continuation"
+            f"{reason_tail}"
+        )
+        normalized["progression_outcome"] = "conservative_escalation"
+        normalized["result_acceptance"] = "reject_current_result"
+        normalized["progression_rule_id"] = "run_state_guardrail_rollback_aftermath_blocked"
+    elif (
+        execution_intent_action
+        and (
+            loop_next_safe_action
+            in {
+                "require_manual_intervention",
+                "require_replanning",
+                "stop_terminal_failure",
+            }
+            or loop_terminal
+            or loop_manual_required
+            or loop_replan_required
+        )
+    ) and current_next_action not in {"escalate_to_human", "rollback_required"}:
+        reason_tail = f" ({loop_blocked_reason})" if loop_blocked_reason else ""
+        normalized["next_action"] = "escalate_to_human"
+        normalized["reason"] = (
+            f"run_state_guardrail: loop state requires conservative operator gate via {loop_next_safe_action or 'pause'}"
+            f"{reason_tail}"
+        )
+        normalized["progression_outcome"] = "conservative_escalation"
+        normalized["result_acceptance"] = "reject_current_result"
+        normalized["progression_rule_id"] = "run_state_guardrail_loop_manual_or_blocked"
+
+    normalized["whether_human_required"] = _normalize_text(normalized.get("next_action"), default="") in {
+        "escalate_to_human",
+        "rollback_required",
+    }
+    return normalized
+
+
 def _load_unit_payloads(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
     raw_units = manifest.get("pr_units")
     if not isinstance(raw_units, list) or not raw_units:
@@ -302,6 +585,10 @@ def _load_unit_payloads(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
             Path(bounded_step_contract_path_text) if bounded_step_contract_path_text else None
         )
         prompt_contract_path = Path(prompt_contract_path_text) if prompt_contract_path_text else None
+        checkpoint_decision_path = _resolve_checkpoint_decision_path(
+            raw_unit=raw,
+            result_path=result_path,
+        )
 
         receipt = _read_json_object(receipt_path) if receipt_path.exists() else None
         result = _read_json_object(result_path) if result_path.exists() else None
@@ -315,6 +602,11 @@ def _load_unit_payloads(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
             if prompt_contract_path is not None
             else None
         )
+        checkpoint_decision = (
+            _read_json_object_if_exists(checkpoint_decision_path)
+            if checkpoint_decision_path is not None
+            else None
+        )
 
         units.append(
             {
@@ -325,10 +617,12 @@ def _load_unit_payloads(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "result_path": str(result_path),
                 "bounded_step_contract_path": str(bounded_step_contract_path) if bounded_step_contract_path else "",
                 "pr_implementation_prompt_contract_path": str(prompt_contract_path) if prompt_contract_path else "",
+                "checkpoint_decision_path": str(checkpoint_decision_path) if checkpoint_decision_path else "",
                 "receipt": receipt,
                 "result": result,
                 "bounded_step_contract": bounded_step_contract,
                 "pr_implementation_prompt_contract": prompt_contract,
+                "checkpoint_decision": checkpoint_decision,
             }
         )
 
@@ -446,6 +740,17 @@ def _collect_run_signals(
             scope_drift += 1
         if _is_category_mismatch(unit, pr_plan_index.get(pr_id)):
             category_mismatch += 1
+        checkpoint_payload = _as_mapping(unit.get("checkpoint_decision"))
+        checkpoint_decision = _normalize_text(
+            checkpoint_payload.get("decision") if isinstance(checkpoint_payload, Mapping) else "",
+            default="",
+        )
+        if checkpoint_decision == "rollback_evaluation_ready":
+            explicit_rollback += 1
+            all_completed_and_passed = False
+        if _checkpoint_requires_conservative_stop(unit):
+            refusal_or_conflict += 1
+            all_completed_and_passed = False
 
         if result is None:
             all_completed_and_passed = False
@@ -577,13 +882,17 @@ def evaluate_next_action_from_run_dir(
 
     manifest = _load_manifest(root)
     units = _load_unit_payloads(manifest)
-    return evaluate_next_action(
+    decision = evaluate_next_action(
         manifest=manifest,
         units=units,
         retry_context=retry_context,
         policy_snapshot=policy_snapshot,
         pr_plan=pr_plan,
     )
+    run_state_payload = _read_json_object_if_exists(root / "run_state.json")
+    if isinstance(run_state_payload, Mapping):
+        return _apply_run_state_guardrail(decision=decision, run_state=run_state_payload)
+    return decision
 
 
 def load_json_file_if_present(path_value: str | None) -> dict[str, Any] | None:

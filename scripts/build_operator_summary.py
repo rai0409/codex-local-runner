@@ -22,6 +22,8 @@ from orchestrator.ledger import get_rollback_trace_by_job_id  # noqa: E402
 from orchestrator.ledger import record_machine_review_payload_path  # noqa: E402
 from automation.review.recovery_policy import POLICY_VERSION  # noqa: E402
 from automation.review.recovery_policy import evaluate_recovery_policy  # noqa: E402
+from automation.orchestration.lifecycle_terminal_state import build_lifecycle_terminal_state_surface  # noqa: E402
+from automation.orchestration.operator_explainability import build_operator_explainability_surface  # noqa: E402
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -61,6 +63,988 @@ def _read_json(path_value: Any) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _extract_decision_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "decision": None,
+            "rule_id": None,
+            "recommended_next_action": None,
+            "blocking_reasons": [],
+            "readiness_status": None,
+            "readiness_next_action": None,
+            "automation_eligible": None,
+            "manual_intervention_required": None,
+            "unresolved_blockers": [],
+            "prerequisites_satisfied": None,
+        }
+    return {
+        "decision": payload.get("decision"),
+        "rule_id": payload.get("rule_id"),
+        "recommended_next_action": payload.get("recommended_next_action"),
+        "blocking_reasons": (
+            [str(item) for item in payload.get("blocking_reasons", [])]
+            if isinstance(payload.get("blocking_reasons"), (list, tuple))
+            else []
+        ),
+        "readiness_status": payload.get("readiness_status"),
+        "readiness_next_action": payload.get("readiness_next_action"),
+        "automation_eligible": payload.get("automation_eligible"),
+        "manual_intervention_required": payload.get("manual_intervention_required"),
+        "unresolved_blockers": (
+            [str(item) for item in payload.get("unresolved_blockers", [])]
+            if isinstance(payload.get("unresolved_blockers"), (list, tuple))
+            else []
+        ),
+        "prerequisites_satisfied": payload.get("prerequisites_satisfied"),
+    }
+
+
+def _extract_checkpoint_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "checkpoint_stage": None,
+            "decision": None,
+            "rule_id": None,
+            "recommended_next_action": None,
+            "manual_intervention_required": None,
+            "global_stop_recommended": None,
+            "blocking_reasons": [],
+        }
+    return {
+        "checkpoint_stage": payload.get("checkpoint_stage"),
+        "decision": payload.get("decision"),
+        "rule_id": payload.get("rule_id"),
+        "recommended_next_action": payload.get("recommended_next_action"),
+        "manual_intervention_required": payload.get("manual_intervention_required"),
+        "global_stop_recommended": payload.get("global_stop_recommended"),
+        "blocking_reasons": (
+            [str(item) for item in payload.get("blocking_reasons", [])]
+            if isinstance(payload.get("blocking_reasons"), (list, tuple))
+            else []
+        ),
+    }
+
+
+def _extract_execution_receipt_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "execution_type": None,
+            "rollback_mode": None,
+            "status": None,
+            "summary": None,
+            "started_at": None,
+            "finished_at": None,
+            "trigger_reason": None,
+            "branch_name": None,
+            "remote_name": None,
+            "base_branch": None,
+            "head_branch": None,
+            "pr_number": None,
+            "pr_url": None,
+            "commit_sha": None,
+            "merge_commit_sha": None,
+            "resulting_commit_sha": None,
+            "resulting_pr_state": None,
+            "resulting_branch_state": None,
+            "failure_reason": None,
+            "manual_intervention_required": None,
+            "replan_required": None,
+            "automatic_continuation_blocked": None,
+            "blocking_reasons": [],
+            "attempted": None,
+            "execution_allowed": None,
+            "execution_authority_status": None,
+            "validation_status": None,
+            "execution_gate_status": None,
+            "authority_blocked_reason": None,
+            "validation_blocked_reason": None,
+            "authority_blocked_reasons": [],
+            "validation_blocked_reasons": [],
+            "missing_prerequisites": [],
+            "missing_required_refs": [],
+            "unsafe_repo_state": [],
+            "remote_pr_ambiguity": [],
+            "remote_github_status": None,
+            "remote_github_blocked": None,
+            "remote_github_blocked_reason": None,
+            "remote_github_blocked_reasons": [],
+            "remote_github_missing_or_ambiguous": None,
+            "remote_state_status": None,
+            "remote_state_blocked": None,
+            "remote_state_blocked_reason": None,
+            "remote_state_missing_or_ambiguous": None,
+            "upstream_tracking_status": None,
+            "remote_divergence_status": None,
+            "remote_branch_status": None,
+            "existing_pr_status": None,
+            "pr_creation_state_status": None,
+            "pr_duplication_risk": None,
+            "mergeability_status": None,
+            "merge_requirements_status": None,
+            "required_checks_status": None,
+            "review_state_status": None,
+            "branch_protection_status": None,
+            "github_state_status": None,
+            "github_state_unavailable": None,
+            "manual_approval_required": None,
+            "rollback_aftermath_status": None,
+            "rollback_aftermath_blocked": None,
+            "rollback_aftermath_blocked_reason": None,
+            "rollback_aftermath_blocked_reasons": [],
+            "rollback_aftermath_missing_or_ambiguous": None,
+            "rollback_validation_status": None,
+            "rollback_manual_followup_required": None,
+            "rollback_remote_followup_required": None,
+            "rollback_conflict_status": None,
+            "rollback_remote_state_status": None,
+            "rollback_divergence_status": None,
+            "rollback_pr_state_status": None,
+            "rollback_branch_state_status": None,
+            "rollback_repo_cleanliness_status": None,
+            "rollback_head_state_status": None,
+            "rollback_revert_commit_status": None,
+            "rollback_post_validation_status": None,
+            "rollback_remote_github_status": None,
+        }
+    return {
+        "execution_type": payload.get("execution_type"),
+        "rollback_mode": payload.get("rollback_mode"),
+        "status": payload.get("status"),
+        "summary": payload.get("summary"),
+        "started_at": payload.get("started_at"),
+        "finished_at": payload.get("finished_at"),
+        "trigger_reason": payload.get("trigger_reason"),
+        "branch_name": payload.get("branch_name"),
+        "remote_name": payload.get("remote_name"),
+        "base_branch": payload.get("base_branch"),
+        "head_branch": payload.get("head_branch"),
+        "pr_number": payload.get("pr_number"),
+        "pr_url": payload.get("pr_url"),
+        "commit_sha": payload.get("commit_sha"),
+        "merge_commit_sha": payload.get("merge_commit_sha"),
+        "resulting_commit_sha": payload.get("resulting_commit_sha"),
+        "resulting_pr_state": payload.get("resulting_pr_state"),
+        "resulting_branch_state": (
+            dict(payload.get("resulting_branch_state"))
+            if isinstance(payload.get("resulting_branch_state"), dict)
+            else None
+        ),
+        "failure_reason": payload.get("failure_reason"),
+        "manual_intervention_required": payload.get("manual_intervention_required"),
+        "replan_required": payload.get("replan_required"),
+        "automatic_continuation_blocked": payload.get("automatic_continuation_blocked"),
+        "blocking_reasons": (
+            [str(item) for item in payload.get("blocking_reasons", [])]
+            if isinstance(payload.get("blocking_reasons"), (list, tuple))
+            else []
+        ),
+        "attempted": payload.get("attempted"),
+        "execution_allowed": payload.get("execution_allowed"),
+        "execution_authority_status": payload.get("execution_authority_status"),
+        "validation_status": payload.get("validation_status"),
+        "execution_gate_status": payload.get("execution_gate_status"),
+        "authority_blocked_reason": payload.get("authority_blocked_reason"),
+        "validation_blocked_reason": payload.get("validation_blocked_reason"),
+        "authority_blocked_reasons": (
+            [str(item) for item in payload.get("authority_blocked_reasons", [])]
+            if isinstance(payload.get("authority_blocked_reasons"), (list, tuple))
+            else []
+        ),
+        "validation_blocked_reasons": (
+            [str(item) for item in payload.get("validation_blocked_reasons", [])]
+            if isinstance(payload.get("validation_blocked_reasons"), (list, tuple))
+            else []
+        ),
+        "missing_prerequisites": (
+            [str(item) for item in payload.get("missing_prerequisites", [])]
+            if isinstance(payload.get("missing_prerequisites"), (list, tuple))
+            else []
+        ),
+        "missing_required_refs": (
+            [str(item) for item in payload.get("missing_required_refs", [])]
+            if isinstance(payload.get("missing_required_refs"), (list, tuple))
+            else []
+        ),
+        "unsafe_repo_state": (
+            [str(item) for item in payload.get("unsafe_repo_state", [])]
+            if isinstance(payload.get("unsafe_repo_state"), (list, tuple))
+            else []
+        ),
+        "remote_pr_ambiguity": (
+            [str(item) for item in payload.get("remote_pr_ambiguity", [])]
+            if isinstance(payload.get("remote_pr_ambiguity"), (list, tuple))
+            else []
+        ),
+        "remote_github_status": payload.get("remote_github_status"),
+        "remote_github_blocked": payload.get("remote_github_blocked"),
+        "remote_github_blocked_reason": payload.get("remote_github_blocked_reason"),
+        "remote_github_blocked_reasons": (
+            [str(item) for item in payload.get("remote_github_blocked_reasons", [])]
+            if isinstance(payload.get("remote_github_blocked_reasons"), (list, tuple))
+            else []
+        ),
+        "remote_github_missing_or_ambiguous": payload.get("remote_github_missing_or_ambiguous"),
+        "remote_state_status": payload.get("remote_state_status"),
+        "remote_state_blocked": payload.get("remote_state_blocked"),
+        "remote_state_blocked_reason": payload.get("remote_state_blocked_reason"),
+        "remote_state_missing_or_ambiguous": payload.get("remote_state_missing_or_ambiguous"),
+        "upstream_tracking_status": payload.get("upstream_tracking_status"),
+        "remote_divergence_status": payload.get("remote_divergence_status"),
+        "remote_branch_status": payload.get("remote_branch_status"),
+        "existing_pr_status": payload.get("existing_pr_status"),
+        "pr_creation_state_status": payload.get("pr_creation_state_status"),
+        "pr_duplication_risk": payload.get("pr_duplication_risk"),
+        "mergeability_status": payload.get("mergeability_status"),
+        "merge_requirements_status": payload.get("merge_requirements_status"),
+        "required_checks_status": payload.get("required_checks_status"),
+        "review_state_status": payload.get("review_state_status"),
+        "branch_protection_status": payload.get("branch_protection_status"),
+        "github_state_status": payload.get("github_state_status"),
+        "github_state_unavailable": payload.get("github_state_unavailable"),
+        "manual_approval_required": payload.get("manual_approval_required"),
+        "rollback_aftermath_status": payload.get("rollback_aftermath_status"),
+        "rollback_aftermath_blocked": payload.get("rollback_aftermath_blocked"),
+        "rollback_aftermath_blocked_reason": payload.get("rollback_aftermath_blocked_reason"),
+        "rollback_aftermath_blocked_reasons": (
+            [str(item) for item in payload.get("rollback_aftermath_blocked_reasons", [])]
+            if isinstance(payload.get("rollback_aftermath_blocked_reasons"), (list, tuple))
+            else []
+        ),
+        "rollback_aftermath_missing_or_ambiguous": payload.get("rollback_aftermath_missing_or_ambiguous"),
+        "rollback_validation_status": payload.get("rollback_validation_status"),
+        "rollback_manual_followup_required": payload.get("rollback_manual_followup_required"),
+        "rollback_remote_followup_required": payload.get("rollback_remote_followup_required"),
+        "rollback_conflict_status": payload.get("rollback_conflict_status"),
+        "rollback_remote_state_status": payload.get("rollback_remote_state_status"),
+        "rollback_divergence_status": payload.get("rollback_divergence_status"),
+        "rollback_pr_state_status": payload.get("rollback_pr_state_status"),
+        "rollback_branch_state_status": payload.get("rollback_branch_state_status"),
+        "rollback_repo_cleanliness_status": payload.get("rollback_repo_cleanliness_status"),
+        "rollback_head_state_status": payload.get("rollback_head_state_status"),
+        "rollback_revert_commit_status": payload.get("rollback_revert_commit_status"),
+        "rollback_post_validation_status": payload.get("rollback_post_validation_status"),
+        "rollback_remote_github_status": payload.get("rollback_remote_github_status"),
+    }
+
+
+def _with_operator_explainability(run_state: dict[str, Any]) -> dict[str, Any]:
+    lifecycle_surface = build_lifecycle_terminal_state_surface(run_state)
+    merged = {**run_state, **lifecycle_surface}
+    return {
+        **merged,
+        **build_operator_explainability_surface(
+            merged,
+            include_rendering_details=True,
+        ),
+    }
+
+
+def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
+    result_path = Path(str(result_path_value).strip()) if isinstance(result_path_value, str) else None
+    if result_path is None or not result_path.exists():
+        return {
+            "paths": {
+                "checkpoint_decision": None,
+                "commit_decision": None,
+                "merge_decision": None,
+                "rollback_decision": None,
+                "commit_execution": None,
+                "push_execution": None,
+                "pr_execution": None,
+                "merge_execution": None,
+                "rollback_execution": None,
+                "run_state": None,
+            },
+            "checkpoint_decision": _extract_checkpoint_summary(None),
+            "commit_decision": _extract_decision_summary(None),
+            "merge_decision": _extract_decision_summary(None),
+            "rollback_decision": _extract_decision_summary(None),
+            "commit_execution": _extract_execution_receipt_summary(None),
+            "push_execution": _extract_execution_receipt_summary(None),
+            "pr_execution": _extract_execution_receipt_summary(None),
+            "merge_execution": _extract_execution_receipt_summary(None),
+            "rollback_execution": _extract_execution_receipt_summary(None),
+            "run_state": _with_operator_explainability({
+                "state": None,
+                "orchestration_state": None,
+                "global_stop": None,
+                "global_stop_reason": None,
+                "continue_allowed": None,
+                "run_paused": None,
+                "manual_intervention_required": None,
+                "rollback_evaluation_pending": None,
+                "global_stop_recommended": None,
+                "next_run_action": None,
+                "loop_state": None,
+                "next_safe_action": None,
+                "loop_blocked_reason": None,
+                "loop_blocked_reasons": [],
+                "resumable": None,
+                "terminal": None,
+                "loop_manual_intervention_required": None,
+                "loop_replan_required": None,
+                "rollback_completed": None,
+                "delivery_completed": None,
+                "loop_allowed_actions": [],
+                "unit_blocked": None,
+                "readiness_summary": {},
+                "readiness_blocked": None,
+                "readiness_manual_required": None,
+                "readiness_awaiting_prerequisites": None,
+                "push_execution_summary": {},
+                "pr_execution_summary": {},
+                "merge_execution_summary": {},
+                "push_execution_succeeded": None,
+                "pr_execution_succeeded": None,
+                "merge_execution_succeeded": None,
+                "push_execution_pending": None,
+                "pr_execution_pending": None,
+                "merge_execution_pending": None,
+                "push_execution_failed": None,
+                "pr_execution_failed": None,
+                "merge_execution_failed": None,
+                "delivery_execution_manual_intervention_required": None,
+                "rollback_execution_summary": {},
+                "rollback_execution_attempted": None,
+                "rollback_execution_succeeded": None,
+                "rollback_execution_pending": None,
+                "rollback_execution_failed": None,
+                "rollback_execution_manual_intervention_required": None,
+                "rollback_replan_required": None,
+                "rollback_automatic_continuation_blocked": None,
+                "rollback_aftermath_summary": {},
+                "rollback_aftermath_status": None,
+                "rollback_aftermath_blocked": None,
+                "rollback_aftermath_manual_required": None,
+                "rollback_aftermath_missing_or_ambiguous": None,
+                "rollback_aftermath_blocked_reason": None,
+                "rollback_aftermath_blocked_reasons": [],
+                "rollback_remote_followup_required": None,
+                "rollback_manual_followup_required": None,
+                "rollback_validation_failed": None,
+                "authority_validation_summary": {},
+                "authority_validation_blocked": None,
+                "execution_authority_blocked": None,
+                "validation_blocked": None,
+                "authority_validation_manual_required": None,
+                "authority_validation_missing_or_ambiguous": None,
+                "authority_validation_blocked_reason": None,
+                "authority_validation_blocked_reasons": [],
+                "remote_github_summary": {},
+                "remote_github_blocked": None,
+                "remote_github_manual_required": None,
+                "remote_github_missing_or_ambiguous": None,
+                "remote_github_blocked_reason": None,
+                "remote_github_blocked_reasons": [],
+                "policy_status": None,
+                "policy_blocked": None,
+                "policy_manual_required": None,
+                "policy_replan_required": None,
+                "policy_resume_allowed": None,
+                "policy_terminal": None,
+                "policy_blocked_reason": None,
+                "policy_blocked_reasons": [],
+                "policy_primary_blocker_class": None,
+                "policy_primary_action": None,
+                "policy_allowed_actions": [],
+                "policy_disallowed_actions": [],
+                "policy_manual_actions": [],
+                "policy_resumable_reason": None,
+                "lifecycle_closure_status": None,
+                "lifecycle_safely_closed": None,
+                "lifecycle_terminal": None,
+                "lifecycle_resumable": None,
+                "lifecycle_manual_required": None,
+                "lifecycle_replan_required": None,
+                "lifecycle_execution_complete_not_closed": None,
+                "lifecycle_rollback_complete_not_closed": None,
+                "lifecycle_blocked_reason": None,
+                "lifecycle_blocked_reasons": [],
+                "lifecycle_primary_closure_issue": None,
+                "lifecycle_stop_class": None,
+            }),
+        }
+
+    unit_dir = result_path.parent
+    run_root = unit_dir.parent
+    checkpoint_path = unit_dir / "checkpoint_decision.json"
+    commit_path = unit_dir / "commit_decision.json"
+    merge_path = unit_dir / "merge_decision.json"
+    rollback_path = unit_dir / "rollback_decision.json"
+    commit_execution_path = unit_dir / "commit_execution.json"
+    push_execution_path = unit_dir / "push_execution.json"
+    pr_execution_path = unit_dir / "pr_execution.json"
+    merge_execution_path = unit_dir / "merge_execution.json"
+    rollback_execution_path = unit_dir / "rollback_execution.json"
+    run_state_path = run_root / "run_state.json"
+
+    checkpoint_payload = _read_json(str(checkpoint_path))
+    commit_payload = _read_json(str(commit_path))
+    merge_payload = _read_json(str(merge_path))
+    rollback_payload = _read_json(str(rollback_path))
+    commit_execution_payload = _read_json(str(commit_execution_path))
+    push_execution_payload = _read_json(str(push_execution_path))
+    pr_execution_payload = _read_json(str(pr_execution_path))
+    merge_execution_payload = _read_json(str(merge_execution_path))
+    rollback_execution_payload = _read_json(str(rollback_execution_path))
+    run_state_payload = _read_json(str(run_state_path))
+
+    return {
+        "paths": {
+            "checkpoint_decision": str(checkpoint_path) if checkpoint_path.exists() else None,
+            "commit_decision": str(commit_path) if commit_path.exists() else None,
+            "merge_decision": str(merge_path) if merge_path.exists() else None,
+            "rollback_decision": str(rollback_path) if rollback_path.exists() else None,
+            "commit_execution": str(commit_execution_path) if commit_execution_path.exists() else None,
+            "push_execution": str(push_execution_path) if push_execution_path.exists() else None,
+            "pr_execution": str(pr_execution_path) if pr_execution_path.exists() else None,
+            "merge_execution": str(merge_execution_path) if merge_execution_path.exists() else None,
+            "rollback_execution": str(rollback_execution_path) if rollback_execution_path.exists() else None,
+            "run_state": str(run_state_path) if run_state_path.exists() else None,
+        },
+        "checkpoint_decision": _extract_checkpoint_summary(checkpoint_payload),
+        "commit_decision": _extract_decision_summary(commit_payload),
+        "merge_decision": _extract_decision_summary(merge_payload),
+        "rollback_decision": _extract_decision_summary(rollback_payload),
+        "commit_execution": _extract_execution_receipt_summary(commit_execution_payload),
+        "push_execution": _extract_execution_receipt_summary(push_execution_payload),
+        "pr_execution": _extract_execution_receipt_summary(pr_execution_payload),
+        "merge_execution": _extract_execution_receipt_summary(merge_execution_payload),
+        "rollback_execution": _extract_execution_receipt_summary(rollback_execution_payload),
+        "run_state": _with_operator_explainability({
+            "state": (
+                run_state_payload.get("state")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "orchestration_state": (
+                run_state_payload.get("orchestration_state")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "global_stop": (
+                run_state_payload.get("global_stop")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "global_stop_reason": (
+                run_state_payload.get("global_stop_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "continue_allowed": (
+                run_state_payload.get("continue_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "run_paused": (
+                run_state_payload.get("run_paused")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "manual_intervention_required": (
+                run_state_payload.get("manual_intervention_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_evaluation_pending": (
+                run_state_payload.get("rollback_evaluation_pending")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "global_stop_recommended": (
+                run_state_payload.get("global_stop_recommended")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "next_run_action": (
+                run_state_payload.get("next_run_action")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_state": (
+                run_state_payload.get("loop_state")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "next_safe_action": (
+                run_state_payload.get("next_safe_action")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_blocked_reason": (
+                run_state_payload.get("loop_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_blocked_reasons": (
+                [str(item) for item in run_state_payload.get("loop_blocked_reasons", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("loop_blocked_reasons"), (list, tuple))
+                else []
+            ),
+            "resumable": (
+                run_state_payload.get("resumable")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "terminal": (
+                run_state_payload.get("terminal")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_manual_intervention_required": (
+                run_state_payload.get("loop_manual_intervention_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_replan_required": (
+                run_state_payload.get("loop_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_completed": (
+                run_state_payload.get("rollback_completed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "delivery_completed": (
+                run_state_payload.get("delivery_completed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_allowed_actions": (
+                [str(item) for item in run_state_payload.get("loop_allowed_actions", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("loop_allowed_actions"), (list, tuple))
+                else []
+            ),
+            "unit_blocked": (
+                run_state_payload.get("unit_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "readiness_summary": (
+                dict(run_state_payload.get("readiness_summary"))
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("readiness_summary"), dict)
+                else {}
+            ),
+            "readiness_blocked": (
+                run_state_payload.get("readiness_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "readiness_manual_required": (
+                run_state_payload.get("readiness_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "readiness_awaiting_prerequisites": (
+                run_state_payload.get("readiness_awaiting_prerequisites")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "commit_execution_summary": (
+                dict(run_state_payload.get("commit_execution_summary"))
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("commit_execution_summary"), dict)
+                else {}
+            ),
+            "commit_execution_executed": (
+                run_state_payload.get("commit_execution_executed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "commit_execution_pending": (
+                run_state_payload.get("commit_execution_pending")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "commit_execution_failed": (
+                run_state_payload.get("commit_execution_failed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "commit_execution_manual_intervention_required": (
+                run_state_payload.get("commit_execution_manual_intervention_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "push_execution_summary": (
+                dict(run_state_payload.get("push_execution_summary"))
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("push_execution_summary"), dict)
+                else {}
+            ),
+            "pr_execution_summary": (
+                dict(run_state_payload.get("pr_execution_summary"))
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("pr_execution_summary"), dict)
+                else {}
+            ),
+            "merge_execution_summary": (
+                dict(run_state_payload.get("merge_execution_summary"))
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("merge_execution_summary"), dict)
+                else {}
+            ),
+            "push_execution_succeeded": (
+                run_state_payload.get("push_execution_succeeded")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "pr_execution_succeeded": (
+                run_state_payload.get("pr_execution_succeeded")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "merge_execution_succeeded": (
+                run_state_payload.get("merge_execution_succeeded")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "push_execution_pending": (
+                run_state_payload.get("push_execution_pending")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "pr_execution_pending": (
+                run_state_payload.get("pr_execution_pending")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "merge_execution_pending": (
+                run_state_payload.get("merge_execution_pending")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "push_execution_failed": (
+                run_state_payload.get("push_execution_failed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "pr_execution_failed": (
+                run_state_payload.get("pr_execution_failed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "merge_execution_failed": (
+                run_state_payload.get("merge_execution_failed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "delivery_execution_manual_intervention_required": (
+                run_state_payload.get("delivery_execution_manual_intervention_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_execution_summary": (
+                dict(run_state_payload.get("rollback_execution_summary"))
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("rollback_execution_summary"), dict)
+                else {}
+            ),
+            "rollback_execution_attempted": (
+                run_state_payload.get("rollback_execution_attempted")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_execution_succeeded": (
+                run_state_payload.get("rollback_execution_succeeded")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_execution_pending": (
+                run_state_payload.get("rollback_execution_pending")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_execution_failed": (
+                run_state_payload.get("rollback_execution_failed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_execution_manual_intervention_required": (
+                run_state_payload.get("rollback_execution_manual_intervention_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_replan_required": (
+                run_state_payload.get("rollback_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_automatic_continuation_blocked": (
+                run_state_payload.get("rollback_automatic_continuation_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_aftermath_summary": (
+                dict(run_state_payload.get("rollback_aftermath_summary"))
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("rollback_aftermath_summary"), dict)
+                else {}
+            ),
+            "rollback_aftermath_status": (
+                run_state_payload.get("rollback_aftermath_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_aftermath_blocked": (
+                run_state_payload.get("rollback_aftermath_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_aftermath_manual_required": (
+                run_state_payload.get("rollback_aftermath_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_aftermath_missing_or_ambiguous": (
+                run_state_payload.get("rollback_aftermath_missing_or_ambiguous")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_aftermath_blocked_reason": (
+                run_state_payload.get("rollback_aftermath_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_aftermath_blocked_reasons": (
+                [str(item) for item in run_state_payload.get("rollback_aftermath_blocked_reasons", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("rollback_aftermath_blocked_reasons"), (list, tuple))
+                else []
+            ),
+            "rollback_remote_followup_required": (
+                run_state_payload.get("rollback_remote_followup_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_manual_followup_required": (
+                run_state_payload.get("rollback_manual_followup_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_validation_failed": (
+                run_state_payload.get("rollback_validation_failed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "authority_validation_summary": (
+                dict(run_state_payload.get("authority_validation_summary"))
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("authority_validation_summary"), dict)
+                else {}
+            ),
+            "authority_validation_blocked": (
+                run_state_payload.get("authority_validation_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authority_blocked": (
+                run_state_payload.get("execution_authority_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "validation_blocked": (
+                run_state_payload.get("validation_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "authority_validation_manual_required": (
+                run_state_payload.get("authority_validation_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "authority_validation_missing_or_ambiguous": (
+                run_state_payload.get("authority_validation_missing_or_ambiguous")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "authority_validation_blocked_reason": (
+                run_state_payload.get("authority_validation_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "authority_validation_blocked_reasons": (
+                [str(item) for item in run_state_payload.get("authority_validation_blocked_reasons", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("authority_validation_blocked_reasons"), (list, tuple))
+                else []
+            ),
+            "remote_github_summary": (
+                dict(run_state_payload.get("remote_github_summary"))
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("remote_github_summary"), dict)
+                else {}
+            ),
+            "remote_github_blocked": (
+                run_state_payload.get("remote_github_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "remote_github_manual_required": (
+                run_state_payload.get("remote_github_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "remote_github_missing_or_ambiguous": (
+                run_state_payload.get("remote_github_missing_or_ambiguous")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "remote_github_blocked_reason": (
+                run_state_payload.get("remote_github_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "remote_github_blocked_reasons": (
+                [str(item) for item in run_state_payload.get("remote_github_blocked_reasons", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("remote_github_blocked_reasons"), (list, tuple))
+                else []
+            ),
+            "policy_status": (
+                run_state_payload.get("policy_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "policy_blocked": (
+                run_state_payload.get("policy_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "policy_manual_required": (
+                run_state_payload.get("policy_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "policy_replan_required": (
+                run_state_payload.get("policy_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "policy_resume_allowed": (
+                run_state_payload.get("policy_resume_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "policy_terminal": (
+                run_state_payload.get("policy_terminal")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "policy_blocked_reason": (
+                run_state_payload.get("policy_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "policy_blocked_reasons": (
+                [str(item) for item in run_state_payload.get("policy_blocked_reasons", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("policy_blocked_reasons"), (list, tuple))
+                else []
+            ),
+            "policy_primary_blocker_class": (
+                run_state_payload.get("policy_primary_blocker_class")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "policy_primary_action": (
+                run_state_payload.get("policy_primary_action")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "policy_allowed_actions": (
+                [str(item) for item in run_state_payload.get("policy_allowed_actions", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("policy_allowed_actions"), (list, tuple))
+                else []
+            ),
+            "policy_disallowed_actions": (
+                [str(item) for item in run_state_payload.get("policy_disallowed_actions", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("policy_disallowed_actions"), (list, tuple))
+                else []
+            ),
+            "policy_manual_actions": (
+                [str(item) for item in run_state_payload.get("policy_manual_actions", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("policy_manual_actions"), (list, tuple))
+                else []
+            ),
+            "policy_resumable_reason": (
+                run_state_payload.get("policy_resumable_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_closure_status": (
+                run_state_payload.get("lifecycle_closure_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_safely_closed": (
+                run_state_payload.get("lifecycle_safely_closed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_terminal": (
+                run_state_payload.get("lifecycle_terminal")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_resumable": (
+                run_state_payload.get("lifecycle_resumable")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_manual_required": (
+                run_state_payload.get("lifecycle_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_replan_required": (
+                run_state_payload.get("lifecycle_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_execution_complete_not_closed": (
+                run_state_payload.get("lifecycle_execution_complete_not_closed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_rollback_complete_not_closed": (
+                run_state_payload.get("lifecycle_rollback_complete_not_closed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_blocked_reason": (
+                run_state_payload.get("lifecycle_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_blocked_reasons": (
+                [str(item) for item in run_state_payload.get("lifecycle_blocked_reasons", [])]
+                if isinstance(run_state_payload, dict)
+                and isinstance(run_state_payload.get("lifecycle_blocked_reasons"), (list, tuple))
+                else []
+            ),
+            "lifecycle_primary_closure_issue": (
+                run_state_payload.get("lifecycle_primary_closure_issue")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lifecycle_stop_class": (
+                run_state_payload.get("lifecycle_stop_class")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+        }),
+    }
 
 
 def _derive_validation_status(result_payload: dict[str, Any] | None) -> dict[str, Any]:
@@ -187,6 +1171,7 @@ def _build_summary(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
     result_payload = _read_json(row.get("result_path"))
     merge_gate_payload = _read_json(row.get("merge_gate_path"))
     merge_gate_surface = _derive_merge_gate_contract_surface(merge_gate_payload)
+    lifecycle_artifacts = _read_lifecycle_artifacts(row.get("result_path"))
     rollback_trace = get_rollback_trace_by_job_id(str(row.get("job_id", "")), db_path=db_path)
     rollback_execution = get_rollback_execution_by_job_id(str(row.get("job_id", "")), db_path=db_path)
 
@@ -232,6 +1217,7 @@ def _build_summary(row: dict[str, Any], *, db_path: str) -> dict[str, Any]:
             "merge_gate": row.get("merge_gate_path"),
             "classification": row.get("classification_path"),
         },
+        "lifecycle_artifacts": lifecycle_artifacts,
     }
 
 
@@ -511,6 +1497,23 @@ def _build_machine_review_payload(
     if isinstance(paths, dict):
         for key in ("request", "result", "rubric", "merge_gate", "classification"):
             artifact_references[key] = paths.get(key)
+    lifecycle = summary.get("lifecycle_artifacts")
+    if isinstance(lifecycle, dict):
+        lifecycle_paths = lifecycle.get("paths")
+        if isinstance(lifecycle_paths, dict):
+            for key in (
+                "checkpoint_decision",
+                "commit_decision",
+                "merge_decision",
+                "rollback_decision",
+                "commit_execution",
+                "push_execution",
+                "pr_execution",
+                "merge_execution",
+                "rollback_execution",
+                "run_state",
+            ):
+                artifact_references[key] = lifecycle_paths.get(key)
 
     policy_output = evaluate_recovery_policy(_build_policy_facts(summary))
     recovery_decision = str(policy_output.get("recovery_decision", "")).strip().lower()
@@ -661,6 +1664,612 @@ def _to_html(summary: dict[str, Any]) -> str:
         rows.append(line("rollback_trace_recorded", rollback.get("trace_recorded")))
         rows.append(line("rollback_eligible", rollback.get("rollback_eligible")))
         rows.append(line("rollback_execution_status", rollback.get("rollback_execution_status")))
+
+    lifecycle = summary.get("lifecycle_artifacts", {})
+    if isinstance(lifecycle, dict):
+        checkpoint_decision = lifecycle.get("checkpoint_decision")
+        commit_decision = lifecycle.get("commit_decision")
+        merge_decision = lifecycle.get("merge_decision")
+        rollback_decision = lifecycle.get("rollback_decision")
+        commit_execution = lifecycle.get("commit_execution")
+        push_execution = lifecycle.get("push_execution")
+        pr_execution = lifecycle.get("pr_execution")
+        merge_execution = lifecycle.get("merge_execution")
+        rollback_execution = lifecycle.get("rollback_execution")
+        run_state = lifecycle.get("run_state")
+        paths = lifecycle.get("paths")
+        if isinstance(checkpoint_decision, dict):
+            rows.append(line("lifecycle.checkpoint_stage", checkpoint_decision.get("checkpoint_stage")))
+            rows.append(line("lifecycle.checkpoint_decision", checkpoint_decision.get("decision")))
+            rows.append(
+                line(
+                    "lifecycle.checkpoint_manual_intervention_required",
+                    checkpoint_decision.get("manual_intervention_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.checkpoint_global_stop_recommended",
+                    checkpoint_decision.get("global_stop_recommended"),
+                )
+            )
+        if isinstance(commit_decision, dict):
+            rows.append(line("lifecycle.commit_decision", commit_decision.get("decision")))
+        if isinstance(merge_decision, dict):
+            rows.append(line("lifecycle.merge_decision", merge_decision.get("decision")))
+        if isinstance(rollback_decision, dict):
+            rows.append(line("lifecycle.rollback_decision", rollback_decision.get("decision")))
+        if isinstance(commit_execution, dict):
+            rows.append(line("lifecycle.commit_execution_status", commit_execution.get("status")))
+            rows.append(line("lifecycle.commit_execution_commit_sha", commit_execution.get("commit_sha")))
+            rows.append(
+                line(
+                    "lifecycle.commit_execution_authority_status",
+                    commit_execution.get("execution_authority_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.commit_execution_validation_status",
+                    commit_execution.get("validation_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.commit_execution_manual_intervention_required",
+                    commit_execution.get("manual_intervention_required"),
+                )
+            )
+        if isinstance(push_execution, dict):
+            rows.append(line("lifecycle.push_execution_status", push_execution.get("status")))
+            rows.append(line("lifecycle.push_execution_branch_name", push_execution.get("branch_name")))
+            rows.append(line("lifecycle.push_remote_state_status", push_execution.get("remote_state_status")))
+            rows.append(
+                line(
+                    "lifecycle.push_remote_state_blocked_reason",
+                    push_execution.get("remote_state_blocked_reason"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.push_execution_authority_status",
+                    push_execution.get("execution_authority_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.push_execution_validation_status",
+                    push_execution.get("validation_status"),
+                )
+            )
+        if isinstance(pr_execution, dict):
+            rows.append(line("lifecycle.pr_execution_status", pr_execution.get("status")))
+            rows.append(line("lifecycle.pr_execution_pr_number", pr_execution.get("pr_number")))
+            rows.append(line("lifecycle.pr_existing_pr_status", pr_execution.get("existing_pr_status")))
+            rows.append(
+                line(
+                    "lifecycle.pr_creation_state_status",
+                    pr_execution.get("pr_creation_state_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.pr_remote_state_blocked_reason",
+                    pr_execution.get("remote_state_blocked_reason"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.pr_execution_authority_status",
+                    pr_execution.get("execution_authority_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.pr_execution_validation_status",
+                    pr_execution.get("validation_status"),
+                )
+            )
+        if isinstance(merge_execution, dict):
+            rows.append(line("lifecycle.merge_execution_status", merge_execution.get("status")))
+            rows.append(line("lifecycle.merge_execution_merge_commit_sha", merge_execution.get("merge_commit_sha")))
+            rows.append(line("lifecycle.merge_mergeability_status", merge_execution.get("mergeability_status")))
+            rows.append(
+                line(
+                    "lifecycle.merge_merge_requirements_status",
+                    merge_execution.get("merge_requirements_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.merge_required_checks_status",
+                    merge_execution.get("required_checks_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.merge_remote_state_blocked_reason",
+                    merge_execution.get("remote_state_blocked_reason"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.merge_execution_authority_status",
+                    merge_execution.get("execution_authority_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.merge_execution_validation_status",
+                    merge_execution.get("validation_status"),
+                )
+            )
+        if isinstance(rollback_execution, dict):
+            rows.append(line("lifecycle.rollback_execution_status", rollback_execution.get("status")))
+            rows.append(line("lifecycle.rollback_execution_mode", rollback_execution.get("rollback_mode")))
+            rows.append(
+                line(
+                    "lifecycle.rollback_execution_authority_status",
+                    rollback_execution.get("execution_authority_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_execution_validation_status",
+                    rollback_execution.get("validation_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_execution_resulting_commit_sha",
+                    rollback_execution.get("resulting_commit_sha"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_execution_manual_intervention_required",
+                    rollback_execution.get("manual_intervention_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_execution_replan_required",
+                    rollback_execution.get("replan_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_aftermath_status",
+                    rollback_execution.get("rollback_aftermath_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_aftermath_blocked",
+                    rollback_execution.get("rollback_aftermath_blocked"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_aftermath_blocked_reason",
+                    rollback_execution.get("rollback_aftermath_blocked_reason"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_validation_status",
+                    rollback_execution.get("rollback_validation_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_manual_followup_required",
+                    rollback_execution.get("rollback_manual_followup_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_remote_followup_required",
+                    rollback_execution.get("rollback_remote_followup_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_post_validation_status",
+                    rollback_execution.get("rollback_post_validation_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_remote_state_status",
+                    rollback_execution.get("rollback_remote_state_status"),
+                )
+            )
+        if isinstance(run_state, dict):
+            rows.append(line("lifecycle.run_state", run_state.get("state")))
+            rows.append(line("lifecycle.orchestration_state", run_state.get("orchestration_state")))
+            rows.append(line("lifecycle.global_stop", run_state.get("global_stop")))
+            rows.append(line("lifecycle.continue_allowed", run_state.get("continue_allowed")))
+            rows.append(line("lifecycle.run_paused", run_state.get("run_paused")))
+            rows.append(
+                line(
+                    "lifecycle.manual_intervention_required",
+                    run_state.get("manual_intervention_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_evaluation_pending",
+                    run_state.get("rollback_evaluation_pending"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.global_stop_recommended",
+                    run_state.get("global_stop_recommended"),
+                )
+            )
+            rows.append(line("lifecycle.next_run_action", run_state.get("next_run_action")))
+            rows.append(line("lifecycle.loop_state", run_state.get("loop_state")))
+            rows.append(line("lifecycle.next_safe_action", run_state.get("next_safe_action")))
+            rows.append(line("lifecycle.loop_blocked_reason", run_state.get("loop_blocked_reason")))
+            rows.append(
+                line(
+                    "lifecycle.loop_blocked_reasons",
+                    ", ".join([str(v) for v in run_state.get("loop_blocked_reasons", [])]),
+                )
+            )
+            rows.append(line("lifecycle.resumable", run_state.get("resumable")))
+            rows.append(line("lifecycle.terminal", run_state.get("terminal")))
+            rows.append(
+                line(
+                    "lifecycle.loop_manual_intervention_required",
+                    run_state.get("loop_manual_intervention_required"),
+                )
+            )
+            rows.append(line("lifecycle.loop_replan_required", run_state.get("loop_replan_required")))
+            rows.append(line("lifecycle.rollback_completed", run_state.get("rollback_completed")))
+            rows.append(line("lifecycle.delivery_completed", run_state.get("delivery_completed")))
+            rows.append(
+                line(
+                    "lifecycle.authority_validation_blocked",
+                    run_state.get("authority_validation_blocked"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.execution_authority_blocked",
+                    run_state.get("execution_authority_blocked"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.validation_blocked",
+                    run_state.get("validation_blocked"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.authority_validation_manual_required",
+                    run_state.get("authority_validation_manual_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.authority_validation_missing_or_ambiguous",
+                    run_state.get("authority_validation_missing_or_ambiguous"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.authority_validation_blocked_reason",
+                    run_state.get("authority_validation_blocked_reason"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.remote_github_blocked",
+                    run_state.get("remote_github_blocked"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.remote_github_manual_required",
+                    run_state.get("remote_github_manual_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.remote_github_missing_or_ambiguous",
+                    run_state.get("remote_github_missing_or_ambiguous"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.remote_github_blocked_reason",
+                    run_state.get("remote_github_blocked_reason"),
+                )
+            )
+            rows.append(line("lifecycle.policy_status", run_state.get("policy_status")))
+            rows.append(line("lifecycle.policy_blocked", run_state.get("policy_blocked")))
+            rows.append(
+                line(
+                    "lifecycle.policy_manual_required",
+                    run_state.get("policy_manual_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.policy_replan_required",
+                    run_state.get("policy_replan_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.policy_resume_allowed",
+                    run_state.get("policy_resume_allowed"),
+                )
+            )
+            rows.append(line("lifecycle.policy_terminal", run_state.get("policy_terminal")))
+            rows.append(
+                line(
+                    "lifecycle.policy_blocked_reason",
+                    run_state.get("policy_blocked_reason"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.policy_blocked_reasons",
+                    ", ".join([str(v) for v in (run_state.get("policy_blocked_reasons") or [])]),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.policy_primary_blocker_class",
+                    run_state.get("policy_primary_blocker_class"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.policy_primary_action",
+                    run_state.get("policy_primary_action"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.policy_allowed_actions",
+                    ", ".join([str(v) for v in (run_state.get("policy_allowed_actions") or [])]),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.policy_disallowed_actions",
+                    ", ".join([str(v) for v in (run_state.get("policy_disallowed_actions") or [])]),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.policy_manual_actions",
+                    ", ".join([str(v) for v in (run_state.get("policy_manual_actions") or [])]),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.policy_resumable_reason",
+                    run_state.get("policy_resumable_reason"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.operator_posture_summary",
+                    run_state.get("operator_posture_summary"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.operator_primary_blocker_class",
+                    run_state.get("operator_primary_blocker_class"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.operator_primary_action",
+                    run_state.get("operator_primary_action"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.operator_action_scope",
+                    run_state.get("operator_action_scope"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.operator_resume_status",
+                    run_state.get("operator_resume_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.operator_next_safe_posture",
+                    run_state.get("operator_next_safe_posture"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.operator_guidance_summary",
+                    run_state.get("operator_guidance_summary"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.operator_safe_actions_summary",
+                    run_state.get("operator_safe_actions_summary"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.operator_unsafe_actions_summary",
+                    run_state.get("operator_unsafe_actions_summary"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.closure_status",
+                    run_state.get("lifecycle_closure_status"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.safely_closed",
+                    run_state.get("lifecycle_safely_closed"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.terminal_normalized",
+                    run_state.get("lifecycle_terminal"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.resumable_normalized",
+                    run_state.get("lifecycle_resumable"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.manual_required_normalized",
+                    run_state.get("lifecycle_manual_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.replan_required_normalized",
+                    run_state.get("lifecycle_replan_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.execution_complete_not_closed",
+                    run_state.get("lifecycle_execution_complete_not_closed"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_complete_not_closed",
+                    run_state.get("lifecycle_rollback_complete_not_closed"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.primary_closure_issue",
+                    run_state.get("lifecycle_primary_closure_issue"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.stop_class",
+                    run_state.get("lifecycle_stop_class"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.blocked_reason_normalized",
+                    run_state.get("lifecycle_blocked_reason"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.blocked_reasons_normalized",
+                    ", ".join([str(v) for v in (run_state.get("lifecycle_blocked_reasons") or [])]),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.loop_allowed_actions",
+                    ", ".join([str(v) for v in run_state.get("loop_allowed_actions", [])]),
+                )
+            )
+            rows.append(line("lifecycle.unit_blocked", run_state.get("unit_blocked")))
+            rows.append(line("lifecycle.commit_execution_executed", run_state.get("commit_execution_executed")))
+            rows.append(line("lifecycle.commit_execution_pending", run_state.get("commit_execution_pending")))
+            rows.append(line("lifecycle.commit_execution_failed", run_state.get("commit_execution_failed")))
+            rows.append(line("lifecycle.push_execution_succeeded", run_state.get("push_execution_succeeded")))
+            rows.append(line("lifecycle.pr_execution_succeeded", run_state.get("pr_execution_succeeded")))
+            rows.append(line("lifecycle.merge_execution_succeeded", run_state.get("merge_execution_succeeded")))
+            rows.append(line("lifecycle.push_execution_pending", run_state.get("push_execution_pending")))
+            rows.append(line("lifecycle.pr_execution_pending", run_state.get("pr_execution_pending")))
+            rows.append(line("lifecycle.merge_execution_pending", run_state.get("merge_execution_pending")))
+            rows.append(line("lifecycle.push_execution_failed", run_state.get("push_execution_failed")))
+            rows.append(line("lifecycle.pr_execution_failed", run_state.get("pr_execution_failed")))
+            rows.append(line("lifecycle.merge_execution_failed", run_state.get("merge_execution_failed")))
+            rows.append(line("lifecycle.rollback_execution_attempted", run_state.get("rollback_execution_attempted")))
+            rows.append(line("lifecycle.rollback_execution_succeeded", run_state.get("rollback_execution_succeeded")))
+            rows.append(line("lifecycle.rollback_execution_pending", run_state.get("rollback_execution_pending")))
+            rows.append(line("lifecycle.rollback_execution_failed", run_state.get("rollback_execution_failed")))
+            rows.append(
+                line(
+                    "lifecycle.rollback_execution_manual_intervention_required",
+                    run_state.get("rollback_execution_manual_intervention_required"),
+                )
+            )
+            rows.append(line("lifecycle.rollback_replan_required", run_state.get("rollback_replan_required")))
+            rows.append(
+                line(
+                    "lifecycle.rollback_automatic_continuation_blocked",
+                    run_state.get("rollback_automatic_continuation_blocked"),
+                )
+            )
+            rows.append(line("lifecycle.rollback_aftermath_status_run", run_state.get("rollback_aftermath_status")))
+            rows.append(line("lifecycle.rollback_aftermath_blocked_run", run_state.get("rollback_aftermath_blocked")))
+            rows.append(
+                line(
+                    "lifecycle.rollback_aftermath_manual_required_run",
+                    run_state.get("rollback_aftermath_manual_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_aftermath_missing_or_ambiguous_run",
+                    run_state.get("rollback_aftermath_missing_or_ambiguous"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_aftermath_blocked_reason_run",
+                    run_state.get("rollback_aftermath_blocked_reason"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_manual_followup_required_run",
+                    run_state.get("rollback_manual_followup_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_remote_followup_required_run",
+                    run_state.get("rollback_remote_followup_required"),
+                )
+            )
+            rows.append(
+                line(
+                    "lifecycle.rollback_validation_failed_run",
+                    run_state.get("rollback_validation_failed"),
+                )
+            )
+        if isinstance(paths, dict):
+            rows.append(line("lifecycle.checkpoint_decision_path", paths.get("checkpoint_decision")))
+            rows.append(line("lifecycle.commit_decision_path", paths.get("commit_decision")))
+            rows.append(line("lifecycle.merge_decision_path", paths.get("merge_decision")))
+            rows.append(line("lifecycle.rollback_decision_path", paths.get("rollback_decision")))
+            rows.append(line("lifecycle.commit_execution_path", paths.get("commit_execution")))
+            rows.append(line("lifecycle.push_execution_path", paths.get("push_execution")))
+            rows.append(line("lifecycle.pr_execution_path", paths.get("pr_execution")))
+            rows.append(line("lifecycle.merge_execution_path", paths.get("merge_execution")))
+            rows.append(line("lifecycle.rollback_execution_path", paths.get("rollback_execution")))
+            rows.append(line("lifecycle.run_state_path", paths.get("run_state")))
 
     paths = summary.get("paths", {})
     if isinstance(paths, dict):

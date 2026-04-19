@@ -171,6 +171,8 @@ class NextActionControllerTests(unittest.TestCase):
         manifest: dict | None = None,
         bounded_step_contract: dict | None = None,
         prompt_contract: dict | None = None,
+        checkpoint_decision: dict | None = None,
+        run_state: dict | None = None,
     ) -> Path:
         run_dir = root / "run"
         unit_dir = run_dir / "pr-01"
@@ -186,6 +188,10 @@ class NextActionControllerTests(unittest.TestCase):
             path = unit_dir / "pr_implementation_prompt_contract.json"
             path.write_text(json.dumps(prompt_contract, ensure_ascii=False, indent=2), encoding="utf-8")
             manifest_payload["pr_units"][0]["pr_implementation_prompt_contract_path"] = str(path)
+        if isinstance(checkpoint_decision, dict):
+            path = unit_dir / "checkpoint_decision.json"
+            path.write_text(json.dumps(checkpoint_decision, ensure_ascii=False, indent=2), encoding="utf-8")
+            manifest_payload["pr_units"][0]["checkpoint_decision_path"] = str(path)
         (run_dir / "manifest.json").write_text(
             json.dumps(manifest_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -199,6 +205,11 @@ class NextActionControllerTests(unittest.TestCase):
         if result is not None:
             (unit_dir / "result.json").write_text(
                 json.dumps(result, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        if isinstance(run_state, dict):
+            (run_dir / "run_state.json").write_text(
+                json.dumps(run_state, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
         return run_dir
@@ -327,6 +338,780 @@ class NextActionControllerTests(unittest.TestCase):
         self.assertEqual(decision["next_action"], "proceed_to_pr")
         self.assertEqual(decision["progression_outcome"], OUTCOME_PROCEED_TO_NEXT_STEP)
         self.assertEqual(decision["result_acceptance"], "accept_current_result")
+
+    def test_checkpoint_global_stop_recommended_is_consumed_conservatively(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        checkpoint_decision = {
+            "schema_version": "v1",
+            "unit_id": "pr-01",
+            "checkpoint_stage": "post_review",
+            "decision": "global_stop_recommended",
+            "rule_id": "checkpoint_global_stop_recommended",
+            "summary": "checkpoint requested global stop",
+            "blocking_reasons": ["global_stop_required"],
+            "required_signals": ["global_stop_required"],
+            "recommended_next_action": "escalate_to_human",
+            "manual_intervention_required": True,
+            "global_stop_recommended": True,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            manifest["dry_run"] = False
+            manifest["run_status"] = "completed"
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                checkpoint_decision=checkpoint_decision,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "escalate_to_human")
+        self.assertTrue(decision["whether_human_required"])
+
+    def test_run_state_global_stop_guardrail_overrides_optimistic_progression(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "paused",
+            "orchestration_state": "global_stop_pending",
+            "summary": "global stop requested",
+            "units_total": 1,
+            "units_completed": 1,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 0,
+            "global_stop": True,
+            "global_stop_reason": "global stop requested",
+            "continue_allowed": False,
+            "run_paused": True,
+            "manual_intervention_required": True,
+            "rollback_evaluation_pending": False,
+            "global_stop_recommended": True,
+            "next_run_action": "hold_for_global_stop",
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            manifest["dry_run"] = False
+            manifest["run_status"] = "completed"
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "escalate_to_human")
+        self.assertTrue(decision["whether_human_required"])
+        self.assertEqual(decision["progression_rule_id"], "run_state_guardrail_global_stop")
+
+    def test_run_state_rollback_pending_guardrail_requests_rollback(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "paused",
+            "orchestration_state": "rollback_evaluation_pending",
+            "summary": "rollback evaluation required",
+            "units_total": 1,
+            "units_completed": 1,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 0,
+            "global_stop": False,
+            "global_stop_reason": "",
+            "continue_allowed": False,
+            "run_paused": True,
+            "manual_intervention_required": False,
+            "rollback_evaluation_pending": True,
+            "global_stop_recommended": False,
+            "next_run_action": "evaluate_rollback",
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            manifest["dry_run"] = False
+            manifest["run_status"] = "completed"
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "rollback_required")
+        self.assertTrue(decision["whether_human_required"])
+        self.assertEqual(decision["progression_rule_id"], "run_state_guardrail_rollback_pending")
+
+    def test_run_state_loop_manual_guardrail_overrides_optimistic_progression(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "paused",
+            "orchestration_state": "paused_for_manual_review",
+            "summary": "manual gate required",
+            "units_total": 1,
+            "units_completed": 1,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 0,
+            "global_stop": False,
+            "global_stop_reason": "",
+            "continue_allowed": False,
+            "run_paused": True,
+            "manual_intervention_required": False,
+            "rollback_evaluation_pending": False,
+            "global_stop_recommended": False,
+            "next_run_action": "pause_run",
+            "loop_state": "manual_intervention_required",
+            "next_safe_action": "require_manual_intervention",
+            "loop_blocked_reason": "manual_intervention_required",
+            "terminal": False,
+            "resumable": True,
+            "loop_manual_intervention_required": True,
+            "loop_replan_required": False,
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            manifest["dry_run"] = False
+            manifest["run_status"] = "completed"
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "escalate_to_human")
+        self.assertTrue(decision["whether_human_required"])
+        self.assertEqual(decision["progression_rule_id"], "run_state_guardrail_loop_manual_or_blocked")
+
+    def test_run_state_loop_rollback_guardrail_requests_rollback(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "summary": "rollback selected by loop",
+            "units_total": 1,
+            "units_completed": 1,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 0,
+            "global_stop": False,
+            "global_stop_reason": "",
+            "continue_allowed": False,
+            "run_paused": True,
+            "manual_intervention_required": False,
+            "rollback_evaluation_pending": False,
+            "global_stop_recommended": False,
+            "next_run_action": "pause_run",
+            "loop_state": "rollback_pending",
+            "next_safe_action": "execute_rollback",
+            "loop_blocked_reason": "",
+            "terminal": False,
+            "resumable": True,
+            "loop_manual_intervention_required": False,
+            "loop_replan_required": False,
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            manifest["dry_run"] = False
+            manifest["run_status"] = "completed"
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "rollback_required")
+        self.assertTrue(decision["whether_human_required"])
+        self.assertEqual(decision["progression_rule_id"], "run_state_guardrail_loop_rollback")
+
+    def test_run_state_authority_validation_guardrail_escalates(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "summary": "validation blocked",
+            "units_total": 1,
+            "units_completed": 1,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 0,
+            "global_stop": False,
+            "global_stop_reason": "",
+            "continue_allowed": True,
+            "run_paused": False,
+            "manual_intervention_required": False,
+            "rollback_evaluation_pending": False,
+            "global_stop_recommended": False,
+            "next_run_action": "continue_run",
+            "loop_state": "runnable_blocked",
+            "next_safe_action": "pause",
+            "loop_blocked_reason": "working_tree_contains_out_of_scope_changes",
+            "terminal": False,
+            "resumable": True,
+            "loop_manual_intervention_required": False,
+            "loop_replan_required": False,
+            "authority_validation_blocked": True,
+            "execution_authority_blocked": False,
+            "validation_blocked": True,
+            "authority_validation_blocked_reason": "working_tree_contains_out_of_scope_changes",
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            manifest["dry_run"] = False
+            manifest["run_status"] = "completed"
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "escalate_to_human")
+        self.assertTrue(decision["whether_human_required"])
+        self.assertEqual(
+            decision["progression_rule_id"],
+            "run_state_guardrail_authority_validation_blocked",
+        )
+
+    def test_run_state_authority_validation_guardrail_skips_non_execution_next_action(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "summary": "validation blocked",
+            "units_total": 1,
+            "units_completed": 0,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 1,
+            "global_stop": False,
+            "global_stop_reason": "",
+            "continue_allowed": False,
+            "run_paused": True,
+            "manual_intervention_required": False,
+            "rollback_evaluation_pending": False,
+            "global_stop_recommended": False,
+            "next_run_action": "pause_run",
+            "loop_state": "runnable_blocked",
+            "next_safe_action": "pause",
+            "loop_blocked_reason": "working_tree_contains_out_of_scope_changes",
+            "terminal": False,
+            "resumable": True,
+            "loop_manual_intervention_required": False,
+            "loop_replan_required": False,
+            "authority_validation_blocked": True,
+            "execution_authority_blocked": False,
+            "validation_blocked": True,
+            "authority_validation_blocked_reason": "working_tree_contains_out_of_scope_changes",
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "signal_recollect")
+        self.assertIn(
+            decision["progression_rule_id"],
+            {"reject_missing_signal_once", "reject_missing_signals"},
+        )
+
+    def test_run_state_remote_github_guardrail_escalates_execution_intent(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "summary": "remote github blocked",
+            "units_total": 1,
+            "units_completed": 1,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 0,
+            "global_stop": False,
+            "global_stop_reason": "",
+            "continue_allowed": True,
+            "run_paused": False,
+            "manual_intervention_required": False,
+            "rollback_evaluation_pending": False,
+            "global_stop_recommended": False,
+            "next_run_action": "continue_run",
+            "loop_state": "runnable_blocked",
+            "next_safe_action": "pause",
+            "loop_blocked_reason": "existing_open_pr_detected",
+            "terminal": False,
+            "resumable": True,
+            "loop_manual_intervention_required": False,
+            "loop_replan_required": False,
+            "remote_github_blocked": True,
+            "remote_github_manual_required": True,
+            "remote_github_missing_or_ambiguous": True,
+            "remote_github_blocked_reason": "existing_open_pr_detected",
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            manifest["dry_run"] = False
+            manifest["run_status"] = "completed"
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "escalate_to_human")
+        self.assertTrue(decision["whether_human_required"])
+        self.assertEqual(
+            decision["progression_rule_id"],
+            "run_state_guardrail_remote_github_blocked",
+        )
+
+    def test_run_state_remote_github_guardrail_skips_non_execution_next_action(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "summary": "remote github blocked",
+            "units_total": 1,
+            "units_completed": 0,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 1,
+            "global_stop": False,
+            "global_stop_reason": "",
+            "continue_allowed": False,
+            "run_paused": True,
+            "manual_intervention_required": False,
+            "rollback_evaluation_pending": False,
+            "global_stop_recommended": False,
+            "next_run_action": "pause_run",
+            "loop_state": "runnable_blocked",
+            "next_safe_action": "pause",
+            "loop_blocked_reason": "existing_open_pr_detected",
+            "terminal": False,
+            "resumable": True,
+            "loop_manual_intervention_required": False,
+            "loop_replan_required": False,
+            "remote_github_blocked": True,
+            "remote_github_manual_required": True,
+            "remote_github_missing_or_ambiguous": True,
+            "remote_github_blocked_reason": "existing_open_pr_detected",
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "signal_recollect")
+
+    def test_run_state_rollback_aftermath_guardrail_escalates_execution_intent(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "summary": "rollback aftermath unresolved",
+            "units_total": 1,
+            "units_completed": 1,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 0,
+            "global_stop": False,
+            "global_stop_reason": "",
+            "continue_allowed": True,
+            "run_paused": False,
+            "manual_intervention_required": False,
+            "rollback_evaluation_pending": False,
+            "global_stop_recommended": False,
+            "next_run_action": "continue_run",
+            "loop_state": "runnable_blocked",
+            "next_safe_action": "pause",
+            "loop_blocked_reason": "rollback_validation_failed",
+            "terminal": False,
+            "resumable": True,
+            "loop_manual_intervention_required": False,
+            "loop_replan_required": False,
+            "rollback_aftermath_blocked": True,
+            "rollback_aftermath_manual_required": True,
+            "rollback_aftermath_missing_or_ambiguous": True,
+            "rollback_validation_failed": True,
+            "rollback_remote_followup_required": False,
+            "rollback_manual_followup_required": True,
+            "rollback_aftermath_blocked_reason": "rollback_validation_failed",
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            manifest["dry_run"] = False
+            manifest["run_status"] = "completed"
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "escalate_to_human")
+        self.assertTrue(decision["whether_human_required"])
+        self.assertEqual(
+            decision["progression_rule_id"],
+            "run_state_guardrail_rollback_aftermath_blocked",
+        )
+
+    def test_run_state_rollback_aftermath_guardrail_skips_non_execution_next_action(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        run_state = {
+            "schema_version": "v1",
+            "run_id": "job-next-action",
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "summary": "rollback aftermath unresolved",
+            "units_total": 1,
+            "units_completed": 0,
+            "units_blocked": 1,
+            "units_failed": 0,
+            "units_pending": 1,
+            "global_stop": False,
+            "global_stop_reason": "",
+            "continue_allowed": False,
+            "run_paused": True,
+            "manual_intervention_required": False,
+            "rollback_evaluation_pending": False,
+            "global_stop_recommended": False,
+            "next_run_action": "pause_run",
+            "loop_state": "runnable_blocked",
+            "next_safe_action": "pause",
+            "loop_blocked_reason": "rollback_validation_failed",
+            "terminal": False,
+            "resumable": True,
+            "loop_manual_intervention_required": False,
+            "loop_replan_required": False,
+            "rollback_aftermath_blocked": True,
+            "rollback_aftermath_manual_required": True,
+            "rollback_aftermath_missing_or_ambiguous": True,
+            "rollback_validation_failed": True,
+            "rollback_remote_followup_required": False,
+            "rollback_manual_followup_required": True,
+            "rollback_aftermath_blocked_reason": "rollback_validation_failed",
+            "unit_blocked": True,
+            "latest_unit_id": "pr-01",
+            "allowed_transitions": ["decision_in_progress"],
+            "orchestration_allowed_transitions": ["checkpoint_evaluation_in_progress"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = root / "run"
+            manifest = self._base_manifest(run_dir)
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=manifest,
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "signal_recollect")
+
+    def test_policy_guardrail_blocks_execution_intent_actions(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "next_safe_action": "execute_merge",
+            "terminal": False,
+            "resumable": True,
+            "policy_status": "blocked",
+            "policy_blocked": True,
+            "policy_manual_required": False,
+            "policy_replan_required": False,
+            "policy_resume_allowed": True,
+            "policy_terminal": False,
+            "policy_blocked_reason": "required_checks_unsatisfied",
+            "policy_blocked_reasons": ["required_checks_unsatisfied"],
+            "policy_disallowed_actions": ["proceed_to_pr", "proceed_to_merge"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest={**self._base_manifest(root / "run"), "dry_run": False, "run_status": "completed"},
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "escalate_to_human")
+        self.assertEqual(
+            decision["progression_rule_id"],
+            "run_state_policy_guardrail_action_disallowed",
+        )
+
+    def test_policy_guardrail_manual_only_escalates_execution_intent(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "next_safe_action": "execute_pr_creation",
+            "terminal": False,
+            "resumable": True,
+            "policy_status": "manual_only",
+            "policy_blocked": True,
+            "policy_manual_required": True,
+            "policy_replan_required": False,
+            "policy_resume_allowed": True,
+            "policy_terminal": False,
+            "policy_blocked_reason": "remote_github_missing_or_ambiguous",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest={**self._base_manifest(root / "run"), "dry_run": False, "run_status": "completed"},
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "escalate_to_human")
+        self.assertEqual(
+            decision["progression_rule_id"],
+            "run_state_policy_guardrail_manual_only",
+        )
+
+    def test_policy_guardrail_replan_required_is_distinct_from_generic_block(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        result["execution"]["status"] = "completed"
+        result["execution"]["verify"]["status"] = "passed"
+        result["failure_type"] = None
+        result["failure_message"] = None
+        run_state = {
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "next_safe_action": "require_replanning",
+            "terminal": False,
+            "resumable": False,
+            "policy_status": "replan_required",
+            "policy_blocked": True,
+            "policy_manual_required": False,
+            "policy_replan_required": True,
+            "policy_resume_allowed": False,
+            "policy_terminal": False,
+            "policy_blocked_reason": "rollback_validation_failed",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest={**self._base_manifest(root / "run"), "dry_run": False, "run_status": "completed"},
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "roadmap_replan")
+        self.assertEqual(
+            decision["progression_rule_id"],
+            "run_state_policy_guardrail_replan_required",
+        )
+
+    def test_policy_guardrail_does_not_destabilize_non_execution_actions(self) -> None:
+        receipt = self._base_receipt()
+        result = self._base_result()
+        run_state = {
+            "state": "decision_in_progress",
+            "orchestration_state": "checkpoint_evaluation_in_progress",
+            "next_safe_action": "pause",
+            "terminal": False,
+            "resumable": True,
+            "policy_status": "blocked",
+            "policy_blocked": True,
+            "policy_manual_required": True,
+            "policy_replan_required": False,
+            "policy_resume_allowed": True,
+            "policy_terminal": False,
+            "policy_blocked_reason": "existing_open_pr_detected",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            run_dir = self._write_run(
+                root,
+                receipt=receipt,
+                result=result,
+                manifest=self._base_manifest(root / "run"),
+                run_state=run_state,
+            )
+            decision = evaluate_next_action_from_run_dir(run_dir, pr_plan=self._base_pr_plan())
+
+        self.assertEqual(decision["next_action"], "signal_recollect")
 
     def test_contract_sidecars_drive_scope_and_category_evaluation(self) -> None:
         receipt = self._base_receipt()
