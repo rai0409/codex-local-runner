@@ -1455,6 +1455,240 @@ def _build_policy_facts(summary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _normalize_changed_files(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    normalized: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _derive_changed_files(
+    *,
+    request_payload: dict[str, Any] | None,
+    result_payload: dict[str, Any] | None,
+    classification_payload: dict[str, Any] | None,
+) -> list[str]:
+    if isinstance(classification_payload, dict):
+        changed = _normalize_changed_files(classification_payload.get("changed_files"))
+        if changed:
+            return changed
+
+    if isinstance(request_payload, dict):
+        changed = _normalize_changed_files(request_payload.get("changed_files"))
+        if changed:
+            return changed
+
+    if isinstance(result_payload, dict):
+        changed = _normalize_changed_files(result_payload.get("changed_files"))
+        if changed:
+            return changed
+        execution = result_payload.get("execution")
+        if isinstance(execution, dict):
+            changed = _normalize_changed_files(execution.get("changed_files"))
+            if changed:
+                return changed
+    return []
+
+
+def _derive_int_signal(
+    *,
+    request_payload: dict[str, Any] | None,
+    result_payload: dict[str, Any] | None,
+    key: str,
+) -> int:
+    candidates: list[Any] = []
+    if isinstance(result_payload, dict):
+        candidates.append(result_payload.get(key))
+        execution = result_payload.get("execution")
+        if isinstance(execution, dict):
+            candidates.append(execution.get(key))
+    if isinstance(request_payload, dict):
+        candidates.append(request_payload.get(key))
+
+    for value in candidates:
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped and stripped.lstrip("-").isdigit():
+                return int(stripped)
+    return 0
+
+
+def _derive_required_tests_signals(
+    *,
+    request_payload: dict[str, Any] | None,
+    result_payload: dict[str, Any] | None,
+    rubric_payload: dict[str, Any] | None,
+) -> tuple[bool, bool, bool]:
+    if isinstance(rubric_payload, dict):
+        declared = _as_optional_bool(rubric_payload.get("required_tests_declared"))
+        executed = _as_optional_bool(rubric_payload.get("required_tests_executed"))
+        passed = _as_optional_bool(rubric_payload.get("required_tests_passed"))
+        if declared is not None and executed is not None and passed is not None:
+            return declared, executed, passed
+
+    declared = False
+    if isinstance(request_payload, dict):
+        validation_commands = request_payload.get("validation_commands")
+        if isinstance(validation_commands, list):
+            declared = len(validation_commands) > 0
+
+    verify_status = ""
+    if isinstance(result_payload, dict):
+        execution = result_payload.get("execution")
+        if isinstance(execution, dict):
+            verify = execution.get("verify")
+            if isinstance(verify, dict):
+                verify_status = str(verify.get("status", "")).strip().lower()
+
+    if verify_status == "passed":
+        return declared, True, True
+    if verify_status == "failed":
+        return declared, True, False
+    return declared, False, False
+
+
+def _derive_prompt_contract_compliance(
+    request_payload: dict[str, Any] | None,
+) -> bool | None:
+    if not isinstance(request_payload, dict):
+        return None
+    explicit = _as_optional_bool(request_payload.get("prompt_contract_compliant"))
+    if explicit is not None:
+        return explicit
+    required = ("repo", "task_type", "goal", "provider")
+    for key in required:
+        value = request_payload.get(key)
+        if value is None or not str(value).strip():
+            return None
+    validation_commands = request_payload.get("validation_commands")
+    if not isinstance(validation_commands, list):
+        return None
+    return True
+
+
+def _build_policy_facts(summary: dict[str, Any]) -> dict[str, Any]:
+    paths = summary.get("paths", {})
+    request_payload = _read_json(paths.get("request")) if isinstance(paths, dict) else None
+    result_payload = _read_json(paths.get("result")) if isinstance(paths, dict) else None
+    rubric_payload = _read_json(paths.get("rubric")) if isinstance(paths, dict) else None
+    merge_gate_payload = _read_json(paths.get("merge_gate")) if isinstance(paths, dict) else None
+    classification_payload = _read_json(paths.get("classification")) if isinstance(paths, dict) else None
+
+    execution_payload = (
+        result_payload.get("execution")
+        if isinstance(result_payload, dict) and isinstance(result_payload.get("execution"), dict)
+        else {}
+    )
+    verify_payload = (
+        execution_payload.get("verify")
+        if isinstance(execution_payload.get("verify"), dict)
+        else {}
+    )
+
+    rollback = summary.get("rollback", {})
+    merge = summary.get("merge", {})
+    required_declared, required_executed, required_passed = _derive_required_tests_signals(
+        request_payload=request_payload,
+        result_payload=result_payload,
+        rubric_payload=rubric_payload,
+    )
+
+    return {
+        "accepted_status": summary.get("accepted_status"),
+        "execution_status": execution_payload.get("status"),
+        "verify_status": verify_payload.get("status"),
+        "verify_reason": verify_payload.get("reason"),
+        "declared_category": summary.get("declared_category"),
+        "observed_category": summary.get("observed_category"),
+        "changed_files": _derive_changed_files(
+            request_payload=request_payload,
+            result_payload=result_payload,
+            classification_payload=classification_payload,
+        ),
+        "additions": _derive_int_signal(
+            request_payload=request_payload,
+            result_payload=result_payload,
+            key="additions",
+        ),
+        "deletions": _derive_int_signal(
+            request_payload=request_payload,
+            result_payload=result_payload,
+            key="deletions",
+        ),
+        "required_tests_declared": required_declared,
+        "required_tests_executed": required_executed,
+        "required_tests_passed": required_passed,
+        "merge_eligible": (
+            _as_optional_bool(rubric_payload.get("merge_eligible"))
+            if isinstance(rubric_payload, dict)
+            else _as_optional_bool(merge.get("merge_eligible"))
+        ),
+        "merge_gate_passed": (
+            _as_optional_bool(merge_gate_payload.get("passed"))
+            if isinstance(merge_gate_payload, dict)
+            else _as_optional_bool(merge.get("merge_gate_passed"))
+        ),
+        "forbidden_files_untouched": (
+            _as_optional_bool(rubric_payload.get("forbidden_files_untouched"))
+            if isinstance(rubric_payload, dict)
+            else None
+        ),
+        "diff_size_within_limit": (
+            _as_optional_bool(rubric_payload.get("diff_size_within_limit"))
+            if isinstance(rubric_payload, dict)
+            else None
+        ),
+        "runtime_semantics_changed": (
+            _as_optional_bool(rubric_payload.get("runtime_semantics_changed"))
+            if isinstance(rubric_payload, dict)
+            else None
+        ),
+        "contract_shape_changed": (
+            _as_optional_bool(rubric_payload.get("contract_shape_changed"))
+            if isinstance(rubric_payload, dict)
+            else None
+        ),
+        "reviewer_fields_changed": (
+            _as_optional_bool(rubric_payload.get("reviewer_fields_changed"))
+            if isinstance(rubric_payload, dict)
+            else None
+        ),
+        "rubric_fail_reasons": (
+            rubric_payload.get("fail_reasons")
+            if isinstance(rubric_payload, dict)
+            else []
+        ),
+        "rubric_warnings": (
+            rubric_payload.get("warnings")
+            if isinstance(rubric_payload, dict)
+            else []
+        ),
+        "merge_gate_fail_reasons": (
+            merge_gate_payload.get("fail_reasons")
+            if isinstance(merge_gate_payload, dict)
+            else []
+        ),
+        "rollback_trace_recorded": (
+            _as_optional_bool(rollback.get("trace_recorded")) if isinstance(rollback, dict) else None
+        ),
+        "rollback_eligible": (
+            _as_optional_bool(rollback.get("rollback_eligible")) if isinstance(rollback, dict) else None
+        ),
+        "rollback_execution_status": (
+            rollback.get("rollback_execution_status") if isinstance(rollback, dict) else None
+        ),
+        "prompt_contract_compliant": _derive_prompt_contract_compliance(request_payload),
+    }
+
+
 def _build_machine_review_payload(
     summary: dict[str, Any],
     *,
@@ -1514,6 +1748,19 @@ def _build_machine_review_payload(
                 "run_state",
             ):
                 artifact_references[key] = lifecycle_paths.get(key)
+
+    policy_output = evaluate_recovery_policy(_build_policy_facts(summary))
+    recovery_decision = str(policy_output.get("recovery_decision", "")).strip().lower()
+    decision_basis = (
+        [str(item) for item in policy_output.get("decision_basis", [])]
+        if isinstance(policy_output.get("decision_basis"), (list, tuple))
+        else []
+    )
+    failure_codes = (
+        [str(item) for item in policy_output.get("failure_codes", [])]
+        if isinstance(policy_output.get("failure_codes"), (list, tuple))
+        else []
+    )
 
     policy_output = evaluate_recovery_policy(_build_policy_facts(summary))
     recovery_decision = str(policy_output.get("recovery_decision", "")).strip().lower()
