@@ -1,0 +1,80 @@
+schema_version: v1
+defaults:
+  decision_kind: escalate_to_human
+  max_attempts: 1
+  backoff_seconds:
+    - 30
+
+policies:
+  - id: codex_execution_usage_exhausted
+    match:
+      provider_class: codex
+      operation_class: execution
+      failure_type: provider_usage_exhausted
+    decision:
+      decision_kind: pause_and_wait
+      pause_state: waiting_for_provider_capacity
+      max_attempts: 0
+      backoff_seconds:
+        - 300
+
+  - id: codex_execution_rate_limited
+    match:
+      provider_class: codex
+      operation_class: execution
+      failure_type: provider_rate_limited
+    decision:
+      decision_kind: pause_and_wait
+      pause_state: waiting_for_rate_limit_reset
+      max_attempts: 0
+      backoff_seconds:
+        - 120
+
+  - id: generic_execution_transport_timeout
+    match:
+      provider_class: "*"
+      operation_class: execution
+      failure_type: transport_timeout
+    decision:
+      decision_kind: retry_now
+      retry_class: same_prompt_retry
+      max_attempts: 2
+      backoff_seconds:
+        - 15
+        - 30
+
+  - id: generic_execution_evaluation_failure
+    match:
+      provider_class: "*"
+      operation_class: execution
+      failure_type: evaluation_failure
+    decision:
+      decision_kind: retry_now
+      retry_class: repair_prompt_retry
+      max_attempts: 1
+      backoff_seconds:
+        - 0
+
+  - id: generic_read_check_wait
+    match:
+      provider_class: "*"
+      operation_class: read_check
+      failure_type: check_pending
+    decision:
+      decision_kind: pause_and_wait
+      pause_state: waiting_for_checks
+      max_attempts: 0
+      backoff_seconds:
+        - 120
+
+  - id: generic_auth_failure_terminal
+    match:
+      provider_class: "*"
+      operation_class: "*"
+      failure_type: auth_failure
+    decision:
+      decision_kind: terminal_refusal
+      max_attempts: 0
+      backoff_seconds:
+        - 0
+      human_required: true
