@@ -16,8 +16,51 @@ from orchestrator.ledger import get_rollback_execution_by_job_id  # noqa: E402
 from orchestrator.ledger import get_job_by_id  # noqa: E402
 from orchestrator.ledger import get_latest_job  # noqa: E402
 from orchestrator.ledger import get_rollback_trace_by_job_id  # noqa: E402
+from automation.orchestration.approval_transport import build_approval_run_state_summary_surface  # noqa: E402
+from automation.orchestration.bounded_execution_bridge import (  # noqa: E402
+    build_bounded_execution_bridge_run_state_summary_surface,
+)
+from automation.orchestration.completion_contract import build_completion_run_state_summary_surface  # noqa: E402
+from automation.orchestration.execution_authorization_gate import (
+    build_execution_authorization_gate_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.execution_result_contract import (
+    build_execution_result_contract_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.verification_closure_contract import (
+    build_verification_closure_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.retry_reentry_loop_contract import (
+    build_retry_reentry_loop_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.endgame_closure_contract import (
+    build_endgame_closure_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.loop_hardening_contract import (
+    build_loop_hardening_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.lane_stabilization_contract import (
+    build_lane_stabilization_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.observability_rollup import (
+    build_observability_rollup_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.failure_bucketing_hardening import (
+    build_failure_bucketing_hardening_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.artifact_retention import (
+    build_artifact_retention_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.fleet_safety_control import (
+    build_fleet_safety_control_run_state_summary_surface,
+)  # noqa: E402
 from automation.orchestration.lifecycle_terminal_state import build_lifecycle_terminal_state_surface  # noqa: E402
+from automation.orchestration.objective_contract import build_objective_run_state_summary_surface  # noqa: E402
 from automation.orchestration.operator_explainability import build_operator_explainability_surface  # noqa: E402
+from automation.orchestration.repair_approval_binding import build_repair_approval_binding_run_state_summary_surface  # noqa: E402
+from automation.orchestration.repair_plan_transport import build_repair_plan_transport_run_state_summary_surface  # noqa: E402
+from automation.orchestration.repair_suggestion_contract import build_repair_suggestion_run_state_summary_surface  # noqa: E402
+from automation.orchestration.reconcile_contract import build_reconcile_run_state_summary_surface  # noqa: E402
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -342,14 +385,1202 @@ def _extract_execution_receipt_summary(payload: dict[str, Any] | None) -> dict[s
 
 
 def _with_operator_explainability(run_state: dict[str, Any]) -> dict[str, Any]:
-    lifecycle_surface = build_lifecycle_terminal_state_surface(run_state)
-    merged = {**run_state, **lifecycle_surface}
+    objective_surface = build_objective_run_state_summary_surface(run_state)
+    lifecycle_surface = build_lifecycle_terminal_state_surface({**run_state, **objective_surface})
+    completion_surface = build_completion_run_state_summary_surface(
+        {**run_state, **objective_surface, **lifecycle_surface}
+    )
+    approval_surface = build_approval_run_state_summary_surface(
+        {**run_state, **objective_surface, **lifecycle_surface, **completion_surface}
+    )
+    reconcile_surface = build_reconcile_run_state_summary_surface(
+        {**run_state, **objective_surface, **lifecycle_surface, **completion_surface, **approval_surface}
+    )
+    repair_surface = build_repair_suggestion_run_state_summary_surface(
+        {
+            **run_state,
+            **objective_surface,
+            **lifecycle_surface,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+        }
+    )
+    repair_plan_surface = build_repair_plan_transport_run_state_summary_surface(
+        {
+            **run_state,
+            **objective_surface,
+            **lifecycle_surface,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **repair_surface,
+        }
+    )
+    repair_binding_surface = build_repair_approval_binding_run_state_summary_surface(
+        {
+            **run_state,
+            **objective_surface,
+            **lifecycle_surface,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **repair_surface,
+            **repair_plan_surface,
+        }
+    )
+    execution_authorization_surface = build_execution_authorization_gate_run_state_summary_surface(
+        {
+            **run_state,
+            **objective_surface,
+            **lifecycle_surface,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **repair_surface,
+            **repair_plan_surface,
+            **repair_binding_surface,
+        }
+    )
+    bounded_execution_surface = build_bounded_execution_bridge_run_state_summary_surface(
+        {
+            **run_state,
+            **objective_surface,
+            **lifecycle_surface,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **repair_surface,
+            **repair_plan_surface,
+            **repair_binding_surface,
+            **execution_authorization_surface,
+        }
+    )
+    execution_result_surface = build_execution_result_contract_run_state_summary_surface(
+        {
+            **run_state,
+            **objective_surface,
+            **lifecycle_surface,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **repair_surface,
+            **repair_plan_surface,
+            **repair_binding_surface,
+            **execution_authorization_surface,
+            **bounded_execution_surface,
+        }
+    )
+    verification_closure_surface = build_verification_closure_run_state_summary_surface(
+        {
+            **run_state,
+            **objective_surface,
+            **lifecycle_surface,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **execution_authorization_surface,
+            **bounded_execution_surface,
+            **execution_result_surface,
+        }
+    )
+    retry_reentry_surface = build_retry_reentry_loop_run_state_summary_surface(
+        {
+            **run_state,
+            **objective_surface,
+            **lifecycle_surface,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **repair_surface,
+            **repair_plan_surface,
+            **repair_binding_surface,
+            **execution_authorization_surface,
+            **bounded_execution_surface,
+            **execution_result_surface,
+            **verification_closure_surface,
+        }
+    )
+    endgame_surface = build_endgame_closure_run_state_summary_surface(
+        {
+            **run_state,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **execution_authorization_surface,
+            **bounded_execution_surface,
+            **execution_result_surface,
+            **verification_closure_surface,
+            **retry_reentry_surface,
+        }
+    )
+    loop_hardening_surface = build_loop_hardening_run_state_summary_surface(
+        {
+            **run_state,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **execution_result_surface,
+            **verification_closure_surface,
+            **retry_reentry_surface,
+            **endgame_surface,
+        }
+    )
+    lane_stabilization_surface = build_lane_stabilization_run_state_summary_surface(
+        {
+            **run_state,
+            **completion_surface,
+            **approval_surface,
+            **reconcile_surface,
+            **execution_authorization_surface,
+            **bounded_execution_surface,
+            **execution_result_surface,
+            **verification_closure_surface,
+            **retry_reentry_surface,
+            **endgame_surface,
+            **loop_hardening_surface,
+        }
+    )
+    observability_surface = build_observability_rollup_run_state_summary_surface(
+        {
+            **run_state,
+            **execution_result_surface,
+            **verification_closure_surface,
+            **retry_reentry_surface,
+            **endgame_surface,
+            **loop_hardening_surface,
+            **lane_stabilization_surface,
+        }
+    )
+    failure_bucketing_hardening_surface = (
+        build_failure_bucketing_hardening_run_state_summary_surface(
+            {
+                **run_state,
+                **loop_hardening_surface,
+                **observability_surface,
+            }
+        )
+    )
+    artifact_retention_surface = build_artifact_retention_run_state_summary_surface(
+        {
+            **run_state,
+            **failure_bucketing_hardening_surface,
+        }
+    )
+    fleet_safety_surface = build_fleet_safety_control_run_state_summary_surface(
+        {
+            **run_state,
+            **failure_bucketing_hardening_surface,
+            **artifact_retention_surface,
+        }
+    )
+    merged = {
+        **run_state,
+        **objective_surface,
+        **lifecycle_surface,
+        **completion_surface,
+        **approval_surface,
+        **reconcile_surface,
+        **repair_surface,
+        **repair_plan_surface,
+        **repair_binding_surface,
+        **execution_authorization_surface,
+        **bounded_execution_surface,
+        **execution_result_surface,
+        **verification_closure_surface,
+        **retry_reentry_surface,
+        **endgame_surface,
+        **loop_hardening_surface,
+        **lane_stabilization_surface,
+        **observability_surface,
+        **failure_bucketing_hardening_surface,
+        **artifact_retention_surface,
+        **fleet_safety_surface,
+    }
     return {
         **merged,
         **build_operator_explainability_surface(
             merged,
             include_rendering_details=True,
         ),
+    }
+
+
+def _extract_objective_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "objective_id": None,
+            "objective_summary": None,
+            "objective_type": None,
+            "requested_outcome": None,
+            "objective_status": None,
+            "objective_source_status": None,
+            "acceptance_status": None,
+            "scope_status": None,
+            "required_artifacts_status": None,
+            "objective_contract_blocked_reason": None,
+            "acceptance_criteria_total": 0,
+            "acceptance_criteria_defined": 0,
+            "required_artifacts_total": 0,
+        }
+
+    acceptance_criteria = payload.get("acceptance_criteria")
+    criteria = acceptance_criteria if isinstance(acceptance_criteria, list) else []
+    required_artifacts = payload.get("required_artifacts")
+    artifacts = required_artifacts if isinstance(required_artifacts, list) else []
+    defined_count = 0
+    for item in criteria:
+        if isinstance(item, dict) and str(item.get("status", "")).strip() == "defined":
+            defined_count += 1
+
+    return {
+        "schema_version": payload.get("schema_version"),
+        "objective_id": payload.get("objective_id"),
+        "objective_summary": payload.get("objective_summary"),
+        "objective_type": payload.get("objective_type"),
+        "requested_outcome": payload.get("requested_outcome"),
+        "objective_status": payload.get("objective_status"),
+        "objective_source_status": payload.get("objective_source_status"),
+        "acceptance_status": payload.get("acceptance_status"),
+        "scope_status": payload.get("scope_status"),
+        "required_artifacts_status": payload.get("required_artifacts_status"),
+        "objective_contract_blocked_reason": payload.get("objective_blocked_reason"),
+        "acceptance_criteria_total": len(criteria),
+        "acceptance_criteria_defined": defined_count,
+        "required_artifacts_total": len(artifacts),
+    }
+
+
+def _extract_completion_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "objective_id": None,
+            "completion_status": None,
+            "done_status": None,
+            "safe_closure_status": None,
+            "completion_evidence_status": None,
+            "closure_decision": None,
+            "closure_reason": None,
+            "completion_manual_required": None,
+            "completion_replan_required": None,
+            "lifecycle_alignment_status": None,
+            "lifecycle_closure_status": None,
+            "completion_blocked_reason": None,
+            "required_evidence_total": 0,
+            "missing_evidence_total": 0,
+        }
+
+    required_evidence = payload.get("required_evidence")
+    missing_evidence = payload.get("missing_evidence")
+    required = required_evidence if isinstance(required_evidence, list) else []
+    missing = missing_evidence if isinstance(missing_evidence, list) else []
+
+    return {
+        "schema_version": payload.get("schema_version"),
+        "objective_id": payload.get("objective_id"),
+        "completion_status": payload.get("completion_status"),
+        "done_status": payload.get("done_status"),
+        "safe_closure_status": payload.get("safe_closure_status"),
+        "completion_evidence_status": payload.get("completion_evidence_status"),
+        "closure_decision": payload.get("closure_decision"),
+        "closure_reason": payload.get("closure_reason"),
+        "completion_manual_required": payload.get("completion_manual_required"),
+        "completion_replan_required": payload.get("completion_replan_required"),
+        "lifecycle_alignment_status": payload.get("lifecycle_alignment_status"),
+        "lifecycle_closure_status": payload.get("lifecycle_closure_status"),
+        "completion_blocked_reason": payload.get("completion_blocked_reason"),
+        "required_evidence_total": len(required),
+        "missing_evidence_total": len(missing),
+    }
+
+
+def _extract_approval_transport_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "completion_status": None,
+            "approval_status": None,
+            "approval_decision": None,
+            "approval_scope": None,
+            "approved_action": None,
+            "approval_required": None,
+            "approval_present": None,
+            "approval_transport_status": None,
+            "approval_compatibility_status": None,
+            "approval_blocked_reason": None,
+            "approval_superseded": None,
+            "approval_stale": None,
+            "approval_actor": None,
+            "approval_recorded_at": None,
+            "approval_expires_at": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "completion_status": payload.get("completion_status"),
+        "approval_status": payload.get("approval_status"),
+        "approval_decision": payload.get("approval_decision"),
+        "approval_scope": payload.get("approval_scope"),
+        "approved_action": payload.get("approved_action"),
+        "approval_required": payload.get("approval_required"),
+        "approval_present": payload.get("approval_present"),
+        "approval_transport_status": payload.get("approval_transport_status"),
+        "approval_compatibility_status": payload.get("approval_compatibility_status"),
+        "approval_blocked_reason": payload.get("approval_blocked_reason"),
+        "approval_superseded": payload.get("approval_superseded"),
+        "approval_stale": payload.get("approval_stale"),
+        "approval_actor": payload.get("approval_actor"),
+        "approval_recorded_at": payload.get("approval_recorded_at"),
+        "approval_expires_at": payload.get("approval_expires_at"),
+    }
+
+
+def _extract_reconcile_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "reconcile_status": None,
+            "reconcile_decision": None,
+            "reconcile_alignment_status": None,
+            "reconcile_primary_mismatch": None,
+            "reconcile_blocked_reason": None,
+            "reconcile_waiting_on_truth": None,
+            "reconcile_manual_required": None,
+            "reconcile_replan_required": None,
+            "reconcile_completion_status": None,
+            "reconcile_approval_status": None,
+            "reconcile_lifecycle_status": None,
+            "reconcile_objective_status": None,
+            "reconcile_transport_status": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "reconcile_status": payload.get("reconcile_status"),
+        "reconcile_decision": payload.get("reconcile_decision"),
+        "reconcile_alignment_status": payload.get("reconcile_alignment_status"),
+        "reconcile_primary_mismatch": payload.get("reconcile_primary_mismatch"),
+        "reconcile_blocked_reason": payload.get("reconcile_blocked_reason"),
+        "reconcile_waiting_on_truth": payload.get("reconcile_waiting_on_truth"),
+        "reconcile_manual_required": payload.get("reconcile_manual_required"),
+        "reconcile_replan_required": payload.get("reconcile_replan_required"),
+        "reconcile_completion_status": payload.get("reconcile_completion_status"),
+        "reconcile_approval_status": payload.get("reconcile_approval_status"),
+        "reconcile_lifecycle_status": payload.get("reconcile_lifecycle_status"),
+        "reconcile_objective_status": payload.get("reconcile_objective_status"),
+        "reconcile_transport_status": payload.get("reconcile_transport_status"),
+    }
+
+
+def _extract_repair_suggestion_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "repair_suggestion_status": None,
+            "repair_suggestion_decision": None,
+            "repair_suggestion_class": None,
+            "repair_suggestion_priority": None,
+            "repair_suggestion_confidence": None,
+            "repair_primary_reason": None,
+            "repair_manual_required": None,
+            "repair_replan_required": None,
+            "repair_truth_gathering_required": None,
+            "repair_closure_followup_required": None,
+            "repair_target_surface": None,
+            "repair_precondition_status": None,
+            "repair_reconcile_status": None,
+            "repair_completion_status": None,
+            "repair_approval_status": None,
+            "repair_lifecycle_status": None,
+            "repair_execution_recommended": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "repair_suggestion_status": payload.get("repair_suggestion_status"),
+        "repair_suggestion_decision": payload.get("repair_suggestion_decision"),
+        "repair_suggestion_class": payload.get("repair_suggestion_class"),
+        "repair_suggestion_priority": payload.get("repair_suggestion_priority"),
+        "repair_suggestion_confidence": payload.get("repair_suggestion_confidence"),
+        "repair_primary_reason": payload.get("repair_primary_reason"),
+        "repair_manual_required": payload.get("repair_manual_required"),
+        "repair_replan_required": payload.get("repair_replan_required"),
+        "repair_truth_gathering_required": payload.get("repair_truth_gathering_required"),
+        "repair_closure_followup_required": payload.get("repair_closure_followup_required"),
+        "repair_target_surface": payload.get("repair_target_surface"),
+        "repair_precondition_status": payload.get("repair_precondition_status"),
+        "repair_reconcile_status": payload.get("repair_reconcile_status"),
+        "repair_completion_status": payload.get("repair_completion_status"),
+        "repair_approval_status": payload.get("repair_approval_status"),
+        "repair_lifecycle_status": payload.get("repair_lifecycle_status"),
+        "repair_execution_recommended": payload.get("repair_execution_recommended"),
+    }
+
+
+def _extract_repair_plan_transport_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "repair_plan_status": None,
+            "repair_plan_decision": None,
+            "repair_plan_class": None,
+            "repair_plan_priority": None,
+            "repair_plan_confidence": None,
+            "repair_plan_target_surface": None,
+            "repair_plan_candidate_action": None,
+            "repair_plan_precondition_status": None,
+            "repair_plan_blocked_reason": None,
+            "repair_plan_manual_required": None,
+            "repair_plan_replan_required": None,
+            "repair_plan_truth_gathering_required": None,
+            "repair_plan_closure_followup_required": None,
+            "repair_plan_execution_ready": None,
+            "repair_plan_source_status": None,
+            "repair_plan_reconcile_status": None,
+            "repair_plan_suggestion_status": None,
+            "repair_plan_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "repair_plan_status": payload.get("repair_plan_status"),
+        "repair_plan_decision": payload.get("repair_plan_decision"),
+        "repair_plan_class": payload.get("repair_plan_class"),
+        "repair_plan_priority": payload.get("repair_plan_priority"),
+        "repair_plan_confidence": payload.get("repair_plan_confidence"),
+        "repair_plan_target_surface": payload.get("repair_plan_target_surface"),
+        "repair_plan_candidate_action": payload.get("repair_plan_candidate_action"),
+        "repair_plan_precondition_status": payload.get("repair_plan_precondition_status"),
+        "repair_plan_blocked_reason": payload.get("repair_plan_blocked_reason"),
+        "repair_plan_manual_required": payload.get("repair_plan_manual_required"),
+        "repair_plan_replan_required": payload.get("repair_plan_replan_required"),
+        "repair_plan_truth_gathering_required": payload.get("repair_plan_truth_gathering_required"),
+        "repair_plan_closure_followup_required": payload.get("repair_plan_closure_followup_required"),
+        "repair_plan_execution_ready": payload.get("repair_plan_execution_ready"),
+        "repair_plan_source_status": payload.get("repair_plan_source_status"),
+        "repair_plan_reconcile_status": payload.get("repair_plan_reconcile_status"),
+        "repair_plan_suggestion_status": payload.get("repair_plan_suggestion_status"),
+        "repair_plan_primary_reason": payload.get("repair_plan_primary_reason"),
+    }
+
+
+def _extract_repair_approval_binding_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "repair_plan_status": None,
+            "approval_status": None,
+            "repair_approval_binding_status": None,
+            "repair_approval_binding_decision": None,
+            "repair_approval_binding_scope": None,
+            "repair_approval_binding_validity": None,
+            "repair_approval_binding_compatibility_status": None,
+            "repair_approval_binding_primary_reason": None,
+            "repair_approval_binding_blocked_reason": None,
+            "repair_approval_binding_manual_required": None,
+            "repair_approval_binding_replan_required": None,
+            "repair_approval_binding_truth_gathering_required": None,
+            "repair_approval_binding_execution_authorized": None,
+            "repair_approval_binding_source_status": None,
+            "repair_approval_binding_plan_status": None,
+            "repair_approval_binding_plan_action": None,
+            "repair_approval_binding_approval_decision": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "repair_plan_status": payload.get("repair_plan_status"),
+        "approval_status": payload.get("approval_status"),
+        "repair_approval_binding_status": payload.get("repair_approval_binding_status"),
+        "repair_approval_binding_decision": payload.get("repair_approval_binding_decision"),
+        "repair_approval_binding_scope": payload.get("repair_approval_binding_scope"),
+        "repair_approval_binding_validity": payload.get("repair_approval_binding_validity"),
+        "repair_approval_binding_compatibility_status": payload.get(
+            "repair_approval_binding_compatibility_status"
+        ),
+        "repair_approval_binding_primary_reason": payload.get("repair_approval_binding_primary_reason"),
+        "repair_approval_binding_blocked_reason": payload.get("repair_approval_binding_blocked_reason"),
+        "repair_approval_binding_manual_required": payload.get("repair_approval_binding_manual_required"),
+        "repair_approval_binding_replan_required": payload.get("repair_approval_binding_replan_required"),
+        "repair_approval_binding_truth_gathering_required": payload.get(
+            "repair_approval_binding_truth_gathering_required"
+        ),
+        "repair_approval_binding_execution_authorized": payload.get(
+            "repair_approval_binding_execution_authorized"
+        ),
+        "repair_approval_binding_source_status": payload.get("repair_approval_binding_source_status"),
+        "repair_approval_binding_plan_status": payload.get("repair_approval_binding_plan_status"),
+        "repair_approval_binding_plan_action": payload.get("repair_approval_binding_plan_action"),
+        "repair_approval_binding_approval_decision": payload.get(
+            "repair_approval_binding_approval_decision"
+        ),
+    }
+
+
+def _extract_execution_authorization_gate_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "execution_authorization_status": None,
+            "execution_authorization_decision": None,
+            "execution_authorization_scope": None,
+            "execution_authorization_validity": None,
+            "execution_authorization_confidence": None,
+            "execution_authorization_primary_reason": None,
+            "execution_authorization_blocked_reason": None,
+            "execution_authorization_manual_required": None,
+            "execution_authorization_replan_required": None,
+            "execution_authorization_truth_gathering_required": None,
+            "execution_authorization_denied": None,
+            "execution_authorization_eligible": None,
+            "execution_authorization_source_status": None,
+            "execution_authorization_binding_status": None,
+            "execution_authorization_plan_status": None,
+            "execution_authorization_approval_status": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "execution_authorization_status": payload.get("execution_authorization_status"),
+        "execution_authorization_decision": payload.get("execution_authorization_decision"),
+        "execution_authorization_scope": payload.get("execution_authorization_scope"),
+        "execution_authorization_validity": payload.get("execution_authorization_validity"),
+        "execution_authorization_confidence": payload.get("execution_authorization_confidence"),
+        "execution_authorization_primary_reason": payload.get("execution_authorization_primary_reason"),
+        "execution_authorization_blocked_reason": payload.get("execution_authorization_blocked_reason"),
+        "execution_authorization_manual_required": payload.get("execution_authorization_manual_required"),
+        "execution_authorization_replan_required": payload.get("execution_authorization_replan_required"),
+        "execution_authorization_truth_gathering_required": payload.get(
+            "execution_authorization_truth_gathering_required"
+        ),
+        "execution_authorization_denied": payload.get("execution_authorization_denied"),
+        "execution_authorization_eligible": payload.get("execution_authorization_eligible"),
+        "execution_authorization_source_status": payload.get("execution_authorization_source_status"),
+        "execution_authorization_binding_status": payload.get("execution_authorization_binding_status"),
+        "execution_authorization_plan_status": payload.get("execution_authorization_plan_status"),
+        "execution_authorization_approval_status": payload.get("execution_authorization_approval_status"),
+    }
+
+
+def _extract_bounded_execution_bridge_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "bounded_execution_status": None,
+            "bounded_execution_decision": None,
+            "bounded_execution_scope": None,
+            "bounded_execution_candidate_action": None,
+            "bounded_execution_validity": None,
+            "bounded_execution_confidence": None,
+            "bounded_execution_primary_reason": None,
+            "bounded_execution_blocked_reason": None,
+            "bounded_execution_manual_required": None,
+            "bounded_execution_replan_required": None,
+            "bounded_execution_truth_gathering_required": None,
+            "bounded_execution_ready": None,
+            "bounded_execution_deferred": None,
+            "bounded_execution_denied": None,
+            "bounded_execution_source_status": None,
+            "bounded_execution_authorization_status": None,
+            "bounded_execution_binding_status": None,
+            "bounded_execution_plan_status": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "bounded_execution_status": payload.get("bounded_execution_status"),
+        "bounded_execution_decision": payload.get("bounded_execution_decision"),
+        "bounded_execution_scope": payload.get("bounded_execution_scope"),
+        "bounded_execution_candidate_action": payload.get("bounded_execution_candidate_action"),
+        "bounded_execution_validity": payload.get("bounded_execution_validity"),
+        "bounded_execution_confidence": payload.get("bounded_execution_confidence"),
+        "bounded_execution_primary_reason": payload.get("bounded_execution_primary_reason"),
+        "bounded_execution_blocked_reason": payload.get("bounded_execution_blocked_reason"),
+        "bounded_execution_manual_required": payload.get("bounded_execution_manual_required"),
+        "bounded_execution_replan_required": payload.get("bounded_execution_replan_required"),
+        "bounded_execution_truth_gathering_required": payload.get(
+            "bounded_execution_truth_gathering_required"
+        ),
+        "bounded_execution_ready": payload.get("bounded_execution_ready"),
+        "bounded_execution_deferred": payload.get("bounded_execution_deferred"),
+        "bounded_execution_denied": payload.get("bounded_execution_denied"),
+        "bounded_execution_source_status": payload.get("bounded_execution_source_status"),
+        "bounded_execution_authorization_status": payload.get(
+            "bounded_execution_authorization_status"
+        ),
+        "bounded_execution_binding_status": payload.get("bounded_execution_binding_status"),
+        "bounded_execution_plan_status": payload.get("bounded_execution_plan_status"),
+    }
+
+
+def _extract_execution_result_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "execution_result_status": None,
+            "execution_result_outcome": None,
+            "execution_result_validity": None,
+            "execution_result_confidence": None,
+            "execution_result_primary_reason": None,
+            "execution_result_attempted": None,
+            "execution_result_receipt_present": None,
+            "execution_result_output_present": None,
+            "execution_result_patch_present": None,
+            "execution_result_patch_applied": None,
+            "execution_result_test_result_present": None,
+            "execution_result_test_passed": None,
+            "execution_result_command_result_present": None,
+            "execution_result_command_succeeded": None,
+            "execution_result_blocked": None,
+            "execution_result_not_executed": None,
+            "execution_result_partial": None,
+            "execution_result_failed": None,
+            "execution_result_succeeded": None,
+            "execution_result_unknown": None,
+            "execution_result_manual_followup_required": None,
+            "execution_result_source_posture": None,
+            "execution_result_bridge_status": None,
+            "execution_result_bridge_decision": None,
+            "execution_result_authorization_status": None,
+            "result_artifact_path": None,
+            "execution_receipt_path": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "execution_result_status": payload.get("execution_result_status"),
+        "execution_result_outcome": payload.get("execution_result_outcome"),
+        "execution_result_validity": payload.get("execution_result_validity"),
+        "execution_result_confidence": payload.get("execution_result_confidence"),
+        "execution_result_primary_reason": payload.get("execution_result_primary_reason"),
+        "execution_result_attempted": payload.get("execution_result_attempted"),
+        "execution_result_receipt_present": payload.get("execution_result_receipt_present"),
+        "execution_result_output_present": payload.get("execution_result_output_present"),
+        "execution_result_patch_present": payload.get("execution_result_patch_present"),
+        "execution_result_patch_applied": payload.get("execution_result_patch_applied"),
+        "execution_result_test_result_present": payload.get("execution_result_test_result_present"),
+        "execution_result_test_passed": payload.get("execution_result_test_passed"),
+        "execution_result_command_result_present": payload.get("execution_result_command_result_present"),
+        "execution_result_command_succeeded": payload.get("execution_result_command_succeeded"),
+        "execution_result_blocked": payload.get("execution_result_blocked"),
+        "execution_result_not_executed": payload.get("execution_result_not_executed"),
+        "execution_result_partial": payload.get("execution_result_partial"),
+        "execution_result_failed": payload.get("execution_result_failed"),
+        "execution_result_succeeded": payload.get("execution_result_succeeded"),
+        "execution_result_unknown": payload.get("execution_result_unknown"),
+        "execution_result_manual_followup_required": payload.get(
+            "execution_result_manual_followup_required"
+        ),
+        "execution_result_source_posture": payload.get("execution_result_source_posture"),
+        "execution_result_bridge_status": payload.get("execution_result_bridge_status"),
+        "execution_result_bridge_decision": payload.get("execution_result_bridge_decision"),
+        "execution_result_authorization_status": payload.get("execution_result_authorization_status"),
+        "result_artifact_path": payload.get("result_artifact_path"),
+        "execution_receipt_path": payload.get("execution_receipt_path"),
+    }
+
+
+def _extract_verification_closure_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "verification_status": None,
+            "verification_outcome": None,
+            "verification_validity": None,
+            "verification_confidence": None,
+            "verification_primary_reason": None,
+            "objective_satisfaction_status": None,
+            "completion_satisfaction_status": None,
+            "closure_status": None,
+            "closure_decision": None,
+            "objective_satisfied": None,
+            "completion_satisfied": None,
+            "safely_closable": None,
+            "manual_closure_required": None,
+            "closure_followup_required": None,
+            "rollback_consideration_required": None,
+            "external_truth_required": None,
+            "verification_source_posture": None,
+            "verification_bridge_status": None,
+            "verification_bridge_decision": None,
+            "verification_execution_result_status": None,
+            "verification_execution_result_outcome": None,
+            "verification_authorization_status": None,
+            "result_artifact_path": None,
+            "execution_receipt_path": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "verification_status": payload.get("verification_status"),
+        "verification_outcome": payload.get("verification_outcome"),
+        "verification_validity": payload.get("verification_validity"),
+        "verification_confidence": payload.get("verification_confidence"),
+        "verification_primary_reason": payload.get("verification_primary_reason"),
+        "objective_satisfaction_status": payload.get("objective_satisfaction_status"),
+        "completion_satisfaction_status": payload.get("completion_satisfaction_status"),
+        "closure_status": payload.get("closure_status"),
+        "closure_decision": payload.get("closure_decision"),
+        "objective_satisfied": payload.get("objective_satisfied"),
+        "completion_satisfied": payload.get("completion_satisfied"),
+        "safely_closable": payload.get("safely_closable"),
+        "manual_closure_required": payload.get("manual_closure_required"),
+        "closure_followup_required": payload.get("closure_followup_required"),
+        "rollback_consideration_required": payload.get("rollback_consideration_required"),
+        "external_truth_required": payload.get("external_truth_required"),
+        "verification_source_posture": payload.get("verification_source_posture"),
+        "verification_bridge_status": payload.get("verification_bridge_status"),
+        "verification_bridge_decision": payload.get("verification_bridge_decision"),
+        "verification_execution_result_status": payload.get(
+            "verification_execution_result_status"
+        ),
+        "verification_execution_result_outcome": payload.get(
+            "verification_execution_result_outcome"
+        ),
+        "verification_authorization_status": payload.get(
+            "verification_authorization_status"
+        ),
+        "result_artifact_path": payload.get("result_artifact_path"),
+        "execution_receipt_path": payload.get("execution_receipt_path"),
+    }
+
+
+def _extract_retry_reentry_loop_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "retry_loop_status": None,
+            "retry_loop_decision": None,
+            "retry_loop_validity": None,
+            "retry_loop_confidence": None,
+            "loop_primary_reason": None,
+            "attempt_count": None,
+            "max_attempt_count": None,
+            "reentry_count": None,
+            "max_reentry_count": None,
+            "same_failure_count": None,
+            "max_same_failure_count": None,
+            "retry_allowed": None,
+            "reentry_allowed": None,
+            "retry_exhausted": None,
+            "reentry_exhausted": None,
+            "same_failure_exhausted": None,
+            "terminal_stop_required": None,
+            "manual_escalation_required": None,
+            "replan_required": None,
+            "recollect_required": None,
+            "same_lane_retry_allowed": None,
+            "repair_retry_allowed": None,
+            "no_progress_stop_required": None,
+            "loop_stop_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "retry_loop_status": payload.get("retry_loop_status"),
+        "retry_loop_decision": payload.get("retry_loop_decision"),
+        "retry_loop_validity": payload.get("retry_loop_validity"),
+        "retry_loop_confidence": payload.get("retry_loop_confidence"),
+        "loop_primary_reason": payload.get("loop_primary_reason"),
+        "attempt_count": payload.get("attempt_count"),
+        "max_attempt_count": payload.get("max_attempt_count"),
+        "reentry_count": payload.get("reentry_count"),
+        "max_reentry_count": payload.get("max_reentry_count"),
+        "same_failure_count": payload.get("same_failure_count"),
+        "max_same_failure_count": payload.get("max_same_failure_count"),
+        "retry_allowed": payload.get("retry_allowed"),
+        "reentry_allowed": payload.get("reentry_allowed"),
+        "retry_exhausted": payload.get("retry_exhausted"),
+        "reentry_exhausted": payload.get("reentry_exhausted"),
+        "same_failure_exhausted": payload.get("same_failure_exhausted"),
+        "terminal_stop_required": payload.get("terminal_stop_required"),
+        "manual_escalation_required": payload.get("manual_escalation_required"),
+        "replan_required": payload.get("replan_required"),
+        "recollect_required": payload.get("recollect_required"),
+        "same_lane_retry_allowed": payload.get("same_lane_retry_allowed"),
+        "repair_retry_allowed": payload.get("repair_retry_allowed"),
+        "no_progress_stop_required": payload.get("no_progress_stop_required"),
+        "loop_stop_reason": payload.get("loop_stop_reason"),
+    }
+
+
+def _extract_endgame_closure_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "endgame_closure_status": None,
+            "endgame_closure_outcome": None,
+            "endgame_closure_validity": None,
+            "endgame_closure_confidence": None,
+            "final_closure_class": None,
+            "terminal_stop_class": None,
+            "closure_resolution_status": None,
+            "endgame_primary_reason": None,
+            "safely_closed": None,
+            "completed_but_not_closed": None,
+            "rollback_complete_but_not_closed": None,
+            "manual_closure_only": None,
+            "external_truth_pending": None,
+            "closure_unresolved": None,
+            "terminal_success": None,
+            "terminal_non_success": None,
+            "operator_followup_required": None,
+            "further_retry_allowed": None,
+            "further_reentry_allowed": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "endgame_closure_status": payload.get("endgame_closure_status"),
+        "endgame_closure_outcome": payload.get("endgame_closure_outcome"),
+        "endgame_closure_validity": payload.get("endgame_closure_validity"),
+        "endgame_closure_confidence": payload.get("endgame_closure_confidence"),
+        "final_closure_class": payload.get("final_closure_class"),
+        "terminal_stop_class": payload.get("terminal_stop_class"),
+        "closure_resolution_status": payload.get("closure_resolution_status"),
+        "endgame_primary_reason": payload.get("endgame_primary_reason"),
+        "safely_closed": payload.get("safely_closed"),
+        "completed_but_not_closed": payload.get("completed_but_not_closed"),
+        "rollback_complete_but_not_closed": payload.get("rollback_complete_but_not_closed"),
+        "manual_closure_only": payload.get("manual_closure_only"),
+        "external_truth_pending": payload.get("external_truth_pending"),
+        "closure_unresolved": payload.get("closure_unresolved"),
+        "terminal_success": payload.get("terminal_success"),
+        "terminal_non_success": payload.get("terminal_non_success"),
+        "operator_followup_required": payload.get("operator_followup_required"),
+        "further_retry_allowed": payload.get("further_retry_allowed"),
+        "further_reentry_allowed": payload.get("further_reentry_allowed"),
+    }
+
+
+def _extract_loop_hardening_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "loop_hardening_status": None,
+            "loop_hardening_decision": None,
+            "loop_hardening_validity": None,
+            "loop_hardening_confidence": None,
+            "loop_hardening_primary_reason": None,
+            "same_failure_signature": None,
+            "same_failure_bucket": None,
+            "same_failure_persistence": None,
+            "no_progress_status": None,
+            "oscillation_status": None,
+            "retry_freeze_status": None,
+            "same_failure_detected": None,
+            "same_failure_stop_required": None,
+            "no_progress_detected": None,
+            "no_progress_stop_required": None,
+            "oscillation_detected": None,
+            "unstable_loop_detected": None,
+            "retry_freeze_required": None,
+            "cool_down_required": None,
+            "forced_manual_escalation_required": None,
+            "hardening_stop_required": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "loop_hardening_status": payload.get("loop_hardening_status"),
+        "loop_hardening_decision": payload.get("loop_hardening_decision"),
+        "loop_hardening_validity": payload.get("loop_hardening_validity"),
+        "loop_hardening_confidence": payload.get("loop_hardening_confidence"),
+        "loop_hardening_primary_reason": payload.get("loop_hardening_primary_reason"),
+        "same_failure_signature": payload.get("same_failure_signature"),
+        "same_failure_bucket": payload.get("same_failure_bucket"),
+        "same_failure_persistence": payload.get("same_failure_persistence"),
+        "no_progress_status": payload.get("no_progress_status"),
+        "oscillation_status": payload.get("oscillation_status"),
+        "retry_freeze_status": payload.get("retry_freeze_status"),
+        "same_failure_detected": payload.get("same_failure_detected"),
+        "same_failure_stop_required": payload.get("same_failure_stop_required"),
+        "no_progress_detected": payload.get("no_progress_detected"),
+        "no_progress_stop_required": payload.get("no_progress_stop_required"),
+        "oscillation_detected": payload.get("oscillation_detected"),
+        "unstable_loop_detected": payload.get("unstable_loop_detected"),
+        "retry_freeze_required": payload.get("retry_freeze_required"),
+        "cool_down_required": payload.get("cool_down_required"),
+        "forced_manual_escalation_required": payload.get(
+            "forced_manual_escalation_required"
+        ),
+        "hardening_stop_required": payload.get("hardening_stop_required"),
+    }
+
+
+def _extract_lane_stabilization_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "lane_status": None,
+            "lane_decision": None,
+            "lane_validity": None,
+            "lane_confidence": None,
+            "current_lane": None,
+            "target_lane": None,
+            "lane_transition_status": None,
+            "lane_transition_decision": None,
+            "lane_preconditions_status": None,
+            "lane_retry_policy_class": None,
+            "lane_verification_policy_class": None,
+            "lane_escalation_policy_class": None,
+            "lane_primary_reason": None,
+            "lane_execution_allowed": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "lane_status": payload.get("lane_status"),
+        "lane_decision": payload.get("lane_decision"),
+        "lane_validity": payload.get("lane_validity"),
+        "lane_confidence": payload.get("lane_confidence"),
+        "current_lane": payload.get("current_lane"),
+        "target_lane": payload.get("target_lane"),
+        "lane_transition_status": payload.get("lane_transition_status"),
+        "lane_transition_decision": payload.get("lane_transition_decision"),
+        "lane_preconditions_status": payload.get("lane_preconditions_status"),
+        "lane_retry_policy_class": payload.get("lane_retry_policy_class"),
+        "lane_verification_policy_class": payload.get("lane_verification_policy_class"),
+        "lane_escalation_policy_class": payload.get("lane_escalation_policy_class"),
+        "lane_primary_reason": payload.get("lane_primary_reason"),
+        "lane_execution_allowed": payload.get("lane_execution_allowed"),
+    }
+
+
+def _extract_observability_rollup_contract_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "observability_status": None,
+            "observability_validity": None,
+            "observability_confidence": None,
+            "run_terminal_class": None,
+            "lane": None,
+            "observability_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "observability_status": payload.get("observability_status"),
+        "observability_validity": payload.get("observability_validity"),
+        "observability_confidence": payload.get("observability_confidence"),
+        "run_terminal_class": payload.get("run_terminal_class"),
+        "lane": payload.get("lane"),
+        "observability_primary_reason": payload.get("observability_primary_reason"),
+    }
+
+
+def _extract_failure_bucket_rollup_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "failure_bucket_status": None,
+            "failure_bucket_validity": None,
+            "failure_bucket_confidence": None,
+            "primary_failure_bucket": None,
+            "bucket_count": None,
+            "failure_bucket_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "failure_bucket_status": payload.get("failure_bucket_status"),
+        "failure_bucket_validity": payload.get("failure_bucket_validity"),
+        "failure_bucket_confidence": payload.get("failure_bucket_confidence"),
+        "primary_failure_bucket": payload.get("primary_failure_bucket"),
+        "bucket_count": payload.get("bucket_count"),
+        "failure_bucket_primary_reason": payload.get("failure_bucket_primary_reason"),
+    }
+
+
+def _extract_fleet_run_rollup_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "fleet_lane": None,
+            "fleet_terminal_class": None,
+            "fleet_primary_failure_bucket": None,
+            "fleet_observability_status": None,
+            "fleet_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "fleet_lane": payload.get("fleet_lane"),
+        "fleet_terminal_class": payload.get("fleet_terminal_class"),
+        "fleet_primary_failure_bucket": payload.get("fleet_primary_failure_bucket"),
+        "fleet_observability_status": payload.get("fleet_observability_status"),
+        "fleet_primary_reason": payload.get("fleet_primary_reason"),
+    }
+
+
+def _extract_failure_bucketing_hardening_contract_summary(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "failure_bucketing_status": None,
+            "failure_bucketing_validity": None,
+            "failure_bucketing_confidence": None,
+            "primary_failure_bucket": None,
+            "bucket_family": None,
+            "bucket_severity": None,
+            "bucket_stability_class": None,
+            "bucket_terminality_class": None,
+            "failure_bucketing_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "failure_bucketing_status": payload.get("failure_bucketing_status"),
+        "failure_bucketing_validity": payload.get("failure_bucketing_validity"),
+        "failure_bucketing_confidence": payload.get("failure_bucketing_confidence"),
+        "primary_failure_bucket": payload.get("primary_failure_bucket"),
+        "bucket_family": payload.get("bucket_family"),
+        "bucket_severity": payload.get("bucket_severity"),
+        "bucket_stability_class": payload.get("bucket_stability_class"),
+        "bucket_terminality_class": payload.get("bucket_terminality_class"),
+        "failure_bucketing_primary_reason": payload.get(
+            "failure_bucketing_primary_reason"
+        ),
+    }
+
+
+def _extract_retention_manifest_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "reference_layout_version": None,
+            "reference_order_stable": None,
+            "alias_deduplicated": None,
+            "manifest_compact": None,
+            "retention_manifest_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "reference_layout_version": payload.get("reference_layout_version"),
+        "reference_order_stable": payload.get("reference_order_stable"),
+        "alias_deduplicated": payload.get("alias_deduplicated"),
+        "manifest_compact": payload.get("manifest_compact"),
+        "retention_manifest_primary_reason": payload.get(
+            "retention_manifest_primary_reason"
+        ),
+    }
+
+
+def _extract_artifact_retention_contract_summary(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "artifact_retention_status": None,
+            "artifact_retention_validity": None,
+            "artifact_retention_confidence": None,
+            "retention_policy_class": None,
+            "retention_compaction_class": None,
+            "retention_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "artifact_retention_status": payload.get("artifact_retention_status"),
+        "artifact_retention_validity": payload.get("artifact_retention_validity"),
+        "artifact_retention_confidence": payload.get("artifact_retention_confidence"),
+        "retention_policy_class": payload.get("retention_policy_class"),
+        "retention_compaction_class": payload.get("retention_compaction_class"),
+        "retention_primary_reason": payload.get("retention_primary_reason"),
+    }
+
+
+def _extract_fleet_safety_control_contract_summary(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "fleet_safety_status": None,
+            "fleet_safety_validity": None,
+            "fleet_safety_confidence": None,
+            "fleet_safety_decision": None,
+            "fleet_restart_decision": None,
+            "fleet_safety_scope": None,
+            "fleet_safety_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "fleet_safety_status": payload.get("fleet_safety_status"),
+        "fleet_safety_validity": payload.get("fleet_safety_validity"),
+        "fleet_safety_confidence": payload.get("fleet_safety_confidence"),
+        "fleet_safety_decision": payload.get("fleet_safety_decision"),
+        "fleet_restart_decision": payload.get("fleet_restart_decision"),
+        "fleet_safety_scope": payload.get("fleet_safety_scope"),
+        "fleet_safety_primary_reason": payload.get("fleet_safety_primary_reason"),
     }
 
 
@@ -368,6 +1599,28 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
                 "merge_execution": None,
                 "rollback_execution": None,
                 "run_state": None,
+                "objective_contract": None,
+                "completion_contract": None,
+                "approval_transport": None,
+                "reconcile_contract": None,
+                "repair_suggestion_contract": None,
+                "repair_plan_transport": None,
+                "repair_approval_binding": None,
+                "execution_authorization_gate": None,
+                "bounded_execution_bridge": None,
+                "execution_result_contract": None,
+                "verification_closure_contract": None,
+                "retry_reentry_loop_contract": None,
+                "endgame_closure_contract": None,
+                "loop_hardening_contract": None,
+                "lane_stabilization_contract": None,
+                "observability_rollup_contract": None,
+                "failure_bucket_rollup": None,
+                "fleet_run_rollup": None,
+                "failure_bucketing_hardening_contract": None,
+                "retention_manifest": None,
+                "artifact_retention_contract": None,
+                "fleet_safety_control_contract": None,
             },
             "checkpoint_decision": _extract_checkpoint_summary(None),
             "commit_decision": _extract_decision_summary(None),
@@ -378,6 +1631,34 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
             "pr_execution": _extract_execution_receipt_summary(None),
             "merge_execution": _extract_execution_receipt_summary(None),
             "rollback_execution": _extract_execution_receipt_summary(None),
+            "objective_contract": _extract_objective_contract_summary(None),
+            "completion_contract": _extract_completion_contract_summary(None),
+            "approval_transport": _extract_approval_transport_summary(None),
+            "reconcile_contract": _extract_reconcile_contract_summary(None),
+            "repair_suggestion_contract": _extract_repair_suggestion_contract_summary(None),
+            "repair_plan_transport": _extract_repair_plan_transport_summary(None),
+            "repair_approval_binding": _extract_repair_approval_binding_summary(None),
+            "execution_authorization_gate": _extract_execution_authorization_gate_summary(None),
+            "bounded_execution_bridge": _extract_bounded_execution_bridge_summary(None),
+            "execution_result_contract": _extract_execution_result_contract_summary(None),
+            "verification_closure_contract": _extract_verification_closure_contract_summary(None),
+            "retry_reentry_loop_contract": _extract_retry_reentry_loop_contract_summary(None),
+            "endgame_closure_contract": _extract_endgame_closure_contract_summary(None),
+            "loop_hardening_contract": _extract_loop_hardening_contract_summary(None),
+            "lane_stabilization_contract": _extract_lane_stabilization_contract_summary(None),
+            "observability_rollup_contract": _extract_observability_rollup_contract_summary(None),
+            "failure_bucket_rollup": _extract_failure_bucket_rollup_summary(None),
+            "fleet_run_rollup": _extract_fleet_run_rollup_summary(None),
+            "failure_bucketing_hardening_contract": (
+                _extract_failure_bucketing_hardening_contract_summary(None)
+            ),
+            "retention_manifest": _extract_retention_manifest_summary(None),
+            "artifact_retention_contract": _extract_artifact_retention_contract_summary(
+                None
+            ),
+            "fleet_safety_control_contract": _extract_fleet_safety_control_contract_summary(
+                None
+            ),
             "run_state": _with_operator_explainability({
                 "state": None,
                 "orchestration_state": None,
@@ -476,6 +1757,218 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
                 "lifecycle_blocked_reasons": [],
                 "lifecycle_primary_closure_issue": None,
                 "lifecycle_stop_class": None,
+                "objective_contract_present": None,
+                "objective_id": None,
+                "objective_summary": None,
+                "objective_type": None,
+                "requested_outcome": None,
+                "objective_acceptance_status": None,
+                "objective_required_artifacts_status": None,
+                "objective_scope_status": None,
+                "objective_contract_status": None,
+                "objective_contract_blocked_reason": None,
+                "completion_contract_present": None,
+                "completion_status": None,
+                "done_status": None,
+                "safe_closure_status": None,
+                "completion_evidence_status": None,
+                "completion_blocked_reason": None,
+                "completion_manual_required": None,
+                "completion_replan_required": None,
+                "completion_lifecycle_alignment_status": None,
+                "approval_transport_present": None,
+                "approval_status": None,
+                "approval_decision": None,
+                "approval_scope": None,
+                "approved_action": None,
+                "approval_required": None,
+                "approval_transport_status": None,
+                "approval_compatibility_status": None,
+                "approval_blocked_reason": None,
+                "reconcile_contract_present": None,
+                "reconcile_status": None,
+                "reconcile_decision": None,
+                "reconcile_alignment_status": None,
+                "reconcile_primary_mismatch": None,
+                "reconcile_blocked_reason": None,
+                "reconcile_waiting_on_truth": None,
+                "reconcile_manual_required": None,
+                "reconcile_replan_required": None,
+                "repair_suggestion_contract_present": None,
+                "repair_suggestion_status": None,
+                "repair_suggestion_decision": None,
+                "repair_suggestion_class": None,
+                "repair_suggestion_priority": None,
+                "repair_suggestion_confidence": None,
+                "repair_primary_reason": None,
+                "repair_manual_required": None,
+                "repair_replan_required": None,
+                "repair_truth_gathering_required": None,
+                "repair_plan_transport_present": None,
+                "repair_plan_status": None,
+                "repair_plan_decision": None,
+                "repair_plan_class": None,
+                "repair_plan_priority": None,
+                "repair_plan_confidence": None,
+                "repair_plan_target_surface": None,
+                "repair_plan_candidate_action": None,
+                "repair_plan_primary_reason": None,
+                "repair_plan_manual_required": None,
+                "repair_plan_replan_required": None,
+                "repair_plan_truth_gathering_required": None,
+                "repair_approval_binding_present": None,
+                "repair_approval_binding_status": None,
+                "repair_approval_binding_decision": None,
+                "repair_approval_binding_scope": None,
+                "repair_approval_binding_validity": None,
+                "repair_approval_binding_compatibility_status": None,
+                "repair_approval_binding_primary_reason": None,
+                "repair_approval_binding_manual_required": None,
+                "repair_approval_binding_replan_required": None,
+                "repair_approval_binding_truth_gathering_required": None,
+                "execution_authorization_gate_present": None,
+                "execution_authorization_status": None,
+                "execution_authorization_decision": None,
+                "execution_authorization_scope": None,
+                "execution_authorization_validity": None,
+                "execution_authorization_confidence": None,
+                "execution_authorization_primary_reason": None,
+                "execution_authorization_manual_required": None,
+                "execution_authorization_replan_required": None,
+                "execution_authorization_truth_gathering_required": None,
+                "bounded_execution_bridge_present": None,
+                "bounded_execution_status": None,
+                "bounded_execution_decision": None,
+                "bounded_execution_scope": None,
+                "bounded_execution_validity": None,
+                "bounded_execution_confidence": None,
+                "bounded_execution_primary_reason": None,
+                "bounded_execution_manual_required": None,
+                "bounded_execution_replan_required": None,
+                "bounded_execution_truth_gathering_required": None,
+                "execution_result_contract_present": None,
+                "execution_result_status": None,
+                "execution_result_outcome": None,
+                "execution_result_validity": None,
+                "execution_result_confidence": None,
+                "execution_result_primary_reason": None,
+                "execution_result_attempted": None,
+                "execution_result_receipt_present": None,
+                "execution_result_output_present": None,
+                "execution_result_manual_followup_required": None,
+                "verification_closure_contract_present": None,
+                "verification_status": None,
+                "verification_outcome": None,
+                "verification_validity": None,
+                "verification_confidence": None,
+                "verification_primary_reason": None,
+                "objective_satisfaction_status": None,
+                "completion_satisfaction_status": None,
+                "closure_status": None,
+                "closure_decision": None,
+                "objective_satisfied": None,
+                "completion_satisfied": None,
+                "safely_closable": None,
+                "manual_closure_required": None,
+                "closure_followup_required": None,
+                "external_truth_required": None,
+                "retry_reentry_loop_contract_present": None,
+                "retry_loop_status": None,
+                "retry_loop_decision": None,
+                "retry_loop_validity": None,
+                "retry_loop_confidence": None,
+                "loop_primary_reason": None,
+                "attempt_count": None,
+                "max_attempt_count": None,
+                "reentry_count": None,
+                "max_reentry_count": None,
+                "same_failure_count": None,
+                "max_same_failure_count": None,
+                "retry_allowed": None,
+                "reentry_allowed": None,
+                "retry_exhausted": None,
+                "reentry_exhausted": None,
+                "same_failure_exhausted": None,
+                "terminal_stop_required": None,
+                "manual_escalation_required": None,
+                "replan_required": None,
+                "recollect_required": None,
+                "same_lane_retry_allowed": None,
+                "repair_retry_allowed": None,
+                "no_progress_stop_required": None,
+                "endgame_closure_contract_present": None,
+                "endgame_closure_status": None,
+                "endgame_closure_outcome": None,
+                "endgame_closure_validity": None,
+                "endgame_closure_confidence": None,
+                "final_closure_class": None,
+                "terminal_stop_class": None,
+                "closure_resolution_status": None,
+                "endgame_primary_reason": None,
+                "safely_closed": None,
+                "completed_but_not_closed": None,
+                "rollback_complete_but_not_closed": None,
+                "manual_closure_only": None,
+                "external_truth_pending": None,
+                "closure_unresolved": None,
+                "terminal_success": None,
+                "terminal_non_success": None,
+                "operator_followup_required": None,
+                "further_retry_allowed": None,
+                "further_reentry_allowed": None,
+                "loop_hardening_contract_present": None,
+                "loop_hardening_status": None,
+                "loop_hardening_decision": None,
+                "loop_hardening_validity": None,
+                "loop_hardening_confidence": None,
+                "loop_hardening_primary_reason": None,
+                "same_failure_signature": None,
+                "same_failure_bucket": None,
+                "same_failure_persistence": None,
+                "no_progress_status": None,
+                "oscillation_status": None,
+                "retry_freeze_status": None,
+                "same_failure_detected": None,
+                "same_failure_stop_required": None,
+                "no_progress_detected": None,
+                "oscillation_detected": None,
+                "unstable_loop_detected": None,
+                "retry_freeze_required": None,
+                "cool_down_required": None,
+                "forced_manual_escalation_required": None,
+                "hardening_stop_required": None,
+                "lane_stabilization_contract_present": None,
+                "lane_status": None,
+                "lane_decision": None,
+                "lane_validity": None,
+                "lane_confidence": None,
+                "current_lane": None,
+                "target_lane": None,
+                "lane_transition_status": None,
+                "lane_transition_decision": None,
+                "lane_preconditions_status": None,
+                "lane_retry_policy_class": None,
+                "lane_verification_policy_class": None,
+                "lane_escalation_policy_class": None,
+                "lane_attempt_budget": None,
+                "lane_reentry_budget": None,
+                "lane_transition_count": None,
+                "max_lane_transition_count": None,
+                "lane_primary_reason": None,
+                "lane_valid": None,
+                "lane_mismatch_detected": None,
+                "lane_transition_required": None,
+                "lane_transition_allowed": None,
+                "lane_transition_blocked": None,
+                "lane_stop_required": None,
+                "lane_manual_review_required": None,
+                "lane_replan_required": None,
+                "lane_truth_gathering_required": None,
+                "lane_execution_allowed": None,
+                "observability_rollup_present": None,
+                "failure_bucketing_hardening_present": None,
+                "artifact_retention_present": None,
+                "fleet_safety_control_present": None,
             }),
         }
 
@@ -491,6 +1984,30 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
     merge_execution_path = unit_dir / "merge_execution.json"
     rollback_execution_path = unit_dir / "rollback_execution.json"
     run_state_path = run_root / "run_state.json"
+    objective_contract_path = run_root / "objective_contract.json"
+    completion_contract_path = run_root / "completion_contract.json"
+    approval_transport_path = run_root / "approval_transport.json"
+    reconcile_contract_path = run_root / "reconcile_contract.json"
+    repair_suggestion_contract_path = run_root / "repair_suggestion_contract.json"
+    repair_plan_transport_path = run_root / "repair_plan_transport.json"
+    repair_approval_binding_path = run_root / "repair_approval_binding.json"
+    execution_authorization_gate_path = run_root / "execution_authorization_gate.json"
+    bounded_execution_bridge_path = run_root / "bounded_execution_bridge.json"
+    execution_result_contract_path = run_root / "execution_result_contract.json"
+    verification_closure_contract_path = run_root / "verification_closure_contract.json"
+    retry_reentry_loop_contract_path = run_root / "retry_reentry_loop_contract.json"
+    endgame_closure_contract_path = run_root / "endgame_closure_contract.json"
+    loop_hardening_contract_path = run_root / "loop_hardening_contract.json"
+    lane_stabilization_contract_path = run_root / "lane_stabilization_contract.json"
+    observability_rollup_contract_path = run_root / "observability_rollup_contract.json"
+    failure_bucket_rollup_path = run_root / "failure_bucket_rollup.json"
+    fleet_run_rollup_path = run_root / "fleet_run_rollup.json"
+    failure_bucketing_hardening_contract_path = (
+        run_root / "failure_bucketing_hardening_contract.json"
+    )
+    retention_manifest_path = run_root / "retention_manifest.json"
+    artifact_retention_contract_path = run_root / "artifact_retention_contract.json"
+    fleet_safety_control_contract_path = run_root / "fleet_safety_control_contract.json"
 
     checkpoint_payload = _read_json_object(str(checkpoint_path))
     commit_payload = _read_json_object(str(commit_path))
@@ -502,6 +2019,46 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
     merge_execution_payload = _read_json_object(str(merge_execution_path))
     rollback_execution_payload = _read_json_object(str(rollback_execution_path))
     run_state_payload = _read_json_object(str(run_state_path))
+    objective_contract_payload = _read_json_object(str(objective_contract_path))
+    completion_contract_payload = _read_json_object(str(completion_contract_path))
+    approval_transport_payload = _read_json_object(str(approval_transport_path))
+    reconcile_contract_payload = _read_json_object(str(reconcile_contract_path))
+    repair_suggestion_contract_payload = _read_json_object(str(repair_suggestion_contract_path))
+    repair_plan_transport_payload = _read_json_object(str(repair_plan_transport_path))
+    repair_approval_binding_payload = _read_json_object(str(repair_approval_binding_path))
+    execution_authorization_gate_payload = _read_json_object(str(execution_authorization_gate_path))
+    bounded_execution_bridge_payload = _read_json_object(str(bounded_execution_bridge_path))
+    execution_result_contract_payload = _read_json_object(str(execution_result_contract_path))
+    verification_closure_contract_payload = _read_json_object(
+        str(verification_closure_contract_path)
+    )
+    retry_reentry_loop_contract_payload = _read_json_object(
+        str(retry_reentry_loop_contract_path)
+    )
+    endgame_closure_contract_payload = _read_json_object(
+        str(endgame_closure_contract_path)
+    )
+    loop_hardening_contract_payload = _read_json_object(
+        str(loop_hardening_contract_path)
+    )
+    lane_stabilization_contract_payload = _read_json_object(
+        str(lane_stabilization_contract_path)
+    )
+    observability_rollup_contract_payload = _read_json_object(
+        str(observability_rollup_contract_path)
+    )
+    failure_bucket_rollup_payload = _read_json_object(str(failure_bucket_rollup_path))
+    fleet_run_rollup_payload = _read_json_object(str(fleet_run_rollup_path))
+    failure_bucketing_hardening_contract_payload = _read_json_object(
+        str(failure_bucketing_hardening_contract_path)
+    )
+    retention_manifest_payload = _read_json_object(str(retention_manifest_path))
+    artifact_retention_contract_payload = _read_json_object(
+        str(artifact_retention_contract_path)
+    )
+    fleet_safety_control_contract_payload = _read_json_object(
+        str(fleet_safety_control_contract_path)
+    )
 
     return {
         "paths": {
@@ -515,6 +2072,92 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
             "merge_execution": str(merge_execution_path) if merge_execution_path.exists() else None,
             "rollback_execution": str(rollback_execution_path) if rollback_execution_path.exists() else None,
             "run_state": str(run_state_path) if run_state_path.exists() else None,
+            "objective_contract": str(objective_contract_path) if objective_contract_path.exists() else None,
+            "completion_contract": str(completion_contract_path) if completion_contract_path.exists() else None,
+            "approval_transport": str(approval_transport_path) if approval_transport_path.exists() else None,
+            "reconcile_contract": str(reconcile_contract_path) if reconcile_contract_path.exists() else None,
+            "repair_suggestion_contract": (
+                str(repair_suggestion_contract_path) if repair_suggestion_contract_path.exists() else None
+            ),
+            "repair_plan_transport": (
+                str(repair_plan_transport_path) if repair_plan_transport_path.exists() else None
+            ),
+            "repair_approval_binding": (
+                str(repair_approval_binding_path) if repair_approval_binding_path.exists() else None
+            ),
+            "execution_authorization_gate": (
+                str(execution_authorization_gate_path)
+                if execution_authorization_gate_path.exists()
+                else None
+            ),
+            "bounded_execution_bridge": (
+                str(bounded_execution_bridge_path)
+                if bounded_execution_bridge_path.exists()
+                else None
+            ),
+            "execution_result_contract": (
+                str(execution_result_contract_path)
+                if execution_result_contract_path.exists()
+                else None
+            ),
+            "verification_closure_contract": (
+                str(verification_closure_contract_path)
+                if verification_closure_contract_path.exists()
+                else None
+            ),
+            "retry_reentry_loop_contract": (
+                str(retry_reentry_loop_contract_path)
+                if retry_reentry_loop_contract_path.exists()
+                else None
+            ),
+            "endgame_closure_contract": (
+                str(endgame_closure_contract_path)
+                if endgame_closure_contract_path.exists()
+                else None
+            ),
+            "loop_hardening_contract": (
+                str(loop_hardening_contract_path)
+                if loop_hardening_contract_path.exists()
+                else None
+            ),
+            "lane_stabilization_contract": (
+                str(lane_stabilization_contract_path)
+                if lane_stabilization_contract_path.exists()
+                else None
+            ),
+            "observability_rollup_contract": (
+                str(observability_rollup_contract_path)
+                if observability_rollup_contract_path.exists()
+                else None
+            ),
+            "failure_bucket_rollup": (
+                str(failure_bucket_rollup_path)
+                if failure_bucket_rollup_path.exists()
+                else None
+            ),
+            "fleet_run_rollup": (
+                str(fleet_run_rollup_path)
+                if fleet_run_rollup_path.exists()
+                else None
+            ),
+            "failure_bucketing_hardening_contract": (
+                str(failure_bucketing_hardening_contract_path)
+                if failure_bucketing_hardening_contract_path.exists()
+                else None
+            ),
+            "retention_manifest": (
+                str(retention_manifest_path) if retention_manifest_path.exists() else None
+            ),
+            "artifact_retention_contract": (
+                str(artifact_retention_contract_path)
+                if artifact_retention_contract_path.exists()
+                else None
+            ),
+            "fleet_safety_control_contract": (
+                str(fleet_safety_control_contract_path)
+                if fleet_safety_control_contract_path.exists()
+                else None
+            ),
         },
         "checkpoint_decision": _extract_checkpoint_summary(checkpoint_payload),
         "commit_decision": _extract_decision_summary(commit_payload),
@@ -525,6 +2168,66 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
         "pr_execution": _extract_execution_receipt_summary(pr_execution_payload),
         "merge_execution": _extract_execution_receipt_summary(merge_execution_payload),
         "rollback_execution": _extract_execution_receipt_summary(rollback_execution_payload),
+        "objective_contract": _extract_objective_contract_summary(objective_contract_payload),
+        "completion_contract": _extract_completion_contract_summary(completion_contract_payload),
+        "approval_transport": _extract_approval_transport_summary(approval_transport_payload),
+        "reconcile_contract": _extract_reconcile_contract_summary(reconcile_contract_payload),
+        "repair_suggestion_contract": _extract_repair_suggestion_contract_summary(
+            repair_suggestion_contract_payload
+        ),
+        "repair_plan_transport": _extract_repair_plan_transport_summary(
+            repair_plan_transport_payload
+        ),
+        "repair_approval_binding": _extract_repair_approval_binding_summary(
+            repair_approval_binding_payload
+        ),
+        "execution_authorization_gate": _extract_execution_authorization_gate_summary(
+            execution_authorization_gate_payload
+        ),
+        "bounded_execution_bridge": _extract_bounded_execution_bridge_summary(
+            bounded_execution_bridge_payload
+        ),
+        "execution_result_contract": _extract_execution_result_contract_summary(
+            execution_result_contract_payload
+        ),
+        "verification_closure_contract": _extract_verification_closure_contract_summary(
+            verification_closure_contract_payload
+        ),
+        "retry_reentry_loop_contract": _extract_retry_reentry_loop_contract_summary(
+            retry_reentry_loop_contract_payload
+        ),
+        "endgame_closure_contract": _extract_endgame_closure_contract_summary(
+            endgame_closure_contract_payload
+        ),
+        "loop_hardening_contract": _extract_loop_hardening_contract_summary(
+            loop_hardening_contract_payload
+        ),
+        "lane_stabilization_contract": _extract_lane_stabilization_contract_summary(
+            lane_stabilization_contract_payload
+        ),
+        "observability_rollup_contract": _extract_observability_rollup_contract_summary(
+            observability_rollup_contract_payload
+        ),
+        "failure_bucket_rollup": _extract_failure_bucket_rollup_summary(
+            failure_bucket_rollup_payload
+        ),
+        "fleet_run_rollup": _extract_fleet_run_rollup_summary(
+            fleet_run_rollup_payload
+        ),
+        "failure_bucketing_hardening_contract": (
+            _extract_failure_bucketing_hardening_contract_summary(
+                failure_bucketing_hardening_contract_payload
+            )
+        ),
+        "retention_manifest": _extract_retention_manifest_summary(
+            retention_manifest_payload
+        ),
+        "artifact_retention_contract": _extract_artifact_retention_contract_summary(
+            artifact_retention_contract_payload
+        ),
+        "fleet_safety_control_contract": _extract_fleet_safety_control_contract_summary(
+            fleet_safety_control_contract_payload
+        ),
         "run_state": _with_operator_explainability({
             "state": (
                 run_state_payload.get("state")
@@ -991,6 +2694,1066 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
             ),
             "policy_resumable_reason": (
                 run_state_payload.get("policy_resumable_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_contract_present": (
+                run_state_payload.get("objective_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_id": (
+                run_state_payload.get("objective_id")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_summary": (
+                run_state_payload.get("objective_summary")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_type": (
+                run_state_payload.get("objective_type")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "requested_outcome": (
+                run_state_payload.get("requested_outcome")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_acceptance_status": (
+                run_state_payload.get("objective_acceptance_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_required_artifacts_status": (
+                run_state_payload.get("objective_required_artifacts_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_scope_status": (
+                run_state_payload.get("objective_scope_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_contract_status": (
+                run_state_payload.get("objective_contract_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_contract_blocked_reason": (
+                run_state_payload.get("objective_contract_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completion_contract_present": (
+                run_state_payload.get("completion_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completion_status": (
+                run_state_payload.get("completion_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "done_status": (
+                run_state_payload.get("done_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "safe_closure_status": (
+                run_state_payload.get("safe_closure_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completion_evidence_status": (
+                run_state_payload.get("completion_evidence_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completion_blocked_reason": (
+                run_state_payload.get("completion_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completion_manual_required": (
+                run_state_payload.get("completion_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completion_replan_required": (
+                run_state_payload.get("completion_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completion_lifecycle_alignment_status": (
+                run_state_payload.get("completion_lifecycle_alignment_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_transport_present": (
+                run_state_payload.get("approval_transport_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_status": (
+                run_state_payload.get("approval_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_decision": (
+                run_state_payload.get("approval_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_scope": (
+                run_state_payload.get("approval_scope")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approved_action": (
+                run_state_payload.get("approved_action")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_required": (
+                run_state_payload.get("approval_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_transport_status": (
+                run_state_payload.get("approval_transport_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_compatibility_status": (
+                run_state_payload.get("approval_compatibility_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_blocked_reason": (
+                run_state_payload.get("approval_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reconcile_contract_present": (
+                run_state_payload.get("reconcile_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reconcile_status": (
+                run_state_payload.get("reconcile_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reconcile_decision": (
+                run_state_payload.get("reconcile_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reconcile_alignment_status": (
+                run_state_payload.get("reconcile_alignment_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reconcile_primary_mismatch": (
+                run_state_payload.get("reconcile_primary_mismatch")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reconcile_blocked_reason": (
+                run_state_payload.get("reconcile_blocked_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reconcile_waiting_on_truth": (
+                run_state_payload.get("reconcile_waiting_on_truth")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reconcile_manual_required": (
+                run_state_payload.get("reconcile_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reconcile_replan_required": (
+                run_state_payload.get("reconcile_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_suggestion_contract_present": (
+                run_state_payload.get("repair_suggestion_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_suggestion_status": (
+                run_state_payload.get("repair_suggestion_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_suggestion_decision": (
+                run_state_payload.get("repair_suggestion_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_suggestion_class": (
+                run_state_payload.get("repair_suggestion_class")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_suggestion_priority": (
+                run_state_payload.get("repair_suggestion_priority")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_suggestion_confidence": (
+                run_state_payload.get("repair_suggestion_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_primary_reason": (
+                run_state_payload.get("repair_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_manual_required": (
+                run_state_payload.get("repair_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_replan_required": (
+                run_state_payload.get("repair_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_truth_gathering_required": (
+                run_state_payload.get("repair_truth_gathering_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_transport_present": (
+                run_state_payload.get("repair_plan_transport_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_status": (
+                run_state_payload.get("repair_plan_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_decision": (
+                run_state_payload.get("repair_plan_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_class": (
+                run_state_payload.get("repair_plan_class")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_priority": (
+                run_state_payload.get("repair_plan_priority")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_confidence": (
+                run_state_payload.get("repair_plan_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_target_surface": (
+                run_state_payload.get("repair_plan_target_surface")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_candidate_action": (
+                run_state_payload.get("repair_plan_candidate_action")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_primary_reason": (
+                run_state_payload.get("repair_plan_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_manual_required": (
+                run_state_payload.get("repair_plan_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_replan_required": (
+                run_state_payload.get("repair_plan_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_plan_truth_gathering_required": (
+                run_state_payload.get("repair_plan_truth_gathering_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_present": (
+                run_state_payload.get("repair_approval_binding_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_status": (
+                run_state_payload.get("repair_approval_binding_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_decision": (
+                run_state_payload.get("repair_approval_binding_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_scope": (
+                run_state_payload.get("repair_approval_binding_scope")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_validity": (
+                run_state_payload.get("repair_approval_binding_validity")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_compatibility_status": (
+                run_state_payload.get("repair_approval_binding_compatibility_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_primary_reason": (
+                run_state_payload.get("repair_approval_binding_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_manual_required": (
+                run_state_payload.get("repair_approval_binding_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_replan_required": (
+                run_state_payload.get("repair_approval_binding_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_approval_binding_truth_gathering_required": (
+                run_state_payload.get("repair_approval_binding_truth_gathering_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_gate_present": (
+                run_state_payload.get("execution_authorization_gate_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_status": (
+                run_state_payload.get("execution_authorization_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_decision": (
+                run_state_payload.get("execution_authorization_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_scope": (
+                run_state_payload.get("execution_authorization_scope")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_validity": (
+                run_state_payload.get("execution_authorization_validity")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_confidence": (
+                run_state_payload.get("execution_authorization_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_primary_reason": (
+                run_state_payload.get("execution_authorization_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_manual_required": (
+                run_state_payload.get("execution_authorization_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_replan_required": (
+                run_state_payload.get("execution_authorization_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_authorization_truth_gathering_required": (
+                run_state_payload.get("execution_authorization_truth_gathering_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_bridge_present": (
+                run_state_payload.get("bounded_execution_bridge_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_status": (
+                run_state_payload.get("bounded_execution_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_decision": (
+                run_state_payload.get("bounded_execution_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_scope": (
+                run_state_payload.get("bounded_execution_scope")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_validity": (
+                run_state_payload.get("bounded_execution_validity")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_confidence": (
+                run_state_payload.get("bounded_execution_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_primary_reason": (
+                run_state_payload.get("bounded_execution_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_manual_required": (
+                run_state_payload.get("bounded_execution_manual_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_replan_required": (
+                run_state_payload.get("bounded_execution_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "bounded_execution_truth_gathering_required": (
+                run_state_payload.get("bounded_execution_truth_gathering_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_contract_present": (
+                run_state_payload.get("execution_result_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_status": (
+                run_state_payload.get("execution_result_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_outcome": (
+                run_state_payload.get("execution_result_outcome")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_validity": (
+                run_state_payload.get("execution_result_validity")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_confidence": (
+                run_state_payload.get("execution_result_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_primary_reason": (
+                run_state_payload.get("execution_result_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_attempted": (
+                run_state_payload.get("execution_result_attempted")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_receipt_present": (
+                run_state_payload.get("execution_result_receipt_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_output_present": (
+                run_state_payload.get("execution_result_output_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "execution_result_manual_followup_required": (
+                run_state_payload.get("execution_result_manual_followup_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "verification_closure_contract_present": (
+                run_state_payload.get("verification_closure_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "verification_status": (
+                run_state_payload.get("verification_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "verification_outcome": (
+                run_state_payload.get("verification_outcome")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "verification_validity": (
+                run_state_payload.get("verification_validity")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "verification_confidence": (
+                run_state_payload.get("verification_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "verification_primary_reason": (
+                run_state_payload.get("verification_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_satisfaction_status": (
+                run_state_payload.get("objective_satisfaction_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completion_satisfaction_status": (
+                run_state_payload.get("completion_satisfaction_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "closure_status": (
+                run_state_payload.get("closure_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "closure_decision": (
+                run_state_payload.get("closure_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "objective_satisfied": (
+                run_state_payload.get("objective_satisfied")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completion_satisfied": (
+                run_state_payload.get("completion_satisfied")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "safely_closable": (
+                run_state_payload.get("safely_closable")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "manual_closure_required": (
+                run_state_payload.get("manual_closure_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "closure_followup_required": (
+                run_state_payload.get("closure_followup_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "external_truth_required": (
+                run_state_payload.get("external_truth_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "retry_reentry_loop_contract_present": (
+                run_state_payload.get("retry_reentry_loop_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "retry_loop_status": (
+                run_state_payload.get("retry_loop_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "retry_loop_decision": (
+                run_state_payload.get("retry_loop_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "retry_loop_validity": (
+                run_state_payload.get("retry_loop_validity")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "retry_loop_confidence": (
+                run_state_payload.get("retry_loop_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_primary_reason": (
+                run_state_payload.get("loop_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "attempt_count": (
+                run_state_payload.get("attempt_count")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "max_attempt_count": (
+                run_state_payload.get("max_attempt_count")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reentry_count": (
+                run_state_payload.get("reentry_count")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "max_reentry_count": (
+                run_state_payload.get("max_reentry_count")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "same_failure_count": (
+                run_state_payload.get("same_failure_count")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "max_same_failure_count": (
+                run_state_payload.get("max_same_failure_count")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "retry_allowed": (
+                run_state_payload.get("retry_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reentry_allowed": (
+                run_state_payload.get("reentry_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "retry_exhausted": (
+                run_state_payload.get("retry_exhausted")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "reentry_exhausted": (
+                run_state_payload.get("reentry_exhausted")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "same_failure_exhausted": (
+                run_state_payload.get("same_failure_exhausted")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "terminal_stop_required": (
+                run_state_payload.get("terminal_stop_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "manual_escalation_required": (
+                run_state_payload.get("manual_escalation_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "replan_required": (
+                run_state_payload.get("replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "recollect_required": (
+                run_state_payload.get("recollect_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "same_lane_retry_allowed": (
+                run_state_payload.get("same_lane_retry_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "repair_retry_allowed": (
+                run_state_payload.get("repair_retry_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "no_progress_stop_required": (
+                run_state_payload.get("no_progress_stop_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "endgame_closure_contract_present": (
+                run_state_payload.get("endgame_closure_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "endgame_closure_status": (
+                run_state_payload.get("endgame_closure_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "endgame_closure_outcome": (
+                run_state_payload.get("endgame_closure_outcome")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "endgame_closure_validity": (
+                run_state_payload.get("endgame_closure_validity")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "endgame_closure_confidence": (
+                run_state_payload.get("endgame_closure_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "final_closure_class": (
+                run_state_payload.get("final_closure_class")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "terminal_stop_class": (
+                run_state_payload.get("terminal_stop_class")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "closure_resolution_status": (
+                run_state_payload.get("closure_resolution_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "endgame_primary_reason": (
+                run_state_payload.get("endgame_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "safely_closed": (
+                run_state_payload.get("safely_closed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "completed_but_not_closed": (
+                run_state_payload.get("completed_but_not_closed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "rollback_complete_but_not_closed": (
+                run_state_payload.get("rollback_complete_but_not_closed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "manual_closure_only": (
+                run_state_payload.get("manual_closure_only")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "external_truth_pending": (
+                run_state_payload.get("external_truth_pending")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "closure_unresolved": (
+                run_state_payload.get("closure_unresolved")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "terminal_success": (
+                run_state_payload.get("terminal_success")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "terminal_non_success": (
+                run_state_payload.get("terminal_non_success")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "operator_followup_required": (
+                run_state_payload.get("operator_followup_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "further_retry_allowed": (
+                run_state_payload.get("further_retry_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "further_reentry_allowed": (
+                run_state_payload.get("further_reentry_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_hardening_contract_present": (
+                run_state_payload.get("loop_hardening_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_hardening_status": (
+                run_state_payload.get("loop_hardening_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_hardening_decision": (
+                run_state_payload.get("loop_hardening_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_hardening_validity": (
+                run_state_payload.get("loop_hardening_validity")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_hardening_confidence": (
+                run_state_payload.get("loop_hardening_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "loop_hardening_primary_reason": (
+                run_state_payload.get("loop_hardening_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "same_failure_signature": (
+                run_state_payload.get("same_failure_signature")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "same_failure_bucket": (
+                run_state_payload.get("same_failure_bucket")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "same_failure_persistence": (
+                run_state_payload.get("same_failure_persistence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "no_progress_status": (
+                run_state_payload.get("no_progress_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "oscillation_status": (
+                run_state_payload.get("oscillation_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "retry_freeze_status": (
+                run_state_payload.get("retry_freeze_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "same_failure_detected": (
+                run_state_payload.get("same_failure_detected")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "same_failure_stop_required": (
+                run_state_payload.get("same_failure_stop_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "no_progress_detected": (
+                run_state_payload.get("no_progress_detected")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "oscillation_detected": (
+                run_state_payload.get("oscillation_detected")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "unstable_loop_detected": (
+                run_state_payload.get("unstable_loop_detected")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "retry_freeze_required": (
+                run_state_payload.get("retry_freeze_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "cool_down_required": (
+                run_state_payload.get("cool_down_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "forced_manual_escalation_required": (
+                run_state_payload.get("forced_manual_escalation_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "hardening_stop_required": (
+                run_state_payload.get("hardening_stop_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_stabilization_contract_present": (
+                run_state_payload.get("lane_stabilization_contract_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_status": (
+                run_state_payload.get("lane_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_decision": (
+                run_state_payload.get("lane_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_validity": (
+                run_state_payload.get("lane_validity")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_confidence": (
+                run_state_payload.get("lane_confidence")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "current_lane": (
+                run_state_payload.get("current_lane")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "target_lane": (
+                run_state_payload.get("target_lane")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_transition_status": (
+                run_state_payload.get("lane_transition_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_transition_decision": (
+                run_state_payload.get("lane_transition_decision")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_preconditions_status": (
+                run_state_payload.get("lane_preconditions_status")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_retry_policy_class": (
+                run_state_payload.get("lane_retry_policy_class")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_verification_policy_class": (
+                run_state_payload.get("lane_verification_policy_class")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_escalation_policy_class": (
+                run_state_payload.get("lane_escalation_policy_class")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_attempt_budget": (
+                run_state_payload.get("lane_attempt_budget")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_reentry_budget": (
+                run_state_payload.get("lane_reentry_budget")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_transition_count": (
+                run_state_payload.get("lane_transition_count")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "max_lane_transition_count": (
+                run_state_payload.get("max_lane_transition_count")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_primary_reason": (
+                run_state_payload.get("lane_primary_reason")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_valid": (
+                run_state_payload.get("lane_valid")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_mismatch_detected": (
+                run_state_payload.get("lane_mismatch_detected")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_transition_required": (
+                run_state_payload.get("lane_transition_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_transition_allowed": (
+                run_state_payload.get("lane_transition_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_transition_blocked": (
+                run_state_payload.get("lane_transition_blocked")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_stop_required": (
+                run_state_payload.get("lane_stop_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_manual_review_required": (
+                run_state_payload.get("lane_manual_review_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_replan_required": (
+                run_state_payload.get("lane_replan_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_truth_gathering_required": (
+                run_state_payload.get("lane_truth_gathering_required")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "lane_execution_allowed": (
+                run_state_payload.get("lane_execution_allowed")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "observability_rollup_present": (
+                run_state_payload.get("observability_rollup_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "failure_bucketing_hardening_present": (
+                run_state_payload.get("failure_bucketing_hardening_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "artifact_retention_present": (
+                run_state_payload.get("artifact_retention_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "fleet_safety_control_present": (
+                run_state_payload.get("fleet_safety_control_present")
                 if isinstance(run_state_payload, dict)
                 else None
             ),
@@ -2065,6 +4828,436 @@ def _format_human(output: dict[str, Any]) -> str:
         ),
         "lifecycle_policy_resumable_reason: "
         + _fmt(output["lifecycle_artifacts"]["run_state"].get("policy_resumable_reason")),
+        "lifecycle_objective_contract_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_contract_present")),
+        "lifecycle_objective_id: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_id")),
+        "lifecycle_objective_summary: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_summary")),
+        "lifecycle_objective_type: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_type")),
+        "lifecycle_requested_outcome: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("requested_outcome")),
+        "lifecycle_objective_acceptance_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_acceptance_status")),
+        "lifecycle_objective_required_artifacts_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_required_artifacts_status")),
+        "lifecycle_objective_scope_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_scope_status")),
+        "lifecycle_objective_contract_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_contract_status")),
+        "lifecycle_objective_contract_blocked_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_contract_blocked_reason")),
+        "lifecycle_completion_contract_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("completion_contract_present")),
+        "lifecycle_completion_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("completion_status")),
+        "lifecycle_done_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("done_status")),
+        "lifecycle_safe_closure_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("safe_closure_status")),
+        "lifecycle_completion_evidence_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("completion_evidence_status")),
+        "lifecycle_completion_blocked_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("completion_blocked_reason")),
+        "lifecycle_completion_manual_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("completion_manual_required")),
+        "lifecycle_completion_replan_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("completion_replan_required")),
+        "lifecycle_completion_lifecycle_alignment_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("completion_lifecycle_alignment_status")),
+        "lifecycle_approval_transport_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("approval_transport_present")),
+        "lifecycle_approval_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("approval_status")),
+        "lifecycle_approval_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("approval_decision")),
+        "lifecycle_approval_scope: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("approval_scope")),
+        "lifecycle_approved_action: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("approved_action")),
+        "lifecycle_approval_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("approval_required")),
+        "lifecycle_approval_transport_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("approval_transport_status")),
+        "lifecycle_approval_compatibility_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("approval_compatibility_status")),
+        "lifecycle_approval_blocked_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("approval_blocked_reason")),
+        "lifecycle_reconcile_contract_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reconcile_contract_present")),
+        "lifecycle_reconcile_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reconcile_status")),
+        "lifecycle_reconcile_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reconcile_decision")),
+        "lifecycle_reconcile_alignment_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reconcile_alignment_status")),
+        "lifecycle_reconcile_primary_mismatch: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reconcile_primary_mismatch")),
+        "lifecycle_reconcile_blocked_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reconcile_blocked_reason")),
+        "lifecycle_reconcile_waiting_on_truth: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reconcile_waiting_on_truth")),
+        "lifecycle_reconcile_manual_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reconcile_manual_required")),
+        "lifecycle_reconcile_replan_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reconcile_replan_required")),
+        "lifecycle_repair_suggestion_contract_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_suggestion_contract_present")),
+        "lifecycle_repair_suggestion_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_suggestion_status")),
+        "lifecycle_repair_suggestion_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_suggestion_decision")),
+        "lifecycle_repair_suggestion_class: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_suggestion_class")),
+        "lifecycle_repair_suggestion_priority: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_suggestion_priority")),
+        "lifecycle_repair_suggestion_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_suggestion_confidence")),
+        "lifecycle_repair_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_primary_reason")),
+        "lifecycle_repair_manual_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_manual_required")),
+        "lifecycle_repair_replan_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_replan_required")),
+        "lifecycle_repair_truth_gathering_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_truth_gathering_required")),
+        "lifecycle_repair_plan_transport_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_transport_present")),
+        "lifecycle_repair_plan_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_status")),
+        "lifecycle_repair_plan_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_decision")),
+        "lifecycle_repair_plan_class: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_class")),
+        "lifecycle_repair_plan_priority: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_priority")),
+        "lifecycle_repair_plan_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_confidence")),
+        "lifecycle_repair_plan_target_surface: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_target_surface")),
+        "lifecycle_repair_plan_candidate_action: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_candidate_action")),
+        "lifecycle_repair_plan_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_primary_reason")),
+        "lifecycle_repair_plan_manual_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_manual_required")),
+        "lifecycle_repair_plan_replan_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_replan_required")),
+        "lifecycle_repair_plan_truth_gathering_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_plan_truth_gathering_required")),
+        "lifecycle_repair_approval_binding_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_approval_binding_present")),
+        "lifecycle_repair_approval_binding_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_approval_binding_status")),
+        "lifecycle_repair_approval_binding_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_approval_binding_decision")),
+        "lifecycle_repair_approval_binding_scope: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_approval_binding_scope")),
+        "lifecycle_repair_approval_binding_validity: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_approval_binding_validity")),
+        "lifecycle_repair_approval_binding_compatibility_status: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "repair_approval_binding_compatibility_status"
+            )
+        ),
+        "lifecycle_repair_approval_binding_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_approval_binding_primary_reason")),
+        "lifecycle_repair_approval_binding_manual_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_approval_binding_manual_required")),
+        "lifecycle_repair_approval_binding_replan_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_approval_binding_replan_required")),
+        "lifecycle_repair_approval_binding_truth_gathering_required: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "repair_approval_binding_truth_gathering_required"
+            )
+        ),
+        "lifecycle_execution_authorization_gate_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_authorization_gate_present")),
+        "lifecycle_execution_authorization_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_authorization_status")),
+        "lifecycle_execution_authorization_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_authorization_decision")),
+        "lifecycle_execution_authorization_scope: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_authorization_scope")),
+        "lifecycle_execution_authorization_validity: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_authorization_validity")),
+        "lifecycle_execution_authorization_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_authorization_confidence")),
+        "lifecycle_execution_authorization_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_authorization_primary_reason")),
+        "lifecycle_execution_authorization_manual_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_authorization_manual_required")),
+        "lifecycle_execution_authorization_replan_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_authorization_replan_required")),
+        "lifecycle_execution_authorization_truth_gathering_required: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "execution_authorization_truth_gathering_required"
+            )
+        ),
+        "lifecycle_bounded_execution_bridge_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("bounded_execution_bridge_present")),
+        "lifecycle_bounded_execution_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("bounded_execution_status")),
+        "lifecycle_bounded_execution_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("bounded_execution_decision")),
+        "lifecycle_bounded_execution_scope: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("bounded_execution_scope")),
+        "lifecycle_bounded_execution_validity: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("bounded_execution_validity")),
+        "lifecycle_bounded_execution_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("bounded_execution_confidence")),
+        "lifecycle_bounded_execution_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("bounded_execution_primary_reason")),
+        "lifecycle_bounded_execution_manual_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("bounded_execution_manual_required")),
+        "lifecycle_bounded_execution_replan_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("bounded_execution_replan_required")),
+        "lifecycle_bounded_execution_truth_gathering_required: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "bounded_execution_truth_gathering_required"
+            )
+        ),
+        "lifecycle_execution_result_contract_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_result_contract_present")),
+        "lifecycle_execution_result_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_result_status")),
+        "lifecycle_execution_result_outcome: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_result_outcome")),
+        "lifecycle_execution_result_validity: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_result_validity")),
+        "lifecycle_execution_result_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_result_confidence")),
+        "lifecycle_execution_result_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_result_primary_reason")),
+        "lifecycle_execution_result_attempted: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_result_attempted")),
+        "lifecycle_execution_result_receipt_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_result_receipt_present")),
+        "lifecycle_execution_result_output_present: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("execution_result_output_present")),
+        "lifecycle_execution_result_manual_followup_required: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "execution_result_manual_followup_required"
+            )
+        ),
+        "lifecycle_verification_closure_contract_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "verification_closure_contract_present"
+            )
+        ),
+        "lifecycle_verification_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("verification_status")),
+        "lifecycle_verification_outcome: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("verification_outcome")),
+        "lifecycle_verification_validity: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("verification_validity")),
+        "lifecycle_verification_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("verification_confidence")),
+        "lifecycle_verification_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("verification_primary_reason")),
+        "lifecycle_objective_satisfaction_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("objective_satisfaction_status")),
+        "lifecycle_completion_satisfaction_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("completion_satisfaction_status")),
+        "lifecycle_closure_decision_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("closure_decision")),
+        "lifecycle_safely_closable_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("safely_closable")),
+        "lifecycle_manual_closure_required_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("manual_closure_required")),
+        "lifecycle_closure_followup_required_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("closure_followup_required")),
+        "lifecycle_external_truth_required_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("external_truth_required")),
+        "lifecycle_retry_reentry_loop_contract_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "retry_reentry_loop_contract_present"
+            )
+        ),
+        "lifecycle_retry_loop_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("retry_loop_status")),
+        "lifecycle_retry_loop_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("retry_loop_decision")),
+        "lifecycle_retry_loop_validity: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("retry_loop_validity")),
+        "lifecycle_retry_loop_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("retry_loop_confidence")),
+        "lifecycle_loop_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("loop_primary_reason")),
+        "lifecycle_attempt_count: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("attempt_count")),
+        "lifecycle_max_attempt_count: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("max_attempt_count")),
+        "lifecycle_reentry_count: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reentry_count")),
+        "lifecycle_max_reentry_count: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("max_reentry_count")),
+        "lifecycle_same_failure_count: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("same_failure_count")),
+        "lifecycle_max_same_failure_count: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("max_same_failure_count")),
+        "lifecycle_retry_allowed: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("retry_allowed")),
+        "lifecycle_reentry_allowed: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reentry_allowed")),
+        "lifecycle_retry_exhausted: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("retry_exhausted")),
+        "lifecycle_reentry_exhausted: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("reentry_exhausted")),
+        "lifecycle_same_failure_exhausted: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("same_failure_exhausted")),
+        "lifecycle_terminal_stop_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("terminal_stop_required")),
+        "lifecycle_manual_escalation_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("manual_escalation_required")),
+        "lifecycle_replan_required_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("replan_required")),
+        "lifecycle_recollect_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("recollect_required")),
+        "lifecycle_same_lane_retry_allowed: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("same_lane_retry_allowed")),
+        "lifecycle_repair_retry_allowed: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("repair_retry_allowed")),
+        "lifecycle_no_progress_stop_required: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("no_progress_stop_required")),
+        "lifecycle_endgame_closure_contract_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "endgame_closure_contract_present"
+            )
+        ),
+        "lifecycle_endgame_closure_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("endgame_closure_status")),
+        "lifecycle_endgame_closure_outcome: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("endgame_closure_outcome")),
+        "lifecycle_endgame_closure_validity: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("endgame_closure_validity")),
+        "lifecycle_endgame_closure_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("endgame_closure_confidence")),
+        "lifecycle_final_closure_class: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("final_closure_class")),
+        "lifecycle_terminal_stop_class: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("terminal_stop_class")),
+        "lifecycle_closure_resolution_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("closure_resolution_status")),
+        "lifecycle_endgame_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("endgame_primary_reason")),
+        "lifecycle_safely_closed_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("safely_closed")),
+        "lifecycle_completed_but_not_closed_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("completed_but_not_closed")),
+        "lifecycle_rollback_complete_but_not_closed_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("rollback_complete_but_not_closed")),
+        "lifecycle_manual_closure_only_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("manual_closure_only")),
+        "lifecycle_external_truth_pending_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("external_truth_pending")),
+        "lifecycle_closure_unresolved_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("closure_unresolved")),
+        "lifecycle_terminal_success_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("terminal_success")),
+        "lifecycle_terminal_non_success_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("terminal_non_success")),
+        "lifecycle_operator_followup_required_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("operator_followup_required")),
+        "lifecycle_further_retry_allowed_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("further_retry_allowed")),
+        "lifecycle_further_reentry_allowed_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("further_reentry_allowed")),
+        "lifecycle_loop_hardening_contract_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "loop_hardening_contract_present"
+            )
+        ),
+        "lifecycle_loop_hardening_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("loop_hardening_status")),
+        "lifecycle_loop_hardening_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("loop_hardening_decision")),
+        "lifecycle_loop_hardening_validity: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("loop_hardening_validity")),
+        "lifecycle_loop_hardening_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("loop_hardening_confidence")),
+        "lifecycle_loop_hardening_primary_reason: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("loop_hardening_primary_reason")),
+        "lifecycle_same_failure_signature_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("same_failure_signature")),
+        "lifecycle_same_failure_bucket_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("same_failure_bucket")),
+        "lifecycle_same_failure_persistence_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("same_failure_persistence")),
+        "lifecycle_no_progress_status_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("no_progress_status")),
+        "lifecycle_oscillation_status_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("oscillation_status")),
+        "lifecycle_retry_freeze_status_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("retry_freeze_status")),
+        "lifecycle_hardening_stop_required_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("hardening_stop_required")),
+        "lifecycle_lane_stabilization_contract_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "lane_stabilization_contract_present"
+            )
+        ),
+        "lifecycle_observability_rollup_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "observability_rollup_present"
+            )
+        ),
+        "lifecycle_failure_bucketing_hardening_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "failure_bucketing_hardening_present"
+            )
+        ),
+        "lifecycle_artifact_retention_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "artifact_retention_present"
+            )
+        ),
+        "lifecycle_fleet_safety_control_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "fleet_safety_control_present"
+            )
+        ),
+        "lifecycle_lane_status: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_status")),
+        "lifecycle_lane_decision: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_decision")),
+        "lifecycle_lane_validity: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_validity")),
+        "lifecycle_lane_confidence: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_confidence")),
+        "lifecycle_current_lane_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("current_lane")),
+        "lifecycle_target_lane_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("target_lane")),
+        "lifecycle_lane_transition_status_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_transition_status")),
+        "lifecycle_lane_transition_decision_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_transition_decision")),
+        "lifecycle_lane_retry_policy_class_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_retry_policy_class")),
+        "lifecycle_lane_verification_policy_class_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_verification_policy_class")),
+        "lifecycle_lane_escalation_policy_class_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_escalation_policy_class")),
+        "lifecycle_lane_primary_reason_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_primary_reason")),
+        "lifecycle_lane_execution_allowed_overlay: "
+        + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_execution_allowed")),
         "lifecycle_operator_posture_summary: "
         + _fmt(output["lifecycle_artifacts"]["run_state"].get("operator_posture_summary")),
         "lifecycle_operator_primary_blocker_class: "
@@ -2115,6 +5308,512 @@ def _format_human(output: dict[str, Any]) -> str:
         ),
         "lifecycle_global_stop_reason: "
         + _fmt(output["lifecycle_artifacts"]["run_state"].get("global_stop_reason")),
+        "lifecycle_objective_contract_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["objective_contract"].get("objective_status")),
+        "lifecycle_objective_contract_source_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["objective_contract"].get("objective_source_status")),
+        "lifecycle_objective_acceptance_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["objective_contract"].get("acceptance_status")),
+        "lifecycle_objective_scope_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["objective_contract"].get("scope_status")),
+        "lifecycle_objective_required_artifacts_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["objective_contract"].get("required_artifacts_status")),
+        "lifecycle_objective_acceptance_criteria_total: "
+        + _fmt(output["lifecycle_artifacts"]["objective_contract"].get("acceptance_criteria_total")),
+        "lifecycle_objective_acceptance_criteria_defined: "
+        + _fmt(output["lifecycle_artifacts"]["objective_contract"].get("acceptance_criteria_defined")),
+        "lifecycle_objective_required_artifacts_total: "
+        + _fmt(output["lifecycle_artifacts"]["objective_contract"].get("required_artifacts_total")),
+        "lifecycle_completion_contract_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["completion_contract"].get("completion_status")),
+        "lifecycle_completion_done_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["completion_contract"].get("done_status")),
+        "lifecycle_completion_safe_closure_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["completion_contract"].get("safe_closure_status")),
+        "lifecycle_completion_evidence_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["completion_contract"].get("completion_evidence_status")),
+        "lifecycle_completion_closure_decision_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["completion_contract"].get("closure_decision")),
+        "lifecycle_completion_lifecycle_alignment_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["completion_contract"].get("lifecycle_alignment_status")),
+        "lifecycle_completion_required_evidence_total: "
+        + _fmt(output["lifecycle_artifacts"]["completion_contract"].get("required_evidence_total")),
+        "lifecycle_completion_missing_evidence_total: "
+        + _fmt(output["lifecycle_artifacts"]["completion_contract"].get("missing_evidence_total")),
+        "lifecycle_approval_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["approval_transport"].get("approval_status")),
+        "lifecycle_approval_decision_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["approval_transport"].get("approval_decision")),
+        "lifecycle_approval_scope_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["approval_transport"].get("approval_scope")),
+        "lifecycle_approval_transport_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["approval_transport"].get("approval_transport_status")),
+        "lifecycle_approval_compatibility_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["approval_transport"].get("approval_compatibility_status")),
+        "lifecycle_approval_blocked_reason_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["approval_transport"].get("approval_blocked_reason")),
+        "lifecycle_reconcile_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["reconcile_contract"].get("reconcile_status")),
+        "lifecycle_reconcile_decision_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["reconcile_contract"].get("reconcile_decision")),
+        "lifecycle_reconcile_alignment_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["reconcile_contract"].get("reconcile_alignment_status")),
+        "lifecycle_reconcile_primary_mismatch_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["reconcile_contract"].get("reconcile_primary_mismatch")),
+        "lifecycle_reconcile_transport_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["reconcile_contract"].get("reconcile_transport_status")),
+        "lifecycle_repair_suggestion_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_suggestion_contract"].get("repair_suggestion_status")),
+        "lifecycle_repair_suggestion_decision_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_suggestion_contract"].get("repair_suggestion_decision")),
+        "lifecycle_repair_suggestion_class_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_suggestion_contract"].get("repair_suggestion_class")),
+        "lifecycle_repair_suggestion_priority_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_suggestion_contract"].get("repair_suggestion_priority")),
+        "lifecycle_repair_primary_reason_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_suggestion_contract"].get("repair_primary_reason")),
+        "lifecycle_repair_plan_status_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_plan_transport"].get("repair_plan_status")),
+        "lifecycle_repair_plan_decision_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_plan_transport"].get("repair_plan_decision")),
+        "lifecycle_repair_plan_class_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_plan_transport"].get("repair_plan_class")),
+        "lifecycle_repair_plan_priority_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_plan_transport"].get("repair_plan_priority")),
+        "lifecycle_repair_plan_primary_reason_artifact: "
+        + _fmt(output["lifecycle_artifacts"]["repair_plan_transport"].get("repair_plan_primary_reason")),
+        "lifecycle_repair_approval_binding_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["repair_approval_binding"].get(
+                "repair_approval_binding_status"
+            )
+        ),
+        "lifecycle_repair_approval_binding_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["repair_approval_binding"].get(
+                "repair_approval_binding_decision"
+            )
+        ),
+        "lifecycle_repair_approval_binding_validity_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["repair_approval_binding"].get(
+                "repair_approval_binding_validity"
+            )
+        ),
+        "lifecycle_repair_approval_binding_compatibility_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["repair_approval_binding"].get(
+                "repair_approval_binding_compatibility_status"
+            )
+        ),
+        "lifecycle_repair_approval_binding_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["repair_approval_binding"].get(
+                "repair_approval_binding_primary_reason"
+            )
+        ),
+        "lifecycle_execution_authorization_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_authorization_gate"].get(
+                "execution_authorization_status"
+            )
+        ),
+        "lifecycle_execution_authorization_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_authorization_gate"].get(
+                "execution_authorization_decision"
+            )
+        ),
+        "lifecycle_execution_authorization_validity_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_authorization_gate"].get(
+                "execution_authorization_validity"
+            )
+        ),
+        "lifecycle_execution_authorization_confidence_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_authorization_gate"].get(
+                "execution_authorization_confidence"
+            )
+        ),
+        "lifecycle_execution_authorization_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_authorization_gate"].get(
+                "execution_authorization_primary_reason"
+            )
+        ),
+        "lifecycle_bounded_execution_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["bounded_execution_bridge"].get(
+                "bounded_execution_status"
+            )
+        ),
+        "lifecycle_bounded_execution_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["bounded_execution_bridge"].get(
+                "bounded_execution_decision"
+            )
+        ),
+        "lifecycle_bounded_execution_validity_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["bounded_execution_bridge"].get(
+                "bounded_execution_validity"
+            )
+        ),
+        "lifecycle_bounded_execution_confidence_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["bounded_execution_bridge"].get(
+                "bounded_execution_confidence"
+            )
+        ),
+        "lifecycle_bounded_execution_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["bounded_execution_bridge"].get(
+                "bounded_execution_primary_reason"
+            )
+        ),
+        "lifecycle_execution_result_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_result_contract"].get(
+                "execution_result_status"
+            )
+        ),
+        "lifecycle_execution_result_outcome_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_result_contract"].get(
+                "execution_result_outcome"
+            )
+        ),
+        "lifecycle_execution_result_validity_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_result_contract"].get(
+                "execution_result_validity"
+            )
+        ),
+        "lifecycle_execution_result_confidence_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_result_contract"].get(
+                "execution_result_confidence"
+            )
+        ),
+        "lifecycle_execution_result_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["execution_result_contract"].get(
+                "execution_result_primary_reason"
+            )
+        ),
+        "lifecycle_verification_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["verification_closure_contract"].get(
+                "verification_status"
+            )
+        ),
+        "lifecycle_verification_outcome_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["verification_closure_contract"].get(
+                "verification_outcome"
+            )
+        ),
+        "lifecycle_verification_validity_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["verification_closure_contract"].get(
+                "verification_validity"
+            )
+        ),
+        "lifecycle_verification_confidence_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["verification_closure_contract"].get(
+                "verification_confidence"
+            )
+        ),
+        "lifecycle_verification_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["verification_closure_contract"].get(
+                "verification_primary_reason"
+            )
+        ),
+        "lifecycle_closure_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["verification_closure_contract"].get(
+                "closure_status"
+            )
+        ),
+        "lifecycle_closure_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["verification_closure_contract"].get(
+                "closure_decision"
+            )
+        ),
+        "lifecycle_retry_loop_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["retry_reentry_loop_contract"].get(
+                "retry_loop_status"
+            )
+        ),
+        "lifecycle_retry_loop_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["retry_reentry_loop_contract"].get(
+                "retry_loop_decision"
+            )
+        ),
+        "lifecycle_retry_loop_validity_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["retry_reentry_loop_contract"].get(
+                "retry_loop_validity"
+            )
+        ),
+        "lifecycle_retry_loop_confidence_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["retry_reentry_loop_contract"].get(
+                "retry_loop_confidence"
+            )
+        ),
+        "lifecycle_retry_loop_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["retry_reentry_loop_contract"].get(
+                "loop_primary_reason"
+            )
+        ),
+        "lifecycle_endgame_closure_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["endgame_closure_contract"].get(
+                "endgame_closure_status"
+            )
+        ),
+        "lifecycle_endgame_closure_outcome_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["endgame_closure_contract"].get(
+                "endgame_closure_outcome"
+            )
+        ),
+        "lifecycle_final_closure_class_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["endgame_closure_contract"].get(
+                "final_closure_class"
+            )
+        ),
+        "lifecycle_terminal_stop_class_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["endgame_closure_contract"].get(
+                "terminal_stop_class"
+            )
+        ),
+        "lifecycle_endgame_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["endgame_closure_contract"].get(
+                "endgame_primary_reason"
+            )
+        ),
+        "lifecycle_loop_hardening_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["loop_hardening_contract"].get(
+                "loop_hardening_status"
+            )
+        ),
+        "lifecycle_loop_hardening_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["loop_hardening_contract"].get(
+                "loop_hardening_decision"
+            )
+        ),
+        "lifecycle_loop_hardening_validity_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["loop_hardening_contract"].get(
+                "loop_hardening_validity"
+            )
+        ),
+        "lifecycle_loop_hardening_confidence_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["loop_hardening_contract"].get(
+                "loop_hardening_confidence"
+            )
+        ),
+        "lifecycle_loop_hardening_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["loop_hardening_contract"].get(
+                "loop_hardening_primary_reason"
+            )
+        ),
+        "lifecycle_lane_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["lane_stabilization_contract"].get(
+                "lane_status"
+            )
+        ),
+        "lifecycle_lane_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["lane_stabilization_contract"].get(
+                "lane_decision"
+            )
+        ),
+        "lifecycle_current_lane_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["lane_stabilization_contract"].get(
+                "current_lane"
+            )
+        ),
+        "lifecycle_target_lane_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["lane_stabilization_contract"].get(
+                "target_lane"
+            )
+        ),
+        "lifecycle_lane_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["lane_stabilization_contract"].get(
+                "lane_primary_reason"
+            )
+        ),
+        "lifecycle_observability_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["observability_rollup_contract"].get(
+                "observability_status"
+            )
+        ),
+        "lifecycle_observability_terminal_class_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["observability_rollup_contract"].get(
+                "run_terminal_class"
+            )
+        ),
+        "lifecycle_observability_lane_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["observability_rollup_contract"].get(
+                "lane"
+            )
+        ),
+        "lifecycle_observability_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["observability_rollup_contract"].get(
+                "observability_primary_reason"
+            )
+        ),
+        "lifecycle_failure_bucket_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["failure_bucket_rollup"].get(
+                "failure_bucket_status"
+            )
+        ),
+        "lifecycle_primary_failure_bucket_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["failure_bucket_rollup"].get(
+                "primary_failure_bucket"
+            )
+        ),
+        "lifecycle_failure_bucket_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["failure_bucket_rollup"].get(
+                "failure_bucket_primary_reason"
+            )
+        ),
+        "lifecycle_fleet_terminal_class_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["fleet_run_rollup"].get(
+                "fleet_terminal_class"
+            )
+        ),
+        "lifecycle_fleet_primary_failure_bucket_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["fleet_run_rollup"].get(
+                "fleet_primary_failure_bucket"
+            )
+        ),
+        "lifecycle_fleet_observability_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["fleet_run_rollup"].get(
+                "fleet_observability_status"
+            )
+        ),
+        "lifecycle_fleet_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["fleet_run_rollup"].get(
+                "fleet_primary_reason"
+            )
+        ),
+        "lifecycle_hardened_primary_failure_bucket_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["failure_bucketing_hardening_contract"].get(
+                "primary_failure_bucket"
+            )
+        ),
+        "lifecycle_hardened_bucket_family_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["failure_bucketing_hardening_contract"].get(
+                "bucket_family"
+            )
+        ),
+        "lifecycle_hardened_bucket_severity_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["failure_bucketing_hardening_contract"].get(
+                "bucket_severity"
+            )
+        ),
+        "lifecycle_hardened_bucket_stability_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["failure_bucketing_hardening_contract"].get(
+                "bucket_stability_class"
+            )
+        ),
+        "lifecycle_hardened_bucket_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["failure_bucketing_hardening_contract"].get(
+                "failure_bucketing_primary_reason"
+            )
+        ),
+        "lifecycle_artifact_retention_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["artifact_retention_contract"].get(
+                "artifact_retention_status"
+            )
+        ),
+        "lifecycle_retention_policy_class_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["artifact_retention_contract"].get(
+                "retention_policy_class"
+            )
+        ),
+        "lifecycle_retention_compaction_class_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["artifact_retention_contract"].get(
+                "retention_compaction_class"
+            )
+        ),
+        "lifecycle_retention_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["artifact_retention_contract"].get(
+                "retention_primary_reason"
+            )
+        ),
+        "lifecycle_fleet_safety_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["fleet_safety_control_contract"].get(
+                "fleet_safety_status"
+            )
+        ),
+        "lifecycle_fleet_safety_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["fleet_safety_control_contract"].get(
+                "fleet_safety_decision"
+            )
+        ),
+        "lifecycle_fleet_restart_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["fleet_safety_control_contract"].get(
+                "fleet_restart_decision"
+            )
+        ),
+        "lifecycle_fleet_safety_scope_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["fleet_safety_control_contract"].get(
+                "fleet_safety_scope"
+            )
+        ),
+        "lifecycle_fleet_safety_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["fleet_safety_control_contract"].get(
+                "fleet_safety_primary_reason"
+            )
+        ),
         f"lifecycle_checkpoint_decision_path: {_fmt(output['lifecycle_artifacts']['paths'].get('checkpoint_decision'))}",
         f"lifecycle_commit_decision_path: {_fmt(output['lifecycle_artifacts']['paths'].get('commit_decision'))}",
         f"lifecycle_merge_decision_path: {_fmt(output['lifecycle_artifacts']['paths'].get('merge_decision'))}",
@@ -2125,6 +5824,28 @@ def _format_human(output: dict[str, Any]) -> str:
         f"lifecycle_merge_execution_path: {_fmt(output['lifecycle_artifacts']['paths'].get('merge_execution'))}",
         f"lifecycle_rollback_execution_path: {_fmt(output['lifecycle_artifacts']['paths'].get('rollback_execution'))}",
         f"lifecycle_run_state_path: {_fmt(output['lifecycle_artifacts']['paths'].get('run_state'))}",
+        f"lifecycle_objective_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('objective_contract'))}",
+        f"lifecycle_completion_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('completion_contract'))}",
+        f"lifecycle_approval_transport_path: {_fmt(output['lifecycle_artifacts']['paths'].get('approval_transport'))}",
+        f"lifecycle_reconcile_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('reconcile_contract'))}",
+        f"lifecycle_repair_suggestion_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('repair_suggestion_contract'))}",
+        f"lifecycle_repair_plan_transport_path: {_fmt(output['lifecycle_artifacts']['paths'].get('repair_plan_transport'))}",
+        f"lifecycle_repair_approval_binding_path: {_fmt(output['lifecycle_artifacts']['paths'].get('repair_approval_binding'))}",
+        f"lifecycle_execution_authorization_gate_path: {_fmt(output['lifecycle_artifacts']['paths'].get('execution_authorization_gate'))}",
+        f"lifecycle_bounded_execution_bridge_path: {_fmt(output['lifecycle_artifacts']['paths'].get('bounded_execution_bridge'))}",
+        f"lifecycle_execution_result_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('execution_result_contract'))}",
+        f"lifecycle_verification_closure_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('verification_closure_contract'))}",
+        f"lifecycle_retry_reentry_loop_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('retry_reentry_loop_contract'))}",
+        f"lifecycle_endgame_closure_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('endgame_closure_contract'))}",
+        f"lifecycle_loop_hardening_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('loop_hardening_contract'))}",
+        f"lifecycle_lane_stabilization_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('lane_stabilization_contract'))}",
+        f"lifecycle_observability_rollup_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('observability_rollup_contract'))}",
+        f"lifecycle_failure_bucket_rollup_path: {_fmt(output['lifecycle_artifacts']['paths'].get('failure_bucket_rollup'))}",
+        f"lifecycle_fleet_run_rollup_path: {_fmt(output['lifecycle_artifacts']['paths'].get('fleet_run_rollup'))}",
+        f"lifecycle_failure_bucketing_hardening_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('failure_bucketing_hardening_contract'))}",
+        f"lifecycle_retention_manifest_path: {_fmt(output['lifecycle_artifacts']['paths'].get('retention_manifest'))}",
+        f"lifecycle_artifact_retention_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('artifact_retention_contract'))}",
+        f"lifecycle_fleet_safety_control_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('fleet_safety_control_contract'))}",
     ]
     return "\n".join(lines)
 

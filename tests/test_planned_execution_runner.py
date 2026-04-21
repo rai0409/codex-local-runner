@@ -10,6 +10,377 @@ import unittest
 from unittest.mock import patch
 
 from automation.execution.codex_executor_adapter import CodexExecutorAdapter
+from automation.orchestration.approval_transport import APPROVAL_COMPATIBILITY_STATUSES
+from automation.orchestration.approval_transport import APPROVAL_DECISIONS
+from automation.orchestration.approval_transport import APPROVAL_RUN_STATE_SUMMARY_SAFE_FIELDS
+from automation.orchestration.approval_transport import APPROVAL_SCOPES
+from automation.orchestration.approval_transport import APPROVAL_STATUSES
+from automation.orchestration.approval_transport import APPROVAL_TRANSPORT_STATUSES
+from automation.orchestration.approval_transport import APPROVED_ACTIONS
+from automation.orchestration.approval_transport import build_approval_run_state_summary_surface
+from automation.orchestration.approval_transport import build_approval_transport_surface
+from automation.orchestration.artifact_index import CONTRACT_ARTIFACT_ROLES
+from automation.orchestration.artifact_index import build_contract_artifact_index
+from automation.orchestration.completion_contract import COMPLETION_RUN_STATE_SUMMARY_SAFE_FIELDS
+from automation.orchestration.completion_contract import COMPLETION_EVIDENCE_STATUSES
+from automation.orchestration.completion_contract import COMPLETION_STATUSES
+from automation.orchestration.completion_contract import CLOSURE_DECISIONS
+from automation.orchestration.completion_contract import DONE_STATUSES
+from automation.orchestration.completion_contract import LIFECYCLE_ALIGNMENT_STATUSES
+from automation.orchestration.completion_contract import SAFE_CLOSURE_STATUSES
+from automation.orchestration.completion_contract import build_completion_contract_surface
+from automation.orchestration.completion_contract import build_completion_run_state_summary_surface
+from automation.orchestration.bounded_execution_bridge import (
+    BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.bounded_execution_bridge import (
+    BOUNDED_EXECUTION_CANDIDATE_ACTIONS,
+)
+from automation.orchestration.bounded_execution_bridge import BOUNDED_EXECUTION_CONFIDENCE_LEVELS
+from automation.orchestration.bounded_execution_bridge import BOUNDED_EXECUTION_DECISIONS
+from automation.orchestration.bounded_execution_bridge import BOUNDED_EXECUTION_REASON_CODES
+from automation.orchestration.bounded_execution_bridge import BOUNDED_EXECUTION_SCOPES
+from automation.orchestration.bounded_execution_bridge import BOUNDED_EXECUTION_SOURCE_STATUSES
+from automation.orchestration.bounded_execution_bridge import BOUNDED_EXECUTION_STATUSES
+from automation.orchestration.bounded_execution_bridge import BOUNDED_EXECUTION_VALIDITIES
+from automation.orchestration.bounded_execution_bridge import (
+    build_bounded_execution_bridge_run_state_summary_surface,
+)
+from automation.orchestration.bounded_execution_bridge import (
+    build_bounded_execution_bridge_surface,
+)
+from automation.orchestration.execution_authorization_gate import (
+    EXECUTION_AUTHORIZATION_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.execution_authorization_gate import EXECUTION_AUTHORIZATION_DECISIONS
+from automation.orchestration.execution_authorization_gate import EXECUTION_AUTHORIZATION_GATE_RUN_STATE_SUMMARY_SAFE_FIELDS
+from automation.orchestration.execution_authorization_gate import EXECUTION_AUTHORIZATION_REASON_CODES
+from automation.orchestration.execution_authorization_gate import EXECUTION_AUTHORIZATION_SCOPES
+from automation.orchestration.execution_authorization_gate import EXECUTION_AUTHORIZATION_SOURCE_STATUSES
+from automation.orchestration.execution_authorization_gate import EXECUTION_AUTHORIZATION_STATUSES
+from automation.orchestration.execution_authorization_gate import EXECUTION_AUTHORIZATION_VALIDITIES
+from automation.orchestration.execution_authorization_gate import (
+    build_execution_authorization_gate_run_state_summary_surface,
+)
+from automation.orchestration.execution_authorization_gate import (
+    build_execution_authorization_gate_surface,
+)
+from automation.orchestration.execution_result_contract import (
+    EXECUTION_RESULT_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.execution_result_contract import EXECUTION_RESULT_OUTCOMES
+from automation.orchestration.execution_result_contract import EXECUTION_RESULT_REASON_CODES
+from automation.orchestration.execution_result_contract import (
+    EXECUTION_RESULT_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.execution_result_contract import EXECUTION_RESULT_SOURCE_POSTURES
+from automation.orchestration.execution_result_contract import EXECUTION_RESULT_STATUSES
+from automation.orchestration.execution_result_contract import EXECUTION_RESULT_VALIDITIES
+from automation.orchestration.execution_result_contract import (
+    build_execution_result_contract_run_state_summary_surface,
+)
+from automation.orchestration.execution_result_contract import (
+    build_execution_result_contract_surface,
+)
+from automation.orchestration.verification_closure_contract import (
+    CLOSURE_DECISIONS as VERIFICATION_CLOSURE_DECISIONS,
+)
+from automation.orchestration.verification_closure_contract import (
+    CLOSURE_STATUSES as VERIFICATION_CLOSURE_STATUSES,
+)
+from automation.orchestration.verification_closure_contract import (
+    COMPLETION_SATISFACTION_STATUSES,
+)
+from automation.orchestration.verification_closure_contract import (
+    OBJECTIVE_SATISFACTION_STATUSES,
+)
+from automation.orchestration.verification_closure_contract import (
+    VERIFICATION_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.verification_closure_contract import (
+    VERIFICATION_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.verification_closure_contract import (
+    VERIFICATION_OUTCOMES,
+)
+from automation.orchestration.verification_closure_contract import (
+    VERIFICATION_REASON_CODES,
+)
+from automation.orchestration.verification_closure_contract import (
+    VERIFICATION_SOURCE_POSTURES,
+)
+from automation.orchestration.verification_closure_contract import (
+    VERIFICATION_STATUSES,
+)
+from automation.orchestration.verification_closure_contract import (
+    VERIFICATION_VALIDITIES,
+)
+from automation.orchestration.verification_closure_contract import (
+    build_verification_closure_contract_surface,
+)
+from automation.orchestration.verification_closure_contract import (
+    build_verification_closure_run_state_summary_surface,
+)
+from automation.orchestration.retry_reentry_loop_contract import LOOP_STOP_REASONS
+from automation.orchestration.retry_reentry_loop_contract import REENTRY_CLASSES
+from automation.orchestration.retry_reentry_loop_contract import RETRY_CLASSES
+from automation.orchestration.retry_reentry_loop_contract import RETRY_LOOP_CONFIDENCE_LEVELS
+from automation.orchestration.retry_reentry_loop_contract import RETRY_LOOP_DECISIONS
+from automation.orchestration.retry_reentry_loop_contract import RETRY_LOOP_REASON_CODES
+from automation.orchestration.retry_reentry_loop_contract import (
+    RETRY_REENTRY_LOOP_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.retry_reentry_loop_contract import RETRY_LOOP_SOURCE_POSTURES
+from automation.orchestration.retry_reentry_loop_contract import RETRY_LOOP_STATUSES
+from automation.orchestration.retry_reentry_loop_contract import RETRY_LOOP_VALIDITIES
+from automation.orchestration.retry_reentry_loop_contract import (
+    build_retry_reentry_loop_contract_surface,
+)
+from automation.orchestration.retry_reentry_loop_contract import (
+    build_retry_reentry_loop_run_state_summary_surface,
+)
+from automation.orchestration.endgame_closure_contract import (
+    CLOSURE_RESOLUTION_STATUSES,
+)
+from automation.orchestration.endgame_closure_contract import (
+    ENDGAME_CLOSURE_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.endgame_closure_contract import ENDGAME_CLOSURE_OUTCOMES
+from automation.orchestration.endgame_closure_contract import (
+    ENDGAME_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.endgame_closure_contract import ENDGAME_CLOSURE_STATUSES
+from automation.orchestration.endgame_closure_contract import ENDGAME_CLOSURE_VALIDITIES
+from automation.orchestration.endgame_closure_contract import ENDGAME_REASON_CODES
+from automation.orchestration.endgame_closure_contract import ENDGAME_SOURCE_POSTURES
+from automation.orchestration.endgame_closure_contract import FINAL_CLOSURE_CLASSES
+from automation.orchestration.endgame_closure_contract import TERMINAL_STOP_CLASSES
+from automation.orchestration.endgame_closure_contract import (
+    build_endgame_closure_contract_surface,
+)
+from automation.orchestration.endgame_closure_contract import (
+    build_endgame_closure_run_state_summary_surface,
+)
+from automation.orchestration.loop_hardening_contract import LOOP_HARDENING_CONFIDENCE_LEVELS
+from automation.orchestration.loop_hardening_contract import LOOP_HARDENING_DECISIONS
+from automation.orchestration.loop_hardening_contract import LOOP_HARDENING_REASON_CODES
+from automation.orchestration.loop_hardening_contract import (
+    LOOP_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.loop_hardening_contract import LOOP_HARDENING_SOURCE_POSTURES
+from automation.orchestration.loop_hardening_contract import LOOP_HARDENING_STATUSES
+from automation.orchestration.loop_hardening_contract import LOOP_HARDENING_VALIDITIES
+from automation.orchestration.loop_hardening_contract import NO_PROGRESS_STATUSES
+from automation.orchestration.loop_hardening_contract import OSCILLATION_STATUSES
+from automation.orchestration.loop_hardening_contract import RETRY_FREEZE_STATUSES
+from automation.orchestration.loop_hardening_contract import SAME_FAILURE_BUCKETS
+from automation.orchestration.loop_hardening_contract import SAME_FAILURE_PERSISTENCE_STATUSES
+from automation.orchestration.loop_hardening_contract import (
+    build_loop_hardening_contract_surface,
+)
+from automation.orchestration.loop_hardening_contract import (
+    build_loop_hardening_run_state_summary_surface,
+)
+from automation.orchestration.lane_stabilization_contract import LANE_CONFIDENCE_LEVELS
+from automation.orchestration.lane_stabilization_contract import LANE_DECISIONS
+from automation.orchestration.lane_stabilization_contract import LANE_ESCALATION_POLICY_CLASSES
+from automation.orchestration.lane_stabilization_contract import LANE_PRECONDITIONS_STATUSES
+from automation.orchestration.lane_stabilization_contract import LANE_REASON_CODES
+from automation.orchestration.lane_stabilization_contract import LANE_RETRY_POLICY_CLASSES
+from automation.orchestration.lane_stabilization_contract import (
+    LANE_SOURCE_POSTURES,
+)
+from automation.orchestration.lane_stabilization_contract import LANE_STATUSES
+from automation.orchestration.lane_stabilization_contract import (
+    LANE_STABILIZATION_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.lane_stabilization_contract import LANE_TRANSITION_DECISIONS
+from automation.orchestration.lane_stabilization_contract import LANE_TRANSITION_STATUSES
+from automation.orchestration.lane_stabilization_contract import LANE_VALIDITIES
+from automation.orchestration.lane_stabilization_contract import LANE_VERIFICATION_POLICY_CLASSES
+from automation.orchestration.lane_stabilization_contract import LANE_VOCABULARY
+from automation.orchestration.lane_stabilization_contract import (
+    build_lane_stabilization_contract_surface,
+)
+from automation.orchestration.lane_stabilization_contract import (
+    build_lane_stabilization_run_state_summary_surface,
+)
+from automation.orchestration.observability_rollup import (
+    FAILURE_BUCKET_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.observability_rollup import FAILURE_BUCKET_REASON_CODES
+from automation.orchestration.observability_rollup import (
+    FAILURE_BUCKET_ROLLUP_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.observability_rollup import FAILURE_BUCKET_STATUSES
+from automation.orchestration.observability_rollup import FAILURE_BUCKET_VALIDITIES
+from automation.orchestration.observability_rollup import FAILURE_BUCKET_VOCABULARY
+from automation.orchestration.observability_rollup import (
+    FLEET_RUN_ROLLUP_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.observability_rollup import (
+    OBSERVABILITY_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.observability_rollup import OBSERVABILITY_REASON_CODES
+from automation.orchestration.observability_rollup import (
+    OBSERVABILITY_ROLLUP_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.observability_rollup import (
+    OBSERVABILITY_ROLLUP_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.observability_rollup import OBSERVABILITY_STATUSES
+from automation.orchestration.observability_rollup import OBSERVABILITY_VALIDITIES
+from automation.orchestration.observability_rollup import RUN_TERMINAL_CLASSES
+from automation.orchestration.observability_rollup import (
+    build_failure_bucket_rollup_summary_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_failure_bucket_rollup_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_fleet_run_rollup_summary_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_fleet_run_rollup_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_observability_rollup_contract_summary_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_observability_rollup_contract_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_observability_rollup_run_state_summary_surface,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    BUCKET_SEVERITIES,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    BUCKET_STABILITY_CLASSES,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    BUCKET_TERMINALITY_CLASSES,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    FAILURE_BUCKETING_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    FAILURE_BUCKETING_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    FAILURE_BUCKETING_HARDENING_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    FAILURE_BUCKETING_REASON_CODES,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    FAILURE_BUCKETING_STATUSES,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    FAILURE_BUCKETING_VALIDITIES,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    HARDENED_FAILURE_BUCKET_VOCABULARY,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    build_failure_bucketing_hardening_contract_surface,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    build_failure_bucketing_hardening_run_state_summary_surface,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    build_failure_bucketing_hardening_summary_surface,
+)
+from automation.orchestration.artifact_retention import (
+    ARTIFACT_RETENTION_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.artifact_retention import (
+    ARTIFACT_RETENTION_REASON_CODES,
+)
+from automation.orchestration.artifact_retention import (
+    ARTIFACT_RETENTION_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.artifact_retention import (
+    ARTIFACT_RETENTION_STATUSES,
+)
+from automation.orchestration.artifact_retention import (
+    ARTIFACT_RETENTION_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.artifact_retention import (
+    ARTIFACT_RETENTION_VALIDITIES,
+)
+from automation.orchestration.artifact_retention import (
+    RETENTION_MANIFEST_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.artifact_retention import (
+    RETENTION_POLICY_CLASSES,
+)
+from automation.orchestration.artifact_retention import (
+    RETENTION_COMPACTION_CLASSES,
+)
+from automation.orchestration.artifact_retention import (
+    build_artifact_retention_contract_surface,
+)
+from automation.orchestration.artifact_retention import (
+    build_artifact_retention_run_state_summary_surface,
+)
+from automation.orchestration.artifact_retention import (
+    build_artifact_retention_summary_surface,
+)
+from automation.orchestration.artifact_retention import (
+    build_retention_manifest_summary_surface,
+)
+from automation.orchestration.artifact_retention import (
+    build_retention_manifest_surface,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_BUCKET_RISK_CLASSES,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_LANE_RISK_CLASSES,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_REPEAT_RISK_CLASSES,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_RESTART_DECISIONS,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_SAFETY_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_SAFETY_CONTROL_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_SAFETY_CONTROL_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_SAFETY_DECISIONS,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_SAFETY_REASON_CODES,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_SAFETY_SCOPES,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_SAFETY_STATUSES,
+)
+from automation.orchestration.fleet_safety_control import (
+    FLEET_SAFETY_VALIDITIES,
+)
+from automation.orchestration.fleet_safety_control import (
+    build_fleet_safety_control_contract_surface,
+)
+from automation.orchestration.fleet_safety_control import (
+    build_fleet_safety_control_run_state_summary_surface,
+)
+from automation.orchestration.fleet_safety_control import (
+    build_fleet_safety_control_summary_surface,
+)
+from automation.orchestration.objective_contract import OBJECTIVE_RUN_STATE_SUMMARY_SAFE_FIELDS
+from automation.orchestration.objective_contract import build_objective_contract_surface
+from automation.orchestration.objective_contract import build_objective_run_state_summary_surface
 from automation.orchestration.planned_execution_runner import DryRunCodexExecutionTransport
 from automation.orchestration.planned_execution_runner import PlannedExecutionRunner
 from automation.orchestration.planned_execution_runner import _augment_run_state_with_closed_loop
@@ -22,6 +393,53 @@ from automation.orchestration.planned_execution_runner import _execute_bounded_p
 from automation.orchestration.planned_execution_runner import _execute_bounded_push
 from automation.orchestration.planned_execution_runner import _execute_bounded_rollback
 from automation.orchestration.planned_execution_runner import _with_rollback_aftermath_surface
+from automation.orchestration.repair_suggestion_contract import REPAIR_PRECONDITION_STATUSES
+from automation.orchestration.repair_suggestion_contract import REPAIR_REASON_CODES
+from automation.orchestration.repair_suggestion_contract import REPAIR_SUGGESTION_CLASSES
+from automation.orchestration.repair_suggestion_contract import REPAIR_SUGGESTION_CONFIDENCE_LEVELS
+from automation.orchestration.repair_suggestion_contract import REPAIR_SUGGESTION_DECISIONS
+from automation.orchestration.repair_suggestion_contract import REPAIR_SUGGESTION_PRIORITIES
+from automation.orchestration.repair_suggestion_contract import REPAIR_SUGGESTION_RUN_STATE_SUMMARY_SAFE_FIELDS
+from automation.orchestration.repair_suggestion_contract import REPAIR_SUGGESTION_STATUSES
+from automation.orchestration.repair_suggestion_contract import REPAIR_TARGET_SURFACES
+from automation.orchestration.repair_suggestion_contract import build_repair_suggestion_contract_surface
+from automation.orchestration.repair_suggestion_contract import build_repair_suggestion_run_state_summary_surface
+from automation.orchestration.repair_approval_binding import (
+    REPAIR_APPROVAL_BINDING_COMPATIBILITY_STATUSES,
+)
+from automation.orchestration.repair_approval_binding import REPAIR_APPROVAL_BINDING_DECISIONS
+from automation.orchestration.repair_approval_binding import REPAIR_APPROVAL_BINDING_REASON_CODES
+from automation.orchestration.repair_approval_binding import (
+    REPAIR_APPROVAL_BINDING_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.repair_approval_binding import REPAIR_APPROVAL_BINDING_SCOPES
+from automation.orchestration.repair_approval_binding import REPAIR_APPROVAL_BINDING_SOURCE_STATUSES
+from automation.orchestration.repair_approval_binding import REPAIR_APPROVAL_BINDING_STATUSES
+from automation.orchestration.repair_approval_binding import REPAIR_APPROVAL_BINDING_VALIDITIES
+from automation.orchestration.repair_approval_binding import (
+    build_repair_approval_binding_run_state_summary_surface,
+)
+from automation.orchestration.repair_approval_binding import build_repair_approval_binding_surface
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_CANDIDATE_ACTIONS
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_CLASSES
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_CONFIDENCE_LEVELS
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_DECISIONS
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_PRECONDITION_STATUSES
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_PRIORITIES
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_REASON_CODES
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_SOURCE_STATUSES
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_STATUSES
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_TARGET_SURFACES
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_TRANSPORT_RUN_STATE_SUMMARY_SAFE_FIELDS
+from automation.orchestration.repair_plan_transport import build_repair_plan_transport_run_state_summary_surface
+from automation.orchestration.repair_plan_transport import build_repair_plan_transport_surface
+from automation.orchestration.reconcile_contract import RECONCILE_ALIGNMENT_STATUSES
+from automation.orchestration.reconcile_contract import RECONCILE_DECISIONS
+from automation.orchestration.reconcile_contract import RECONCILE_RUN_STATE_SUMMARY_SAFE_FIELDS
+from automation.orchestration.reconcile_contract import RECONCILE_STATUSES
+from automation.orchestration.reconcile_contract import RECONCILE_TRANSPORT_STATUSES
+from automation.orchestration.reconcile_contract import build_reconcile_contract_surface
+from automation.orchestration.reconcile_contract import build_reconcile_run_state_summary_surface
 from automation.orchestration.run_state_summary_contract import build_manifest_run_state_summary_contract_surface
 from automation.orchestration.run_state_summary_contract import is_manifest_summary_safe_field
 from automation.orchestration.run_state_summary_contract import select_manifest_run_state_summary_compact
@@ -603,6 +1021,334 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
             "merge_sha": merge_sha,
         }
 
+    def _build_retry_loop_payload(
+        self,
+        *,
+        verification: dict[str, object] | None = None,
+        execution_result: dict[str, object] | None = None,
+        run_state: dict[str, object] | None = None,
+        repair_suggestion: dict[str, object] | None = None,
+        repair_plan: dict[str, object] | None = None,
+        artifacts: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return build_retry_reentry_loop_contract_surface(
+            run_id="job-retry-loop",
+            completion_contract_payload={"completion_status": "not_done"},
+            approval_transport_payload={"approval_status": "approved"},
+            reconcile_contract_payload={"reconcile_status": "aligned"},
+            repair_suggestion_contract_payload=repair_suggestion or {},
+            repair_plan_transport_payload=repair_plan or {},
+            repair_approval_binding_payload={"repair_approval_binding_status": "bound"},
+            execution_authorization_gate_payload={"execution_authorization_status": "eligible"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "ready", "bounded_execution_decision": "attempt_bounded_execution"},
+            execution_result_contract_payload=execution_result or {},
+            verification_closure_contract_payload=verification or {},
+            run_state_payload=run_state or {},
+            artifact_presence=artifacts or {"verification_closure_contract.json": True, "run_state.json": True},
+        )
+
+    def _build_endgame_payload(
+        self,
+        *,
+        verification: dict[str, object] | None = None,
+        retry_loop: dict[str, object] | None = None,
+        execution_result: dict[str, object] | None = None,
+        run_state: dict[str, object] | None = None,
+        artifacts: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return build_endgame_closure_contract_surface(
+            run_id="job-endgame",
+            completion_contract_payload={"objective_id": "objective-endgame", "completion_status": "not_done"},
+            approval_transport_payload={"approval_status": "approved"},
+            reconcile_contract_payload={"reconcile_status": "aligned"},
+            execution_authorization_gate_payload={"execution_authorization_status": "eligible"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "ready"},
+            execution_result_contract_payload=execution_result or {},
+            verification_closure_contract_payload=verification or {},
+            retry_reentry_loop_contract_payload=retry_loop or {},
+            run_state_payload=run_state or {},
+            artifact_presence=artifacts
+            or {
+                "verification_closure_contract.json": True,
+                "retry_reentry_loop_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+    def _build_loop_hardening_payload(
+        self,
+        *,
+        completion: dict[str, object] | None = None,
+        approval: dict[str, object] | None = None,
+        reconcile: dict[str, object] | None = None,
+        execution_result: dict[str, object] | None = None,
+        verification: dict[str, object] | None = None,
+        retry_loop: dict[str, object] | None = None,
+        endgame: dict[str, object] | None = None,
+        run_state: dict[str, object] | None = None,
+        artifacts: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return build_loop_hardening_contract_surface(
+            run_id="job-loop-hardening",
+            completion_contract_payload=completion or {"completion_status": "not_done"},
+            approval_transport_payload=approval or {"approval_status": "approved"},
+            reconcile_contract_payload=reconcile or {"reconcile_status": "aligned"},
+            execution_result_contract_payload=execution_result or {},
+            verification_closure_contract_payload=verification or {},
+            retry_reentry_loop_contract_payload=retry_loop or {},
+            endgame_closure_contract_payload=endgame or {},
+            run_state_payload=run_state or {},
+            artifact_presence=artifacts
+            or {
+                "retry_reentry_loop_contract.json": True,
+                "endgame_closure_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+    def _build_lane_stabilization_payload(
+        self,
+        *,
+        objective: dict[str, object] | None = None,
+        completion: dict[str, object] | None = None,
+        approval: dict[str, object] | None = None,
+        reconcile: dict[str, object] | None = None,
+        execution_authorization: dict[str, object] | None = None,
+        bounded_execution: dict[str, object] | None = None,
+        execution_result: dict[str, object] | None = None,
+        verification: dict[str, object] | None = None,
+        retry_loop: dict[str, object] | None = None,
+        endgame: dict[str, object] | None = None,
+        loop_hardening: dict[str, object] | None = None,
+        run_state: dict[str, object] | None = None,
+        artifacts: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return build_lane_stabilization_contract_surface(
+            run_id="job-lane-stabilization",
+            objective_contract_payload=objective or {"objective_id": "objective-lane"},
+            completion_contract_payload=completion or {"completion_status": "not_done"},
+            approval_transport_payload=approval or {"approval_status": "approved"},
+            reconcile_contract_payload=reconcile or {"reconcile_status": "aligned"},
+            execution_authorization_gate_payload=execution_authorization
+            or {"execution_authorization_status": "pending"},
+            bounded_execution_bridge_payload=bounded_execution
+            or {"bounded_execution_status": "deferred"},
+            execution_result_contract_payload=execution_result or {},
+            verification_closure_contract_payload=verification or {},
+            retry_reentry_loop_contract_payload=retry_loop or {},
+            endgame_closure_contract_payload=endgame or {},
+            loop_hardening_contract_payload=loop_hardening or {},
+            run_state_payload=run_state or {},
+            artifact_presence=artifacts
+            or {
+                "retry_reentry_loop_contract.json": True,
+                "loop_hardening_contract.json": True,
+                "endgame_closure_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+    def _build_observability_payload(
+        self,
+        *,
+        objective: dict[str, object] | None = None,
+        execution_result: dict[str, object] | None = None,
+        verification: dict[str, object] | None = None,
+        retry_loop: dict[str, object] | None = None,
+        endgame: dict[str, object] | None = None,
+        loop_hardening: dict[str, object] | None = None,
+        lane: dict[str, object] | None = None,
+        run_state: dict[str, object] | None = None,
+        artifact_presence: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        default_artifact_presence = {
+            "objective_contract.json": True,
+            "completion_contract.json": True,
+            "approval_transport.json": True,
+            "reconcile_contract.json": True,
+            "repair_suggestion_contract.json": True,
+            "repair_plan_transport.json": True,
+            "repair_approval_binding.json": True,
+            "execution_authorization_gate.json": True,
+            "bounded_execution_bridge.json": True,
+            "execution_result_contract.json": True,
+            "verification_closure_contract.json": True,
+            "retry_reentry_loop_contract.json": True,
+            "endgame_closure_contract.json": True,
+            "loop_hardening_contract.json": True,
+            "lane_stabilization_contract.json": True,
+            "contract_artifact_index.json": True,
+            "run_state.json": True,
+        }
+        return build_observability_rollup_contract_surface(
+            run_id="job-observability",
+            objective_contract_payload=objective or {"objective_id": "objective-observability"},
+            execution_result_contract_payload=execution_result or {},
+            verification_closure_contract_payload=verification or {},
+            retry_reentry_loop_contract_payload=retry_loop or {},
+            endgame_closure_contract_payload=endgame or {},
+            loop_hardening_contract_payload=loop_hardening or {},
+            lane_stabilization_contract_payload=lane or {},
+            run_state_payload=run_state or {"state": "paused"},
+            artifact_presence=artifact_presence or default_artifact_presence,
+            contract_artifact_index_payload={
+                "objective_contract": {"path": "objective_contract.json"}
+            },
+        )
+
+    def _build_failure_bucketing_hardening_payload(
+        self,
+        *,
+        objective: dict[str, object] | None = None,
+        execution_result: dict[str, object] | None = None,
+        verification: dict[str, object] | None = None,
+        retry_loop: dict[str, object] | None = None,
+        endgame: dict[str, object] | None = None,
+        loop_hardening: dict[str, object] | None = None,
+        lane: dict[str, object] | None = None,
+        observability: dict[str, object] | None = None,
+        failure_bucket_rollup: dict[str, object] | None = None,
+        bounded_execution: dict[str, object] | None = None,
+        execution_authorization: dict[str, object] | None = None,
+        run_state: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return build_failure_bucketing_hardening_contract_surface(
+            run_id="job-failure-bucketing-hardening",
+            objective_contract_payload=objective or {"objective_id": "objective-failure-bucketing"},
+            execution_result_contract_payload=execution_result or {},
+            verification_closure_contract_payload=verification or {},
+            retry_reentry_loop_contract_payload=retry_loop or {},
+            endgame_closure_contract_payload=endgame or {},
+            loop_hardening_contract_payload=loop_hardening or {},
+            lane_stabilization_contract_payload=lane or {},
+            observability_rollup_payload=observability or {},
+            failure_bucket_rollup_payload=failure_bucket_rollup or {},
+            bounded_execution_bridge_payload=bounded_execution or {},
+            execution_authorization_gate_payload=execution_authorization or {},
+            run_state_payload=run_state or {},
+        )
+
+    def _build_retention_manifest_payload(
+        self,
+        *,
+        paths_by_role: dict[str, object] | None = None,
+        summaries_by_role: dict[str, object] | None = None,
+        artifact_index: dict[str, object] | None = None,
+        manifest: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return build_retention_manifest_surface(
+            run_id="job-retention-manifest",
+            objective_contract_payload={"objective_id": "objective-retention"},
+            paths_by_role=paths_by_role
+            or {
+                "objective_contract": "/tmp/objective_contract.json",
+                "failure_bucket_rollup": "/tmp/failure_bucket_rollup.json",
+                "failure_bucketing_hardening_contract": "/tmp/failure_bucketing_hardening_contract.json",
+            },
+            summaries_by_role=summaries_by_role
+            or {
+                "objective_contract": {"objective_contract_present": True},
+                "failure_bucket_rollup": {"failure_bucket_status": "classified"},
+                "failure_bucketing_hardening_contract": {
+                    "failure_bucketing_status": "classified"
+                },
+            },
+            contract_artifact_index_payload=artifact_index
+            or {
+                "objective_contract": {"path": "/tmp/objective_contract.json"},
+                "failure_bucket_rollup": {"path": "/tmp/failure_bucket_rollup.json"},
+                "failure_bucketing_hardening_contract": {
+                    "path": "/tmp/failure_bucketing_hardening_contract.json"
+                },
+            },
+            manifest_payload=manifest
+            or {
+                "run_state_summary": {"state": "paused"},
+                "run_state_summary_compact": {"state": "paused"},
+            },
+        )
+
+    def _build_artifact_retention_payload(
+        self,
+        *,
+        retention_manifest: dict[str, object] | None = None,
+        artifact_index: dict[str, object] | None = None,
+        observability: dict[str, object] | None = None,
+        failure_hardening: dict[str, object] | None = None,
+        endgame: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        manifest_payload = retention_manifest or self._build_retention_manifest_payload()
+        return build_artifact_retention_contract_surface(
+            run_id="job-artifact-retention",
+            objective_contract_payload={"objective_id": "objective-retention"},
+            retention_manifest_payload=manifest_payload,
+            contract_artifact_index_payload=artifact_index
+            or {
+                role: {"path": path}
+                for role, path in manifest_payload.get("path_refs", {}).items()
+            },
+            observability_rollup_payload=observability or {"observability_status": "ready"},
+            failure_bucketing_hardening_payload=failure_hardening
+            or {"failure_bucketing_status": "classified"},
+            endgame_closure_contract_payload=endgame
+            or {"final_closure_class": "terminal_non_success"},
+        )
+
+    def _build_fleet_safety_payload(
+        self,
+        *,
+        objective: dict[str, object] | None = None,
+        observability: dict[str, object] | None = None,
+        hard_bucket: dict[str, object] | None = None,
+        lane: dict[str, object] | None = None,
+        loop_hardening: dict[str, object] | None = None,
+        endgame: dict[str, object] | None = None,
+        retry_loop: dict[str, object] | None = None,
+        retention: dict[str, object] | None = None,
+        retention_manifest: dict[str, object] | None = None,
+        run_state: dict[str, object] | None = None,
+        artifact_index: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return build_fleet_safety_control_contract_surface(
+            run_id="job-fleet-safety",
+            objective_contract_payload=objective or {"objective_id": "objective-fleet-safety"},
+            observability_rollup_payload=observability
+            or {"observability_status": "ready"},
+            failure_bucketing_hardening_payload=hard_bucket
+            or {
+                "primary_failure_bucket": "execution_failure",
+                "bucket_severity": "low",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "non_terminal",
+            },
+            lane_stabilization_contract_payload=lane
+            or {
+                "lane_status": "lane_valid",
+                "current_lane": "closure_followup",
+                "lane_execution_allowed": True,
+                "lane_mismatch_detected": False,
+                "lane_transition_blocked": False,
+            },
+            loop_hardening_contract_payload=loop_hardening
+            or {"loop_hardening_status": "stable"},
+            endgame_closure_contract_payload=endgame
+            or {"final_closure_class": "completed_but_not_closed"},
+            retry_reentry_loop_contract_payload=retry_loop
+            or {"retry_loop_status": "hold", "same_failure_count": 0},
+            artifact_retention_contract_payload=retention
+            or {
+                "artifact_retention_status": "ready",
+                "artifact_retention_validity": "valid",
+                "retention_reference_consistent": True,
+                "retention_manifest_compact": True,
+                "retention_alias_deduplicated": False,
+            },
+            retention_manifest_payload=retention_manifest
+            or {"alias_deduplicated": False},
+            run_state_payload=run_state or {},
+            contract_artifact_index_payload=artifact_index or {},
+        )
+
     def test_deterministic_processing_order_for_multiple_pr_slices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -994,6 +1740,218 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
                     "policy_disallowed_actions",
                     "policy_manual_actions",
                     "policy_resumable_reason",
+                    "objective_contract_present",
+                    "objective_id",
+                    "objective_summary",
+                    "objective_type",
+                    "requested_outcome",
+                    "objective_acceptance_status",
+                    "objective_required_artifacts_status",
+                    "objective_scope_status",
+                    "objective_contract_status",
+                    "objective_contract_blocked_reason",
+                    "completion_contract_present",
+                    "completion_status",
+                    "done_status",
+                    "safe_closure_status",
+                    "completion_evidence_status",
+                    "completion_blocked_reason",
+                    "completion_manual_required",
+                    "completion_replan_required",
+                    "completion_lifecycle_alignment_status",
+                    "approval_transport_present",
+                    "approval_status",
+                    "approval_decision",
+                    "approval_scope",
+                    "approved_action",
+                    "approval_required",
+                    "approval_transport_status",
+                    "approval_compatibility_status",
+                    "approval_blocked_reason",
+                    "reconcile_contract_present",
+                    "reconcile_status",
+                    "reconcile_decision",
+                    "reconcile_alignment_status",
+                    "reconcile_primary_mismatch",
+                    "reconcile_blocked_reason",
+                    "reconcile_waiting_on_truth",
+                    "reconcile_manual_required",
+                    "reconcile_replan_required",
+                    "repair_suggestion_contract_present",
+                    "repair_suggestion_status",
+                    "repair_suggestion_decision",
+                    "repair_suggestion_class",
+                    "repair_suggestion_priority",
+                    "repair_suggestion_confidence",
+                    "repair_primary_reason",
+                    "repair_manual_required",
+                    "repair_replan_required",
+                    "repair_truth_gathering_required",
+                    "repair_plan_transport_present",
+                    "repair_plan_status",
+                    "repair_plan_decision",
+                    "repair_plan_class",
+                    "repair_plan_priority",
+                    "repair_plan_confidence",
+                    "repair_plan_target_surface",
+                    "repair_plan_candidate_action",
+                    "repair_plan_primary_reason",
+                    "repair_plan_manual_required",
+                    "repair_plan_replan_required",
+                    "repair_plan_truth_gathering_required",
+                    "repair_approval_binding_present",
+                    "repair_approval_binding_status",
+                    "repair_approval_binding_decision",
+                    "repair_approval_binding_scope",
+                    "repair_approval_binding_validity",
+                    "repair_approval_binding_compatibility_status",
+                    "repair_approval_binding_primary_reason",
+                    "repair_approval_binding_manual_required",
+                    "repair_approval_binding_replan_required",
+                    "repair_approval_binding_truth_gathering_required",
+                    "execution_authorization_gate_present",
+                    "execution_authorization_status",
+                    "execution_authorization_decision",
+                    "execution_authorization_scope",
+                    "execution_authorization_validity",
+                    "execution_authorization_confidence",
+                    "execution_authorization_primary_reason",
+                    "execution_authorization_manual_required",
+                    "execution_authorization_replan_required",
+                    "execution_authorization_truth_gathering_required",
+                    "bounded_execution_bridge_present",
+                    "bounded_execution_status",
+                    "bounded_execution_decision",
+                    "bounded_execution_scope",
+                    "bounded_execution_validity",
+                    "bounded_execution_confidence",
+                    "bounded_execution_primary_reason",
+                    "bounded_execution_manual_required",
+                    "bounded_execution_replan_required",
+                    "bounded_execution_truth_gathering_required",
+                    "execution_result_contract_present",
+                    "execution_result_status",
+                    "execution_result_outcome",
+                    "execution_result_validity",
+                    "execution_result_confidence",
+                    "execution_result_primary_reason",
+                    "execution_result_attempted",
+                    "execution_result_receipt_present",
+                    "execution_result_output_present",
+                    "execution_result_manual_followup_required",
+                    "verification_closure_contract_present",
+                    "verification_status",
+                    "verification_outcome",
+                    "verification_validity",
+                    "verification_confidence",
+                    "verification_primary_reason",
+                    "objective_satisfaction_status",
+                    "completion_satisfaction_status",
+                    "closure_status",
+                    "closure_decision",
+                    "objective_satisfied",
+                    "completion_satisfied",
+                    "safely_closable",
+                    "manual_closure_required",
+                    "closure_followup_required",
+                    "external_truth_required",
+                    "retry_reentry_loop_contract_present",
+                    "retry_loop_status",
+                    "retry_loop_decision",
+                    "retry_loop_validity",
+                    "retry_loop_confidence",
+                    "loop_primary_reason",
+                    "attempt_count",
+                    "max_attempt_count",
+                    "reentry_count",
+                    "max_reentry_count",
+                    "same_failure_count",
+                    "max_same_failure_count",
+                    "retry_allowed",
+                    "reentry_allowed",
+                    "retry_exhausted",
+                    "reentry_exhausted",
+                    "same_failure_exhausted",
+                    "terminal_stop_required",
+                    "manual_escalation_required",
+                    "replan_required",
+                    "recollect_required",
+                    "same_lane_retry_allowed",
+                    "repair_retry_allowed",
+                    "no_progress_stop_required",
+                    "endgame_closure_contract_present",
+                    "endgame_closure_status",
+                    "endgame_closure_outcome",
+                    "endgame_closure_validity",
+                    "endgame_closure_confidence",
+                    "final_closure_class",
+                    "terminal_stop_class",
+                    "closure_resolution_status",
+                    "endgame_primary_reason",
+                    "safely_closed",
+                    "completed_but_not_closed",
+                    "rollback_complete_but_not_closed",
+                    "manual_closure_only",
+                    "external_truth_pending",
+                    "closure_unresolved",
+                    "terminal_success",
+                    "terminal_non_success",
+                    "operator_followup_required",
+                    "further_retry_allowed",
+                    "further_reentry_allowed",
+                    "loop_hardening_contract_present",
+                    "loop_hardening_status",
+                    "loop_hardening_decision",
+                    "loop_hardening_validity",
+                    "loop_hardening_confidence",
+                    "loop_hardening_primary_reason",
+                    "same_failure_signature",
+                    "same_failure_bucket",
+                    "same_failure_persistence",
+                    "no_progress_status",
+                    "oscillation_status",
+                    "retry_freeze_status",
+                    "same_failure_detected",
+                    "same_failure_stop_required",
+                    "no_progress_detected",
+                    "oscillation_detected",
+                    "unstable_loop_detected",
+                    "retry_freeze_required",
+                    "cool_down_required",
+                    "forced_manual_escalation_required",
+                    "hardening_stop_required",
+                    "lane_stabilization_contract_present",
+                    "lane_status",
+                    "lane_decision",
+                    "lane_validity",
+                    "lane_confidence",
+                    "current_lane",
+                    "target_lane",
+                    "lane_transition_status",
+                    "lane_transition_decision",
+                    "lane_preconditions_status",
+                    "lane_retry_policy_class",
+                    "lane_verification_policy_class",
+                    "lane_escalation_policy_class",
+                    "lane_attempt_budget",
+                    "lane_reentry_budget",
+                    "lane_transition_count",
+                    "max_lane_transition_count",
+                    "lane_primary_reason",
+                    "lane_valid",
+                    "lane_mismatch_detected",
+                    "lane_transition_required",
+                    "lane_transition_allowed",
+                    "lane_transition_blocked",
+                    "lane_stop_required",
+                    "lane_manual_review_required",
+                    "lane_replan_required",
+                    "lane_truth_gathering_required",
+                    "lane_execution_allowed",
+                    "observability_rollup_present",
+                    "failure_bucketing_hardening_present",
+                    "artifact_retention_present",
+                    "fleet_safety_control_present",
                     "operator_posture_summary",
                     "operator_primary_blocker_class",
                     "operator_primary_action",
@@ -1077,6 +2035,51 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertIn("run_state_summary", manifest)
         self.assertIn("run_state_summary_compact", manifest)
         self.assertIn("run_state_summary_contract", manifest)
+        self.assertIn("objective_contract_summary", manifest)
+        self.assertIn("objective_contract_path", manifest)
+        self.assertIn("completion_contract_summary", manifest)
+        self.assertIn("completion_contract_path", manifest)
+        self.assertIn("approval_transport_summary", manifest)
+        self.assertIn("approval_transport_path", manifest)
+        self.assertIn("reconcile_contract_summary", manifest)
+        self.assertIn("reconcile_contract_path", manifest)
+        self.assertIn("repair_suggestion_contract_summary", manifest)
+        self.assertIn("repair_suggestion_contract_path", manifest)
+        self.assertIn("repair_plan_transport_summary", manifest)
+        self.assertIn("repair_plan_transport_path", manifest)
+        self.assertIn("repair_approval_binding_summary", manifest)
+        self.assertIn("repair_approval_binding_path", manifest)
+        self.assertIn("execution_authorization_gate_summary", manifest)
+        self.assertIn("execution_authorization_gate_path", manifest)
+        self.assertIn("bounded_execution_bridge_summary", manifest)
+        self.assertIn("bounded_execution_bridge_path", manifest)
+        self.assertIn("execution_result_contract_summary", manifest)
+        self.assertIn("execution_result_contract_path", manifest)
+        self.assertIn("verification_closure_contract_summary", manifest)
+        self.assertIn("verification_closure_contract_path", manifest)
+        self.assertIn("retry_reentry_loop_contract_summary", manifest)
+        self.assertIn("retry_reentry_loop_contract_path", manifest)
+        self.assertIn("endgame_closure_contract_summary", manifest)
+        self.assertIn("endgame_closure_contract_path", manifest)
+        self.assertIn("loop_hardening_contract_summary", manifest)
+        self.assertIn("loop_hardening_contract_path", manifest)
+        self.assertIn("lane_stabilization_contract_summary", manifest)
+        self.assertIn("lane_stabilization_contract_path", manifest)
+        self.assertIn("observability_rollup_contract_summary", manifest)
+        self.assertIn("observability_rollup_contract_path", manifest)
+        self.assertIn("failure_bucket_rollup_summary", manifest)
+        self.assertIn("failure_bucket_rollup_path", manifest)
+        self.assertIn("fleet_run_rollup_summary", manifest)
+        self.assertIn("fleet_run_rollup_path", manifest)
+        self.assertIn("failure_bucketing_hardening_contract_summary", manifest)
+        self.assertIn("failure_bucketing_hardening_contract_path", manifest)
+        self.assertIn("retention_manifest_summary", manifest)
+        self.assertIn("retention_manifest_path", manifest)
+        self.assertIn("artifact_retention_contract_summary", manifest)
+        self.assertIn("artifact_retention_contract_path", manifest)
+        self.assertIn("fleet_safety_control_contract_summary", manifest)
+        self.assertIn("fleet_safety_control_contract_path", manifest)
+        self.assertIn("contract_artifact_index", manifest)
         self.assertIn("manifest_path", manifest)
         self.assertIn("next_action_path", manifest)
         self.assertIn("action_handoff_path", manifest)
@@ -1092,106 +2095,37 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
             "signal_recollect",
         )
         self.assertEqual(manifest["progression_summary"]["final_unit_state"], "reviewed")
-        self.assertEqual(manifest["run_state_summary"]["state"], "paused")
-        self.assertIn("orchestration_state", manifest["run_state_summary"])
-        self.assertIn("continue_allowed", manifest["run_state_summary"])
-        self.assertIn("run_paused", manifest["run_state_summary"])
-        self.assertIn("manual_intervention_required", manifest["run_state_summary"])
-        self.assertIn("rollback_evaluation_pending", manifest["run_state_summary"])
-        self.assertIn("global_stop_recommended", manifest["run_state_summary"])
-        self.assertIn("next_run_action", manifest["run_state_summary"])
-        self.assertIn("loop_state", manifest["run_state_summary"])
-        self.assertIn("next_safe_action", manifest["run_state_summary"])
-        self.assertIn("loop_blocked_reason", manifest["run_state_summary"])
-        self.assertIn("loop_blocked_reasons", manifest["run_state_summary"])
-        self.assertIn("resumable", manifest["run_state_summary"])
-        self.assertIn("terminal", manifest["run_state_summary"])
-        self.assertIn("loop_manual_intervention_required", manifest["run_state_summary"])
-        self.assertIn("loop_replan_required", manifest["run_state_summary"])
-        self.assertIn("rollback_completed", manifest["run_state_summary"])
-        self.assertIn("delivery_completed", manifest["run_state_summary"])
-        self.assertIn("loop_allowed_actions", manifest["run_state_summary"])
-        self.assertIn("readiness_summary", manifest["run_state_summary"])
-        self.assertIn("readiness_blocked", manifest["run_state_summary"])
-        self.assertIn("readiness_manual_required", manifest["run_state_summary"])
-        self.assertIn("readiness_awaiting_prerequisites", manifest["run_state_summary"])
-        self.assertIn("commit_execution_summary", manifest["run_state_summary"])
-        self.assertIn("commit_execution_executed", manifest["run_state_summary"])
-        self.assertIn("commit_execution_pending", manifest["run_state_summary"])
-        self.assertIn("commit_execution_failed", manifest["run_state_summary"])
-        self.assertIn("commit_execution_manual_intervention_required", manifest["run_state_summary"])
-        self.assertIn("push_execution_summary", manifest["run_state_summary"])
-        self.assertIn("pr_execution_summary", manifest["run_state_summary"])
-        self.assertIn("merge_execution_summary", manifest["run_state_summary"])
-        self.assertIn("push_execution_succeeded", manifest["run_state_summary"])
-        self.assertIn("pr_execution_succeeded", manifest["run_state_summary"])
-        self.assertIn("merge_execution_succeeded", manifest["run_state_summary"])
-        self.assertIn("push_execution_pending", manifest["run_state_summary"])
-        self.assertIn("pr_execution_pending", manifest["run_state_summary"])
-        self.assertIn("merge_execution_pending", manifest["run_state_summary"])
-        self.assertIn("push_execution_failed", manifest["run_state_summary"])
-        self.assertIn("pr_execution_failed", manifest["run_state_summary"])
-        self.assertIn("merge_execution_failed", manifest["run_state_summary"])
-        self.assertIn("delivery_execution_manual_intervention_required", manifest["run_state_summary"])
-        self.assertIn("rollback_execution_summary", manifest["run_state_summary"])
-        self.assertIn("rollback_execution_attempted", manifest["run_state_summary"])
-        self.assertIn("rollback_execution_succeeded", manifest["run_state_summary"])
-        self.assertIn("rollback_execution_pending", manifest["run_state_summary"])
-        self.assertIn("rollback_execution_failed", manifest["run_state_summary"])
-        self.assertIn("rollback_execution_manual_intervention_required", manifest["run_state_summary"])
-        self.assertIn("rollback_replan_required", manifest["run_state_summary"])
-        self.assertIn("rollback_automatic_continuation_blocked", manifest["run_state_summary"])
-        self.assertIn("rollback_aftermath_summary", manifest["run_state_summary"])
-        self.assertIn("rollback_aftermath_status", manifest["run_state_summary"])
-        self.assertIn("rollback_aftermath_blocked", manifest["run_state_summary"])
-        self.assertIn("rollback_aftermath_manual_required", manifest["run_state_summary"])
-        self.assertIn("rollback_aftermath_missing_or_ambiguous", manifest["run_state_summary"])
-        self.assertIn("rollback_aftermath_blocked_reason", manifest["run_state_summary"])
-        self.assertIn("rollback_aftermath_blocked_reasons", manifest["run_state_summary"])
-        self.assertIn("rollback_remote_followup_required", manifest["run_state_summary"])
-        self.assertIn("rollback_manual_followup_required", manifest["run_state_summary"])
-        self.assertIn("rollback_validation_failed", manifest["run_state_summary"])
-        self.assertIn("remote_github_summary", manifest["run_state_summary"])
-        self.assertIn("remote_github_blocked", manifest["run_state_summary"])
-        self.assertIn("remote_github_manual_required", manifest["run_state_summary"])
-        self.assertIn("remote_github_missing_or_ambiguous", manifest["run_state_summary"])
-        self.assertIn("remote_github_blocked_reason", manifest["run_state_summary"])
-        self.assertIn("remote_github_blocked_reasons", manifest["run_state_summary"])
-        self.assertIn("policy_status", manifest["run_state_summary"])
-        self.assertIn("policy_blocked", manifest["run_state_summary"])
-        self.assertIn("policy_manual_required", manifest["run_state_summary"])
-        self.assertIn("policy_replan_required", manifest["run_state_summary"])
-        self.assertIn("policy_resume_allowed", manifest["run_state_summary"])
-        self.assertIn("policy_terminal", manifest["run_state_summary"])
-        self.assertIn("policy_blocked_reason", manifest["run_state_summary"])
-        self.assertIn("policy_blocked_reasons", manifest["run_state_summary"])
-        self.assertIn("policy_primary_blocker_class", manifest["run_state_summary"])
-        self.assertIn("policy_primary_action", manifest["run_state_summary"])
-        self.assertIn("policy_allowed_actions", manifest["run_state_summary"])
-        self.assertIn("policy_disallowed_actions", manifest["run_state_summary"])
-        self.assertIn("policy_manual_actions", manifest["run_state_summary"])
-        self.assertIn("policy_resumable_reason", manifest["run_state_summary"])
-        self.assertIn("operator_posture_summary", manifest["run_state_summary"])
-        self.assertIn("operator_primary_blocker_class", manifest["run_state_summary"])
-        self.assertIn("operator_primary_action", manifest["run_state_summary"])
-        self.assertIn("operator_action_scope", manifest["run_state_summary"])
-        self.assertIn("operator_resume_status", manifest["run_state_summary"])
-        self.assertIn("operator_next_safe_posture", manifest["run_state_summary"])
-        self.assertIn("lifecycle_closure_status", manifest["run_state_summary"])
-        self.assertIn("lifecycle_safely_closed", manifest["run_state_summary"])
-        self.assertIn("lifecycle_terminal", manifest["run_state_summary"])
-        self.assertIn("lifecycle_resumable", manifest["run_state_summary"])
-        self.assertIn("lifecycle_manual_required", manifest["run_state_summary"])
-        self.assertIn("lifecycle_replan_required", manifest["run_state_summary"])
-        self.assertIn("lifecycle_execution_complete_not_closed", manifest["run_state_summary"])
-        self.assertIn("lifecycle_rollback_complete_not_closed", manifest["run_state_summary"])
-        self.assertIn("lifecycle_blocked_reason", manifest["run_state_summary"])
-        self.assertIn("lifecycle_blocked_reasons", manifest["run_state_summary"])
-        self.assertIn("lifecycle_primary_closure_issue", manifest["run_state_summary"])
-        self.assertIn("lifecycle_stop_class", manifest["run_state_summary"])
+        self.assertEqual(manifest["run_state_summary_compact"]["state"], "paused")
+        self.assertEqual(
+            manifest["run_state_summary"],
+            manifest["run_state_summary_compact"],
+        )
+        self.assertNotIn("loop_blocked_reasons", manifest["run_state_summary"])
+        self.assertNotIn("policy_blocked_reasons", manifest["run_state_summary"])
+        self.assertNotIn("lifecycle_blocked_reasons", manifest["run_state_summary"])
+        self.assertNotIn("reconcile_blocked_reasons", manifest["run_state_summary"])
         self.assertNotIn("operator_guidance_summary", manifest["run_state_summary"])
         self.assertNotIn("operator_safe_actions_summary", manifest["run_state_summary"])
         self.assertNotIn("operator_unsafe_actions_summary", manifest["run_state_summary"])
+        self.assertIn("loop_hardening_contract_present", manifest["run_state_summary_compact"])
+        self.assertIn("loop_hardening_status", manifest["run_state_summary_compact"])
+        self.assertIn("loop_hardening_decision", manifest["run_state_summary_compact"])
+        self.assertIn("loop_hardening_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("lane_stabilization_contract_present", manifest["run_state_summary_compact"])
+        self.assertIn("lane_status", manifest["run_state_summary_compact"])
+        self.assertIn("lane_decision", manifest["run_state_summary_compact"])
+        self.assertIn("lane_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("observability_rollup_present", manifest["run_state_summary_compact"])
+        self.assertIn("failure_bucketing_hardening_present", manifest["run_state_summary_compact"])
+        self.assertIn("artifact_retention_present", manifest["run_state_summary_compact"])
+        self.assertIn("fleet_safety_control_present", manifest["run_state_summary_compact"])
+        self.assertNotIn("observability_status", manifest["run_state_summary_compact"])
+        self.assertNotIn("primary_failure_bucket", manifest["run_state_summary_compact"])
+        self.assertNotIn("fleet_terminal_class", manifest["run_state_summary_compact"])
+        self.assertNotIn("bucket_family", manifest["run_state_summary_compact"])
+        self.assertNotIn("bucket_severity", manifest["run_state_summary_compact"])
+        self.assertNotIn("artifact_retention_status", manifest["run_state_summary_compact"])
+        self.assertNotIn("fleet_safety_status", manifest["run_state_summary_compact"])
         self.assertIn("lifecycle_closure_status", manifest["run_state_summary_compact"])
         self.assertIn("lifecycle_safely_closed", manifest["run_state_summary_compact"])
         self.assertIn("lifecycle_terminal", manifest["run_state_summary_compact"])
@@ -1209,12 +2143,206 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertIn("operator_primary_action", manifest["run_state_summary_compact"])
         self.assertIn("operator_resume_status", manifest["run_state_summary_compact"])
         self.assertIn("operator_next_safe_posture", manifest["run_state_summary_compact"])
+        self.assertIn("objective_contract_present", manifest["run_state_summary_compact"])
+        self.assertIn("objective_id", manifest["run_state_summary_compact"])
+        self.assertIn("objective_summary", manifest["run_state_summary_compact"])
+        self.assertIn("objective_type", manifest["run_state_summary_compact"])
+        self.assertIn("requested_outcome", manifest["run_state_summary_compact"])
+        self.assertIn("objective_acceptance_status", manifest["run_state_summary_compact"])
+        self.assertIn("objective_required_artifacts_status", manifest["run_state_summary_compact"])
+        self.assertIn("objective_scope_status", manifest["run_state_summary_compact"])
+        self.assertIn("objective_contract_status", manifest["run_state_summary_compact"])
+        self.assertIn("objective_contract_blocked_reason", manifest["run_state_summary_compact"])
+        self.assertIn("completion_contract_present", manifest["run_state_summary_compact"])
+        self.assertIn("completion_status", manifest["run_state_summary_compact"])
+        self.assertIn("done_status", manifest["run_state_summary_compact"])
+        self.assertIn("safe_closure_status", manifest["run_state_summary_compact"])
+        self.assertIn("completion_evidence_status", manifest["run_state_summary_compact"])
+        self.assertIn("completion_blocked_reason", manifest["run_state_summary_compact"])
+        self.assertIn("completion_manual_required", manifest["run_state_summary_compact"])
+        self.assertIn("completion_replan_required", manifest["run_state_summary_compact"])
+        self.assertIn("completion_lifecycle_alignment_status", manifest["run_state_summary_compact"])
+        self.assertIn("approval_transport_present", manifest["run_state_summary_compact"])
+        self.assertIn("approval_status", manifest["run_state_summary_compact"])
+        self.assertIn("approval_decision", manifest["run_state_summary_compact"])
+        self.assertIn("approval_scope", manifest["run_state_summary_compact"])
+        self.assertIn("approved_action", manifest["run_state_summary_compact"])
+        self.assertIn("approval_required", manifest["run_state_summary_compact"])
+        self.assertIn("approval_transport_status", manifest["run_state_summary_compact"])
+        self.assertIn("approval_compatibility_status", manifest["run_state_summary_compact"])
+        self.assertIn("approval_blocked_reason", manifest["run_state_summary_compact"])
+        self.assertIn("reconcile_contract_present", manifest["run_state_summary_compact"])
+        self.assertIn("reconcile_status", manifest["run_state_summary_compact"])
+        self.assertIn("reconcile_decision", manifest["run_state_summary_compact"])
+        self.assertIn("reconcile_alignment_status", manifest["run_state_summary_compact"])
+        self.assertIn("reconcile_primary_mismatch", manifest["run_state_summary_compact"])
+        self.assertIn("reconcile_blocked_reason", manifest["run_state_summary_compact"])
+        self.assertIn("reconcile_waiting_on_truth", manifest["run_state_summary_compact"])
+        self.assertIn("reconcile_manual_required", manifest["run_state_summary_compact"])
+        self.assertIn("reconcile_replan_required", manifest["run_state_summary_compact"])
+        self.assertIn("repair_suggestion_contract_present", manifest["run_state_summary_compact"])
+        self.assertIn("repair_suggestion_status", manifest["run_state_summary_compact"])
+        self.assertIn("repair_suggestion_decision", manifest["run_state_summary_compact"])
+        self.assertIn("repair_suggestion_class", manifest["run_state_summary_compact"])
+        self.assertIn("repair_suggestion_priority", manifest["run_state_summary_compact"])
+        self.assertIn("repair_suggestion_confidence", manifest["run_state_summary_compact"])
+        self.assertIn("repair_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("repair_manual_required", manifest["run_state_summary_compact"])
+        self.assertIn("repair_replan_required", manifest["run_state_summary_compact"])
+        self.assertIn("repair_truth_gathering_required", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_transport_present", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_status", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_decision", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_class", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_priority", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_confidence", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_target_surface", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_candidate_action", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_manual_required", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_replan_required", manifest["run_state_summary_compact"])
+        self.assertIn("repair_plan_truth_gathering_required", manifest["run_state_summary_compact"])
+        self.assertIn("repair_approval_binding_present", manifest["run_state_summary_compact"])
+        self.assertIn("repair_approval_binding_status", manifest["run_state_summary_compact"])
+        self.assertIn("repair_approval_binding_decision", manifest["run_state_summary_compact"])
+        self.assertIn("repair_approval_binding_scope", manifest["run_state_summary_compact"])
+        self.assertIn("repair_approval_binding_validity", manifest["run_state_summary_compact"])
+        self.assertIn(
+            "repair_approval_binding_compatibility_status",
+            manifest["run_state_summary_compact"],
+        )
+        self.assertIn("repair_approval_binding_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("repair_approval_binding_manual_required", manifest["run_state_summary_compact"])
+        self.assertIn("repair_approval_binding_replan_required", manifest["run_state_summary_compact"])
+        self.assertIn(
+            "repair_approval_binding_truth_gathering_required",
+            manifest["run_state_summary_compact"],
+        )
+        self.assertIn("execution_authorization_gate_present", manifest["run_state_summary_compact"])
+        self.assertIn("execution_authorization_status", manifest["run_state_summary_compact"])
+        self.assertIn("execution_authorization_decision", manifest["run_state_summary_compact"])
+        self.assertIn("execution_authorization_scope", manifest["run_state_summary_compact"])
+        self.assertIn("execution_authorization_validity", manifest["run_state_summary_compact"])
+        self.assertIn("execution_authorization_confidence", manifest["run_state_summary_compact"])
+        self.assertIn("execution_authorization_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("execution_authorization_manual_required", manifest["run_state_summary_compact"])
+        self.assertIn("execution_authorization_replan_required", manifest["run_state_summary_compact"])
+        self.assertIn(
+            "execution_authorization_truth_gathering_required",
+            manifest["run_state_summary_compact"],
+        )
+        self.assertIn("bounded_execution_bridge_present", manifest["run_state_summary_compact"])
+        self.assertIn("bounded_execution_status", manifest["run_state_summary_compact"])
+        self.assertIn("bounded_execution_decision", manifest["run_state_summary_compact"])
+        self.assertIn("bounded_execution_scope", manifest["run_state_summary_compact"])
+        self.assertIn("bounded_execution_validity", manifest["run_state_summary_compact"])
+        self.assertIn("bounded_execution_confidence", manifest["run_state_summary_compact"])
+        self.assertIn("bounded_execution_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("bounded_execution_manual_required", manifest["run_state_summary_compact"])
+        self.assertIn("bounded_execution_replan_required", manifest["run_state_summary_compact"])
+        self.assertIn(
+            "bounded_execution_truth_gathering_required",
+            manifest["run_state_summary_compact"],
+        )
+        self.assertIn(
+            "verification_closure_contract_present",
+            manifest["run_state_summary_compact"],
+        )
+        self.assertIn("verification_status", manifest["run_state_summary_compact"])
+        self.assertIn("verification_outcome", manifest["run_state_summary_compact"])
+        self.assertIn("verification_validity", manifest["run_state_summary_compact"])
+        self.assertIn("verification_confidence", manifest["run_state_summary_compact"])
+        self.assertIn("verification_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("objective_satisfaction_status", manifest["run_state_summary_compact"])
+        self.assertIn("completion_satisfaction_status", manifest["run_state_summary_compact"])
+        self.assertIn("closure_status", manifest["run_state_summary_compact"])
+        self.assertIn("closure_decision", manifest["run_state_summary_compact"])
+        self.assertIn("objective_satisfied", manifest["run_state_summary_compact"])
+        self.assertIn("completion_satisfied", manifest["run_state_summary_compact"])
+        self.assertIn("safely_closable", manifest["run_state_summary_compact"])
+        self.assertIn("manual_closure_required", manifest["run_state_summary_compact"])
+        self.assertIn("closure_followup_required", manifest["run_state_summary_compact"])
+        self.assertIn("external_truth_required", manifest["run_state_summary_compact"])
+        self.assertIn("retry_reentry_loop_contract_present", manifest["run_state_summary_compact"])
+        self.assertIn("retry_loop_status", manifest["run_state_summary_compact"])
+        self.assertIn("retry_loop_decision", manifest["run_state_summary_compact"])
+        self.assertIn("retry_loop_validity", manifest["run_state_summary_compact"])
+        self.assertIn("retry_loop_confidence", manifest["run_state_summary_compact"])
+        self.assertIn("loop_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("attempt_count", manifest["run_state_summary_compact"])
+        self.assertIn("max_attempt_count", manifest["run_state_summary_compact"])
+        self.assertIn("reentry_count", manifest["run_state_summary_compact"])
+        self.assertIn("max_reentry_count", manifest["run_state_summary_compact"])
+        self.assertIn("same_failure_count", manifest["run_state_summary_compact"])
+        self.assertIn("max_same_failure_count", manifest["run_state_summary_compact"])
+        self.assertIn("retry_allowed", manifest["run_state_summary_compact"])
+        self.assertIn("reentry_allowed", manifest["run_state_summary_compact"])
+        self.assertIn("retry_exhausted", manifest["run_state_summary_compact"])
+        self.assertIn("reentry_exhausted", manifest["run_state_summary_compact"])
+        self.assertIn("same_failure_exhausted", manifest["run_state_summary_compact"])
+        self.assertIn("terminal_stop_required", manifest["run_state_summary_compact"])
+        self.assertIn("manual_escalation_required", manifest["run_state_summary_compact"])
+        self.assertIn("replan_required", manifest["run_state_summary_compact"])
+        self.assertIn("recollect_required", manifest["run_state_summary_compact"])
+        self.assertIn("same_lane_retry_allowed", manifest["run_state_summary_compact"])
+        self.assertIn("repair_retry_allowed", manifest["run_state_summary_compact"])
+        self.assertIn("no_progress_stop_required", manifest["run_state_summary_compact"])
+        self.assertIn("endgame_closure_contract_present", manifest["run_state_summary_compact"])
+        self.assertIn("endgame_closure_status", manifest["run_state_summary_compact"])
+        self.assertIn("endgame_closure_outcome", manifest["run_state_summary_compact"])
+        self.assertIn("endgame_closure_validity", manifest["run_state_summary_compact"])
+        self.assertIn("endgame_closure_confidence", manifest["run_state_summary_compact"])
+        self.assertIn("final_closure_class", manifest["run_state_summary_compact"])
+        self.assertIn("terminal_stop_class", manifest["run_state_summary_compact"])
+        self.assertIn("closure_resolution_status", manifest["run_state_summary_compact"])
+        self.assertIn("endgame_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("safely_closed", manifest["run_state_summary_compact"])
+        self.assertIn("completed_but_not_closed", manifest["run_state_summary_compact"])
+        self.assertIn(
+            "rollback_complete_but_not_closed",
+            manifest["run_state_summary_compact"],
+        )
+        self.assertIn("manual_closure_only", manifest["run_state_summary_compact"])
+        self.assertIn("external_truth_pending", manifest["run_state_summary_compact"])
+        self.assertIn("closure_unresolved", manifest["run_state_summary_compact"])
+        self.assertIn("terminal_success", manifest["run_state_summary_compact"])
+        self.assertIn("terminal_non_success", manifest["run_state_summary_compact"])
+        self.assertIn("operator_followup_required", manifest["run_state_summary_compact"])
+        self.assertIn("further_retry_allowed", manifest["run_state_summary_compact"])
+        self.assertIn("further_reentry_allowed", manifest["run_state_summary_compact"])
+        self.assertIn("lane_stabilization_contract_present", manifest["run_state_summary_compact"])
+        self.assertIn("lane_status", manifest["run_state_summary_compact"])
+        self.assertIn("lane_decision", manifest["run_state_summary_compact"])
+        self.assertIn("lane_primary_reason", manifest["run_state_summary_compact"])
+        self.assertIn("current_lane", manifest["run_state_summary_compact"])
+        self.assertIn("target_lane", manifest["run_state_summary_compact"])
+        self.assertNotIn("reconcile_blocked_reasons", manifest["run_state_summary_compact"])
+        self.assertNotIn("repair_reason_codes", manifest["run_state_summary_compact"])
+        self.assertNotIn("repair_plan_reason_codes", manifest["run_state_summary_compact"])
+        self.assertNotIn("repair_plan_blocked_reasons", manifest["run_state_summary_compact"])
+        self.assertNotIn("repair_approval_binding_reason_codes", manifest["run_state_summary_compact"])
+        self.assertNotIn("repair_approval_binding_blocked_reasons", manifest["run_state_summary_compact"])
+        self.assertNotIn("execution_authorization_reason_codes", manifest["run_state_summary_compact"])
+        self.assertNotIn("execution_authorization_blocked_reasons", manifest["run_state_summary_compact"])
+        self.assertNotIn("bounded_execution_reason_codes", manifest["run_state_summary_compact"])
+        self.assertNotIn("bounded_execution_blocked_reasons", manifest["run_state_summary_compact"])
+        self.assertNotIn("verification_reason_codes", manifest["run_state_summary_compact"])
+        self.assertNotIn("loop_reason_codes", manifest["run_state_summary_compact"])
+        self.assertNotIn("endgame_reason_codes", manifest["run_state_summary_compact"])
         self.assertNotIn("operator_guidance_summary", manifest["run_state_summary_compact"])
         self.assertNotIn("operator_safe_actions_summary", manifest["run_state_summary_compact"])
         self.assertNotIn("operator_unsafe_actions_summary", manifest["run_state_summary_compact"])
         self.assertEqual(
             manifest["run_state_summary_contract"]["canonical_run_truth_owner"],
             "run_state.json",
+        )
+        self.assertEqual(
+            manifest["run_state_summary_contract"]["compatibility_summary_field"],
+            "run_state_summary",
+        )
+        self.assertEqual(
+            manifest["run_state_summary_contract"]["compatibility_summary_mode"],
+            "alias_to_compact_deprecated_verbose",
         )
         self.assertIn(
             "operator_guidance_summary",
@@ -1223,6 +2351,435 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertIn(
             "lifecycle_closure_status",
             manifest["run_state_summary_contract"]["lifecycle_summary_safe_fields"],
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["objective_summary_safe_fields"]),
+            set(OBJECTIVE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["completion_summary_safe_fields"]),
+            set(COMPLETION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["approval_summary_safe_fields"]),
+            set(APPROVAL_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["reconcile_summary_safe_fields"]),
+            set(RECONCILE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["repair_suggestion_summary_safe_fields"]),
+            set(REPAIR_SUGGESTION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["repair_plan_transport_summary_safe_fields"]),
+            set(REPAIR_PLAN_TRANSPORT_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["repair_approval_binding_summary_safe_fields"]),
+            set(REPAIR_APPROVAL_BINDING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["execution_authorization_summary_safe_fields"]),
+            set(EXECUTION_AUTHORIZATION_GATE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["bounded_execution_summary_safe_fields"]),
+            set(BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["execution_result_summary_safe_fields"]),
+            set(EXECUTION_RESULT_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["verification_closure_summary_safe_fields"]),
+            set(VERIFICATION_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["retry_reentry_loop_summary_safe_fields"]),
+            set(RETRY_REENTRY_LOOP_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["endgame_closure_summary_safe_fields"]),
+            set(ENDGAME_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["loop_hardening_summary_safe_fields"]),
+            set(LOOP_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["lane_stabilization_summary_safe_fields"]),
+            set(LANE_STABILIZATION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["run_state_summary_contract"]["observability_summary_safe_fields"]),
+            set(OBSERVABILITY_ROLLUP_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(
+                manifest["run_state_summary_contract"][
+                    "failure_bucketing_hardening_summary_safe_fields"
+                ]
+            ),
+            set(FAILURE_BUCKETING_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(
+                manifest["run_state_summary_contract"][
+                    "artifact_retention_summary_safe_fields"
+                ]
+            ),
+            set(ARTIFACT_RETENTION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(
+                manifest["run_state_summary_contract"][
+                    "fleet_safety_control_summary_safe_fields"
+                ]
+            ),
+            set(FLEET_SAFETY_CONTROL_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(manifest["objective_contract_summary"].keys()),
+            set(OBJECTIVE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(str(manifest["objective_contract_path"]).endswith("objective_contract.json"))
+        self.assertEqual(
+            set(manifest["completion_contract_summary"].keys()),
+            set(COMPLETION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(str(manifest["completion_contract_path"]).endswith("completion_contract.json"))
+        self.assertEqual(
+            set(manifest["approval_transport_summary"].keys()),
+            set(APPROVAL_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(str(manifest["approval_transport_path"]).endswith("approval_transport.json"))
+        self.assertEqual(
+            set(manifest["reconcile_contract_summary"].keys()),
+            set(RECONCILE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(str(manifest["reconcile_contract_path"]).endswith("reconcile_contract.json"))
+        self.assertEqual(
+            set(manifest["repair_suggestion_contract_summary"].keys()),
+            set(REPAIR_SUGGESTION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["repair_suggestion_contract_path"]).endswith(
+                "repair_suggestion_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["repair_plan_transport_summary"].keys()),
+            set(REPAIR_PLAN_TRANSPORT_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["repair_plan_transport_path"]).endswith(
+                "repair_plan_transport.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["repair_approval_binding_summary"].keys()),
+            set(REPAIR_APPROVAL_BINDING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["repair_approval_binding_path"]).endswith(
+                "repair_approval_binding.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["execution_authorization_gate_summary"].keys()),
+            set(EXECUTION_AUTHORIZATION_GATE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["execution_authorization_gate_path"]).endswith(
+                "execution_authorization_gate.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["bounded_execution_bridge_summary"].keys()),
+            set(BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["bounded_execution_bridge_path"]).endswith(
+                "bounded_execution_bridge.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["execution_result_contract_summary"].keys()),
+            set(EXECUTION_RESULT_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["execution_result_contract_path"]).endswith(
+                "execution_result_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["verification_closure_contract_summary"].keys()),
+            set(VERIFICATION_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["verification_closure_contract_path"]).endswith(
+                "verification_closure_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["retry_reentry_loop_contract_summary"].keys()),
+            set(RETRY_REENTRY_LOOP_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["retry_reentry_loop_contract_path"]).endswith(
+                "retry_reentry_loop_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["endgame_closure_contract_summary"].keys()),
+            set(ENDGAME_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["endgame_closure_contract_path"]).endswith(
+                "endgame_closure_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["lane_stabilization_contract_summary"].keys()),
+            set(LANE_STABILIZATION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["lane_stabilization_contract_path"]).endswith(
+                "lane_stabilization_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["observability_rollup_contract_summary"].keys()),
+            set(OBSERVABILITY_ROLLUP_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["observability_rollup_contract_path"]).endswith(
+                "observability_rollup_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["failure_bucket_rollup_summary"].keys()),
+            set(FAILURE_BUCKET_ROLLUP_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["failure_bucket_rollup_path"]).endswith("failure_bucket_rollup.json")
+        )
+        self.assertEqual(
+            set(manifest["fleet_run_rollup_summary"].keys()),
+            set(FLEET_RUN_ROLLUP_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["fleet_run_rollup_path"]).endswith("fleet_run_rollup.json")
+        )
+        self.assertEqual(
+            set(manifest["failure_bucketing_hardening_contract_summary"].keys()),
+            set(FAILURE_BUCKETING_HARDENING_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["failure_bucketing_hardening_contract_path"]).endswith(
+                "failure_bucketing_hardening_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["retention_manifest_summary"].keys()),
+            set(RETENTION_MANIFEST_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["retention_manifest_path"]).endswith(
+                "retention_manifest.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["artifact_retention_contract_summary"].keys()),
+            set(ARTIFACT_RETENTION_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["artifact_retention_contract_path"]).endswith(
+                "artifact_retention_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["fleet_safety_control_contract_summary"].keys()),
+            set(FLEET_SAFETY_CONTROL_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["fleet_safety_control_contract_path"]).endswith(
+                "fleet_safety_control_contract.json"
+            )
+        )
+        contract_artifact_index = manifest["contract_artifact_index"]
+        self.assertEqual(list(contract_artifact_index.keys()), list(CONTRACT_ARTIFACT_ROLES))
+        for role in CONTRACT_ARTIFACT_ROLES:
+            self.assertIn("path", contract_artifact_index[role])
+            self.assertIn("summary", contract_artifact_index[role])
+            self.assertIsInstance(contract_artifact_index[role]["summary"], dict)
+        objective_compact_fields = {
+            key
+            for key in manifest["run_state_summary_compact"]
+            if (key.startswith("objective_") and key not in {"objective_satisfaction_status", "objective_satisfied"})
+            or key == "requested_outcome"
+        }
+        self.assertEqual(
+            objective_compact_fields,
+            set(OBJECTIVE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        objective_run_state_fields = {
+            key
+            for key in manifest["run_state_summary"]
+            if (key.startswith("objective_") and key not in {"objective_satisfaction_status", "objective_satisfied"})
+            or key == "requested_outcome"
+        }
+        self.assertEqual(
+            objective_run_state_fields,
+            set(OBJECTIVE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        completion_compact_fields = {
+            key
+            for key in manifest["run_state_summary_compact"]
+            if (key.startswith("completion_") and key not in {"completion_satisfaction_status", "completion_satisfied"})
+            or key in {"done_status", "safe_closure_status"}
+        }
+        self.assertEqual(
+            completion_compact_fields,
+            set(COMPLETION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        completion_run_state_fields = {
+            key
+            for key in manifest["run_state_summary"]
+            if (key.startswith("completion_") and key not in {"completion_satisfaction_status", "completion_satisfied"})
+            or key in {"done_status", "safe_closure_status"}
+        }
+        self.assertEqual(
+            completion_run_state_fields,
+            set(COMPLETION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        approval_compact_fields = {
+            key
+            for key in manifest["run_state_summary_compact"]
+            if key.startswith("approval_") or key == "approved_action"
+        }
+        self.assertEqual(
+            approval_compact_fields,
+            set(APPROVAL_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        approval_run_state_fields = {
+            key
+            for key in manifest["run_state_summary"]
+            if key.startswith("approval_") or key == "approved_action"
+        }
+        self.assertEqual(
+            approval_run_state_fields,
+            set(APPROVAL_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        reconcile_compact_fields = {
+            key
+            for key in manifest["run_state_summary_compact"]
+            if key.startswith("reconcile_")
+        }
+        self.assertEqual(
+            reconcile_compact_fields,
+            set(RECONCILE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        reconcile_run_state_fields = {
+            key
+            for key in manifest["run_state_summary"]
+            if key.startswith("reconcile_")
+        }
+        self.assertEqual(
+            reconcile_run_state_fields,
+            set(RECONCILE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        repair_compact_fields = {
+            key
+            for key in manifest["run_state_summary_compact"]
+            if key in set(REPAIR_SUGGESTION_RUN_STATE_SUMMARY_SAFE_FIELDS)
+        }
+        self.assertEqual(
+            repair_compact_fields,
+            set(REPAIR_SUGGESTION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        repair_run_state_fields = {
+            key
+            for key in manifest["run_state_summary"]
+            if key in set(REPAIR_SUGGESTION_RUN_STATE_SUMMARY_SAFE_FIELDS)
+        }
+        self.assertEqual(
+            repair_run_state_fields,
+            set(REPAIR_SUGGESTION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        repair_plan_compact_fields = {
+            key
+            for key in manifest["run_state_summary_compact"]
+            if key.startswith("repair_plan_")
+        }
+        self.assertEqual(
+            repair_plan_compact_fields,
+            set(REPAIR_PLAN_TRANSPORT_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        repair_plan_run_state_fields = {
+            key
+            for key in manifest["run_state_summary"]
+            if key.startswith("repair_plan_")
+        }
+        self.assertEqual(
+            repair_plan_run_state_fields,
+            set(REPAIR_PLAN_TRANSPORT_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        execution_authorization_compact_fields = {
+            key
+            for key in manifest["run_state_summary_compact"]
+            if key in set(EXECUTION_AUTHORIZATION_GATE_RUN_STATE_SUMMARY_SAFE_FIELDS)
+        }
+        self.assertEqual(
+            execution_authorization_compact_fields,
+            set(EXECUTION_AUTHORIZATION_GATE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        execution_authorization_run_state_fields = {
+            key
+            for key in manifest["run_state_summary"]
+            if key in set(EXECUTION_AUTHORIZATION_GATE_RUN_STATE_SUMMARY_SAFE_FIELDS)
+        }
+        self.assertEqual(
+            execution_authorization_run_state_fields,
+            set(EXECUTION_AUTHORIZATION_GATE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        bounded_execution_compact_fields = {
+            key
+            for key in manifest["run_state_summary_compact"]
+            if key in set(BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS)
+        }
+        self.assertEqual(
+            bounded_execution_compact_fields,
+            set(BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        bounded_execution_run_state_fields = {
+            key
+            for key in manifest["run_state_summary"]
+            if key in set(BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS)
+        }
+        self.assertEqual(
+            bounded_execution_run_state_fields,
+            set(BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        endgame_compact_fields = {
+            key
+            for key in manifest["run_state_summary_compact"]
+            if key in set(ENDGAME_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS)
+        }
+        self.assertEqual(
+            endgame_compact_fields,
+            set(ENDGAME_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        endgame_run_state_fields = {
+            key
+            for key in manifest["run_state_summary"]
+            if key in set(ENDGAME_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS)
+        }
+        self.assertEqual(
+            endgame_run_state_fields,
+            set(ENDGAME_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
         )
 
     def test_stop_on_failure_behavior(self) -> None:
@@ -1866,6 +3423,15 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
             push_execution = json.loads(Path(first["push_execution_path"]).read_text(encoding="utf-8"))
             pr_execution = json.loads(Path(first["pr_execution_path"]).read_text(encoding="utf-8"))
             merge_execution = json.loads(Path(first["merge_execution_path"]).read_text(encoding="utf-8"))
+            run_state_payload = json.loads(
+                Path(manifest["run_state_path"]).read_text(encoding="utf-8")
+            )
+            run_state_payload = json.loads(
+                Path(manifest["run_state_path"]).read_text(encoding="utf-8")
+            )
+            run_state_payload = json.loads(
+                Path(manifest["run_state_path"]).read_text(encoding="utf-8")
+            )
             run_state_payload = json.loads(Path(manifest["run_state_path"]).read_text(encoding="utf-8"))
             merge_decision = json.loads(Path(first["merge_decision_path"]).read_text(encoding="utf-8"))
             progression = json.loads(Path(first["unit_progression_path"]).read_text(encoding="utf-8"))
@@ -1966,6 +3532,9 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
             push_execution = json.loads(Path(first["push_execution_path"]).read_text(encoding="utf-8"))
             pr_execution = json.loads(Path(first["pr_execution_path"]).read_text(encoding="utf-8"))
             merge_execution = json.loads(Path(first["merge_execution_path"]).read_text(encoding="utf-8"))
+            run_state_payload = json.loads(
+                Path(manifest["run_state_path"]).read_text(encoding="utf-8")
+            )
 
         self.assertEqual(push_execution["status"], "succeeded")
         self.assertEqual(pr_execution["status"], "blocked")
@@ -1977,12 +3546,6 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertIn("open_pr_lookup_api_failure", pr_execution["remote_pr_ambiguity"])
         self.assertTrue(pr_execution["remote_github_blocked"])
         self.assertEqual(merge_execution["status"], "blocked")
-        run_state_path = Path(manifest["run_state_path"])
-        run_state_payload = (
-            json.loads(run_state_path.read_text(encoding="utf-8"))
-            if run_state_path.exists()
-            else dict(manifest.get("run_state_summary", {}))
-        )
         self.assertTrue(run_state_payload["remote_github_blocked"])
         self.assertTrue(run_state_payload["remote_github_manual_required"])
         self.assertTrue(run_state_payload["remote_github_missing_or_ambiguous"])
@@ -3104,6 +4667,4411 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertTrue(resumable_state["lifecycle_resumable"])
         self.assertFalse(resumable_state["lifecycle_terminal"])
 
+    def test_objective_contract_is_deterministic_and_uses_priority_one_sources(self) -> None:
+        artifacts = {
+            "project_brief": {
+                "project_id": "proj-1",
+                "objective": "Priority1 objective",
+                "success_definition": "Priority1 outcome",
+                "target_repo": "repo-from-brief",
+                "target_branch": "main",
+                "allowed_risk_level": "conservative",
+                "non_goals": ["no-refactor"],
+            },
+            "repo_facts": {
+                "repo": "repo-from-facts",
+                "default_branch": "develop",
+            },
+            "pr_plan": {
+                "plan_id": "proj-1-plan-v1",
+                "prs": [
+                    {
+                        "pr_id": "proj-1-pr-01",
+                        "exact_scope": "priority1 exact scope",
+                        "touched_files": ["src/a.py"],
+                        "forbidden_files": ["src/unsafe.py"],
+                        "acceptance_criteria": ["planned acceptance"],
+                    }
+                ],
+            },
+            "roadmap": {"estimated_risk": "high"},
+        }
+        units = [
+            {
+                "bounded_step_contract": {
+                    "purpose": "Priority2 bounded purpose",
+                    "scope_in": ["src/alt.py"],
+                    "scope_out": ["src/alt_unsafe.py"],
+                    "invariants_to_preserve": ["bounded invariant"],
+                },
+                "pr_implementation_prompt_contract": {
+                    "task_scope": {"purpose": "Priority2 prompt purpose"},
+                    "definition_of_done": ["prompt done"],
+                },
+                "codex_task_prompt_md": "- Priority4 fallback summary",
+            }
+        ]
+        artifact_ownership = {
+            "run_state": "run_state.json",
+            "next_action": "next_action.json",
+            "objective_contract": "objective_contract.json",
+        }
+
+        payload_a = build_objective_contract_surface(
+            run_id="job-objective-1",
+            artifacts=artifacts,
+            units=units,
+            artifact_ownership=artifact_ownership,
+        )
+        payload_b = build_objective_contract_surface(
+            run_id="job-objective-1",
+            artifacts=artifacts,
+            units=units,
+            artifact_ownership=artifact_ownership,
+        )
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["objective_summary"], "Priority1 objective")
+        self.assertEqual(payload_a["requested_outcome"], "Priority1 outcome")
+        self.assertEqual(payload_a["target_repo"], "repo-from-brief")
+        self.assertEqual(payload_a["target_branch"], "main")
+        self.assertEqual(payload_a["source_priority_used"], "priority_1")
+        self.assertEqual(payload_a["objective_source_status"], "structured_complete")
+        self.assertIn(payload_a["objective_status"], {"complete", "incomplete", "underspecified", "blocked"})
+        self.assertIn(payload_a["acceptance_status"], {"defined", "partially_defined", "undefined", "blocked"})
+        self.assertIn(payload_a["scope_status"], {"clear", "partial", "unclear", "blocked"})
+        self.assertIn(
+            payload_a["required_artifacts_status"],
+            {"defined", "partially_defined", "undefined", "blocked"},
+        )
+
+    def test_objective_contract_is_conservative_when_inputs_are_missing(self) -> None:
+        payload = build_objective_contract_surface(
+            run_id="job-objective-missing",
+            artifacts={},
+            units=[],
+            artifact_ownership={},
+        )
+
+        self.assertEqual(payload["schema_version"], "v1")
+        self.assertEqual(payload["run_id"], "job-objective-missing")
+        self.assertEqual(payload["objective_source_status"], "missing")
+        self.assertEqual(payload["objective_status"], "blocked")
+        self.assertEqual(payload["acceptance_status"], "blocked")
+        self.assertEqual(payload["scope_status"], "blocked")
+        self.assertEqual(payload["required_artifacts_status"], "blocked")
+        self.assertTrue(payload["objective_blocked_reasons"])
+
+    def test_objective_contract_keeps_unknown_acceptance_undefined(self) -> None:
+        payload = build_objective_contract_surface(
+            run_id="job-objective-acceptance",
+            artifacts={
+                "project_brief": {
+                    "project_id": "proj-acceptance",
+                    "objective": "Objective without acceptance",
+                    "success_definition": "",
+                },
+                "pr_plan": {
+                    "plan_id": "proj-acceptance-plan-v1",
+                    "prs": [
+                        {
+                            "pr_id": "proj-acceptance-pr-01",
+                            "touched_files": ["src/a.py"],
+                            "forbidden_files": ["src/b.py"],
+                            "acceptance_criteria": [],
+                        }
+                    ],
+                },
+            },
+            units=[],
+            artifact_ownership={"run_state": "run_state.json"},
+        )
+
+        self.assertIn(payload["acceptance_status"], {"undefined", "blocked", "partially_defined"})
+        self.assertNotEqual(payload["acceptance_status"], "defined")
+        self.assertEqual(payload["acceptance_criteria"][0]["status"], "undefined")
+
+    def test_objective_run_state_summary_surface_is_compact(self) -> None:
+        compact = build_objective_run_state_summary_surface(
+            {
+                "objective_id": "objective-123",
+                "objective_summary": "Summary",
+                "objective_type": "implementation",
+                "requested_outcome": "Outcome",
+                "objective_status": "underspecified",
+                "acceptance_status": "partially_defined",
+                "scope_status": "partial",
+                "required_artifacts_status": "defined",
+                "objective_blocked_reason": "acceptance_partially_defined",
+            }
+        )
+
+        self.assertEqual(set(compact.keys()), set(OBJECTIVE_RUN_STATE_SUMMARY_SAFE_FIELDS))
+        self.assertEqual(compact["objective_contract_status"], "underspecified")
+        self.assertEqual(compact["objective_acceptance_status"], "partially_defined")
+        self.assertEqual(compact["objective_scope_status"], "partial")
+        self.assertEqual(compact["objective_required_artifacts_status"], "defined")
+
+    def test_completion_contract_is_deterministic_when_truth_is_aligned(self) -> None:
+        objective_payload = {
+            "objective_id": "objective-123",
+            "objective_summary": "Implement narrow completion contract",
+            "requested_outcome": "done and safely closed",
+            "objective_status": "complete",
+            "acceptance_status": "defined",
+            "acceptance_criteria": [
+                {"criterion_id": "criterion_001", "status": "defined", "text": "all checks pass"}
+            ],
+            "required_artifacts": ["next_action.json", "run_state.json"],
+        }
+        run_state_payload = {
+            "lifecycle_closure_status": "safely_closed",
+            "lifecycle_safely_closed": True,
+            "lifecycle_manual_required": False,
+            "lifecycle_replan_required": False,
+            "policy_manual_required": False,
+            "policy_replan_required": False,
+            "delivery_completed": True,
+        }
+        artifact_presence = {
+            "next_action.json": True,
+            "run_state.json": True,
+        }
+
+        payload_a = build_completion_contract_surface(
+            run_id="job-completion-1",
+            objective_contract_payload=objective_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence=artifact_presence,
+        )
+        payload_b = build_completion_contract_surface(
+            run_id="job-completion-1",
+            objective_contract_payload=objective_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence=artifact_presence,
+        )
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["completion_status"], "done_and_safely_closed")
+        self.assertEqual(payload_a["done_status"], "done")
+        self.assertEqual(payload_a["safe_closure_status"], "safely_closed")
+        self.assertEqual(payload_a["closure_decision"], "close")
+        self.assertEqual(payload_a["lifecycle_alignment_status"], "aligned")
+        self.assertEqual(payload_a["completion_blocked_reason"], "")
+        self.assertEqual(payload_a["completion_blocked_reasons"], [])
+        self.assertIn(payload_a["completion_evidence_status"], {"sufficient", "partial", "missing"})
+
+    def test_completion_contract_degrades_conservatively_when_objective_truth_missing(self) -> None:
+        payload = build_completion_contract_surface(
+            run_id="job-completion-missing",
+            objective_contract_payload={},
+            run_state_payload={},
+            artifact_presence={},
+        )
+
+        self.assertEqual(payload["schema_version"], "v1")
+        self.assertEqual(payload["run_id"], "job-completion-missing")
+        self.assertIn(payload["completion_status"], COMPLETION_STATUSES)
+        self.assertIn(payload["done_status"], DONE_STATUSES)
+        self.assertIn(payload["safe_closure_status"], SAFE_CLOSURE_STATUSES)
+        self.assertIn(payload["closure_decision"], CLOSURE_DECISIONS)
+        self.assertIn(payload["lifecycle_alignment_status"], LIFECYCLE_ALIGNMENT_STATUSES)
+        self.assertIn(payload["completion_evidence_status"], COMPLETION_EVIDENCE_STATUSES)
+        self.assertNotEqual(payload["completion_status"], "done_and_safely_closed")
+        self.assertNotEqual(payload["done_status"], "done")
+        self.assertTrue(payload["missing_evidence"])
+        self.assertTrue(payload["completion_blocked_reasons"])
+
+    def test_completion_contract_distinguishes_execution_complete_not_accepted(self) -> None:
+        payload = build_completion_contract_surface(
+            run_id="job-completion-execution-only",
+            objective_contract_payload={
+                "objective_id": "objective-456",
+                "objective_status": "underspecified",
+                "acceptance_status": "partially_defined",
+                "acceptance_criteria": [{"criterion_id": "criterion_001", "status": "undefined"}],
+                "required_artifacts": [],
+            },
+            run_state_payload={
+                "delivery_completed": True,
+                "lifecycle_closure_status": "execution_complete_not_closed",
+                "lifecycle_safely_closed": False,
+                "lifecycle_manual_required": False,
+                "lifecycle_replan_required": False,
+                "policy_manual_required": False,
+                "policy_replan_required": False,
+            },
+            artifact_presence={},
+        )
+
+        self.assertEqual(payload["done_status"], "not_done")
+        self.assertEqual(payload["safe_closure_status"], "not_safely_closed")
+        self.assertEqual(payload["completion_status"], "execution_complete_not_accepted")
+        self.assertTrue(payload["execution_complete_not_accepted"])
+
+    def test_completion_contract_distinguishes_done_from_safe_closure(self) -> None:
+        payload = build_completion_contract_surface(
+            run_id="job-completion-manual-close",
+            objective_contract_payload={
+                "objective_id": "objective-789",
+                "objective_status": "complete",
+                "acceptance_status": "defined",
+                "acceptance_criteria": [{"criterion_id": "criterion_001", "status": "defined"}],
+                "required_artifacts": [],
+            },
+            run_state_payload={
+                "lifecycle_closure_status": "stopped_manual_only",
+                "lifecycle_safely_closed": False,
+                "lifecycle_manual_required": True,
+                "lifecycle_replan_required": False,
+                "policy_manual_required": True,
+                "policy_replan_required": False,
+            },
+            artifact_presence={},
+        )
+
+        self.assertEqual(payload["done_status"], "done")
+        self.assertEqual(payload["safe_closure_status"], "not_safely_closed")
+        self.assertEqual(payload["completion_status"], "manual_closure_required")
+        self.assertTrue(payload["completion_manual_required"])
+
+    def test_completion_run_state_summary_surface_is_compact(self) -> None:
+        compact = build_completion_run_state_summary_surface(
+            {
+                "completion_status": "delivery_complete_waiting_external_truth",
+                "done_status": "done",
+                "safe_closure_status": "not_safely_closed",
+                "completion_evidence_status": "partial",
+                "completion_blocked_reason": "delivery_complete_waiting_external_truth",
+                "completion_manual_required": True,
+                "completion_replan_required": False,
+                "lifecycle_alignment_status": "partially_aligned",
+            }
+        )
+
+        self.assertEqual(set(compact.keys()), set(COMPLETION_RUN_STATE_SUMMARY_SAFE_FIELDS))
+        self.assertEqual(compact["completion_status"], "delivery_complete_waiting_external_truth")
+        self.assertEqual(compact["done_status"], "done")
+        self.assertEqual(compact["safe_closure_status"], "not_safely_closed")
+        self.assertEqual(compact["completion_evidence_status"], "partial")
+        self.assertEqual(compact["completion_lifecycle_alignment_status"], "partially_aligned")
+
+    def test_approval_transport_is_deterministic_when_truth_and_input_are_stable(self) -> None:
+        objective_payload = {
+            "objective_id": "objective-approval-1",
+            "objective_status": "complete",
+            "objective_summary": "Safely close completed run",
+            "requested_outcome": "close run safely",
+        }
+        completion_payload = {
+            "completion_status": "done_and_safely_closed",
+            "done_status": "done",
+            "safe_closure_status": "safely_closed",
+            "closure_decision": "close",
+            "completion_manual_required": False,
+            "completion_replan_required": False,
+        }
+        run_state_payload = {
+            "lifecycle_closure_status": "safely_closed",
+            "lifecycle_primary_closure_issue": "",
+            "lifecycle_manual_required": False,
+            "lifecycle_replan_required": False,
+            "next_safe_action": "stop_terminal_success",
+            "policy_primary_action": "proceed_to_merge",
+            "policy_status": "allowed",
+            "policy_manual_required": False,
+            "policy_replan_required": False,
+            "manual_intervention_required": False,
+        }
+        approval_input = {
+            "approval_decision": "approve",
+            "approval_scope": "current_run",
+            "approved_action": "close_run",
+            "approval_actor": "operator",
+            "approval_reason": "all truth aligned",
+            "approval_recorded_at": "2026-04-19T10:00:00+00:00",
+        }
+
+        payload_a = build_approval_transport_surface(
+            run_id="job-approval-1",
+            objective_contract_payload=objective_payload,
+            completion_contract_payload=completion_payload,
+            run_state_payload=run_state_payload,
+            approval_input_payload=approval_input,
+            evaluated_at="2026-04-19T10:05:00+00:00",
+        )
+        payload_b = build_approval_transport_surface(
+            run_id="job-approval-1",
+            objective_contract_payload=objective_payload,
+            completion_contract_payload=completion_payload,
+            run_state_payload=run_state_payload,
+            approval_input_payload=approval_input,
+            evaluated_at="2026-04-19T10:05:00+00:00",
+        )
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertIn(payload_a["approval_status"], APPROVAL_STATUSES)
+        self.assertIn(payload_a["approval_decision"], APPROVAL_DECISIONS)
+        self.assertIn(payload_a["approval_scope"], APPROVAL_SCOPES)
+        self.assertIn(payload_a["approved_action"], APPROVED_ACTIONS)
+        self.assertIn(payload_a["approval_compatibility_status"], APPROVAL_COMPATIBILITY_STATUSES)
+        self.assertIn(payload_a["approval_transport_status"], APPROVAL_TRANSPORT_STATUSES)
+        self.assertEqual(payload_a["approval_status"], "approved")
+        self.assertEqual(payload_a["approval_transport_status"], "actionable")
+        self.assertEqual(payload_a["approval_compatibility_status"], "compatible")
+        self.assertEqual(payload_a["approval_blocked_reason"], "")
+        self.assertEqual(payload_a["approval_blocked_reasons"], [])
+
+    def test_approval_transport_emits_absent_when_input_is_missing(self) -> None:
+        payload = build_approval_transport_surface(
+            run_id="job-approval-absent",
+            objective_contract_payload={
+                "objective_id": "objective-approval-absent",
+                "objective_status": "incomplete",
+            },
+            completion_contract_payload={
+                "completion_status": "manual_closure_required",
+                "done_status": "not_done",
+                "safe_closure_status": "not_safely_closed",
+                "completion_manual_required": True,
+                "completion_replan_required": False,
+            },
+            run_state_payload={
+                "lifecycle_closure_status": "stopped_manual_only",
+                "lifecycle_manual_required": True,
+                "lifecycle_replan_required": False,
+                "policy_status": "manual_only",
+                "policy_manual_required": True,
+                "policy_replan_required": False,
+                "manual_intervention_required": True,
+            },
+            approval_input_payload=None,
+            evaluated_at="2026-04-19T10:05:00+00:00",
+        )
+
+        self.assertEqual(payload["approval_status"], "absent")
+        self.assertEqual(payload["approval_decision"], "none")
+        self.assertFalse(payload["approval_present"])
+        self.assertEqual(payload["approval_transport_status"], "missing")
+        self.assertEqual(payload["approval_compatibility_status"], "insufficient_truth")
+        self.assertEqual(payload["approval_actor"], "")
+        self.assertEqual(payload["approval_reason"], "")
+        self.assertEqual(payload["approval_notes"], "")
+        self.assertTrue(payload["approval_blocked_reasons"])
+
+    def test_approval_transport_marks_closure_approval_incompatible_when_not_done(self) -> None:
+        payload = build_approval_transport_surface(
+            run_id="job-approval-incompatible",
+            objective_contract_payload={
+                "objective_id": "objective-approval-2",
+                "objective_status": "underspecified",
+            },
+            completion_contract_payload={
+                "completion_status": "execution_complete_not_accepted",
+                "done_status": "not_done",
+                "safe_closure_status": "not_safely_closed",
+                "closure_decision": "hold",
+                "completion_manual_required": False,
+                "completion_replan_required": False,
+            },
+            run_state_payload={
+                "lifecycle_closure_status": "execution_complete_not_closed",
+                "lifecycle_manual_required": False,
+                "lifecycle_replan_required": False,
+                "policy_status": "blocked",
+                "policy_manual_required": False,
+                "policy_replan_required": False,
+            },
+            approval_input_payload={
+                "approval_decision": "approve",
+                "approval_scope": "current_run",
+                "approved_action": "close_run",
+            },
+            evaluated_at="2026-04-19T10:05:00+00:00",
+        )
+
+        self.assertEqual(payload["approval_status"], "approved")
+        self.assertEqual(payload["approval_compatibility_status"], "incompatible")
+        self.assertEqual(payload["approval_transport_status"], "blocked")
+        self.assertIn("completion_not_done_for_closure", payload["approval_blocked_reasons"])
+
+    def test_approval_transport_degrades_for_stale_and_superseded_inputs(self) -> None:
+        base_objective = {"objective_id": "objective-approval-3", "objective_status": "complete"}
+        base_completion = {
+            "completion_status": "done_and_safely_closed",
+            "done_status": "done",
+            "safe_closure_status": "safely_closed",
+            "completion_manual_required": False,
+            "completion_replan_required": False,
+        }
+        base_run_state = {
+            "lifecycle_closure_status": "safely_closed",
+            "lifecycle_manual_required": False,
+            "lifecycle_replan_required": False,
+            "policy_status": "allowed",
+            "policy_manual_required": False,
+            "policy_replan_required": False,
+        }
+
+        stale_payload = build_approval_transport_surface(
+            run_id="job-approval-3",
+            objective_contract_payload=base_objective,
+            completion_contract_payload=base_completion,
+            run_state_payload=base_run_state,
+            approval_input_payload={
+                "approval_decision": "approve",
+                "approval_scope": "current_run",
+                "approval_expires_at": "2026-04-19T09:59:59+00:00",
+            },
+            evaluated_at="2026-04-19T10:05:00+00:00",
+        )
+        superseded_payload = build_approval_transport_surface(
+            run_id="job-approval-3",
+            objective_contract_payload=base_objective,
+            completion_contract_payload=base_completion,
+            run_state_payload=base_run_state,
+            approval_input_payload={
+                "approval_decision": "approve",
+                "approval_scope": "current_run",
+                "target_completion_status": "replan_before_closure",
+            },
+            evaluated_at="2026-04-19T10:05:00+00:00",
+        )
+
+        self.assertTrue(stale_payload["approval_stale"])
+        self.assertEqual(stale_payload["approval_transport_status"], "expired")
+        self.assertTrue(superseded_payload["approval_superseded"])
+        self.assertEqual(superseded_payload["approval_transport_status"], "superseded")
+
+    def test_approval_run_state_summary_surface_is_compact(self) -> None:
+        compact = build_approval_run_state_summary_surface(
+            {
+                "approval_status": "deferred",
+                "approval_decision": "defer",
+                "approval_scope": "next_safe_action_only",
+                "approved_action": "hold_for_manual_review",
+                "approval_required": True,
+                "approval_transport_status": "non_actionable",
+                "approval_compatibility_status": "partially_compatible",
+                "approval_blocked_reason": "approval_scope_partial",
+                "approval_notes": "not summary safe",
+            }
+        )
+
+        self.assertEqual(set(compact.keys()), set(APPROVAL_RUN_STATE_SUMMARY_SAFE_FIELDS))
+        self.assertEqual(compact["approval_status"], "deferred")
+        self.assertEqual(compact["approval_decision"], "defer")
+        self.assertEqual(compact["approval_scope"], "next_safe_action_only")
+        self.assertEqual(compact["approved_action"], "hold_for_manual_review")
+        self.assertEqual(compact["approval_transport_status"], "non_actionable")
+        self.assertEqual(compact["approval_compatibility_status"], "partially_compatible")
+
+    def test_reconcile_contract_is_deterministic_when_truth_surfaces_align(self) -> None:
+        payload_a = build_reconcile_contract_surface(
+            run_id="job-reconcile-1",
+            objective_contract_payload={
+                "objective_id": "objective-reconcile-1",
+                "objective_summary": "close run",
+                "requested_outcome": "aligned close",
+                "objective_status": "complete",
+            },
+            completion_contract_payload={
+                "objective_id": "objective-reconcile-1",
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+                "closure_decision": "close",
+                "completion_manual_required": False,
+                "completion_replan_required": False,
+            },
+            approval_transport_payload={
+                "objective_id": "objective-reconcile-1",
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_transport_status": "actionable",
+                "approval_required": False,
+                "approval_present": True,
+            },
+            run_state_payload={
+                "objective_contract_present": True,
+                "completion_contract_present": True,
+                "approval_transport_present": True,
+                "objective_contract_status": "complete",
+                "completion_status": "done_and_safely_closed",
+                "approval_status": "approved",
+                "lifecycle_closure_status": "safely_closed",
+                "lifecycle_safely_closed": True,
+                "lifecycle_manual_required": False,
+                "lifecycle_replan_required": False,
+                "manual_intervention_required": False,
+                "policy_replan_required": False,
+                "rollback_replan_required": False,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+        payload_b = build_reconcile_contract_surface(
+            run_id="job-reconcile-1",
+            objective_contract_payload={
+                "objective_id": "objective-reconcile-1",
+                "objective_summary": "close run",
+                "requested_outcome": "aligned close",
+                "objective_status": "complete",
+            },
+            completion_contract_payload={
+                "objective_id": "objective-reconcile-1",
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+                "closure_decision": "close",
+                "completion_manual_required": False,
+                "completion_replan_required": False,
+            },
+            approval_transport_payload={
+                "objective_id": "objective-reconcile-1",
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_transport_status": "actionable",
+                "approval_required": False,
+                "approval_present": True,
+            },
+            run_state_payload={
+                "objective_contract_present": True,
+                "completion_contract_present": True,
+                "approval_transport_present": True,
+                "objective_contract_status": "complete",
+                "completion_status": "done_and_safely_closed",
+                "approval_status": "approved",
+                "lifecycle_closure_status": "safely_closed",
+                "lifecycle_safely_closed": True,
+                "lifecycle_manual_required": False,
+                "lifecycle_replan_required": False,
+                "manual_intervention_required": False,
+                "policy_replan_required": False,
+                "rollback_replan_required": False,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["reconcile_status"], "aligned")
+        self.assertEqual(payload_a["reconcile_decision"], "aligned_no_action")
+        self.assertEqual(payload_a["reconcile_primary_mismatch"], "")
+        self.assertEqual(payload_a["reconcile_blocked_reason"], "")
+        self.assertEqual(payload_a["reconcile_blocked_reasons"], [])
+        self.assertIn(payload_a["reconcile_status"], RECONCILE_STATUSES)
+        self.assertIn(payload_a["reconcile_decision"], RECONCILE_DECISIONS)
+        self.assertIn(payload_a["reconcile_alignment_status"], RECONCILE_ALIGNMENT_STATUSES)
+        self.assertIn(payload_a["reconcile_transport_status"], RECONCILE_TRANSPORT_STATUSES)
+
+    def test_reconcile_contract_degrades_to_waiting_for_truth_when_sources_missing(self) -> None:
+        payload = build_reconcile_contract_surface(
+            run_id="job-reconcile-missing",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            run_state_payload={},
+            artifact_presence={},
+        )
+
+        self.assertEqual(payload["reconcile_status"], "waiting_for_truth")
+        self.assertEqual(payload["reconcile_decision"], "wait_for_truth")
+        self.assertEqual(payload["reconcile_alignment_status"], "insufficient_truth")
+        self.assertNotEqual(payload["reconcile_status"], "inconsistent")
+        self.assertTrue(payload["reconcile_waiting_on_truth"])
+        self.assertTrue(payload["reconcile_blocked_reasons"])
+
+    def test_reconcile_contract_detects_objective_completion_mismatch(self) -> None:
+        payload = build_reconcile_contract_surface(
+            run_id="job-reconcile-objective-mismatch",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_transport_status": "actionable",
+                "approval_present": True,
+            },
+            run_state_payload={
+                "objective_contract_status": "underspecified",
+                "completion_status": "done_and_safely_closed",
+                "approval_status": "approved",
+                "lifecycle_closure_status": "safely_closed",
+                "lifecycle_safely_closed": True,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["reconcile_status"], "inconsistent")
+        self.assertEqual(payload["reconcile_primary_mismatch"], "objective_completion_conflict")
+
+    def test_reconcile_contract_detects_completion_lifecycle_mismatch(self) -> None:
+        payload = build_reconcile_contract_surface(
+            run_id="job-reconcile-lifecycle-mismatch",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_transport_status": "actionable",
+                "approval_present": True,
+            },
+            run_state_payload={
+                "objective_contract_status": "complete",
+                "completion_status": "done_and_safely_closed",
+                "approval_status": "approved",
+                "lifecycle_closure_status": "stopped_manual_only",
+                "lifecycle_safely_closed": False,
+                "lifecycle_manual_required": True,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["reconcile_status"], "inconsistent")
+        self.assertEqual(payload["reconcile_primary_mismatch"], "completion_lifecycle_conflict")
+
+    def test_reconcile_contract_detects_approval_completion_mismatch(self) -> None:
+        payload = build_reconcile_contract_surface(
+            run_id="job-reconcile-approval-mismatch",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "execution_complete_not_accepted",
+                "done_status": "not_done",
+                "safe_closure_status": "not_safely_closed",
+            },
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_transport_status": "actionable",
+                "approval_present": True,
+            },
+            run_state_payload={
+                "objective_contract_status": "complete",
+                "completion_status": "execution_complete_not_accepted",
+                "approval_status": "approved",
+                "lifecycle_closure_status": "execution_complete_not_closed",
+                "lifecycle_safely_closed": False,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["reconcile_status"], "inconsistent")
+        self.assertEqual(payload["reconcile_primary_mismatch"], "approval_completion_conflict")
+
+    def test_reconcile_waiting_state_is_distinct_from_inconsistent_state(self) -> None:
+        waiting = build_reconcile_contract_surface(
+            run_id="job-reconcile-waiting",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            run_state_payload={},
+            artifact_presence={},
+        )
+        inconsistent = build_reconcile_contract_surface(
+            run_id="job-reconcile-inconsistent",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_transport_status": "actionable",
+                "approval_present": True,
+            },
+            run_state_payload={
+                "objective_contract_status": "underspecified",
+                "completion_status": "done_and_safely_closed",
+                "approval_status": "approved",
+                "lifecycle_closure_status": "safely_closed",
+                "lifecycle_safely_closed": True,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(waiting["reconcile_status"], "waiting_for_truth")
+        self.assertEqual(inconsistent["reconcile_status"], "inconsistent")
+
+    def test_reconcile_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_reconcile_run_state_summary_surface(
+            {
+                "reconcile_status": "bad_status",
+                "reconcile_decision": "bad_decision",
+                "reconcile_alignment_status": "bad_alignment",
+                "reconcile_primary_mismatch": "truth_pending",
+                "reconcile_waiting_on_truth": True,
+                "reconcile_manual_required": True,
+                "reconcile_replan_required": False,
+                "reconcile_blocked_reasons": ["not_summary_safe"],
+            }
+        )
+
+        self.assertEqual(set(compact.keys()), set(RECONCILE_RUN_STATE_SUMMARY_SAFE_FIELDS))
+        self.assertIn(compact["reconcile_status"], RECONCILE_STATUSES)
+        self.assertIn(compact["reconcile_decision"], RECONCILE_DECISIONS)
+        self.assertIn(compact["reconcile_alignment_status"], RECONCILE_ALIGNMENT_STATUSES)
+
+    def test_repair_suggestion_contract_is_deterministic_when_truth_is_aligned(self) -> None:
+        payload_a = build_repair_suggestion_contract_surface(
+            run_id="job-repair-1",
+            objective_contract_payload={
+                "objective_id": "objective-repair-1",
+                "objective_status": "complete",
+            },
+            completion_contract_payload={
+                "objective_id": "objective-repair-1",
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+                "closure_decision": "close",
+            },
+            approval_transport_payload={
+                "objective_id": "objective-repair-1",
+                "approval_status": "approved",
+                "approval_transport_status": "actionable",
+                "approval_required": False,
+            },
+            reconcile_contract_payload={
+                "objective_id": "objective-repair-1",
+                "reconcile_status": "aligned",
+                "reconcile_decision": "aligned_no_action",
+            },
+            run_state_payload={
+                "objective_contract_present": True,
+                "completion_contract_present": True,
+                "approval_transport_present": True,
+                "reconcile_contract_present": True,
+                "lifecycle_closure_status": "safely_closed",
+                "lifecycle_safely_closed": True,
+                "lifecycle_manual_required": False,
+                "lifecycle_replan_required": False,
+                "manual_intervention_required": False,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+        payload_b = build_repair_suggestion_contract_surface(
+            run_id="job-repair-1",
+            objective_contract_payload={
+                "objective_id": "objective-repair-1",
+                "objective_status": "complete",
+            },
+            completion_contract_payload={
+                "objective_id": "objective-repair-1",
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+                "closure_decision": "close",
+            },
+            approval_transport_payload={
+                "objective_id": "objective-repair-1",
+                "approval_status": "approved",
+                "approval_transport_status": "actionable",
+                "approval_required": False,
+            },
+            reconcile_contract_payload={
+                "objective_id": "objective-repair-1",
+                "reconcile_status": "aligned",
+                "reconcile_decision": "aligned_no_action",
+            },
+            run_state_payload={
+                "objective_contract_present": True,
+                "completion_contract_present": True,
+                "approval_transport_present": True,
+                "reconcile_contract_present": True,
+                "lifecycle_closure_status": "safely_closed",
+                "lifecycle_safely_closed": True,
+                "lifecycle_manual_required": False,
+                "lifecycle_replan_required": False,
+                "manual_intervention_required": False,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["repair_suggestion_status"], "no_repair_needed")
+        self.assertEqual(payload_a["repair_suggestion_decision"], "no_action")
+        self.assertEqual(payload_a["repair_suggestion_class"], "no_gap")
+        self.assertEqual(payload_a["repair_primary_reason"], "no_reason")
+        self.assertEqual(payload_a["repair_reason_codes"], ["no_reason"])
+        self.assertFalse(payload_a["repair_execution_recommended"])
+        self.assertIn(payload_a["repair_suggestion_status"], REPAIR_SUGGESTION_STATUSES)
+        self.assertIn(payload_a["repair_suggestion_decision"], REPAIR_SUGGESTION_DECISIONS)
+        self.assertIn(payload_a["repair_suggestion_class"], REPAIR_SUGGESTION_CLASSES)
+        self.assertIn(payload_a["repair_suggestion_priority"], REPAIR_SUGGESTION_PRIORITIES)
+        self.assertIn(payload_a["repair_suggestion_confidence"], REPAIR_SUGGESTION_CONFIDENCE_LEVELS)
+        self.assertIn(payload_a["repair_target_surface"], REPAIR_TARGET_SURFACES)
+        self.assertIn(payload_a["repair_precondition_status"], REPAIR_PRECONDITION_STATUSES)
+
+    def test_repair_suggestion_waiting_truth_prefers_gather_truth(self) -> None:
+        payload = build_repair_suggestion_contract_surface(
+            run_id="job-repair-wait",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            reconcile_contract_payload={"reconcile_status": "waiting_for_truth"},
+            run_state_payload={},
+            artifact_presence={},
+        )
+
+        self.assertEqual(payload["repair_suggestion_decision"], "gather_truth")
+        self.assertTrue(payload["repair_truth_gathering_required"])
+        self.assertIn("missing_upstream_truth", payload["repair_reason_codes"])
+        self.assertFalse(payload["repair_execution_recommended"])
+
+    def test_repair_suggestion_blocked_manual_required_prefers_manual_review(self) -> None:
+        payload = build_repair_suggestion_contract_surface(
+            run_id="job-repair-manual",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "replan_before_closure", "done_status": "not_done"},
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={
+                "reconcile_status": "blocked",
+                "reconcile_manual_required": True,
+                "reconcile_replan_required": False,
+            },
+            run_state_payload={
+                "lifecycle_closure_status": "stopped_manual_only",
+                "lifecycle_safely_closed": False,
+                "manual_intervention_required": True,
+                "lifecycle_manual_required": True,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_suggestion_decision"], "manual_review")
+        self.assertEqual(payload["repair_suggestion_status"], "blocked")
+        self.assertTrue(payload["repair_manual_required"])
+        self.assertIn("manual_intervention_required", payload["repair_reason_codes"])
+
+    def test_repair_suggestion_replan_required_prefers_request_replan(self) -> None:
+        payload = build_repair_suggestion_contract_surface(
+            run_id="job-repair-replan",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "replan_before_closure",
+                "done_status": "not_done",
+                "completion_replan_required": True,
+            },
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked", "reconcile_replan_required": True},
+            run_state_payload={
+                "lifecycle_closure_status": "stopped_replan_required",
+                "lifecycle_safely_closed": False,
+                "lifecycle_replan_required": True,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_suggestion_decision"], "request_replan")
+        self.assertTrue(payload["repair_replan_required"])
+        self.assertIn("replan_required", payload["repair_reason_codes"])
+
+    def test_repair_suggestion_done_but_not_closed_prefers_closure_followup(self) -> None:
+        payload = build_repair_suggestion_contract_surface(
+            run_id="job-repair-closure",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "partially_aligned"},
+            run_state_payload={
+                "lifecycle_closure_status": "execution_complete_not_closed",
+                "lifecycle_safely_closed": False,
+                "lifecycle_manual_required": False,
+                "lifecycle_replan_required": False,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_suggestion_decision"], "closure_followup")
+        self.assertTrue(payload["repair_closure_followup_required"])
+        self.assertIn("closure_followup_required", payload["repair_reason_codes"])
+
+    def test_repair_suggestion_approval_conflict_prefers_manual_review(self) -> None:
+        payload = build_repair_suggestion_contract_surface(
+            run_id="job-repair-approval-conflict",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "execution_complete_not_accepted",
+                "done_status": "not_done",
+                "safe_closure_status": "not_safely_closed",
+            },
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={"reconcile_status": "inconsistent"},
+            run_state_payload={
+                "lifecycle_closure_status": "execution_complete_not_closed",
+                "lifecycle_safely_closed": False,
+                "manual_intervention_required": True,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_suggestion_decision"], "manual_review")
+        self.assertEqual(payload["repair_suggestion_class"], "approval_conflict")
+        self.assertIn("approval_conflict", payload["repair_reason_codes"])
+
+    def test_repair_suggestion_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_repair_suggestion_run_state_summary_surface(
+            {
+                "repair_suggestion_status": "bad_status",
+                "repair_suggestion_decision": "bad_decision",
+                "repair_suggestion_class": "bad_class",
+                "repair_suggestion_priority": "bad_priority",
+                "repair_suggestion_confidence": "bad_confidence",
+                "repair_primary_reason": "bad_reason",
+                "repair_manual_required": True,
+                "repair_replan_required": False,
+                "repair_truth_gathering_required": True,
+                "repair_reason_codes": ["not_summary_safe"],
+            }
+        )
+
+        self.assertEqual(set(compact.keys()), set(REPAIR_SUGGESTION_RUN_STATE_SUMMARY_SAFE_FIELDS))
+        self.assertIn(compact["repair_suggestion_status"], REPAIR_SUGGESTION_STATUSES)
+        self.assertIn(compact["repair_suggestion_decision"], REPAIR_SUGGESTION_DECISIONS)
+        self.assertIn(compact["repair_suggestion_class"], REPAIR_SUGGESTION_CLASSES)
+        self.assertIn(compact["repair_suggestion_priority"], REPAIR_SUGGESTION_PRIORITIES)
+        self.assertIn(compact["repair_suggestion_confidence"], REPAIR_SUGGESTION_CONFIDENCE_LEVELS)
+        self.assertIn(compact["repair_primary_reason"], REPAIR_REASON_CODES)
+
+    def test_repair_plan_transport_is_deterministic_when_no_repair_is_needed(self) -> None:
+        payload_a = build_repair_plan_transport_surface(
+            run_id="job-repair-plan-1",
+            objective_contract_payload={
+                "objective_id": "objective-repair-plan-1",
+                "objective_status": "complete",
+            },
+            completion_contract_payload={
+                "objective_id": "objective-repair-plan-1",
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+                "closure_decision": "close",
+            },
+            approval_transport_payload={
+                "objective_id": "objective-repair-plan-1",
+                "approval_status": "approved",
+                "approval_transport_status": "actionable",
+                "approval_required": False,
+            },
+            reconcile_contract_payload={
+                "objective_id": "objective-repair-plan-1",
+                "reconcile_status": "aligned",
+                "reconcile_decision": "aligned_no_action",
+            },
+            repair_suggestion_contract_payload={
+                "objective_id": "objective-repair-plan-1",
+                "repair_suggestion_status": "no_repair_needed",
+                "repair_suggestion_decision": "no_action",
+                "repair_suggestion_class": "no_gap",
+                "repair_primary_reason": "no_reason",
+                "repair_reason_codes": ["no_reason"],
+                "repair_target_surface": "none",
+            },
+            run_state_payload={
+                "objective_contract_present": True,
+                "completion_contract_present": True,
+                "approval_transport_present": True,
+                "reconcile_contract_present": True,
+                "repair_suggestion_contract_present": True,
+                "lifecycle_closure_status": "safely_closed",
+                "lifecycle_safely_closed": True,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+        payload_b = build_repair_plan_transport_surface(
+            run_id="job-repair-plan-1",
+            objective_contract_payload={
+                "objective_id": "objective-repair-plan-1",
+                "objective_status": "complete",
+            },
+            completion_contract_payload={
+                "objective_id": "objective-repair-plan-1",
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+                "closure_decision": "close",
+            },
+            approval_transport_payload={
+                "objective_id": "objective-repair-plan-1",
+                "approval_status": "approved",
+                "approval_transport_status": "actionable",
+                "approval_required": False,
+            },
+            reconcile_contract_payload={
+                "objective_id": "objective-repair-plan-1",
+                "reconcile_status": "aligned",
+                "reconcile_decision": "aligned_no_action",
+            },
+            repair_suggestion_contract_payload={
+                "objective_id": "objective-repair-plan-1",
+                "repair_suggestion_status": "no_repair_needed",
+                "repair_suggestion_decision": "no_action",
+                "repair_suggestion_class": "no_gap",
+                "repair_primary_reason": "no_reason",
+                "repair_reason_codes": ["no_reason"],
+                "repair_target_surface": "none",
+            },
+            run_state_payload={
+                "objective_contract_present": True,
+                "completion_contract_present": True,
+                "approval_transport_present": True,
+                "reconcile_contract_present": True,
+                "repair_suggestion_contract_present": True,
+                "lifecycle_closure_status": "safely_closed",
+                "lifecycle_safely_closed": True,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["repair_plan_status"], "not_needed")
+        self.assertEqual(payload_a["repair_plan_decision"], "no_plan")
+        self.assertEqual(payload_a["repair_plan_class"], "no_plan")
+        self.assertEqual(payload_a["repair_plan_candidate_action"], "no_action")
+        self.assertEqual(payload_a["repair_plan_reason_codes"], ["no_reason"])
+        self.assertEqual(payload_a["repair_plan_primary_reason"], "no_reason")
+        self.assertFalse(payload_a["repair_plan_execution_ready"])
+        self.assertIn(payload_a["repair_plan_status"], REPAIR_PLAN_STATUSES)
+        self.assertIn(payload_a["repair_plan_decision"], REPAIR_PLAN_DECISIONS)
+        self.assertIn(payload_a["repair_plan_class"], REPAIR_PLAN_CLASSES)
+        self.assertIn(payload_a["repair_plan_priority"], REPAIR_PLAN_PRIORITIES)
+        self.assertIn(payload_a["repair_plan_confidence"], REPAIR_PLAN_CONFIDENCE_LEVELS)
+        self.assertIn(payload_a["repair_plan_target_surface"], REPAIR_PLAN_TARGET_SURFACES)
+        self.assertIn(payload_a["repair_plan_candidate_action"], REPAIR_PLAN_CANDIDATE_ACTIONS)
+        self.assertIn(payload_a["repair_plan_precondition_status"], REPAIR_PLAN_PRECONDITION_STATUSES)
+        self.assertIn(payload_a["repair_plan_source_status"], REPAIR_PLAN_SOURCE_STATUSES)
+
+    def test_repair_plan_waiting_truth_suggestion_yields_truth_gathering_plan(self) -> None:
+        payload = build_repair_plan_transport_surface(
+            run_id="job-repair-plan-wait",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "not_done", "done_status": "not_done"},
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "waiting_for_truth", "reconcile_decision": "wait_for_truth"},
+            repair_suggestion_contract_payload={
+                "repair_suggestion_status": "suggested",
+                "repair_suggestion_decision": "gather_truth",
+                "repair_suggestion_class": "truth_gap",
+                "repair_primary_reason": "reconcile_waiting_for_truth",
+                "repair_reason_codes": ["reconcile_waiting_for_truth"],
+                "repair_truth_gathering_required": True,
+                "repair_target_surface": "cross_surface",
+            },
+            run_state_payload={"repair_suggestion_contract_present": True, "lifecycle_closure_status": "stopped_resumable"},
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_plan_status"], "available")
+        self.assertEqual(payload["repair_plan_decision"], "prepare_truth_gathering_plan")
+        self.assertEqual(payload["repair_plan_class"], "truth_gathering_plan")
+        self.assertEqual(payload["repair_plan_candidate_action"], "gather_missing_truth")
+        self.assertTrue(payload["repair_plan_truth_gathering_required"])
+        self.assertFalse(payload["repair_plan_execution_ready"])
+
+    def test_repair_plan_manual_review_suggestion_yields_manual_review_plan(self) -> None:
+        payload = build_repair_plan_transport_surface(
+            run_id="job-repair-plan-manual",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure", "done_status": "not_done"},
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked", "reconcile_decision": "manual_review"},
+            repair_suggestion_contract_payload={
+                "repair_suggestion_status": "suggested",
+                "repair_suggestion_decision": "manual_review",
+                "repair_suggestion_class": "approval_conflict",
+                "repair_primary_reason": "manual_intervention_required",
+                "repair_reason_codes": ["manual_intervention_required"],
+                "repair_manual_required": True,
+                "repair_target_surface": "approval",
+            },
+            run_state_payload={"repair_suggestion_contract_present": True, "manual_intervention_required": True},
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_plan_status"], "available")
+        self.assertEqual(payload["repair_plan_decision"], "prepare_manual_review_plan")
+        self.assertEqual(payload["repair_plan_class"], "manual_review_plan")
+        self.assertEqual(payload["repair_plan_candidate_action"], "request_manual_review")
+        self.assertEqual(payload["repair_plan_priority"], "high")
+        self.assertTrue(payload["repair_plan_manual_required"])
+
+    def test_repair_plan_replan_suggestion_yields_replan_plan(self) -> None:
+        payload = build_repair_plan_transport_surface(
+            run_id="job-repair-plan-replan",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "replan_before_closure", "done_status": "not_done"},
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked", "reconcile_decision": "request_replan"},
+            repair_suggestion_contract_payload={
+                "repair_suggestion_status": "suggested",
+                "repair_suggestion_decision": "request_replan",
+                "repair_suggestion_class": "objective_gap",
+                "repair_primary_reason": "replan_required",
+                "repair_reason_codes": ["replan_required"],
+                "repair_replan_required": True,
+                "repair_target_surface": "objective",
+            },
+            run_state_payload={"repair_suggestion_contract_present": True, "policy_replan_required": True},
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_plan_status"], "available")
+        self.assertEqual(payload["repair_plan_decision"], "prepare_replan_plan")
+        self.assertEqual(payload["repair_plan_class"], "replan_plan")
+        self.assertEqual(payload["repair_plan_candidate_action"], "request_replan")
+        self.assertEqual(payload["repair_plan_priority"], "high")
+        self.assertTrue(payload["repair_plan_replan_required"])
+
+    def test_repair_plan_closure_followup_suggestion_yields_closure_followup_plan(self) -> None:
+        payload = build_repair_plan_transport_surface(
+            run_id="job-repair-plan-closure",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked", "reconcile_decision": "hold"},
+            repair_suggestion_contract_payload={
+                "repair_suggestion_status": "suggested",
+                "repair_suggestion_decision": "closure_followup",
+                "repair_suggestion_class": "completion_closure_gap",
+                "repair_primary_reason": "closure_followup_required",
+                "repair_reason_codes": ["closure_followup_required"],
+                "repair_closure_followup_required": True,
+                "repair_target_surface": "lifecycle",
+            },
+            run_state_payload={
+                "repair_suggestion_contract_present": True,
+                "lifecycle_closure_status": "execution_complete_not_closed",
+                "lifecycle_safely_closed": False,
+            },
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_plan_status"], "available")
+        self.assertEqual(payload["repair_plan_decision"], "prepare_closure_followup_plan")
+        self.assertEqual(payload["repair_plan_class"], "closure_followup_plan")
+        self.assertEqual(payload["repair_plan_candidate_action"], "request_closure_followup")
+        self.assertEqual(payload["repair_plan_priority"], "high")
+        self.assertTrue(payload["repair_plan_closure_followup_required"])
+
+    def test_repair_plan_priority_rules_cover_high_medium_and_low(self) -> None:
+        high = build_repair_plan_transport_surface(
+            run_id="job-repair-plan-priority-high",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure", "done_status": "not_done"},
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked", "reconcile_decision": "request_replan"},
+            repair_suggestion_contract_payload={
+                "repair_suggestion_status": "suggested",
+                "repair_suggestion_decision": "request_replan",
+                "repair_suggestion_class": "objective_gap",
+                "repair_primary_reason": "replan_required",
+                "repair_reason_codes": ["replan_required"],
+                "repair_replan_required": True,
+            },
+            run_state_payload={"repair_suggestion_contract_present": True},
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+        medium = build_repair_plan_transport_surface(
+            run_id="job-repair-plan-priority-medium",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "not_done", "done_status": "not_done"},
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "waiting_for_truth", "reconcile_decision": "wait_for_truth"},
+            repair_suggestion_contract_payload={
+                "repair_suggestion_status": "suggested",
+                "repair_suggestion_decision": "gather_truth",
+                "repair_suggestion_class": "truth_gap",
+                "repair_primary_reason": "reconcile_waiting_for_truth",
+                "repair_reason_codes": ["reconcile_waiting_for_truth"],
+                "repair_truth_gathering_required": True,
+            },
+            run_state_payload={"repair_suggestion_contract_present": True},
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+        low = build_repair_plan_transport_surface(
+            run_id="job-repair-plan-priority-low",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "done_status": "done",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={"reconcile_status": "aligned", "reconcile_decision": "aligned_no_action"},
+            repair_suggestion_contract_payload={
+                "repair_suggestion_status": "no_repair_needed",
+                "repair_suggestion_decision": "no_action",
+                "repair_primary_reason": "no_reason",
+                "repair_reason_codes": ["no_reason"],
+            },
+            run_state_payload={"repair_suggestion_contract_present": True, "lifecycle_closure_status": "safely_closed"},
+            artifact_presence={
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(high["repair_plan_priority"], "high")
+        self.assertEqual(medium["repair_plan_priority"], "medium")
+        self.assertEqual(low["repair_plan_priority"], "low")
+
+    def test_repair_plan_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_repair_plan_transport_run_state_summary_surface(
+            {
+                "repair_plan_status": "bad_status",
+                "repair_plan_decision": "bad_decision",
+                "repair_plan_class": "bad_class",
+                "repair_plan_priority": "bad_priority",
+                "repair_plan_confidence": "bad_confidence",
+                "repair_plan_target_surface": "bad_surface",
+                "repair_plan_candidate_action": "bad_action",
+                "repair_plan_primary_reason": "bad_reason",
+                "repair_plan_manual_required": True,
+                "repair_plan_replan_required": False,
+                "repair_plan_truth_gathering_required": True,
+                "repair_plan_reason_codes": ["not_summary_safe"],
+            }
+        )
+
+        self.assertEqual(set(compact.keys()), set(REPAIR_PLAN_TRANSPORT_RUN_STATE_SUMMARY_SAFE_FIELDS))
+        self.assertIn(compact["repair_plan_status"], REPAIR_PLAN_STATUSES)
+        self.assertIn(compact["repair_plan_decision"], REPAIR_PLAN_DECISIONS)
+        self.assertIn(compact["repair_plan_class"], REPAIR_PLAN_CLASSES)
+        self.assertIn(compact["repair_plan_priority"], REPAIR_PLAN_PRIORITIES)
+        self.assertIn(compact["repair_plan_confidence"], REPAIR_PLAN_CONFIDENCE_LEVELS)
+        self.assertIn(compact["repair_plan_target_surface"], REPAIR_PLAN_TARGET_SURFACES)
+        self.assertIn(compact["repair_plan_candidate_action"], REPAIR_PLAN_CANDIDATE_ACTIONS)
+        self.assertIn(compact["repair_plan_primary_reason"], REPAIR_PLAN_REASON_CODES)
+
+    def test_repair_approval_binding_is_deterministic_when_plan_not_needed(self) -> None:
+        kwargs = {
+            "run_id": "job-repair-binding-not-needed",
+            "objective_contract_payload": {
+                "objective_id": "objective-repair-binding-not-needed",
+                "objective_status": "complete",
+            },
+            "completion_contract_payload": {
+                "objective_id": "objective-repair-binding-not-needed",
+                "completion_status": "done_and_safely_closed",
+                "closure_decision": "close",
+            },
+            "approval_transport_payload": {
+                "objective_id": "objective-repair-binding-not-needed",
+                "approval_status": "absent",
+                "approval_decision": "none",
+                "approval_transport_status": "missing",
+            },
+            "reconcile_contract_payload": {"reconcile_status": "aligned"},
+            "repair_suggestion_contract_payload": {"repair_suggestion_status": "no_repair_needed"},
+            "repair_plan_transport_payload": {
+                "repair_plan_status": "not_needed",
+                "repair_plan_decision": "no_plan",
+                "repair_plan_candidate_action": "no_action",
+                "repair_plan_primary_reason": "no_reason",
+            },
+            "run_state_payload": {
+                "repair_plan_transport_present": True,
+                "approval_transport_present": True,
+            },
+            "artifact_presence": {
+                "repair_plan_transport.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        }
+        payload_a = build_repair_approval_binding_surface(**kwargs)
+        payload_b = build_repair_approval_binding_surface(**kwargs)
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["repair_approval_binding_status"], "not_applicable")
+        self.assertEqual(payload_a["repair_approval_binding_decision"], "no_binding")
+        self.assertEqual(payload_a["repair_approval_binding_scope"], "none")
+        self.assertEqual(payload_a["repair_approval_binding_reason_codes"], ["no_reason"])
+        self.assertEqual(payload_a["repair_approval_binding_primary_reason"], "no_reason")
+        self.assertFalse(payload_a["repair_approval_binding_execution_authorized"])
+        self.assertIn(payload_a["repair_approval_binding_status"], REPAIR_APPROVAL_BINDING_STATUSES)
+        self.assertIn(payload_a["repair_approval_binding_decision"], REPAIR_APPROVAL_BINDING_DECISIONS)
+        self.assertIn(payload_a["repair_approval_binding_scope"], REPAIR_APPROVAL_BINDING_SCOPES)
+        self.assertIn(payload_a["repair_approval_binding_validity"], REPAIR_APPROVAL_BINDING_VALIDITIES)
+        self.assertIn(
+            payload_a["repair_approval_binding_compatibility_status"],
+            REPAIR_APPROVAL_BINDING_COMPATIBILITY_STATUSES,
+        )
+        self.assertIn(
+            payload_a["repair_approval_binding_source_status"],
+            REPAIR_APPROVAL_BINDING_SOURCE_STATUSES,
+        )
+
+    def test_repair_approval_binding_available_plan_without_approval_is_missing_unbound(self) -> None:
+        payload = build_repair_approval_binding_surface(
+            run_id="job-repair-binding-missing-approval",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={"approval_status": "absent", "approval_decision": "none"},
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_decision": "prepare_replan_plan",
+                "repair_plan_candidate_action": "request_replan",
+                "repair_plan_primary_reason": "replan_required",
+                "repair_plan_replan_required": True,
+            },
+            run_state_payload={
+                "repair_plan_transport_present": True,
+                "approval_transport_present": True,
+            },
+            artifact_presence={
+                "repair_plan_transport.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_approval_binding_status"], "missing")
+        self.assertEqual(payload["repair_approval_binding_decision"], "hold_unbound")
+        self.assertEqual(payload["repair_approval_binding_primary_reason"], "missing_approval")
+        self.assertFalse(payload["repair_approval_binding_execution_authorized"])
+
+    def test_repair_approval_binding_denied_or_deferred_prevents_bound(self) -> None:
+        denied = build_repair_approval_binding_surface(
+            run_id="job-repair-binding-denied",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "denied",
+                "approval_decision": "deny",
+                "approval_scope": "current_completion_state",
+                "approved_action": "hold_for_manual_review",
+                "approval_transport_status": "blocked",
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_decision": "prepare_manual_review_plan",
+                "repair_plan_candidate_action": "request_manual_review",
+                "repair_plan_primary_reason": "manual_intervention_required",
+                "repair_plan_manual_required": True,
+            },
+            run_state_payload={"repair_plan_transport_present": True, "approval_transport_present": True},
+            artifact_presence={
+                "repair_plan_transport.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+        deferred = build_repair_approval_binding_surface(
+            run_id="job-repair-binding-deferred",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "deferred",
+                "approval_decision": "defer",
+                "approval_scope": "current_completion_state",
+                "approved_action": "hold_for_manual_review",
+                "approval_transport_status": "non_actionable",
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_decision": "prepare_manual_review_plan",
+                "repair_plan_candidate_action": "request_manual_review",
+                "repair_plan_primary_reason": "manual_intervention_required",
+                "repair_plan_manual_required": True,
+            },
+            run_state_payload={"repair_plan_transport_present": True, "approval_transport_present": True},
+            artifact_presence={
+                "repair_plan_transport.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertNotEqual(denied["repair_approval_binding_status"], "bound")
+        self.assertNotEqual(deferred["repair_approval_binding_status"], "bound")
+        self.assertIn("approval_denied", denied["repair_approval_binding_reason_codes"])
+        self.assertIn("approval_deferred", deferred["repair_approval_binding_reason_codes"])
+
+    def test_repair_approval_binding_compatible_explicit_approval_can_bind(self) -> None:
+        payload = build_repair_approval_binding_surface(
+            run_id="job-repair-binding-bound",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "replan_requested",
+                "approval_decision": "request_replan",
+                "approval_scope": "replan_only",
+                "approved_action": "request_replan",
+                "approval_transport_status": "actionable",
+                "approval_compatibility_status": "compatible",
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_decision": "prepare_replan_plan",
+                "repair_plan_candidate_action": "request_replan",
+                "repair_plan_primary_reason": "replan_required",
+                "repair_plan_replan_required": True,
+            },
+            run_state_payload={"repair_plan_transport_present": True, "approval_transport_present": True},
+            artifact_presence={
+                "repair_plan_transport.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(payload["repair_approval_binding_status"], "bound")
+        self.assertEqual(payload["repair_approval_binding_decision"], "bind_for_future_execution")
+        self.assertEqual(payload["repair_approval_binding_validity"], "valid")
+        self.assertEqual(payload["repair_approval_binding_compatibility_status"], "compatible")
+        self.assertFalse(payload["repair_approval_binding_execution_authorized"])
+
+    def test_repair_approval_binding_stale_or_superseded_degrades_validity(self) -> None:
+        stale = build_repair_approval_binding_surface(
+            run_id="job-repair-binding-stale",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_scope": "current_completion_state",
+                "approved_action": "hold_for_manual_review",
+                "approval_transport_status": "expired",
+                "approval_stale": True,
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_candidate_action": "request_manual_review",
+                "repair_plan_manual_required": True,
+            },
+            run_state_payload={"repair_plan_transport_present": True, "approval_transport_present": True},
+            artifact_presence={
+                "repair_plan_transport.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+        superseded = build_repair_approval_binding_surface(
+            run_id="job-repair-binding-superseded",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_scope": "current_completion_state",
+                "approved_action": "hold_for_manual_review",
+                "approval_transport_status": "superseded",
+                "approval_superseded": True,
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_candidate_action": "request_manual_review",
+                "repair_plan_manual_required": True,
+            },
+            run_state_payload={"repair_plan_transport_present": True, "approval_transport_present": True},
+            artifact_presence={
+                "repair_plan_transport.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertEqual(stale["repair_approval_binding_validity"], "stale")
+        self.assertNotEqual(stale["repair_approval_binding_status"], "bound")
+        self.assertEqual(superseded["repair_approval_binding_validity"], "superseded")
+        self.assertNotEqual(superseded["repair_approval_binding_status"], "bound")
+
+    def test_repair_approval_binding_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_repair_approval_binding_run_state_summary_surface(
+            {
+                "repair_approval_binding_status": "bad_status",
+                "repair_approval_binding_decision": "bad_decision",
+                "repair_approval_binding_scope": "bad_scope",
+                "repair_approval_binding_validity": "bad_validity",
+                "repair_approval_binding_compatibility_status": "bad_compatibility",
+                "repair_approval_binding_primary_reason": "bad_reason",
+                "repair_approval_binding_manual_required": True,
+                "repair_approval_binding_replan_required": False,
+                "repair_approval_binding_truth_gathering_required": True,
+                "repair_approval_binding_reason_codes": ["not_summary_safe"],
+            }
+        )
+
+        self.assertEqual(
+            set(compact.keys()),
+            set(REPAIR_APPROVAL_BINDING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(compact["repair_approval_binding_status"], REPAIR_APPROVAL_BINDING_STATUSES)
+        self.assertIn(compact["repair_approval_binding_decision"], REPAIR_APPROVAL_BINDING_DECISIONS)
+        self.assertIn(compact["repair_approval_binding_scope"], REPAIR_APPROVAL_BINDING_SCOPES)
+        self.assertIn(compact["repair_approval_binding_validity"], REPAIR_APPROVAL_BINDING_VALIDITIES)
+        self.assertIn(
+            compact["repair_approval_binding_compatibility_status"],
+            REPAIR_APPROVAL_BINDING_COMPATIBILITY_STATUSES,
+        )
+        self.assertIn(
+            compact["repair_approval_binding_primary_reason"],
+            REPAIR_APPROVAL_BINDING_REASON_CODES,
+        )
+
+    def test_execution_authorization_gate_is_deterministic_for_eligible_posture(self) -> None:
+        kwargs = {
+            "run_id": "job-exec-auth-eligible",
+            "objective_contract_payload": {
+                "objective_id": "objective-exec-auth-eligible",
+                "objective_status": "complete",
+            },
+            "completion_contract_payload": {
+                "objective_id": "objective-exec-auth-eligible",
+                "completion_status": "done_and_safely_closed",
+                "closure_decision": "close",
+            },
+            "approval_transport_payload": {
+                "objective_id": "objective-exec-auth-eligible",
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_transport_status": "actionable",
+            },
+            "reconcile_contract_payload": {
+                "objective_id": "objective-exec-auth-eligible",
+                "reconcile_status": "aligned",
+                "reconcile_decision": "aligned_no_action",
+            },
+            "repair_suggestion_contract_payload": {
+                "repair_suggestion_status": "suggested",
+            },
+            "repair_plan_transport_payload": {
+                "repair_plan_status": "available",
+                "repair_plan_candidate_action": "request_manual_review",
+            },
+            "repair_approval_binding_payload": {
+                "repair_approval_binding_status": "bound",
+                "repair_approval_binding_scope": "current_plan_candidate",
+                "repair_approval_binding_validity": "valid",
+                "repair_approval_binding_compatibility_status": "compatible",
+                "repair_approval_binding_primary_reason": "no_reason",
+                "repair_approval_binding_manual_required": False,
+                "repair_approval_binding_replan_required": False,
+                "repair_approval_binding_truth_gathering_required": False,
+            },
+            "run_state_payload": {
+                "repair_approval_binding_present": True,
+                "repair_plan_transport_present": True,
+                "approval_transport_present": True,
+                "manual_intervention_required": False,
+                "policy_manual_required": False,
+                "policy_replan_required": False,
+                "repair_truth_gathering_required": False,
+            },
+            "artifact_presence": {
+                "objective_contract.json": True,
+                "completion_contract.json": True,
+                "approval_transport.json": True,
+                "reconcile_contract.json": True,
+                "repair_suggestion_contract.json": True,
+                "repair_plan_transport.json": True,
+                "repair_approval_binding.json": True,
+                "run_state.json": True,
+            },
+        }
+        payload_a = build_execution_authorization_gate_surface(**kwargs)
+        payload_b = build_execution_authorization_gate_surface(**kwargs)
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["execution_authorization_status"], "eligible")
+        self.assertEqual(payload_a["execution_authorization_decision"], "authorize_future_execution")
+        self.assertEqual(payload_a["execution_authorization_primary_reason"], "authorization_ready")
+        self.assertFalse(payload_a["execution_authorization_denied"])
+        self.assertTrue(payload_a["execution_authorization_eligible"])
+        self.assertIn(payload_a["execution_authorization_status"], EXECUTION_AUTHORIZATION_STATUSES)
+        self.assertIn(payload_a["execution_authorization_decision"], EXECUTION_AUTHORIZATION_DECISIONS)
+        self.assertIn(payload_a["execution_authorization_scope"], EXECUTION_AUTHORIZATION_SCOPES)
+        self.assertIn(payload_a["execution_authorization_validity"], EXECUTION_AUTHORIZATION_VALIDITIES)
+        self.assertIn(
+            payload_a["execution_authorization_confidence"],
+            EXECUTION_AUTHORIZATION_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(
+            payload_a["execution_authorization_source_status"],
+            EXECUTION_AUTHORIZATION_SOURCE_STATUSES,
+        )
+        self.assertIn(
+            payload_a["execution_authorization_primary_reason"],
+            EXECUTION_AUTHORIZATION_REASON_CODES,
+        )
+
+    def test_execution_authorization_missing_binding_prevents_eligibility(self) -> None:
+        payload = build_execution_authorization_gate_surface(
+            run_id="job-exec-auth-missing-binding",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_transport_status": "actionable",
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked", "reconcile_decision": "hold"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={"repair_plan_status": "available"},
+            repair_approval_binding_payload=None,
+            run_state_payload={"repair_plan_transport_present": True, "approval_transport_present": True},
+            artifact_presence={
+                "repair_plan_transport.json": True,
+                "approval_transport.json": True,
+                "run_state.json": True,
+            },
+        )
+
+        self.assertNotEqual(payload["execution_authorization_status"], "eligible")
+        self.assertIn("missing_binding", payload["execution_authorization_reason_codes"])
+        self.assertFalse(payload["execution_authorization_eligible"])
+
+    def test_execution_authorization_denied_approval_sets_denied_status(self) -> None:
+        payload = build_execution_authorization_gate_surface(
+            run_id="job-exec-auth-denied",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "denied",
+                "approval_decision": "deny",
+                "approval_transport_status": "blocked",
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={"repair_plan_status": "available"},
+            repair_approval_binding_payload={
+                "repair_approval_binding_status": "blocked",
+                "repair_approval_binding_validity": "invalid",
+                "repair_approval_binding_compatibility_status": "incompatible",
+            },
+            run_state_payload={"repair_approval_binding_present": True},
+            artifact_presence={"repair_approval_binding.json": True, "run_state.json": True},
+        )
+
+        self.assertEqual(payload["execution_authorization_status"], "denied")
+        self.assertEqual(payload["execution_authorization_decision"], "deny_execution")
+        self.assertTrue(payload["execution_authorization_denied"])
+        self.assertFalse(payload["execution_authorization_eligible"])
+        self.assertIn("approval_denied", payload["execution_authorization_reason_codes"])
+
+    def test_execution_authorization_stale_superseded_or_invalid_binding_prevents_eligibility(self) -> None:
+        stale = build_execution_authorization_gate_surface(
+            run_id="job-exec-auth-stale",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_transport_status": "actionable",
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={"repair_plan_status": "available"},
+            repair_approval_binding_payload={
+                "repair_approval_binding_status": "bound",
+                "repair_approval_binding_validity": "stale",
+                "repair_approval_binding_compatibility_status": "compatible",
+            },
+            run_state_payload={"repair_approval_binding_present": True},
+            artifact_presence={"repair_approval_binding.json": True, "run_state.json": True},
+        )
+        superseded = build_execution_authorization_gate_surface(
+            run_id="job-exec-auth-superseded",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_transport_status": "actionable",
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={"repair_plan_status": "available"},
+            repair_approval_binding_payload={
+                "repair_approval_binding_status": "bound",
+                "repair_approval_binding_validity": "superseded",
+                "repair_approval_binding_compatibility_status": "compatible",
+            },
+            run_state_payload={"repair_approval_binding_present": True},
+            artifact_presence={"repair_approval_binding.json": True, "run_state.json": True},
+        )
+        invalid = build_execution_authorization_gate_surface(
+            run_id="job-exec-auth-invalid",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "approved",
+                "approval_decision": "approve",
+                "approval_transport_status": "actionable",
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={"repair_plan_status": "available"},
+            repair_approval_binding_payload={
+                "repair_approval_binding_status": "blocked",
+                "repair_approval_binding_validity": "invalid",
+                "repair_approval_binding_compatibility_status": "incompatible",
+            },
+            run_state_payload={"repair_approval_binding_present": True},
+            artifact_presence={"repair_approval_binding.json": True, "run_state.json": True},
+        )
+
+        self.assertNotEqual(stale["execution_authorization_status"], "eligible")
+        self.assertEqual(stale["execution_authorization_validity"], "stale")
+        self.assertNotEqual(superseded["execution_authorization_status"], "eligible")
+        self.assertEqual(superseded["execution_authorization_validity"], "superseded")
+        self.assertNotEqual(invalid["execution_authorization_status"], "eligible")
+        self.assertEqual(invalid["execution_authorization_validity"], "invalid")
+
+    def test_execution_authorization_replan_manual_and_truth_gathering_prevent_eligibility(self) -> None:
+        replan = build_execution_authorization_gate_surface(
+            run_id="job-exec-auth-replan",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked", "reconcile_decision": "request_replan"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_replan_required": True,
+            },
+            repair_approval_binding_payload={
+                "repair_approval_binding_status": "partially_bound",
+                "repair_approval_binding_validity": "valid",
+                "repair_approval_binding_compatibility_status": "partially_compatible",
+                "repair_approval_binding_replan_required": True,
+            },
+            run_state_payload={"repair_approval_binding_present": True, "policy_replan_required": True},
+            artifact_presence={"repair_approval_binding.json": True, "run_state.json": True},
+        )
+        manual = build_execution_authorization_gate_surface(
+            run_id="job-exec-auth-manual",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "execution_complete_not_accepted"},
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={"repair_plan_status": "available", "repair_plan_manual_required": True},
+            repair_approval_binding_payload={
+                "repair_approval_binding_status": "partially_bound",
+                "repair_approval_binding_validity": "valid",
+                "repair_approval_binding_compatibility_status": "partially_compatible",
+                "repair_approval_binding_manual_required": True,
+            },
+            run_state_payload={"repair_approval_binding_present": True, "manual_intervention_required": True},
+            artifact_presence={"repair_approval_binding.json": True, "run_state.json": True},
+        )
+        truth_gap = build_execution_authorization_gate_surface(
+            run_id="job-exec-auth-truth-gap",
+            objective_contract_payload={"objective_status": "incomplete"},
+            completion_contract_payload={"completion_status": "not_done"},
+            approval_transport_payload={"approval_status": "absent", "approval_transport_status": "missing"},
+            reconcile_contract_payload={"reconcile_status": "waiting_for_truth"},
+            repair_suggestion_contract_payload={
+                "repair_suggestion_status": "suggested",
+                "repair_truth_gathering_required": True,
+            },
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_truth_gathering_required": True,
+            },
+            repair_approval_binding_payload={
+                "repair_approval_binding_status": "missing",
+                "repair_approval_binding_validity": "insufficient_truth",
+                "repair_approval_binding_compatibility_status": "insufficient_truth",
+                "repair_approval_binding_truth_gathering_required": True,
+            },
+            run_state_payload={"repair_approval_binding_present": True},
+            artifact_presence={"repair_approval_binding.json": True, "run_state.json": True},
+        )
+
+        self.assertEqual(replan["execution_authorization_decision"], "request_replan")
+        self.assertFalse(replan["execution_authorization_eligible"])
+        self.assertNotEqual(manual["execution_authorization_status"], "eligible")
+        self.assertIn(
+            manual["execution_authorization_primary_reason"],
+            EXECUTION_AUTHORIZATION_REASON_CODES,
+        )
+        self.assertEqual(truth_gap["execution_authorization_status"], "pending")
+        self.assertIn("truth_gathering_required", truth_gap["execution_authorization_reason_codes"])
+        self.assertFalse(truth_gap["execution_authorization_eligible"])
+
+    def test_execution_authorization_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_execution_authorization_gate_run_state_summary_surface(
+            {
+                "execution_authorization_status": "bad_status",
+                "execution_authorization_decision": "bad_decision",
+                "execution_authorization_scope": "bad_scope",
+                "execution_authorization_validity": "bad_validity",
+                "execution_authorization_confidence": "bad_confidence",
+                "execution_authorization_primary_reason": "bad_reason",
+                "execution_authorization_manual_required": True,
+                "execution_authorization_replan_required": False,
+                "execution_authorization_truth_gathering_required": True,
+                "execution_authorization_reason_codes": ["not_summary_safe"],
+            }
+        )
+
+        self.assertEqual(
+            set(compact.keys()),
+            set(EXECUTION_AUTHORIZATION_GATE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(compact["execution_authorization_status"], EXECUTION_AUTHORIZATION_STATUSES)
+        self.assertIn(compact["execution_authorization_decision"], EXECUTION_AUTHORIZATION_DECISIONS)
+        self.assertIn(compact["execution_authorization_scope"], EXECUTION_AUTHORIZATION_SCOPES)
+        self.assertIn(compact["execution_authorization_validity"], EXECUTION_AUTHORIZATION_VALIDITIES)
+        self.assertIn(
+            compact["execution_authorization_confidence"],
+            EXECUTION_AUTHORIZATION_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(
+            compact["execution_authorization_primary_reason"],
+            EXECUTION_AUTHORIZATION_REASON_CODES,
+        )
+
+    def test_bounded_execution_bridge_is_deterministic_for_ready_posture(self) -> None:
+        kwargs = {
+            "run_id": "job-bounded-ready",
+            "objective_contract_payload": {"objective_id": "objective-bounded", "objective_status": "complete"},
+            "completion_contract_payload": {
+                "objective_id": "objective-bounded",
+                "completion_status": "done_and_safely_closed",
+                "closure_decision": "close",
+            },
+            "approval_transport_payload": {
+                "objective_id": "objective-bounded",
+                "approval_status": "approved",
+                "approval_transport_status": "actionable",
+            },
+            "reconcile_contract_payload": {"reconcile_status": "aligned", "reconcile_decision": "aligned_no_action"},
+            "repair_suggestion_contract_payload": {"repair_suggestion_status": "suggested"},
+            "repair_plan_transport_payload": {
+                "repair_plan_status": "available",
+                "repair_plan_candidate_action": "request_manual_review",
+            },
+            "repair_approval_binding_payload": {
+                "repair_approval_binding_status": "bound",
+                "repair_approval_binding_scope": "current_plan_candidate",
+                "repair_approval_binding_validity": "valid",
+            },
+            "execution_authorization_gate_payload": {
+                "execution_authorization_status": "eligible",
+                "execution_authorization_scope": "current_repair_plan_candidate",
+                "execution_authorization_validity": "valid",
+                "execution_authorization_primary_reason": "authorization_ready",
+                "execution_authorization_eligible": True,
+                "execution_authorization_denied": False,
+            },
+            "run_state_payload": {
+                "repair_plan_transport_present": True,
+                "repair_approval_binding_present": True,
+                "execution_authorization_gate_present": True,
+                "manual_intervention_required": False,
+                "policy_manual_required": False,
+                "policy_replan_required": False,
+                "repair_truth_gathering_required": False,
+            },
+            "artifact_presence": {
+                "repair_plan_transport.json": True,
+                "repair_approval_binding.json": True,
+                "execution_authorization_gate.json": True,
+                "run_state.json": True,
+            },
+        }
+        payload_a = build_bounded_execution_bridge_surface(**kwargs)
+        payload_b = build_bounded_execution_bridge_surface(**kwargs)
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["bounded_execution_status"], "ready")
+        self.assertEqual(payload_a["bounded_execution_decision"], "attempt_bounded_execution")
+        self.assertTrue(payload_a["bounded_execution_ready"])
+        self.assertFalse(payload_a["bounded_execution_deferred"])
+        self.assertFalse(payload_a["bounded_execution_denied"])
+        self.assertIn(payload_a["bounded_execution_status"], BOUNDED_EXECUTION_STATUSES)
+        self.assertIn(payload_a["bounded_execution_decision"], BOUNDED_EXECUTION_DECISIONS)
+        self.assertIn(payload_a["bounded_execution_scope"], BOUNDED_EXECUTION_SCOPES)
+        self.assertIn(
+            payload_a["bounded_execution_candidate_action"],
+            BOUNDED_EXECUTION_CANDIDATE_ACTIONS,
+        )
+        self.assertIn(payload_a["bounded_execution_validity"], BOUNDED_EXECUTION_VALIDITIES)
+        self.assertIn(
+            payload_a["bounded_execution_confidence"],
+            BOUNDED_EXECUTION_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(
+            payload_a["bounded_execution_source_status"],
+            BOUNDED_EXECUTION_SOURCE_STATUSES,
+        )
+        self.assertIn(
+            payload_a["bounded_execution_primary_reason"],
+            BOUNDED_EXECUTION_REASON_CODES,
+        )
+
+    def test_bounded_execution_bridge_authorization_not_eligible_prevents_ready(self) -> None:
+        payload = build_bounded_execution_bridge_surface(
+            run_id="job-bounded-not-eligible",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={"repair_plan_status": "available", "repair_plan_candidate_action": "request_replan"},
+            repair_approval_binding_payload={"repair_approval_binding_status": "missing"},
+            execution_authorization_gate_payload={
+                "execution_authorization_status": "blocked",
+                "execution_authorization_validity": "invalid",
+                "execution_authorization_eligible": False,
+            },
+            run_state_payload={"execution_authorization_gate_present": True},
+            artifact_presence={"execution_authorization_gate.json": True, "run_state.json": True},
+        )
+
+        self.assertNotEqual(payload["bounded_execution_status"], "ready")
+        self.assertFalse(payload["bounded_execution_ready"])
+        self.assertIn("authorization_not_eligible", payload["bounded_execution_reason_codes"])
+
+    def test_bounded_execution_bridge_denied_authorization_prevents_ready(self) -> None:
+        payload = build_bounded_execution_bridge_surface(
+            run_id="job-bounded-denied",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={
+                "approval_status": "denied",
+                "approval_decision": "deny",
+                "approval_transport_status": "blocked",
+            },
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={"repair_plan_status": "available", "repair_plan_candidate_action": "request_manual_review"},
+            repair_approval_binding_payload={
+                "repair_approval_binding_status": "blocked",
+                "repair_approval_binding_validity": "invalid",
+            },
+            execution_authorization_gate_payload={
+                "execution_authorization_status": "denied",
+                "execution_authorization_denied": True,
+            },
+            run_state_payload={"execution_authorization_gate_present": True},
+            artifact_presence={"execution_authorization_gate.json": True, "run_state.json": True},
+        )
+
+        self.assertNotEqual(payload["bounded_execution_status"], "ready")
+        self.assertFalse(payload["bounded_execution_ready"])
+        self.assertTrue(payload["bounded_execution_denied"])
+        self.assertIn("authorization_denied", payload["bounded_execution_reason_codes"])
+
+    def test_bounded_execution_bridge_replan_manual_and_truth_gathering_prevent_ready(self) -> None:
+        replan = build_bounded_execution_bridge_surface(
+            run_id="job-bounded-replan",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={"completion_status": "replan_before_closure"},
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked", "reconcile_decision": "request_replan"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_candidate_action": "request_replan",
+                "repair_plan_replan_required": True,
+            },
+            repair_approval_binding_payload={"repair_approval_binding_status": "partially_bound"},
+            execution_authorization_gate_payload={
+                "execution_authorization_status": "blocked",
+                "execution_authorization_decision": "request_replan",
+                "execution_authorization_replan_required": True,
+            },
+            run_state_payload={"execution_authorization_gate_present": True},
+            artifact_presence={"execution_authorization_gate.json": True, "run_state.json": True},
+        )
+        manual = build_bounded_execution_bridge_surface(
+            run_id="job-bounded-manual",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "execution_complete_not_accepted"},
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_candidate_action": "request_manual_review",
+                "repair_plan_manual_required": True,
+            },
+            repair_approval_binding_payload={"repair_approval_binding_status": "partially_bound"},
+            execution_authorization_gate_payload={
+                "execution_authorization_status": "blocked",
+                "execution_authorization_manual_required": True,
+            },
+            run_state_payload={"execution_authorization_gate_present": True, "manual_intervention_required": True},
+            artifact_presence={"execution_authorization_gate.json": True, "run_state.json": True},
+        )
+        truth_gap = build_bounded_execution_bridge_surface(
+            run_id="job-bounded-truth-gap",
+            objective_contract_payload={"objective_status": "incomplete"},
+            completion_contract_payload={"completion_status": "not_done"},
+            approval_transport_payload={"approval_status": "absent", "approval_transport_status": "missing"},
+            reconcile_contract_payload={"reconcile_status": "waiting_for_truth"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested", "repair_suggestion_decision": "gather_truth"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_candidate_action": "gather_missing_truth",
+                "repair_plan_truth_gathering_required": True,
+            },
+            repair_approval_binding_payload={"repair_approval_binding_status": "missing"},
+            execution_authorization_gate_payload={
+                "execution_authorization_status": "pending",
+                "execution_authorization_truth_gathering_required": True,
+            },
+            run_state_payload={"execution_authorization_gate_present": True},
+            artifact_presence={"execution_authorization_gate.json": True, "run_state.json": True},
+        )
+
+        self.assertFalse(replan["bounded_execution_ready"])
+        self.assertEqual(replan["bounded_execution_decision"], "request_replan")
+        self.assertFalse(manual["bounded_execution_ready"])
+        self.assertEqual(manual["bounded_execution_decision"], "manual_review_required")
+        self.assertFalse(truth_gap["bounded_execution_ready"])
+        self.assertEqual(truth_gap["bounded_execution_status"], "deferred")
+        self.assertTrue(truth_gap["bounded_execution_deferred"])
+        self.assertIn("truth_gathering_required", truth_gap["bounded_execution_reason_codes"])
+
+    def test_bounded_execution_bridge_deferred_vs_insufficient_truth(self) -> None:
+        deferred = build_bounded_execution_bridge_surface(
+            run_id="job-bounded-deferred",
+            objective_contract_payload={"objective_status": "incomplete"},
+            completion_contract_payload={"completion_status": "not_done"},
+            approval_transport_payload={"approval_status": "absent", "approval_transport_status": "missing"},
+            reconcile_contract_payload={"reconcile_status": "waiting_for_truth"},
+            repair_suggestion_contract_payload={"repair_suggestion_status": "suggested"},
+            repair_plan_transport_payload={
+                "repair_plan_status": "available",
+                "repair_plan_candidate_action": "gather_missing_truth",
+                "repair_plan_truth_gathering_required": True,
+            },
+            repair_approval_binding_payload={"repair_approval_binding_status": "missing"},
+            execution_authorization_gate_payload={"execution_authorization_status": "pending"},
+            run_state_payload={"execution_authorization_gate_present": True},
+            artifact_presence={"execution_authorization_gate.json": True, "run_state.json": True},
+        )
+        insufficient = build_bounded_execution_bridge_surface(
+            run_id="job-bounded-insufficient",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            reconcile_contract_payload={},
+            repair_suggestion_contract_payload={},
+            repair_plan_transport_payload={},
+            repair_approval_binding_payload={},
+            execution_authorization_gate_payload={},
+            run_state_payload={},
+            artifact_presence={},
+        )
+
+        self.assertEqual(deferred["bounded_execution_status"], "deferred")
+        self.assertEqual(deferred["bounded_execution_decision"], "hold_deferred")
+        self.assertEqual(insufficient["bounded_execution_status"], "insufficient_truth")
+        self.assertNotEqual(insufficient["bounded_execution_status"], "ready")
+
+    def test_bounded_execution_bridge_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_bounded_execution_bridge_run_state_summary_surface(
+            {
+                "bounded_execution_status": "bad_status",
+                "bounded_execution_decision": "bad_decision",
+                "bounded_execution_scope": "bad_scope",
+                "bounded_execution_validity": "bad_validity",
+                "bounded_execution_confidence": "bad_confidence",
+                "bounded_execution_primary_reason": "bad_reason",
+                "bounded_execution_manual_required": True,
+                "bounded_execution_replan_required": False,
+                "bounded_execution_truth_gathering_required": True,
+                "bounded_execution_reason_codes": ["not_summary_safe"],
+            }
+        )
+
+        self.assertEqual(
+            set(compact.keys()),
+            set(BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(compact["bounded_execution_status"], BOUNDED_EXECUTION_STATUSES)
+        self.assertIn(compact["bounded_execution_decision"], BOUNDED_EXECUTION_DECISIONS)
+        self.assertIn(compact["bounded_execution_scope"], BOUNDED_EXECUTION_SCOPES)
+        self.assertIn(compact["bounded_execution_validity"], BOUNDED_EXECUTION_VALIDITIES)
+        self.assertIn(
+            compact["bounded_execution_confidence"],
+            BOUNDED_EXECUTION_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(
+            compact["bounded_execution_primary_reason"],
+            BOUNDED_EXECUTION_REASON_CODES,
+        )
+
+    def test_execution_result_contract_is_deterministic_for_narrow_success(self) -> None:
+        execution_records = [
+            {
+                "pr_id": "pr-01",
+                "result_path": "/tmp/pr-01/result.json",
+                "result_exists": True,
+                "result_malformed": False,
+                "result_payload": {
+                    "execution": {
+                        "status": "completed",
+                        "attempt_count": 1,
+                        "verify": {
+                            "status": "passed",
+                            "commands": ["uv run python -m unittest tests.test_planned_execution_runner -v"],
+                        },
+                    },
+                    "changed_files": ["automation/orchestration/execution_result_contract.py"],
+                    "additions": 10,
+                    "deletions": 0,
+                    "generated_patch_summary": "narrow additive patch",
+                    "failure_type": None,
+                    "raw_execution": {
+                        "result": {
+                            "verify": {
+                                "status": "passed",
+                                "command_results": [
+                                    {"command": "uv run python -m unittest", "status": "passed"}
+                                ],
+                            }
+                        }
+                    },
+                },
+                "receipt_path": "/tmp/pr-01/execution_receipt.json",
+                "receipt_exists": True,
+                "receipt_malformed": False,
+                "receipt_payload": {"status": "recorded"},
+            }
+        ]
+        kwargs = {
+            "run_id": "job-execution-result-ready",
+            "objective_contract_payload": {"objective_id": "objective-ready", "objective_status": "complete"},
+            "completion_contract_payload": {"objective_id": "objective-ready", "completion_status": "done_and_safely_closed"},
+            "approval_transport_payload": {"approval_status": "approved"},
+            "reconcile_contract_payload": {"reconcile_status": "aligned"},
+            "repair_plan_transport_payload": {"repair_plan_status": "available"},
+            "repair_approval_binding_payload": {"repair_approval_binding_status": "bound"},
+            "execution_authorization_gate_payload": {"execution_authorization_status": "eligible"},
+            "bounded_execution_bridge_payload": {
+                "bounded_execution_status": "ready",
+                "bounded_execution_decision": "attempt_bounded_execution",
+                "bounded_execution_denied": False,
+            },
+            "run_state_payload": {},
+            "execution_records": execution_records,
+            "artifact_presence": {"bounded_execution_bridge.json": True, "run_state.json": True},
+        }
+        payload_a = build_execution_result_contract_surface(**kwargs)
+        payload_b = build_execution_result_contract_surface(**kwargs)
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["execution_result_status"], "succeeded")
+        self.assertEqual(payload_a["execution_result_outcome"], "changes_applied")
+        self.assertTrue(payload_a["execution_result_attempted"])
+        self.assertTrue(payload_a["execution_result_succeeded"])
+        self.assertIn(payload_a["execution_result_status"], EXECUTION_RESULT_STATUSES)
+        self.assertIn(payload_a["execution_result_outcome"], EXECUTION_RESULT_OUTCOMES)
+        self.assertIn(payload_a["execution_result_validity"], EXECUTION_RESULT_VALIDITIES)
+        self.assertIn(payload_a["execution_result_confidence"], EXECUTION_RESULT_CONFIDENCE_LEVELS)
+        self.assertIn(payload_a["execution_result_primary_reason"], EXECUTION_RESULT_REASON_CODES)
+        self.assertIn(payload_a["execution_result_source_posture"], EXECUTION_RESULT_SOURCE_POSTURES)
+
+    def test_execution_result_contract_separates_blocked_not_executed_and_unknown(self) -> None:
+        blocked = build_execution_result_contract_surface(
+            run_id="job-execution-result-blocked",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            reconcile_contract_payload={},
+            repair_plan_transport_payload={},
+            repair_approval_binding_payload={},
+            execution_authorization_gate_payload={"execution_authorization_status": "denied"},
+            bounded_execution_bridge_payload={
+                "bounded_execution_status": "blocked",
+                "bounded_execution_decision": "hold_blocked",
+                "bounded_execution_denied": True,
+            },
+            run_state_payload={},
+            execution_records=[],
+            artifact_presence={},
+        )
+        not_executed = build_execution_result_contract_surface(
+            run_id="job-execution-result-not-executed",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            reconcile_contract_payload={},
+            repair_plan_transport_payload={},
+            repair_approval_binding_payload={},
+            execution_authorization_gate_payload={"execution_authorization_status": "pending"},
+            bounded_execution_bridge_payload={
+                "bounded_execution_status": "deferred",
+                "bounded_execution_decision": "hold_deferred",
+            },
+            run_state_payload={},
+            execution_records=[],
+            artifact_presence={},
+        )
+        unknown = build_execution_result_contract_surface(
+            run_id="job-execution-result-unknown",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            reconcile_contract_payload={},
+            repair_plan_transport_payload={},
+            repair_approval_binding_payload={},
+            execution_authorization_gate_payload={},
+            bounded_execution_bridge_payload={"bounded_execution_status": "insufficient_truth"},
+            run_state_payload={},
+            execution_records=[],
+            artifact_presence={},
+        )
+
+        self.assertEqual(blocked["execution_result_status"], "blocked")
+        self.assertEqual(blocked["execution_result_outcome"], "blocked")
+        self.assertFalse(blocked["execution_result_attempted"])
+        self.assertEqual(not_executed["execution_result_status"], "not_executed")
+        self.assertEqual(not_executed["execution_result_outcome"], "skipped")
+        self.assertFalse(not_executed["execution_result_attempted"])
+        self.assertEqual(unknown["execution_result_status"], "unknown")
+        self.assertEqual(unknown["execution_result_outcome"], "unknown")
+
+    def test_execution_result_contract_attempted_malformed_evidence_degrades_conservatively(self) -> None:
+        payload = build_execution_result_contract_surface(
+            run_id="job-execution-result-malformed",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            reconcile_contract_payload={},
+            repair_plan_transport_payload={},
+            repair_approval_binding_payload={},
+            execution_authorization_gate_payload={"execution_authorization_status": "eligible"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "ready"},
+            run_state_payload={},
+            execution_records=[
+                {
+                    "result_path": "/tmp/pr-01/result.json",
+                    "result_exists": True,
+                    "result_malformed": True,
+                    "result_payload": None,
+                    "receipt_path": "/tmp/pr-01/execution_receipt.json",
+                    "receipt_exists": True,
+                    "receipt_malformed": False,
+                    "receipt_payload": {"status": "recorded"},
+                }
+            ],
+            artifact_presence={},
+        )
+
+        self.assertIn(payload["execution_result_status"], {"partial", "unknown"})
+        self.assertTrue(payload["execution_result_unknown"] or payload["execution_result_partial"])
+        self.assertIn(payload["execution_result_validity"], {"malformed", "partial", "unknown"})
+        self.assertIn("malformed_evidence", payload["execution_result_reason_codes"])
+
+    def test_execution_result_contract_reason_order_is_deterministic(self) -> None:
+        payload = build_execution_result_contract_surface(
+            run_id="job-execution-result-reason-order",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            reconcile_contract_payload={},
+            repair_plan_transport_payload={},
+            repair_approval_binding_payload={},
+            execution_authorization_gate_payload={"execution_authorization_status": "pending"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "deferred"},
+            run_state_payload={},
+            execution_records=[],
+            artifact_presence={},
+        )
+        self.assertEqual(
+            payload["execution_result_primary_reason"],
+            payload["execution_result_reason_codes"][0],
+        )
+
+    def test_execution_result_contract_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_execution_result_contract_run_state_summary_surface(
+            {
+                "execution_result_status": "bad_status",
+                "execution_result_outcome": "bad_outcome",
+                "execution_result_validity": "bad_validity",
+                "execution_result_confidence": "bad_confidence",
+                "execution_result_primary_reason": "bad_reason",
+                "execution_result_attempted": True,
+                "execution_result_receipt_present": False,
+                "execution_result_output_present": True,
+                "execution_result_manual_followup_required": True,
+                "execution_result_reason_codes": ["not_summary_safe"],
+            }
+        )
+
+        self.assertEqual(
+            set(compact.keys()),
+            set(EXECUTION_RESULT_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(compact["execution_result_status"], EXECUTION_RESULT_STATUSES)
+        self.assertIn(compact["execution_result_outcome"], EXECUTION_RESULT_OUTCOMES)
+        self.assertIn(compact["execution_result_validity"], EXECUTION_RESULT_VALIDITIES)
+        self.assertIn(compact["execution_result_confidence"], EXECUTION_RESULT_CONFIDENCE_LEVELS)
+        self.assertIn(compact["execution_result_primary_reason"], EXECUTION_RESULT_REASON_CODES)
+        self.assertIsInstance(compact["execution_result_attempted"], bool)
+        self.assertIsInstance(compact["execution_result_receipt_present"], bool)
+        self.assertIsInstance(compact["execution_result_output_present"], bool)
+        self.assertIsInstance(compact["execution_result_manual_followup_required"], bool)
+
+    def test_verification_closure_contract_is_deterministic(self) -> None:
+        kwargs = {
+            "run_id": "job-verification-deterministic",
+            "objective_contract_payload": {
+                "objective_id": "objective-verification",
+                "objective_status": "complete",
+            },
+            "completion_contract_payload": {
+                "objective_id": "objective-verification",
+                "completion_status": "done_and_safely_closed",
+                "safe_closure_status": "safely_closed",
+                "closure_decision": "close",
+            },
+            "approval_transport_payload": {
+                "approval_status": "approved",
+                "approval_transport_status": "actionable",
+            },
+            "reconcile_contract_payload": {
+                "reconcile_status": "aligned",
+                "reconcile_primary_mismatch": "",
+            },
+            "execution_authorization_gate_payload": {
+                "execution_authorization_status": "eligible",
+            },
+            "bounded_execution_bridge_payload": {
+                "bounded_execution_status": "ready",
+                "bounded_execution_decision": "attempt_bounded_execution",
+            },
+            "execution_result_contract_payload": {
+                "objective_id": "objective-verification",
+                "execution_result_status": "succeeded",
+                "execution_result_outcome": "changes_applied",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            "run_state_payload": {
+                "lifecycle_safely_closed": True,
+                "lifecycle_closure_status": "safely_closed",
+            },
+            "artifact_presence": {"execution_result_contract.json": True, "run_state.json": True},
+        }
+        payload_a = build_verification_closure_contract_surface(**kwargs)
+        payload_b = build_verification_closure_contract_surface(**kwargs)
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["verification_status"], "verified_success")
+        self.assertEqual(payload_a["closure_decision"], "close_ready")
+
+    def test_verification_closure_execution_success_does_not_imply_objective_satisfied(self) -> None:
+        payload = build_verification_closure_contract_surface(
+            run_id="job-verification-objective-gap",
+            objective_contract_payload={"objective_status": "underspecified"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={"reconcile_status": "aligned"},
+            execution_authorization_gate_payload={"execution_authorization_status": "eligible"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "ready"},
+            execution_result_contract_payload={
+                "execution_result_status": "succeeded",
+                "execution_result_outcome": "changes_applied",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            run_state_payload={"lifecycle_safely_closed": True, "lifecycle_closure_status": "safely_closed"},
+            artifact_presence={"execution_result_contract.json": True},
+        )
+        self.assertEqual(payload["verification_outcome"], "objective_gap")
+        self.assertEqual(payload["objective_satisfaction_status"], "not_satisfied")
+        self.assertNotEqual(payload["verification_status"], "verified_success")
+        self.assertNotEqual(payload["closure_decision"], "close_ready")
+
+    def test_verification_closure_objective_satisfied_does_not_imply_close_ready(self) -> None:
+        payload = build_verification_closure_contract_surface(
+            run_id="job-verification-approval-blocked",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={
+                "approval_status": "deferred",
+                "approval_transport_status": "non_actionable",
+                "approval_blocked_reason": "approval_scope_partial",
+            },
+            reconcile_contract_payload={"reconcile_status": "aligned"},
+            execution_authorization_gate_payload={"execution_authorization_status": "eligible"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "ready"},
+            execution_result_contract_payload={
+                "execution_result_status": "succeeded",
+                "execution_result_outcome": "changes_applied",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            run_state_payload={"lifecycle_safely_closed": True, "lifecycle_closure_status": "safely_closed"},
+            artifact_presence={"execution_result_contract.json": True},
+        )
+        self.assertEqual(payload["objective_satisfaction_status"], "satisfied")
+        self.assertNotEqual(payload["closure_decision"], "close_ready")
+        self.assertIn(payload["verification_outcome"], {"closure_followup", "manual_closure_only"})
+
+    def test_verification_closure_handles_malformed_execution_result_evidence(self) -> None:
+        payload = build_verification_closure_contract_surface(
+            run_id="job-verification-malformed",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "done_and_safely_closed"},
+            approval_transport_payload={},
+            reconcile_contract_payload={},
+            execution_authorization_gate_payload={},
+            bounded_execution_bridge_payload={"bounded_execution_status": "ready"},
+            execution_result_contract_payload={
+                "execution_result_status": "unknown",
+                "execution_result_outcome": "unknown",
+                "execution_result_validity": "malformed",
+            },
+            run_state_payload={},
+            artifact_presence={"execution_result_contract.json": True},
+        )
+        self.assertEqual(payload["verification_validity"], "malformed")
+        self.assertEqual(payload["verification_status"], "not_verifiable")
+        self.assertNotEqual(payload["closure_decision"], "close_ready")
+
+    def test_verification_closure_handles_insufficient_truth(self) -> None:
+        payload = build_verification_closure_contract_surface(
+            run_id="job-verification-insufficient",
+            objective_contract_payload={},
+            completion_contract_payload={},
+            approval_transport_payload={},
+            reconcile_contract_payload={},
+            execution_authorization_gate_payload={},
+            bounded_execution_bridge_payload={"bounded_execution_status": "insufficient_truth"},
+            execution_result_contract_payload={},
+            run_state_payload={},
+            artifact_presence={},
+        )
+        self.assertEqual(payload["verification_status"], "not_verifiable")
+        self.assertEqual(payload["verification_validity"], "insufficient_truth")
+        self.assertEqual(payload["objective_satisfaction_status"], "unknown")
+        self.assertIn(payload["closure_decision"], {"cannot_determine", "await_external_truth"})
+
+    def test_verification_closure_handles_external_truth_pending(self) -> None:
+        payload = build_verification_closure_contract_surface(
+            run_id="job-verification-external",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "delivery_complete_waiting_external_truth",
+                "safe_closure_status": "not_safely_closed",
+                "delivery_complete_waiting_external_truth": True,
+            },
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={"reconcile_status": "waiting_for_truth"},
+            execution_authorization_gate_payload={"execution_authorization_status": "pending"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "deferred"},
+            execution_result_contract_payload={
+                "execution_result_status": "not_executed",
+                "execution_result_outcome": "skipped",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": False,
+            },
+            run_state_payload={},
+            artifact_presence={"execution_result_contract.json": True},
+        )
+        self.assertEqual(payload["verification_outcome"], "external_truth_pending")
+        self.assertEqual(payload["closure_decision"], "await_external_truth")
+        self.assertTrue(payload["external_truth_required"])
+
+    def test_verification_closure_approval_blocker_causes_hold(self) -> None:
+        payload = build_verification_closure_contract_surface(
+            run_id="job-verification-approval-hold",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={
+                "approval_status": "denied",
+                "approval_transport_status": "blocked",
+                "approval_blocked_reason": "approval_denied",
+            },
+            reconcile_contract_payload={"reconcile_status": "aligned"},
+            execution_authorization_gate_payload={"execution_authorization_status": "denied"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "blocked"},
+            execution_result_contract_payload={
+                "execution_result_status": "blocked",
+                "execution_result_outcome": "blocked",
+                "execution_result_validity": "valid",
+            },
+            run_state_payload={},
+            artifact_presence={"execution_result_contract.json": True},
+        )
+        self.assertIn(payload["closure_decision"], {"hold_for_followup", "manual_close"})
+        self.assertNotEqual(payload["closure_decision"], "close_ready")
+
+    def test_verification_closure_reconcile_mismatch_causes_hold(self) -> None:
+        payload = build_verification_closure_contract_surface(
+            run_id="job-verification-reconcile-hold",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={"completion_status": "done_and_safely_closed", "safe_closure_status": "safely_closed"},
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={
+                "reconcile_status": "blocked",
+                "reconcile_primary_mismatch": "completion_lifecycle_mismatch",
+            },
+            execution_authorization_gate_payload={"execution_authorization_status": "eligible"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "ready"},
+            execution_result_contract_payload={
+                "execution_result_status": "succeeded",
+                "execution_result_outcome": "changes_applied",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            run_state_payload={"lifecycle_safely_closed": False},
+            artifact_presence={"execution_result_contract.json": True},
+        )
+        self.assertEqual(payload["verification_outcome"], "closure_followup")
+        self.assertEqual(payload["closure_decision"], "hold_for_followup")
+
+    def test_verification_closure_flags_rollback_consideration_without_execution(self) -> None:
+        payload = build_verification_closure_contract_surface(
+            run_id="job-verification-rollback-consideration",
+            objective_contract_payload={"objective_status": "complete"},
+            completion_contract_payload={
+                "completion_status": "done_and_safely_closed",
+                "safe_closure_status": "safely_closed",
+            },
+            approval_transport_payload={"approval_status": "approved", "approval_transport_status": "actionable"},
+            reconcile_contract_payload={"reconcile_status": "aligned"},
+            execution_authorization_gate_payload={"execution_authorization_status": "eligible"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "ready"},
+            execution_result_contract_payload={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            run_state_payload={"lifecycle_safely_closed": True, "lifecycle_closure_status": "safely_closed"},
+            artifact_presence={"execution_result_contract.json": True},
+        )
+        self.assertTrue(payload["rollback_consideration_required"])
+        self.assertEqual(payload["closure_decision"], "consider_rollback")
+
+    def test_verification_closure_reason_order_is_deterministic(self) -> None:
+        payload = build_verification_closure_contract_surface(
+            run_id="job-verification-reason-order",
+            objective_contract_payload={"objective_status": "incomplete"},
+            completion_contract_payload={"completion_status": "not_done"},
+            approval_transport_payload={"approval_status": "deferred", "approval_transport_status": "non_actionable"},
+            reconcile_contract_payload={"reconcile_status": "blocked", "reconcile_primary_mismatch": "x"},
+            execution_authorization_gate_payload={"execution_authorization_status": "pending"},
+            bounded_execution_bridge_payload={"bounded_execution_status": "blocked"},
+            execution_result_contract_payload={
+                "execution_result_status": "unknown",
+                "execution_result_outcome": "unknown",
+                "execution_result_validity": "partial",
+            },
+            run_state_payload={},
+            artifact_presence={"execution_result_contract.json": True},
+        )
+        self.assertEqual(
+            payload["verification_primary_reason"],
+            payload["verification_reason_codes"][0],
+        )
+
+    def test_verification_closure_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_verification_closure_run_state_summary_surface(
+            {
+                "verification_status": "bad_status",
+                "verification_outcome": "bad_outcome",
+                "verification_validity": "bad_validity",
+                "verification_confidence": "bad_confidence",
+                "verification_primary_reason": "bad_reason",
+                "objective_satisfaction_status": "bad_objective",
+                "completion_satisfaction_status": "bad_completion",
+                "closure_status": "bad_closure",
+                "closure_decision": "bad_decision",
+                "objective_satisfied": True,
+                "completion_satisfied": False,
+                "safely_closable": False,
+                "manual_closure_required": True,
+                "closure_followup_required": True,
+                "external_truth_required": False,
+            }
+        )
+        self.assertEqual(
+            set(compact.keys()),
+            set(VERIFICATION_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(compact["verification_status"], VERIFICATION_STATUSES)
+        self.assertIn(compact["verification_outcome"], VERIFICATION_OUTCOMES)
+        self.assertIn(compact["verification_validity"], VERIFICATION_VALIDITIES)
+        self.assertIn(compact["verification_confidence"], VERIFICATION_CONFIDENCE_LEVELS)
+        self.assertIn(compact["verification_primary_reason"], VERIFICATION_REASON_CODES)
+        self.assertIn(compact["objective_satisfaction_status"], OBJECTIVE_SATISFACTION_STATUSES)
+        self.assertIn(compact["completion_satisfaction_status"], COMPLETION_SATISFACTION_STATUSES)
+        self.assertIn(compact["closure_status"], VERIFICATION_CLOSURE_STATUSES)
+        self.assertIn(compact["closure_decision"], VERIFICATION_CLOSURE_DECISIONS)
+
+    def test_retry_reentry_loop_contract_is_deterministic(self) -> None:
+        kwargs = {
+            "verification": {
+                "verification_status": "verified_failure",
+                "verification_outcome": "closure_followup",
+                "verification_validity": "valid",
+                "closure_status": "closure_pending",
+                "closure_decision": "hold_for_followup",
+                "closure_followup_required": True,
+            },
+            "execution_result": {
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+        }
+        payload_a = self._build_retry_loop_payload(**kwargs)
+        payload_b = self._build_retry_loop_payload(**kwargs)
+
+        self.assertEqual(payload_a, payload_b)
+        self.assertIn(payload_a["retry_loop_status"], RETRY_LOOP_STATUSES)
+        self.assertIn(payload_a["retry_loop_decision"], RETRY_LOOP_DECISIONS)
+        self.assertIn(payload_a["retry_loop_validity"], RETRY_LOOP_VALIDITIES)
+        self.assertIn(payload_a["retry_loop_confidence"], RETRY_LOOP_CONFIDENCE_LEVELS)
+        self.assertIn(payload_a["retry_class"], RETRY_CLASSES)
+        self.assertIn(payload_a["reentry_class"], REENTRY_CLASSES)
+        self.assertIn(payload_a["loop_stop_reason"], LOOP_STOP_REASONS)
+        self.assertIn(payload_a["retry_loop_source_posture"], RETRY_LOOP_SOURCE_POSTURES)
+        self.assertEqual(payload_a["loop_primary_reason"], payload_a["loop_reason_codes"][0])
+
+    def test_retry_loop_closure_ready_is_not_applicable(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "verified_success",
+                "verification_outcome": "objective_satisfied",
+                "verification_validity": "valid",
+                "closure_status": "safely_closable",
+                "closure_decision": "close_ready",
+            },
+            execution_result={
+                "execution_result_status": "succeeded",
+                "execution_result_outcome": "changes_applied",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+        )
+        self.assertEqual(payload["retry_loop_status"], "not_applicable")
+        self.assertEqual(payload["retry_loop_decision"], "not_applicable")
+        self.assertFalse(payload["retry_allowed"])
+        self.assertFalse(payload["reentry_allowed"])
+
+    def test_retry_loop_manual_only_requires_terminal_stop(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "manual_closure_only",
+                "verification_validity": "valid",
+                "closure_status": "manual_closure_only",
+                "closure_decision": "manual_close",
+                "manual_closure_required": True,
+            },
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "command_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+        )
+        self.assertEqual(payload["retry_loop_status"], "stop_required")
+        self.assertEqual(payload["retry_loop_decision"], "escalate_manual")
+        self.assertTrue(payload["terminal_stop_required"])
+        self.assertFalse(payload["retry_allowed"])
+        self.assertFalse(payload["reentry_allowed"])
+
+    def test_retry_loop_classifies_same_lane_retry(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+                "closure_status": "not_closable",
+                "closure_decision": "hold_for_followup",
+            },
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+        )
+        self.assertEqual(payload["retry_loop_status"], "retry_ready")
+        self.assertEqual(payload["retry_loop_decision"], "same_lane_retry")
+        self.assertEqual(payload["retry_class"], "same_lane")
+        self.assertTrue(payload["retry_allowed"])
+        self.assertTrue(payload["same_lane_retry_allowed"])
+
+    def test_retry_loop_classifies_repair_retry(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "closure_followup",
+                "verification_validity": "valid",
+                "closure_status": "closure_pending",
+                "closure_decision": "hold_for_followup",
+                "closure_followup_required": True,
+            },
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+        )
+        self.assertEqual(payload["retry_loop_status"], "retry_ready")
+        self.assertEqual(payload["retry_loop_decision"], "repair_retry")
+        self.assertEqual(payload["retry_class"], "repair")
+        self.assertTrue(payload["repair_retry_allowed"])
+
+    def test_retry_loop_classifies_recollect_reentry(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "inconclusive",
+                "verification_outcome": "external_truth_pending",
+                "verification_validity": "partial",
+                "closure_status": "closure_pending",
+                "closure_decision": "await_external_truth",
+                "external_truth_required": True,
+            },
+            execution_result={
+                "execution_result_status": "not_executed",
+                "execution_result_outcome": "skipped",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": False,
+            },
+        )
+        self.assertEqual(payload["retry_loop_status"], "reentry_ready")
+        self.assertEqual(payload["retry_loop_decision"], "recollect")
+        self.assertEqual(payload["reentry_class"], "recollect")
+        self.assertTrue(payload["reentry_allowed"])
+        self.assertTrue(payload["recollect_required"])
+
+    def test_retry_loop_classifies_replan_reentry(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+                "closure_status": "not_closable",
+                "closure_decision": "hold_for_followup",
+            },
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            repair_suggestion={"repair_suggestion_decision": "request_replan"},
+        )
+        self.assertEqual(payload["retry_loop_status"], "reentry_ready")
+        self.assertEqual(payload["retry_loop_decision"], "replan")
+        self.assertEqual(payload["reentry_class"], "replan")
+        self.assertTrue(payload["reentry_allowed"])
+        self.assertTrue(payload["replan_required"])
+
+    def test_retry_loop_handles_insufficient_truth_conservatively(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={},
+            execution_result={},
+            artifacts={},
+        )
+        self.assertEqual(payload["retry_loop_status"], "insufficient_truth")
+        self.assertEqual(payload["retry_loop_validity"], "insufficient_truth")
+        self.assertFalse(payload["retry_allowed"])
+        self.assertFalse(payload["reentry_allowed"])
+
+    def test_retry_loop_marks_exhausted_when_retry_budget_consumed(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+                "closure_status": "not_closable",
+                "closure_decision": "hold_for_followup",
+            },
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            run_state={"attempt_count": 2, "max_attempt_count": 2},
+        )
+        self.assertEqual(payload["retry_loop_status"], "exhausted")
+        self.assertTrue(payload["retry_exhausted"])
+        self.assertFalse(payload["retry_allowed"])
+
+    def test_retry_loop_marks_exhausted_when_reentry_budget_consumed(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+                "closure_status": "not_closable",
+                "closure_decision": "hold_for_followup",
+            },
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            run_state={"reentry_count": 2, "max_reentry_count": 2},
+        )
+        self.assertEqual(payload["retry_loop_status"], "exhausted")
+        self.assertTrue(payload["reentry_exhausted"])
+        self.assertFalse(payload["reentry_allowed"])
+
+    def test_retry_loop_detects_same_failure_or_no_progress_stop(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+                "closure_status": "not_closable",
+                "closure_decision": "hold_for_followup",
+            },
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            run_state={
+                "same_failure_count": 2,
+                "max_same_failure_count": 3,
+                "no_progress_stop_required": True,
+            },
+        )
+        self.assertEqual(payload["retry_loop_status"], "stop_required")
+        self.assertEqual(payload["retry_loop_decision"], "stop_terminal")
+        self.assertTrue(payload["no_progress_stop_required"])
+        self.assertTrue(payload["terminal_stop_required"])
+        self.assertFalse(payload["retry_allowed"])
+
+    def test_retry_loop_reason_codes_are_deterministic(self) -> None:
+        payload = self._build_retry_loop_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+                "closure_status": "not_closable",
+                "closure_decision": "hold_for_followup",
+            },
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+                "execution_result_attempted": True,
+            },
+            repair_suggestion={"repair_suggestion_decision": "request_replan"},
+            run_state={"attempt_count": 2, "max_attempt_count": 2},
+        )
+        self.assertEqual(payload["loop_primary_reason"], payload["loop_reason_codes"][0])
+        self.assertEqual(payload["loop_reason_codes"][0], "retry_exhausted")
+        self.assertIn("verification_terminal_failure", payload["loop_reason_codes"])
+        self.assertLess(
+            payload["loop_reason_codes"].index("retry_exhausted"),
+            payload["loop_reason_codes"].index("verification_terminal_failure"),
+        )
+
+    def test_retry_loop_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_retry_reentry_loop_run_state_summary_surface(
+            {
+                "retry_loop_status": "bad_status",
+                "retry_loop_decision": "bad_decision",
+                "retry_loop_validity": "bad_validity",
+                "retry_loop_confidence": "bad_confidence",
+                "loop_primary_reason": "bad_reason",
+                "attempt_count": 3,
+                "max_attempt_count": 2,
+                "reentry_count": 1,
+                "max_reentry_count": 2,
+                "same_failure_count": 1,
+                "max_same_failure_count": 2,
+                "retry_allowed": True,
+                "reentry_allowed": True,
+                "retry_exhausted": False,
+                "reentry_exhausted": False,
+                "same_failure_exhausted": False,
+                "terminal_stop_required": True,
+                "manual_escalation_required": False,
+                "replan_required": False,
+                "recollect_required": False,
+                "same_lane_retry_allowed": False,
+                "repair_retry_allowed": False,
+                "no_progress_stop_required": True,
+            }
+        )
+        self.assertEqual(
+            set(compact.keys()),
+            set(RETRY_REENTRY_LOOP_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(compact["retry_loop_status"], RETRY_LOOP_STATUSES)
+        self.assertIn(compact["retry_loop_decision"], RETRY_LOOP_DECISIONS)
+        self.assertIn(compact["retry_loop_validity"], RETRY_LOOP_VALIDITIES)
+        self.assertIn(compact["retry_loop_confidence"], RETRY_LOOP_CONFIDENCE_LEVELS)
+        self.assertIn(compact["loop_primary_reason"], RETRY_LOOP_REASON_CODES)
+        self.assertIsInstance(compact["retry_allowed"], bool)
+        self.assertIsInstance(compact["reentry_allowed"], bool)
+        self.assertIsInstance(compact["terminal_stop_required"], bool)
+
+    def test_endgame_closure_contract_is_deterministic(self) -> None:
+        kwargs = {
+            "verification": {
+                "verification_status": "verified_failure",
+                "verification_outcome": "closure_followup",
+                "verification_validity": "valid",
+                "closure_status": "closure_pending",
+                "closure_decision": "hold_for_followup",
+                "objective_satisfied": True,
+                "completion_satisfied": True,
+                "closure_followup_required": True,
+            },
+            "retry_loop": {
+                "retry_loop_status": "stop_required",
+                "retry_loop_decision": "stop_terminal",
+                "retry_allowed": False,
+                "reentry_allowed": False,
+                "terminal_stop_required": True,
+            },
+            "execution_result": {
+                "execution_result_status": "succeeded",
+                "execution_result_outcome": "changes_applied",
+                "execution_result_validity": "valid",
+            },
+        }
+        payload_a = self._build_endgame_payload(**kwargs)
+        payload_b = self._build_endgame_payload(**kwargs)
+        self.assertEqual(payload_a, payload_b)
+        self.assertIn(payload_a["endgame_closure_status"], ENDGAME_CLOSURE_STATUSES)
+        self.assertIn(payload_a["endgame_closure_outcome"], ENDGAME_CLOSURE_OUTCOMES)
+        self.assertIn(payload_a["endgame_closure_validity"], ENDGAME_CLOSURE_VALIDITIES)
+        self.assertIn(payload_a["endgame_closure_confidence"], ENDGAME_CLOSURE_CONFIDENCE_LEVELS)
+        self.assertIn(payload_a["final_closure_class"], FINAL_CLOSURE_CLASSES)
+        self.assertIn(payload_a["terminal_stop_class"], TERMINAL_STOP_CLASSES)
+        self.assertIn(payload_a["closure_resolution_status"], CLOSURE_RESOLUTION_STATUSES)
+        self.assertIn(payload_a["endgame_source_posture"], ENDGAME_SOURCE_POSTURES)
+        self.assertEqual(payload_a["endgame_primary_reason"], payload_a["endgame_reason_codes"][0])
+
+    def test_endgame_closure_classifies_safely_closed(self) -> None:
+        payload = self._build_endgame_payload(
+            verification={
+                "verification_status": "verified_success",
+                "verification_outcome": "objective_satisfied",
+                "verification_validity": "valid",
+                "closure_status": "safely_closable",
+                "closure_decision": "close_ready",
+                "objective_satisfied": True,
+                "completion_satisfied": True,
+            },
+            retry_loop={
+                "retry_loop_status": "not_applicable",
+                "retry_loop_decision": "not_applicable",
+                "retry_allowed": False,
+                "reentry_allowed": False,
+                "terminal_stop_required": False,
+            },
+            execution_result={
+                "execution_result_status": "succeeded",
+                "execution_result_outcome": "changes_applied",
+                "execution_result_validity": "valid",
+            },
+            run_state={"lifecycle_closure_status": "safely_closed"},
+        )
+        self.assertEqual(payload["endgame_closure_status"], "safely_closed")
+        self.assertEqual(payload["endgame_closure_outcome"], "terminal_success_closed")
+        self.assertEqual(payload["final_closure_class"], "safely_closed")
+        self.assertEqual(payload["terminal_stop_class"], "terminal_success")
+        self.assertTrue(payload["safely_closed"])
+        self.assertFalse(payload["further_retry_allowed"])
+        self.assertFalse(payload["further_reentry_allowed"])
+
+    def test_endgame_closure_classifies_completed_but_not_closed(self) -> None:
+        payload = self._build_endgame_payload(
+            verification={
+                "verification_status": "verified_success",
+                "verification_outcome": "closure_followup",
+                "verification_validity": "partial",
+                "closure_status": "closure_pending",
+                "closure_decision": "hold_for_followup",
+                "objective_satisfied": True,
+                "completion_satisfied": True,
+                "closure_followup_required": True,
+            },
+            retry_loop={
+                "retry_loop_status": "stop_required",
+                "retry_loop_decision": "hold",
+                "retry_allowed": False,
+                "reentry_allowed": False,
+                "terminal_stop_required": True,
+            },
+            execution_result={
+                "execution_result_status": "succeeded",
+                "execution_result_outcome": "changes_applied",
+                "execution_result_validity": "valid",
+            },
+            run_state={"lifecycle_execution_complete_not_closed": True},
+        )
+        self.assertEqual(payload["endgame_closure_status"], "not_closed")
+        self.assertEqual(payload["final_closure_class"], "completed_but_not_closed")
+        self.assertTrue(payload["completed_but_not_closed"])
+        self.assertFalse(payload["safely_closed"])
+
+    def test_endgame_closure_classifies_rollback_complete_not_closed(self) -> None:
+        payload = self._build_endgame_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "rollback_consideration",
+                "verification_validity": "valid",
+                "closure_status": "not_closable",
+                "closure_decision": "consider_rollback",
+            },
+            retry_loop={
+                "retry_loop_status": "stop_required",
+                "retry_loop_decision": "stop_terminal",
+                "retry_allowed": False,
+                "reentry_allowed": False,
+                "terminal_stop_required": True,
+            },
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+            },
+            run_state={"lifecycle_rollback_complete_not_closed": True},
+        )
+        self.assertEqual(payload["final_closure_class"], "rollback_complete_but_not_closed")
+        self.assertTrue(payload["rollback_complete_but_not_closed"])
+        self.assertFalse(payload["safely_closed"])
+
+    def test_endgame_closure_classifies_manual_and_external_pending(self) -> None:
+        manual_payload = self._build_endgame_payload(
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "manual_closure_only",
+                "verification_validity": "valid",
+                "closure_status": "manual_closure_only",
+                "closure_decision": "manual_close",
+                "manual_closure_required": True,
+            },
+            retry_loop={
+                "retry_loop_status": "stop_required",
+                "retry_loop_decision": "escalate_manual",
+                "retry_allowed": False,
+                "reentry_allowed": False,
+                "manual_escalation_required": True,
+                "terminal_stop_required": True,
+            },
+        )
+        self.assertEqual(manual_payload["endgame_closure_status"], "manual_only")
+        self.assertEqual(manual_payload["final_closure_class"], "manual_closure_only")
+        self.assertEqual(manual_payload["terminal_stop_class"], "manual_terminal")
+
+        external_payload = self._build_endgame_payload(
+            verification={
+                "verification_status": "inconclusive",
+                "verification_outcome": "external_truth_pending",
+                "verification_validity": "partial",
+                "closure_status": "closure_pending",
+                "closure_decision": "await_external_truth",
+                "external_truth_required": True,
+            },
+            retry_loop={
+                "retry_loop_status": "not_applicable",
+                "retry_loop_decision": "hold",
+                "retry_allowed": False,
+                "reentry_allowed": False,
+                "terminal_stop_required": True,
+            },
+        )
+        self.assertEqual(external_payload["endgame_closure_status"], "closure_pending")
+        self.assertEqual(external_payload["final_closure_class"], "external_truth_pending")
+        self.assertEqual(external_payload["terminal_stop_class"], "external_wait_terminal")
+
+    def test_endgame_closure_handles_insufficient_and_reason_order(self) -> None:
+        insufficient = self._build_endgame_payload(
+            verification={},
+            retry_loop={},
+            execution_result={},
+            artifacts={},
+        )
+        self.assertEqual(insufficient["endgame_closure_status"], "insufficient_truth")
+        self.assertEqual(insufficient["endgame_closure_validity"], "insufficient_truth")
+        self.assertEqual(insufficient["endgame_primary_reason"], "insufficient_endgame_truth")
+
+        ordered = self._build_endgame_payload(
+            verification={
+                "verification_status": "inconclusive",
+                "verification_outcome": "unknown",
+                "verification_validity": "partial",
+                "closure_status": "unknown",
+                "closure_decision": "cannot_determine",
+            },
+            retry_loop={
+                "retry_loop_status": "exhausted",
+                "retry_loop_decision": "stop_terminal",
+                "retry_allowed": False,
+                "reentry_allowed": False,
+                "retry_exhausted": True,
+                "reentry_exhausted": True,
+                "same_failure_exhausted": True,
+                "terminal_stop_required": True,
+            },
+        )
+        self.assertEqual(ordered["endgame_primary_reason"], ordered["endgame_reason_codes"][0])
+        self.assertIn(ordered["endgame_primary_reason"], ENDGAME_REASON_CODES)
+
+    def test_endgame_closure_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_endgame_closure_run_state_summary_surface(
+            {
+                "endgame_closure_status": "bad_status",
+                "endgame_closure_outcome": "bad_outcome",
+                "endgame_closure_validity": "bad_validity",
+                "endgame_closure_confidence": "bad_confidence",
+                "final_closure_class": "bad_class",
+                "terminal_stop_class": "bad_terminal",
+                "closure_resolution_status": "bad_resolution",
+                "endgame_primary_reason": "bad_reason",
+                "retry_allowed": True,
+                "reentry_allowed": True,
+                "further_retry_allowed": True,
+                "further_reentry_allowed": True,
+            }
+        )
+        self.assertEqual(
+            set(compact.keys()),
+            set(ENDGAME_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(compact["endgame_closure_status"], ENDGAME_CLOSURE_STATUSES)
+        self.assertIn(compact["endgame_closure_outcome"], ENDGAME_CLOSURE_OUTCOMES)
+        self.assertIn(compact["endgame_closure_validity"], ENDGAME_CLOSURE_VALIDITIES)
+        self.assertIn(compact["endgame_closure_confidence"], ENDGAME_CLOSURE_CONFIDENCE_LEVELS)
+        self.assertIn(compact["final_closure_class"], FINAL_CLOSURE_CLASSES)
+        self.assertIn(compact["terminal_stop_class"], TERMINAL_STOP_CLASSES)
+        self.assertIn(compact["closure_resolution_status"], CLOSURE_RESOLUTION_STATUSES)
+        self.assertIn(compact["endgame_primary_reason"], ENDGAME_REASON_CODES)
+
+    def test_loop_hardening_contract_is_deterministic(self) -> None:
+        kwargs = {
+            "execution_result": {
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+            },
+            "verification": {
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+                "closure_status": "not_closable",
+                "closure_decision": "hold_for_followup",
+            },
+            "retry_loop": {
+                "retry_loop_status": "retry_ready",
+                "retry_loop_decision": "same_lane_retry",
+                "retry_loop_validity": "valid",
+                "same_failure_count": 1,
+                "max_same_failure_count": 3,
+            },
+            "endgame": {
+                "endgame_closure_status": "not_closed",
+                "endgame_closure_validity": "valid",
+                "final_closure_class": "terminal_non_success",
+                "closure_resolution_status": "pending",
+            },
+        }
+        payload_a = self._build_loop_hardening_payload(**kwargs)
+        payload_b = self._build_loop_hardening_payload(**kwargs)
+        self.assertEqual(payload_a, payload_b)
+        self.assertIn(payload_a["loop_hardening_status"], LOOP_HARDENING_STATUSES)
+        self.assertIn(payload_a["loop_hardening_decision"], LOOP_HARDENING_DECISIONS)
+        self.assertIn(payload_a["loop_hardening_validity"], LOOP_HARDENING_VALIDITIES)
+        self.assertIn(payload_a["loop_hardening_confidence"], LOOP_HARDENING_CONFIDENCE_LEVELS)
+        self.assertIn(payload_a["same_failure_bucket"], SAME_FAILURE_BUCKETS)
+        self.assertIn(payload_a["same_failure_persistence"], SAME_FAILURE_PERSISTENCE_STATUSES)
+        self.assertIn(payload_a["no_progress_status"], NO_PROGRESS_STATUSES)
+        self.assertIn(payload_a["oscillation_status"], OSCILLATION_STATUSES)
+        self.assertIn(payload_a["retry_freeze_status"], RETRY_FREEZE_STATUSES)
+        self.assertIn(payload_a["loop_hardening_source_posture"], LOOP_HARDENING_SOURCE_POSTURES)
+        self.assertEqual(
+            payload_a["loop_hardening_primary_reason"],
+            payload_a["loop_hardening_reason_codes"][0],
+        )
+
+    def test_loop_hardening_detects_same_failure_and_stop(self) -> None:
+        payload = self._build_loop_hardening_payload(
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+            },
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+            },
+            retry_loop={
+                "retry_loop_status": "retry_ready",
+                "retry_loop_decision": "same_lane_retry",
+                "same_failure_count": 2,
+                "max_same_failure_count": 2,
+                "same_failure_exhausted": True,
+            },
+            endgame={
+                "endgame_closure_status": "not_closed",
+                "final_closure_class": "terminal_non_success",
+            },
+        )
+        self.assertTrue(payload["same_failure_detected"])
+        self.assertTrue(payload["same_failure_stop_required"])
+        self.assertEqual(payload["loop_hardening_status"], "stop_required")
+        self.assertTrue(payload["hardening_stop_required"])
+
+    def test_loop_hardening_detects_no_progress_and_oscillation(self) -> None:
+        payload = self._build_loop_hardening_payload(
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+            },
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+            },
+            retry_loop={
+                "retry_loop_status": "retry_ready",
+                "retry_loop_decision": "same_lane_retry",
+                "attempt_count": 3,
+                "same_failure_count": 2,
+                "max_same_failure_count": 4,
+                "no_progress_stop_required": True,
+                "unstable_loop_suspected": True,
+            },
+            run_state={"prior_retry_class": "repair"},
+        )
+        self.assertTrue(payload["no_progress_detected"])
+        self.assertTrue(payload["no_progress_stop_required"])
+        self.assertTrue(payload["oscillation_detected"])
+        self.assertTrue(payload["unstable_loop_detected"])
+
+    def test_loop_hardening_safely_closed_is_not_applicable(self) -> None:
+        payload = self._build_loop_hardening_payload(
+            retry_loop={
+                "retry_loop_status": "not_applicable",
+                "retry_loop_decision": "not_applicable",
+            },
+            endgame={
+                "endgame_closure_status": "safely_closed",
+                "final_closure_class": "safely_closed",
+                "safely_closed": True,
+            },
+        )
+        self.assertEqual(payload["loop_hardening_status"], "not_applicable")
+        self.assertEqual(payload["loop_hardening_decision"], "not_applicable")
+        self.assertFalse(payload["hardening_stop_required"])
+
+    def test_loop_hardening_handles_insufficient_truth(self) -> None:
+        payload = self._build_loop_hardening_payload(
+            completion={},
+            approval={},
+            reconcile={},
+            execution_result={},
+            verification={},
+            retry_loop={},
+            endgame={},
+            artifacts={},
+        )
+        self.assertEqual(payload["loop_hardening_status"], "insufficient_truth")
+        self.assertEqual(payload["loop_hardening_validity"], "insufficient_truth")
+        self.assertTrue(payload["hardening_stop_required"])
+
+    def test_loop_hardening_reason_codes_are_deterministic(self) -> None:
+        payload = self._build_loop_hardening_payload(
+            execution_result={
+                "execution_result_status": "failed",
+                "execution_result_outcome": "tests_failed",
+                "execution_result_validity": "valid",
+            },
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "completion_gap",
+                "verification_validity": "valid",
+            },
+            retry_loop={
+                "retry_loop_status": "retry_ready",
+                "retry_loop_decision": "same_lane_retry",
+                "same_failure_count": 2,
+                "max_same_failure_count": 2,
+                "same_failure_exhausted": True,
+            },
+        )
+        self.assertEqual(
+            payload["loop_hardening_primary_reason"],
+            payload["loop_hardening_reason_codes"][0],
+        )
+        self.assertIn("same_failure_exhausted", payload["loop_hardening_reason_codes"])
+
+    def test_loop_hardening_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_loop_hardening_run_state_summary_surface(
+            {
+                "loop_hardening_status": "bad_status",
+                "loop_hardening_decision": "bad_decision",
+                "loop_hardening_validity": "bad_validity",
+                "loop_hardening_confidence": "bad_confidence",
+                "loop_hardening_primary_reason": "bad_reason",
+                "same_failure_bucket": "bad_bucket",
+                "same_failure_persistence": "bad_persistence",
+                "no_progress_status": "bad_progress",
+                "oscillation_status": "bad_oscillation",
+                "retry_freeze_status": "bad_freeze",
+            }
+        )
+        self.assertEqual(
+            set(compact.keys()),
+            set(LOOP_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(compact["loop_hardening_status"], LOOP_HARDENING_STATUSES)
+        self.assertIn(compact["loop_hardening_decision"], LOOP_HARDENING_DECISIONS)
+        self.assertIn(compact["loop_hardening_validity"], LOOP_HARDENING_VALIDITIES)
+        self.assertIn(compact["loop_hardening_confidence"], LOOP_HARDENING_CONFIDENCE_LEVELS)
+        self.assertIn(compact["loop_hardening_primary_reason"], LOOP_HARDENING_REASON_CODES)
+        self.assertIn(compact["same_failure_bucket"], SAME_FAILURE_BUCKETS)
+        self.assertIn(compact["same_failure_persistence"], SAME_FAILURE_PERSISTENCE_STATUSES)
+        self.assertIn(compact["no_progress_status"], NO_PROGRESS_STATUSES)
+        self.assertIn(compact["oscillation_status"], OSCILLATION_STATUSES)
+        self.assertIn(compact["retry_freeze_status"], RETRY_FREEZE_STATUSES)
+
+    def test_lane_stabilization_contract_is_deterministic(self) -> None:
+        kwargs = {
+            "execution_authorization": {"execution_authorization_status": "eligible"},
+            "bounded_execution": {"bounded_execution_status": "ready"},
+            "retry_loop": {
+                "retry_loop_status": "retry_ready",
+                "retry_loop_decision": "same_lane_retry",
+                "max_attempt_count": 2,
+                "max_reentry_count": 2,
+            },
+            "endgame": {
+                "final_closure_class": "terminal_non_success",
+                "closure_resolution_status": "pending",
+            },
+            "loop_hardening": {"loop_hardening_status": "stable", "loop_hardening_decision": "continue_bounded"},
+            "run_state": {"next_safe_action": "proceed_to_pr", "policy_primary_action": "proceed_to_pr"},
+        }
+        payload_a = self._build_lane_stabilization_payload(**kwargs)
+        payload_b = self._build_lane_stabilization_payload(**kwargs)
+        self.assertEqual(payload_a, payload_b)
+        self.assertIn(payload_a["lane_status"], LANE_STATUSES)
+        self.assertIn(payload_a["lane_decision"], LANE_DECISIONS)
+        self.assertIn(payload_a["lane_validity"], LANE_VALIDITIES)
+        self.assertIn(payload_a["lane_confidence"], LANE_CONFIDENCE_LEVELS)
+        self.assertIn(payload_a["current_lane"], LANE_VOCABULARY)
+        self.assertIn(payload_a["target_lane"], LANE_VOCABULARY)
+        self.assertIn(payload_a["lane_source_posture"], LANE_SOURCE_POSTURES)
+        self.assertEqual(payload_a["lane_primary_reason"], payload_a["lane_reason_codes"][0])
+
+    def test_lane_truth_gathering_inference(self) -> None:
+        payload = self._build_lane_stabilization_payload(
+            retry_loop={"retry_loop_status": "insufficient_truth", "retry_loop_decision": "recollect"},
+            loop_hardening={"loop_hardening_status": "watch"},
+        )
+        self.assertEqual(payload["target_lane"], "truth_gathering")
+        self.assertEqual(payload["lane_retry_policy_class"], "recollect_only")
+        self.assertEqual(payload["lane_verification_policy_class"], "truth_check")
+        self.assertFalse(payload["lane_execution_allowed"])
+
+    def test_lane_replan_and_manual_and_closure_lane_inference(self) -> None:
+        replan = self._build_lane_stabilization_payload(
+            retry_loop={"retry_loop_decision": "replan", "replan_required": True},
+            loop_hardening={"loop_hardening_status": "watch"},
+        )
+        self.assertEqual(replan["target_lane"], "replan_preparation")
+        self.assertEqual(replan["lane_retry_policy_class"], "replan_only")
+
+        manual = self._build_lane_stabilization_payload(
+            retry_loop={"retry_loop_decision": "escalate_manual", "manual_escalation_required": True},
+            loop_hardening={"loop_hardening_status": "watch"},
+        )
+        self.assertEqual(manual["target_lane"], "manual_review_preparation")
+        self.assertEqual(manual["lane_retry_policy_class"], "manual_only")
+
+        closure = self._build_lane_stabilization_payload(
+            verification={"verification_outcome": "closure_followup"},
+            endgame={"final_closure_class": "completed_but_not_closed", "closure_resolution_status": "pending"},
+            loop_hardening={"loop_hardening_status": "watch"},
+        )
+        self.assertEqual(closure["target_lane"], "closure_followup")
+        self.assertEqual(closure["lane_verification_policy_class"], "closure_check")
+
+    def test_lane_bounded_execution_lane_and_hardening_block(self) -> None:
+        ready = self._build_lane_stabilization_payload(
+            execution_authorization={"execution_authorization_status": "eligible"},
+            bounded_execution={"bounded_execution_status": "ready"},
+            retry_loop={"retry_loop_status": "retry_ready", "retry_loop_decision": "same_lane_retry"},
+            loop_hardening={"loop_hardening_status": "stable"},
+            run_state={"next_safe_action": "proceed_to_pr", "policy_primary_action": "proceed_to_pr"},
+        )
+        self.assertEqual(ready["target_lane"], "bounded_github_update")
+        self.assertTrue(ready["lane_execution_allowed"])
+
+        blocked = self._build_lane_stabilization_payload(
+            execution_authorization={"execution_authorization_status": "eligible"},
+            bounded_execution={"bounded_execution_status": "ready"},
+            retry_loop={"retry_loop_status": "retry_ready", "retry_loop_decision": "same_lane_retry"},
+            loop_hardening={"loop_hardening_status": "freeze", "retry_freeze_required": True},
+            run_state={"next_safe_action": "proceed_to_pr", "policy_primary_action": "proceed_to_pr"},
+        )
+        self.assertFalse(blocked["lane_execution_allowed"])
+        self.assertIn(blocked["lane_status"], {"lane_valid", "lane_stop_required"})
+
+    def test_lane_mismatch_and_transition_blocked(self) -> None:
+        mismatch = self._build_lane_stabilization_payload(
+            retry_loop={"retry_loop_decision": "replan", "replan_required": True},
+            run_state={"current_lane": "bounded_local_patch", "lane_transition_count": 0},
+            loop_hardening={"loop_hardening_status": "watch"},
+        )
+        self.assertEqual(mismatch["lane_status"], "lane_mismatch")
+        self.assertTrue(mismatch["lane_mismatch_detected"])
+        self.assertTrue(mismatch["lane_transition_required"])
+
+        blocked = self._build_lane_stabilization_payload(
+            retry_loop={"retry_loop_decision": "replan", "replan_required": True},
+            run_state={
+                "current_lane": "bounded_local_patch",
+                "lane_transition_count": 2,
+                "max_lane_transition_count": 2,
+            },
+            loop_hardening={"loop_hardening_status": "watch"},
+        )
+        self.assertIn(blocked["lane_status"], {"lane_mismatch", "lane_transition_blocked"})
+        self.assertIn("transition_budget_exhausted", blocked["lane_reason_codes"])
+
+    def test_lane_reason_codes_and_alias_non_duplication_are_deterministic(self) -> None:
+        payload = self._build_lane_stabilization_payload(
+            retry_loop={"retry_loop_decision": "recollect", "retry_loop_status": "insufficient_truth"},
+            run_state={"lane_transition_count": 1, "lane_transition_count_compat": 1},
+            loop_hardening={"loop_hardening_status": "watch"},
+        )
+        self.assertEqual(payload["lane_primary_reason"], payload["lane_reason_codes"][0])
+        self.assertIn(payload["lane_primary_reason"], LANE_REASON_CODES)
+        self.assertEqual(payload["lane_transition_count"], 1)
+
+    def test_lane_run_state_summary_surface_is_compact_and_enum_safe(self) -> None:
+        compact = build_lane_stabilization_run_state_summary_surface(
+            {
+                "lane_status": "bad_status",
+                "lane_decision": "bad_decision",
+                "lane_validity": "bad_validity",
+                "lane_confidence": "bad_confidence",
+                "current_lane": "bad_lane",
+                "target_lane": "bad_lane",
+                "lane_transition_status": "bad_transition_status",
+                "lane_transition_decision": "bad_transition_decision",
+                "lane_preconditions_status": "bad_preconditions",
+                "lane_retry_policy_class": "bad_retry_policy",
+                "lane_verification_policy_class": "bad_verification_policy",
+                "lane_escalation_policy_class": "bad_escalation_policy",
+                "lane_primary_reason": "bad_reason",
+            }
+        )
+        self.assertEqual(set(compact.keys()), set(LANE_STABILIZATION_RUN_STATE_SUMMARY_SAFE_FIELDS))
+        self.assertIn(compact["lane_status"], LANE_STATUSES)
+        self.assertIn(compact["lane_decision"], LANE_DECISIONS)
+        self.assertIn(compact["lane_validity"], LANE_VALIDITIES)
+        self.assertIn(compact["lane_confidence"], LANE_CONFIDENCE_LEVELS)
+        self.assertIn(compact["current_lane"], LANE_VOCABULARY)
+        self.assertIn(compact["target_lane"], LANE_VOCABULARY)
+        self.assertIn(compact["lane_transition_status"], LANE_TRANSITION_STATUSES)
+        self.assertIn(compact["lane_transition_decision"], LANE_TRANSITION_DECISIONS)
+        self.assertIn(compact["lane_preconditions_status"], LANE_PRECONDITIONS_STATUSES)
+        self.assertIn(compact["lane_retry_policy_class"], LANE_RETRY_POLICY_CLASSES)
+        self.assertIn(compact["lane_verification_policy_class"], LANE_VERIFICATION_POLICY_CLASSES)
+        self.assertIn(compact["lane_escalation_policy_class"], LANE_ESCALATION_POLICY_CLASSES)
+        self.assertIn(compact["lane_primary_reason"], LANE_REASON_CODES)
+
+    def test_observability_rollup_contract_is_deterministic(self) -> None:
+        payload_a = self._build_observability_payload(
+            execution_result={"execution_result_status": "succeeded"},
+            verification={"verification_outcome": "objective_satisfied"},
+            retry_loop={"retry_loop_status": "not_applicable", "attempt_count": 1},
+            endgame={
+                "final_closure_class": "safely_closed",
+                "terminal_stop_class": "terminal_success",
+            },
+            loop_hardening={"loop_hardening_status": "not_applicable"},
+            lane={
+                "lane_status": "not_applicable",
+                "current_lane": "closure_followup",
+                "lane_valid": True,
+                "lane_execution_allowed": False,
+            },
+            run_state={"state": "completed"},
+        )
+        payload_b = self._build_observability_payload(
+            execution_result={"execution_result_status": "succeeded"},
+            verification={"verification_outcome": "objective_satisfied"},
+            retry_loop={"retry_loop_status": "not_applicable", "attempt_count": 1},
+            endgame={
+                "final_closure_class": "safely_closed",
+                "terminal_stop_class": "terminal_success",
+            },
+            loop_hardening={"loop_hardening_status": "not_applicable"},
+            lane={
+                "lane_status": "not_applicable",
+                "current_lane": "closure_followup",
+                "lane_valid": True,
+                "lane_execution_allowed": False,
+            },
+            run_state={"state": "completed"},
+        )
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["run_terminal_class"], "safely_closed")
+        self.assertTrue(payload_a["run_safely_closed"])
+        self.assertEqual(payload_a["observability_primary_reason"], "safely_closed_terminal")
+        self.assertIn(payload_a["observability_status"], OBSERVABILITY_STATUSES)
+        self.assertIn(payload_a["observability_validity"], OBSERVABILITY_VALIDITIES)
+        self.assertIn(payload_a["observability_confidence"], OBSERVABILITY_CONFIDENCE_LEVELS)
+        self.assertIn(payload_a["run_terminal_class"], RUN_TERMINAL_CLASSES)
+        self.assertEqual(
+            payload_a["observability_primary_reason"],
+            payload_a["observability_reason_codes"][0],
+        )
+        self.assertIn(payload_a["observability_primary_reason"], OBSERVABILITY_REASON_CODES)
+
+    def test_observability_rollup_distinguishes_missing_vs_malformed(self) -> None:
+        missing = self._build_observability_payload(
+            artifact_presence={"run_state.json": True},
+            execution_result={"execution_result_status": "unknown"},
+        )
+        malformed = self._build_observability_payload(
+            verification=["malformed"],
+            execution_result={"execution_result_status": "unknown"},
+        )
+        self.assertTrue(missing["artifact_missing_detected"])
+        self.assertFalse(missing["artifact_malformed_detected"])
+        self.assertEqual(missing["observability_status"], "partial")
+        self.assertEqual(missing["observability_primary_reason"], "missing_required_artifact")
+        self.assertTrue(malformed["artifact_malformed_detected"])
+        self.assertEqual(malformed["observability_status"], "degraded")
+        self.assertEqual(malformed["observability_validity"], "malformed")
+        self.assertEqual(
+            malformed["observability_primary_reason"],
+            "malformed_observability_inputs",
+        )
+
+    def test_failure_bucket_rollup_precedence_and_reason_order_are_deterministic(self) -> None:
+        observability = self._build_observability_payload(
+            execution_result={"execution_result_status": "partial"},
+            verification={"verification_status": "not_verifiable"},
+            artifact_presence={"run_state.json": True},
+        )
+        payload = build_failure_bucket_rollup_surface(
+            run_id="job-failure-bucket",
+            objective_contract_payload={"objective_id": "objective-failure-bucket"},
+            execution_result_contract_payload={"execution_result_status": "failed"},
+            verification_closure_contract_payload={
+                "verification_status": "not_verifiable",
+                "verification_validity": "insufficient_truth",
+                "verification_outcome": "objective_gap",
+            },
+            retry_reentry_loop_contract_payload={"retry_loop_status": "stop_required"},
+            endgame_closure_contract_payload={"final_closure_class": "closure_unresolved"},
+            loop_hardening_contract_payload={"same_failure_bucket": "bad_bucket"},
+            lane_stabilization_contract_payload={"lane_status": "lane_mismatch"},
+            observability_rollup_payload=observability,
+            run_state_payload={},
+        )
+        self.assertEqual(payload["primary_failure_bucket"], "truth_missing")
+        self.assertEqual(payload["failure_bucket_status"], "insufficient_truth")
+        self.assertEqual(payload["same_failure_bucket"], "truth_missing")
+        self.assertEqual(
+            payload["failure_bucket_primary_reason"],
+            payload["failure_bucket_reason_codes"][0],
+        )
+        self.assertIn(payload["failure_bucket_status"], FAILURE_BUCKET_STATUSES)
+        self.assertIn(payload["failure_bucket_validity"], FAILURE_BUCKET_VALIDITIES)
+        self.assertIn(payload["failure_bucket_confidence"], FAILURE_BUCKET_CONFIDENCE_LEVELS)
+        self.assertIn(payload["failure_bucket_primary_reason"], FAILURE_BUCKET_REASON_CODES)
+        self.assertIn(payload["primary_failure_bucket"], FAILURE_BUCKET_VOCABULARY)
+        emitted = [payload["primary_failure_bucket"], *payload["secondary_failure_buckets"]]
+        self.assertEqual(payload["bucket_count"], len(set(emitted)))
+
+    def test_fleet_run_rollup_maps_increments_deterministically(self) -> None:
+        observability = self._build_observability_payload(
+            execution_result={"execution_result_status": "failed"},
+            verification={"verification_outcome": "closure_followup"},
+            retry_loop={
+                "retry_loop_status": "exhausted",
+                "retry_exhausted": True,
+                "no_progress_stop_required": True,
+            },
+            endgame={"final_closure_class": "terminal_non_success"},
+            loop_hardening={"loop_hardening_status": "stop_required"},
+            lane={"lane_status": "lane_mismatch", "current_lane": "replan_preparation"},
+            run_state={"state": "paused"},
+        )
+        failure_bucket = build_failure_bucket_rollup_surface(
+            run_id="job-fleet-rollup",
+            objective_contract_payload={"objective_id": "objective-fleet-rollup"},
+            execution_result_contract_payload={"execution_result_status": "failed"},
+            verification_closure_contract_payload={"verification_outcome": "closure_followup"},
+            retry_reentry_loop_contract_payload={
+                "retry_loop_status": "exhausted",
+                "no_progress_stop_required": True,
+            },
+            endgame_closure_contract_payload={"final_closure_class": "terminal_non_success"},
+            loop_hardening_contract_payload={"loop_hardening_status": "stop_required"},
+            lane_stabilization_contract_payload={"lane_status": "lane_mismatch"},
+            observability_rollup_payload=observability,
+            run_state_payload={},
+        )
+        fleet = build_fleet_run_rollup_surface(
+            run_id="job-fleet-rollup",
+            objective_contract_payload={"objective_id": "objective-fleet-rollup"},
+            observability_rollup_payload=observability,
+            failure_bucket_rollup_payload=failure_bucket,
+            verification_closure_contract_payload={"verification_outcome": "closure_followup"},
+            retry_reentry_loop_contract_payload={"retry_loop_status": "exhausted"},
+            endgame_closure_contract_payload={"final_closure_class": "terminal_non_success"},
+            loop_hardening_contract_payload={"loop_hardening_status": "stop_required"},
+            lane_stabilization_contract_payload={"lane_status": "lane_mismatch"},
+            execution_result_contract_payload={"execution_result_status": "failed"},
+        )
+        self.assertEqual(fleet["fleet_started_increment"], 1)
+        self.assertEqual(fleet["fleet_safely_closed_increment"], 0)
+        self.assertEqual(fleet["fleet_retry_exhausted_increment"], 1)
+        self.assertEqual(fleet["fleet_no_progress_stop_increment"], 1)
+        self.assertIn(fleet["fleet_primary_failure_bucket"], FAILURE_BUCKET_VOCABULARY)
+        for key in (
+            "fleet_started_increment",
+            "fleet_completed_increment",
+            "fleet_safely_closed_increment",
+            "fleet_manual_escalation_increment",
+            "fleet_replan_increment",
+            "fleet_no_progress_stop_increment",
+            "fleet_retry_exhausted_increment",
+            "fleet_artifact_missing_increment",
+            "fleet_artifact_malformed_increment",
+        ):
+            self.assertIn(fleet[key], {0, 1})
+
+    def test_observability_rollup_summary_surfaces_are_compact(self) -> None:
+        compact = build_observability_rollup_run_state_summary_surface(
+            {
+                "observability_status": "ready",
+                "run_terminal_class": "safely_closed",
+                "observability_primary_reason": "safely_closed_terminal",
+                "lane": "closure_followup",
+            }
+        )
+        self.assertEqual(
+            set(compact.keys()),
+            set(OBSERVABILITY_ROLLUP_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["observability_rollup_present"])
+
+        summary = build_observability_rollup_contract_summary_surface(
+            {"observability_status": "bad", "run_terminal_class": "bad"}
+        )
+        self.assertEqual(
+            set(summary.keys()),
+            set(OBSERVABILITY_ROLLUP_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(summary["observability_status"], OBSERVABILITY_STATUSES)
+        self.assertIn(summary["run_terminal_class"], RUN_TERMINAL_CLASSES)
+
+        bucket_summary = build_failure_bucket_rollup_summary_surface(
+            {"failure_bucket_status": "bad", "primary_failure_bucket": "bad"}
+        )
+        self.assertEqual(
+            set(bucket_summary.keys()),
+            set(FAILURE_BUCKET_ROLLUP_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(bucket_summary["failure_bucket_status"], FAILURE_BUCKET_STATUSES)
+        self.assertIn(bucket_summary["primary_failure_bucket"], FAILURE_BUCKET_VOCABULARY)
+
+        fleet_summary = build_fleet_run_rollup_summary_surface(
+            {"fleet_primary_failure_bucket": "bad", "fleet_observability_status": "bad"}
+        )
+        self.assertEqual(
+            set(fleet_summary.keys()),
+            set(FLEET_RUN_ROLLUP_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(fleet_summary["fleet_primary_failure_bucket"], FAILURE_BUCKET_VOCABULARY)
+        self.assertIn(fleet_summary["fleet_observability_status"], OBSERVABILITY_STATUSES)
+
+    def test_failure_bucketing_hardening_is_deterministic_and_precedence_ordered(self) -> None:
+        payload_a = self._build_failure_bucketing_hardening_payload(
+            verification={
+                "verification_status": "not_verifiable",
+                "verification_validity": "insufficient_truth",
+            },
+            loop_hardening={
+                "same_failure_bucket": "truth_missing",
+                "same_failure_signature": "truth_missing|verification_status:not_verifiable",
+            },
+            failure_bucket_rollup={"primary_failure_bucket": "truth_missing"},
+            observability={"observability_status": "partial"},
+        )
+        payload_b = self._build_failure_bucketing_hardening_payload(
+            verification={
+                "verification_status": "not_verifiable",
+                "verification_validity": "insufficient_truth",
+            },
+            loop_hardening={
+                "same_failure_bucket": "truth_missing",
+                "same_failure_signature": "truth_missing|verification_status:not_verifiable",
+            },
+            failure_bucket_rollup={"primary_failure_bucket": "truth_missing"},
+            observability={"observability_status": "partial"},
+        )
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["primary_failure_bucket"], "truth_missing")
+        self.assertEqual(payload_a["failure_bucketing_status"], "insufficient_truth")
+        self.assertTrue(payload_a["bucket_alias_deduplicated"])
+        self.assertEqual(payload_a["bucket_count"], 1)
+        self.assertEqual(
+            payload_a["failure_bucketing_primary_reason"],
+            payload_a["failure_bucketing_reason_codes"][0],
+        )
+        self.assertIn(payload_a["failure_bucketing_status"], FAILURE_BUCKETING_STATUSES)
+        self.assertIn(payload_a["failure_bucketing_validity"], FAILURE_BUCKETING_VALIDITIES)
+        self.assertIn(
+            payload_a["failure_bucketing_confidence"],
+            FAILURE_BUCKETING_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(
+            payload_a["failure_bucketing_primary_reason"],
+            FAILURE_BUCKETING_REASON_CODES,
+        )
+        self.assertIn(payload_a["primary_failure_bucket"], HARDENED_FAILURE_BUCKET_VOCABULARY)
+
+    def test_failure_bucketing_hardening_truth_conflict_vs_truth_missing(self) -> None:
+        missing = self._build_failure_bucketing_hardening_payload(
+            verification={
+                "verification_status": "not_verifiable",
+                "verification_validity": "insufficient_truth",
+            },
+            observability={"observability_status": "partial"},
+            failure_bucket_rollup={"primary_failure_bucket": "unknown"},
+        )
+        conflict = self._build_failure_bucketing_hardening_payload(
+            endgame={"final_closure_class": "safely_closed"},
+            execution_authorization={"execution_authorization_status": "denied"},
+            bounded_execution={"bounded_execution_status": "ready"},
+            observability={"observability_status": "ready"},
+            failure_bucket_rollup={"primary_failure_bucket": "execution_failure"},
+        )
+        self.assertEqual(missing["primary_failure_bucket"], "truth_missing")
+        self.assertEqual(conflict["primary_failure_bucket"], "truth_conflict")
+        self.assertIn(conflict["bucket_stability_class"], BUCKET_STABILITY_CLASSES)
+
+    def test_failure_bucketing_hardening_distinctions_and_mappings(self) -> None:
+        execution_failure = self._build_failure_bucketing_hardening_payload(
+            execution_result={"execution_result_status": "failed"},
+            verification={"verification_status": "verified_failure"},
+            observability={"observability_status": "ready"},
+            failure_bucket_rollup={"primary_failure_bucket": "execution_failure"},
+        )
+        verification_failure = self._build_failure_bucketing_hardening_payload(
+            execution_result={"execution_result_status": "succeeded"},
+            verification={
+                "verification_status": "verified_failure",
+                "verification_outcome": "closure_followup",
+            },
+            observability={"observability_status": "ready"},
+            failure_bucket_rollup={"primary_failure_bucket": "verification_failure"},
+        )
+        retry_exhausted = self._build_failure_bucketing_hardening_payload(
+            retry_loop={"retry_loop_status": "exhausted", "retry_exhausted": True},
+            loop_hardening={"same_failure_stop_required": True, "same_failure_persistence": "high"},
+            observability={"observability_status": "ready"},
+            failure_bucket_rollup={"primary_failure_bucket": "same_failure_exhausted"},
+        )
+        no_progress = self._build_failure_bucketing_hardening_payload(
+            loop_hardening={
+                "no_progress_stop_required": True,
+                "no_progress_status": "confirmed",
+                "oscillation_status": "confirmed",
+            },
+            observability={"observability_status": "ready"},
+            failure_bucket_rollup={"primary_failure_bucket": "oscillation"},
+        )
+        manual_only = self._build_failure_bucketing_hardening_payload(
+            endgame={"final_closure_class": "manual_closure_only"},
+            observability={"observability_status": "ready"},
+            failure_bucket_rollup={"primary_failure_bucket": "closure_unresolved"},
+        )
+        self.assertEqual(execution_failure["primary_failure_bucket"], "execution_failure")
+        self.assertEqual(verification_failure["primary_failure_bucket"], "verification_failure")
+        self.assertEqual(retry_exhausted["primary_failure_bucket"], "retry_exhausted")
+        self.assertEqual(no_progress["primary_failure_bucket"], "no_progress")
+        self.assertEqual(manual_only["primary_failure_bucket"], "manual_only")
+        self.assertEqual(manual_only["bucket_terminality_class"], "manual_only")
+        self.assertIn(manual_only["bucket_severity"], BUCKET_SEVERITIES)
+        self.assertIn(manual_only["bucket_terminality_class"], BUCKET_TERMINALITY_CLASSES)
+
+    def test_failure_bucketing_hardening_summary_surfaces_are_compact(self) -> None:
+        compact = build_failure_bucketing_hardening_run_state_summary_surface(
+            {"failure_bucketing_status": "classified"}
+        )
+        self.assertEqual(
+            set(compact.keys()),
+            set(FAILURE_BUCKETING_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["failure_bucketing_hardening_present"])
+
+        summary = build_failure_bucketing_hardening_summary_surface(
+            {
+                "failure_bucketing_status": "bad",
+                "failure_bucketing_validity": "bad",
+                "failure_bucketing_confidence": "bad",
+                "primary_failure_bucket": "bad",
+                "bucket_family": "bad",
+                "bucket_severity": "bad",
+                "bucket_stability_class": "bad",
+                "bucket_terminality_class": "bad",
+                "failure_bucketing_primary_reason": "bad",
+            }
+        )
+        self.assertEqual(
+            set(summary.keys()),
+            set(FAILURE_BUCKETING_HARDENING_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(summary["failure_bucketing_status"], FAILURE_BUCKETING_STATUSES)
+        self.assertIn(summary["failure_bucketing_validity"], FAILURE_BUCKETING_VALIDITIES)
+        self.assertIn(
+            summary["failure_bucketing_confidence"],
+            FAILURE_BUCKETING_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(summary["primary_failure_bucket"], HARDENED_FAILURE_BUCKET_VOCABULARY)
+        self.assertIn(summary["failure_bucketing_primary_reason"], FAILURE_BUCKETING_REASON_CODES)
+
+    def test_retention_manifest_and_contract_are_deterministic(self) -> None:
+        manifest_a = self._build_retention_manifest_payload()
+        manifest_b = self._build_retention_manifest_payload()
+        self.assertEqual(manifest_a, manifest_b)
+        retention_a = self._build_artifact_retention_payload(retention_manifest=manifest_a)
+        retention_b = self._build_artifact_retention_payload(retention_manifest=manifest_b)
+        self.assertEqual(retention_a, retention_b)
+        self.assertIn(retention_a["artifact_retention_status"], ARTIFACT_RETENTION_STATUSES)
+        self.assertIn(retention_a["artifact_retention_validity"], ARTIFACT_RETENTION_VALIDITIES)
+        self.assertIn(
+            retention_a["artifact_retention_confidence"],
+            ARTIFACT_RETENTION_CONFIDENCE_LEVELS,
+        )
+        self.assertEqual(retention_a["retention_primary_reason"], retention_a["retention_reason_codes"][0])
+        self.assertIn(retention_a["retention_primary_reason"], ARTIFACT_RETENTION_REASON_CODES)
+
+    def test_retention_distinguishes_canonical_summary_superseded_and_prunable(self) -> None:
+        retention_manifest = self._build_retention_manifest_payload()
+        self.assertGreater(retention_manifest["canonical_artifact_count"], 0)
+        self.assertIn("objective_contract", retention_manifest["summary_safe_refs"])
+        self.assertIn("objective_contract", retention_manifest["path_refs"])
+        self.assertGreaterEqual(retention_manifest["superseded_artifact_count"], 1)
+        self.assertGreaterEqual(retention_manifest["prunable_artifact_count"], 1)
+        self.assertTrue(retention_manifest["alias_deduplicated"])
+
+        retention = self._build_artifact_retention_payload(retention_manifest=retention_manifest)
+        self.assertGreater(retention["canonical_artifact_count"], 0)
+        self.assertGreater(retention["summary_ref_count"], 0)
+        self.assertGreater(retention["path_ref_count"], 0)
+        self.assertGreaterEqual(retention["superseded_artifact_count"], 1)
+        self.assertGreaterEqual(retention["prunable_artifact_count"], 1)
+        self.assertIn(retention["retention_policy_class"], RETENTION_POLICY_CLASSES)
+        self.assertIn(retention["retention_compaction_class"], RETENTION_COMPACTION_CLASSES)
+
+    def test_retention_alias_non_dup_and_reference_consistency(self) -> None:
+        retention_manifest = self._build_retention_manifest_payload()
+        retention = self._build_artifact_retention_payload(retention_manifest=retention_manifest)
+        self.assertTrue(retention["retention_alias_deduplicated"])
+        self.assertTrue(retention["retention_reference_consistent"])
+        self.assertGreaterEqual(retention["artifact_count"], retention["canonical_artifact_count"])
+        self.assertGreater(retention["alias_ref_count"], 0)
+
+    def test_retention_detects_malformed_reference_layout(self) -> None:
+        malformed_manifest = build_retention_manifest_surface(
+            run_id="job-retention-malformed",
+            objective_contract_payload={"objective_id": "objective-retention"},
+            paths_by_role=[],
+            summaries_by_role={},
+            contract_artifact_index_payload={},
+            manifest_payload={},
+        )
+        self.assertEqual(malformed_manifest["retention_manifest_primary_reason"], "malformed_reference_layout")
+
+        malformed_retention = build_artifact_retention_contract_surface(
+            run_id="job-retention-malformed",
+            objective_contract_payload={"objective_id": "objective-retention"},
+            retention_manifest_payload=[],
+            contract_artifact_index_payload={},
+            observability_rollup_payload={},
+            failure_bucketing_hardening_payload={},
+            endgame_closure_contract_payload={},
+        )
+        self.assertEqual(malformed_retention["artifact_retention_status"], "degraded")
+        self.assertEqual(malformed_retention["artifact_retention_validity"], "malformed")
+
+    def test_retention_summary_surfaces_are_compact(self) -> None:
+        compact = build_artifact_retention_run_state_summary_surface(
+            {"artifact_retention_status": "ready"}
+        )
+        self.assertEqual(
+            set(compact.keys()),
+            set(ARTIFACT_RETENTION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["artifact_retention_present"])
+
+        retention_summary = build_artifact_retention_summary_surface(
+            {
+                "artifact_retention_status": "bad",
+                "artifact_retention_validity": "bad",
+                "artifact_retention_confidence": "bad",
+                "retention_policy_class": "bad",
+                "retention_compaction_class": "bad",
+                "retention_primary_reason": "bad",
+            }
+        )
+        self.assertEqual(
+            set(retention_summary.keys()),
+            set(ARTIFACT_RETENTION_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(retention_summary["artifact_retention_status"], ARTIFACT_RETENTION_STATUSES)
+        self.assertIn(retention_summary["artifact_retention_validity"], ARTIFACT_RETENTION_VALIDITIES)
+        self.assertIn(
+            retention_summary["artifact_retention_confidence"],
+            ARTIFACT_RETENTION_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(retention_summary["retention_policy_class"], RETENTION_POLICY_CLASSES)
+        self.assertIn(retention_summary["retention_compaction_class"], RETENTION_COMPACTION_CLASSES)
+        self.assertIn(retention_summary["retention_primary_reason"], ARTIFACT_RETENTION_REASON_CODES)
+
+        manifest_summary = build_retention_manifest_summary_surface(
+            {
+                "reference_layout_version": "v1",
+                "reference_order_stable": True,
+                "alias_deduplicated": True,
+                "manifest_compact": True,
+                "canonical_artifact_count": 3,
+                "superseded_artifact_count": 1,
+                "prunable_artifact_count": 1,
+                "retention_manifest_primary_reason": "canonical_reference_layout_ready",
+            }
+        )
+        self.assertEqual(
+            set(manifest_summary.keys()),
+            set(RETENTION_MANIFEST_SUMMARY_SAFE_FIELDS),
+        )
+
+    def test_fleet_safety_control_is_deterministic_and_manual_only_mapped(self) -> None:
+        payload_a = self._build_fleet_safety_payload(
+            endgame={"final_closure_class": "manual_closure_only"},
+            hard_bucket={
+                "primary_failure_bucket": "manual_only",
+                "bucket_severity": "high",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "manual_only",
+            },
+            retry_loop={"retry_loop_status": "stop_required", "manual_escalation_required": True},
+            lane={
+                "lane_status": "lane_valid",
+                "current_lane": "manual_review_preparation",
+                "lane_execution_allowed": False,
+            },
+        )
+        payload_b = self._build_fleet_safety_payload(
+            endgame={"final_closure_class": "manual_closure_only"},
+            hard_bucket={
+                "primary_failure_bucket": "manual_only",
+                "bucket_severity": "high",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "manual_only",
+            },
+            retry_loop={"retry_loop_status": "stop_required", "manual_escalation_required": True},
+            lane={
+                "lane_status": "lane_valid",
+                "current_lane": "manual_review_preparation",
+                "lane_execution_allowed": False,
+            },
+        )
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["fleet_safety_status"], "stop")
+        self.assertEqual(payload_a["fleet_safety_decision"], "escalate_manual")
+        self.assertEqual(payload_a["fleet_restart_decision"], "manual_only")
+        self.assertTrue(payload_a["fleet_manual_review_required"])
+        self.assertIn(payload_a["fleet_safety_status"], FLEET_SAFETY_STATUSES)
+        self.assertIn(payload_a["fleet_safety_validity"], FLEET_SAFETY_VALIDITIES)
+        self.assertIn(payload_a["fleet_safety_confidence"], FLEET_SAFETY_CONFIDENCE_LEVELS)
+        self.assertIn(payload_a["fleet_safety_decision"], FLEET_SAFETY_DECISIONS)
+        self.assertIn(payload_a["fleet_restart_decision"], FLEET_RESTART_DECISIONS)
+        self.assertIn(payload_a["fleet_safety_scope"], FLEET_SAFETY_SCOPES)
+        self.assertIn(payload_a["fleet_safety_primary_reason"], FLEET_SAFETY_REASON_CODES)
+        self.assertEqual(
+            payload_a["fleet_safety_primary_reason"],
+            payload_a["fleet_safety_reason_codes"][0],
+        )
+
+    def test_fleet_safety_control_distinguishes_hold_and_freeze(self) -> None:
+        hold_payload = self._build_fleet_safety_payload(
+            observability={"observability_status": "partial"},
+            endgame={"final_closure_class": "completed_but_not_closed"},
+            lane={
+                "lane_status": "lane_transition_blocked",
+                "current_lane": "truth_gathering",
+                "lane_execution_allowed": False,
+                "lane_transition_blocked": True,
+            },
+            hard_bucket={
+                "primary_failure_bucket": "execution_failure",
+                "bucket_severity": "medium",
+                "bucket_stability_class": "ambiguous",
+                "bucket_terminality_class": "non_terminal",
+            },
+        )
+        freeze_payload = self._build_fleet_safety_payload(
+            observability={"observability_status": "ready"},
+            endgame={"final_closure_class": "completed_but_not_closed"},
+            lane={
+                "lane_status": "lane_mismatch",
+                "current_lane": "bounded_local_patch",
+                "lane_execution_allowed": False,
+                "lane_mismatch_detected": True,
+            },
+            hard_bucket={
+                "primary_failure_bucket": "lane_mismatch",
+                "bucket_severity": "high",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "non_terminal",
+            },
+        )
+        self.assertEqual(hold_payload["fleet_safety_status"], "hold")
+        self.assertEqual(hold_payload["fleet_safety_decision"], "hold_for_review")
+        self.assertEqual(freeze_payload["fleet_safety_status"], "freeze")
+        self.assertEqual(freeze_payload["fleet_safety_decision"], "freeze_run")
+
+    def test_fleet_safety_control_distinguishes_freeze_and_stop(self) -> None:
+        freeze_payload = self._build_fleet_safety_payload(
+            loop_hardening={"loop_hardening_status": "stop_required", "no_progress_stop_required": True},
+            retry_loop={"retry_loop_status": "exhausted", "same_failure_exhausted": True, "same_failure_count": 3},
+            hard_bucket={
+                "primary_failure_bucket": "same_failure_exhausted",
+                "bucket_severity": "high",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "non_terminal",
+            },
+        )
+        stop_payload = self._build_fleet_safety_payload(
+            endgame={"final_closure_class": "terminal_non_success"},
+            hard_bucket={
+                "primary_failure_bucket": "terminal_non_success",
+                "bucket_severity": "high",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "terminal",
+            },
+            lane={"lane_status": "lane_valid", "current_lane": "closure_followup", "lane_execution_allowed": False},
+        )
+        self.assertEqual(freeze_payload["fleet_safety_status"], "freeze")
+        self.assertEqual(stop_payload["fleet_safety_status"], "stop")
+        self.assertTrue(stop_payload["fleet_run_stop_required"])
+        self.assertFalse(stop_payload["fleet_run_allowed"])
+
+    def test_fleet_safety_control_restart_allowed_vs_blocked(self) -> None:
+        allowed_payload = self._build_fleet_safety_payload(
+            observability={"observability_status": "ready"},
+            endgame={"final_closure_class": "safely_closed"},
+            hard_bucket={
+                "primary_failure_bucket": "execution_failure",
+                "bucket_severity": "low",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "non_terminal",
+            },
+            lane={"lane_status": "lane_valid", "current_lane": "closure_followup", "lane_execution_allowed": True},
+        )
+        blocked_payload = self._build_fleet_safety_payload(
+            endgame={"final_closure_class": "terminal_non_success"},
+            hard_bucket={
+                "primary_failure_bucket": "terminal_non_success",
+                "bucket_severity": "high",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "terminal",
+            },
+        )
+        self.assertEqual(allowed_payload["fleet_safety_status"], "allow")
+        self.assertEqual(allowed_payload["fleet_restart_decision"], "restart_allowed")
+        self.assertTrue(allowed_payload["fleet_restart_allowed"])
+        self.assertFalse(allowed_payload["fleet_restart_blocked"])
+        self.assertEqual(blocked_payload["fleet_restart_decision"], "restart_blocked")
+        self.assertFalse(blocked_payload["fleet_restart_allowed"])
+        self.assertTrue(blocked_payload["fleet_restart_blocked"])
+
+    def test_fleet_safety_control_risk_class_mappings(self) -> None:
+        lane_sensitive = self._build_fleet_safety_payload(
+            lane={
+                "lane_status": "lane_mismatch",
+                "current_lane": "bounded_github_update",
+                "lane_execution_allowed": False,
+                "lane_mismatch_detected": True,
+            },
+            hard_bucket={
+                "primary_failure_bucket": "lane_mismatch",
+                "bucket_severity": "high",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "non_terminal",
+            },
+        )
+        bucket_sensitive = self._build_fleet_safety_payload(
+            hard_bucket={
+                "primary_failure_bucket": "execution_failure",
+                "bucket_severity": "critical",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "terminal",
+            },
+            lane={"lane_status": "lane_valid", "current_lane": "closure_followup", "lane_execution_allowed": True},
+        )
+        repeat_risky = self._build_fleet_safety_payload(
+            retry_loop={"retry_loop_status": "exhausted", "same_failure_count": 3, "same_failure_exhausted": True},
+            loop_hardening={"loop_hardening_status": "stop_required", "no_progress_stop_required": True},
+            hard_bucket={
+                "primary_failure_bucket": "same_failure_exhausted",
+                "bucket_severity": "high",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "non_terminal",
+            },
+        )
+        self.assertEqual(lane_sensitive["fleet_safety_scope"], "lane_sensitive")
+        self.assertIn(lane_sensitive["fleet_lane_risk_class"], FLEET_LANE_RISK_CLASSES)
+        self.assertEqual(bucket_sensitive["fleet_safety_scope"], "bucket_sensitive")
+        self.assertIn(bucket_sensitive["fleet_bucket_risk_class"], FLEET_BUCKET_RISK_CLASSES)
+        self.assertIn(repeat_risky["fleet_repeat_risk_class"], FLEET_REPEAT_RISK_CLASSES)
+        self.assertEqual(repeat_risky["fleet_repeat_risk_class"], "repeat_blocked")
+
+    def test_fleet_safety_control_degraded_vs_insufficient_truth(self) -> None:
+        degraded = self._build_fleet_safety_payload(
+            observability={"observability_status": "ready"},
+            retention={
+                "artifact_retention_status": "ready",
+                "artifact_retention_validity": "malformed",
+                "retention_reference_consistent": False,
+                "retention_manifest_compact": True,
+            },
+        )
+        insufficient = self._build_fleet_safety_payload(
+            observability={"observability_status": "insufficient_truth"},
+            hard_bucket={
+                "primary_failure_bucket": "truth_missing",
+                "bucket_severity": "unknown",
+                "bucket_stability_class": "unknown",
+                "bucket_terminality_class": "unknown",
+            },
+            retention={
+                "artifact_retention_status": "insufficient_truth",
+                "artifact_retention_validity": "insufficient_truth",
+                "retention_reference_consistent": True,
+                "retention_manifest_compact": True,
+            },
+        )
+        self.assertEqual(degraded["fleet_safety_status"], "degraded")
+        self.assertEqual(degraded["fleet_safety_validity"], "partial")
+        self.assertEqual(insufficient["fleet_safety_status"], "insufficient_truth")
+        self.assertEqual(insufficient["fleet_safety_validity"], "insufficient_truth")
+
+    def test_fleet_safety_control_alias_non_dup_and_compact_surfaces(self) -> None:
+        payload = self._build_fleet_safety_payload(
+            retention={
+                "artifact_retention_status": "ready",
+                "artifact_retention_validity": "valid",
+                "retention_reference_consistent": True,
+                "retention_manifest_compact": True,
+                "retention_alias_deduplicated": True,
+            },
+            retention_manifest={"alias_deduplicated": True},
+            hard_bucket={
+                "primary_failure_bucket": "execution_failure",
+                "bucket_severity": "low",
+                "bucket_stability_class": "stable",
+                "bucket_terminality_class": "non_terminal",
+                "bucket_alias_deduplicated": True,
+            },
+        )
+        self.assertIn("alias_deduplicated", payload["fleet_safety_reason_codes"])
+        compact = build_fleet_safety_control_run_state_summary_surface(payload)
+        self.assertEqual(
+            set(compact.keys()),
+            set(FLEET_SAFETY_CONTROL_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["fleet_safety_control_present"])
+        summary = build_fleet_safety_control_summary_surface(payload)
+        self.assertEqual(
+            set(summary.keys()),
+            set(FLEET_SAFETY_CONTROL_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(summary["fleet_safety_status"], FLEET_SAFETY_STATUSES)
+        self.assertIn(summary["fleet_safety_validity"], FLEET_SAFETY_VALIDITIES)
+        self.assertIn(summary["fleet_safety_confidence"], FLEET_SAFETY_CONFIDENCE_LEVELS)
+        self.assertIn(summary["fleet_safety_decision"], FLEET_SAFETY_DECISIONS)
+        self.assertIn(summary["fleet_restart_decision"], FLEET_RESTART_DECISIONS)
+        self.assertIn(summary["fleet_safety_scope"], FLEET_SAFETY_SCOPES)
+        self.assertIn(summary["fleet_safety_primary_reason"], FLEET_SAFETY_REASON_CODES)
+
     def test_operator_explainability_distinguishes_action_specific_denial(self) -> None:
         run_state = _augment_run_state_with_operator_explainability(
             run_state_payload={
@@ -3221,6 +9189,106 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertIn("operator_primary_action", compact)
         self.assertIn("operator_resume_status", compact)
         self.assertIn("operator_next_safe_posture", compact)
+        self.assertIn("objective_contract_present", compact)
+        self.assertIn("objective_contract_status", compact)
+        self.assertIn("objective_acceptance_status", compact)
+        self.assertIn("objective_scope_status", compact)
+        self.assertIn("objective_required_artifacts_status", compact)
+        self.assertIn("completion_contract_present", compact)
+        self.assertIn("completion_status", compact)
+        self.assertIn("done_status", compact)
+        self.assertIn("safe_closure_status", compact)
+        self.assertIn("completion_evidence_status", compact)
+        self.assertIn("completion_blocked_reason", compact)
+        self.assertIn("completion_manual_required", compact)
+        self.assertIn("completion_replan_required", compact)
+        self.assertIn("completion_lifecycle_alignment_status", compact)
+        self.assertIn("approval_transport_present", compact)
+        self.assertIn("approval_status", compact)
+        self.assertIn("approval_decision", compact)
+        self.assertIn("approval_scope", compact)
+        self.assertIn("approved_action", compact)
+        self.assertIn("approval_required", compact)
+        self.assertIn("approval_transport_status", compact)
+        self.assertIn("approval_compatibility_status", compact)
+        self.assertIn("approval_blocked_reason", compact)
+        self.assertIn("reconcile_contract_present", compact)
+        self.assertIn("reconcile_status", compact)
+        self.assertIn("reconcile_decision", compact)
+        self.assertIn("reconcile_alignment_status", compact)
+        self.assertIn("reconcile_primary_mismatch", compact)
+        self.assertIn("reconcile_blocked_reason", compact)
+        self.assertIn("reconcile_waiting_on_truth", compact)
+        self.assertIn("reconcile_manual_required", compact)
+        self.assertIn("reconcile_replan_required", compact)
+        self.assertIn("repair_suggestion_contract_present", compact)
+        self.assertIn("repair_suggestion_status", compact)
+        self.assertIn("repair_suggestion_decision", compact)
+        self.assertIn("repair_suggestion_class", compact)
+        self.assertIn("repair_suggestion_priority", compact)
+        self.assertIn("repair_suggestion_confidence", compact)
+        self.assertIn("repair_primary_reason", compact)
+        self.assertIn("repair_manual_required", compact)
+        self.assertIn("repair_replan_required", compact)
+        self.assertIn("repair_truth_gathering_required", compact)
+        self.assertIn("repair_plan_transport_present", compact)
+        self.assertIn("repair_plan_status", compact)
+        self.assertIn("repair_plan_decision", compact)
+        self.assertIn("repair_plan_class", compact)
+        self.assertIn("repair_plan_priority", compact)
+        self.assertIn("repair_plan_confidence", compact)
+        self.assertIn("repair_plan_target_surface", compact)
+        self.assertIn("repair_plan_candidate_action", compact)
+        self.assertIn("repair_plan_primary_reason", compact)
+        self.assertIn("repair_plan_manual_required", compact)
+        self.assertIn("repair_plan_replan_required", compact)
+        self.assertIn("repair_plan_truth_gathering_required", compact)
+        self.assertIn("repair_approval_binding_present", compact)
+        self.assertIn("repair_approval_binding_status", compact)
+        self.assertIn("repair_approval_binding_decision", compact)
+        self.assertIn("repair_approval_binding_scope", compact)
+        self.assertIn("repair_approval_binding_validity", compact)
+        self.assertIn("repair_approval_binding_compatibility_status", compact)
+        self.assertIn("repair_approval_binding_primary_reason", compact)
+        self.assertIn("repair_approval_binding_manual_required", compact)
+        self.assertIn("repair_approval_binding_replan_required", compact)
+        self.assertIn("repair_approval_binding_truth_gathering_required", compact)
+        self.assertIn("execution_authorization_gate_present", compact)
+        self.assertIn("execution_authorization_status", compact)
+        self.assertIn("execution_authorization_decision", compact)
+        self.assertIn("execution_authorization_scope", compact)
+        self.assertIn("execution_authorization_validity", compact)
+        self.assertIn("execution_authorization_confidence", compact)
+        self.assertIn("execution_authorization_primary_reason", compact)
+        self.assertIn("execution_authorization_manual_required", compact)
+        self.assertIn("execution_authorization_replan_required", compact)
+        self.assertIn("execution_authorization_truth_gathering_required", compact)
+        self.assertIn("bounded_execution_bridge_present", compact)
+        self.assertIn("bounded_execution_status", compact)
+        self.assertIn("bounded_execution_decision", compact)
+        self.assertIn("bounded_execution_scope", compact)
+        self.assertIn("bounded_execution_validity", compact)
+        self.assertIn("bounded_execution_confidence", compact)
+        self.assertIn("bounded_execution_primary_reason", compact)
+        self.assertIn("bounded_execution_manual_required", compact)
+        self.assertIn("bounded_execution_replan_required", compact)
+        self.assertIn("bounded_execution_truth_gathering_required", compact)
+        self.assertIn("verification_closure_contract_present", compact)
+        self.assertIn("verification_status", compact)
+        self.assertIn("verification_outcome", compact)
+        self.assertIn("verification_validity", compact)
+        self.assertIn("verification_confidence", compact)
+        self.assertIn("verification_primary_reason", compact)
+        self.assertIn("objective_satisfaction_status", compact)
+        self.assertIn("completion_satisfaction_status", compact)
+        self.assertIn("closure_status", compact)
+        self.assertIn("closure_decision", compact)
+        self.assertIn("objective_satisfied", compact)
+        self.assertIn("completion_satisfied", compact)
+        self.assertIn("safely_closable", compact)
+        self.assertIn("manual_closure_required", compact)
+        self.assertIn("closure_followup_required", compact)
+        self.assertIn("external_truth_required", compact)
         self.assertIn("lifecycle_closure_status", compact)
         self.assertIn("lifecycle_safely_closed", compact)
         self.assertIn("lifecycle_terminal", compact)
@@ -3232,14 +9300,121 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertIn("lifecycle_primary_closure_issue", compact)
         self.assertIn("lifecycle_stop_class", compact)
         self.assertNotIn("lifecycle_blocked_reasons", compact)
+        self.assertNotIn("reconcile_blocked_reasons", compact)
+        self.assertNotIn("repair_reason_codes", compact)
+        self.assertNotIn("repair_plan_reason_codes", compact)
+        self.assertNotIn("repair_plan_blocked_reasons", compact)
+        self.assertNotIn("repair_approval_binding_reason_codes", compact)
+        self.assertNotIn("repair_approval_binding_blocked_reasons", compact)
+        self.assertNotIn("execution_authorization_reason_codes", compact)
+        self.assertNotIn("execution_authorization_blocked_reasons", compact)
+        self.assertNotIn("bounded_execution_reason_codes", compact)
+        self.assertNotIn("bounded_execution_blocked_reasons", compact)
+        self.assertNotIn("verification_reason_codes", compact)
         self.assertNotIn("operator_guidance_summary", compact)
         self.assertNotIn("operator_safe_actions_summary", compact)
         self.assertNotIn("operator_unsafe_actions_summary", compact)
+        self.assertNotIn("objective_source_status", compact)
         self.assertFalse(is_manifest_summary_safe_field("operator_guidance_summary"))
         contract = build_manifest_run_state_summary_contract_surface()
         self.assertEqual(contract["compact_summary_field"], "run_state_summary_compact")
+        self.assertEqual(contract["compatibility_summary_field"], "run_state_summary")
+        self.assertEqual(
+            contract["compatibility_summary_mode"],
+            "alias_to_compact_deprecated_verbose",
+        )
         self.assertIn("operator_guidance_summary", contract["rendering_only_operator_fields"])
         self.assertIn("lifecycle_closure_status", contract["lifecycle_summary_safe_fields"])
+        self.assertEqual(
+            set(contract["completion_summary_safe_fields"]),
+            set(COMPLETION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["approval_summary_safe_fields"]),
+            set(APPROVAL_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["reconcile_summary_safe_fields"]),
+            set(RECONCILE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["repair_suggestion_summary_safe_fields"]),
+            set(REPAIR_SUGGESTION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["repair_plan_transport_summary_safe_fields"]),
+            set(REPAIR_PLAN_TRANSPORT_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["repair_approval_binding_summary_safe_fields"]),
+            set(REPAIR_APPROVAL_BINDING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["execution_authorization_summary_safe_fields"]),
+            set(EXECUTION_AUTHORIZATION_GATE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["bounded_execution_summary_safe_fields"]),
+            set(BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["execution_result_summary_safe_fields"]),
+            set(EXECUTION_RESULT_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["verification_closure_summary_safe_fields"]),
+            set(VERIFICATION_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["retry_reentry_loop_summary_safe_fields"]),
+            set(RETRY_REENTRY_LOOP_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["endgame_closure_summary_safe_fields"]),
+            set(ENDGAME_CLOSURE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["loop_hardening_summary_safe_fields"]),
+            set(LOOP_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["lane_stabilization_summary_safe_fields"]),
+            set(LANE_STABILIZATION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["observability_summary_safe_fields"]),
+            set(OBSERVABILITY_ROLLUP_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["failure_bucketing_hardening_summary_safe_fields"]),
+            set(FAILURE_BUCKETING_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+
+    def test_contract_artifact_index_is_deterministic_and_compact(self) -> None:
+        paths = {
+            "objective_contract": "/tmp/objective_contract.json",
+            "completion_contract": "/tmp/completion_contract.json",
+            "approval_transport": "/tmp/approval_transport.json",
+        }
+        summaries = {
+            "objective_contract": {"objective_contract_present": True},
+            "completion_contract": {"completion_contract_present": True},
+            "approval_transport": {"approval_transport_present": True},
+        }
+        payload_a = build_contract_artifact_index(paths_by_role=paths, summaries_by_role=summaries)
+        payload_b = build_contract_artifact_index(paths_by_role=paths, summaries_by_role=summaries)
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(
+            list(payload_a.keys()),
+            ["objective_contract", "completion_contract", "approval_transport"],
+        )
+        self.assertEqual(payload_a["objective_contract"]["path"], "/tmp/objective_contract.json")
+        self.assertEqual(
+            payload_a["completion_contract"]["summary"],
+            {"completion_contract_present": True},
+        )
+        self.assertNotIn("reconcile_contract", payload_a)
+        self.assertEqual(list(CONTRACT_ARTIFACT_ROLES)[0], "objective_contract")
 
     def test_manifest_summary_selector_is_stable_when_optional_operator_fields_are_absent(self) -> None:
         compact = select_manifest_run_state_summary_compact(
@@ -3259,6 +9434,9 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertEqual(compact["lifecycle_closure_status"], "stopped_resumable")
         self.assertFalse(compact["lifecycle_safely_closed"])
         self.assertTrue(compact["lifecycle_resumable"])
+        self.assertIn(compact["completion_status"], COMPLETION_STATUSES)
+        self.assertIn(compact["done_status"], DONE_STATUSES)
+        self.assertIn(compact["safe_closure_status"], SAFE_CLOSURE_STATUSES)
 
     def test_runner_persists_rollback_progression_checkpoints_when_execution_attempted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
