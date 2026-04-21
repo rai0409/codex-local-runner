@@ -14,8 +14,119 @@ from automation.control.next_action_controller import evaluate_next_action_from_
 from automation.control.retry_context_store import FileRetryContextStore
 from automation.execution.codex_executor_adapter import CodexExecutionTransport
 from automation.execution.codex_executor_adapter import CodexExecutorAdapter
+from automation.orchestration.approval_transport import build_approval_run_state_summary_surface
+from automation.orchestration.artifact_index import build_contract_artifact_index
+from automation.orchestration.approval_transport import build_approval_transport_surface
+from automation.orchestration.completion_contract import build_completion_contract_surface
+from automation.orchestration.completion_contract import build_completion_run_state_summary_surface
+from automation.orchestration.execution_authorization_gate import (
+    build_execution_authorization_gate_run_state_summary_surface,
+)
+from automation.orchestration.execution_authorization_gate import build_execution_authorization_gate_surface
+from automation.orchestration.execution_result_contract import (
+    build_execution_result_contract_run_state_summary_surface,
+)
+from automation.orchestration.execution_result_contract import build_execution_result_contract_surface
+from automation.orchestration.verification_closure_contract import (
+    build_verification_closure_contract_surface,
+)
+from automation.orchestration.verification_closure_contract import (
+    build_verification_closure_run_state_summary_surface,
+)
+from automation.orchestration.retry_reentry_loop_contract import (
+    build_retry_reentry_loop_contract_surface,
+)
+from automation.orchestration.retry_reentry_loop_contract import (
+    build_retry_reentry_loop_run_state_summary_surface,
+)
+from automation.orchestration.endgame_closure_contract import (
+    build_endgame_closure_contract_surface,
+)
+from automation.orchestration.endgame_closure_contract import (
+    build_endgame_closure_run_state_summary_surface,
+)
+from automation.orchestration.loop_hardening_contract import (
+    build_loop_hardening_contract_surface,
+)
+from automation.orchestration.loop_hardening_contract import (
+    build_loop_hardening_run_state_summary_surface,
+)
+from automation.orchestration.lane_stabilization_contract import (
+    build_lane_stabilization_contract_surface,
+)
+from automation.orchestration.lane_stabilization_contract import (
+    build_lane_stabilization_run_state_summary_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_failure_bucket_rollup_summary_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_failure_bucket_rollup_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_fleet_run_rollup_summary_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_fleet_run_rollup_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_observability_rollup_contract_summary_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_observability_rollup_contract_surface,
+)
+from automation.orchestration.observability_rollup import (
+    build_observability_rollup_run_state_summary_surface,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    build_failure_bucketing_hardening_run_state_summary_surface,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    build_failure_bucketing_hardening_summary_surface,
+)
+from automation.orchestration.failure_bucketing_hardening import (
+    build_failure_bucketing_hardening_contract_surface,
+)
+from automation.orchestration.artifact_retention import (
+    build_artifact_retention_contract_surface,
+)
+from automation.orchestration.artifact_retention import (
+    build_artifact_retention_run_state_summary_surface,
+)
+from automation.orchestration.artifact_retention import (
+    build_artifact_retention_summary_surface,
+)
+from automation.orchestration.artifact_retention import (
+    build_retention_manifest_summary_surface,
+)
+from automation.orchestration.artifact_retention import (
+    build_retention_manifest_surface,
+)
+from automation.orchestration.fleet_safety_control import (
+    build_fleet_safety_control_contract_surface,
+)
+from automation.orchestration.fleet_safety_control import (
+    build_fleet_safety_control_run_state_summary_surface,
+)
+from automation.orchestration.fleet_safety_control import (
+    build_fleet_safety_control_summary_surface,
+)
+from automation.orchestration.bounded_execution_bridge import (
+    build_bounded_execution_bridge_run_state_summary_surface,
+)
+from automation.orchestration.bounded_execution_bridge import build_bounded_execution_bridge_surface
 from automation.orchestration.lifecycle_terminal_state import build_lifecycle_terminal_state_surface
+from automation.orchestration.objective_contract import build_objective_contract_surface
+from automation.orchestration.objective_contract import build_objective_run_state_summary_surface
 from automation.orchestration.operator_explainability import build_operator_explainability_surface
+from automation.orchestration.repair_suggestion_contract import build_repair_suggestion_contract_surface
+from automation.orchestration.repair_suggestion_contract import build_repair_suggestion_run_state_summary_surface
+from automation.orchestration.repair_approval_binding import build_repair_approval_binding_run_state_summary_surface
+from automation.orchestration.repair_approval_binding import build_repair_approval_binding_surface
+from automation.orchestration.repair_plan_transport import build_repair_plan_transport_run_state_summary_surface
+from automation.orchestration.repair_plan_transport import build_repair_plan_transport_surface
+from automation.orchestration.reconcile_contract import build_reconcile_contract_surface
+from automation.orchestration.reconcile_contract import build_reconcile_run_state_summary_surface
 from automation.orchestration.run_state_summary_contract import build_manifest_run_state_summary_contract_surface
 from automation.orchestration.run_state_summary_contract import select_manifest_run_state_summary_compact
 from automation.planning.prompt_compiler import compile_prompt_units
@@ -379,6 +490,8 @@ _MISSING_REQUIRED_REF_TOKENS = (
 # - push_execution.json / pr_execution.json / merge_execution.json: downstream delivery execution receipts
 # - rollback_execution.json: bounded rollback execution receipt derived from rollback readiness + execution receipts
 # - run_state.json: run-level lifecycle state summary
+# - objective_contract.json: run-level intent and acceptance contract (objective truth owner)
+# - completion_contract.json: run-level derived completion decision contract
 
 
 def _iso_now(now: Callable[[], datetime]) -> str:
@@ -442,6 +555,25 @@ def _merge_retry_context_inputs(
     if has_explicit:
         merged.update(dict(explicit or {}))
     return merged
+
+
+def _resolve_approval_input_payload(
+    *,
+    explicit_approval_input: Mapping[str, Any] | None,
+    artifacts: Mapping[str, Any],
+    policy_snapshot: Mapping[str, Any],
+) -> dict[str, Any]:
+    candidates: list[Any] = [
+        explicit_approval_input,
+        artifacts.get("approval_input"),
+        artifacts.get("manual_approval_input"),
+        policy_snapshot.get("approval_input"),
+        policy_snapshot.get("manual_approval_input"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, Mapping):
+            return dict(candidate)
+    return {}
 
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -4697,6 +4829,315 @@ def _augment_run_state_with_closed_loop(
     }
 
 
+def _augment_run_state_with_objective_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    objective_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    objective_surface = build_objective_run_state_summary_surface(objective_contract_payload)
+    return {
+        **payload,
+        **objective_surface,
+    }
+
+
+def _augment_run_state_with_completion_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    completion_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    completion_surface = build_completion_run_state_summary_surface(completion_contract_payload)
+    return {
+        **payload,
+        **completion_surface,
+    }
+
+
+def _augment_run_state_with_approval_transport_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    approval_transport_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    approval_surface = build_approval_run_state_summary_surface(approval_transport_payload)
+    return {
+        **payload,
+        **approval_surface,
+    }
+
+
+def _augment_run_state_with_reconcile_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    reconcile_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    reconcile_surface = build_reconcile_run_state_summary_surface(reconcile_contract_payload)
+    return {
+        **payload,
+        **reconcile_surface,
+    }
+
+
+def _augment_run_state_with_repair_suggestion_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    repair_suggestion_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    repair_surface = build_repair_suggestion_run_state_summary_surface(
+        repair_suggestion_contract_payload
+    )
+    return {
+        **payload,
+        **repair_surface,
+    }
+
+
+def _augment_run_state_with_repair_plan_transport_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    repair_plan_transport_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    repair_plan_surface = build_repair_plan_transport_run_state_summary_surface(
+        repair_plan_transport_payload
+    )
+    return {
+        **payload,
+        **repair_plan_surface,
+    }
+
+
+def _augment_run_state_with_repair_approval_binding_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    repair_approval_binding_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    binding_surface = build_repair_approval_binding_run_state_summary_surface(
+        repair_approval_binding_payload
+    )
+    return {
+        **payload,
+        **binding_surface,
+    }
+
+
+def _augment_run_state_with_execution_authorization_gate_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    execution_authorization_gate_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    execution_authorization_surface = build_execution_authorization_gate_run_state_summary_surface(
+        execution_authorization_gate_payload
+    )
+    return {
+        **payload,
+        **execution_authorization_surface,
+    }
+
+
+def _augment_run_state_with_bounded_execution_bridge_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    bounded_execution_bridge_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    bounded_execution_surface = build_bounded_execution_bridge_run_state_summary_surface(
+        bounded_execution_bridge_payload
+    )
+    return {
+        **payload,
+        **bounded_execution_surface,
+    }
+
+
+def _augment_run_state_with_execution_result_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    execution_result_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    execution_result_surface = build_execution_result_contract_run_state_summary_surface(
+        execution_result_contract_payload
+    )
+    return {
+        **payload,
+        **execution_result_surface,
+    }
+
+
+def _augment_run_state_with_verification_closure_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    verification_closure_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    verification_closure_surface = build_verification_closure_run_state_summary_surface(
+        verification_closure_contract_payload
+    )
+    return {
+        **payload,
+        **verification_closure_surface,
+    }
+
+
+def _augment_run_state_with_retry_reentry_loop_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    retry_reentry_loop_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    retry_reentry_surface = build_retry_reentry_loop_run_state_summary_surface(
+        retry_reentry_loop_contract_payload
+    )
+    return {
+        **payload,
+        **retry_reentry_surface,
+    }
+
+
+def _augment_run_state_with_endgame_closure_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    endgame_closure_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    endgame_surface = build_endgame_closure_run_state_summary_surface(
+        endgame_closure_contract_payload
+    )
+    return {
+        **payload,
+        **endgame_surface,
+    }
+
+
+def _augment_run_state_with_loop_hardening_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    loop_hardening_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    loop_hardening_surface = build_loop_hardening_run_state_summary_surface(
+        loop_hardening_contract_payload
+    )
+    return {
+        **payload,
+        **loop_hardening_surface,
+    }
+
+
+def _augment_run_state_with_lane_stabilization_contract_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    lane_stabilization_contract_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    lane_stabilization_surface = build_lane_stabilization_run_state_summary_surface(
+        lane_stabilization_contract_payload
+    )
+    return {
+        **payload,
+        **lane_stabilization_surface,
+    }
+
+
+def _augment_run_state_with_observability_rollup_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    observability_rollup_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    observability_surface = build_observability_rollup_run_state_summary_surface(
+        observability_rollup_payload
+    )
+    return {
+        **payload,
+        **observability_surface,
+    }
+
+
+def _augment_run_state_with_failure_bucketing_hardening_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    failure_bucketing_hardening_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    hardening_surface = build_failure_bucketing_hardening_run_state_summary_surface(
+        failure_bucketing_hardening_payload
+    )
+    return {
+        **payload,
+        **hardening_surface,
+    }
+
+
+def _augment_run_state_with_artifact_retention_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    artifact_retention_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    retention_surface = build_artifact_retention_run_state_summary_surface(
+        artifact_retention_payload
+    )
+    return {
+        **payload,
+        **retention_surface,
+    }
+
+
+def _augment_run_state_with_fleet_safety_control_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    fleet_safety_control_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    fleet_safety_surface = build_fleet_safety_control_run_state_summary_surface(
+        fleet_safety_control_payload
+    )
+    return {
+        **payload,
+        **fleet_safety_surface,
+    }
+
+
+def _collect_execution_result_contract_records(
+    manifest_units: list[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for entry in manifest_units:
+        result_path_text = _normalize_text(entry.get("result_path"), default="")
+        receipt_path_text = _normalize_text(entry.get("receipt_path"), default="")
+
+        result_path = Path(result_path_text) if result_path_text else None
+        receipt_path = Path(receipt_path_text) if receipt_path_text else None
+
+        result_exists = bool(result_path and result_path.exists())
+        receipt_exists = bool(receipt_path and receipt_path.exists())
+        result_payload = _read_json_object_if_exists(result_path) if result_path else None
+        receipt_payload = _read_json_object_if_exists(receipt_path) if receipt_path else None
+
+        records.append(
+            {
+                "pr_id": _normalize_text(entry.get("pr_id"), default=""),
+                "result_path": str(result_path) if result_path else "",
+                "result_exists": result_exists,
+                "result_malformed": bool(result_exists and not isinstance(result_payload, Mapping)),
+                "result_payload": dict(result_payload) if isinstance(result_payload, Mapping) else None,
+                "receipt_path": str(receipt_path) if receipt_path else "",
+                "receipt_exists": receipt_exists,
+                "receipt_malformed": bool(receipt_exists and not isinstance(receipt_payload, Mapping)),
+                "receipt_payload": dict(receipt_payload) if isinstance(receipt_payload, Mapping) else None,
+            }
+        )
+    return records
+
+
 def _augment_run_state_with_policy_overlay(
     *,
     run_state_payload: Mapping[str, Any],
@@ -5686,6 +6127,7 @@ class PlannedExecutionRunner:
         stop_on_failure: bool = True,
         retry_context: Mapping[str, Any] | None = None,
         policy_snapshot: Mapping[str, Any] | None = None,
+        approval_input: Mapping[str, Any] | None = None,
         github_read_evidence: Mapping[str, Any] | None = None,
         execution_repo_path: str | Path | None = None,
     ) -> dict[str, Any]:
@@ -5712,6 +6154,11 @@ class PlannedExecutionRunner:
             else {}
         )
         policy_payload = dict(policy_snapshot) if isinstance(policy_snapshot, Mapping) else {}
+        approval_input_payload = _resolve_approval_input_payload(
+            explicit_approval_input=approval_input,
+            artifacts=artifacts,
+            policy_snapshot=policy_payload,
+        )
         resolved_repository = _normalize_text(
             policy_payload.get("repository"),
             default=_normalize_text(
@@ -6052,9 +6499,45 @@ class PlannedExecutionRunner:
                 "merge_execution": "merge_execution.json",
                 "rollback_execution": "rollback_execution.json",
                 "run_state": "run_state.json",
+                "objective_contract": "objective_contract.json",
+                "completion_contract": "completion_contract.json",
+                "approval_transport": "approval_transport.json",
+                "reconcile_contract": "reconcile_contract.json",
+                "repair_suggestion_contract": "repair_suggestion_contract.json",
+                "repair_plan_transport": "repair_plan_transport.json",
+                "repair_approval_binding": "repair_approval_binding.json",
+                "execution_authorization_gate": "execution_authorization_gate.json",
+                "bounded_execution_bridge": "bounded_execution_bridge.json",
+                "execution_result_contract": "execution_result_contract.json",
+                "verification_closure_contract": "verification_closure_contract.json",
+                "retry_reentry_loop_contract": "retry_reentry_loop_contract.json",
+                "endgame_closure_contract": "endgame_closure_contract.json",
+                "loop_hardening_contract": "loop_hardening_contract.json",
+                "lane_stabilization_contract": "lane_stabilization_contract.json",
+                "observability_rollup_contract": "observability_rollup_contract.json",
+                "failure_bucket_rollup": "failure_bucket_rollup.json",
+                "fleet_run_rollup": "fleet_run_rollup.json",
+                "failure_bucketing_hardening_contract": "failure_bucketing_hardening_contract.json",
+                "retention_manifest": "retention_manifest.json",
+                "artifact_retention_contract": "artifact_retention_contract.json",
+                "fleet_safety_control_contract": "fleet_safety_control_contract.json",
             },
             "pr_units": manifest_units,
         }
+        objective_contract_path = run_root / "objective_contract.json"
+        objective_contract_payload = build_objective_contract_surface(
+            run_id=resolved_job_id,
+            artifacts=artifacts,
+            units=units,
+            policy_snapshot=policy_snapshot,
+            execution_repo_path=resolved_execution_repo_path or None,
+            artifact_ownership=manifest["artifact_ownership"],
+        )
+        _write_json(objective_contract_path, objective_contract_payload)
+        manifest["objective_contract_summary"] = build_objective_run_state_summary_surface(
+            objective_contract_payload
+        )
+        manifest["objective_contract_path"] = str(objective_contract_path)
 
         manifest_path = run_root / "manifest.json"
         _write_json(manifest_path, manifest)
@@ -6287,6 +6770,10 @@ class PlannedExecutionRunner:
             reason=_normalize_text(decision_payload.get("reason"), default=""),
             total_units_planned=total_units_planned,
             manifest_units=manifest_units,
+        )
+        run_state_payload = _augment_run_state_with_objective_contract_summary(
+            run_state_payload=run_state_payload,
+            objective_contract_payload=objective_contract_payload,
         )
         # PR27 readiness gating overlays remain canonical for decision artifacts.
         # PR28 adds bounded commit execution only when readiness + run-level guardrails allow it.
@@ -7506,10 +7993,710 @@ class PlannedExecutionRunner:
         run_state_payload = _augment_run_state_with_lifecycle_terminal_contract(
             run_state_payload=run_state_payload,
         )
+        completion_contract_path = run_root / "completion_contract.json"
+        completion_contract_payload = build_completion_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "run_state.json": True,
+                "next_action.json": decision_path.exists(),
+                "manifest.json": manifest_path.exists(),
+            },
+        )
+        _write_json(completion_contract_path, completion_contract_payload)
+        run_state_payload = _augment_run_state_with_completion_contract_summary(
+            run_state_payload=run_state_payload,
+            completion_contract_payload=completion_contract_payload,
+        )
+        approval_transport_path = run_root / "approval_transport.json"
+        approval_transport_payload = build_approval_transport_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            run_state_payload=run_state_payload,
+            approval_input_payload=approval_input_payload,
+            evaluated_at=_normalize_text(run_state_payload.get("updated_at"), default=_iso_now(self.now)),
+        )
+        _write_json(approval_transport_path, approval_transport_payload)
+        run_state_payload = _augment_run_state_with_approval_transport_summary(
+            run_state_payload=run_state_payload,
+            approval_transport_payload=approval_transport_payload,
+        )
+        reconcile_contract_path = run_root / "reconcile_contract.json"
+        reconcile_contract_payload = build_reconcile_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(reconcile_contract_path, reconcile_contract_payload)
+        run_state_payload = _augment_run_state_with_reconcile_contract_summary(
+            run_state_payload=run_state_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+        )
+        repair_suggestion_contract_path = run_root / "repair_suggestion_contract.json"
+        repair_suggestion_contract_payload = build_repair_suggestion_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(repair_suggestion_contract_path, repair_suggestion_contract_payload)
+        run_state_payload = _augment_run_state_with_repair_suggestion_contract_summary(
+            run_state_payload=run_state_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+        )
+        repair_plan_transport_path = run_root / "repair_plan_transport.json"
+        repair_plan_transport_payload = build_repair_plan_transport_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "repair_suggestion_contract.json": repair_suggestion_contract_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(repair_plan_transport_path, repair_plan_transport_payload)
+        run_state_payload = _augment_run_state_with_repair_plan_transport_summary(
+            run_state_payload=run_state_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+        )
+        repair_approval_binding_path = run_root / "repair_approval_binding.json"
+        repair_approval_binding_payload = build_repair_approval_binding_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "repair_suggestion_contract.json": repair_suggestion_contract_path.exists(),
+                "repair_plan_transport.json": repair_plan_transport_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(repair_approval_binding_path, repair_approval_binding_payload)
+        run_state_payload = _augment_run_state_with_repair_approval_binding_summary(
+            run_state_payload=run_state_payload,
+            repair_approval_binding_payload=repair_approval_binding_payload,
+        )
+        execution_authorization_gate_path = run_root / "execution_authorization_gate.json"
+        execution_authorization_gate_payload = build_execution_authorization_gate_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            repair_approval_binding_payload=repair_approval_binding_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "repair_suggestion_contract.json": repair_suggestion_contract_path.exists(),
+                "repair_plan_transport.json": repair_plan_transport_path.exists(),
+                "repair_approval_binding.json": repair_approval_binding_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(execution_authorization_gate_path, execution_authorization_gate_payload)
+        run_state_payload = _augment_run_state_with_execution_authorization_gate_summary(
+            run_state_payload=run_state_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+        )
+        bounded_execution_bridge_path = run_root / "bounded_execution_bridge.json"
+        bounded_execution_bridge_payload = build_bounded_execution_bridge_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            repair_approval_binding_payload=repair_approval_binding_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "repair_suggestion_contract.json": repair_suggestion_contract_path.exists(),
+                "repair_plan_transport.json": repair_plan_transport_path.exists(),
+                "repair_approval_binding.json": repair_approval_binding_path.exists(),
+                "execution_authorization_gate.json": execution_authorization_gate_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(bounded_execution_bridge_path, bounded_execution_bridge_payload)
+        run_state_payload = _augment_run_state_with_bounded_execution_bridge_summary(
+            run_state_payload=run_state_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+        )
+        execution_result_contract_path = run_root / "execution_result_contract.json"
+        execution_result_contract_payload = build_execution_result_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            repair_approval_binding_payload=repair_approval_binding_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+            run_state_payload=run_state_payload,
+            execution_records=_collect_execution_result_contract_records(manifest_units),
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "repair_plan_transport.json": repair_plan_transport_path.exists(),
+                "repair_approval_binding.json": repair_approval_binding_path.exists(),
+                "execution_authorization_gate.json": execution_authorization_gate_path.exists(),
+                "bounded_execution_bridge.json": bounded_execution_bridge_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(execution_result_contract_path, execution_result_contract_payload)
+        run_state_payload = _augment_run_state_with_execution_result_contract_summary(
+            run_state_payload=run_state_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+        )
+        verification_closure_contract_path = run_root / "verification_closure_contract.json"
+        verification_closure_contract_payload = build_verification_closure_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "execution_authorization_gate.json": execution_authorization_gate_path.exists(),
+                "bounded_execution_bridge.json": bounded_execution_bridge_path.exists(),
+                "execution_result_contract.json": execution_result_contract_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(verification_closure_contract_path, verification_closure_contract_payload)
+        run_state_payload = _augment_run_state_with_verification_closure_contract_summary(
+            run_state_payload=run_state_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+        )
+        retry_reentry_loop_contract_path = run_root / "retry_reentry_loop_contract.json"
+        retry_reentry_loop_contract_payload = build_retry_reentry_loop_contract_surface(
+            run_id=resolved_job_id,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+            repair_plan_transport_payload=repair_plan_transport_payload,
+            repair_approval_binding_payload=repair_approval_binding_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "repair_suggestion_contract.json": repair_suggestion_contract_path.exists(),
+                "repair_plan_transport.json": repair_plan_transport_path.exists(),
+                "repair_approval_binding.json": repair_approval_binding_path.exists(),
+                "execution_authorization_gate.json": execution_authorization_gate_path.exists(),
+                "bounded_execution_bridge.json": bounded_execution_bridge_path.exists(),
+                "execution_result_contract.json": execution_result_contract_path.exists(),
+                "verification_closure_contract.json": verification_closure_contract_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(retry_reentry_loop_contract_path, retry_reentry_loop_contract_payload)
+        run_state_payload = _augment_run_state_with_retry_reentry_loop_contract_summary(
+            run_state_payload=run_state_payload,
+            retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+        )
+        endgame_closure_contract_path = run_root / "endgame_closure_contract.json"
+        endgame_closure_contract_payload = build_endgame_closure_contract_surface(
+            run_id=resolved_job_id,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+            retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "execution_authorization_gate.json": execution_authorization_gate_path.exists(),
+                "bounded_execution_bridge.json": bounded_execution_bridge_path.exists(),
+                "execution_result_contract.json": execution_result_contract_path.exists(),
+                "verification_closure_contract.json": verification_closure_contract_path.exists(),
+                "retry_reentry_loop_contract.json": retry_reentry_loop_contract_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(endgame_closure_contract_path, endgame_closure_contract_payload)
+        run_state_payload = _augment_run_state_with_endgame_closure_contract_summary(
+            run_state_payload=run_state_payload,
+            endgame_closure_contract_payload=endgame_closure_contract_payload,
+        )
+        loop_hardening_contract_path = run_root / "loop_hardening_contract.json"
+        loop_hardening_contract_payload = build_loop_hardening_contract_surface(
+            run_id=resolved_job_id,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+            retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+            endgame_closure_contract_payload=endgame_closure_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "execution_result_contract.json": execution_result_contract_path.exists(),
+                "verification_closure_contract.json": verification_closure_contract_path.exists(),
+                "retry_reentry_loop_contract.json": retry_reentry_loop_contract_path.exists(),
+                "endgame_closure_contract.json": endgame_closure_contract_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(loop_hardening_contract_path, loop_hardening_contract_payload)
+        run_state_payload = _augment_run_state_with_loop_hardening_contract_summary(
+            run_state_payload=run_state_payload,
+            loop_hardening_contract_payload=loop_hardening_contract_payload,
+        )
+        lane_stabilization_contract_path = run_root / "lane_stabilization_contract.json"
+        lane_stabilization_contract_payload = build_lane_stabilization_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            completion_contract_payload=completion_contract_payload,
+            approval_transport_payload=approval_transport_payload,
+            reconcile_contract_payload=reconcile_contract_payload,
+            execution_authorization_gate_payload=execution_authorization_gate_payload,
+            bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+            retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+            endgame_closure_contract_payload=endgame_closure_contract_payload,
+            loop_hardening_contract_payload=loop_hardening_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "execution_authorization_gate.json": execution_authorization_gate_path.exists(),
+                "bounded_execution_bridge.json": bounded_execution_bridge_path.exists(),
+                "execution_result_contract.json": execution_result_contract_path.exists(),
+                "verification_closure_contract.json": verification_closure_contract_path.exists(),
+                "retry_reentry_loop_contract.json": retry_reentry_loop_contract_path.exists(),
+                "endgame_closure_contract.json": endgame_closure_contract_path.exists(),
+                "loop_hardening_contract.json": loop_hardening_contract_path.exists(),
+                "run_state.json": True,
+            },
+        )
+        _write_json(lane_stabilization_contract_path, lane_stabilization_contract_payload)
+        run_state_payload = _augment_run_state_with_lane_stabilization_contract_summary(
+            run_state_payload=run_state_payload,
+            lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+        )
+        observability_rollup_contract_path = run_root / "observability_rollup_contract.json"
+        observability_rollup_payload = build_observability_rollup_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+            retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+            endgame_closure_contract_payload=endgame_closure_contract_payload,
+            loop_hardening_contract_payload=loop_hardening_contract_payload,
+            lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+            run_state_payload=run_state_payload,
+            artifact_presence={
+                "objective_contract.json": objective_contract_path.exists(),
+                "completion_contract.json": completion_contract_path.exists(),
+                "approval_transport.json": approval_transport_path.exists(),
+                "reconcile_contract.json": reconcile_contract_path.exists(),
+                "repair_suggestion_contract.json": repair_suggestion_contract_path.exists(),
+                "repair_plan_transport.json": repair_plan_transport_path.exists(),
+                "repair_approval_binding.json": repair_approval_binding_path.exists(),
+                "execution_authorization_gate.json": execution_authorization_gate_path.exists(),
+                "bounded_execution_bridge.json": bounded_execution_bridge_path.exists(),
+                "execution_result_contract.json": execution_result_contract_path.exists(),
+                "verification_closure_contract.json": verification_closure_contract_path.exists(),
+                "retry_reentry_loop_contract.json": retry_reentry_loop_contract_path.exists(),
+                "endgame_closure_contract.json": endgame_closure_contract_path.exists(),
+                "loop_hardening_contract.json": loop_hardening_contract_path.exists(),
+                "lane_stabilization_contract.json": lane_stabilization_contract_path.exists(),
+                "run_state.json": True,
+            },
+            contract_artifact_index_payload=None,
+        )
+        _write_json(observability_rollup_contract_path, observability_rollup_payload)
+        run_state_payload = _augment_run_state_with_observability_rollup_summary(
+            run_state_payload=run_state_payload,
+            observability_rollup_payload=observability_rollup_payload,
+        )
+        failure_bucket_rollup_path = run_root / "failure_bucket_rollup.json"
+        failure_bucket_rollup_payload = build_failure_bucket_rollup_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+            retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+            endgame_closure_contract_payload=endgame_closure_contract_payload,
+            loop_hardening_contract_payload=loop_hardening_contract_payload,
+            lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+            observability_rollup_payload=observability_rollup_payload,
+            run_state_payload=run_state_payload,
+        )
+        _write_json(failure_bucket_rollup_path, failure_bucket_rollup_payload)
+        fleet_run_rollup_path = run_root / "fleet_run_rollup.json"
+        fleet_run_rollup_payload = build_fleet_run_rollup_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            observability_rollup_payload=observability_rollup_payload,
+            failure_bucket_rollup_payload=failure_bucket_rollup_payload,
+            verification_closure_contract_payload=verification_closure_contract_payload,
+            retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+            endgame_closure_contract_payload=endgame_closure_contract_payload,
+            loop_hardening_contract_payload=loop_hardening_contract_payload,
+            lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+            execution_result_contract_payload=execution_result_contract_payload,
+        )
+        _write_json(fleet_run_rollup_path, fleet_run_rollup_payload)
+        failure_bucketing_hardening_contract_path = (
+            run_root / "failure_bucketing_hardening_contract.json"
+        )
+        failure_bucketing_hardening_payload = (
+            build_failure_bucketing_hardening_contract_surface(
+                run_id=resolved_job_id,
+                objective_contract_payload=objective_contract_payload,
+                execution_result_contract_payload=execution_result_contract_payload,
+                verification_closure_contract_payload=verification_closure_contract_payload,
+                retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+                endgame_closure_contract_payload=endgame_closure_contract_payload,
+                loop_hardening_contract_payload=loop_hardening_contract_payload,
+                lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+                observability_rollup_payload=observability_rollup_payload,
+                failure_bucket_rollup_payload=failure_bucket_rollup_payload,
+                bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+                execution_authorization_gate_payload=execution_authorization_gate_payload,
+                run_state_payload=run_state_payload,
+            )
+        )
+        _write_json(
+            failure_bucketing_hardening_contract_path,
+            failure_bucketing_hardening_payload,
+        )
+        run_state_payload = _augment_run_state_with_failure_bucketing_hardening_summary(
+            run_state_payload=run_state_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
+        )
+        manifest["completion_contract_summary"] = build_completion_run_state_summary_surface(
+            completion_contract_payload
+        )
+        manifest["completion_contract_path"] = str(completion_contract_path)
+        manifest["approval_transport_summary"] = build_approval_run_state_summary_surface(
+            approval_transport_payload
+        )
+        manifest["approval_transport_path"] = str(approval_transport_path)
+        manifest["reconcile_contract_summary"] = build_reconcile_run_state_summary_surface(
+            reconcile_contract_payload
+        )
+        manifest["reconcile_contract_path"] = str(reconcile_contract_path)
+        manifest["repair_suggestion_contract_summary"] = (
+            build_repair_suggestion_run_state_summary_surface(
+                repair_suggestion_contract_payload
+            )
+        )
+        manifest["repair_suggestion_contract_path"] = str(repair_suggestion_contract_path)
+        manifest["repair_plan_transport_summary"] = (
+            build_repair_plan_transport_run_state_summary_surface(
+                repair_plan_transport_payload
+            )
+        )
+        manifest["repair_plan_transport_path"] = str(repair_plan_transport_path)
+        manifest["repair_approval_binding_summary"] = (
+            build_repair_approval_binding_run_state_summary_surface(
+                repair_approval_binding_payload
+            )
+        )
+        manifest["repair_approval_binding_path"] = str(repair_approval_binding_path)
+        manifest["execution_authorization_gate_summary"] = (
+            build_execution_authorization_gate_run_state_summary_surface(
+                execution_authorization_gate_payload
+            )
+        )
+        manifest["execution_authorization_gate_path"] = str(execution_authorization_gate_path)
+        manifest["bounded_execution_bridge_summary"] = (
+            build_bounded_execution_bridge_run_state_summary_surface(
+                bounded_execution_bridge_payload
+            )
+        )
+        manifest["bounded_execution_bridge_path"] = str(bounded_execution_bridge_path)
+        manifest["execution_result_contract_summary"] = (
+            build_execution_result_contract_run_state_summary_surface(
+                execution_result_contract_payload
+            )
+        )
+        manifest["execution_result_contract_path"] = str(execution_result_contract_path)
+        manifest["verification_closure_contract_summary"] = (
+            build_verification_closure_run_state_summary_surface(
+                verification_closure_contract_payload
+            )
+        )
+        manifest["verification_closure_contract_path"] = str(
+            verification_closure_contract_path
+        )
+        manifest["retry_reentry_loop_contract_summary"] = (
+            build_retry_reentry_loop_run_state_summary_surface(
+                retry_reentry_loop_contract_payload
+            )
+        )
+        manifest["retry_reentry_loop_contract_path"] = str(
+            retry_reentry_loop_contract_path
+        )
+        manifest["endgame_closure_contract_summary"] = (
+            build_endgame_closure_run_state_summary_surface(
+                endgame_closure_contract_payload
+            )
+        )
+        manifest["endgame_closure_contract_path"] = str(
+            endgame_closure_contract_path
+        )
+        manifest["loop_hardening_contract_summary"] = (
+            build_loop_hardening_run_state_summary_surface(
+                loop_hardening_contract_payload
+            )
+        )
+        manifest["loop_hardening_contract_path"] = str(
+            loop_hardening_contract_path
+        )
+        manifest["lane_stabilization_contract_summary"] = (
+            build_lane_stabilization_run_state_summary_surface(
+                lane_stabilization_contract_payload
+            )
+        )
+        manifest["lane_stabilization_contract_path"] = str(
+            lane_stabilization_contract_path
+        )
+        manifest["observability_rollup_contract_summary"] = (
+            build_observability_rollup_contract_summary_surface(
+                observability_rollup_payload
+            )
+        )
+        manifest["observability_rollup_contract_path"] = str(
+            observability_rollup_contract_path
+        )
+        manifest["failure_bucket_rollup_summary"] = (
+            build_failure_bucket_rollup_summary_surface(
+                failure_bucket_rollup_payload
+            )
+        )
+        manifest["failure_bucket_rollup_path"] = str(failure_bucket_rollup_path)
+        manifest["fleet_run_rollup_summary"] = (
+            build_fleet_run_rollup_summary_surface(fleet_run_rollup_payload)
+        )
+        manifest["fleet_run_rollup_path"] = str(fleet_run_rollup_path)
+        manifest["failure_bucketing_hardening_contract_summary"] = (
+            build_failure_bucketing_hardening_summary_surface(
+                failure_bucketing_hardening_payload
+            )
+        )
+        manifest["failure_bucketing_hardening_contract_path"] = str(
+            failure_bucketing_hardening_contract_path
+        )
+        contract_summaries_by_role = {
+            "objective_contract": manifest.get("objective_contract_summary"),
+            "completion_contract": manifest.get("completion_contract_summary"),
+            "approval_transport": manifest.get("approval_transport_summary"),
+            "reconcile_contract": manifest.get("reconcile_contract_summary"),
+            "repair_suggestion_contract": manifest.get("repair_suggestion_contract_summary"),
+            "repair_plan_transport": manifest.get("repair_plan_transport_summary"),
+            "repair_approval_binding": manifest.get("repair_approval_binding_summary"),
+            "execution_authorization_gate": manifest.get("execution_authorization_gate_summary"),
+            "bounded_execution_bridge": manifest.get("bounded_execution_bridge_summary"),
+            "execution_result_contract": manifest.get("execution_result_contract_summary"),
+            "verification_closure_contract": manifest.get("verification_closure_contract_summary"),
+            "retry_reentry_loop_contract": manifest.get("retry_reentry_loop_contract_summary"),
+            "endgame_closure_contract": manifest.get("endgame_closure_contract_summary"),
+            "loop_hardening_contract": manifest.get("loop_hardening_contract_summary"),
+            "lane_stabilization_contract": manifest.get("lane_stabilization_contract_summary"),
+            "observability_rollup_contract": manifest.get("observability_rollup_contract_summary"),
+            "failure_bucket_rollup": manifest.get("failure_bucket_rollup_summary"),
+            "fleet_run_rollup": manifest.get("fleet_run_rollup_summary"),
+            "failure_bucketing_hardening_contract": manifest.get(
+                "failure_bucketing_hardening_contract_summary"
+            ),
+        }
+        contract_paths_by_role = {
+            "objective_contract": manifest.get("objective_contract_path"),
+            "completion_contract": manifest.get("completion_contract_path"),
+            "approval_transport": manifest.get("approval_transport_path"),
+            "reconcile_contract": manifest.get("reconcile_contract_path"),
+            "repair_suggestion_contract": manifest.get("repair_suggestion_contract_path"),
+            "repair_plan_transport": manifest.get("repair_plan_transport_path"),
+            "repair_approval_binding": manifest.get("repair_approval_binding_path"),
+            "execution_authorization_gate": manifest.get("execution_authorization_gate_path"),
+            "bounded_execution_bridge": manifest.get("bounded_execution_bridge_path"),
+            "execution_result_contract": manifest.get("execution_result_contract_path"),
+            "verification_closure_contract": manifest.get("verification_closure_contract_path"),
+            "retry_reentry_loop_contract": manifest.get("retry_reentry_loop_contract_path"),
+            "endgame_closure_contract": manifest.get("endgame_closure_contract_path"),
+            "loop_hardening_contract": manifest.get("loop_hardening_contract_path"),
+            "lane_stabilization_contract": manifest.get("lane_stabilization_contract_path"),
+            "observability_rollup_contract": manifest.get("observability_rollup_contract_path"),
+            "failure_bucket_rollup": manifest.get("failure_bucket_rollup_path"),
+            "fleet_run_rollup": manifest.get("fleet_run_rollup_path"),
+            "failure_bucketing_hardening_contract": manifest.get(
+                "failure_bucketing_hardening_contract_path"
+            ),
+        }
+        manifest["contract_artifact_index"] = build_contract_artifact_index(
+            paths_by_role=contract_paths_by_role,
+            summaries_by_role=contract_summaries_by_role,
+        )
+        retention_manifest_path = run_root / "retention_manifest.json"
+        retention_manifest_payload = build_retention_manifest_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            paths_by_role=contract_paths_by_role,
+            summaries_by_role=contract_summaries_by_role,
+            contract_artifact_index_payload=manifest.get("contract_artifact_index"),
+            manifest_payload=manifest,
+        )
+        _write_json(retention_manifest_path, retention_manifest_payload)
+        artifact_retention_contract_path = run_root / "artifact_retention_contract.json"
+        artifact_retention_contract_payload = build_artifact_retention_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            retention_manifest_payload=retention_manifest_payload,
+            contract_artifact_index_payload=manifest.get("contract_artifact_index"),
+            observability_rollup_payload=observability_rollup_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
+            endgame_closure_contract_payload=endgame_closure_contract_payload,
+        )
+        _write_json(artifact_retention_contract_path, artifact_retention_contract_payload)
+        run_state_payload = _augment_run_state_with_artifact_retention_summary(
+            run_state_payload=run_state_payload,
+            artifact_retention_payload=artifact_retention_contract_payload,
+        )
+        fleet_safety_control_contract_path = run_root / "fleet_safety_control_contract.json"
+        fleet_safety_control_contract_payload = build_fleet_safety_control_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            observability_rollup_payload=observability_rollup_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
+            lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+            loop_hardening_contract_payload=loop_hardening_contract_payload,
+            endgame_closure_contract_payload=endgame_closure_contract_payload,
+            retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+            artifact_retention_contract_payload=artifact_retention_contract_payload,
+            retention_manifest_payload=retention_manifest_payload,
+            run_state_payload=run_state_payload,
+            contract_artifact_index_payload=manifest.get("contract_artifact_index"),
+        )
+        _write_json(
+            fleet_safety_control_contract_path,
+            fleet_safety_control_contract_payload,
+        )
+        run_state_payload = _augment_run_state_with_fleet_safety_control_summary(
+            run_state_payload=run_state_payload,
+            fleet_safety_control_payload=fleet_safety_control_contract_payload,
+        )
         run_state_payload = _augment_run_state_with_operator_explainability(
             run_state_payload=run_state_payload,
         )
         _write_json(run_state_path, run_state_payload)
+        manifest["retention_manifest_summary"] = build_retention_manifest_summary_surface(
+            retention_manifest_payload
+        )
+        manifest["retention_manifest_path"] = str(retention_manifest_path)
+        manifest["artifact_retention_contract_summary"] = build_artifact_retention_summary_surface(
+            artifact_retention_contract_payload
+        )
+        manifest["artifact_retention_contract_path"] = str(
+            artifact_retention_contract_path
+        )
+        manifest["fleet_safety_control_contract_summary"] = (
+            build_fleet_safety_control_summary_surface(
+                fleet_safety_control_contract_payload
+            )
+        )
+        manifest["fleet_safety_control_contract_path"] = str(
+            fleet_safety_control_contract_path
+        )
+        contract_summaries_by_role["retention_manifest"] = manifest.get(
+            "retention_manifest_summary"
+        )
+        contract_summaries_by_role["artifact_retention_contract"] = manifest.get(
+            "artifact_retention_contract_summary"
+        )
+        contract_summaries_by_role["fleet_safety_control_contract"] = manifest.get(
+            "fleet_safety_control_contract_summary"
+        )
+        contract_paths_by_role["retention_manifest"] = manifest.get(
+            "retention_manifest_path"
+        )
+        contract_paths_by_role["artifact_retention_contract"] = manifest.get(
+            "artifact_retention_contract_path"
+        )
+        contract_paths_by_role["fleet_safety_control_contract"] = manifest.get(
+            "fleet_safety_control_contract_path"
+        )
+        manifest["contract_artifact_index"] = build_contract_artifact_index(
+            paths_by_role=contract_paths_by_role,
+            summaries_by_role=contract_summaries_by_role,
+        )
 
         handoff_path = run_root / "action_handoff.json"
         handoff_error = ""
@@ -7599,309 +8786,12 @@ class PlannedExecutionRunner:
             "result_acceptance": _normalize_text(decision_payload.get("result_acceptance"), default=""),
             "progression_rule_id": _normalize_text(decision_payload.get("progression_rule_id"), default=""),
         }
-        manifest["run_state_summary"] = {
-            "state": _normalize_text(run_state_payload.get("state"), default=""),
-            "orchestration_state": _normalize_text(run_state_payload.get("orchestration_state"), default=""),
-            "summary": _normalize_text(run_state_payload.get("summary"), default=""),
-            "units_total": _as_non_negative_int(run_state_payload.get("units_total"), default=0),
-            "units_completed": _as_non_negative_int(run_state_payload.get("units_completed"), default=0),
-            "units_blocked": _as_non_negative_int(run_state_payload.get("units_blocked"), default=0),
-            "units_failed": _as_non_negative_int(run_state_payload.get("units_failed"), default=0),
-            "units_pending": _as_non_negative_int(run_state_payload.get("units_pending"), default=0),
-            "global_stop": bool(run_state_payload.get("global_stop", False)),
-            "global_stop_reason": _normalize_text(run_state_payload.get("global_stop_reason"), default=""),
-            "continue_allowed": bool(run_state_payload.get("continue_allowed", False)),
-            "run_paused": bool(run_state_payload.get("run_paused", False)),
-            "manual_intervention_required": bool(
-                run_state_payload.get("manual_intervention_required", False)
-            ),
-            "rollback_evaluation_pending": bool(
-                run_state_payload.get("rollback_evaluation_pending", False)
-            ),
-            "global_stop_recommended": bool(run_state_payload.get("global_stop_recommended", False)),
-            "next_run_action": _normalize_text(run_state_payload.get("next_run_action"), default=""),
-            "loop_state": _normalize_text(run_state_payload.get("loop_state"), default=""),
-            "next_safe_action": _normalize_text(run_state_payload.get("next_safe_action"), default=""),
-            "loop_blocked_reason": _normalize_text(run_state_payload.get("loop_blocked_reason"), default=""),
-            "loop_blocked_reasons": _normalize_string_list(run_state_payload.get("loop_blocked_reasons")),
-            "resumable": bool(run_state_payload.get("resumable", False)),
-            "terminal": bool(run_state_payload.get("terminal", False)),
-            "loop_manual_intervention_required": bool(
-                run_state_payload.get("loop_manual_intervention_required", False)
-            ),
-            "loop_replan_required": bool(run_state_payload.get("loop_replan_required", False)),
-            "rollback_completed": bool(run_state_payload.get("rollback_completed", False)),
-            "delivery_completed": bool(run_state_payload.get("delivery_completed", False)),
-            "loop_allowed_actions": _normalize_string_list(run_state_payload.get("loop_allowed_actions"), sort_items=True),
-            "unit_blocked": bool(run_state_payload.get("unit_blocked", False)),
-            "latest_unit_id": _normalize_text(run_state_payload.get("latest_unit_id"), default=""),
-            "readiness_summary": (
-                dict(run_state_payload.get("readiness_summary"))
-                if isinstance(run_state_payload.get("readiness_summary"), Mapping)
-                else {}
-            ),
-            "readiness_blocked": bool(run_state_payload.get("readiness_blocked", False)),
-            "readiness_manual_required": bool(
-                run_state_payload.get("readiness_manual_required", False)
-            ),
-            "readiness_awaiting_prerequisites": bool(
-                run_state_payload.get("readiness_awaiting_prerequisites", False)
-            ),
-            "commit_execution_summary": (
-                dict(run_state_payload.get("commit_execution_summary"))
-                if isinstance(run_state_payload.get("commit_execution_summary"), Mapping)
-                else {}
-            ),
-            "commit_execution_executed": bool(
-                run_state_payload.get("commit_execution_executed", False)
-            ),
-            "commit_execution_pending": bool(
-                run_state_payload.get("commit_execution_pending", False)
-            ),
-            "commit_execution_failed": bool(
-                run_state_payload.get("commit_execution_failed", False)
-            ),
-            "commit_execution_manual_intervention_required": bool(
-                run_state_payload.get("commit_execution_manual_intervention_required", False)
-            ),
-            "push_execution_summary": (
-                dict(run_state_payload.get("push_execution_summary"))
-                if isinstance(run_state_payload.get("push_execution_summary"), Mapping)
-                else {}
-            ),
-            "pr_execution_summary": (
-                dict(run_state_payload.get("pr_execution_summary"))
-                if isinstance(run_state_payload.get("pr_execution_summary"), Mapping)
-                else {}
-            ),
-            "merge_execution_summary": (
-                dict(run_state_payload.get("merge_execution_summary"))
-                if isinstance(run_state_payload.get("merge_execution_summary"), Mapping)
-                else {}
-            ),
-            "push_execution_succeeded": bool(run_state_payload.get("push_execution_succeeded", False)),
-            "pr_execution_succeeded": bool(run_state_payload.get("pr_execution_succeeded", False)),
-            "merge_execution_succeeded": bool(run_state_payload.get("merge_execution_succeeded", False)),
-            "push_execution_pending": bool(run_state_payload.get("push_execution_pending", False)),
-            "pr_execution_pending": bool(run_state_payload.get("pr_execution_pending", False)),
-            "merge_execution_pending": bool(run_state_payload.get("merge_execution_pending", False)),
-            "push_execution_failed": bool(run_state_payload.get("push_execution_failed", False)),
-            "pr_execution_failed": bool(run_state_payload.get("pr_execution_failed", False)),
-            "merge_execution_failed": bool(run_state_payload.get("merge_execution_failed", False)),
-            "delivery_execution_manual_intervention_required": bool(
-                run_state_payload.get("delivery_execution_manual_intervention_required", False)
-            ),
-            "rollback_execution_summary": (
-                dict(run_state_payload.get("rollback_execution_summary"))
-                if isinstance(run_state_payload.get("rollback_execution_summary"), Mapping)
-                else {}
-            ),
-            "rollback_execution_attempted": bool(
-                run_state_payload.get("rollback_execution_attempted", False)
-            ),
-            "rollback_execution_succeeded": bool(
-                run_state_payload.get("rollback_execution_succeeded", False)
-            ),
-            "rollback_execution_pending": bool(
-                run_state_payload.get("rollback_execution_pending", False)
-            ),
-            "rollback_execution_failed": bool(
-                run_state_payload.get("rollback_execution_failed", False)
-            ),
-            "rollback_execution_manual_intervention_required": bool(
-                run_state_payload.get("rollback_execution_manual_intervention_required", False)
-            ),
-            "rollback_replan_required": bool(
-                run_state_payload.get("rollback_replan_required", False)
-            ),
-            "rollback_automatic_continuation_blocked": bool(
-                run_state_payload.get("rollback_automatic_continuation_blocked", False)
-            ),
-            "rollback_aftermath_summary": (
-                dict(run_state_payload.get("rollback_aftermath_summary"))
-                if isinstance(run_state_payload.get("rollback_aftermath_summary"), Mapping)
-                else {}
-            ),
-            "rollback_aftermath_status": _normalize_text(
-                run_state_payload.get("rollback_aftermath_status"),
-                default="incomplete",
-            ),
-            "rollback_aftermath_blocked": bool(
-                run_state_payload.get("rollback_aftermath_blocked", False)
-            ),
-            "rollback_aftermath_manual_required": bool(
-                run_state_payload.get("rollback_aftermath_manual_required", False)
-            ),
-            "rollback_aftermath_missing_or_ambiguous": bool(
-                run_state_payload.get("rollback_aftermath_missing_or_ambiguous", False)
-            ),
-            "rollback_aftermath_blocked_reason": _normalize_text(
-                run_state_payload.get("rollback_aftermath_blocked_reason"),
-                default="",
-            ),
-            "rollback_aftermath_blocked_reasons": _normalize_string_list(
-                run_state_payload.get("rollback_aftermath_blocked_reasons")
-            ),
-            "rollback_remote_followup_required": bool(
-                run_state_payload.get("rollback_remote_followup_required", False)
-            ),
-            "rollback_manual_followup_required": bool(
-                run_state_payload.get("rollback_manual_followup_required", False)
-            ),
-            "rollback_validation_failed": bool(
-                run_state_payload.get("rollback_validation_failed", False)
-            ),
-            "authority_validation_summary": (
-                dict(run_state_payload.get("authority_validation_summary"))
-                if isinstance(run_state_payload.get("authority_validation_summary"), Mapping)
-                else {}
-            ),
-            "authority_validation_blocked": bool(
-                run_state_payload.get("authority_validation_blocked", False)
-            ),
-            "execution_authority_blocked": bool(
-                run_state_payload.get("execution_authority_blocked", False)
-            ),
-            "validation_blocked": bool(run_state_payload.get("validation_blocked", False)),
-            "authority_validation_manual_required": bool(
-                run_state_payload.get("authority_validation_manual_required", False)
-            ),
-            "authority_validation_missing_or_ambiguous": bool(
-                run_state_payload.get("authority_validation_missing_or_ambiguous", False)
-            ),
-            "authority_validation_blocked_reason": _normalize_text(
-                run_state_payload.get("authority_validation_blocked_reason"),
-                default="",
-            ),
-            "authority_validation_blocked_reasons": _normalize_string_list(
-                run_state_payload.get("authority_validation_blocked_reasons")
-            ),
-            "remote_github_summary": (
-                dict(run_state_payload.get("remote_github_summary"))
-                if isinstance(run_state_payload.get("remote_github_summary"), Mapping)
-                else {}
-            ),
-            "remote_github_blocked": bool(run_state_payload.get("remote_github_blocked", False)),
-            "remote_github_manual_required": bool(
-                run_state_payload.get("remote_github_manual_required", False)
-            ),
-            "remote_github_missing_or_ambiguous": bool(
-                run_state_payload.get("remote_github_missing_or_ambiguous", False)
-            ),
-            "remote_github_blocked_reason": _normalize_text(
-                run_state_payload.get("remote_github_blocked_reason"),
-                default="",
-            ),
-            "remote_github_blocked_reasons": _normalize_string_list(
-                run_state_payload.get("remote_github_blocked_reasons")
-            ),
-            "policy_status": _normalize_text(run_state_payload.get("policy_status"), default=""),
-            "policy_blocked": bool(run_state_payload.get("policy_blocked", False)),
-            "policy_manual_required": bool(
-                run_state_payload.get("policy_manual_required", False)
-            ),
-            "policy_replan_required": bool(
-                run_state_payload.get("policy_replan_required", False)
-            ),
-            "policy_resume_allowed": bool(
-                run_state_payload.get("policy_resume_allowed", False)
-            ),
-            "policy_terminal": bool(run_state_payload.get("policy_terminal", False)),
-            "policy_blocked_reason": _normalize_text(
-                run_state_payload.get("policy_blocked_reason"),
-                default="",
-            ),
-            "policy_blocked_reasons": _normalize_string_list(
-                run_state_payload.get("policy_blocked_reasons")
-            ),
-            "policy_primary_blocker_class": _normalize_text(
-                run_state_payload.get("policy_primary_blocker_class"),
-                default="",
-            ),
-            "policy_primary_action": _normalize_text(
-                run_state_payload.get("policy_primary_action"),
-                default="",
-            ),
-            "policy_allowed_actions": _normalize_string_list(
-                run_state_payload.get("policy_allowed_actions"),
-                sort_items=True,
-            ),
-            "policy_disallowed_actions": _normalize_string_list(
-                run_state_payload.get("policy_disallowed_actions"),
-                sort_items=True,
-            ),
-            "policy_manual_actions": _normalize_string_list(
-                run_state_payload.get("policy_manual_actions"),
-                sort_items=True,
-            ),
-            "policy_resumable_reason": _normalize_text(
-                run_state_payload.get("policy_resumable_reason"),
-                default="",
-            ),
-            "operator_posture_summary": _normalize_text(
-                run_state_payload.get("operator_posture_summary"),
-                default="",
-            ),
-            "operator_primary_blocker_class": _normalize_text(
-                run_state_payload.get("operator_primary_blocker_class"),
-                default="",
-            ),
-            "operator_primary_action": _normalize_text(
-                run_state_payload.get("operator_primary_action"),
-                default="",
-            ),
-            "operator_action_scope": _normalize_text(
-                run_state_payload.get("operator_action_scope"),
-                default="",
-            ),
-            "operator_resume_status": _normalize_text(
-                run_state_payload.get("operator_resume_status"),
-                default="",
-            ),
-            "operator_next_safe_posture": _normalize_text(
-                run_state_payload.get("operator_next_safe_posture"),
-                default="",
-            ),
-            "lifecycle_closure_status": _normalize_text(
-                run_state_payload.get("lifecycle_closure_status"),
-                default="",
-            ),
-            "lifecycle_safely_closed": bool(
-                run_state_payload.get("lifecycle_safely_closed", False)
-            ),
-            "lifecycle_terminal": bool(run_state_payload.get("lifecycle_terminal", False)),
-            "lifecycle_resumable": bool(run_state_payload.get("lifecycle_resumable", False)),
-            "lifecycle_manual_required": bool(
-                run_state_payload.get("lifecycle_manual_required", False)
-            ),
-            "lifecycle_replan_required": bool(
-                run_state_payload.get("lifecycle_replan_required", False)
-            ),
-            "lifecycle_execution_complete_not_closed": bool(
-                run_state_payload.get("lifecycle_execution_complete_not_closed", False)
-            ),
-            "lifecycle_rollback_complete_not_closed": bool(
-                run_state_payload.get("lifecycle_rollback_complete_not_closed", False)
-            ),
-            "lifecycle_blocked_reason": _normalize_text(
-                run_state_payload.get("lifecycle_blocked_reason"),
-                default="",
-            ),
-            "lifecycle_blocked_reasons": _normalize_string_list(
-                run_state_payload.get("lifecycle_blocked_reasons")
-            ),
-            "lifecycle_primary_closure_issue": _normalize_text(
-                run_state_payload.get("lifecycle_primary_closure_issue"),
-                default="",
-            ),
-            "lifecycle_stop_class": _normalize_text(
-                run_state_payload.get("lifecycle_stop_class"),
-                default="",
-            ),
-        }
-        manifest["run_state_summary_compact"] = select_manifest_run_state_summary_compact(
+        run_state_summary_compact = select_manifest_run_state_summary_compact(
             run_state_payload,
         )
+        manifest["run_state_summary_compact"] = run_state_summary_compact
+        # Compatibility alias: PR52 slims manifest summaries to compact-only fields.
+        manifest["run_state_summary"] = dict(run_state_summary_compact)
         manifest["run_state_summary_contract"] = build_manifest_run_state_summary_contract_surface()
 
         manifest["handoff_summary"] = {
