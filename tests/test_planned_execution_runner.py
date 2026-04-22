@@ -378,6 +378,184 @@ from automation.orchestration.fleet_safety_control import (
 from automation.orchestration.fleet_safety_control import (
     build_fleet_safety_control_summary_surface,
 )
+from automation.orchestration.approval_email_delivery import (
+    APPROVAL_DECISION_SCOPES,
+)
+from automation.orchestration.approval_email_delivery import (
+    APPROVAL_EMAIL_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.approval_email_delivery import (
+    APPROVAL_EMAIL_DELIVERY_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_email_delivery import (
+    APPROVAL_EMAIL_DELIVERY_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_email_delivery import (
+    APPROVAL_EMAIL_REASON_CODES,
+)
+from automation.orchestration.approval_email_delivery import (
+    APPROVAL_EMAIL_STATUSES,
+)
+from automation.orchestration.approval_email_delivery import (
+    APPROVAL_EMAIL_VALIDITIES,
+)
+from automation.orchestration.approval_email_delivery import (
+    APPROVAL_OPTION_SETS,
+)
+from automation.orchestration.approval_email_delivery import APPROVAL_PRIORITIES
+from automation.orchestration.approval_email_delivery import APPROVAL_REASON_CLASSES
+from automation.orchestration.approval_email_delivery import DELIVERY_MODES
+from automation.orchestration.approval_email_delivery import DELIVERY_OUTCOMES
+from automation.orchestration.approval_email_delivery import PROPOSED_ACTION_CLASSES
+from automation.orchestration.approval_email_delivery import PROPOSED_NEXT_DIRECTIONS
+from automation.orchestration.approval_email_delivery import PROPOSED_RESTART_MODES
+from automation.orchestration.approval_email_delivery import RECIPIENT_CLASSES
+from automation.orchestration.approval_email_delivery import (
+    build_approval_email_delivery_contract_surface,
+)
+from automation.orchestration.approval_email_delivery import (
+    build_approval_email_delivery_run_state_summary_surface,
+)
+from automation.orchestration.approval_email_delivery import (
+    build_approval_email_delivery_summary_surface,
+)
+from automation.orchestration.approval_direction_rules import derive_direction_posture
+from automation.orchestration.approval_email_templates import render_approval_body_compact
+from automation.orchestration.approval_email_templates import render_approval_subject
+from automation.orchestration.approval_reply_commands import ALLOWED_REPLY_COMMANDS
+from automation.orchestration.approval_reply_commands import is_supported_reply_command
+from automation.orchestration.approval_reply_commands import map_approved_reply_command
+from automation.orchestration.approval_reply_commands import normalize_reply_command
+from automation.orchestration.approval_runtime_policy import (
+    APPROVAL_RUNTIME_RULES_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_runtime_policy import (
+    APPROVAL_RUNTIME_RULES_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_runtime_policy import (
+    build_approval_runtime_rules_contract_surface,
+)
+from automation.orchestration.approval_runtime_policy import (
+    build_approval_runtime_rules_run_state_summary_surface,
+)
+from automation.orchestration.approval_runtime_policy import (
+    build_approval_runtime_rules_summary_surface,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    APPROVAL_DELIVERY_HANDOFF_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    APPROVAL_DELIVERY_HANDOFF_REASON_CODES,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    APPROVAL_DELIVERY_HANDOFF_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    APPROVAL_DELIVERY_HANDOFF_STATUSES,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    APPROVAL_DELIVERY_HANDOFF_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    APPROVAL_DELIVERY_HANDOFF_VALIDITIES,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    DOWNSTREAM_ADAPTERS,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    build_approval_delivery_handoff_contract_surface,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    build_approval_delivery_handoff_run_state_summary_surface,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    build_approval_delivery_handoff_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVAL_RESPONSE_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVAL_RESPONSE_REASON_CODES,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVAL_RESPONSE_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVAL_RESPONSE_STATUSES,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVAL_RESPONSE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVAL_RESPONSE_VALIDITIES,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVED_RESTART_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVED_RESTART_REASON_CODES,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVED_RESTART_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVED_RESTART_STATUSES,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVED_RESTART_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVED_RESTART_VALIDITIES,
+)
+from automation.orchestration.approval_response_ingest import RESTART_DECISIONS
+from automation.orchestration.approval_response_ingest import (
+    build_approved_restart_contract_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approved_restart_run_state_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approved_restart_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approval_response_contract_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approval_response_run_state_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approval_response_summary_surface,
+)
+from automation.orchestration.approval_safety import (
+    APPROVAL_SAFETY_CONFIDENCE_LEVELS,
+)
+from automation.orchestration.approval_safety import (
+    APPROVAL_SAFETY_DECISIONS,
+)
+from automation.orchestration.approval_safety import (
+    APPROVAL_SAFETY_REASON_CODES,
+)
+from automation.orchestration.approval_safety import (
+    APPROVAL_SAFETY_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_safety import (
+    APPROVAL_SAFETY_STATUSES,
+)
+from automation.orchestration.approval_safety import (
+    APPROVAL_SAFETY_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_safety import (
+    APPROVAL_SAFETY_VALIDITIES,
+)
+from automation.orchestration.approval_safety import (
+    build_approval_safety_contract_surface,
+)
+from automation.orchestration.approval_safety import (
+    build_approval_safety_run_state_summary_surface,
+)
+from automation.orchestration.approval_safety import (
+    build_approval_safety_summary_surface,
+)
 from automation.orchestration.objective_contract import OBJECTIVE_RUN_STATE_SUMMARY_SAFE_FIELDS
 from automation.orchestration.objective_contract import build_objective_contract_surface
 from automation.orchestration.objective_contract import build_objective_run_state_summary_surface
@@ -1349,6 +1527,60 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
             contract_artifact_index_payload=artifact_index or {},
         )
 
+    def _build_approval_email_payload(
+        self,
+        *,
+        objective: dict[str, object] | None = None,
+        fleet_safety: dict[str, object] | None = None,
+        hard_bucket: dict[str, object] | None = None,
+        lane: dict[str, object] | None = None,
+        loop_hardening: dict[str, object] | None = None,
+        endgame: dict[str, object] | None = None,
+        retry_loop: dict[str, object] | None = None,
+        retention: dict[str, object] | None = None,
+        run_state: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return build_approval_email_delivery_contract_surface(
+            run_id="job-approval-email",
+            objective_contract_payload=objective or {"objective_id": "objective-approval-email"},
+            fleet_safety_control_payload=fleet_safety
+            or {
+                "fleet_safety_status": "freeze",
+                "fleet_safety_decision": "freeze_run",
+                "fleet_restart_decision": "restart_blocked",
+            },
+            failure_bucketing_hardening_payload=hard_bucket
+            or {
+                "primary_failure_bucket": "retry_exhausted",
+                "bucket_severity": "critical",
+                "bucket_terminality_class": "terminal",
+            },
+            lane_stabilization_contract_payload=lane
+            or {
+                "lane_status": "lane_transition_blocked",
+                "current_lane": "bounded_local_patch",
+                "lane_mismatch_detected": True,
+            },
+            loop_hardening_contract_payload=loop_hardening
+            or {
+                "loop_hardening_status": "freeze",
+                "same_failure_stop_required": True,
+            },
+            endgame_closure_contract_payload=endgame
+            or {"final_closure_class": "closure_unresolved"},
+            retry_reentry_loop_contract_payload=retry_loop
+            or {"retry_loop_decision": "replan", "retry_exhausted": True},
+            artifact_retention_contract_payload=retention
+            or {
+                "artifact_retention_status": "ready",
+                "artifact_retention_validity": "valid",
+                "retention_reference_consistent": True,
+                "retention_alias_deduplicated": False,
+            },
+            run_state_payload=run_state or {},
+            contract_artifact_index_payload={},
+        )
+
     def test_deterministic_processing_order_for_multiple_pr_slices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -1952,6 +2184,12 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
                     "failure_bucketing_hardening_present",
                     "artifact_retention_present",
                     "fleet_safety_control_present",
+                    "approval_email_delivery_present",
+                    "approval_runtime_rules_present",
+                    "approval_delivery_handoff_present",
+                    "approval_response_present",
+                    "approved_restart_present",
+                    "approval_safety_present",
                     "operator_posture_summary",
                     "operator_primary_blocker_class",
                     "operator_primary_action",
@@ -2079,6 +2317,18 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertIn("artifact_retention_contract_path", manifest)
         self.assertIn("fleet_safety_control_contract_summary", manifest)
         self.assertIn("fleet_safety_control_contract_path", manifest)
+        self.assertIn("approval_email_delivery_contract_summary", manifest)
+        self.assertIn("approval_email_delivery_contract_path", manifest)
+        self.assertIn("approval_runtime_rules_contract_summary", manifest)
+        self.assertIn("approval_runtime_rules_contract_path", manifest)
+        self.assertIn("approval_delivery_handoff_contract_summary", manifest)
+        self.assertIn("approval_delivery_handoff_contract_path", manifest)
+        self.assertIn("approval_response_contract_summary", manifest)
+        self.assertIn("approval_response_contract_path", manifest)
+        self.assertIn("approved_restart_contract_summary", manifest)
+        self.assertIn("approved_restart_contract_path", manifest)
+        self.assertIn("approval_safety_contract_summary", manifest)
+        self.assertIn("approval_safety_contract_path", manifest)
         self.assertIn("contract_artifact_index", manifest)
         self.assertIn("manifest_path", manifest)
         self.assertIn("next_action_path", manifest)
@@ -2119,6 +2369,12 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertIn("failure_bucketing_hardening_present", manifest["run_state_summary_compact"])
         self.assertIn("artifact_retention_present", manifest["run_state_summary_compact"])
         self.assertIn("fleet_safety_control_present", manifest["run_state_summary_compact"])
+        self.assertIn("approval_email_delivery_present", manifest["run_state_summary_compact"])
+        self.assertIn("approval_runtime_rules_present", manifest["run_state_summary_compact"])
+        self.assertIn("approval_delivery_handoff_present", manifest["run_state_summary_compact"])
+        self.assertIn("approval_response_present", manifest["run_state_summary_compact"])
+        self.assertIn("approved_restart_present", manifest["run_state_summary_compact"])
+        self.assertIn("approval_safety_present", manifest["run_state_summary_compact"])
         self.assertNotIn("observability_status", manifest["run_state_summary_compact"])
         self.assertNotIn("primary_failure_bucket", manifest["run_state_summary_compact"])
         self.assertNotIn("fleet_terminal_class", manifest["run_state_summary_compact"])
@@ -2126,6 +2382,12 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertNotIn("bucket_severity", manifest["run_state_summary_compact"])
         self.assertNotIn("artifact_retention_status", manifest["run_state_summary_compact"])
         self.assertNotIn("fleet_safety_status", manifest["run_state_summary_compact"])
+        self.assertNotIn("approval_email_status", manifest["run_state_summary_compact"])
+        self.assertNotIn("runtime_rules_version", manifest["run_state_summary_compact"])
+        self.assertNotIn("approval_delivery_handoff_status", manifest["run_state_summary_compact"])
+        self.assertNotIn("approval_response_status", manifest["run_state_summary_compact"])
+        self.assertNotIn("approved_restart_status", manifest["run_state_summary_compact"])
+        self.assertNotIn("approval_safety_status", manifest["run_state_summary_compact"])
         self.assertIn("lifecycle_closure_status", manifest["run_state_summary_compact"])
         self.assertIn("lifecycle_safely_closed", manifest["run_state_summary_compact"])
         self.assertIn("lifecycle_terminal", manifest["run_state_summary_compact"])
@@ -2441,6 +2703,38 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
             set(FLEET_SAFETY_CONTROL_RUN_STATE_SUMMARY_SAFE_FIELDS),
         )
         self.assertEqual(
+            set(
+                manifest["run_state_summary_contract"][
+                    "approval_email_delivery_summary_safe_fields"
+                ]
+            ),
+            set(APPROVAL_EMAIL_DELIVERY_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(
+                manifest["run_state_summary_contract"][
+                    "approval_runtime_rules_summary_safe_fields"
+                ]
+            ),
+            set(APPROVAL_RUNTIME_RULES_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(
+                manifest["run_state_summary_contract"][
+                    "approval_delivery_handoff_summary_safe_fields"
+                ]
+            ),
+            set(APPROVAL_DELIVERY_HANDOFF_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(
+                manifest["run_state_summary_contract"][
+                    "approval_safety_summary_safe_fields"
+                ]
+            ),
+            set(APPROVAL_SAFETY_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
             set(manifest["objective_contract_summary"].keys()),
             set(OBJECTIVE_RUN_STATE_SUMMARY_SAFE_FIELDS),
         )
@@ -2609,6 +2903,60 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
                 "fleet_safety_control_contract.json"
             )
         )
+        self.assertEqual(
+            set(manifest["approval_email_delivery_contract_summary"].keys()),
+            set(APPROVAL_EMAIL_DELIVERY_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["approval_email_delivery_contract_path"]).endswith(
+                "approval_email_delivery_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["approval_runtime_rules_contract_summary"].keys()),
+            set(APPROVAL_RUNTIME_RULES_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["approval_runtime_rules_contract_path"]).endswith(
+                "approval_runtime_rules_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["approval_delivery_handoff_contract_summary"].keys()),
+            set(APPROVAL_DELIVERY_HANDOFF_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["approval_delivery_handoff_contract_path"]).endswith(
+                "approval_delivery_handoff_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["approval_response_contract_summary"].keys()),
+            set(APPROVAL_RESPONSE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["approval_response_contract_path"]).endswith(
+                "approval_response_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["approved_restart_contract_summary"].keys()),
+            set(APPROVED_RESTART_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["approved_restart_contract_path"]).endswith(
+                "approved_restart_contract.json"
+            )
+        )
+        self.assertEqual(
+            set(manifest["approval_safety_contract_summary"].keys()),
+            set(APPROVAL_SAFETY_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(
+            str(manifest["approval_safety_contract_path"]).endswith(
+                "approval_safety_contract.json"
+            )
+        )
         contract_artifact_index = manifest["contract_artifact_index"]
         self.assertEqual(list(contract_artifact_index.keys()), list(CONTRACT_ARTIFACT_ROLES))
         for role in CONTRACT_ARTIFACT_ROLES:
@@ -2658,7 +3006,19 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         approval_compact_fields = {
             key
             for key in manifest["run_state_summary_compact"]
-            if key.startswith("approval_") or key == "approved_action"
+            if (
+                key.startswith("approval_")
+                and key
+                not in {
+                    "approval_email_delivery_present",
+                    "approval_runtime_rules_present",
+                    "approval_delivery_handoff_present",
+                    "approval_response_present",
+                    "approved_restart_present",
+                    "approval_safety_present",
+                }
+            )
+            or key == "approved_action"
         }
         self.assertEqual(
             approval_compact_fields,
@@ -2667,7 +3027,19 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         approval_run_state_fields = {
             key
             for key in manifest["run_state_summary"]
-            if key.startswith("approval_") or key == "approved_action"
+            if (
+                key.startswith("approval_")
+                and key
+                not in {
+                    "approval_email_delivery_present",
+                    "approval_runtime_rules_present",
+                    "approval_delivery_handoff_present",
+                    "approval_response_present",
+                    "approved_restart_present",
+                    "approval_safety_present",
+                }
+            )
+            or key == "approved_action"
         }
         self.assertEqual(
             approval_run_state_fields,
@@ -9072,6 +9444,1426 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertIn(summary["fleet_safety_scope"], FLEET_SAFETY_SCOPES)
         self.assertIn(summary["fleet_safety_primary_reason"], FLEET_SAFETY_REASON_CODES)
 
+    def test_approval_email_delivery_is_deterministic_and_manual_only_mapped(self) -> None:
+        payload_a = self._build_approval_email_payload(
+            fleet_safety={
+                "fleet_safety_status": "stop",
+                "fleet_safety_decision": "escalate_manual",
+                "fleet_restart_decision": "manual_only",
+            },
+            hard_bucket={
+                "primary_failure_bucket": "manual_only",
+                "bucket_severity": "high",
+                "bucket_terminality_class": "manual_only",
+            },
+            endgame={"final_closure_class": "manual_closure_only"},
+        )
+        payload_b = self._build_approval_email_payload(
+            fleet_safety={
+                "fleet_safety_status": "stop",
+                "fleet_safety_decision": "escalate_manual",
+                "fleet_restart_decision": "manual_only",
+            },
+            hard_bucket={
+                "primary_failure_bucket": "manual_only",
+                "bucket_severity": "high",
+                "bucket_terminality_class": "manual_only",
+            },
+            endgame={"final_closure_class": "manual_closure_only"},
+        )
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["approval_email_status"], "delivery_blocked")
+        self.assertTrue(payload_a["approval_required"])
+        self.assertEqual(payload_a["approval_reason_class"], "manual_only")
+        self.assertEqual(payload_a["proposed_next_direction"], "manual_review_preparation")
+        self.assertEqual(payload_a["proposed_restart_mode"], "approval_required_then_manual")
+        self.assertTrue(payload_a["delivery_outcome"] in {"blocked", "failed"})
+        self.assertIn(payload_a["approval_email_status"], APPROVAL_EMAIL_STATUSES)
+        self.assertIn(payload_a["approval_email_validity"], APPROVAL_EMAIL_VALIDITIES)
+        self.assertIn(
+            payload_a["approval_email_confidence"],
+            APPROVAL_EMAIL_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(payload_a["approval_priority"], APPROVAL_PRIORITIES)
+        self.assertIn(payload_a["approval_reason_class"], APPROVAL_REASON_CLASSES)
+        self.assertIn(payload_a["approval_decision_scope"], APPROVAL_DECISION_SCOPES)
+        self.assertIn(payload_a["proposed_next_direction"], PROPOSED_NEXT_DIRECTIONS)
+        self.assertIn(payload_a["proposed_restart_mode"], PROPOSED_RESTART_MODES)
+        self.assertIn(payload_a["proposed_action_class"], PROPOSED_ACTION_CLASSES)
+        self.assertIn(payload_a["recipient_class"], RECIPIENT_CLASSES)
+        self.assertIn(payload_a["delivery_mode"], DELIVERY_MODES)
+        self.assertIn(payload_a["delivery_outcome"], DELIVERY_OUTCOMES)
+        self.assertIn(payload_a["approval_option_set"], APPROVAL_OPTION_SETS)
+        self.assertIn(payload_a["approval_email_primary_reason"], APPROVAL_EMAIL_REASON_CODES)
+        self.assertEqual(
+            payload_a["approval_email_primary_reason"],
+            payload_a["approval_email_reason_codes"][0],
+        )
+
+    def test_approval_email_delivery_required_delivered_and_blocked_distinctions(self) -> None:
+        delivered = build_approval_email_delivery_contract_surface(
+            run_id="job-approval-email",
+            objective_contract_payload={"objective_id": "objective-approval-email"},
+            fleet_safety_control_payload={
+                "fleet_safety_status": "hold",
+                "fleet_safety_decision": "hold_for_review",
+                "fleet_restart_decision": "restart_hold",
+            },
+            failure_bucketing_hardening_payload={
+                "primary_failure_bucket": "verification_failure",
+                "bucket_severity": "high",
+                "bucket_terminality_class": "terminal",
+            },
+            lane_stabilization_contract_payload={"lane_status": "lane_transition_blocked", "current_lane": "bounded_local_patch"},
+            loop_hardening_contract_payload={"loop_hardening_status": "watch"},
+            endgame_closure_contract_payload={"final_closure_class": "completed_but_not_closed"},
+            retry_reentry_loop_contract_payload={"retry_loop_decision": "replan"},
+            artifact_retention_contract_payload={
+                "artifact_retention_status": "ready",
+                "artifact_retention_validity": "valid",
+                "retention_reference_consistent": True,
+            },
+            run_state_payload={"approval_email_delivery_mode": "gmail_send"},
+            contract_artifact_index_payload={},
+            delivery_adapter=lambda payload: {
+                "delivery_attempted": True,
+                "delivery_outcome": "sent",
+                "status": "ok",
+            },
+        )
+        required = self._build_approval_email_payload(
+            run_state={"approval_email_delivery_mode": "review_queue_only"}
+        )
+        blocked = self._build_approval_email_payload(
+            run_state={"approval_email_delivery_mode": "gmail_send"}
+        )
+        self.assertEqual(delivered["approval_email_status"], "delivered_for_review")
+        self.assertEqual(delivered["delivery_outcome"], "sent")
+        self.assertEqual(required["approval_email_status"], "required")
+        self.assertEqual(required["delivery_outcome"], "skipped")
+        self.assertEqual(blocked["approval_email_status"], "delivery_blocked")
+        self.assertIn(blocked["delivery_outcome"], {"blocked", "failed"})
+
+    def test_approval_email_delivery_direction_and_restart_consistency(self) -> None:
+        replan_payload = self._build_approval_email_payload(
+            hard_bucket={
+                "primary_failure_bucket": "same_failure_exhausted",
+                "bucket_severity": "critical",
+                "bucket_terminality_class": "terminal",
+            },
+            retry_loop={"retry_loop_decision": "replan"},
+            fleet_safety={
+                "fleet_safety_status": "freeze",
+                "fleet_safety_decision": "freeze_run",
+                "fleet_restart_decision": "restart_blocked",
+            },
+        )
+        closure_payload = self._build_approval_email_payload(
+            fleet_safety={
+                "fleet_safety_status": "hold",
+                "fleet_safety_decision": "hold_for_review",
+                "fleet_restart_decision": "restart_hold",
+            },
+            hard_bucket={
+                "primary_failure_bucket": "external_truth_pending",
+                "bucket_severity": "medium",
+                "bucket_terminality_class": "external_wait",
+            },
+            endgame={"final_closure_class": "external_truth_pending"},
+            retry_loop={"retry_loop_decision": "hold"},
+        )
+        self.assertEqual(replan_payload["proposed_next_direction"], "replan_preparation")
+        self.assertEqual(replan_payload["proposed_action_class"], "review_and_replan")
+        self.assertEqual(replan_payload["proposed_restart_mode"], "blocked")
+        self.assertFalse(replan_payload["approval_can_clear_restart_block"])
+        self.assertEqual(closure_payload["proposed_next_direction"], "closure_followup")
+        self.assertEqual(closure_payload["proposed_action_class"], "review_and_close_followup")
+        self.assertEqual(closure_payload["proposed_restart_mode"], "held")
+        self.assertTrue(closure_payload["restart_held_pending_approval"])
+        self.assertTrue(closure_payload["approval_can_clear_restart_block"])
+
+    def test_approval_email_delivery_mode_selection_and_compact_surfaces(self) -> None:
+        draft_payload = self._build_approval_email_payload(
+            run_state={"approval_email_delivery_mode": "gmail_draft"}
+        )
+        send_payload = self._build_approval_email_payload(
+            run_state={"approval_email_delivery_mode": "gmail_send"}
+        )
+        self.assertEqual(draft_payload["delivery_mode"], "gmail_draft")
+        self.assertTrue(draft_payload["draft_required"])
+        self.assertFalse(draft_payload["send_allowed"])
+        self.assertEqual(send_payload["delivery_mode"], "gmail_send")
+        self.assertTrue(send_payload["send_allowed"])
+        self.assertFalse(send_payload["draft_required"])
+        self.assertLessEqual(len(draft_payload["approval_body_compact"].splitlines()), 8)
+        self.assertTrue(draft_payload["approval_subject"].startswith("[Approval Needed]"))
+        compact = build_approval_email_delivery_run_state_summary_surface(draft_payload)
+        self.assertEqual(
+            set(compact.keys()),
+            set(APPROVAL_EMAIL_DELIVERY_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["approval_email_delivery_present"])
+        summary = build_approval_email_delivery_summary_surface(draft_payload)
+        self.assertEqual(
+            set(summary.keys()),
+            set(APPROVAL_EMAIL_DELIVERY_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertIn(summary["approval_email_status"], APPROVAL_EMAIL_STATUSES)
+        self.assertIn(summary["approval_email_validity"], APPROVAL_EMAIL_VALIDITIES)
+        self.assertIn(summary["approval_email_confidence"], APPROVAL_EMAIL_CONFIDENCE_LEVELS)
+        self.assertIn(summary["approval_priority"], APPROVAL_PRIORITIES)
+        self.assertIn(summary["proposed_next_direction"], PROPOSED_NEXT_DIRECTIONS)
+        self.assertIn(summary["delivery_mode"], DELIVERY_MODES)
+        self.assertIn(summary["delivery_outcome"], DELIVERY_OUTCOMES)
+        self.assertIn(summary["approval_email_primary_reason"], APPROVAL_EMAIL_REASON_CODES)
+
+    def test_approval_direction_rules_are_deterministic(self) -> None:
+        replan = derive_direction_posture(
+            lead_reason="high_repeat_or_freeze_posture",
+            primary_failure_bucket="same_failure_exhausted",
+            final_closure_class="terminal_non_success",
+            retry_loop_decision="replan",
+            current_lane="bounded_local_patch",
+            approval_required=True,
+            manual_only_terminal=False,
+            restart_blocked=True,
+            restart_hold=False,
+            bucket_severity="critical",
+            fleet_safety_status="freeze",
+        )
+        replan_again = derive_direction_posture(
+            lead_reason="high_repeat_or_freeze_posture",
+            primary_failure_bucket="same_failure_exhausted",
+            final_closure_class="terminal_non_success",
+            retry_loop_decision="replan",
+            current_lane="bounded_local_patch",
+            approval_required=True,
+            manual_only_terminal=False,
+            restart_blocked=True,
+            restart_hold=False,
+            bucket_severity="critical",
+            fleet_safety_status="freeze",
+        )
+        truth = derive_direction_posture(
+            lead_reason="closure_decision_requires_review",
+            primary_failure_bucket="truth_missing",
+            final_closure_class="closure_unresolved",
+            retry_loop_decision="recollect",
+            current_lane="bounded_local_patch",
+            approval_required=True,
+            manual_only_terminal=False,
+            restart_blocked=False,
+            restart_hold=True,
+            bucket_severity="medium",
+            fleet_safety_status="hold",
+        )
+        self.assertEqual(replan, replan_again)
+        self.assertEqual(replan["proposed_next_direction"], "replan_preparation")
+        self.assertEqual(replan["proposed_target_lane"], "replan_preparation")
+        self.assertEqual(replan["proposed_restart_mode"], "blocked")
+        self.assertEqual(truth["proposed_next_direction"], "truth_gathering")
+        self.assertEqual(truth["proposed_target_lane"], "truth_gathering")
+
+    def test_approval_reply_command_normalization_and_mapping(self) -> None:
+        self.assertEqual(normalize_reply_command("  ok   replan "), "OK REPLAN")
+        self.assertTrue(is_supported_reply_command("ok truth"))
+        self.assertFalse(is_supported_reply_command("ok start"))
+        mapped_close = map_approved_reply_command("OK CLOSE")
+        mapped_reject = map_approved_reply_command("reject")
+        mapped_unknown = map_approved_reply_command("approve now")
+        self.assertTrue(mapped_close["supported"])
+        self.assertEqual(mapped_close["proposed_next_direction"], "closure_followup")
+        self.assertEqual(mapped_close["proposed_action_class"], "review_and_close_followup")
+        self.assertEqual(mapped_reject["proposed_next_direction"], "stop_no_restart")
+        self.assertFalse(mapped_reject["restart_allowed"])
+        self.assertFalse(mapped_unknown["supported"])
+        self.assertEqual(mapped_unknown["proposed_restart_mode"], "unknown")
+
+    def test_approval_email_templates_are_compact_and_stable(self) -> None:
+        subject = render_approval_subject(
+            priority="critical",
+            run_id="job-" + ("x" * 80),
+            primary_failure_bucket="same_failure_exhausted",
+            proposed_next_direction="replan_preparation",
+        )
+        body = render_approval_body_compact(
+            run_id="job-template",
+            fleet_safety_status="freeze",
+            primary_reason="high_repeat_or_freeze_posture",
+            proposed_direction="replan_preparation",
+            restart_mode="blocked",
+            allowed_reply_commands=("OK REPLAN", "HOLD", "REJECT"),
+            hints={"next_safe_hint": "collect minimal truth and replan"},
+        )
+        body_again = render_approval_body_compact(
+            run_id="job-template",
+            fleet_safety_status="freeze",
+            primary_reason="high_repeat_or_freeze_posture",
+            proposed_direction="replan_preparation",
+            restart_mode="blocked",
+            allowed_reply_commands=("OK REPLAN", "HOLD", "REJECT"),
+            hints={"next_safe_hint": "collect minimal truth and replan"},
+        )
+        self.assertLessEqual(len(subject), 140)
+        self.assertTrue(subject.startswith("[Approval Needed]"))
+        self.assertLessEqual(len(body), 480)
+        self.assertLessEqual(len(body.splitlines()), 7)
+        self.assertEqual(body, body_again)
+        self.assertIn("Reply: OK REPLAN | HOLD | REJECT", body)
+
+    def test_approval_runtime_rules_contract_is_compact_and_deterministic(self) -> None:
+        payload_a = build_approval_runtime_rules_contract_surface(
+            run_id="job-runtime-rules",
+            objective_contract_payload={"objective_id": "objective-runtime-rules"},
+            approval_email_delivery_payload={
+                "approval_email_status": "required",
+                "proposed_next_direction": "replan_preparation",
+                "retention_reference_consistent": True,
+            },
+            contract_artifact_index_payload={"approval_email_delivery_contract": {"path": "x.json"}},
+        )
+        payload_b = build_approval_runtime_rules_contract_surface(
+            run_id="job-runtime-rules",
+            objective_contract_payload={"objective_id": "objective-runtime-rules"},
+            approval_email_delivery_payload={
+                "approval_email_status": "required",
+                "proposed_next_direction": "replan_preparation",
+                "retention_reference_consistent": True,
+            },
+            contract_artifact_index_payload={"approval_email_delivery_contract": {"path": "x.json"}},
+        )
+        self.assertEqual(payload_a, payload_b)
+        self.assertEqual(payload_a["allowed_reply_commands"], list(ALLOWED_REPLY_COMMANDS))
+        self.assertEqual(
+            len(payload_a["supporting_compact_truth_refs"]),
+            len(set(payload_a["supporting_compact_truth_refs"])),
+        )
+        summary = build_approval_runtime_rules_summary_surface(payload_a)
+        self.assertEqual(
+            set(summary.keys()),
+            set(APPROVAL_RUNTIME_RULES_SUMMARY_SAFE_FIELDS),
+        )
+        compact = build_approval_runtime_rules_run_state_summary_surface(payload_a)
+        self.assertEqual(
+            set(compact.keys()),
+            set(APPROVAL_RUNTIME_RULES_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["approval_runtime_rules_present"])
+
+    def test_approval_delivery_handoff_mode_specific_outcomes_are_deterministic(self) -> None:
+        def _adapter(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+            mode = str(payload.get("delivery_mode", "")).strip()
+            if mode == "gmail_send":
+                return {
+                    "delivery_attempted": True,
+                    "delivery_outcome": "sent",
+                    "downstream_delivery_id": "d-send",
+                    "downstream_thread_id": "t-send",
+                    "downstream_message_id": "m-send",
+                    "downstream_delivery_timestamp": "2026-04-22T00:00:00Z",
+                }
+            if mode == "gmail_draft":
+                return {
+                    "delivery_attempted": True,
+                    "delivery_outcome": "draft_created",
+                    "downstream_delivery_id": "d-draft",
+                    "downstream_thread_id": "t-draft",
+                    "downstream_message_id": "m-draft",
+                    "downstream_delivery_timestamp": "2026-04-22T00:01:00Z",
+                }
+            return {
+                "delivery_attempted": False,
+                "delivery_outcome": "blocked",
+            }
+
+        common_email_payload = {
+            "approval_email_status": "required",
+            "approval_required": True,
+            "approval_priority": "high",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "blocked",
+            "recipient_target": "self:default",
+            "approval_subject": "[Approval Needed][high] run job: retry_exhausted -> replan_preparation",
+            "approval_body_compact": "Run: job\nSafety: freeze",
+            "approval_option_set": "approve_replan_or_reject",
+            "approval_summary_compact": "reason=retry_exhausted",
+        }
+
+        sent_a = build_approval_delivery_handoff_contract_surface(
+            run_id="job-handoff",
+            objective_contract_payload={"objective_id": "obj-handoff"},
+            approval_email_delivery_payload={
+                **common_email_payload,
+                "delivery_mode": "gmail_send",
+            },
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={"fleet_safety_status": "freeze"},
+            failure_bucketing_hardening_payload={
+                "primary_failure_bucket": "retry_exhausted",
+                "bucket_severity": "high",
+            },
+            lane_stabilization_contract_payload={"current_lane": "replan_preparation"},
+            run_state_payload={"approval_runtime_rules_present": True},
+            handoff_adapter=_adapter,
+        )
+        sent_b = build_approval_delivery_handoff_contract_surface(
+            run_id="job-handoff",
+            objective_contract_payload={"objective_id": "obj-handoff"},
+            approval_email_delivery_payload={
+                **common_email_payload,
+                "delivery_mode": "gmail_send",
+            },
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={"fleet_safety_status": "freeze"},
+            failure_bucketing_hardening_payload={
+                "primary_failure_bucket": "retry_exhausted",
+                "bucket_severity": "high",
+            },
+            lane_stabilization_contract_payload={"current_lane": "replan_preparation"},
+            run_state_payload={"approval_runtime_rules_present": True},
+            handoff_adapter=_adapter,
+        )
+        draft = build_approval_delivery_handoff_contract_surface(
+            run_id="job-handoff",
+            objective_contract_payload={"objective_id": "obj-handoff"},
+            approval_email_delivery_payload={
+                **common_email_payload,
+                "delivery_mode": "gmail_draft",
+            },
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={"fleet_safety_status": "freeze"},
+            failure_bucketing_hardening_payload={
+                "primary_failure_bucket": "retry_exhausted",
+                "bucket_severity": "high",
+            },
+            lane_stabilization_contract_payload={"current_lane": "replan_preparation"},
+            run_state_payload={"approval_runtime_rules_present": True},
+            handoff_adapter=_adapter,
+        )
+        queue = build_approval_delivery_handoff_contract_surface(
+            run_id="job-handoff",
+            objective_contract_payload={"objective_id": "obj-handoff"},
+            approval_email_delivery_payload={
+                **common_email_payload,
+                "delivery_mode": "review_queue_only",
+            },
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={"fleet_safety_status": "freeze"},
+            failure_bucketing_hardening_payload={
+                "primary_failure_bucket": "retry_exhausted",
+                "bucket_severity": "high",
+            },
+            lane_stabilization_contract_payload={"current_lane": "replan_preparation"},
+            run_state_payload={"approval_runtime_rules_present": True},
+            handoff_adapter=_adapter,
+        )
+
+        self.assertEqual(sent_a, sent_b)
+        self.assertEqual(sent_a["approval_delivery_handoff_status"], "delivered_for_review")
+        self.assertEqual(sent_a["delivery_outcome"], "sent")
+        self.assertTrue(sent_a["delivery_attempted"])
+        self.assertTrue(sent_a["delivery_succeeded"])
+        self.assertEqual(sent_a["downstream_delivery_id"], "d-send")
+        self.assertEqual(draft["delivery_outcome"], "draft_created")
+        self.assertEqual(queue["delivery_outcome"], "queued_for_review")
+        self.assertTrue(queue["approval_pending_human_response"])
+        self.assertIn(
+            queue["approval_delivery_handoff_primary_reason"],
+            APPROVAL_DELIVERY_HANDOFF_REASON_CODES,
+        )
+        self.assertIn(
+            queue["approval_delivery_handoff_status"],
+            APPROVAL_DELIVERY_HANDOFF_STATUSES,
+        )
+        self.assertIn(
+            queue["approval_delivery_handoff_validity"],
+            APPROVAL_DELIVERY_HANDOFF_VALIDITIES,
+        )
+        self.assertIn(
+            queue["approval_delivery_handoff_confidence"],
+            APPROVAL_DELIVERY_HANDOFF_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(queue["downstream_adapter"], DOWNSTREAM_ADAPTERS)
+
+    def test_approval_delivery_handoff_blocked_failed_and_not_required(self) -> None:
+        blocked = build_approval_delivery_handoff_contract_surface(
+            run_id="job-handoff-blocked",
+            objective_contract_payload={"objective_id": "obj-handoff"},
+            approval_email_delivery_payload={
+                "approval_email_status": "required",
+                "approval_required": True,
+                "delivery_mode": "gmail_send",
+                "recipient_target": "self:default",
+                "approval_subject": "subject",
+                "approval_body_compact": "body",
+                "approval_option_set": "approve_or_reject",
+                "approval_summary_compact": "summary",
+                "proposed_next_direction": "same_lane_retry",
+                "proposed_target_lane": "bounded_local_patch",
+                "proposed_restart_mode": "approval_required_then_restart",
+            },
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={},
+            failure_bucketing_hardening_payload={},
+            lane_stabilization_contract_payload={},
+            run_state_payload={},
+            handoff_adapter=lambda _: {"delivery_outcome": "blocked"},
+        )
+
+        def _failing_adapter(_: Mapping[str, Any]) -> Mapping[str, Any]:
+            raise RuntimeError("adapter boom")
+
+        failed = build_approval_delivery_handoff_contract_surface(
+            run_id="job-handoff-failed",
+            objective_contract_payload={"objective_id": "obj-handoff"},
+            approval_email_delivery_payload={
+                "approval_email_status": "required",
+                "approval_required": True,
+                "delivery_mode": "gmail_send",
+                "recipient_target": "self:default",
+                "approval_subject": "subject",
+                "approval_body_compact": "body",
+                "approval_option_set": "approve_or_reject",
+                "approval_summary_compact": "summary",
+                "proposed_next_direction": "same_lane_retry",
+                "proposed_target_lane": "bounded_local_patch",
+                "proposed_restart_mode": "approval_required_then_restart",
+            },
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={},
+            failure_bucketing_hardening_payload={},
+            lane_stabilization_contract_payload={},
+            run_state_payload={},
+            handoff_adapter=_failing_adapter,
+        )
+        not_required = build_approval_delivery_handoff_contract_surface(
+            run_id="job-handoff-skip",
+            objective_contract_payload={"objective_id": "obj-handoff"},
+            approval_email_delivery_payload={
+                "approval_email_status": "not_required",
+                "approval_required": False,
+                "delivery_mode": "not_applicable",
+            },
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={},
+            failure_bucketing_hardening_payload={},
+            lane_stabilization_contract_payload={},
+            run_state_payload={},
+            handoff_adapter=_failing_adapter,
+        )
+        self.assertEqual(blocked["approval_delivery_handoff_status"], "handoff_blocked")
+        self.assertEqual(blocked["delivery_outcome"], "blocked")
+        self.assertTrue(blocked["delivery_blocked"])
+        self.assertFalse(blocked["delivery_attempted"])
+        self.assertEqual(failed["approval_delivery_handoff_status"], "handoff_failed")
+        self.assertEqual(failed["delivery_outcome"], "failed")
+        self.assertTrue(failed["delivery_failed"])
+        self.assertTrue(failed["delivery_attempted"])
+        self.assertEqual(not_required["approval_delivery_handoff_status"], "not_required")
+        self.assertEqual(not_required["delivery_outcome"], "skipped")
+        self.assertFalse(not_required["delivery_attempted"])
+        summary = build_approval_delivery_handoff_summary_surface(blocked)
+        compact = build_approval_delivery_handoff_run_state_summary_surface(blocked)
+        self.assertEqual(
+            set(summary.keys()),
+            set(APPROVAL_DELIVERY_HANDOFF_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(compact.keys()),
+            set(APPROVAL_DELIVERY_HANDOFF_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["approval_delivery_handoff_present"])
+
+    def test_approval_response_ingest_normalization_and_supported_vs_unsupported(self) -> None:
+        common_handoff = {
+            "approval_delivery_handoff_status": "delivered_for_review",
+            "delivery_mode": "gmail_send",
+            "delivery_outcome": "sent",
+            "approval_pending_human_response": True,
+            "downstream_adapter": "internal_automation",
+            "downstream_delivery_id": "d-1",
+            "downstream_thread_id": "t-1",
+            "downstream_message_id": "m-1",
+        }
+        approval_email = {
+            "approval_required": True,
+            "approval_priority": "high",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "recipient_class": "operator",
+        }
+        supported = build_approval_response_contract_surface(
+            run_id="job-response",
+            objective_contract_payload={"objective_id": "obj-response"},
+            approval_delivery_handoff_payload=common_handoff,
+            approval_email_delivery_payload=approval_email,
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={"fleet_restart_decision": "restart_hold"},
+            run_state_payload={},
+            response_payload={
+                "response_received": True,
+                "response_command_raw": "  ok   replan ",
+                "response_actor_class": "operator",
+                "response_message_id": "mail-1",
+                "response_received_timestamp": "2026-04-22T12:00:00Z",
+            },
+        )
+        unsupported = build_approval_response_contract_surface(
+            run_id="job-response",
+            objective_contract_payload={"objective_id": "obj-response"},
+            approval_delivery_handoff_payload=common_handoff,
+            approval_email_delivery_payload=approval_email,
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={"fleet_restart_decision": "restart_hold"},
+            run_state_payload={},
+            response_payload={
+                "response_received": True,
+                "response_command_raw": "please retry quickly",
+                "response_actor_class": "operator",
+            },
+        )
+        held = build_approval_response_contract_surface(
+            run_id="job-response",
+            objective_contract_payload={"objective_id": "obj-response"},
+            approval_delivery_handoff_payload=common_handoff,
+            approval_email_delivery_payload=approval_email,
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={"fleet_restart_decision": "restart_hold"},
+            run_state_payload={},
+            response_payload={
+                "response_received": True,
+                "response_command_raw": " hold ",
+                "response_actor_class": "operator",
+            },
+        )
+        rejected = build_approval_response_contract_surface(
+            run_id="job-response",
+            objective_contract_payload={"objective_id": "obj-response"},
+            approval_delivery_handoff_payload=common_handoff,
+            approval_email_delivery_payload=approval_email,
+            approval_runtime_rules_payload={"runtime_rules_version": "v1"},
+            fleet_safety_control_payload={"fleet_restart_decision": "restart_hold"},
+            run_state_payload={},
+            response_payload={
+                "response_received": True,
+                "response_command_raw": " reject ",
+                "response_actor_class": "operator",
+            },
+        )
+
+        self.assertEqual(supported["response_command_normalized"], "OK REPLAN")
+        self.assertTrue(supported["response_supported"])
+        self.assertEqual(supported["approval_response_status"], "response_accepted")
+        self.assertEqual(supported["response_decision_class"], "approved")
+        self.assertTrue(supported["response_allows_restart"])
+        self.assertIn(supported["approval_response_status"], APPROVAL_RESPONSE_STATUSES)
+        self.assertIn(supported["approval_response_validity"], APPROVAL_RESPONSE_VALIDITIES)
+        self.assertIn(
+            supported["approval_response_confidence"],
+            APPROVAL_RESPONSE_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(
+            supported["approval_response_primary_reason"],
+            APPROVAL_RESPONSE_REASON_CODES,
+        )
+        self.assertEqual(unsupported["approval_response_status"], "response_unsupported")
+        self.assertFalse(unsupported["response_supported"])
+        self.assertTrue(unsupported["response_blocks_restart"])
+        self.assertEqual(held["approval_response_status"], "response_held")
+        self.assertTrue(held["response_holds_restart"])
+        self.assertEqual(rejected["approval_response_status"], "response_rejected")
+        self.assertTrue(rejected["response_blocks_restart"])
+        summary = build_approval_response_summary_surface(supported)
+        compact = build_approval_response_run_state_summary_surface(supported)
+        self.assertEqual(set(summary.keys()), set(APPROVAL_RESPONSE_SUMMARY_SAFE_FIELDS))
+        self.assertEqual(
+            set(compact.keys()),
+            set(APPROVAL_RESPONSE_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["approval_response_present"])
+
+    def test_approved_restart_decision_mapping_and_retry_compatibility(self) -> None:
+        approval_email = {
+            "approval_required": True,
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+        }
+        handoff = {
+            "approval_can_clear_restart_block": True,
+            "restart_blocked_pending_approval": True,
+            "restart_held_pending_approval": False,
+        }
+        base_response = {
+            "approval_response_status": "response_accepted",
+            "response_received": True,
+            "response_decision_class": "approved",
+            "approval_can_clear_restart_block": True,
+        }
+        fleet = {"fleet_restart_decision": "restart_blocked"}
+        hardened_bucket = {
+            "primary_failure_bucket": "retry_exhausted",
+            "bucket_severity": "high",
+        }
+        lane = {"current_lane": "replan_preparation"}
+
+        replan_response = dict(base_response, response_command_normalized="OK REPLAN")
+        truth_response = dict(base_response, response_command_normalized="OK TRUTH")
+        close_response = dict(base_response, response_command_normalized="OK CLOSE")
+        retry_incompatible_response = dict(base_response, response_command_normalized="OK RETRY")
+        hold_response = {
+            "approval_response_status": "response_held",
+            "response_received": True,
+            "response_decision_class": "held",
+            "response_command_normalized": "HOLD",
+            "response_holds_restart": True,
+        }
+        reject_response = {
+            "approval_response_status": "response_rejected",
+            "response_received": True,
+            "response_decision_class": "rejected",
+            "response_command_normalized": "REJECT",
+            "response_blocks_restart": True,
+        }
+        unsupported_response = {
+            "approval_response_status": "response_unsupported",
+            "response_received": True,
+            "response_decision_class": "unsupported",
+            "response_command_normalized": "PLEASE RETRY",
+            "response_blocks_restart": True,
+        }
+
+        replan = build_approved_restart_contract_surface(
+            run_id="job-restart",
+            objective_contract_payload={"objective_id": "obj-restart"},
+            approval_response_payload=replan_response,
+            approval_delivery_handoff_payload=handoff,
+            approval_email_delivery_payload=approval_email,
+            fleet_safety_control_payload=fleet,
+            failure_bucketing_hardening_payload=hardened_bucket,
+            lane_stabilization_contract_payload=lane,
+            run_state_payload={},
+        )
+        truth = build_approved_restart_contract_surface(
+            run_id="job-restart",
+            objective_contract_payload={"objective_id": "obj-restart"},
+            approval_response_payload=truth_response,
+            approval_delivery_handoff_payload=handoff,
+            approval_email_delivery_payload=approval_email,
+            fleet_safety_control_payload=fleet,
+            failure_bucketing_hardening_payload=hardened_bucket,
+            lane_stabilization_contract_payload=lane,
+            run_state_payload={},
+        )
+        close = build_approved_restart_contract_surface(
+            run_id="job-restart",
+            objective_contract_payload={"objective_id": "obj-restart"},
+            approval_response_payload=close_response,
+            approval_delivery_handoff_payload=handoff,
+            approval_email_delivery_payload=approval_email,
+            fleet_safety_control_payload=fleet,
+            failure_bucketing_hardening_payload=hardened_bucket,
+            lane_stabilization_contract_payload=lane,
+            run_state_payload={},
+        )
+        retry_incompatible = build_approved_restart_contract_surface(
+            run_id="job-restart",
+            objective_contract_payload={"objective_id": "obj-restart"},
+            approval_response_payload=retry_incompatible_response,
+            approval_delivery_handoff_payload=handoff,
+            approval_email_delivery_payload=approval_email,
+            fleet_safety_control_payload=fleet,
+            failure_bucketing_hardening_payload=hardened_bucket,
+            lane_stabilization_contract_payload=lane,
+            run_state_payload={},
+        )
+        held = build_approved_restart_contract_surface(
+            run_id="job-restart",
+            objective_contract_payload={"objective_id": "obj-restart"},
+            approval_response_payload=hold_response,
+            approval_delivery_handoff_payload=handoff,
+            approval_email_delivery_payload=approval_email,
+            fleet_safety_control_payload=fleet,
+            failure_bucketing_hardening_payload=hardened_bucket,
+            lane_stabilization_contract_payload=lane,
+            run_state_payload={},
+        )
+        rejected = build_approved_restart_contract_surface(
+            run_id="job-restart",
+            objective_contract_payload={"objective_id": "obj-restart"},
+            approval_response_payload=reject_response,
+            approval_delivery_handoff_payload=handoff,
+            approval_email_delivery_payload=approval_email,
+            fleet_safety_control_payload=fleet,
+            failure_bucketing_hardening_payload=hardened_bucket,
+            lane_stabilization_contract_payload=lane,
+            run_state_payload={},
+        )
+        unsupported = build_approved_restart_contract_surface(
+            run_id="job-restart",
+            objective_contract_payload={"objective_id": "obj-restart"},
+            approval_response_payload=unsupported_response,
+            approval_delivery_handoff_payload=handoff,
+            approval_email_delivery_payload=approval_email,
+            fleet_safety_control_payload=fleet,
+            failure_bucketing_hardening_payload=hardened_bucket,
+            lane_stabilization_contract_payload=lane,
+            run_state_payload={},
+        )
+
+        self.assertEqual(replan["approved_restart_status"], "restart_allowed")
+        self.assertEqual(replan["restart_decision"], "allow_replan_preparation")
+        self.assertEqual(truth["restart_decision"], "allow_truth_gathering")
+        self.assertEqual(close["restart_decision"], "allow_closure_followup")
+        self.assertEqual(retry_incompatible["approved_restart_status"], "restart_blocked")
+        self.assertEqual(retry_incompatible["restart_decision"], "block_restart")
+        self.assertEqual(held["approved_restart_status"], "restart_held")
+        self.assertEqual(held["restart_decision"], "hold_restart")
+        self.assertEqual(rejected["approved_restart_status"], "manual_followup_required")
+        self.assertEqual(rejected["restart_decision"], "manual_followup_only")
+        self.assertEqual(unsupported["approved_restart_status"], "restart_blocked")
+        self.assertEqual(unsupported["restart_decision"], "block_restart")
+        self.assertIn(replan["approved_restart_status"], APPROVED_RESTART_STATUSES)
+        self.assertIn(replan["approved_restart_validity"], APPROVED_RESTART_VALIDITIES)
+        self.assertIn(
+            replan["approved_restart_confidence"],
+            APPROVED_RESTART_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(replan["restart_decision"], RESTART_DECISIONS)
+        self.assertIn(
+            replan["approved_restart_primary_reason"],
+            APPROVED_RESTART_REASON_CODES,
+        )
+        summary = build_approved_restart_summary_surface(replan)
+        compact = build_approved_restart_run_state_summary_surface(replan)
+        self.assertEqual(set(summary.keys()), set(APPROVED_RESTART_SUMMARY_SAFE_FIELDS))
+        self.assertEqual(
+            set(compact.keys()),
+            set(APPROVED_RESTART_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["approved_restart_present"])
+
+    def test_approval_safety_duplicate_cooldown_loop_and_not_applicable(self) -> None:
+        objective = {"objective_id": "obj-safety"}
+        approval_email_required = {
+            "approval_email_status": "required",
+            "approval_required": True,
+            "approval_priority": "high",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "recipient_target": "self:default",
+            "recipient_class": "self",
+        }
+        lane = {"current_lane": "replan_preparation"}
+        hard_bucket = {"primary_failure_bucket": "retry_exhausted", "bucket_severity": "high"}
+
+        duplicate = build_approval_safety_contract_surface(
+            run_id="job-safety",
+            objective_contract_payload=objective,
+            approval_email_delivery_payload=approval_email_required,
+            approval_delivery_handoff_payload={
+                "approval_delivery_handoff_status": "delivered_for_review",
+                "delivery_outcome": "sent",
+                "approval_pending_human_response": True,
+            },
+            approval_response_payload={"approval_response_status": "awaiting_response"},
+            approved_restart_payload={"approved_restart_status": "not_ready"},
+            lane_stabilization_contract_payload=lane,
+            failure_bucketing_hardening_payload=hard_bucket,
+            approval_runtime_rules_payload={},
+            run_state_payload={},
+        )
+        cooldown = build_approval_safety_contract_surface(
+            run_id="job-safety",
+            objective_contract_payload=objective,
+            approval_email_delivery_payload=approval_email_required,
+            approval_delivery_handoff_payload={
+                "approval_delivery_handoff_status": "handoff_attempted",
+                "delivery_outcome": "sent",
+                "approval_pending_human_response": False,
+            },
+            approval_response_payload={"approval_response_status": "awaiting_response"},
+            approved_restart_payload={"approved_restart_status": "not_ready"},
+            lane_stabilization_contract_payload=lane,
+            failure_bucketing_hardening_payload=hard_bucket,
+            approval_runtime_rules_payload={},
+            run_state_payload={
+                "approval_prior_recent_delivery_count": 1,
+                "approval_cooldown_seconds": 120,
+            },
+        )
+        loop = build_approval_safety_contract_surface(
+            run_id="job-safety",
+            objective_contract_payload=objective,
+            approval_email_delivery_payload=approval_email_required,
+            approval_delivery_handoff_payload={
+                "approval_delivery_handoff_status": "handoff_attempted",
+                "delivery_outcome": "blocked",
+                "approval_pending_human_response": False,
+            },
+            approval_response_payload={"approval_response_status": "awaiting_response"},
+            approved_restart_payload={"approved_restart_status": "not_ready"},
+            lane_stabilization_contract_payload=lane,
+            failure_bucketing_hardening_payload=hard_bucket,
+            approval_runtime_rules_payload={},
+            run_state_payload={
+                "approval_same_request_class_count": 4,
+                "approval_prior_recent_delivery_count": 1,
+            },
+        )
+        not_required = build_approval_safety_contract_surface(
+            run_id="job-safety",
+            objective_contract_payload=objective,
+            approval_email_delivery_payload={
+                "approval_email_status": "not_required",
+                "approval_required": False,
+            },
+            approval_delivery_handoff_payload={},
+            approval_response_payload={},
+            approved_restart_payload={},
+            lane_stabilization_contract_payload=lane,
+            failure_bucketing_hardening_payload=hard_bucket,
+            approval_runtime_rules_payload={},
+            run_state_payload={},
+        )
+
+        self.assertEqual(duplicate["approval_safety_status"], "duplicate_pending")
+        self.assertEqual(duplicate["approval_safety_decision"], "block_until_response_or_clear")
+        self.assertTrue(duplicate["approval_duplicate_detected"])
+        self.assertTrue(duplicate["approval_pending_duplicate"])
+        self.assertTrue(duplicate["approval_delivery_blocked_by_safety"])
+        self.assertFalse(duplicate["approval_redelivery_allowed"])
+
+        self.assertEqual(cooldown["approval_safety_status"], "cooldown_active")
+        self.assertEqual(cooldown["approval_safety_decision"], "defer_until_cooldown_expires")
+        self.assertTrue(cooldown["approval_cooldown_active"])
+        self.assertTrue(cooldown["approval_delivery_deferred_by_safety"])
+        self.assertFalse(cooldown["approval_redelivery_allowed"])
+
+        self.assertEqual(loop["approval_safety_status"], "loop_suspected")
+        self.assertEqual(loop["approval_safety_decision"], "block_loop_suspected")
+        self.assertTrue(loop["approval_loop_suspected"])
+        self.assertTrue(loop["approval_delivery_blocked_by_safety"])
+        self.assertFalse(loop["approval_redelivery_allowed"])
+
+        self.assertEqual(not_required["approval_safety_status"], "not_applicable")
+        self.assertFalse(not_required["approval_redelivery_allowed"])
+        self.assertFalse(not_required["approval_delivery_allowed_by_safety"])
+        self.assertFalse(not_required["approval_delivery_blocked_by_safety"])
+
+    def test_approval_safety_dedup_key_and_response_clearing_are_deterministic(self) -> None:
+        objective = {"objective_id": "obj-safety-clear"}
+        approval_email = {
+            "approval_email_status": "required",
+            "approval_required": True,
+            "approval_priority": "medium",
+            "proposed_next_direction": "truth_gathering",
+            "proposed_target_lane": "truth_gathering",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "recipient_target": "operator:default",
+            "recipient_class": "operator",
+        }
+        lane = {"current_lane": "truth_gathering"}
+        hard_bucket = {"primary_failure_bucket": "truth_missing", "bucket_severity": "medium"}
+
+        first = build_approval_safety_contract_surface(
+            run_id="job-safety-clear",
+            objective_contract_payload=objective,
+            approval_email_delivery_payload=approval_email,
+            approval_delivery_handoff_payload={
+                "approval_delivery_handoff_status": "delivered_for_review",
+                "delivery_outcome": "sent",
+                "approval_pending_human_response": True,
+                "downstream_delivery_timestamp": "2026-04-22T00:00:00Z",
+            },
+            approval_response_payload={
+                "approval_response_status": "response_accepted",
+                "approval_response_validity": "valid",
+                "response_received": True,
+                "response_received_timestamp": "2026-04-22T00:05:00Z",
+            },
+            approved_restart_payload={"approved_restart_status": "restart_allowed"},
+            lane_stabilization_contract_payload=lane,
+            failure_bucketing_hardening_payload=hard_bucket,
+            approval_runtime_rules_payload={},
+            run_state_payload={},
+        )
+        second = build_approval_safety_contract_surface(
+            run_id="job-safety-clear",
+            objective_contract_payload=objective,
+            approval_email_delivery_payload=approval_email,
+            approval_delivery_handoff_payload={
+                "approval_delivery_handoff_status": "delivered_for_review",
+                "delivery_outcome": "sent",
+                "approval_pending_human_response": True,
+                "downstream_delivery_timestamp": "2026-04-22T00:00:00Z",
+            },
+            approval_response_payload={
+                "approval_response_status": "response_accepted",
+                "approval_response_validity": "valid",
+                "response_received": True,
+                "response_received_timestamp": "2026-04-22T00:05:00Z",
+            },
+            approved_restart_payload={"approved_restart_status": "restart_allowed"},
+            lane_stabilization_contract_payload=lane,
+            failure_bucketing_hardening_payload=hard_bucket,
+            approval_runtime_rules_payload={},
+            run_state_payload={},
+        )
+        cleared_duplicate = build_approval_safety_contract_surface(
+            run_id="job-safety-clear",
+            objective_contract_payload=objective,
+            approval_email_delivery_payload=approval_email,
+            approval_delivery_handoff_payload={
+                "approval_delivery_handoff_status": "delivered_for_review",
+                "delivery_outcome": "sent",
+                "approval_pending_human_response": True,
+                "downstream_delivery_timestamp": "2026-04-22T00:00:00Z",
+            },
+            approval_response_payload={
+                "approval_response_status": "response_accepted",
+                "approval_response_validity": "valid",
+                "response_received": True,
+                "response_received_timestamp": "2026-04-22T00:05:00Z",
+            },
+            approved_restart_payload={"approved_restart_status": "restart_allowed"},
+            lane_stabilization_contract_payload=lane,
+            failure_bucketing_hardening_payload=hard_bucket,
+            approval_runtime_rules_payload={},
+            run_state_payload={
+                "approval_last_dedup_key": first["approval_dedup_key"],
+                "approval_prior_pending_count": 2,
+            },
+        )
+
+        self.assertEqual(first["approval_dedup_key"], second["approval_dedup_key"])
+        self.assertEqual(cleared_duplicate["approval_safety_status"], "safe_to_deliver")
+        self.assertEqual(cleared_duplicate["approval_safety_decision"], "allow_delivery")
+        self.assertTrue(cleared_duplicate["approval_duplicate_detected"])
+        self.assertFalse(cleared_duplicate["approval_pending_duplicate"])
+        self.assertTrue(cleared_duplicate["approval_delivery_allowed_by_safety"])
+        self.assertTrue(cleared_duplicate["approval_redelivery_allowed"])
+        self.assertEqual(
+            cleared_duplicate["approval_safety_primary_reason"],
+            "delivery_safe_to_send",
+        )
+        self.assertIn(
+            "response_cleared_pending_duplicate",
+            cleared_duplicate["approval_safety_reason_codes"],
+        )
+        self.assertIn(cleared_duplicate["approval_safety_status"], APPROVAL_SAFETY_STATUSES)
+        self.assertIn(cleared_duplicate["approval_safety_validity"], APPROVAL_SAFETY_VALIDITIES)
+        self.assertIn(
+            cleared_duplicate["approval_safety_confidence"],
+            APPROVAL_SAFETY_CONFIDENCE_LEVELS,
+        )
+        self.assertIn(cleared_duplicate["approval_safety_decision"], APPROVAL_SAFETY_DECISIONS)
+        self.assertIn(
+            cleared_duplicate["approval_safety_primary_reason"],
+            APPROVAL_SAFETY_REASON_CODES,
+        )
+        summary = build_approval_safety_summary_surface(cleared_duplicate)
+        compact = build_approval_safety_run_state_summary_surface(cleared_duplicate)
+        self.assertEqual(set(summary.keys()), set(APPROVAL_SAFETY_SUMMARY_SAFE_FIELDS))
+        self.assertEqual(
+            set(compact.keys()),
+            set(APPROVAL_SAFETY_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertTrue(compact["approval_safety_present"])
+
+    def test_runner_executes_one_automatic_restart_when_approved_and_safety_clear(self) -> None:
+        response_payload = {
+            "schema_version": "v1",
+            "run_id": "job-approved-restart",
+            "objective_id": "objective-approved-restart",
+            "approval_response_status": "response_accepted",
+            "approval_response_validity": "valid",
+            "approval_response_confidence": "high",
+            "response_received": True,
+            "response_command_raw": "OK REPLAN",
+            "response_command_normalized": "OK REPLAN",
+            "response_supported": True,
+            "response_from_expected_actor": True,
+            "response_decision_class": "approved",
+            "response_decision_scope": "restart_and_direction",
+            "response_blocks_restart": False,
+            "response_holds_restart": False,
+            "response_allows_restart": True,
+            "approval_response_primary_reason": "response_approved_accepted",
+            "approval_response_reason_codes": ["response_approved_accepted"],
+        }
+        approved_restart_payload = {
+            "schema_version": "v1",
+            "run_id": "job-approved-restart",
+            "objective_id": "objective-approved-restart",
+            "approved_restart_status": "restart_allowed",
+            "approved_restart_validity": "valid",
+            "approved_restart_confidence": "high",
+            "restart_decision": "allow_replan_preparation",
+            "restart_allowed": True,
+            "restart_blocked": False,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "replan_preparation",
+            "approved_target_lane": "replan_preparation",
+            "approved_restart_mode": "approval_required_then_restart",
+            "approved_action_class": "review_and_replan",
+            "response_command_normalized": "OK REPLAN",
+            "response_decision_class": "approved",
+            "approved_restart_primary_reason": "restart_approved_and_allowed",
+            "approved_restart_reason_codes": ["restart_approved_and_allowed"],
+        }
+        approval_safety_payload = {
+            "schema_version": "v1",
+            "run_id": "job-approved-restart",
+            "objective_id": "objective-approved-restart",
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_duplicate_detected": False,
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+            "approval_safety_primary_reason": "delivery_safe_to_send",
+            "approval_safety_reason_codes": ["delivery_safe_to_send"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+            transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            execution_payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(
+            execution_payload["automatic_restart_execution_status"], "executed"
+        )
+        self.assertTrue(execution_payload["automatic_restart_executed"])
+        self.assertTrue(execution_payload["automatic_restart_attempted"])
+        self.assertEqual(execution_payload["automatic_restart_count"], 1)
+        self.assertTrue(
+            execution_payload["automatic_restart_additional_execution_blocked"]
+        )
+        self.assertFalse(execution_payload["automatic_restart_chained"])
+        self.assertEqual(execution_payload["automatic_restart_result_status"], "completed")
+        self.assertTrue(
+            execution_payload["automatic_restart_launch_pr_id"].endswith(
+                "__approved_restart_once"
+            )
+        )
+        self.assertEqual(
+            execution_payload["automatic_restart_execution_reason"],
+            "restart_executed_once",
+        )
+        self.assertEqual(len(transport.launch_order), 4)
+        self.assertEqual(
+            len([item for item in transport.launch_order if item.endswith("__approved_restart_once")]),
+            1,
+        )
+        self.assertIn("approved_restart_execution_contract_summary", manifest)
+        self.assertIn("approved_restart_execution_contract_path", manifest)
+        self.assertTrue(
+            str(manifest["approved_restart_execution_contract_path"]).endswith(
+                "approved_restart_execution_contract.json"
+            )
+        )
+
+    def test_runner_auto_restart_is_blocked_for_safety_statuses(self) -> None:
+        response_payload = {
+            "approval_response_status": "response_accepted",
+            "approval_response_validity": "valid",
+            "response_received": True,
+            "response_command_normalized": "OK REPLAN",
+            "response_decision_class": "approved",
+            "response_allows_restart": True,
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "restart_allowed",
+            "approved_restart_validity": "valid",
+            "restart_decision": "allow_replan_preparation",
+            "restart_allowed": True,
+            "restart_blocked": False,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "replan_preparation",
+            "approved_target_lane": "replan_preparation",
+            "approved_action_class": "review_and_replan",
+            "response_decision_class": "approved",
+            "response_command_normalized": "OK REPLAN",
+        }
+        blocked_cases = (
+            (
+                "duplicate_pending",
+                {
+                    "approval_safety_status": "duplicate_pending",
+                    "approval_safety_decision": "block_until_response_or_clear",
+                    "approval_pending_duplicate": True,
+                    "approval_delivery_blocked_by_safety": True,
+                },
+                "safety_duplicate_pending",
+            ),
+            (
+                "cooldown_active",
+                {
+                    "approval_safety_status": "cooldown_active",
+                    "approval_safety_decision": "defer_until_cooldown_expires",
+                    "approval_cooldown_active": True,
+                    "approval_delivery_deferred_by_safety": True,
+                },
+                "safety_cooldown_active",
+            ),
+            (
+                "loop_suspected",
+                {
+                    "approval_safety_status": "loop_suspected",
+                    "approval_safety_decision": "block_loop_suspected",
+                    "approval_loop_suspected": True,
+                    "approval_delivery_blocked_by_safety": True,
+                },
+                "safety_loop_suspected",
+            ),
+            (
+                "delivery_blocked",
+                {
+                    "approval_safety_status": "delivery_blocked",
+                    "approval_safety_decision": "block_until_response_or_clear",
+                    "approval_delivery_blocked_by_safety": True,
+                },
+                "safety_delivery_blocked",
+            ),
+            (
+                "delivery_deferred",
+                {
+                    "approval_safety_status": "delivery_deferred",
+                    "approval_safety_decision": "defer_until_cooldown_expires",
+                    "approval_delivery_deferred_by_safety": True,
+                },
+                "safety_delivery_deferred",
+            ),
+        )
+        for status, safety_patch, expected_reason in blocked_cases:
+            with self.subTest(status=status):
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    root = Path(tmp_dir)
+                    artifacts_dir = self._write_planning_artifacts(root)
+                    out_dir = root / "artifacts" / "executions"
+                    transport = _RecordingDryRunTransport()
+                    runner = PlannedExecutionRunner(
+                        adapter=CodexExecutorAdapter(transport=transport)
+                    )
+                    merged_safety_payload = {
+                        "approval_safety_status": status,
+                        "approval_safety_validity": "valid",
+                        "approval_safety_confidence": "high",
+                        "approval_duplicate_detected": False,
+                        "approval_pending_duplicate": False,
+                        "approval_cooldown_active": False,
+                        "approval_loop_suspected": False,
+                        "approval_delivery_blocked_by_safety": False,
+                        "approval_delivery_deferred_by_safety": False,
+                        "approval_delivery_allowed_by_safety": False,
+                        "approval_safety_primary_reason": "unknown_safety_posture",
+                        "approval_safety_reason_codes": ["unknown_safety_posture"],
+                    }
+                    merged_safety_payload.update(safety_patch)
+                    with (
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                            return_value=response_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                            return_value=approved_restart_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                            return_value=merged_safety_payload,
+                        ),
+                    ):
+                        manifest = runner.run(
+                            artifacts_input_dir=artifacts_dir,
+                            output_dir=out_dir,
+                            dry_run=True,
+                            stop_on_failure=True,
+                        )
+                    run_root = out_dir / manifest["job_id"]
+                    execution_payload = json.loads(
+                        (run_root / "approved_restart_execution_contract.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+
+                self.assertEqual(
+                    execution_payload["automatic_restart_execution_status"],
+                    "not_executed",
+                )
+                self.assertFalse(execution_payload["automatic_restart_executed"])
+                self.assertFalse(execution_payload["automatic_restart_attempted"])
+                self.assertEqual(
+                    execution_payload["automatic_restart_execution_reason"],
+                    expected_reason,
+                )
+                self.assertEqual(len(transport.launch_order), 3)
+                self.assertEqual(execution_payload["automatic_restart_count"], 0)
+
+    def test_runner_auto_restart_not_executed_for_invalid_restart_posture(self) -> None:
+        safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_duplicate_detected": False,
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        invalid_cases = (
+            (
+                "partial_validity",
+                {
+                    "approval_response_status": "response_accepted",
+                    "response_decision_class": "approved",
+                    "response_command_normalized": "OK REPLAN",
+                },
+                {
+                    "approved_restart_status": "restart_allowed",
+                    "approved_restart_validity": "partial",
+                    "restart_decision": "allow_replan_preparation",
+                    "restart_allowed": True,
+                    "response_decision_class": "approved",
+                    "response_command_normalized": "OK REPLAN",
+                },
+                "invalid_approved_restart_posture",
+            ),
+            (
+                "hold_command",
+                {
+                    "approval_response_status": "response_held",
+                    "response_decision_class": "held",
+                    "response_command_normalized": "HOLD",
+                },
+                {
+                    "approved_restart_status": "restart_held",
+                    "approved_restart_validity": "valid",
+                    "restart_decision": "hold_restart",
+                    "restart_allowed": False,
+                    "restart_held": True,
+                    "response_decision_class": "held",
+                    "response_command_normalized": "HOLD",
+                },
+                "invalid_approved_restart_posture",
+            ),
+            (
+                "reject_manual_only",
+                {
+                    "approval_response_status": "response_rejected",
+                    "response_decision_class": "rejected",
+                    "response_command_normalized": "REJECT",
+                },
+                {
+                    "approved_restart_status": "manual_followup_required",
+                    "approved_restart_validity": "valid",
+                    "restart_decision": "manual_followup_only",
+                    "restart_allowed": False,
+                    "restart_requires_manual_followup": True,
+                    "response_decision_class": "rejected",
+                    "response_command_normalized": "REJECT",
+                },
+                "invalid_approved_restart_posture",
+            ),
+        )
+
+        for case_id, response_payload, approved_restart_payload, expected_reason in invalid_cases:
+            with self.subTest(case=case_id):
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    root = Path(tmp_dir)
+                    artifacts_dir = self._write_planning_artifacts(root)
+                    out_dir = root / "artifacts" / "executions"
+                    transport = _RecordingDryRunTransport()
+                    runner = PlannedExecutionRunner(
+                        adapter=CodexExecutorAdapter(transport=transport)
+                    )
+                    with (
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                            return_value=response_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                            return_value=approved_restart_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                            return_value=safety_payload,
+                        ),
+                    ):
+                        manifest = runner.run(
+                            artifacts_input_dir=artifacts_dir,
+                            output_dir=out_dir,
+                            dry_run=True,
+                            stop_on_failure=True,
+                        )
+                    run_root = out_dir / manifest["job_id"]
+                    execution_payload = json.loads(
+                        (run_root / "approved_restart_execution_contract.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+
+                self.assertEqual(
+                    execution_payload["automatic_restart_execution_status"],
+                    "not_executed",
+                )
+                self.assertEqual(
+                    execution_payload["automatic_restart_execution_reason"],
+                    expected_reason,
+                )
+                self.assertFalse(execution_payload["automatic_restart_executed"])
+                self.assertFalse(execution_payload["automatic_restart_attempted"])
+                self.assertEqual(execution_payload["automatic_restart_count"], 0)
+                self.assertEqual(len(transport.launch_order), 3)
+
     def test_operator_explainability_distinguishes_action_specific_denial(self) -> None:
         run_state = _augment_run_state_with_operator_explainability(
             run_state_payload={
@@ -9388,6 +11180,18 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertEqual(
             set(contract["failure_bucketing_hardening_summary_safe_fields"]),
             set(FAILURE_BUCKETING_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["artifact_retention_summary_safe_fields"]),
+            set(ARTIFACT_RETENTION_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["fleet_safety_control_summary_safe_fields"]),
+            set(FLEET_SAFETY_CONTROL_RUN_STATE_SUMMARY_SAFE_FIELDS),
+        )
+        self.assertEqual(
+            set(contract["approval_email_delivery_summary_safe_fields"]),
+            set(APPROVAL_EMAIL_DELIVERY_RUN_STATE_SUMMARY_SAFE_FIELDS),
         )
 
     def test_contract_artifact_index_is_deterministic_and_compact(self) -> None:

@@ -111,6 +111,60 @@ from automation.orchestration.fleet_safety_control import (
 from automation.orchestration.fleet_safety_control import (
     build_fleet_safety_control_summary_surface,
 )
+from automation.orchestration.approval_email_delivery import (
+    build_approval_email_delivery_contract_surface,
+)
+from automation.orchestration.approval_email_delivery import (
+    build_approval_email_delivery_run_state_summary_surface,
+)
+from automation.orchestration.approval_email_delivery import (
+    build_approval_email_delivery_summary_surface,
+)
+from automation.orchestration.approval_runtime_policy import (
+    build_approval_runtime_rules_contract_surface,
+)
+from automation.orchestration.approval_runtime_policy import (
+    build_approval_runtime_rules_run_state_summary_surface,
+)
+from automation.orchestration.approval_runtime_policy import (
+    build_approval_runtime_rules_summary_surface,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    build_approval_delivery_handoff_contract_surface,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    build_approval_delivery_handoff_run_state_summary_surface,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    build_approval_delivery_handoff_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approved_restart_contract_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approved_restart_run_state_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approved_restart_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approval_response_contract_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approval_response_run_state_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approval_response_summary_surface,
+)
+from automation.orchestration.approval_safety import (
+    build_approval_safety_contract_surface,
+)
+from automation.orchestration.approval_safety import (
+    build_approval_safety_run_state_summary_surface,
+)
+from automation.orchestration.approval_safety import (
+    build_approval_safety_summary_surface,
+)
 from automation.orchestration.bounded_execution_bridge import (
     build_bounded_execution_bridge_run_state_summary_surface,
 )
@@ -368,6 +422,43 @@ _ROLLBACK_VALIDATION_STATUSES = {
     "unavailable",
     "ambiguous",
     "not_applicable",
+}
+_APPROVED_RESTART_EXECUTION_SCHEMA_VERSION = "v1"
+_APPROVED_RESTART_EXECUTION_STATUSES = {"executed", "not_executed"}
+_APPROVED_RESTART_EXECUTION_REASON_CODES = {
+    "invalid_approved_restart_posture",
+    "response_not_approved",
+    "safety_duplicate_pending",
+    "safety_cooldown_active",
+    "safety_loop_suspected",
+    "safety_delivery_blocked",
+    "safety_delivery_deferred",
+    "safety_not_clear",
+    "restart_target_missing",
+    "restart_launch_failed",
+    "restart_executed_once",
+    "restart_not_executed",
+}
+_APPROVED_RESTART_EXECUTION_REASON_ORDER = (
+    "invalid_approved_restart_posture",
+    "response_not_approved",
+    "safety_duplicate_pending",
+    "safety_cooldown_active",
+    "safety_loop_suspected",
+    "safety_delivery_blocked",
+    "safety_delivery_deferred",
+    "safety_not_clear",
+    "restart_target_missing",
+    "restart_launch_failed",
+    "restart_executed_once",
+    "restart_not_executed",
+)
+_APPROVED_RESTART_ALLOWED_DECISIONS = {
+    "allow_same_lane_retry",
+    "allow_repair_retry",
+    "allow_truth_gathering",
+    "allow_replan_preparation",
+    "allow_closure_followup",
 }
 
 _AUTHORITY_BLOCKER_REASONS = {
@@ -5106,6 +5197,440 @@ def _augment_run_state_with_fleet_safety_control_summary(
     }
 
 
+def _augment_run_state_with_approval_email_delivery_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    approval_email_delivery_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    approval_email_surface = build_approval_email_delivery_run_state_summary_surface(
+        approval_email_delivery_payload
+    )
+    return {
+        **payload,
+        **approval_email_surface,
+    }
+
+
+def _augment_run_state_with_approval_runtime_rules_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    approval_runtime_rules_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    runtime_surface = build_approval_runtime_rules_run_state_summary_surface(
+        approval_runtime_rules_payload
+    )
+    return {
+        **payload,
+        **runtime_surface,
+    }
+
+
+def _augment_run_state_with_approval_delivery_handoff_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    approval_delivery_handoff_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    handoff_surface = build_approval_delivery_handoff_run_state_summary_surface(
+        approval_delivery_handoff_payload
+    )
+    return {
+        **payload,
+        **handoff_surface,
+    }
+
+
+def _augment_run_state_with_approval_response_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    approval_response_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    response_surface = build_approval_response_run_state_summary_surface(
+        approval_response_payload
+    )
+    return {
+        **payload,
+        **response_surface,
+    }
+
+
+def _augment_run_state_with_approved_restart_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    approved_restart_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    restart_surface = build_approved_restart_run_state_summary_surface(
+        approved_restart_payload
+    )
+    return {
+        **payload,
+        **restart_surface,
+    }
+
+
+def _augment_run_state_with_approval_safety_summary(
+    *,
+    run_state_payload: Mapping[str, Any],
+    approval_safety_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload)
+    safety_surface = build_approval_safety_run_state_summary_surface(
+        approval_safety_payload
+    )
+    return {
+        **payload,
+        **safety_surface,
+    }
+
+
+def _approval_delivery_noop_adapter(
+    handoff_payload: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    _ = handoff_payload
+    return {
+        "delivery_attempted": False,
+        "delivery_outcome": "not_attempted",
+        "delivery_metadata": {"adapter": "deferred_to_handoff_contract"},
+    }
+
+
+def _normalize_approved_restart_execution_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [reason for reason in reason_codes if reason in _APPROVED_RESTART_EXECUTION_REASON_CODES]
+    )
+    ordered = [reason for reason in _APPROVED_RESTART_EXECUTION_REASON_ORDER if reason in normalized]
+    return ordered if ordered else ["restart_not_executed"]
+
+
+def _select_approved_restart_target_unit(
+    manifest_units: list[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    for entry in manifest_units:
+        status = _normalize_text(entry.get("status"), default="")
+        if status == "failed":
+            return dict(entry)
+    if manifest_units:
+        return dict(manifest_units[0])
+    return None
+
+
+def _build_approved_restart_execution_summary_surface(
+    payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    source = dict(payload or {})
+    status = _normalize_text(source.get("automatic_restart_execution_status"), default="not_executed")
+    if status not in _APPROVED_RESTART_EXECUTION_STATUSES:
+        status = "not_executed"
+    return {
+        "automatic_restart_execution_status": status,
+        "automatic_restart_executed": bool(source.get("automatic_restart_executed", False)),
+        "automatic_restart_execution_reason": _normalize_text(
+            source.get("automatic_restart_execution_reason"),
+            default="restart_not_executed",
+        ),
+        "automatic_restart_result_status": _normalize_text(
+            source.get("automatic_restart_result_status"),
+            default="not_attempted",
+        ),
+    }
+
+
+def _build_approved_restart_execution_contract_surface(
+    *,
+    run_id: str,
+    objective_contract_payload: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    approval_response_payload: Mapping[str, Any] | None,
+    approval_safety_payload: Mapping[str, Any] | None,
+    manifest_units: list[Mapping[str, Any]],
+    adapter: CodexExecutorAdapter,
+    dry_run: bool,
+    now: Callable[[], datetime],
+) -> dict[str, Any]:
+    objective = dict(objective_contract_payload or {})
+    approved_restart = dict(approved_restart_payload or {})
+    approval_response = dict(approval_response_payload or {})
+    approval_safety = dict(approval_safety_payload or {})
+
+    objective_id = _normalize_text(objective.get("objective_id"), default="")
+    approved_restart_status = _normalize_text(
+        approved_restart.get("approved_restart_status"),
+        default="insufficient_truth",
+    )
+    approved_restart_validity = _normalize_text(
+        approved_restart.get("approved_restart_validity"),
+        default="insufficient_truth",
+    )
+    restart_decision = _normalize_text(approved_restart.get("restart_decision"), default="unknown")
+    restart_allowed = bool(approved_restart.get("restart_allowed", False))
+    restart_blocked = bool(approved_restart.get("restart_blocked", False))
+    restart_held = bool(approved_restart.get("restart_held", False))
+    restart_manual_followup = bool(approved_restart.get("restart_requires_manual_followup", False))
+    approved_next_direction = _normalize_text(
+        approved_restart.get("approved_next_direction"),
+        default="unknown",
+    )
+    approved_target_lane = _normalize_text(
+        approved_restart.get("approved_target_lane"),
+        default="unknown",
+    )
+    approved_action_class = _normalize_text(
+        approved_restart.get("approved_action_class"),
+        default="unknown",
+    )
+
+    approval_response_status = _normalize_text(
+        approval_response.get("approval_response_status"),
+        default="insufficient_truth",
+    )
+    response_decision_class = _normalize_text(
+        approval_response.get("response_decision_class"),
+        default="unknown",
+    )
+    response_command_normalized = _normalize_text(
+        approval_response.get("response_command_normalized"),
+        default="",
+    )
+
+    approval_safety_status = _normalize_text(
+        approval_safety.get("approval_safety_status"),
+        default="insufficient_truth",
+    )
+    approval_safety_decision = _normalize_text(
+        approval_safety.get("approval_safety_decision"),
+        default="unknown",
+    )
+    safety_duplicate_pending = bool(
+        approval_safety.get("approval_pending_duplicate", False)
+    ) or approval_safety_status == "duplicate_pending"
+    safety_cooldown_active = bool(
+        approval_safety.get("approval_cooldown_active", False)
+    ) or approval_safety_status == "cooldown_active"
+    safety_loop_suspected = bool(
+        approval_safety.get("approval_loop_suspected", False)
+    ) or approval_safety_status == "loop_suspected"
+    safety_delivery_blocked = bool(
+        approval_safety.get("approval_delivery_blocked_by_safety", False)
+    ) or approval_safety_status == "delivery_blocked"
+    safety_delivery_deferred = bool(
+        approval_safety.get("approval_delivery_deferred_by_safety", False)
+    ) or approval_safety_status == "delivery_deferred"
+
+    execution_status = "not_executed"
+    execution_reason = "restart_not_executed"
+    execution_reason_codes: list[str] = []
+    automatic_restart_attempted = False
+    automatic_restart_executed = False
+    automatic_restart_count = 0
+    restart_target_pr_id = ""
+    restart_launch_pr_id = ""
+    restart_run_id = ""
+    restart_result_status = "not_attempted"
+    restart_stdout_path = ""
+    restart_stderr_path = ""
+    restart_artifacts_count = 0
+    restart_error = ""
+
+    invalid_approved_restart_posture = bool(
+        approved_restart_validity != "valid"
+        or approved_restart_status != "restart_allowed"
+        or not restart_allowed
+        or restart_blocked
+        or restart_held
+        or restart_manual_followup
+        or restart_decision not in _APPROVED_RESTART_ALLOWED_DECISIONS
+        or response_decision_class == "unsupported"
+        or restart_decision in {"block_restart", "manual_followup_only", "hold_restart"}
+    )
+    response_not_approved = bool(
+        response_decision_class != "approved"
+        or response_command_normalized in {"HOLD", "REJECT"}
+        or approval_response_status != "response_accepted"
+    )
+    safety_status_clear = approval_safety_status in {"safe_to_deliver", "not_applicable"}
+
+    if invalid_approved_restart_posture:
+        execution_reason = "invalid_approved_restart_posture"
+    elif response_not_approved:
+        execution_reason = "response_not_approved"
+    elif safety_duplicate_pending:
+        execution_reason = "safety_duplicate_pending"
+    elif safety_cooldown_active:
+        execution_reason = "safety_cooldown_active"
+    elif safety_loop_suspected:
+        execution_reason = "safety_loop_suspected"
+    elif safety_delivery_blocked:
+        execution_reason = "safety_delivery_blocked"
+    elif safety_delivery_deferred:
+        execution_reason = "safety_delivery_deferred"
+    elif not safety_status_clear:
+        execution_reason = "safety_not_clear"
+    else:
+        target_entry = _select_approved_restart_target_unit(manifest_units)
+        if not isinstance(target_entry, Mapping):
+            execution_reason = "restart_target_missing"
+        else:
+            restart_target_pr_id = _normalize_text(target_entry.get("pr_id"), default="")
+            target_prompt_path_text = _normalize_text(
+                target_entry.get("compiled_prompt_path"),
+                default="",
+            )
+            target_prompt_path = (
+                Path(target_prompt_path_text) if target_prompt_path_text else None
+            )
+            target_work_dir = target_prompt_path.parent if target_prompt_path else Path("")
+            if (
+                not restart_target_pr_id
+                or not target_prompt_path_text
+                or target_prompt_path is None
+                or not target_prompt_path.exists()
+                or not target_work_dir.exists()
+            ):
+                execution_reason = "restart_target_missing"
+            else:
+                restart_launch_pr_id = f"{restart_target_pr_id}__approved_restart_once"
+                try:
+                    launch_response = dict(
+                        adapter.launch_job(
+                            job_id=_normalize_text(run_id, default=""),
+                            pr_id=restart_launch_pr_id,
+                            prompt_path=str(target_prompt_path),
+                            work_dir=str(target_work_dir),
+                            metadata={
+                                "automatic_restart_execution": True,
+                                "automatic_restart_limit": 1,
+                                "automatic_restart_direction": approved_next_direction,
+                                "automatic_restart_target_lane": approved_target_lane,
+                                "automatic_restart_action_class": approved_action_class,
+                                "automatic_restart_decision": restart_decision,
+                                "automatic_restart_response_command": response_command_normalized,
+                            },
+                        )
+                    )
+                except Exception as exc:  # pragma: no cover - deterministic fallback
+                    restart_error = _normalize_text(str(exc), default="automatic_restart_launch_failed")
+                    execution_reason = "restart_launch_failed"
+                else:
+                    automatic_restart_attempted = True
+                    restart_run_id = _normalize_text(launch_response.get("run_id"), default="")
+                    if not restart_run_id:
+                        execution_reason = "restart_launch_failed"
+                    else:
+                        status_response = dict(adapter.poll_status(run_id=restart_run_id))
+                        artifact_response = dict(adapter.collect_artifacts(run_id=restart_run_id))
+                        restart_result_status = _normalize_text(
+                            status_response.get("status"),
+                            default="failed",
+                        ).lower()
+                        if restart_result_status not in {
+                            "completed",
+                            "failed",
+                            "timed_out",
+                            "not_started",
+                            "running",
+                        }:
+                            restart_result_status = "failed"
+                        restart_stdout_path = _normalize_text(
+                            artifact_response.get("stdout_path"),
+                            default="",
+                        )
+                        restart_stderr_path = _normalize_text(
+                            artifact_response.get("stderr_path"),
+                            default="",
+                        )
+                        restart_artifacts_count = len(
+                            artifact_response.get("artifacts")
+                            if isinstance(artifact_response.get("artifacts"), list)
+                            else []
+                        )
+                        automatic_restart_executed = True
+                        automatic_restart_count = 1
+                        execution_status = "executed"
+                        execution_reason = "restart_executed_once"
+
+    if execution_status != "executed":
+        automatic_restart_executed = False
+        automatic_restart_count = 0
+        restart_result_status = "not_attempted"
+
+    execution_reason_codes = _normalize_approved_restart_execution_reason_codes(
+        [execution_reason]
+    )
+
+    supporting_compact_truth_refs = _serialize_required_signals(
+        [
+            "approved_restart_contract.approved_restart_status" if approved_restart_status else "",
+            "approved_restart_contract.restart_decision" if restart_decision else "",
+            "approval_response_contract.approval_response_status" if approval_response_status else "",
+            "approval_response_contract.response_decision_class" if response_decision_class else "",
+            "approval_safety_contract.approval_safety_status" if approval_safety_status else "",
+            "approval_safety_contract.approval_safety_decision" if approval_safety_decision else "",
+        ]
+    )
+
+    return {
+        "schema_version": _APPROVED_RESTART_EXECUTION_SCHEMA_VERSION,
+        "run_id": _normalize_text(run_id, default=""),
+        "objective_id": objective_id,
+        "automatic_restart_execution_status": (
+            execution_status
+            if execution_status in _APPROVED_RESTART_EXECUTION_STATUSES
+            else "not_executed"
+        ),
+        "automatic_restart_execution_reason": execution_reason_codes[0],
+        "automatic_restart_execution_reason_codes": execution_reason_codes,
+        "automatic_restart_attempted": bool(automatic_restart_attempted),
+        "automatic_restart_executed": bool(automatic_restart_executed),
+        "automatic_restart_count": automatic_restart_count,
+        "automatic_restart_limit": 1,
+        "automatic_restart_additional_execution_blocked": True,
+        "automatic_restart_chained": False,
+        "automatic_restart_target_pr_id": restart_target_pr_id,
+        "automatic_restart_launch_pr_id": restart_launch_pr_id,
+        "automatic_restart_run_id": restart_run_id,
+        "automatic_restart_result_status": restart_result_status,
+        "automatic_restart_stdout_path": restart_stdout_path,
+        "automatic_restart_stderr_path": restart_stderr_path,
+        "automatic_restart_artifacts_count": restart_artifacts_count,
+        "automatic_restart_error": restart_error,
+        "automatic_restart_triggered_at": _iso_now(now) if automatic_restart_attempted else "",
+        "dry_run": bool(dry_run),
+        "approved_restart_status": approved_restart_status,
+        "approved_restart_validity": approved_restart_validity,
+        "restart_decision": restart_decision,
+        "approved_next_direction": approved_next_direction,
+        "approved_target_lane": approved_target_lane,
+        "approved_action_class": approved_action_class,
+        "approval_response_status": approval_response_status,
+        "response_decision_class": response_decision_class,
+        "response_command_normalized": response_command_normalized,
+        "approval_safety_status": approval_safety_status,
+        "approval_safety_decision": approval_safety_decision,
+        "approval_pending_duplicate": bool(
+            approval_safety.get("approval_pending_duplicate", False)
+        ),
+        "approval_cooldown_active": bool(
+            approval_safety.get("approval_cooldown_active", False)
+        ),
+        "approval_loop_suspected": bool(
+            approval_safety.get("approval_loop_suspected", False)
+        ),
+        "approval_delivery_blocked_by_safety": bool(
+            approval_safety.get("approval_delivery_blocked_by_safety", False)
+        ),
+        "approval_delivery_deferred_by_safety": bool(
+            approval_safety.get("approval_delivery_deferred_by_safety", False)
+        ),
+        "supporting_compact_truth_refs": supporting_compact_truth_refs,
+    }
+
+
 def _collect_execution_result_contract_records(
     manifest_units: list[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -6128,6 +6653,7 @@ class PlannedExecutionRunner:
         retry_context: Mapping[str, Any] | None = None,
         policy_snapshot: Mapping[str, Any] | None = None,
         approval_input: Mapping[str, Any] | None = None,
+        approval_response_input: Mapping[str, Any] | None = None,
         github_read_evidence: Mapping[str, Any] | None = None,
         execution_repo_path: str | Path | None = None,
     ) -> dict[str, Any]:
@@ -6521,6 +7047,13 @@ class PlannedExecutionRunner:
                 "retention_manifest": "retention_manifest.json",
                 "artifact_retention_contract": "artifact_retention_contract.json",
                 "fleet_safety_control_contract": "fleet_safety_control_contract.json",
+                "approval_email_delivery_contract": "approval_email_delivery_contract.json",
+                "approval_runtime_rules_contract": "approval_runtime_rules_contract.json",
+                "approval_delivery_handoff_contract": "approval_delivery_handoff_contract.json",
+                "approval_response_contract": "approval_response_contract.json",
+                "approved_restart_contract": "approved_restart_contract.json",
+                "approval_safety_contract": "approval_safety_contract.json",
+                "approved_restart_execution_contract": "approved_restart_execution_contract.json",
             },
             "pr_units": manifest_units,
         }
@@ -8653,6 +9186,159 @@ class PlannedExecutionRunner:
             run_state_payload=run_state_payload,
             fleet_safety_control_payload=fleet_safety_control_contract_payload,
         )
+        approval_email_delivery_contract_path = (
+            run_root / "approval_email_delivery_contract.json"
+        )
+        approval_email_delivery_contract_payload = (
+            build_approval_email_delivery_contract_surface(
+                run_id=resolved_job_id,
+                objective_contract_payload=objective_contract_payload,
+                fleet_safety_control_payload=fleet_safety_control_contract_payload,
+                failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
+                lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+                loop_hardening_contract_payload=loop_hardening_contract_payload,
+                endgame_closure_contract_payload=endgame_closure_contract_payload,
+                retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
+                artifact_retention_contract_payload=artifact_retention_contract_payload,
+                run_state_payload=run_state_payload,
+                contract_artifact_index_payload=manifest.get("contract_artifact_index"),
+                delivery_adapter=_approval_delivery_noop_adapter,
+            )
+        )
+        _write_json(
+            approval_email_delivery_contract_path,
+            approval_email_delivery_contract_payload,
+        )
+        run_state_payload = _augment_run_state_with_approval_email_delivery_summary(
+            run_state_payload=run_state_payload,
+            approval_email_delivery_payload=approval_email_delivery_contract_payload,
+        )
+        approval_runtime_rules_contract_path = (
+            run_root / "approval_runtime_rules_contract.json"
+        )
+        approval_runtime_rules_contract_payload = (
+            build_approval_runtime_rules_contract_surface(
+                run_id=resolved_job_id,
+                objective_contract_payload=objective_contract_payload,
+                approval_email_delivery_payload=approval_email_delivery_contract_payload,
+                contract_artifact_index_payload=manifest.get("contract_artifact_index"),
+            )
+        )
+        _write_json(
+            approval_runtime_rules_contract_path,
+            approval_runtime_rules_contract_payload,
+        )
+        run_state_payload = _augment_run_state_with_approval_runtime_rules_summary(
+            run_state_payload=run_state_payload,
+            approval_runtime_rules_payload=approval_runtime_rules_contract_payload,
+        )
+        approval_delivery_handoff_contract_path = (
+            run_root / "approval_delivery_handoff_contract.json"
+        )
+        approval_delivery_handoff_contract_payload = (
+            build_approval_delivery_handoff_contract_surface(
+                run_id=resolved_job_id,
+                objective_contract_payload=objective_contract_payload,
+                approval_email_delivery_payload=approval_email_delivery_contract_payload,
+                approval_runtime_rules_payload=approval_runtime_rules_contract_payload,
+                fleet_safety_control_payload=fleet_safety_control_contract_payload,
+                failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
+                lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+                run_state_payload=run_state_payload,
+                contract_artifact_index_payload=manifest.get("contract_artifact_index"),
+            )
+        )
+        _write_json(
+            approval_delivery_handoff_contract_path,
+            approval_delivery_handoff_contract_payload,
+        )
+        run_state_payload = _augment_run_state_with_approval_delivery_handoff_summary(
+            run_state_payload=run_state_payload,
+            approval_delivery_handoff_payload=approval_delivery_handoff_contract_payload,
+        )
+        approval_response_contract_path = run_root / "approval_response_contract.json"
+        approval_response_contract_payload = build_approval_response_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            approval_delivery_handoff_payload=approval_delivery_handoff_contract_payload,
+            approval_email_delivery_payload=approval_email_delivery_contract_payload,
+            approval_runtime_rules_payload=approval_runtime_rules_contract_payload,
+            fleet_safety_control_payload=fleet_safety_control_contract_payload,
+            run_state_payload=run_state_payload,
+            contract_artifact_index_payload=manifest.get("contract_artifact_index"),
+            response_payload=approval_response_input,
+        )
+        _write_json(
+            approval_response_contract_path,
+            approval_response_contract_payload,
+        )
+        run_state_payload = _augment_run_state_with_approval_response_summary(
+            run_state_payload=run_state_payload,
+            approval_response_payload=approval_response_contract_payload,
+        )
+        approved_restart_contract_path = run_root / "approved_restart_contract.json"
+        approved_restart_contract_payload = build_approved_restart_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            approval_response_payload=approval_response_contract_payload,
+            approval_delivery_handoff_payload=approval_delivery_handoff_contract_payload,
+            approval_email_delivery_payload=approval_email_delivery_contract_payload,
+            fleet_safety_control_payload=fleet_safety_control_contract_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
+            lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+            run_state_payload=run_state_payload,
+            contract_artifact_index_payload=manifest.get("contract_artifact_index"),
+        )
+        _write_json(
+            approved_restart_contract_path,
+            approved_restart_contract_payload,
+        )
+        run_state_payload = _augment_run_state_with_approved_restart_summary(
+            run_state_payload=run_state_payload,
+            approved_restart_payload=approved_restart_contract_payload,
+        )
+        approval_safety_contract_path = run_root / "approval_safety_contract.json"
+        approval_safety_contract_payload = build_approval_safety_contract_surface(
+            run_id=resolved_job_id,
+            objective_contract_payload=objective_contract_payload,
+            approval_email_delivery_payload=approval_email_delivery_contract_payload,
+            approval_delivery_handoff_payload=approval_delivery_handoff_contract_payload,
+            approval_response_payload=approval_response_contract_payload,
+            approved_restart_payload=approved_restart_contract_payload,
+            lane_stabilization_contract_payload=lane_stabilization_contract_payload,
+            failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
+            approval_runtime_rules_payload=approval_runtime_rules_contract_payload,
+            run_state_payload=run_state_payload,
+            contract_artifact_index_payload=manifest.get("contract_artifact_index"),
+        )
+        _write_json(
+            approval_safety_contract_path,
+            approval_safety_contract_payload,
+        )
+        run_state_payload = _augment_run_state_with_approval_safety_summary(
+            run_state_payload=run_state_payload,
+            approval_safety_payload=approval_safety_contract_payload,
+        )
+        approved_restart_execution_contract_path = (
+            run_root / "approved_restart_execution_contract.json"
+        )
+        approved_restart_execution_contract_payload = (
+            _build_approved_restart_execution_contract_surface(
+                run_id=resolved_job_id,
+                objective_contract_payload=objective_contract_payload,
+                approved_restart_payload=approved_restart_contract_payload,
+                approval_response_payload=approval_response_contract_payload,
+                approval_safety_payload=approval_safety_contract_payload,
+                manifest_units=manifest_units,
+                adapter=self.adapter,
+                dry_run=dry_run,
+                now=self.now,
+            )
+        )
+        _write_json(
+            approved_restart_execution_contract_path,
+            approved_restart_execution_contract_payload,
+        )
         run_state_payload = _augment_run_state_with_operator_explainability(
             run_state_payload=run_state_payload,
         )
@@ -8675,6 +9361,62 @@ class PlannedExecutionRunner:
         manifest["fleet_safety_control_contract_path"] = str(
             fleet_safety_control_contract_path
         )
+        manifest["approval_email_delivery_contract_summary"] = (
+            build_approval_email_delivery_summary_surface(
+                approval_email_delivery_contract_payload
+            )
+        )
+        manifest["approval_email_delivery_contract_path"] = str(
+            approval_email_delivery_contract_path
+        )
+        manifest["approval_runtime_rules_contract_summary"] = (
+            build_approval_runtime_rules_summary_surface(
+                approval_runtime_rules_contract_payload
+            )
+        )
+        manifest["approval_runtime_rules_contract_path"] = str(
+            approval_runtime_rules_contract_path
+        )
+        manifest["approval_delivery_handoff_contract_summary"] = (
+            build_approval_delivery_handoff_summary_surface(
+                approval_delivery_handoff_contract_payload
+            )
+        )
+        manifest["approval_delivery_handoff_contract_path"] = str(
+            approval_delivery_handoff_contract_path
+        )
+        manifest["approval_response_contract_summary"] = (
+            build_approval_response_summary_surface(
+                approval_response_contract_payload
+            )
+        )
+        manifest["approval_response_contract_path"] = str(
+            approval_response_contract_path
+        )
+        manifest["approved_restart_contract_summary"] = (
+            build_approved_restart_summary_surface(
+                approved_restart_contract_payload
+            )
+        )
+        manifest["approved_restart_contract_path"] = str(
+            approved_restart_contract_path
+        )
+        manifest["approval_safety_contract_summary"] = (
+            build_approval_safety_summary_surface(
+                approval_safety_contract_payload
+            )
+        )
+        manifest["approval_safety_contract_path"] = str(
+            approval_safety_contract_path
+        )
+        manifest["approved_restart_execution_contract_summary"] = (
+            _build_approved_restart_execution_summary_surface(
+                approved_restart_execution_contract_payload
+            )
+        )
+        manifest["approved_restart_execution_contract_path"] = str(
+            approved_restart_execution_contract_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -8684,6 +9426,24 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["fleet_safety_control_contract"] = manifest.get(
             "fleet_safety_control_contract_summary"
         )
+        contract_summaries_by_role["approval_email_delivery_contract"] = manifest.get(
+            "approval_email_delivery_contract_summary"
+        )
+        contract_summaries_by_role["approval_runtime_rules_contract"] = manifest.get(
+            "approval_runtime_rules_contract_summary"
+        )
+        contract_summaries_by_role["approval_delivery_handoff_contract"] = manifest.get(
+            "approval_delivery_handoff_contract_summary"
+        )
+        contract_summaries_by_role["approval_response_contract"] = manifest.get(
+            "approval_response_contract_summary"
+        )
+        contract_summaries_by_role["approved_restart_contract"] = manifest.get(
+            "approved_restart_contract_summary"
+        )
+        contract_summaries_by_role["approval_safety_contract"] = manifest.get(
+            "approval_safety_contract_summary"
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -8692,6 +9452,24 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["fleet_safety_control_contract"] = manifest.get(
             "fleet_safety_control_contract_path"
+        )
+        contract_paths_by_role["approval_email_delivery_contract"] = manifest.get(
+            "approval_email_delivery_contract_path"
+        )
+        contract_paths_by_role["approval_runtime_rules_contract"] = manifest.get(
+            "approval_runtime_rules_contract_path"
+        )
+        contract_paths_by_role["approval_delivery_handoff_contract"] = manifest.get(
+            "approval_delivery_handoff_contract_path"
+        )
+        contract_paths_by_role["approval_response_contract"] = manifest.get(
+            "approval_response_contract_path"
+        )
+        contract_paths_by_role["approved_restart_contract"] = manifest.get(
+            "approved_restart_contract_path"
+        )
+        contract_paths_by_role["approval_safety_contract"] = manifest.get(
+            "approval_safety_contract_path"
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,

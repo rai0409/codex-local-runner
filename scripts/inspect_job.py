@@ -54,6 +54,21 @@ from automation.orchestration.artifact_retention import (
 from automation.orchestration.fleet_safety_control import (
     build_fleet_safety_control_run_state_summary_surface,
 )  # noqa: E402
+from automation.orchestration.approval_email_delivery import (
+    build_approval_email_delivery_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.approval_runtime_policy import (
+    build_approval_runtime_rules_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.approval_delivery_adapter import (
+    build_approval_delivery_handoff_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.approval_response_ingest import (
+    build_approval_response_run_state_summary_surface,
+)  # noqa: E402
+from automation.orchestration.approval_response_ingest import (
+    build_approved_restart_run_state_summary_surface,
+)  # noqa: E402
 from automation.orchestration.lifecycle_terminal_state import build_lifecycle_terminal_state_surface  # noqa: E402
 from automation.orchestration.objective_contract import build_objective_run_state_summary_surface  # noqa: E402
 from automation.orchestration.operator_explainability import build_operator_explainability_surface  # noqa: E402
@@ -574,6 +589,47 @@ def _with_operator_explainability(run_state: dict[str, Any]) -> dict[str, Any]:
             **artifact_retention_surface,
         }
     )
+    approval_email_delivery_surface = (
+        build_approval_email_delivery_run_state_summary_surface(
+            {
+                **run_state,
+                **fleet_safety_surface,
+            }
+        )
+    )
+    approval_runtime_rules_surface = (
+        build_approval_runtime_rules_run_state_summary_surface(
+            {
+                **run_state,
+                **approval_email_delivery_surface,
+            }
+        )
+    )
+    approval_delivery_handoff_surface = (
+        build_approval_delivery_handoff_run_state_summary_surface(
+            {
+                **run_state,
+                **approval_email_delivery_surface,
+                **approval_runtime_rules_surface,
+            }
+        )
+    )
+    approval_response_surface = (
+        build_approval_response_run_state_summary_surface(
+            {
+                **run_state,
+                **approval_delivery_handoff_surface,
+            }
+        )
+    )
+    approved_restart_surface = (
+        build_approved_restart_run_state_summary_surface(
+            {
+                **run_state,
+                **approval_response_surface,
+            }
+        )
+    )
     merged = {
         **run_state,
         **objective_surface,
@@ -596,6 +652,11 @@ def _with_operator_explainability(run_state: dict[str, Any]) -> dict[str, Any]:
         **failure_bucketing_hardening_surface,
         **artifact_retention_surface,
         **fleet_safety_surface,
+        **approval_email_delivery_surface,
+        **approval_runtime_rules_surface,
+        **approval_delivery_handoff_surface,
+        **approval_response_surface,
+        **approved_restart_surface,
     }
     return {
         **merged,
@@ -1584,6 +1645,200 @@ def _extract_fleet_safety_control_contract_summary(
     }
 
 
+def _extract_approval_email_delivery_contract_summary(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "approval_email_status": None,
+            "approval_email_validity": None,
+            "approval_email_confidence": None,
+            "approval_required": None,
+            "proposed_next_direction": None,
+            "delivery_mode": None,
+            "delivery_outcome": None,
+            "approval_email_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "approval_email_status": payload.get("approval_email_status"),
+        "approval_email_validity": payload.get("approval_email_validity"),
+        "approval_email_confidence": payload.get("approval_email_confidence"),
+        "approval_required": payload.get("approval_required"),
+        "proposed_next_direction": payload.get("proposed_next_direction"),
+        "delivery_mode": payload.get("delivery_mode"),
+        "delivery_outcome": payload.get("delivery_outcome"),
+        "approval_email_primary_reason": payload.get("approval_email_primary_reason"),
+    }
+
+
+def _extract_approval_runtime_rules_contract_summary(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "runtime_rules_version": None,
+            "direction_rule_mode": None,
+            "email_template_mode": None,
+            "reply_command_mode": None,
+            "truncation_policy_mode": None,
+            "runtime_rules_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "runtime_rules_version": payload.get("runtime_rules_version"),
+        "direction_rule_mode": payload.get("direction_rule_mode"),
+        "email_template_mode": payload.get("email_template_mode"),
+        "reply_command_mode": payload.get("reply_command_mode"),
+        "truncation_policy_mode": payload.get("truncation_policy_mode"),
+        "runtime_rules_primary_reason": payload.get("runtime_rules_primary_reason"),
+    }
+
+
+def _extract_approval_delivery_handoff_contract_summary(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "approval_delivery_handoff_status": None,
+            "approval_delivery_handoff_validity": None,
+            "approval_delivery_handoff_confidence": None,
+            "delivery_mode": None,
+            "delivery_outcome": None,
+            "approval_pending_human_response": None,
+            "approval_delivery_handoff_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "approval_delivery_handoff_status": payload.get(
+            "approval_delivery_handoff_status"
+        ),
+        "approval_delivery_handoff_validity": payload.get(
+            "approval_delivery_handoff_validity"
+        ),
+        "approval_delivery_handoff_confidence": payload.get(
+            "approval_delivery_handoff_confidence"
+        ),
+        "delivery_mode": payload.get("delivery_mode"),
+        "delivery_outcome": payload.get("delivery_outcome"),
+        "approval_pending_human_response": payload.get(
+            "approval_pending_human_response"
+        ),
+        "approval_delivery_handoff_primary_reason": payload.get(
+            "approval_delivery_handoff_primary_reason"
+        ),
+    }
+
+
+def _extract_approval_response_contract_summary(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "approval_response_status": None,
+            "approval_response_validity": None,
+            "approval_response_confidence": None,
+            "response_command_normalized": None,
+            "response_decision_class": None,
+            "approval_response_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "approval_response_status": payload.get("approval_response_status"),
+        "approval_response_validity": payload.get("approval_response_validity"),
+        "approval_response_confidence": payload.get("approval_response_confidence"),
+        "response_command_normalized": payload.get("response_command_normalized"),
+        "response_decision_class": payload.get("response_decision_class"),
+        "approval_response_primary_reason": payload.get("approval_response_primary_reason"),
+    }
+
+
+def _extract_approved_restart_contract_summary(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "approved_restart_status": None,
+            "approved_restart_validity": None,
+            "approved_restart_confidence": None,
+            "restart_decision": None,
+            "restart_allowed": None,
+            "restart_blocked": None,
+            "restart_held": None,
+            "approved_next_direction": None,
+            "approved_restart_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "approved_restart_status": payload.get("approved_restart_status"),
+        "approved_restart_validity": payload.get("approved_restart_validity"),
+        "approved_restart_confidence": payload.get("approved_restart_confidence"),
+        "restart_decision": payload.get("restart_decision"),
+        "restart_allowed": payload.get("restart_allowed"),
+        "restart_blocked": payload.get("restart_blocked"),
+        "restart_held": payload.get("restart_held"),
+        "approved_next_direction": payload.get("approved_next_direction"),
+        "approved_restart_primary_reason": payload.get("approved_restart_primary_reason"),
+    }
+
+
+def _extract_approval_safety_contract_summary(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": None,
+            "run_id": None,
+            "objective_id": None,
+            "approval_safety_status": None,
+            "approval_safety_validity": None,
+            "approval_safety_confidence": None,
+            "approval_safety_decision": None,
+            "approval_duplicate_detected": None,
+            "approval_cooldown_active": None,
+            "approval_loop_suspected": None,
+            "approval_safety_primary_reason": None,
+        }
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "objective_id": payload.get("objective_id"),
+        "approval_safety_status": payload.get("approval_safety_status"),
+        "approval_safety_validity": payload.get("approval_safety_validity"),
+        "approval_safety_confidence": payload.get("approval_safety_confidence"),
+        "approval_safety_decision": payload.get("approval_safety_decision"),
+        "approval_duplicate_detected": payload.get("approval_duplicate_detected"),
+        "approval_cooldown_active": payload.get("approval_cooldown_active"),
+        "approval_loop_suspected": payload.get("approval_loop_suspected"),
+        "approval_safety_primary_reason": payload.get("approval_safety_primary_reason"),
+    }
+
+
 def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
     result_path = Path(str(result_path_value).strip()) if isinstance(result_path_value, str) else None
     if result_path is None or not result_path.exists():
@@ -1621,6 +1876,12 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
                 "retention_manifest": None,
                 "artifact_retention_contract": None,
                 "fleet_safety_control_contract": None,
+                "approval_email_delivery_contract": None,
+                "approval_runtime_rules_contract": None,
+                "approval_delivery_handoff_contract": None,
+                "approval_response_contract": None,
+                "approved_restart_contract": None,
+                "approval_safety_contract": None,
             },
             "checkpoint_decision": _extract_checkpoint_summary(None),
             "commit_decision": _extract_decision_summary(None),
@@ -1658,6 +1919,24 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
             ),
             "fleet_safety_control_contract": _extract_fleet_safety_control_contract_summary(
                 None
+            ),
+            "approval_email_delivery_contract": (
+                _extract_approval_email_delivery_contract_summary(None)
+            ),
+            "approval_runtime_rules_contract": (
+                _extract_approval_runtime_rules_contract_summary(None)
+            ),
+            "approval_delivery_handoff_contract": (
+                _extract_approval_delivery_handoff_contract_summary(None)
+            ),
+            "approval_response_contract": (
+                _extract_approval_response_contract_summary(None)
+            ),
+            "approved_restart_contract": (
+                _extract_approved_restart_contract_summary(None)
+            ),
+            "approval_safety_contract": (
+                _extract_approval_safety_contract_summary(None)
             ),
             "run_state": _with_operator_explainability({
                 "state": None,
@@ -1969,6 +2248,12 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
                 "failure_bucketing_hardening_present": None,
                 "artifact_retention_present": None,
                 "fleet_safety_control_present": None,
+                "approval_email_delivery_present": None,
+                "approval_runtime_rules_present": None,
+                "approval_delivery_handoff_present": None,
+                "approval_response_present": None,
+                "approved_restart_present": None,
+                "approval_safety_present": None,
             }),
         }
 
@@ -2008,6 +2293,14 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
     retention_manifest_path = run_root / "retention_manifest.json"
     artifact_retention_contract_path = run_root / "artifact_retention_contract.json"
     fleet_safety_control_contract_path = run_root / "fleet_safety_control_contract.json"
+    approval_email_delivery_contract_path = run_root / "approval_email_delivery_contract.json"
+    approval_runtime_rules_contract_path = run_root / "approval_runtime_rules_contract.json"
+    approval_delivery_handoff_contract_path = (
+        run_root / "approval_delivery_handoff_contract.json"
+    )
+    approval_response_contract_path = run_root / "approval_response_contract.json"
+    approved_restart_contract_path = run_root / "approved_restart_contract.json"
+    approval_safety_contract_path = run_root / "approval_safety_contract.json"
 
     checkpoint_payload = _read_json_object(str(checkpoint_path))
     commit_payload = _read_json_object(str(commit_path))
@@ -2058,6 +2351,24 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
     )
     fleet_safety_control_contract_payload = _read_json_object(
         str(fleet_safety_control_contract_path)
+    )
+    approval_email_delivery_contract_payload = _read_json_object(
+        str(approval_email_delivery_contract_path)
+    )
+    approval_runtime_rules_contract_payload = _read_json_object(
+        str(approval_runtime_rules_contract_path)
+    )
+    approval_delivery_handoff_contract_payload = _read_json_object(
+        str(approval_delivery_handoff_contract_path)
+    )
+    approval_response_contract_payload = _read_json_object(
+        str(approval_response_contract_path)
+    )
+    approved_restart_contract_payload = _read_json_object(
+        str(approved_restart_contract_path)
+    )
+    approval_safety_contract_payload = _read_json_object(
+        str(approval_safety_contract_path)
     )
 
     return {
@@ -2158,6 +2469,36 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
                 if fleet_safety_control_contract_path.exists()
                 else None
             ),
+            "approval_email_delivery_contract": (
+                str(approval_email_delivery_contract_path)
+                if approval_email_delivery_contract_path.exists()
+                else None
+            ),
+            "approval_runtime_rules_contract": (
+                str(approval_runtime_rules_contract_path)
+                if approval_runtime_rules_contract_path.exists()
+                else None
+            ),
+            "approval_delivery_handoff_contract": (
+                str(approval_delivery_handoff_contract_path)
+                if approval_delivery_handoff_contract_path.exists()
+                else None
+            ),
+            "approval_response_contract": (
+                str(approval_response_contract_path)
+                if approval_response_contract_path.exists()
+                else None
+            ),
+            "approved_restart_contract": (
+                str(approved_restart_contract_path)
+                if approved_restart_contract_path.exists()
+                else None
+            ),
+            "approval_safety_contract": (
+                str(approval_safety_contract_path)
+                if approval_safety_contract_path.exists()
+                else None
+            ),
         },
         "checkpoint_decision": _extract_checkpoint_summary(checkpoint_payload),
         "commit_decision": _extract_decision_summary(commit_payload),
@@ -2227,6 +2568,36 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
         ),
         "fleet_safety_control_contract": _extract_fleet_safety_control_contract_summary(
             fleet_safety_control_contract_payload
+        ),
+        "approval_email_delivery_contract": (
+            _extract_approval_email_delivery_contract_summary(
+                approval_email_delivery_contract_payload
+            )
+        ),
+        "approval_runtime_rules_contract": (
+            _extract_approval_runtime_rules_contract_summary(
+                approval_runtime_rules_contract_payload
+            )
+        ),
+        "approval_delivery_handoff_contract": (
+            _extract_approval_delivery_handoff_contract_summary(
+                approval_delivery_handoff_contract_payload
+            )
+        ),
+        "approval_response_contract": (
+            _extract_approval_response_contract_summary(
+                approval_response_contract_payload
+            )
+        ),
+        "approved_restart_contract": (
+            _extract_approved_restart_contract_summary(
+                approved_restart_contract_payload
+            )
+        ),
+        "approval_safety_contract": (
+            _extract_approval_safety_contract_summary(
+                approval_safety_contract_payload
+            )
         ),
         "run_state": _with_operator_explainability({
             "state": (
@@ -3757,6 +4128,36 @@ def _read_lifecycle_artifacts(result_path_value: Any) -> dict[str, Any]:
                 if isinstance(run_state_payload, dict)
                 else None
             ),
+            "approval_email_delivery_present": (
+                run_state_payload.get("approval_email_delivery_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_runtime_rules_present": (
+                run_state_payload.get("approval_runtime_rules_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_delivery_handoff_present": (
+                run_state_payload.get("approval_delivery_handoff_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_response_present": (
+                run_state_payload.get("approval_response_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approved_restart_present": (
+                run_state_payload.get("approved_restart_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
+            "approval_safety_present": (
+                run_state_payload.get("approval_safety_present")
+                if isinstance(run_state_payload, dict)
+                else None
+            ),
             "lifecycle_closure_status": (
                 run_state_payload.get("lifecycle_closure_status")
                 if isinstance(run_state_payload, dict)
@@ -5232,6 +5633,42 @@ def _format_human(output: dict[str, Any]) -> str:
                 "fleet_safety_control_present"
             )
         ),
+        "lifecycle_approval_email_delivery_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "approval_email_delivery_present"
+            )
+        ),
+        "lifecycle_approval_runtime_rules_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "approval_runtime_rules_present"
+            )
+        ),
+        "lifecycle_approval_delivery_handoff_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "approval_delivery_handoff_present"
+            )
+        ),
+        "lifecycle_approval_response_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "approval_response_present"
+            )
+        ),
+        "lifecycle_approved_restart_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "approved_restart_present"
+            )
+        ),
+        "lifecycle_approval_safety_present: "
+        + _fmt(
+            output["lifecycle_artifacts"]["run_state"].get(
+                "approval_safety_present"
+            )
+        ),
         "lifecycle_lane_status: "
         + _fmt(output["lifecycle_artifacts"]["run_state"].get("lane_status")),
         "lifecycle_lane_decision: "
@@ -5814,6 +6251,156 @@ def _format_human(output: dict[str, Any]) -> str:
                 "fleet_safety_primary_reason"
             )
         ),
+        "lifecycle_approval_email_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_email_delivery_contract"].get(
+                "approval_email_status"
+            )
+        ),
+        "lifecycle_approval_next_direction_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_email_delivery_contract"].get(
+                "proposed_next_direction"
+            )
+        ),
+        "lifecycle_approval_delivery_outcome_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_email_delivery_contract"].get(
+                "delivery_outcome"
+            )
+        ),
+        "lifecycle_approval_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_email_delivery_contract"].get(
+                "approval_email_primary_reason"
+            )
+        ),
+        "lifecycle_runtime_rules_version_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_runtime_rules_contract"].get(
+                "runtime_rules_version"
+            )
+        ),
+        "lifecycle_runtime_reply_command_mode_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_runtime_rules_contract"].get(
+                "reply_command_mode"
+            )
+        ),
+        "lifecycle_runtime_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_runtime_rules_contract"].get(
+                "runtime_rules_primary_reason"
+            )
+        ),
+        "lifecycle_approval_handoff_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_delivery_handoff_contract"].get(
+                "approval_delivery_handoff_status"
+            )
+        ),
+        "lifecycle_approval_handoff_mode_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_delivery_handoff_contract"].get(
+                "delivery_mode"
+            )
+        ),
+        "lifecycle_approval_handoff_outcome_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_delivery_handoff_contract"].get(
+                "delivery_outcome"
+            )
+        ),
+        "lifecycle_approval_handoff_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_delivery_handoff_contract"].get(
+                "approval_delivery_handoff_primary_reason"
+            )
+        ),
+        "lifecycle_approval_response_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_response_contract"].get(
+                "approval_response_status"
+            )
+        ),
+        "lifecycle_approval_response_command_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_response_contract"].get(
+                "response_command_normalized"
+            )
+        ),
+        "lifecycle_approval_response_decision_class_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_response_contract"].get(
+                "response_decision_class"
+            )
+        ),
+        "lifecycle_approval_response_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_response_contract"].get(
+                "approval_response_primary_reason"
+            )
+        ),
+        "lifecycle_approved_restart_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approved_restart_contract"].get(
+                "approved_restart_status"
+            )
+        ),
+        "lifecycle_approved_restart_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approved_restart_contract"].get(
+                "restart_decision"
+            )
+        ),
+        "lifecycle_approved_restart_next_direction_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approved_restart_contract"].get(
+                "approved_next_direction"
+            )
+        ),
+        "lifecycle_approved_restart_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approved_restart_contract"].get(
+                "approved_restart_primary_reason"
+            )
+        ),
+        "lifecycle_approval_safety_status_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_safety_contract"].get(
+                "approval_safety_status"
+            )
+        ),
+        "lifecycle_approval_safety_decision_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_safety_contract"].get(
+                "approval_safety_decision"
+            )
+        ),
+        "lifecycle_approval_safety_duplicate_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_safety_contract"].get(
+                "approval_duplicate_detected"
+            )
+        ),
+        "lifecycle_approval_safety_cooldown_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_safety_contract"].get(
+                "approval_cooldown_active"
+            )
+        ),
+        "lifecycle_approval_safety_loop_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_safety_contract"].get(
+                "approval_loop_suspected"
+            )
+        ),
+        "lifecycle_approval_safety_primary_reason_artifact: "
+        + _fmt(
+            output["lifecycle_artifacts"]["approval_safety_contract"].get(
+                "approval_safety_primary_reason"
+            )
+        ),
         f"lifecycle_checkpoint_decision_path: {_fmt(output['lifecycle_artifacts']['paths'].get('checkpoint_decision'))}",
         f"lifecycle_commit_decision_path: {_fmt(output['lifecycle_artifacts']['paths'].get('commit_decision'))}",
         f"lifecycle_merge_decision_path: {_fmt(output['lifecycle_artifacts']['paths'].get('merge_decision'))}",
@@ -5846,6 +6433,12 @@ def _format_human(output: dict[str, Any]) -> str:
         f"lifecycle_retention_manifest_path: {_fmt(output['lifecycle_artifacts']['paths'].get('retention_manifest'))}",
         f"lifecycle_artifact_retention_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('artifact_retention_contract'))}",
         f"lifecycle_fleet_safety_control_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('fleet_safety_control_contract'))}",
+        f"lifecycle_approval_email_delivery_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('approval_email_delivery_contract'))}",
+        f"lifecycle_approval_runtime_rules_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('approval_runtime_rules_contract'))}",
+        f"lifecycle_approval_delivery_handoff_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('approval_delivery_handoff_contract'))}",
+        f"lifecycle_approval_response_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('approval_response_contract'))}",
+        f"lifecycle_approved_restart_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('approved_restart_contract'))}",
+        f"lifecycle_approval_safety_contract_path: {_fmt(output['lifecycle_artifacts']['paths'].get('approval_safety_contract'))}",
     ]
     return "\n".join(lines)
 

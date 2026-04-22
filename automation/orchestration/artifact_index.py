@@ -28,6 +28,12 @@ CONTRACT_ARTIFACT_ROLES = (
     "retention_manifest",
     "artifact_retention_contract",
     "fleet_safety_control_contract",
+    "approval_email_delivery_contract",
+    "approval_runtime_rules_contract",
+    "approval_delivery_handoff_contract",
+    "approval_response_contract",
+    "approved_restart_contract",
+    "approval_safety_contract",
 )
 
 

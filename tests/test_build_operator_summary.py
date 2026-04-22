@@ -2765,6 +2765,9 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
                         "failure_bucketing_hardening_present": True,
                         "artifact_retention_present": True,
                         "fleet_safety_control_present": True,
+                        "approval_email_delivery_present": True,
+                        "approval_runtime_rules_present": True,
+                        "approval_safety_present": True,
                     },
                     ensure_ascii=False,
                     indent=2,
@@ -2898,6 +2901,64 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (run_root / "approval_email_delivery_contract.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "v1",
+                        "run_id": "job-observability-summary",
+                        "objective_id": "objective-observability-summary",
+                        "approval_email_status": "required",
+                        "approval_email_validity": "valid",
+                        "approval_email_confidence": "high",
+                        "approval_required": True,
+                        "proposed_next_direction": "replan_preparation",
+                        "delivery_mode": "gmail_send",
+                        "delivery_outcome": "blocked",
+                        "approval_email_primary_reason": "restart_blocked_by_fleet_safety",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (run_root / "approval_runtime_rules_contract.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "v1",
+                        "run_id": "job-observability-summary",
+                        "objective_id": "objective-observability-summary",
+                        "runtime_rules_version": "v1",
+                        "direction_rule_mode": "deterministic_rules_v1",
+                        "email_template_mode": "deterministic_templates_v1",
+                        "reply_command_mode": "fixed_command_grammar_v1",
+                        "truncation_policy_mode": "compact_truncation_v1",
+                        "runtime_rules_primary_reason": "runtime_rules_ready",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (run_root / "approval_safety_contract.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "v1",
+                        "run_id": "job-observability-summary",
+                        "objective_id": "objective-observability-summary",
+                        "approval_safety_status": "cooldown_active",
+                        "approval_safety_validity": "valid",
+                        "approval_safety_confidence": "high",
+                        "approval_safety_decision": "defer_until_cooldown_expires",
+                        "approval_duplicate_detected": True,
+                        "approval_cooldown_active": True,
+                        "approval_loop_suspected": False,
+                        "approval_safety_primary_reason": "cooldown_window_active",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
             self._seed_job(
                 db_path=db_path,
                 job_id="job-observability-summary",
@@ -2931,10 +2992,16 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
         retention_manifest = summary["lifecycle_artifacts"]["retention_manifest"]
         artifact_retention = summary["lifecycle_artifacts"]["artifact_retention_contract"]
         fleet_safety = summary["lifecycle_artifacts"]["fleet_safety_control_contract"]
+        approval_email = summary["lifecycle_artifacts"]["approval_email_delivery_contract"]
+        runtime_rules = summary["lifecycle_artifacts"]["approval_runtime_rules_contract"]
+        approval_safety = summary["lifecycle_artifacts"]["approval_safety_contract"]
         self.assertTrue(run_state["observability_rollup_present"])
         self.assertTrue(run_state["failure_bucketing_hardening_present"])
         self.assertTrue(run_state["artifact_retention_present"])
         self.assertTrue(run_state["fleet_safety_control_present"])
+        self.assertTrue(run_state["approval_email_delivery_present"])
+        self.assertTrue(run_state["approval_runtime_rules_present"])
+        self.assertTrue(run_state["approval_safety_present"])
         self.assertEqual(observability["observability_status"], "partial")
         self.assertEqual(observability["run_terminal_class"], "terminal_non_success")
         self.assertEqual(failure_bucket["primary_failure_bucket"], "execution_failure")
@@ -2948,6 +3015,15 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
         self.assertEqual(artifact_retention["artifact_retention_status"], "ready")
         self.assertEqual(fleet_safety["fleet_safety_status"], "hold")
         self.assertEqual(fleet_safety["fleet_safety_decision"], "hold_for_review")
+        self.assertEqual(approval_email["approval_email_status"], "required")
+        self.assertEqual(approval_email["delivery_outcome"], "blocked")
+        self.assertEqual(runtime_rules["runtime_rules_version"], "v1")
+        self.assertEqual(runtime_rules["reply_command_mode"], "fixed_command_grammar_v1")
+        self.assertEqual(approval_safety["approval_safety_status"], "cooldown_active")
+        self.assertEqual(
+            approval_safety["approval_safety_decision"],
+            "defer_until_cooldown_expires",
+        )
         self.assertIsNotNone(summary["lifecycle_artifacts"]["paths"]["observability_rollup_contract"])
         self.assertIsNotNone(summary["lifecycle_artifacts"]["paths"]["failure_bucket_rollup"])
         self.assertIsNotNone(summary["lifecycle_artifacts"]["paths"]["fleet_run_rollup"])
@@ -2958,6 +3034,15 @@ class BuildOperatorSummaryCliTests(unittest.TestCase):
         self.assertIsNotNone(summary["lifecycle_artifacts"]["paths"]["artifact_retention_contract"])
         self.assertIsNotNone(
             summary["lifecycle_artifacts"]["paths"]["fleet_safety_control_contract"]
+        )
+        self.assertIsNotNone(
+            summary["lifecycle_artifacts"]["paths"]["approval_email_delivery_contract"]
+        )
+        self.assertIsNotNone(
+            summary["lifecycle_artifacts"]["paths"]["approval_runtime_rules_contract"]
+        )
+        self.assertIsNotNone(
+            summary["lifecycle_artifacts"]["paths"]["approval_safety_contract"]
         )
 
     def test_missing_job_exits_nonzero(self) -> None:
