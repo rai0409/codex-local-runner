@@ -1,0 +1,31 @@
+version: 1
+branch:
+  prefixes:
+    - pr
+    - fix
+    - ops
+    - runtime
+    - approval
+  separator: "-"
+  max_length: 64
+commit:
+  subject:
+    imperative: true
+    max_length: 72
+    allow_component_prefix: true
+    trailing_period: false
+pr:
+  title:
+    prefix_style: bracketed_component
+    max_length: 72
+  body:
+    sections:
+      - Summary
+      - What changed
+      - Validation
+      - Scope notes
+cleanup:
+  sync_main_first: true
+  delete_local_branch: true
+  delete_remote_branch_optional: true
+  fetch_prune_before_cleanup: true

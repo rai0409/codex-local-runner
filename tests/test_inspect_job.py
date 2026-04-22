@@ -2272,6 +2272,11 @@ class InspectJobCliTests(unittest.TestCase):
                         "failure_bucketing_hardening_present": True,
                         "artifact_retention_present": True,
                         "fleet_safety_control_present": True,
+                        "approval_email_delivery_present": True,
+                        "approval_runtime_rules_present": True,
+                        "approval_response_present": True,
+                        "approved_restart_present": True,
+                        "approval_safety_present": True,
                     },
                     ensure_ascii=False,
                     indent=2,
@@ -2405,6 +2410,103 @@ class InspectJobCliTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (run_root / "approval_email_delivery_contract.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "v1",
+                        "run_id": "job-observability",
+                        "objective_id": "objective-observability",
+                        "approval_email_status": "required",
+                        "approval_email_validity": "valid",
+                        "approval_email_confidence": "high",
+                        "approval_required": True,
+                        "proposed_next_direction": "replan_preparation",
+                        "delivery_mode": "gmail_send",
+                        "delivery_outcome": "blocked",
+                        "approval_email_primary_reason": "restart_blocked_by_fleet_safety",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (run_root / "approval_runtime_rules_contract.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "v1",
+                        "run_id": "job-observability",
+                        "objective_id": "objective-observability",
+                        "runtime_rules_version": "v1",
+                        "direction_rule_mode": "deterministic_rules_v1",
+                        "email_template_mode": "deterministic_templates_v1",
+                        "reply_command_mode": "fixed_command_grammar_v1",
+                        "truncation_policy_mode": "compact_truncation_v1",
+                        "runtime_rules_primary_reason": "runtime_rules_ready",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (run_root / "approval_response_contract.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "v1",
+                        "run_id": "job-observability",
+                        "objective_id": "objective-observability",
+                        "approval_response_status": "response_accepted",
+                        "approval_response_validity": "valid",
+                        "approval_response_confidence": "high",
+                        "response_command_normalized": "OK REPLAN",
+                        "response_decision_class": "approved",
+                        "approval_response_primary_reason": "response_approved_accepted",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (run_root / "approved_restart_contract.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "v1",
+                        "run_id": "job-observability",
+                        "objective_id": "objective-observability",
+                        "approved_restart_status": "restart_allowed",
+                        "approved_restart_validity": "valid",
+                        "approved_restart_confidence": "high",
+                        "restart_decision": "allow_replan_preparation",
+                        "restart_allowed": True,
+                        "restart_blocked": False,
+                        "restart_held": False,
+                        "approved_next_direction": "replan_preparation",
+                        "approved_restart_primary_reason": "restart_approved_and_allowed",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (run_root / "approval_safety_contract.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "v1",
+                        "run_id": "job-observability",
+                        "objective_id": "objective-observability",
+                        "approval_safety_status": "duplicate_pending",
+                        "approval_safety_validity": "valid",
+                        "approval_safety_confidence": "high",
+                        "approval_safety_decision": "block_until_response_or_clear",
+                        "approval_duplicate_detected": True,
+                        "approval_cooldown_active": False,
+                        "approval_loop_suspected": False,
+                        "approval_safety_primary_reason": "duplicate_pending_uncleared",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
 
             self._seed_job(
                 db_path=db_path,
@@ -2426,11 +2528,21 @@ class InspectJobCliTests(unittest.TestCase):
         retention_manifest = payload["lifecycle_artifacts"]["retention_manifest"]
         artifact_retention = payload["lifecycle_artifacts"]["artifact_retention_contract"]
         fleet_safety = payload["lifecycle_artifacts"]["fleet_safety_control_contract"]
+        approval_email = payload["lifecycle_artifacts"]["approval_email_delivery_contract"]
+        runtime_rules = payload["lifecycle_artifacts"]["approval_runtime_rules_contract"]
+        approval_response = payload["lifecycle_artifacts"]["approval_response_contract"]
+        approved_restart = payload["lifecycle_artifacts"]["approved_restart_contract"]
+        approval_safety = payload["lifecycle_artifacts"]["approval_safety_contract"]
 
         self.assertTrue(run_state["observability_rollup_present"])
         self.assertTrue(run_state["failure_bucketing_hardening_present"])
         self.assertTrue(run_state["artifact_retention_present"])
         self.assertTrue(run_state["fleet_safety_control_present"])
+        self.assertTrue(run_state["approval_email_delivery_present"])
+        self.assertTrue(run_state["approval_runtime_rules_present"])
+        self.assertTrue(run_state["approval_response_present"])
+        self.assertTrue(run_state["approved_restart_present"])
+        self.assertTrue(run_state["approval_safety_present"])
         self.assertEqual(observability["observability_status"], "partial")
         self.assertEqual(observability["run_terminal_class"], "terminal_non_success")
         self.assertEqual(failure_bucket["primary_failure_bucket"], "execution_failure")
@@ -2444,6 +2556,19 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertEqual(artifact_retention["artifact_retention_status"], "ready")
         self.assertEqual(fleet_safety["fleet_safety_status"], "freeze")
         self.assertEqual(fleet_safety["fleet_safety_decision"], "freeze_run")
+        self.assertEqual(approval_email["approval_email_status"], "required")
+        self.assertEqual(approval_email["delivery_outcome"], "blocked")
+        self.assertEqual(runtime_rules["runtime_rules_version"], "v1")
+        self.assertEqual(runtime_rules["reply_command_mode"], "fixed_command_grammar_v1")
+        self.assertEqual(approval_response["approval_response_status"], "response_accepted")
+        self.assertEqual(approval_response["response_command_normalized"], "OK REPLAN")
+        self.assertEqual(approved_restart["approved_restart_status"], "restart_allowed")
+        self.assertEqual(approved_restart["restart_decision"], "allow_replan_preparation")
+        self.assertEqual(approval_safety["approval_safety_status"], "duplicate_pending")
+        self.assertEqual(
+            approval_safety["approval_safety_decision"],
+            "block_until_response_or_clear",
+        )
         self.assertIsNotNone(payload["lifecycle_artifacts"]["paths"]["observability_rollup_contract"])
         self.assertIsNotNone(payload["lifecycle_artifacts"]["paths"]["failure_bucket_rollup"])
         self.assertIsNotNone(payload["lifecycle_artifacts"]["paths"]["fleet_run_rollup"])
@@ -2457,17 +2582,42 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertIsNotNone(
             payload["lifecycle_artifacts"]["paths"]["fleet_safety_control_contract"]
         )
+        self.assertIsNotNone(
+            payload["lifecycle_artifacts"]["paths"]["approval_email_delivery_contract"]
+        )
+        self.assertIsNotNone(
+            payload["lifecycle_artifacts"]["paths"]["approval_runtime_rules_contract"]
+        )
+        self.assertIsNotNone(
+            payload["lifecycle_artifacts"]["paths"]["approval_response_contract"]
+        )
+        self.assertIsNotNone(
+            payload["lifecycle_artifacts"]["paths"]["approved_restart_contract"]
+        )
+        self.assertIsNotNone(
+            payload["lifecycle_artifacts"]["paths"]["approval_safety_contract"]
+        )
 
         self.assertIn("lifecycle_observability_rollup_present:", human_proc.stdout)
         self.assertIn("lifecycle_failure_bucketing_hardening_present:", human_proc.stdout)
         self.assertIn("lifecycle_artifact_retention_present:", human_proc.stdout)
         self.assertIn("lifecycle_fleet_safety_control_present:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_email_delivery_present:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_runtime_rules_present:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_response_present:", human_proc.stdout)
+        self.assertIn("lifecycle_approved_restart_present:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_safety_present:", human_proc.stdout)
         self.assertIn("lifecycle_observability_status_artifact:", human_proc.stdout)
         self.assertIn("lifecycle_primary_failure_bucket_artifact:", human_proc.stdout)
         self.assertIn("lifecycle_fleet_terminal_class_artifact:", human_proc.stdout)
         self.assertIn("lifecycle_hardened_primary_failure_bucket_artifact:", human_proc.stdout)
         self.assertIn("lifecycle_artifact_retention_status_artifact:", human_proc.stdout)
         self.assertIn("lifecycle_fleet_safety_status_artifact:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_email_status_artifact:", human_proc.stdout)
+        self.assertIn("lifecycle_runtime_rules_version_artifact:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_response_status_artifact:", human_proc.stdout)
+        self.assertIn("lifecycle_approved_restart_status_artifact:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_safety_status_artifact:", human_proc.stdout)
         self.assertIn("lifecycle_observability_rollup_contract_path:", human_proc.stdout)
         self.assertIn("lifecycle_failure_bucket_rollup_path:", human_proc.stdout)
         self.assertIn("lifecycle_fleet_run_rollup_path:", human_proc.stdout)
@@ -2478,6 +2628,11 @@ class InspectJobCliTests(unittest.TestCase):
         self.assertIn("lifecycle_retention_manifest_path:", human_proc.stdout)
         self.assertIn("lifecycle_artifact_retention_contract_path:", human_proc.stdout)
         self.assertIn("lifecycle_fleet_safety_control_contract_path:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_email_delivery_contract_path:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_runtime_rules_contract_path:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_response_contract_path:", human_proc.stdout)
+        self.assertIn("lifecycle_approved_restart_contract_path:", human_proc.stdout)
+        self.assertIn("lifecycle_approval_safety_contract_path:", human_proc.stdout)
 
     def test_missing_job_exits_clearly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -73,6 +73,42 @@ from automation.orchestration.fleet_safety_control import (
 from automation.orchestration.fleet_safety_control import (
     build_fleet_safety_control_run_state_summary_surface,
 )
+from automation.orchestration.approval_email_delivery import (
+    APPROVAL_EMAIL_DELIVERY_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_email_delivery import (
+    build_approval_email_delivery_run_state_summary_surface,
+)
+from automation.orchestration.approval_runtime_policy import (
+    APPROVAL_RUNTIME_RULES_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_runtime_policy import (
+    build_approval_runtime_rules_run_state_summary_surface,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    APPROVAL_DELIVERY_HANDOFF_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_delivery_adapter import (
+    build_approval_delivery_handoff_run_state_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVAL_RESPONSE_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_response_ingest import (
+    APPROVED_RESTART_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approval_response_run_state_summary_surface,
+)
+from automation.orchestration.approval_response_ingest import (
+    build_approved_restart_run_state_summary_surface,
+)
+from automation.orchestration.approval_safety import (
+    APPROVAL_SAFETY_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.approval_safety import (
+    build_approval_safety_run_state_summary_surface,
+)
 from automation.orchestration.bounded_execution_bridge import (
     BOUNDED_EXECUTION_BRIDGE_RUN_STATE_SUMMARY_SAFE_FIELDS,
 )
@@ -124,6 +160,12 @@ CANONICAL_RUN_STATE_TRUTH_SURFACES = (
     "failure_bucketing_hardening_contract",
     "artifact_retention_contract",
     "fleet_safety_control_contract",
+    "approval_email_delivery_contract",
+    "approval_runtime_rules_contract",
+    "approval_delivery_handoff_contract",
+    "approval_response_contract",
+    "approved_restart_contract",
+    "approval_safety_contract",
     "lifecycle_contract",
     "orchestration",
 )
@@ -176,6 +218,12 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *FAILURE_BUCKETING_HARDENING_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *ARTIFACT_RETENTION_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *FLEET_SAFETY_CONTROL_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *APPROVAL_EMAIL_DELIVERY_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *APPROVAL_RUNTIME_RULES_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *APPROVAL_DELIVERY_HANDOFF_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *APPROVAL_RESPONSE_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *APPROVED_RESTART_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *APPROVAL_SAFETY_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *LIFECYCLE_SUMMARY_SAFE_FIELDS,
     *OPERATOR_SUMMARY_SAFE_FIELDS,
 )
@@ -413,6 +461,29 @@ def select_manifest_run_state_summary_compact(
             **artifact_retention_surface,
         }
     )
+    approval_email_delivery_surface = (
+        build_approval_email_delivery_run_state_summary_surface(
+            {
+                **payload,
+                **fleet_safety_control_surface,
+            }
+        )
+    )
+    approval_runtime_rules_surface = build_approval_runtime_rules_run_state_summary_surface(
+        payload
+    )
+    approval_delivery_handoff_surface = build_approval_delivery_handoff_run_state_summary_surface(
+        payload
+    )
+    approval_response_surface = build_approval_response_run_state_summary_surface(
+        payload
+    )
+    approved_restart_surface = build_approved_restart_run_state_summary_surface(
+        payload
+    )
+    approval_safety_surface = build_approval_safety_run_state_summary_surface(
+        payload
+    )
     operator_surface = build_operator_explainability_surface(
         {
             **payload,
@@ -436,6 +507,12 @@ def select_manifest_run_state_summary_compact(
             **failure_bucketing_hardening_surface,
             **artifact_retention_surface,
             **fleet_safety_control_surface,
+            **approval_email_delivery_surface,
+            **approval_runtime_rules_surface,
+            **approval_delivery_handoff_surface,
+            **approval_response_surface,
+            **approved_restart_surface,
+            **approval_safety_surface,
         },
         include_rendering_details=False,
     )
@@ -461,6 +538,12 @@ def select_manifest_run_state_summary_compact(
         **failure_bucketing_hardening_surface,
         **artifact_retention_surface,
         **fleet_safety_control_surface,
+        **approval_email_delivery_surface,
+        **approval_runtime_rules_surface,
+        **approval_delivery_handoff_surface,
+        **approval_response_surface,
+        **approved_restart_surface,
+        **approval_safety_surface,
         **operator_surface,
     }
 
@@ -588,6 +671,12 @@ def select_manifest_run_state_summary_compact(
         "failure_bucketing_hardening_present",
         "artifact_retention_present",
         "fleet_safety_control_present",
+        "approval_email_delivery_present",
+        "approval_runtime_rules_present",
+        "approval_delivery_handoff_present",
+        "approval_response_present",
+        "approved_restart_present",
+        "approval_safety_present",
         "lifecycle_safely_closed",
         "lifecycle_terminal",
         "lifecycle_resumable",
@@ -837,6 +926,24 @@ def build_manifest_run_state_summary_contract_surface() -> dict[str, Any]:
         ),
         "fleet_safety_control_summary_safe_fields": list(
             FLEET_SAFETY_CONTROL_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "approval_email_delivery_summary_safe_fields": list(
+            APPROVAL_EMAIL_DELIVERY_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "approval_runtime_rules_summary_safe_fields": list(
+            APPROVAL_RUNTIME_RULES_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "approval_delivery_handoff_summary_safe_fields": list(
+            APPROVAL_DELIVERY_HANDOFF_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "approval_response_summary_safe_fields": list(
+            APPROVAL_RESPONSE_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "approved_restart_summary_safe_fields": list(
+            APPROVED_RESTART_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "approval_safety_summary_safe_fields": list(
+            APPROVAL_SAFETY_RUN_STATE_SUMMARY_SAFE_FIELDS
         ),
         "lifecycle_summary_safe_fields": list(LIFECYCLE_SUMMARY_SAFE_FIELDS),
         "rendering_only_operator_fields": list(OPERATOR_RENDERING_ONLY_FIELDS),

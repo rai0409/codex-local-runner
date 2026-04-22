@@ -1,0 +1,34 @@
+version: 1
+normalization:
+  case_insensitive: true
+  trim_outer_whitespace: true
+  collapse_internal_whitespace: true
+  fuzzy_matching: false
+commands:
+  "OK RETRY":
+    decision_class: approved
+    next_direction: same_lane_retry
+    restart_posture: approval_required_then_restart
+  "OK REPLAN":
+    decision_class: approved
+    next_direction: replan_preparation
+    restart_posture: approval_required_then_restart
+  "OK TRUTH":
+    decision_class: approved
+    next_direction: truth_gathering
+    restart_posture: approval_required_then_restart
+  "OK CLOSE":
+    decision_class: approved
+    next_direction: closure_followup
+    restart_posture: approval_required_then_restart
+  "HOLD":
+    decision_class: held
+    next_direction: manual_review_preparation
+    restart_posture: hold_restart
+  "REJECT":
+    decision_class: rejected
+    next_direction: stop_no_restart
+    restart_posture: block_restart_manual_followup
+unsupported:
+  decision_class: unsupported
+  restart_posture: block_restart
