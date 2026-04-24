@@ -179,6 +179,8 @@ from automation.orchestration.repair_approval_binding import build_repair_approv
 from automation.orchestration.repair_approval_binding import build_repair_approval_binding_surface
 from automation.orchestration.repair_plan_transport import build_repair_plan_transport_run_state_summary_surface
 from automation.orchestration.repair_plan_transport import build_repair_plan_transport_surface
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_CANDIDATE_ACTIONS
+from automation.orchestration.repair_plan_transport import REPAIR_PLAN_CLASSES
 from automation.orchestration.reconcile_contract import build_reconcile_contract_surface
 from automation.orchestration.reconcile_contract import build_reconcile_run_state_summary_surface
 from automation.orchestration.run_state_summary_contract import build_manifest_run_state_summary_contract_surface
@@ -434,6 +436,13 @@ _APPROVED_RESTART_EXECUTION_REASON_CODES = {
     "safety_delivery_blocked",
     "safety_delivery_deferred",
     "safety_not_clear",
+    "continuation_budget_insufficient_truth",
+    "continuation_budget_exhausted",
+    "continuation_no_progress_stop",
+    "failure_bucket_continuation_denied",
+    "continuation_next_step_not_selected",
+    "supported_repair_qualification_failed",
+    "supported_repair_verification_failed",
     "restart_target_missing",
     "restart_launch_failed",
     "restart_executed_once",
@@ -448,6 +457,13 @@ _APPROVED_RESTART_EXECUTION_REASON_ORDER = (
     "safety_delivery_blocked",
     "safety_delivery_deferred",
     "safety_not_clear",
+    "continuation_budget_insufficient_truth",
+    "continuation_budget_exhausted",
+    "continuation_no_progress_stop",
+    "failure_bucket_continuation_denied",
+    "continuation_next_step_not_selected",
+    "supported_repair_qualification_failed",
+    "supported_repair_verification_failed",
     "restart_target_missing",
     "restart_launch_failed",
     "restart_executed_once",
@@ -459,6 +475,1007 @@ _APPROVED_RESTART_ALLOWED_DECISIONS = {
     "allow_truth_gathering",
     "allow_replan_preparation",
     "allow_closure_followup",
+}
+_APPROVAL_SKIP_GATE_STATUSES = {
+    "skip_allowed",
+    "approval_required",
+    "not_applicable",
+    "insufficient_truth",
+}
+_APPROVAL_SKIP_GATE_DECISIONS = {
+    "skip_and_continue_once",
+    "require_human_approval",
+    "not_applicable",
+}
+_APPROVAL_SKIP_REASON_CODES = {
+    "skip_allowed_low_risk",
+    "skip_not_applicable_approval_not_required",
+    "skip_human_response_already_present",
+    "skip_invalid_or_insufficient_truth",
+    "skip_safety_duplicate_pending",
+    "skip_safety_cooldown_active",
+    "skip_safety_loop_suspected",
+    "skip_safety_delivery_blocked",
+    "skip_safety_delivery_deferred",
+    "skip_safety_not_clear",
+    "skip_manual_review_required",
+    "skip_high_risk_posture",
+    "skip_unsupported_direction",
+    "skip_hold_or_reject_posture",
+    "skip_not_allowed",
+}
+_APPROVAL_SKIP_REASON_ORDER = (
+    "skip_not_applicable_approval_not_required",
+    "skip_human_response_already_present",
+    "skip_invalid_or_insufficient_truth",
+    "skip_safety_duplicate_pending",
+    "skip_safety_cooldown_active",
+    "skip_safety_loop_suspected",
+    "skip_safety_delivery_blocked",
+    "skip_safety_delivery_deferred",
+    "skip_safety_not_clear",
+    "skip_manual_review_required",
+    "skip_high_risk_posture",
+    "skip_unsupported_direction",
+    "skip_hold_or_reject_posture",
+    "skip_allowed_low_risk",
+    "skip_not_allowed",
+)
+_APPROVAL_SKIP_DIRECTION_TO_POSTURE = {
+    "same_lane_retry": {
+        "response_command": "OK RETRY",
+        "restart_decision": "allow_same_lane_retry",
+    },
+    "repair_retry": {
+        "response_command": "OK RETRY",
+        "restart_decision": "allow_repair_retry",
+    },
+    "truth_gathering": {
+        "response_command": "OK TRUTH",
+        "restart_decision": "allow_truth_gathering",
+    },
+    "replan_preparation": {
+        "response_command": "OK REPLAN",
+        "restart_decision": "allow_replan_preparation",
+    },
+    "closure_followup": {
+        "response_command": "OK CLOSE",
+        "restart_decision": "allow_closure_followup",
+    },
+}
+_CONTINUATION_BUDGET_SCHEMA_VERSION = "v1"
+_CONTINUATION_BUDGET_STATUSES = {"available", "exhausted", "insufficient_truth"}
+_CONTINUATION_BUDGET_DECISIONS = {
+    "allow_under_budget",
+    "deny_budget_exhausted",
+    "deny_insufficient_truth",
+}
+_CONTINUATION_BUDGET_REASON_CODES = {
+    "budget_available",
+    "budget_run_exhausted",
+    "budget_objective_exhausted",
+    "budget_lane_exhausted",
+    "budget_branch_exhausted",
+    "budget_insufficient_truth",
+}
+_CONTINUATION_BUDGET_REASON_ORDER = (
+    "budget_insufficient_truth",
+    "budget_lane_exhausted",
+    "budget_objective_exhausted",
+    "budget_run_exhausted",
+    "budget_branch_exhausted",
+    "budget_available",
+)
+_CONTINUATION_BUDGET_RUN_LIMIT_DEFAULT = 2
+_CONTINUATION_BUDGET_OBJECTIVE_LIMIT_DEFAULT = 2
+_CONTINUATION_BUDGET_LANE_LIMIT_DEFAULT = 2
+_CONTINUATION_BUDGET_BRANCH_TYPES = {"retry", "replan", "truth_gather"}
+_CONTINUATION_BUDGET_BRANCH_STATUSES = {"available", "exhausted", "not_applicable"}
+_CONTINUATION_BUDGET_BRANCH_DECISIONS = {
+    "allow_under_branch_ceiling",
+    "deny_branch_ceiling_exhausted",
+    "not_applicable",
+}
+_CONTINUATION_BUDGET_BRANCH_REASON_CODES = {
+    "branch_budget_available",
+    "branch_budget_exhausted",
+    "branch_budget_not_applicable",
+}
+_CONTINUATION_BUDGET_BRANCH_REASON_ORDER = (
+    "branch_budget_exhausted",
+    "branch_budget_available",
+    "branch_budget_not_applicable",
+)
+_CONTINUATION_BUDGET_BRANCH_LIMIT_DEFAULTS = {
+    "retry": 2,
+    "replan": 2,
+    "truth_gather": 2,
+}
+_CONTINUATION_REPAIR_PLAYBOOK_STATUSES = {
+    "selected",
+    "not_selected",
+    "insufficient_truth",
+}
+_CONTINUATION_REPAIR_PLAYBOOK_REASON_CODES = {
+    "playbook_selected",
+    "playbook_insufficient_truth",
+    "playbook_bucket_unsupported",
+}
+_CONTINUATION_REPAIR_PLAYBOOK_REASON_ORDER = (
+    "playbook_insufficient_truth",
+    "playbook_bucket_unsupported",
+    "playbook_selected",
+)
+_CONTINUATION_NEXT_STEP_SELECTION_STATUSES = {
+    "selected",
+    "not_selected",
+    "insufficient_truth",
+}
+_CONTINUATION_NEXT_STEP_TARGETS = {
+    "retry",
+    "replan",
+    "truth_gather",
+    "supported_repair",
+    "none",
+}
+_CONTINUATION_NEXT_STEP_REASON_CODES = {
+    "next_step_selected_supported_repair",
+    "next_step_selected_truth_gather",
+    "next_step_selected_replan",
+    "next_step_selected_retry",
+    "next_step_insufficient_truth",
+    "next_step_not_selected",
+}
+_CONTINUATION_NEXT_STEP_REASON_ORDER = (
+    "next_step_insufficient_truth",
+    "next_step_not_selected",
+    "next_step_selected_supported_repair",
+    "next_step_selected_truth_gather",
+    "next_step_selected_replan",
+    "next_step_selected_retry",
+)
+_CONTINUATION_REPAIR_PLAYBOOKS = {
+    "objective_gap": {
+        "repair_plan_class": "replan_plan",
+        "repair_plan_candidate_action": "request_replan",
+    },
+    "completion_gap": {
+        "repair_plan_class": "closure_followup_plan",
+        "repair_plan_candidate_action": "request_closure_followup",
+    },
+    "approval_blocker": {
+        "repair_plan_class": "manual_review_plan",
+        "repair_plan_candidate_action": "request_manual_review",
+    },
+    "reconcile_mismatch": {
+        "repair_plan_class": "truth_gathering_plan",
+        "repair_plan_candidate_action": "gather_missing_truth",
+    },
+    "execution_failure": {
+        "repair_plan_class": "replan_plan",
+        "repair_plan_candidate_action": "request_replan",
+    },
+    "execution_partial": {
+        "repair_plan_class": "truth_gathering_plan",
+        "repair_plan_candidate_action": "gather_missing_truth",
+    },
+    "verification_failure": {
+        "repair_plan_class": "truth_gathering_plan",
+        "repair_plan_candidate_action": "gather_missing_truth",
+    },
+    "retry_exhausted": {
+        "repair_plan_class": "replan_plan",
+        "repair_plan_candidate_action": "request_replan",
+    },
+    "same_failure_exhausted": {
+        "repair_plan_class": "replan_plan",
+        "repair_plan_candidate_action": "request_replan",
+    },
+    "no_progress": {
+        "repair_plan_class": "manual_review_plan",
+        "repair_plan_candidate_action": "request_manual_review",
+    },
+    "oscillation": {
+        "repair_plan_class": "manual_review_plan",
+        "repair_plan_candidate_action": "request_manual_review",
+    },
+    "lane_mismatch": {
+        "repair_plan_class": "replan_plan",
+        "repair_plan_candidate_action": "request_replan",
+    },
+    "closure_unresolved": {
+        "repair_plan_class": "closure_followup_plan",
+        "repair_plan_candidate_action": "request_closure_followup",
+    },
+    "terminal_non_success": {
+        "repair_plan_class": "manual_review_plan",
+        "repair_plan_candidate_action": "request_manual_review",
+    },
+}
+_SUPPORTED_REPAIR_EXECUTION_STATUSES = {
+    "not_selected",
+    "not_executed_precheck_blocked",
+    "not_executed_qualification_failed",
+    "not_executed_launch_failed",
+    "executed_verification_passed",
+    "executed_verification_failed",
+}
+_SUPPORTED_REPAIR_EXECUTION_REASON_CODES = {
+    "repair_not_selected",
+    "repair_precheck_blocked",
+    "repair_qualification_failed",
+    "repair_launch_failed",
+    "repair_verification_passed",
+    "repair_verification_failed",
+}
+_SUPPORTED_REPAIR_EXECUTION_REASON_ORDER = (
+    "repair_precheck_blocked",
+    "repair_qualification_failed",
+    "repair_launch_failed",
+    "repair_verification_failed",
+    "repair_verification_passed",
+    "repair_not_selected",
+)
+_FINAL_HUMAN_REVIEW_GATE_STATUSES = {"required", "not_required"}
+_FINAL_HUMAN_REVIEW_GATE_REASON_CODES = {
+    "final_review_manual_only_posture",
+    "final_review_high_risk_posture",
+    "final_review_supported_repair_verification_failed",
+    "final_review_next_step_unresolved",
+    "final_review_explicit_manual_review_required",
+    "final_review_not_required",
+}
+_FINAL_HUMAN_REVIEW_GATE_REASON_ORDER = (
+    "final_review_manual_only_posture",
+    "final_review_high_risk_posture",
+    "final_review_supported_repair_verification_failed",
+    "final_review_next_step_unresolved",
+    "final_review_explicit_manual_review_required",
+    "final_review_not_required",
+)
+_PROJECT_PLANNING_SUMMARY_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_PLANNING_SUMMARY_REASON_CODES = {
+    "planning_summary_compiled",
+    "planning_summary_insufficient_truth",
+}
+_PROJECT_PLANNING_SUMMARY_REASON_ORDER = (
+    "planning_summary_insufficient_truth",
+    "planning_summary_compiled",
+)
+_PROJECT_ROADMAP_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_ROADMAP_REASON_CODES = {
+    "roadmap_compiled",
+    "roadmap_insufficient_truth",
+}
+_PROJECT_ROADMAP_REASON_ORDER = (
+    "roadmap_insufficient_truth",
+    "roadmap_compiled",
+)
+_PROJECT_PR_SLICING_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_PR_SLICING_REASON_CODES = {
+    "pr_slices_compiled",
+    "pr_slices_insufficient_truth",
+}
+_PROJECT_PR_SLICING_REASON_ORDER = (
+    "pr_slices_insufficient_truth",
+    "pr_slices_compiled",
+)
+_PROJECT_PR_SIZE_DECISIONS = {"single_theme_single_pr", "not_available"}
+_PROJECT_PR_PRIORITIZATION_MODES = {
+    "blocked_last_narrow_first_prereq_first",
+    "insufficient_truth",
+}
+_PROJECT_ROADMAP_SCOPE_CLASS_ORDER = {
+    "runner_only": 0,
+    "runner_and_tests": 1,
+    "cross_surface": 2,
+    "unknown": 3,
+}
+_PROJECT_ROADMAP_TOPIC_ORDER = (
+    "continuation_budget",
+    "branch_ceiling",
+    "failure_bucket_gate",
+    "next_step_selection",
+    "supported_repair_posture",
+    "human_review_gate",
+)
+_PROJECT_ROADMAP_ITEM_ORDER = {
+    f"roadmap_{topic}": index
+    for index, topic in enumerate(_PROJECT_ROADMAP_TOPIC_ORDER)
+}
+_PROJECT_ROADMAP_PREREQUISITES = {
+    "roadmap_branch_ceiling": ("roadmap_continuation_budget",),
+    "roadmap_failure_bucket_gate": ("roadmap_continuation_budget",),
+    "roadmap_supported_repair_posture": ("roadmap_next_step_selection",),
+    "roadmap_human_review_gate": ("roadmap_next_step_selection",),
+}
+_IMPLEMENTATION_PROMPT_STATUSES = {"available", "insufficient_truth"}
+_IMPLEMENTATION_PROMPT_REASON_CODES = {
+    "prompt_compiled",
+    "prompt_planning_insufficient_truth",
+    "prompt_slice_state_insufficient_truth",
+    "prompt_slice_missing",
+    "prompt_size_posture_unbounded",
+}
+_IMPLEMENTATION_PROMPT_REASON_ORDER = (
+    "prompt_planning_insufficient_truth",
+    "prompt_slice_state_insufficient_truth",
+    "prompt_slice_missing",
+    "prompt_size_posture_unbounded",
+    "prompt_compiled",
+)
+_PROJECT_PR_QUEUE_STATUSES = {"prepared", "blocked", "empty", "insufficient_truth"}
+_PROJECT_PR_QUEUE_REASON_CODES = {
+    "queue_item_prepared",
+    "queue_item_blocked",
+    "queue_empty",
+    "queue_state_insufficient_truth",
+    "prompt_unavailable_for_selected_slice",
+}
+_PROJECT_PR_QUEUE_REASON_ORDER = (
+    "queue_state_insufficient_truth",
+    "queue_empty",
+    "prompt_unavailable_for_selected_slice",
+    "queue_item_blocked",
+    "queue_item_prepared",
+)
+_REVIEW_ASSIMILATION_STATUSES = {"assimilated", "no_action", "insufficient_truth"}
+_REVIEW_ASSIMILATION_ACTIONS = {"accept", "retry", "replan", "split", "escalate", "none"}
+_REVIEW_ASSIMILATION_REASON_CODES = {
+    "assimilation_queue_state_insufficient_truth",
+    "assimilation_queue_empty",
+    "assimilation_queue_blocked",
+    "assimilation_prompt_unavailable",
+    "assimilation_result_insufficient_truth",
+    "assimilation_accept_succeeded",
+    "assimilation_retry_retryable_failure",
+    "assimilation_replan_design_invalid",
+    "assimilation_split_scope_signal",
+    "assimilation_escalate_manual_followup",
+    "assimilation_escalate_unclassified",
+}
+_REVIEW_ASSIMILATION_REASON_ORDER = (
+    "assimilation_queue_state_insufficient_truth",
+    "assimilation_queue_empty",
+    "assimilation_prompt_unavailable",
+    "assimilation_queue_blocked",
+    "assimilation_result_insufficient_truth",
+    "assimilation_escalate_manual_followup",
+    "assimilation_replan_design_invalid",
+    "assimilation_split_scope_signal",
+    "assimilation_retry_retryable_failure",
+    "assimilation_accept_succeeded",
+    "assimilation_escalate_unclassified",
+)
+_SELF_HEALING_STATUSES = {
+    "executed",
+    "selected",
+    "blocked",
+    "not_applicable",
+    "insufficient_truth",
+}
+_SELF_HEALING_TRANSITION_TARGETS = {
+    "retry",
+    "replan",
+    "truth_gather",
+    "alternative_supported_repair",
+    "none",
+}
+_SELF_HEALING_REASON_CODES = {
+    "self_healing_executed_retry",
+    "self_healing_executed_replan",
+    "self_healing_executed_truth_gather",
+    "self_healing_executed_alternative_supported_repair",
+    "self_healing_selected_retry",
+    "self_healing_selected_replan",
+    "self_healing_selected_truth_gather",
+    "self_healing_selected_alternative_supported_repair",
+    "self_healing_not_applicable_assimilation_no_action",
+    "self_healing_not_applicable_assimilation_accept",
+    "self_healing_insufficient_assimilation_truth",
+    "self_healing_blocked_queue_non_runnable",
+    "self_healing_blocked_safety_gate",
+    "self_healing_blocked_budget_exhausted",
+    "self_healing_blocked_branch_budget_exhausted",
+    "self_healing_blocked_final_human_review",
+    "self_healing_blocked_unsupported_action",
+    "self_healing_blocked_alternative_repair_not_allowed",
+}
+_SELF_HEALING_REASON_ORDER = (
+    "self_healing_insufficient_assimilation_truth",
+    "self_healing_not_applicable_assimilation_accept",
+    "self_healing_not_applicable_assimilation_no_action",
+    "self_healing_blocked_queue_non_runnable",
+    "self_healing_blocked_safety_gate",
+    "self_healing_blocked_budget_exhausted",
+    "self_healing_blocked_branch_budget_exhausted",
+    "self_healing_blocked_final_human_review",
+    "self_healing_blocked_alternative_repair_not_allowed",
+    "self_healing_blocked_unsupported_action",
+    "self_healing_selected_alternative_supported_repair",
+    "self_healing_selected_truth_gather",
+    "self_healing_selected_replan",
+    "self_healing_selected_retry",
+    "self_healing_executed_alternative_supported_repair",
+    "self_healing_executed_truth_gather",
+    "self_healing_executed_replan",
+    "self_healing_executed_retry",
+)
+_SELF_HEALING_CHAIN_LIMIT_DEFAULT = 1
+_LONG_RUNNING_STABILITY_STATUSES = {
+    "monitoring",
+    "paused",
+    "resume_ready",
+    "safe_stop",
+    "escalated",
+    "insufficient_truth",
+}
+_LONG_RUNNING_REASON_CODES = {
+    "long_running_monitoring_active",
+    "long_running_paused_stale_watchdog",
+    "long_running_escalated_stuck_detection",
+    "long_running_safe_stop_queue_empty",
+    "long_running_safe_stop_queue_blocked",
+    "long_running_safe_stop_human_fallback",
+    "long_running_safe_stop_chain_budget_exhausted",
+    "long_running_escalated_final_human_review_required",
+    "long_running_insufficient_truth_queue_state",
+    "long_running_resume_ready_replay_safe",
+}
+_LONG_RUNNING_REASON_ORDER = (
+    "long_running_insufficient_truth_queue_state",
+    "long_running_escalated_final_human_review_required",
+    "long_running_escalated_stuck_detection",
+    "long_running_paused_stale_watchdog",
+    "long_running_safe_stop_human_fallback",
+    "long_running_safe_stop_chain_budget_exhausted",
+    "long_running_safe_stop_queue_blocked",
+    "long_running_safe_stop_queue_empty",
+    "long_running_resume_ready_replay_safe",
+    "long_running_monitoring_active",
+)
+_LONG_RUNNING_STALE_AFTER_SECONDS_DEFAULT = 900
+_LONG_RUNNING_STUCK_CYCLE_THRESHOLD_DEFAULT = 2
+_OBJECTIVE_COMPILER_STATUSES = {"available", "insufficient_truth"}
+_OBJECTIVE_DONE_CRITERIA_STATUSES = {"met", "not_met", "insufficient_truth"}
+_OBJECTIVE_STOP_CRITERIA_STATUSES = {"stop", "continue", "insufficient_truth"}
+_OBJECTIVE_COMPLETION_POSTURES = {
+    "objective_active",
+    "objective_completed",
+    "objective_blocked",
+    "objective_insufficient_truth",
+}
+_OBJECTIVE_SCOPE_DRIFT_STATUSES = {"detected", "clear", "insufficient_truth"}
+_OBJECTIVE_COMPILER_REASON_CODES = {
+    "objective_compiled",
+    "objective_identity_missing",
+    "objective_truth_insufficient",
+    "done_criteria_met",
+    "done_criteria_incomplete",
+    "done_criteria_insufficient_truth",
+    "stop_criteria_continue",
+    "stop_criteria_done_met",
+    "stop_criteria_human_review_required",
+    "stop_criteria_stability_pause_or_escalation",
+    "stop_criteria_human_fallback_preserved",
+    "stop_criteria_insufficient_truth",
+    "scope_drift_detected_queue_prompt_mismatch",
+    "scope_drift_detected_split_signal",
+    "scope_drift_clear",
+    "scope_drift_insufficient_truth",
+    "completion_objective_active",
+    "completion_objective_completed",
+    "completion_objective_blocked",
+    "completion_objective_insufficient_truth",
+}
+_OBJECTIVE_COMPILER_REASON_ORDER = (
+    "objective_identity_missing",
+    "objective_truth_insufficient",
+    "objective_compiled",
+    "done_criteria_insufficient_truth",
+    "done_criteria_met",
+    "done_criteria_incomplete",
+    "scope_drift_insufficient_truth",
+    "scope_drift_detected_queue_prompt_mismatch",
+    "scope_drift_detected_split_signal",
+    "scope_drift_clear",
+    "stop_criteria_insufficient_truth",
+    "stop_criteria_human_review_required",
+    "stop_criteria_stability_pause_or_escalation",
+    "stop_criteria_human_fallback_preserved",
+    "stop_criteria_done_met",
+    "stop_criteria_continue",
+    "completion_objective_insufficient_truth",
+    "completion_objective_completed",
+    "completion_objective_blocked",
+    "completion_objective_active",
+)
+_PROJECT_AUTONOMY_BUDGET_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_PRIORITY_POSTURES = {
+    "active",
+    "lower_priority",
+    "deferred",
+    "completed",
+    "insufficient_truth",
+}
+_PROJECT_BUDGET_POSTURES = {"available", "exhausted", "insufficient_truth"}
+_PROJECT_PR_RETRY_BUDGET_POSTURES = {
+    "available",
+    "exhausted",
+    "not_applicable",
+    "insufficient_truth",
+}
+_PROJECT_HIGH_RISK_DEFER_POSTURES = {"defer", "clear", "insufficient_truth"}
+_PROJECT_AUTONOMY_BUDGET_REASON_CODES = {
+    "autonomy_budget_compiled",
+    "autonomy_budget_insufficient_truth",
+    "project_priority_active",
+    "project_priority_lowered_budget_exhausted",
+    "project_priority_deferred_blocked",
+    "project_priority_deferred_high_risk",
+    "project_priority_completed",
+    "project_priority_insufficient_truth",
+    "run_budget_available",
+    "run_budget_exhausted",
+    "run_budget_insufficient_truth",
+    "objective_budget_available",
+    "objective_budget_exhausted",
+    "objective_budget_insufficient_truth",
+    "pr_retry_budget_available",
+    "pr_retry_budget_exhausted",
+    "pr_retry_budget_not_applicable",
+    "pr_retry_budget_insufficient_truth",
+    "high_risk_defer_active",
+    "high_risk_defer_clear",
+    "high_risk_defer_insufficient_truth",
+}
+_PROJECT_AUTONOMY_BUDGET_REASON_ORDER = (
+    "autonomy_budget_insufficient_truth",
+    "autonomy_budget_compiled",
+    "project_priority_insufficient_truth",
+    "project_priority_deferred_high_risk",
+    "project_priority_deferred_blocked",
+    "project_priority_lowered_budget_exhausted",
+    "project_priority_completed",
+    "project_priority_active",
+    "run_budget_insufficient_truth",
+    "run_budget_exhausted",
+    "run_budget_available",
+    "objective_budget_insufficient_truth",
+    "objective_budget_exhausted",
+    "objective_budget_available",
+    "pr_retry_budget_insufficient_truth",
+    "pr_retry_budget_exhausted",
+    "pr_retry_budget_available",
+    "pr_retry_budget_not_applicable",
+    "high_risk_defer_insufficient_truth",
+    "high_risk_defer_active",
+    "high_risk_defer_clear",
+)
+_PROJECT_QUALITY_GATE_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_QUALITY_GATE_POSTURES = {
+    "merge_ready",
+    "review_ready",
+    "retry_needed",
+    "insufficient_truth",
+}
+_PROJECT_QUALITY_GATE_NAMES = {
+    "unit",
+    "targeted_regression",
+    "lint",
+    "typecheck",
+}
+_PROJECT_QUALITY_GATE_CHANGED_AREA_CLASSES = {
+    "runner_and_tests",
+    "runner_only",
+    "unknown",
+}
+_PROJECT_QUALITY_GATE_RISK_LEVELS = {"high", "moderate", "low", "insufficient_truth"}
+_PROJECT_QUALITY_GATE_REASON_CODES = {
+    "quality_gate_compiled",
+    "quality_gate_insufficient_truth",
+    "quality_gate_posture_merge_ready",
+    "quality_gate_posture_review_ready",
+    "quality_gate_posture_retry_needed",
+    "quality_gate_posture_insufficient_truth",
+    "quality_gate_changed_area_runner_and_tests",
+    "quality_gate_changed_area_runner_only",
+    "quality_gate_changed_area_unknown",
+    "quality_gate_changed_area_insufficient_truth",
+    "quality_gate_risk_high",
+    "quality_gate_risk_moderate",
+    "quality_gate_risk_low",
+    "quality_gate_risk_insufficient_truth",
+    "quality_gate_targeted_regression_enabled",
+    "quality_gate_targeted_regression_not_required",
+}
+_PROJECT_QUALITY_GATE_REASON_ORDER = (
+    "quality_gate_insufficient_truth",
+    "quality_gate_posture_insufficient_truth",
+    "quality_gate_changed_area_insufficient_truth",
+    "quality_gate_risk_insufficient_truth",
+    "quality_gate_compiled",
+    "quality_gate_posture_retry_needed",
+    "quality_gate_posture_review_ready",
+    "quality_gate_posture_merge_ready",
+    "quality_gate_changed_area_runner_and_tests",
+    "quality_gate_changed_area_runner_only",
+    "quality_gate_changed_area_unknown",
+    "quality_gate_risk_high",
+    "quality_gate_risk_moderate",
+    "quality_gate_risk_low",
+    "quality_gate_targeted_regression_enabled",
+    "quality_gate_targeted_regression_not_required",
+)
+_PROJECT_MERGE_BRANCH_LIFECYCLE_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_MERGE_READY_POSTURES = {
+    "merge_ready",
+    "not_merge_ready",
+    "insufficient_truth",
+}
+_PROJECT_BRANCH_CANDIDATE_POSTURES = {
+    "candidate",
+    "not_candidate",
+    "insufficient_truth",
+}
+_PROJECT_LOCAL_MAIN_SYNC_POSTURES = {
+    "sync_required",
+    "sync_not_required",
+    "insufficient_truth",
+}
+_PROJECT_MERGE_BRANCH_LIFECYCLE_REASON_CODES = {
+    "merge_branch_lifecycle_compiled",
+    "merge_branch_lifecycle_insufficient_truth",
+    "merge_branch_posture_merge_ready",
+    "merge_branch_posture_not_merge_ready",
+    "merge_branch_posture_insufficient_truth",
+    "merge_branch_cleanup_candidate_yes",
+    "merge_branch_cleanup_candidate_no",
+    "merge_branch_cleanup_candidate_insufficient_truth",
+    "merge_branch_quarantine_candidate_yes",
+    "merge_branch_quarantine_candidate_no",
+    "merge_branch_quarantine_candidate_insufficient_truth",
+    "merge_branch_local_main_sync_required",
+    "merge_branch_local_main_sync_not_required",
+    "merge_branch_local_main_sync_insufficient_truth",
+}
+_PROJECT_MERGE_BRANCH_LIFECYCLE_REASON_ORDER = (
+    "merge_branch_lifecycle_insufficient_truth",
+    "merge_branch_posture_insufficient_truth",
+    "merge_branch_cleanup_candidate_insufficient_truth",
+    "merge_branch_quarantine_candidate_insufficient_truth",
+    "merge_branch_local_main_sync_insufficient_truth",
+    "merge_branch_lifecycle_compiled",
+    "merge_branch_posture_merge_ready",
+    "merge_branch_posture_not_merge_ready",
+    "merge_branch_cleanup_candidate_yes",
+    "merge_branch_cleanup_candidate_no",
+    "merge_branch_quarantine_candidate_yes",
+    "merge_branch_quarantine_candidate_no",
+    "merge_branch_local_main_sync_required",
+    "merge_branch_local_main_sync_not_required",
+)
+_PROJECT_FAILURE_MEMORY_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_FAILURE_MEMORY_SUPPRESSION_POSTURES = {
+    "none",
+    "suppress_retry",
+    "suppress_repair",
+    "suppress_review_issue",
+    "suppress_failure_bucket",
+    "insufficient_truth",
+}
+_PROJECT_FAILURE_MEMORY_REASON_CODES = {
+    "failure_memory_compiled",
+    "failure_memory_insufficient_truth",
+    "failure_memory_ineffective_retry_detected",
+    "failure_memory_failed_repair_detected",
+    "failure_memory_repeated_review_issue_detected",
+    "failure_memory_recurring_failure_bucket_detected",
+    "failure_memory_no_ineffective_retry",
+    "failure_memory_no_failed_repair",
+    "failure_memory_no_repeated_review_issue",
+    "failure_memory_no_recurring_failure_bucket",
+    "failure_memory_suppression_none",
+    "failure_memory_suppression_retry",
+    "failure_memory_suppression_repair",
+    "failure_memory_suppression_review_issue",
+    "failure_memory_suppression_failure_bucket",
+}
+_PROJECT_FAILURE_MEMORY_REASON_ORDER = (
+    "failure_memory_insufficient_truth",
+    "failure_memory_compiled",
+    "failure_memory_ineffective_retry_detected",
+    "failure_memory_failed_repair_detected",
+    "failure_memory_repeated_review_issue_detected",
+    "failure_memory_recurring_failure_bucket_detected",
+    "failure_memory_no_ineffective_retry",
+    "failure_memory_no_failed_repair",
+    "failure_memory_no_repeated_review_issue",
+    "failure_memory_no_recurring_failure_bucket",
+    "failure_memory_suppression_failure_bucket",
+    "failure_memory_suppression_review_issue",
+    "failure_memory_suppression_repair",
+    "failure_memory_suppression_retry",
+    "failure_memory_suppression_none",
+)
+_PROJECT_EXTERNAL_BOUNDARY_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_EXTERNAL_DEPENDENCY_POSTURES = {
+    "dependency_available",
+    "dependency_blocked",
+    "manual_only",
+    "insufficient_truth",
+}
+_PROJECT_EXTERNAL_BOUNDARY_POSTURES = {
+    "clear",
+    "blocked",
+    "manual_only",
+    "insufficient_truth",
+}
+_PROJECT_EXTERNAL_BOUNDARY_REASON_CODES = {
+    "external_boundary_compiled",
+    "external_boundary_insufficient_truth",
+    "external_dependency_available",
+    "external_dependency_blocked",
+    "external_dependency_manual_only",
+    "external_boundary_manual_only",
+    "external_network_boundary_clear",
+    "external_network_boundary_blocked",
+    "external_ci_boundary_clear",
+    "external_ci_boundary_blocked",
+    "external_secrets_boundary_clear",
+    "external_secrets_boundary_blocked",
+    "external_github_boundary_clear",
+    "external_github_boundary_blocked",
+    "external_api_boundary_clear",
+    "external_api_boundary_blocked",
+}
+_PROJECT_EXTERNAL_BOUNDARY_REASON_ORDER = (
+    "external_boundary_insufficient_truth",
+    "external_boundary_compiled",
+    "external_dependency_manual_only",
+    "external_dependency_blocked",
+    "external_dependency_available",
+    "external_boundary_manual_only",
+    "external_network_boundary_blocked",
+    "external_ci_boundary_blocked",
+    "external_secrets_boundary_blocked",
+    "external_github_boundary_blocked",
+    "external_api_boundary_blocked",
+    "external_network_boundary_clear",
+    "external_ci_boundary_clear",
+    "external_secrets_boundary_clear",
+    "external_github_boundary_clear",
+    "external_api_boundary_clear",
+)
+_PROJECT_HUMAN_ESCALATION_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_HUMAN_ESCALATION_POSTURES = {
+    "escalation_required",
+    "not_required",
+    "insufficient_truth",
+}
+_PROJECT_HUMAN_ESCALATION_RISK_POSTURES = {
+    "elevated",
+    "clear",
+    "insufficient_truth",
+}
+_PROJECT_HUMAN_ESCALATION_REASON_CODES = {
+    "escalation_compiled",
+    "escalation_insufficient_truth",
+    "escalation_required",
+    "escalation_not_required",
+    "escalation_architecture_risk_elevated",
+    "escalation_architecture_risk_clear",
+    "escalation_scope_risk_elevated",
+    "escalation_scope_risk_clear",
+    "escalation_external_risk_elevated",
+    "escalation_external_risk_clear",
+    "escalation_budget_risk_elevated",
+    "escalation_budget_risk_clear",
+    "escalation_repeated_failure_risk_elevated",
+    "escalation_repeated_failure_risk_clear",
+    "escalation_manual_only_risk_elevated",
+    "escalation_manual_only_risk_clear",
+}
+_PROJECT_HUMAN_ESCALATION_REASON_ORDER = (
+    "escalation_insufficient_truth",
+    "escalation_compiled",
+    "escalation_required",
+    "escalation_not_required",
+    "escalation_manual_only_risk_elevated",
+    "escalation_external_risk_elevated",
+    "escalation_budget_risk_elevated",
+    "escalation_repeated_failure_risk_elevated",
+    "escalation_scope_risk_elevated",
+    "escalation_architecture_risk_elevated",
+    "escalation_manual_only_risk_clear",
+    "escalation_external_risk_clear",
+    "escalation_budget_risk_clear",
+    "escalation_repeated_failure_risk_clear",
+    "escalation_scope_risk_clear",
+    "escalation_architecture_risk_clear",
+)
+_PROJECT_APPROVAL_NOTIFICATION_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_APPROVAL_NOTIFICATION_READY_POSTURES = {
+    "ready",
+    "not_ready",
+    "not_required",
+    "insufficient_truth",
+}
+_PROJECT_APPROVAL_REPLY_REQUIRED_POSTURES = {
+    "reply_required",
+    "reply_not_required",
+    "insufficient_truth",
+}
+_PROJECT_APPROVAL_CHANNEL_POSTURES = {
+    "email_send",
+    "email_draft",
+    "review_queue",
+    "manual_only",
+    "not_required",
+    "insufficient_truth",
+}
+_PROJECT_APPROVAL_MOBILE_SUMMARY_POSTURES = {
+    "available",
+    "not_required",
+    "insufficient_truth",
+}
+_PROJECT_APPROVAL_NOTIFICATION_REASON_CODES = {
+    "approval_notification_compiled",
+    "approval_notification_insufficient_truth",
+    "approval_notification_ready",
+    "approval_notification_not_ready",
+    "approval_notification_not_required",
+    "approval_reply_required",
+    "approval_reply_not_required",
+    "approval_channel_email_send",
+    "approval_channel_email_draft",
+    "approval_channel_review_queue",
+    "approval_channel_manual_only",
+    "approval_channel_not_required",
+    "approval_channel_insufficient_truth",
+    "approval_mobile_summary_available",
+    "approval_mobile_summary_not_required",
+    "approval_mobile_summary_insufficient_truth",
+    "approval_escalation_required",
+    "approval_escalation_not_required",
+    "approval_response_awaiting",
+    "approval_response_terminal",
+}
+_PROJECT_APPROVAL_NOTIFICATION_REASON_ORDER = (
+    "approval_notification_insufficient_truth",
+    "approval_notification_compiled",
+    "approval_escalation_required",
+    "approval_escalation_not_required",
+    "approval_notification_ready",
+    "approval_notification_not_ready",
+    "approval_notification_not_required",
+    "approval_reply_required",
+    "approval_reply_not_required",
+    "approval_channel_insufficient_truth",
+    "approval_channel_manual_only",
+    "approval_channel_review_queue",
+    "approval_channel_email_draft",
+    "approval_channel_email_send",
+    "approval_channel_not_required",
+    "approval_mobile_summary_insufficient_truth",
+    "approval_mobile_summary_available",
+    "approval_mobile_summary_not_required",
+    "approval_response_awaiting",
+    "approval_response_terminal",
+)
+_PROJECT_MULTI_OBJECTIVE_STATUSES = {"available", "insufficient_truth"}
+_PROJECT_ACTIVE_OBJECTIVE_SELECTION_POSTURES = {
+    "selected",
+    "deferred",
+    "insufficient_truth",
+}
+_PROJECT_BLOCKED_OBJECTIVE_DEFERRAL_POSTURES = {
+    "deferred",
+    "not_deferred",
+    "insufficient_truth",
+}
+_PROJECT_RESUMABLE_QUEUE_ORDERING_POSTURES = {
+    "resume_selected_first",
+    "resume_blocked",
+    "resume_empty",
+    "resume_completed_waiting",
+    "deferred_non_runnable",
+    "insufficient_truth",
+}
+_PROJECT_MULTI_OBJECTIVE_REASON_CODES = {
+    "multi_objective_compiled",
+    "multi_objective_insufficient_truth",
+    "multi_objective_selected",
+    "multi_objective_deferred",
+    "multi_objective_blocked_objective_deferred",
+    "multi_objective_blocked_objective_not_deferred",
+    "multi_objective_queue_resume_selected_first",
+    "multi_objective_queue_resume_blocked",
+    "multi_objective_queue_resume_empty",
+    "multi_objective_queue_resume_completed_waiting",
+    "multi_objective_queue_deferred_non_runnable",
+    "multi_objective_approval_notification_deferred",
+    "multi_objective_escalation_deferred",
+}
+_PROJECT_MULTI_OBJECTIVE_REASON_ORDER = (
+    "multi_objective_insufficient_truth",
+    "multi_objective_compiled",
+    "multi_objective_approval_notification_deferred",
+    "multi_objective_escalation_deferred",
+    "multi_objective_selected",
+    "multi_objective_deferred",
+    "multi_objective_blocked_objective_deferred",
+    "multi_objective_blocked_objective_not_deferred",
+    "multi_objective_queue_deferred_non_runnable",
+    "multi_objective_queue_resume_selected_first",
+    "multi_objective_queue_resume_blocked",
+    "multi_objective_queue_resume_completed_waiting",
+    "multi_objective_queue_resume_empty",
+)
+_IMPLEMENTATION_PROMPT_PRESERVED_CONSTRAINTS_REFS = (
+    "/home/rai/codex-local-runner/prompts/context/pr_history_index.md",
+    "/home/rai/codex-local-runner/prompts/context/current_architecture_constraints.md",
+    "/home/rai/codex-local-runner/prompts/base_contract_rules.md",
+    "/home/rai/codex-local-runner/prompts/base_token_reduction_rules.md",
+    "/home/rai/codex-local-runner/prompts/base_codex_execution_wrapper.md",
+    "/home/rai/codex-local-runner/prompts/base_codex_return_format.md",
+)
+_IMPLEMENTATION_PROMPT_DEFAULT_PREFERRED_FILES = (
+    "automation/orchestration/planned_execution_runner.py",
+    "tests/test_planned_execution_runner.py",
+)
+_IMPLEMENTATION_PROMPT_DEFAULT_OUT_OF_SCOPE = (
+    "queue execution",
+    "codex invocation redesign",
+    "roadmap generation redesign",
+    "PR slicing redesign",
+    "approval/restart/repair redesign",
+    "new planner/controller framework",
+    "broad autonomous execution changes",
+)
+_IMPLEMENTATION_PROMPT_IN_SCOPE_BY_THEME = {
+    "continuation_budget": (
+        "deterministic continuation-budget behavior for selected bounded slice",
+        "compact runner and focused runner-test updates only",
+    ),
+    "branch_ceiling": (
+        "deterministic branch-ceiling behavior for selected bounded slice",
+        "compact runner and focused runner-test updates only",
+    ),
+    "failure_bucket_gate": (
+        "deterministic failure-bucket gate behavior for selected bounded slice",
+        "compact runner and focused runner-test updates only",
+    ),
+    "next_step_selection": (
+        "deterministic next-step selection behavior for selected bounded slice",
+        "compact runner and focused runner-test updates only",
+    ),
+    "supported_repair_posture": (
+        "deterministic supported-repair posture behavior for selected bounded slice",
+        "compact runner and focused runner-test updates only",
+    ),
+    "human_review_gate": (
+        "deterministic final human-review gate behavior for selected bounded slice",
+        "compact runner and focused runner-test updates only",
+    ),
+}
+_SUPPORTED_REPAIR_EXECUTABLE_PLAYBOOK_CLASSES = {
+    "replan_plan",
+    "truth_gathering_plan",
+    "closure_followup_plan",
+}
+_SUPPORTED_REPAIR_EXECUTABLE_CANDIDATE_ACTIONS = {
+    "request_replan",
+    "gather_missing_truth",
+    "request_closure_followup",
+}
+_CONTINUATION_UNSAFE_FAILURE_BUCKETS = {
+    "truth_missing",
+    "truth_conflict",
+    "authorization_denied",
+    "bridge_blocked",
+    "manual_only",
+    "external_truth_pending",
 }
 
 _AUTHORITY_BLOCKER_REASONS = {
@@ -587,6 +1604,17 @@ _MISSING_REQUIRED_REF_TOKENS = (
 
 def _iso_now(now: Callable[[], datetime]) -> str:
     return now().isoformat(timespec="seconds")
+
+
+def _parse_iso_timestamp(value: str) -> datetime | None:
+    text = _normalize_text(value, default="")
+    if not text:
+        return None
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
 
 
 def _normalize_text(value: Any, *, default: str = "") -> str:
@@ -5308,6 +6336,3665 @@ def _normalize_approved_restart_execution_reason_codes(
     return ordered if ordered else ["restart_not_executed"]
 
 
+def _normalize_approval_skip_reason_codes(reason_codes: list[str]) -> list[str]:
+    normalized = _serialize_required_signals(
+        [reason for reason in reason_codes if reason in _APPROVAL_SKIP_REASON_CODES]
+    )
+    ordered = [reason for reason in _APPROVAL_SKIP_REASON_ORDER if reason in normalized]
+    return ordered if ordered else ["skip_not_allowed"]
+
+
+def _normalize_continuation_budget_reason_codes(reason_codes: list[str]) -> list[str]:
+    normalized = _serialize_required_signals(
+        [reason for reason in reason_codes if reason in _CONTINUATION_BUDGET_REASON_CODES]
+    )
+    ordered = [reason for reason in _CONTINUATION_BUDGET_REASON_ORDER if reason in normalized]
+    return ordered if ordered else ["budget_insufficient_truth"]
+
+
+def _normalize_continuation_branch_budget_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [reason for reason in reason_codes if reason in _CONTINUATION_BUDGET_BRANCH_REASON_CODES]
+    )
+    ordered = [
+        reason
+        for reason in _CONTINUATION_BUDGET_BRANCH_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["branch_budget_not_applicable"]
+
+
+def _normalize_continuation_repair_playbook_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _CONTINUATION_REPAIR_PLAYBOOK_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _CONTINUATION_REPAIR_PLAYBOOK_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["playbook_insufficient_truth"]
+
+
+def _normalize_continuation_next_step_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _CONTINUATION_NEXT_STEP_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _CONTINUATION_NEXT_STEP_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["next_step_not_selected"]
+
+
+def _normalize_supported_repair_execution_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _SUPPORTED_REPAIR_EXECUTION_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _SUPPORTED_REPAIR_EXECUTION_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["repair_not_selected"]
+
+
+def _normalize_final_human_review_gate_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _FINAL_HUMAN_REVIEW_GATE_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _FINAL_HUMAN_REVIEW_GATE_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["final_review_not_required"]
+
+
+def _normalize_project_planning_summary_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_PLANNING_SUMMARY_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_PLANNING_SUMMARY_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["planning_summary_insufficient_truth"]
+
+
+def _normalize_project_roadmap_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_ROADMAP_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_ROADMAP_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["roadmap_insufficient_truth"]
+
+
+def _normalize_project_pr_slicing_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_PR_SLICING_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_PR_SLICING_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["pr_slices_insufficient_truth"]
+
+
+def _build_project_roadmap_items(
+    *,
+    project_planning_summary_compact: Mapping[str, Any],
+    planning_source_status: str,
+) -> list[dict[str, Any]]:
+    continuation_budget_status = _normalize_text(
+        project_planning_summary_compact.get("continuation_budget_status"),
+        default="unknown",
+    )
+    continuation_budget_branch_status = _normalize_text(
+        project_planning_summary_compact.get("continuation_budget_branch_status"),
+        default="unknown",
+    )
+    continuation_failure_bucket = _normalize_text(
+        project_planning_summary_compact.get("continuation_failure_bucket"),
+        default="unknown",
+    )
+    continuation_failure_bucket_denied = bool(
+        project_planning_summary_compact.get("continuation_failure_bucket_denied", False)
+    )
+    continuation_next_step_selection_status = _normalize_text(
+        project_planning_summary_compact.get("continuation_next_step_selection_status"),
+        default="unknown",
+    )
+    continuation_next_step_target = _normalize_text(
+        project_planning_summary_compact.get("continuation_next_step_target"),
+        default="none",
+    )
+    supported_repair_execution_status = _normalize_text(
+        project_planning_summary_compact.get("supported_repair_execution_status"),
+        default="unknown",
+    )
+    final_human_review_required = bool(
+        project_planning_summary_compact.get("final_human_review_required", False)
+    )
+    final_human_review_reason = _normalize_text(
+        project_planning_summary_compact.get("final_human_review_reason"),
+        default="final_review_not_required",
+    )
+
+    roadmap_items: list[dict[str, Any]] = [
+        {
+            "roadmap_item_id": "roadmap_continuation_budget",
+            "topic_theme": "continuation_budget",
+            "bounded_scope_class": "runner_only",
+            "planning_source_status": planning_source_status,
+            "blocked": continuation_budget_status != "available",
+            "blocked_reason": (
+                "budget_not_available"
+                if continuation_budget_status != "available"
+                else "none"
+            ),
+            "prerequisite_item_ids": [],
+            "insufficient_reason": "",
+        },
+        {
+            "roadmap_item_id": "roadmap_branch_ceiling",
+            "topic_theme": "branch_ceiling",
+            "bounded_scope_class": "runner_only",
+            "planning_source_status": planning_source_status,
+            "blocked": continuation_budget_branch_status != "available",
+            "blocked_reason": (
+                "branch_ceiling_not_available"
+                if continuation_budget_branch_status != "available"
+                else "none"
+            ),
+            "prerequisite_item_ids": [],
+            "insufficient_reason": "",
+        },
+        {
+            "roadmap_item_id": "roadmap_failure_bucket_gate",
+            "topic_theme": "failure_bucket_gate",
+            "bounded_scope_class": "runner_only",
+            "planning_source_status": planning_source_status,
+            "blocked": continuation_failure_bucket_denied,
+            "blocked_reason": (
+                f"failure_bucket_denied:{continuation_failure_bucket}"
+                if continuation_failure_bucket_denied
+                else "none"
+            ),
+            "prerequisite_item_ids": [],
+            "insufficient_reason": "",
+        },
+        {
+            "roadmap_item_id": "roadmap_next_step_selection",
+            "topic_theme": "next_step_selection",
+            "bounded_scope_class": "runner_and_tests",
+            "planning_source_status": planning_source_status,
+            "blocked": continuation_next_step_selection_status != "selected",
+            "blocked_reason": (
+                "next_step_not_selected"
+                if continuation_next_step_selection_status != "selected"
+                else "none"
+            ),
+            "prerequisite_item_ids": [],
+            "insufficient_reason": "",
+        },
+        {
+            "roadmap_item_id": "roadmap_supported_repair_posture",
+            "topic_theme": "supported_repair_posture",
+            "bounded_scope_class": "runner_and_tests",
+            "planning_source_status": planning_source_status,
+            "blocked": supported_repair_execution_status in {
+                "executed_verification_failed",
+                "not_executed_precheck_blocked",
+                "not_executed_qualification_failed",
+                "not_executed_launch_failed",
+            },
+            "blocked_reason": (
+                f"supported_repair_status:{supported_repair_execution_status}"
+                if supported_repair_execution_status
+                not in {"", "not_selected", "executed_verification_passed"}
+                else "none"
+            ),
+            "prerequisite_item_ids": [],
+            "insufficient_reason": "",
+        },
+        {
+            "roadmap_item_id": "roadmap_human_review_gate",
+            "topic_theme": "human_review_gate",
+            "bounded_scope_class": "runner_and_tests",
+            "planning_source_status": planning_source_status,
+            "blocked": final_human_review_required,
+            "blocked_reason": (
+                final_human_review_reason if final_human_review_required else "none"
+            ),
+            "prerequisite_item_ids": [],
+            "insufficient_reason": "",
+        },
+    ]
+
+    raw_blocked_by_id = {
+        _normalize_text(item.get("roadmap_item_id"), default=""): bool(item.get("blocked", False))
+        for item in roadmap_items
+    }
+    for item in roadmap_items:
+        item_id = _normalize_text(item.get("roadmap_item_id"), default="")
+        prerequisites = list(_PROJECT_ROADMAP_PREREQUISITES.get(item_id, ()))
+        item["prerequisite_item_ids"] = prerequisites
+        item["blocked"] = bool(
+            item.get("blocked", False)
+            or any(raw_blocked_by_id.get(prereq_id, False) for prereq_id in prerequisites)
+        )
+        if item["blocked"] and _normalize_text(item.get("blocked_reason"), default="none") == "none":
+            item["blocked_reason"] = "blocked_by_prerequisite"
+
+    ordered_items = sorted(
+        roadmap_items,
+        key=lambda item: (
+            1 if bool(item.get("blocked", False)) else 0,
+            _PROJECT_ROADMAP_SCOPE_CLASS_ORDER.get(
+                _normalize_text(item.get("bounded_scope_class"), default="unknown"),
+                _PROJECT_ROADMAP_SCOPE_CLASS_ORDER["unknown"],
+            ),
+            _PROJECT_ROADMAP_ITEM_ORDER.get(
+                _normalize_text(item.get("roadmap_item_id"), default=""),
+                len(_PROJECT_ROADMAP_ITEM_ORDER),
+            ),
+        ),
+    )
+    for index, item in enumerate(ordered_items, start=1):
+        item["order"] = index
+        item["priority"] = index
+        item["priority_class"] = "blocked" if bool(item.get("blocked", False)) else "active"
+    return ordered_items
+
+
+def _build_project_pr_slices(
+    roadmap_items: list[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    if not roadmap_items:
+        return []
+
+    item_id_to_slice_id: dict[str, str] = {}
+    slices: list[dict[str, Any]] = []
+    for index, item in enumerate(roadmap_items, start=1):
+        topic_theme = _normalize_text(item.get("topic_theme"), default="unknown")
+        item_id = _normalize_text(item.get("roadmap_item_id"), default="")
+        slice_id = f"slice_{index:02d}_{topic_theme}"
+        item_id_to_slice_id[item_id] = slice_id
+        slices.append(
+            {
+                "slice_id": slice_id,
+                "order": index,
+                "priority": _as_non_negative_int(item.get("priority"), default=index),
+                "topic_theme": topic_theme,
+                "roadmap_item_id": item_id,
+                "bounded_scope_class": _normalize_text(
+                    item.get("bounded_scope_class"),
+                    default="unknown",
+                ),
+                "planning_source_status": _normalize_text(
+                    item.get("planning_source_status"),
+                    default="planning_summary_available",
+                ),
+                "blocked": bool(item.get("blocked", False)),
+                "blocked_reason": _normalize_text(
+                    item.get("blocked_reason"),
+                    default="none",
+                ),
+                "one_pr_size_decision": "single_theme_single_pr",
+                "insufficient_reason": _normalize_text(
+                    item.get("insufficient_reason"),
+                    default="",
+                ),
+                "prerequisite_slice_ids": [],
+            }
+        )
+    for item, slice_entry in zip(roadmap_items, slices):
+        prerequisite_ids = [
+            item_id_to_slice_id[prereq_id]
+            for prereq_id in item.get("prerequisite_item_ids", [])
+            if prereq_id in item_id_to_slice_id
+        ]
+        slice_entry["prerequisite_slice_ids"] = prerequisite_ids
+    return slices
+
+
+def _normalize_implementation_prompt_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _IMPLEMENTATION_PROMPT_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _IMPLEMENTATION_PROMPT_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["prompt_planning_insufficient_truth"]
+
+
+def _build_implementation_prompt_payload(
+    *,
+    objective_id: str,
+    project_planning_summary_status: str,
+    project_pr_slicing_status: str,
+    project_pr_one_pr_size_decision: str,
+    project_pr_slices: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    prompt_status = "insufficient_truth"
+    prompt_available = False
+    prompt_reason = "prompt_planning_insufficient_truth"
+
+    selected_slice: Mapping[str, Any] = {}
+    if project_planning_summary_status != "available":
+        prompt_reason = "prompt_planning_insufficient_truth"
+    elif project_pr_slicing_status != "available":
+        prompt_reason = "prompt_slice_state_insufficient_truth"
+    elif project_pr_one_pr_size_decision != "single_theme_single_pr":
+        prompt_reason = "prompt_size_posture_unbounded"
+    elif not project_pr_slices:
+        prompt_reason = "prompt_slice_missing"
+    else:
+        prompt_status = "available"
+        prompt_available = True
+        prompt_reason = "prompt_compiled"
+        selected_slice = min(
+            project_pr_slices,
+            key=lambda item: (
+                _as_non_negative_int(item.get("order"), default=0),
+                _normalize_text(item.get("slice_id"), default=""),
+            ),
+        )
+
+    prompt_reason_codes = _normalize_implementation_prompt_reason_codes([prompt_reason])
+    slice_id = _normalize_text(selected_slice.get("slice_id"), default="")
+    roadmap_item_id = _normalize_text(selected_slice.get("roadmap_item_id"), default="")
+    topic_theme = _normalize_text(selected_slice.get("topic_theme"), default="unknown")
+    bounded_scope_class = _normalize_text(
+        selected_slice.get("bounded_scope_class"),
+        default="unknown",
+    )
+    objective_or_theme = (
+        f"{objective_id}:{topic_theme}" if objective_id and topic_theme != "unknown" else topic_theme
+    )
+    in_scope = list(
+        _IMPLEMENTATION_PROMPT_IN_SCOPE_BY_THEME.get(
+            topic_theme,
+            ("deterministic bounded slice implementation only",),
+        )
+    )
+    return {
+        "prompt_status": (
+            prompt_status
+            if prompt_status in _IMPLEMENTATION_PROMPT_STATUSES
+            else "insufficient_truth"
+        ),
+        "prompt_available": bool(prompt_available),
+        "prompt_reason": prompt_reason_codes[0],
+        "prompt_reason_codes": prompt_reason_codes,
+        "slice_id": slice_id,
+        "roadmap_item_id": roadmap_item_id,
+        "objective_or_theme": objective_or_theme,
+        "bounded_scope_class": bounded_scope_class,
+        "in_scope": in_scope if prompt_available else [],
+        "out_of_scope": (
+            list(_IMPLEMENTATION_PROMPT_DEFAULT_OUT_OF_SCOPE) if prompt_available else []
+        ),
+        "preferred_files": (
+            list(_IMPLEMENTATION_PROMPT_DEFAULT_PREFERRED_FILES) if prompt_available else []
+        ),
+        "preserved_constraints_ref": (
+            list(_IMPLEMENTATION_PROMPT_PRESERVED_CONSTRAINTS_REFS) if prompt_available else []
+        ),
+        "suggested_validation_targets": (
+            ["uv run python -m unittest tests.test_planned_execution_runner -v"]
+            if prompt_available
+            else []
+        ),
+        "return_format": (
+            [
+                "1. exact files changed",
+                "2. tests not run by instruction",
+                "3. suggested validation targets",
+                "4. out-of-scope changes explicitly avoided",
+                "5. prior increments / accumulated execution history / current architecture constraints explicitly preserved",
+                "6. prompt-generation rule explicitly preserved",
+            ]
+            if prompt_available
+            else []
+        ),
+    }
+
+
+def _normalize_project_pr_queue_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_PR_QUEUE_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_PR_QUEUE_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["queue_state_insufficient_truth"]
+
+
+def _build_project_pr_queue_state(
+    *,
+    project_pr_slicing_status: str,
+    project_pr_slices: list[Mapping[str, Any]],
+    implementation_prompt_payload: Mapping[str, Any],
+    prior_processed_slice_ids: list[str],
+) -> dict[str, Any]:
+    queue_status = "insufficient_truth"
+    queue_reason = "queue_state_insufficient_truth"
+    queue_items: list[dict[str, Any]] = []
+    selected_item: dict[str, Any] = {}
+    handoff_prepared = False
+    handoff_payload: dict[str, Any] = {}
+    processed_before = _serialize_required_signals(prior_processed_slice_ids)
+    processed_set = set(processed_before)
+
+    if project_pr_slicing_status == "available":
+        ordered_slices = sorted(
+            project_pr_slices,
+            key=lambda item: (
+                _as_non_negative_int(item.get("order"), default=0),
+                _normalize_text(item.get("slice_id"), default=""),
+            ),
+        )
+        for item in ordered_slices:
+            slice_id = _normalize_text(item.get("slice_id"), default="")
+            blocked = bool(item.get("blocked", False))
+            processed = bool(slice_id and slice_id in processed_set)
+            runnable = bool(slice_id and not blocked and not processed)
+            blocked_reason = _normalize_text(item.get("blocked_reason"), default="")
+            if processed and not blocked_reason:
+                blocked_reason = "already_prepared"
+            queue_items.append(
+                {
+                    "slice_id": slice_id,
+                    "roadmap_item_id": _normalize_text(item.get("roadmap_item_id"), default=""),
+                    "order": _as_non_negative_int(item.get("order"), default=0),
+                    "blocked": blocked,
+                    "processed": processed,
+                    "runnable": runnable,
+                    "blocked_reason": blocked_reason,
+                }
+            )
+
+        if not queue_items:
+            queue_status = "empty"
+            queue_reason = "queue_empty"
+        else:
+            runnable_items = [item for item in queue_items if bool(item.get("runnable", False))]
+            if not runnable_items:
+                if any(bool(item.get("processed", False)) for item in queue_items):
+                    queue_status = "empty"
+                    queue_reason = "queue_empty"
+                else:
+                    queue_status = "blocked"
+                    queue_reason = "queue_item_blocked"
+                    selected_item = dict(queue_items[0])
+            else:
+                selected_item = dict(runnable_items[0])
+                prompt_available = bool(implementation_prompt_payload.get("prompt_available", False))
+                prompt_slice_id = _normalize_text(
+                    implementation_prompt_payload.get("slice_id"),
+                    default="",
+                )
+                selected_slice_id = _normalize_text(selected_item.get("slice_id"), default="")
+                if prompt_available and prompt_slice_id == selected_slice_id:
+                    queue_status = "prepared"
+                    queue_reason = "queue_item_prepared"
+                    handoff_prepared = True
+                    handoff_payload = {
+                        "slice_id": selected_slice_id,
+                        "roadmap_item_id": _normalize_text(
+                            selected_item.get("roadmap_item_id"),
+                            default="",
+                        ),
+                        "order": _as_non_negative_int(
+                            selected_item.get("order"),
+                            default=0,
+                        ),
+                        "implementation_prompt_payload": dict(implementation_prompt_payload),
+                    }
+                else:
+                    queue_status = "blocked"
+                    queue_reason = "prompt_unavailable_for_selected_slice"
+
+    queue_reason_codes = _normalize_project_pr_queue_reason_codes([queue_reason])
+    selected_slice_id = _normalize_text(selected_item.get("slice_id"), default="")
+    processed_after = processed_before
+    if handoff_prepared and selected_slice_id:
+        processed_after = _serialize_required_signals([*processed_before, selected_slice_id])
+    runnable_count = sum(1 for item in queue_items if bool(item.get("runnable", False)))
+    blocked_count = sum(
+        1
+        for item in queue_items
+        if bool(item.get("blocked", False)) or bool(item.get("processed", False))
+    )
+    return {
+        "queue_status": (
+            queue_status if queue_status in _PROJECT_PR_QUEUE_STATUSES else "insufficient_truth"
+        ),
+        "queue_reason": queue_reason_codes[0],
+        "queue_reason_codes": queue_reason_codes,
+        "queue_item_count": len(queue_items),
+        "queue_runnable_count": runnable_count,
+        "queue_blocked_count": blocked_count,
+        "queue_selected_slice_id": selected_slice_id,
+        "queue_selected_roadmap_item_id": _normalize_text(
+            selected_item.get("roadmap_item_id"),
+            default="",
+        ),
+        "queue_selected_blocked": bool(selected_item.get("blocked", False)),
+        "queue_handoff_prepared": bool(handoff_prepared),
+        "queue_handoff_payload": handoff_payload,
+        "queue_items": queue_items,
+        "queue_processed_slice_ids_before": processed_before,
+        "queue_processed_slice_ids_after": processed_after,
+    }
+
+
+def _normalize_review_assimilation_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _REVIEW_ASSIMILATION_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _REVIEW_ASSIMILATION_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["assimilation_result_insufficient_truth"]
+
+
+def _build_review_assimilation_state(
+    *,
+    queue_status: str,
+    queue_reason: str,
+    queue_handoff_prepared: bool,
+    queue_handoff_payload: Mapping[str, Any] | None,
+    restart_result_status: str,
+    continuation_next_step_target: str,
+    continuation_next_step_reason: str,
+    continuation_next_step_truth_insufficiency_explicit: bool,
+    final_human_review_required: bool,
+    final_human_review_reason: str,
+) -> dict[str, Any]:
+    normalized_queue_status = _normalize_text(queue_status, default="insufficient_truth")
+    normalized_queue_reason = _normalize_text(queue_reason, default="")
+    normalized_result_status = _normalize_text(restart_result_status, default="not_attempted")
+    normalized_next_step_target = _normalize_text(continuation_next_step_target, default="none")
+    normalized_next_step_reason = _normalize_text(continuation_next_step_reason, default="")
+    normalized_final_review_reason = _normalize_text(final_human_review_reason, default="")
+    handoff_payload_map = (
+        dict(queue_handoff_payload)
+        if isinstance(queue_handoff_payload, Mapping)
+        else {}
+    )
+    handoff_slice_id = _normalize_text(handoff_payload_map.get("slice_id"), default="")
+    handoff_roadmap_item_id = _normalize_text(
+        handoff_payload_map.get("roadmap_item_id"),
+        default="",
+    )
+
+    assimilation_status = "insufficient_truth"
+    assimilation_action = "none"
+    assimilation_reason = "assimilation_result_insufficient_truth"
+    reviewable = False
+
+    if normalized_queue_status == "insufficient_truth":
+        assimilation_status = "insufficient_truth"
+        assimilation_reason = "assimilation_queue_state_insufficient_truth"
+    elif normalized_queue_status == "empty":
+        assimilation_status = "no_action"
+        assimilation_reason = "assimilation_queue_empty"
+    elif normalized_queue_status == "blocked":
+        assimilation_status = "no_action"
+        assimilation_reason = (
+            "assimilation_prompt_unavailable"
+            if normalized_queue_reason == "prompt_unavailable_for_selected_slice"
+            else "assimilation_queue_blocked"
+        )
+    elif normalized_queue_status != "prepared":
+        assimilation_status = "insufficient_truth"
+        assimilation_reason = "assimilation_queue_state_insufficient_truth"
+    elif not queue_handoff_prepared:
+        assimilation_status = "no_action"
+        assimilation_reason = "assimilation_queue_blocked"
+    else:
+        reviewable = True
+        if normalized_result_status in {"", "unknown", "not_attempted", "not_started", "running"}:
+            assimilation_status = "insufficient_truth"
+            assimilation_reason = "assimilation_result_insufficient_truth"
+        elif final_human_review_required:
+            assimilation_status = "assimilated"
+            assimilation_action = "escalate"
+            assimilation_reason = "assimilation_escalate_manual_followup"
+        elif normalized_result_status == "completed":
+            assimilation_status = "assimilated"
+            assimilation_action = "accept"
+            assimilation_reason = "assimilation_accept_succeeded"
+        elif normalized_result_status in {"failed", "timed_out"}:
+            assimilation_status = "assimilated"
+            if normalized_next_step_target == "replan" or normalized_next_step_reason == "next_step_selected_replan":
+                assimilation_action = "replan"
+                assimilation_reason = "assimilation_replan_design_invalid"
+            elif (
+                normalized_next_step_target == "truth_gather"
+                or continuation_next_step_truth_insufficiency_explicit
+            ):
+                assimilation_action = "split"
+                assimilation_reason = "assimilation_split_scope_signal"
+            elif normalized_next_step_target in {"retry", "supported_repair"}:
+                assimilation_action = "retry"
+                assimilation_reason = "assimilation_retry_retryable_failure"
+            elif (
+                normalized_final_review_reason
+                and normalized_final_review_reason != "final_review_not_required"
+            ):
+                assimilation_action = "escalate"
+                assimilation_reason = "assimilation_escalate_manual_followup"
+            else:
+                assimilation_action = "escalate"
+                assimilation_reason = "assimilation_escalate_unclassified"
+        else:
+            assimilation_status = "insufficient_truth"
+            assimilation_reason = "assimilation_result_insufficient_truth"
+
+    assimilation_reason_codes = _normalize_review_assimilation_reason_codes([assimilation_reason])
+    if assimilation_status not in _REVIEW_ASSIMILATION_STATUSES:
+        assimilation_status = "insufficient_truth"
+    if assimilation_action not in _REVIEW_ASSIMILATION_ACTIONS:
+        assimilation_action = "none"
+    return {
+        "review_assimilation_status": assimilation_status,
+        "review_assimilation_action": assimilation_action,
+        "review_assimilation_reason": assimilation_reason_codes[0],
+        "review_assimilation_reason_codes": assimilation_reason_codes,
+        "review_assimilation_available": bool(
+            assimilation_status == "assimilated" and assimilation_action != "none"
+        ),
+        "review_assimilation_reviewable": bool(reviewable),
+        "review_assimilation_queue_status": normalized_queue_status,
+        "review_assimilation_queue_reason": normalized_queue_reason,
+        "review_assimilation_result_status": normalized_result_status,
+        "review_assimilation_handoff_slice_id": handoff_slice_id,
+        "review_assimilation_handoff_roadmap_item_id": handoff_roadmap_item_id,
+    }
+
+
+def _normalize_self_healing_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _SELF_HEALING_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _SELF_HEALING_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["self_healing_insufficient_assimilation_truth"]
+
+
+def _build_bounded_self_healing_state(
+    *,
+    review_assimilation_status: str,
+    review_assimilation_action: str,
+    review_assimilation_available: bool,
+    review_assimilation_reviewable: bool,
+    review_assimilation_queue_status: str,
+    continuation_next_step_truth_insufficiency_explicit: bool,
+    supported_repair_execution_status: str,
+    continuation_repair_playbook_selected: bool,
+    continuation_repair_playbook_class: str,
+    continuation_repair_playbook_candidate_action: str,
+    final_human_review_required: bool,
+    final_human_review_reason: str,
+    continuation_budget_status: str,
+    continuation_branch_budget_status: str,
+    continuation_no_progress_stop_required: bool,
+    continuation_failure_bucket_denied: bool,
+    safety_duplicate_pending: bool,
+    safety_cooldown_active: bool,
+    safety_loop_suspected: bool,
+    safety_delivery_blocked: bool,
+    safety_delivery_deferred: bool,
+    prior_self_healing_transition_count: int,
+    self_healing_chain_limit: int,
+    prior_continuation_retry_count: int,
+    prior_continuation_replan_count: int,
+    prior_continuation_truth_gather_count: int,
+    continuation_retry_limit: int,
+    continuation_replan_limit: int,
+    continuation_truth_gather_limit: int,
+) -> dict[str, Any]:
+    assimilation_status = _normalize_text(
+        review_assimilation_status,
+        default="insufficient_truth",
+    )
+    assimilation_action = _normalize_text(
+        review_assimilation_action,
+        default="none",
+    )
+    queue_status = _normalize_text(
+        review_assimilation_queue_status,
+        default="insufficient_truth",
+    )
+    continuation_budget_status = _normalize_text(
+        continuation_budget_status,
+        default="insufficient_truth",
+    )
+    continuation_branch_budget_status = _normalize_text(
+        continuation_branch_budget_status,
+        default="not_applicable",
+    )
+    final_human_review_reason = _normalize_text(
+        final_human_review_reason,
+        default="",
+    )
+
+    transition_target = "none"
+    transition_selected = False
+    transition_executed = False
+    transition_allowed = False
+    self_healing_status = "insufficient_truth"
+    self_healing_reason = "self_healing_insufficient_assimilation_truth"
+
+    chain_limit = max(0, _as_non_negative_int(self_healing_chain_limit, default=0))
+    transition_count_before = _as_non_negative_int(
+        prior_self_healing_transition_count,
+        default=0,
+    )
+    chain_budget_remaining_before = max(0, chain_limit - transition_count_before)
+
+    assimilation_unavailable = bool(
+        assimilation_status in {"insufficient_truth", ""}
+        or not review_assimilation_reviewable
+        or queue_status in {"insufficient_truth", "blocked", "empty"}
+    )
+    if assimilation_unavailable and assimilation_status == "insufficient_truth":
+        self_healing_status = "insufficient_truth"
+        self_healing_reason = "self_healing_insufficient_assimilation_truth"
+    elif assimilation_status == "no_action" or assimilation_action == "none":
+        self_healing_status = "not_applicable"
+        self_healing_reason = (
+            "self_healing_not_applicable_assimilation_accept"
+            if assimilation_action == "accept"
+            else "self_healing_not_applicable_assimilation_no_action"
+        )
+    elif not review_assimilation_available:
+        self_healing_status = "not_applicable"
+        self_healing_reason = "self_healing_not_applicable_assimilation_no_action"
+    elif queue_status != "prepared":
+        self_healing_status = "blocked"
+        self_healing_reason = "self_healing_blocked_queue_non_runnable"
+    else:
+        if assimilation_action == "retry":
+            transition_target = "retry"
+        elif assimilation_action == "replan":
+            transition_target = "replan"
+        elif assimilation_action == "split":
+            transition_target = "truth_gather"
+        elif assimilation_action == "escalate":
+            alternative_supported_repair_allowed = bool(
+                supported_repair_execution_status == "executed_verification_failed"
+                and continuation_repair_playbook_selected
+                and continuation_repair_playbook_class in _SUPPORTED_REPAIR_EXECUTABLE_PLAYBOOK_CLASSES
+                and continuation_repair_playbook_candidate_action
+                in _SUPPORTED_REPAIR_EXECUTABLE_CANDIDATE_ACTIONS
+            )
+            if alternative_supported_repair_allowed:
+                transition_target = "alternative_supported_repair"
+            else:
+                self_healing_status = "blocked"
+                self_healing_reason = "self_healing_blocked_alternative_repair_not_allowed"
+        elif assimilation_action == "accept":
+            self_healing_status = "not_applicable"
+            self_healing_reason = "self_healing_not_applicable_assimilation_accept"
+        else:
+            self_healing_status = "blocked"
+            self_healing_reason = "self_healing_blocked_unsupported_action"
+
+        if transition_target != "none":
+            transition_selected = True
+            selected_reason_map = {
+                "retry": "self_healing_selected_retry",
+                "replan": "self_healing_selected_replan",
+                "truth_gather": "self_healing_selected_truth_gather",
+                "alternative_supported_repair": (
+                    "self_healing_selected_alternative_supported_repair"
+                ),
+            }
+            executed_reason_map = {
+                "retry": "self_healing_executed_retry",
+                "replan": "self_healing_executed_replan",
+                "truth_gather": "self_healing_executed_truth_gather",
+                "alternative_supported_repair": (
+                    "self_healing_executed_alternative_supported_repair"
+                ),
+            }
+            self_healing_status = "selected"
+            self_healing_reason = selected_reason_map.get(
+                transition_target,
+                "self_healing_blocked_unsupported_action",
+            )
+
+            safety_gate_blocked = bool(
+                continuation_budget_status != "available"
+                or continuation_no_progress_stop_required
+                or continuation_failure_bucket_denied
+                or safety_duplicate_pending
+                or safety_cooldown_active
+                or safety_loop_suspected
+                or safety_delivery_blocked
+                or safety_delivery_deferred
+            )
+            branch_budget_exhausted = False
+            if transition_target == "retry":
+                branch_budget_exhausted = bool(
+                    prior_continuation_retry_count >= continuation_retry_limit
+                )
+            elif transition_target == "replan":
+                branch_budget_exhausted = bool(
+                    prior_continuation_replan_count >= continuation_replan_limit
+                )
+            elif transition_target == "truth_gather":
+                branch_budget_exhausted = bool(
+                    prior_continuation_truth_gather_count
+                    >= continuation_truth_gather_limit
+                )
+            if continuation_branch_budget_status == "exhausted":
+                branch_budget_exhausted = True
+
+            allow_despite_final_review = bool(
+                transition_target == "alternative_supported_repair"
+                and final_human_review_reason
+                == "final_review_supported_repair_verification_failed"
+            )
+            final_human_blocked = bool(
+                final_human_review_required and not allow_despite_final_review
+            )
+
+            if chain_budget_remaining_before <= 0:
+                self_healing_status = "blocked"
+                self_healing_reason = "self_healing_blocked_budget_exhausted"
+            elif safety_gate_blocked:
+                self_healing_status = "blocked"
+                self_healing_reason = "self_healing_blocked_safety_gate"
+            elif branch_budget_exhausted:
+                self_healing_status = "blocked"
+                self_healing_reason = "self_healing_blocked_branch_budget_exhausted"
+            elif final_human_blocked:
+                self_healing_status = "blocked"
+                self_healing_reason = "self_healing_blocked_final_human_review"
+            else:
+                transition_allowed = True
+                transition_executed = True
+                self_healing_status = "executed"
+                self_healing_reason = executed_reason_map.get(
+                    transition_target,
+                    "self_healing_blocked_unsupported_action",
+                )
+
+    transition_count_after = transition_count_before + (1 if transition_executed else 0)
+    chain_budget_remaining_after = max(0, chain_limit - transition_count_after)
+    self_healing_reason_codes = _normalize_self_healing_reason_codes([self_healing_reason])
+    human_fallback_preserved = bool(
+        self_healing_status in {"blocked", "insufficient_truth", "not_applicable"}
+    )
+    if self_healing_status not in _SELF_HEALING_STATUSES:
+        self_healing_status = "insufficient_truth"
+    if transition_target not in _SELF_HEALING_TRANSITION_TARGETS:
+        transition_target = "none"
+    return {
+        "self_healing_status": self_healing_status,
+        "self_healing_transition_selected": bool(transition_selected),
+        "self_healing_transition_target": transition_target,
+        "self_healing_transition_allowed": bool(transition_allowed),
+        "self_healing_transition_executed": bool(transition_executed),
+        "self_healing_reason": self_healing_reason_codes[0],
+        "self_healing_reason_codes": self_healing_reason_codes,
+        "self_healing_chain_limit": chain_limit,
+        "self_healing_transition_count_before": transition_count_before,
+        "self_healing_transition_count_after": transition_count_after,
+        "self_healing_chain_budget_remaining_before": chain_budget_remaining_before,
+        "self_healing_chain_budget_remaining_after": chain_budget_remaining_after,
+        "self_healing_human_fallback_preserved": bool(human_fallback_preserved),
+        "self_healing_source_assimilation_status": assimilation_status,
+        "self_healing_source_assimilation_action": assimilation_action,
+        "self_healing_truth_insufficiency_signal": bool(
+            continuation_next_step_truth_insufficiency_explicit
+        ),
+    }
+
+
+def _normalize_long_running_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _LONG_RUNNING_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _LONG_RUNNING_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["long_running_insufficient_truth_queue_state"]
+
+
+def _build_long_running_stability_state(
+    *,
+    objective_id: str,
+    queue_status: str,
+    queue_selected_slice_id: str,
+    queue_handoff_prepared: bool,
+    queue_processed_count: int,
+    review_assimilation_status: str,
+    review_assimilation_action: str,
+    review_assimilation_available: bool,
+    self_healing_status: str,
+    self_healing_transition_target: str,
+    self_healing_transition_executed: bool,
+    self_healing_human_fallback_preserved: bool,
+    self_healing_chain_budget_remaining_after: int,
+    self_healing_transition_count_after: int,
+    final_human_review_required: bool,
+    automatic_restart_executed: bool,
+    automatic_continuation_run_count: int,
+    prior_long_running_replay_key: str,
+    prior_long_running_progress_signature: str,
+    prior_long_running_stale_cycle_count: int,
+    prior_long_running_stuck_cycle_count: int,
+    prior_long_running_watchdog_heartbeat_at: str,
+    now: Callable[[], datetime],
+) -> dict[str, Any]:
+    now_dt = now()
+    now_at = now_dt.isoformat(timespec="seconds")
+    normalized_objective_id = _normalize_text(objective_id, default="")
+    normalized_queue_status = _normalize_text(queue_status, default="insufficient_truth")
+    normalized_selected_slice_id = _normalize_text(queue_selected_slice_id, default="")
+    normalized_assimilation_status = _normalize_text(
+        review_assimilation_status,
+        default="insufficient_truth",
+    )
+    normalized_assimilation_action = _normalize_text(
+        review_assimilation_action,
+        default="none",
+    )
+    normalized_self_healing_status = _normalize_text(
+        self_healing_status,
+        default="insufficient_truth",
+    )
+    normalized_self_healing_target = _normalize_text(
+        self_healing_transition_target,
+        default="none",
+    )
+    queue_processed_count_value = _as_non_negative_int(queue_processed_count, default=0)
+    run_count_value = _as_non_negative_int(automatic_continuation_run_count, default=0)
+    self_healing_transition_count_value = _as_non_negative_int(
+        self_healing_transition_count_after,
+        default=0,
+    )
+    chain_budget_remaining = _as_non_negative_int(
+        self_healing_chain_budget_remaining_after,
+        default=0,
+    )
+    current_replay_key = "|".join(
+        [
+            normalized_objective_id,
+            normalized_selected_slice_id,
+            normalized_assimilation_status,
+            normalized_assimilation_action,
+            normalized_self_healing_status,
+            normalized_self_healing_target,
+        ]
+    ).strip("|")
+    progress_signature = "|".join(
+        [
+            str(run_count_value),
+            str(queue_processed_count_value),
+            str(self_healing_transition_count_value),
+            "restart_executed" if automatic_restart_executed else "restart_not_executed",
+            "self_healing_executed" if self_healing_transition_executed else "self_healing_not_executed",
+        ]
+    )
+    prior_replay_key = _normalize_text(prior_long_running_replay_key, default="")
+    prior_progress_signature = _normalize_text(
+        prior_long_running_progress_signature,
+        default="",
+    )
+    replay_key_unchanged = bool(
+        current_replay_key and prior_replay_key and current_replay_key == prior_replay_key
+    )
+    progress_unchanged = bool(
+        replay_key_unchanged
+        and progress_signature
+        and prior_progress_signature
+        and progress_signature == prior_progress_signature
+    )
+    stale_cycle_count = (
+        _as_non_negative_int(prior_long_running_stale_cycle_count, default=0) + 1
+        if progress_unchanged
+        else 0
+    )
+    stuck_cycle_count = (
+        _as_non_negative_int(prior_long_running_stuck_cycle_count, default=0) + 1
+        if progress_unchanged
+        else 0
+    )
+    stale_after_seconds = _LONG_RUNNING_STALE_AFTER_SECONDS_DEFAULT
+    prior_heartbeat_dt = _parse_iso_timestamp(prior_long_running_watchdog_heartbeat_at)
+    stale_age_seconds = 0
+    if prior_heartbeat_dt is not None:
+        comparable_now = now_dt
+        if prior_heartbeat_dt.tzinfo is None and comparable_now.tzinfo is not None:
+            prior_heartbeat_dt = prior_heartbeat_dt.replace(tzinfo=comparable_now.tzinfo)
+        elif prior_heartbeat_dt.tzinfo is not None and comparable_now.tzinfo is None:
+            comparable_now = comparable_now.replace(tzinfo=prior_heartbeat_dt.tzinfo)
+        stale_age_seconds = max(
+            0,
+            int((comparable_now - prior_heartbeat_dt).total_seconds()),
+        )
+    stale_detected = bool(
+        progress_unchanged
+        and stale_age_seconds >= stale_after_seconds
+    )
+    stuck_detected = bool(
+        progress_unchanged
+        and stuck_cycle_count >= _LONG_RUNNING_STUCK_CYCLE_THRESHOLD_DEFAULT
+    )
+
+    status = "insufficient_truth"
+    reason = "long_running_insufficient_truth_queue_state"
+    pause_required = True
+    resume_allowed = False
+    escalation_required = False
+    safe_stop_required = True
+    watchdog_active = False
+
+    if normalized_queue_status == "insufficient_truth":
+        status = "insufficient_truth"
+        reason = "long_running_insufficient_truth_queue_state"
+    elif final_human_review_required:
+        status = "escalated"
+        reason = "long_running_escalated_final_human_review_required"
+        escalation_required = True
+    elif normalized_queue_status == "empty":
+        status = "safe_stop"
+        reason = "long_running_safe_stop_queue_empty"
+    elif normalized_queue_status == "blocked":
+        status = "safe_stop"
+        reason = "long_running_safe_stop_queue_blocked"
+    elif bool(self_healing_human_fallback_preserved):
+        status = "safe_stop"
+        reason = "long_running_safe_stop_human_fallback"
+    elif chain_budget_remaining <= 0:
+        status = "safe_stop"
+        reason = "long_running_safe_stop_chain_budget_exhausted"
+    elif stuck_detected:
+        status = "escalated"
+        reason = "long_running_escalated_stuck_detection"
+        escalation_required = True
+    elif stale_detected:
+        status = "paused"
+        reason = "long_running_paused_stale_watchdog"
+        resume_allowed = bool(current_replay_key)
+    elif (
+        normalized_queue_status == "prepared"
+        and queue_handoff_prepared
+        and review_assimilation_available
+    ):
+        status = "monitoring"
+        reason = "long_running_monitoring_active"
+        pause_required = False
+        safe_stop_required = False
+        watchdog_active = True
+    elif (
+        normalized_queue_status == "prepared"
+        and queue_handoff_prepared
+        and current_replay_key
+    ):
+        status = "resume_ready"
+        reason = "long_running_resume_ready_replay_safe"
+        resume_allowed = True
+        safe_stop_required = False
+    else:
+        status = "safe_stop"
+        reason = "long_running_safe_stop_human_fallback"
+
+    reason_codes = _normalize_long_running_reason_codes([reason])
+    if status not in _LONG_RUNNING_STABILITY_STATUSES:
+        status = "insufficient_truth"
+    if status in {"monitoring"}:
+        pause_required = False
+    replay_safe = bool(current_replay_key and progress_signature)
+    resume_token = (
+        f"{current_replay_key}|{self_healing_transition_count_value}|{queue_processed_count_value}"
+        if replay_safe
+        else ""
+    )
+    return {
+        "long_running_stability_status": status,
+        "long_running_watchdog_active": bool(watchdog_active),
+        "long_running_stale_detected": bool(stale_detected),
+        "long_running_stuck_detected": bool(stuck_detected),
+        "long_running_pause_required": bool(pause_required),
+        "long_running_resume_allowed": bool(resume_allowed),
+        "long_running_escalation_required": bool(escalation_required),
+        "long_running_safe_stop_required": bool(safe_stop_required),
+        "long_running_replay_safe": bool(replay_safe),
+        "long_running_replay_key": current_replay_key,
+        "long_running_progress_signature": progress_signature,
+        "long_running_resume_token": resume_token,
+        "long_running_watchdog_heartbeat_at": now_at,
+        "long_running_watchdog_stale_after_seconds": stale_after_seconds,
+        "long_running_watchdog_stale_age_seconds": stale_age_seconds,
+        "long_running_stale_cycle_count": stale_cycle_count,
+        "long_running_stuck_cycle_count": stuck_cycle_count,
+        "long_running_reason": reason_codes[0],
+        "long_running_reason_codes": reason_codes,
+        "long_running_source_queue_status": normalized_queue_status,
+        "long_running_source_review_assimilation_status": normalized_assimilation_status,
+        "long_running_source_review_assimilation_action": normalized_assimilation_action,
+        "long_running_source_self_healing_status": normalized_self_healing_status,
+        "long_running_source_self_healing_target": normalized_self_healing_target,
+    }
+
+
+def _normalize_objective_compiler_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _OBJECTIVE_COMPILER_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _OBJECTIVE_COMPILER_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["objective_truth_insufficient"]
+
+
+def _normalize_project_autonomy_budget_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_AUTONOMY_BUDGET_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_AUTONOMY_BUDGET_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["autonomy_budget_insufficient_truth"]
+
+
+def _build_objective_done_compiler_state(
+    *,
+    objective_id: str,
+    project_planning_summary_status: str,
+    project_pr_slicing_status: str,
+    project_pr_slice_count: int,
+    project_pr_queue_status: str,
+    project_pr_queue_reason: str,
+    project_pr_queue_processed_slice_ids_after: list[str],
+    review_assimilation_reason: str,
+    self_healing_human_fallback_preserved: bool,
+    long_running_stability_status: str,
+    final_human_review_required: bool,
+) -> dict[str, Any]:
+    normalized_objective_id = _normalize_text(objective_id, default="")
+    planning_status = _normalize_text(
+        project_planning_summary_status,
+        default="insufficient_truth",
+    )
+    slicing_status = _normalize_text(
+        project_pr_slicing_status,
+        default="insufficient_truth",
+    )
+    queue_status = _normalize_text(project_pr_queue_status, default="insufficient_truth")
+    queue_reason = _normalize_text(project_pr_queue_reason, default="")
+    assimilation_reason = _normalize_text(review_assimilation_reason, default="")
+    long_running_status = _normalize_text(
+        long_running_stability_status,
+        default="insufficient_truth",
+    )
+    processed_slice_ids = _normalize_string_list(project_pr_queue_processed_slice_ids_after)
+    processed_count = len(processed_slice_ids)
+    slice_count = _as_non_negative_int(project_pr_slice_count, default=0)
+
+    compiler_status = "insufficient_truth"
+    compiler_reason = "objective_truth_insufficient"
+    current_objective_available = False
+    if not normalized_objective_id:
+        compiler_status = "insufficient_truth"
+        compiler_reason = "objective_identity_missing"
+    elif planning_status != "available" and slicing_status != "available":
+        compiler_status = "insufficient_truth"
+        compiler_reason = "objective_truth_insufficient"
+    else:
+        compiler_status = "available"
+        compiler_reason = "objective_compiled"
+        current_objective_available = True
+
+    scope_drift_status = "insufficient_truth"
+    scope_drift_reason = "scope_drift_insufficient_truth"
+    scope_drift_detected = False
+    if slicing_status == "available":
+        scope_drift_detected = bool(
+            queue_reason == "prompt_unavailable_for_selected_slice"
+            or assimilation_reason == "assimilation_split_scope_signal"
+        )
+        if scope_drift_detected:
+            scope_drift_status = "detected"
+            scope_drift_reason = (
+                "scope_drift_detected_queue_prompt_mismatch"
+                if queue_reason == "prompt_unavailable_for_selected_slice"
+                else "scope_drift_detected_split_signal"
+            )
+        else:
+            scope_drift_status = "clear"
+            scope_drift_reason = "scope_drift_clear"
+
+    done_status = "insufficient_truth"
+    done_reason = "done_criteria_insufficient_truth"
+    done_met = False
+    done_remaining_count = 0
+    if compiler_status == "available" and slicing_status == "available":
+        done_remaining_count = max(0, slice_count - processed_count)
+        done_met = bool(
+            slice_count > 0
+            and done_remaining_count == 0
+            and queue_status == "empty"
+        )
+        done_status = "met" if done_met else "not_met"
+        done_reason = "done_criteria_met" if done_met else "done_criteria_incomplete"
+
+    stop_status = "insufficient_truth"
+    stop_reason = "stop_criteria_insufficient_truth"
+    stop_met = True
+    if compiler_status == "available":
+        stop_met = bool(
+            final_human_review_required
+            or long_running_status in {"safe_stop", "paused", "escalated"}
+            or bool(self_healing_human_fallback_preserved)
+        )
+        stop_status = "stop" if stop_met else "continue"
+        if not stop_met:
+            stop_reason = "stop_criteria_continue"
+        elif done_met:
+            stop_reason = "stop_criteria_done_met"
+        elif final_human_review_required:
+            stop_reason = "stop_criteria_human_review_required"
+        elif long_running_status in {"paused", "escalated"}:
+            stop_reason = "stop_criteria_stability_pause_or_escalation"
+        else:
+            stop_reason = "stop_criteria_human_fallback_preserved"
+
+    completion_posture = "objective_insufficient_truth"
+    completion_reason = "completion_objective_insufficient_truth"
+    if compiler_status != "available":
+        completion_posture = "objective_insufficient_truth"
+        completion_reason = "completion_objective_insufficient_truth"
+    elif done_met and not scope_drift_detected:
+        completion_posture = "objective_completed"
+        completion_reason = "completion_objective_completed"
+    elif stop_met and (
+        final_human_review_required
+        or queue_status == "blocked"
+        or long_running_status in {"paused", "escalated"}
+        or bool(self_healing_human_fallback_preserved)
+    ):
+        completion_posture = "objective_blocked"
+        completion_reason = "completion_objective_blocked"
+    else:
+        completion_posture = "objective_active"
+        completion_reason = "completion_objective_active"
+
+    reason_codes = _normalize_objective_compiler_reason_codes(
+        [
+            compiler_reason,
+            done_reason,
+            scope_drift_reason,
+            stop_reason,
+            completion_reason,
+        ]
+    )
+    if compiler_status not in _OBJECTIVE_COMPILER_STATUSES:
+        compiler_status = "insufficient_truth"
+    if done_status not in _OBJECTIVE_DONE_CRITERIA_STATUSES:
+        done_status = "insufficient_truth"
+    if stop_status not in _OBJECTIVE_STOP_CRITERIA_STATUSES:
+        stop_status = "insufficient_truth"
+    if completion_posture not in _OBJECTIVE_COMPLETION_POSTURES:
+        completion_posture = "objective_insufficient_truth"
+    if scope_drift_status not in _OBJECTIVE_SCOPE_DRIFT_STATUSES:
+        scope_drift_status = "insufficient_truth"
+    return {
+        "objective_compiler_status": compiler_status,
+        "objective_compiler_reason": reason_codes[0],
+        "objective_compiler_reason_codes": reason_codes,
+        "current_objective_id": normalized_objective_id,
+        "current_objective_available": bool(current_objective_available),
+        "objective_done_criteria_status": done_status,
+        "objective_done_criteria_met": bool(done_met),
+        "objective_done_remaining_slice_count": done_remaining_count,
+        "objective_stop_criteria_status": stop_status,
+        "objective_stop_criteria_met": bool(stop_met),
+        "objective_completion_posture": completion_posture,
+        "objective_scope_drift_status": scope_drift_status,
+        "objective_scope_drift_detected": bool(scope_drift_detected),
+        "objective_scope_drift_reason": scope_drift_reason,
+        "objective_source_slice_count": slice_count,
+        "objective_source_processed_count": processed_count,
+        "objective_source_queue_status": queue_status,
+    }
+
+
+def _build_project_autonomy_budget_state(
+    *,
+    project_planning_summary_status: str,
+    objective_compiler_status: str,
+    objective_completion_posture: str,
+    final_human_review_required: bool,
+    high_risk_posture: bool,
+    continuation_budget_truth_sufficient: bool,
+    continuation_budget_status: str,
+    continuation_budget_run_exhausted: bool,
+    continuation_budget_objective_exhausted: bool,
+    continuation_budget_run_limit: int,
+    continuation_budget_objective_limit: int,
+    continuation_budget_run_remaining: int,
+    continuation_budget_objective_remaining: int,
+    continuation_budget_branch_type: str,
+    continuation_budget_branch_status: str,
+    continuation_budget_branch_exhausted: bool,
+    continuation_budget_branch_limit: int,
+    continuation_budget_branch_remaining: int,
+) -> dict[str, Any]:
+    planning_status = _normalize_text(
+        project_planning_summary_status,
+        default="insufficient_truth",
+    )
+    objective_status = _normalize_text(
+        objective_compiler_status,
+        default="insufficient_truth",
+    )
+    completion_posture = _normalize_text(
+        objective_completion_posture,
+        default="objective_insufficient_truth",
+    )
+    budget_status = _normalize_text(
+        continuation_budget_status,
+        default="insufficient_truth",
+    )
+    branch_type = _normalize_text(continuation_budget_branch_type, default="unknown")
+    branch_status = _normalize_text(
+        continuation_budget_branch_status,
+        default="insufficient_truth",
+    )
+
+    compiler_status = "insufficient_truth"
+    priority_posture = "insufficient_truth"
+    run_budget_posture = "insufficient_truth"
+    objective_budget_posture = "insufficient_truth"
+    pr_retry_budget_posture = "insufficient_truth"
+    high_risk_defer_posture = "insufficient_truth"
+    priority_deferred = False
+    high_risk_defer_active = False
+    pr_retry_budget_applicable = False
+    pr_retry_budget_exhausted = False
+    run_budget_exhausted = False
+    objective_budget_exhausted = False
+
+    reason_codes: list[str] = []
+    truth_sufficient = bool(
+        planning_status == "available"
+        and objective_status == "available"
+        and continuation_budget_truth_sufficient
+        and budget_status in _CONTINUATION_BUDGET_STATUSES
+    )
+    if not truth_sufficient:
+        reason_codes.extend(
+            [
+                "autonomy_budget_insufficient_truth",
+                "project_priority_insufficient_truth",
+                "run_budget_insufficient_truth",
+                "objective_budget_insufficient_truth",
+                "pr_retry_budget_insufficient_truth",
+                "high_risk_defer_insufficient_truth",
+            ]
+        )
+    else:
+        compiler_status = "available"
+        run_budget_exhausted = bool(continuation_budget_run_exhausted)
+        objective_budget_exhausted = bool(continuation_budget_objective_exhausted)
+        run_budget_posture = "exhausted" if run_budget_exhausted else "available"
+        objective_budget_posture = (
+            "exhausted" if objective_budget_exhausted else "available"
+        )
+        if branch_type == "retry":
+            pr_retry_budget_applicable = True
+            pr_retry_budget_exhausted = bool(continuation_budget_branch_exhausted)
+            if branch_status in {"available", "exhausted"}:
+                pr_retry_budget_posture = branch_status
+            else:
+                pr_retry_budget_posture = "insufficient_truth"
+        else:
+            pr_retry_budget_posture = "not_applicable"
+
+        high_risk_defer_active = bool(
+            high_risk_posture or final_human_review_required
+        )
+        high_risk_defer_posture = "defer" if high_risk_defer_active else "clear"
+        priority_deferred = bool(
+            high_risk_defer_active or completion_posture == "objective_blocked"
+        )
+        any_budget_exhausted = bool(
+            run_budget_exhausted
+            or objective_budget_exhausted
+            or pr_retry_budget_exhausted
+        )
+        if completion_posture == "objective_completed":
+            priority_posture = "completed"
+        elif priority_deferred:
+            priority_posture = "deferred"
+        elif any_budget_exhausted:
+            priority_posture = "lower_priority"
+        else:
+            priority_posture = "active"
+
+        reason_codes.append("autonomy_budget_compiled")
+        if priority_posture == "completed":
+            reason_codes.append("project_priority_completed")
+        elif priority_posture == "deferred":
+            reason_codes.append(
+                "project_priority_deferred_high_risk"
+                if high_risk_defer_active
+                else "project_priority_deferred_blocked"
+            )
+        elif priority_posture == "lower_priority":
+            reason_codes.append("project_priority_lowered_budget_exhausted")
+        else:
+            reason_codes.append("project_priority_active")
+        reason_codes.append(
+            "run_budget_exhausted" if run_budget_exhausted else "run_budget_available"
+        )
+        reason_codes.append(
+            "objective_budget_exhausted"
+            if objective_budget_exhausted
+            else "objective_budget_available"
+        )
+        if pr_retry_budget_posture == "available":
+            reason_codes.append("pr_retry_budget_available")
+        elif pr_retry_budget_posture == "exhausted":
+            reason_codes.append("pr_retry_budget_exhausted")
+        elif pr_retry_budget_posture == "not_applicable":
+            reason_codes.append("pr_retry_budget_not_applicable")
+        else:
+            reason_codes.append("pr_retry_budget_insufficient_truth")
+        reason_codes.append(
+            "high_risk_defer_active"
+            if high_risk_defer_active
+            else "high_risk_defer_clear"
+        )
+
+    reason_codes = _normalize_project_autonomy_budget_reason_codes(reason_codes)
+    if compiler_status not in _PROJECT_AUTONOMY_BUDGET_STATUSES:
+        compiler_status = "insufficient_truth"
+    if priority_posture not in _PROJECT_PRIORITY_POSTURES:
+        priority_posture = "insufficient_truth"
+    if run_budget_posture not in _PROJECT_BUDGET_POSTURES:
+        run_budget_posture = "insufficient_truth"
+    if objective_budget_posture not in _PROJECT_BUDGET_POSTURES:
+        objective_budget_posture = "insufficient_truth"
+    if pr_retry_budget_posture not in _PROJECT_PR_RETRY_BUDGET_POSTURES:
+        pr_retry_budget_posture = "insufficient_truth"
+    if high_risk_defer_posture not in _PROJECT_HIGH_RISK_DEFER_POSTURES:
+        high_risk_defer_posture = "insufficient_truth"
+
+    return {
+        "project_autonomy_budget_status": compiler_status,
+        "project_autonomy_budget_reason": reason_codes[0],
+        "project_autonomy_budget_reason_codes": reason_codes,
+        "project_priority_posture": priority_posture,
+        "project_priority_deferred": bool(priority_deferred),
+        "project_high_risk_defer_posture": high_risk_defer_posture,
+        "project_high_risk_defer_active": bool(high_risk_defer_active),
+        "project_run_budget_posture": run_budget_posture,
+        "project_run_budget_limit": _as_non_negative_int(
+            continuation_budget_run_limit,
+            default=0,
+        ),
+        "project_run_budget_remaining": _as_non_negative_int(
+            continuation_budget_run_remaining,
+            default=0,
+        ),
+        "project_run_budget_exhausted": bool(run_budget_exhausted),
+        "project_objective_budget_posture": objective_budget_posture,
+        "project_objective_budget_limit": _as_non_negative_int(
+            continuation_budget_objective_limit,
+            default=0,
+        ),
+        "project_objective_budget_remaining": _as_non_negative_int(
+            continuation_budget_objective_remaining,
+            default=0,
+        ),
+        "project_objective_budget_exhausted": bool(objective_budget_exhausted),
+        "project_pr_retry_budget_posture": pr_retry_budget_posture,
+        "project_pr_retry_budget_applicable": bool(pr_retry_budget_applicable),
+        "project_pr_retry_budget_limit": _as_non_negative_int(
+            continuation_budget_branch_limit if branch_type == "retry" else 0,
+            default=0,
+        ),
+        "project_pr_retry_budget_remaining": _as_non_negative_int(
+            continuation_budget_branch_remaining if branch_type == "retry" else 0,
+            default=0,
+        ),
+        "project_pr_retry_budget_exhausted": bool(pr_retry_budget_exhausted),
+    }
+
+
+def _normalize_project_quality_gate_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_QUALITY_GATE_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_QUALITY_GATE_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["quality_gate_insufficient_truth"]
+
+
+def _build_project_quality_gate_state(
+    *,
+    project_planning_summary_status: str,
+    project_pr_slicing_status: str,
+    implementation_prompt_status: str,
+    implementation_prompt_payload: Mapping[str, Any],
+    project_pr_queue_status: str,
+    review_assimilation_status: str,
+    review_assimilation_action: str,
+    self_healing_status: str,
+    long_running_stability_status: str,
+    objective_compiler_status: str,
+    objective_completion_posture: str,
+    objective_scope_drift_detected: bool,
+    project_autonomy_budget_status: str,
+    project_priority_posture: str,
+    project_run_budget_posture: str,
+    project_objective_budget_posture: str,
+    project_pr_retry_budget_posture: str,
+    project_high_risk_defer_posture: str,
+    continuation_failure_bucket_denied: bool,
+    continuation_no_progress_stop_required: bool,
+    continuation_next_step_selection_status: str,
+    continuation_next_step_target: str,
+    supported_repair_execution_status: str,
+    final_human_review_required: bool,
+) -> dict[str, Any]:
+    planning_status = _normalize_text(
+        project_planning_summary_status,
+        default="insufficient_truth",
+    )
+    slicing_status = _normalize_text(
+        project_pr_slicing_status,
+        default="insufficient_truth",
+    )
+    prompt_status = _normalize_text(
+        implementation_prompt_status,
+        default="insufficient_truth",
+    )
+    queue_status = _normalize_text(
+        project_pr_queue_status,
+        default="insufficient_truth",
+    )
+    assimilation_status = _normalize_text(
+        review_assimilation_status,
+        default="insufficient_truth",
+    )
+    assimilation_action = _normalize_text(review_assimilation_action, default="none")
+    normalized_self_healing_status = _normalize_text(
+        self_healing_status,
+        default="insufficient_truth",
+    )
+    long_running_status = _normalize_text(
+        long_running_stability_status,
+        default="insufficient_truth",
+    )
+    objective_status = _normalize_text(
+        objective_compiler_status,
+        default="insufficient_truth",
+    )
+    completion_posture = _normalize_text(
+        objective_completion_posture,
+        default="objective_insufficient_truth",
+    )
+    autonomy_budget_status = _normalize_text(
+        project_autonomy_budget_status,
+        default="insufficient_truth",
+    )
+    priority_posture = _normalize_text(
+        project_priority_posture,
+        default="insufficient_truth",
+    )
+    run_budget_posture = _normalize_text(
+        project_run_budget_posture,
+        default="insufficient_truth",
+    )
+    objective_budget_posture = _normalize_text(
+        project_objective_budget_posture,
+        default="insufficient_truth",
+    )
+    pr_retry_budget_posture = _normalize_text(
+        project_pr_retry_budget_posture,
+        default="insufficient_truth",
+    )
+    high_risk_defer_posture = _normalize_text(
+        project_high_risk_defer_posture,
+        default="insufficient_truth",
+    )
+    next_step_selection_status = _normalize_text(
+        continuation_next_step_selection_status,
+        default="insufficient_truth",
+    )
+    next_step_target = _normalize_text(continuation_next_step_target, default="none")
+    repair_status = _normalize_text(
+        supported_repair_execution_status,
+        default="not_selected",
+    )
+
+    prompt_payload = (
+        dict(implementation_prompt_payload)
+        if isinstance(implementation_prompt_payload, Mapping)
+        else {}
+    )
+    preferred_files = [
+        _normalize_text(path, default="")
+        for path in prompt_payload.get("preferred_files", [])
+        if isinstance(path, str)
+    ]
+    has_runner_files = any(
+        path.startswith("automation/orchestration/") for path in preferred_files
+    )
+    has_test_files = any(path.startswith("tests/") for path in preferred_files)
+    changed_area_class = "unknown"
+    if has_runner_files and has_test_files:
+        changed_area_class = "runner_and_tests"
+    elif has_runner_files:
+        changed_area_class = "runner_only"
+    else:
+        prompt_scope_class = _normalize_text(
+            prompt_payload.get("bounded_scope_class"),
+            default="unknown",
+        )
+        if prompt_scope_class in {"runner_and_tests", "runner_only"}:
+            changed_area_class = prompt_scope_class
+    if changed_area_class not in _PROJECT_QUALITY_GATE_CHANGED_AREA_CLASSES:
+        changed_area_class = "unknown"
+
+    truth_sufficient = bool(
+        planning_status == "available"
+        and slicing_status == "available"
+        and prompt_status == "available"
+        and queue_status in _PROJECT_PR_QUEUE_STATUSES
+        and queue_status != "insufficient_truth"
+        and objective_status == "available"
+        and autonomy_budget_status == "available"
+    )
+    if not truth_sufficient:
+        reason_codes = _normalize_project_quality_gate_reason_codes(
+            [
+                "quality_gate_insufficient_truth",
+                "quality_gate_posture_insufficient_truth",
+                "quality_gate_changed_area_insufficient_truth",
+                "quality_gate_risk_insufficient_truth",
+            ]
+        )
+        return {
+            "project_quality_gate_status": "insufficient_truth",
+            "project_quality_gate_reason": reason_codes[0],
+            "project_quality_gate_reason_codes": reason_codes,
+            "project_quality_gate_posture": "insufficient_truth",
+            "project_quality_gate_merge_ready": False,
+            "project_quality_gate_review_ready": False,
+            "project_quality_gate_retry_needed": False,
+            "project_quality_gate_recommended": [],
+            "project_quality_gate_recommended_count": 0,
+            "project_quality_gate_changed_area_class": "unknown",
+            "project_quality_gate_risk_level": "insufficient_truth",
+            "project_quality_gate_high_risk": False,
+            "project_quality_gate_unavailable": True,
+        }
+
+    high_risk = bool(
+        high_risk_defer_posture == "defer"
+        or final_human_review_required
+        or continuation_failure_bucket_denied
+        or continuation_no_progress_stop_required
+        or completion_posture == "objective_blocked"
+        or long_running_status in {"paused", "escalated", "safe_stop"}
+        or repair_status
+        in {
+            "executed_verification_failed",
+            "not_executed_precheck_blocked",
+            "not_executed_qualification_failed",
+            "not_executed_launch_failed",
+        }
+    )
+    retry_signal = bool(
+        assimilation_action in {"retry", "replan", "split"}
+        or (
+            next_step_selection_status == "selected"
+            and next_step_target in {"retry", "replan", "truth_gather", "supported_repair"}
+        )
+        or normalized_self_healing_status in {"selected", "executed"}
+        or run_budget_posture == "exhausted"
+        or objective_budget_posture == "exhausted"
+        or pr_retry_budget_posture == "exhausted"
+    )
+    merge_ready = bool(
+        completion_posture == "objective_completed"
+        and assimilation_status == "assimilated"
+        and assimilation_action == "accept"
+        and queue_status == "empty"
+        and not high_risk
+        and not retry_signal
+        and priority_posture not in {"deferred", "insufficient_truth"}
+    )
+    retry_needed = bool(not merge_ready and retry_signal)
+    review_ready = bool(not merge_ready and not retry_needed)
+
+    posture = "review_ready"
+    if merge_ready:
+        posture = "merge_ready"
+    elif retry_needed:
+        posture = "retry_needed"
+    if posture not in _PROJECT_QUALITY_GATE_POSTURES:
+        posture = "insufficient_truth"
+
+    recommended = {"unit", "lint", "typecheck"}
+    targeted_regression_required = bool(
+        high_risk
+        or retry_needed
+        or changed_area_class == "runner_and_tests"
+        or bool(objective_scope_drift_detected)
+    )
+    if targeted_regression_required:
+        recommended.add("targeted_regression")
+    ordered_gates = [
+        gate
+        for gate in ["unit", "targeted_regression", "lint", "typecheck"]
+        if gate in recommended and gate in _PROJECT_QUALITY_GATE_NAMES
+    ]
+
+    risk_level = "low"
+    if high_risk:
+        risk_level = "high"
+    elif retry_needed or bool(objective_scope_drift_detected):
+        risk_level = "moderate"
+    if risk_level not in _PROJECT_QUALITY_GATE_RISK_LEVELS:
+        risk_level = "insufficient_truth"
+
+    reason_codes = ["quality_gate_compiled"]
+    if posture == "merge_ready":
+        reason_codes.append("quality_gate_posture_merge_ready")
+    elif posture == "retry_needed":
+        reason_codes.append("quality_gate_posture_retry_needed")
+    else:
+        reason_codes.append("quality_gate_posture_review_ready")
+    if changed_area_class == "runner_and_tests":
+        reason_codes.append("quality_gate_changed_area_runner_and_tests")
+    elif changed_area_class == "runner_only":
+        reason_codes.append("quality_gate_changed_area_runner_only")
+    else:
+        reason_codes.append("quality_gate_changed_area_unknown")
+    if risk_level == "high":
+        reason_codes.append("quality_gate_risk_high")
+    elif risk_level == "moderate":
+        reason_codes.append("quality_gate_risk_moderate")
+    else:
+        reason_codes.append("quality_gate_risk_low")
+    reason_codes.append(
+        "quality_gate_targeted_regression_enabled"
+        if targeted_regression_required
+        else "quality_gate_targeted_regression_not_required"
+    )
+    reason_codes = _normalize_project_quality_gate_reason_codes(reason_codes)
+    return {
+        "project_quality_gate_status": "available",
+        "project_quality_gate_reason": reason_codes[0],
+        "project_quality_gate_reason_codes": reason_codes,
+        "project_quality_gate_posture": posture,
+        "project_quality_gate_merge_ready": bool(merge_ready),
+        "project_quality_gate_review_ready": bool(review_ready),
+        "project_quality_gate_retry_needed": bool(retry_needed),
+        "project_quality_gate_recommended": ordered_gates,
+        "project_quality_gate_recommended_count": len(ordered_gates),
+        "project_quality_gate_changed_area_class": changed_area_class,
+        "project_quality_gate_risk_level": risk_level,
+        "project_quality_gate_high_risk": bool(high_risk),
+        "project_quality_gate_unavailable": False,
+    }
+
+
+def _normalize_project_merge_branch_lifecycle_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_MERGE_BRANCH_LIFECYCLE_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_MERGE_BRANCH_LIFECYCLE_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["merge_branch_lifecycle_insufficient_truth"]
+
+
+def _build_project_merge_branch_lifecycle_state(
+    *,
+    project_quality_gate_status: str,
+    project_quality_gate_posture: str,
+    project_quality_gate_merge_ready: bool,
+    project_quality_gate_retry_needed: bool,
+    project_quality_gate_high_risk: bool,
+    objective_compiler_status: str,
+    objective_completion_posture: str,
+    project_autonomy_budget_status: str,
+    project_priority_posture: str,
+    project_high_risk_defer_posture: str,
+    project_pr_queue_status: str,
+    project_pr_queue_processed_count: int,
+    review_assimilation_status: str,
+    review_assimilation_action: str,
+    self_healing_status: str,
+    long_running_stability_status: str,
+    final_human_review_required: bool,
+    final_human_review_gate_status: str,
+    continuation_failure_bucket_denied: bool,
+    continuation_no_progress_stop_required: bool,
+    supported_repair_execution_status: str,
+) -> dict[str, Any]:
+    quality_gate_status = _normalize_text(
+        project_quality_gate_status,
+        default="insufficient_truth",
+    )
+    quality_gate_posture = _normalize_text(
+        project_quality_gate_posture,
+        default="insufficient_truth",
+    )
+    objective_status = _normalize_text(
+        objective_compiler_status,
+        default="insufficient_truth",
+    )
+    completion_posture = _normalize_text(
+        objective_completion_posture,
+        default="objective_insufficient_truth",
+    )
+    autonomy_budget_status = _normalize_text(
+        project_autonomy_budget_status,
+        default="insufficient_truth",
+    )
+    priority_posture = _normalize_text(
+        project_priority_posture,
+        default="insufficient_truth",
+    )
+    high_risk_defer_posture = _normalize_text(
+        project_high_risk_defer_posture,
+        default="insufficient_truth",
+    )
+    queue_status = _normalize_text(
+        project_pr_queue_status,
+        default="insufficient_truth",
+    )
+    review_status = _normalize_text(
+        review_assimilation_status,
+        default="insufficient_truth",
+    )
+    review_action = _normalize_text(review_assimilation_action, default="none")
+    normalized_self_healing_status = _normalize_text(
+        self_healing_status,
+        default="insufficient_truth",
+    )
+    long_running_status = _normalize_text(
+        long_running_stability_status,
+        default="insufficient_truth",
+    )
+    final_review_gate_status = _normalize_text(
+        final_human_review_gate_status,
+        default="not_required",
+    )
+    repair_status = _normalize_text(
+        supported_repair_execution_status,
+        default="not_selected",
+    )
+    processed_count = _as_non_negative_int(
+        project_pr_queue_processed_count,
+        default=0,
+    )
+
+    truth_sufficient = bool(
+        quality_gate_status == "available"
+        and quality_gate_posture in _PROJECT_QUALITY_GATE_POSTURES
+        and quality_gate_posture != "insufficient_truth"
+        and objective_status == "available"
+        and completion_posture in _OBJECTIVE_COMPLETION_POSTURES
+        and completion_posture != "objective_insufficient_truth"
+        and autonomy_budget_status == "available"
+        and queue_status in _PROJECT_PR_QUEUE_STATUSES
+        and queue_status != "insufficient_truth"
+    )
+    if not truth_sufficient:
+        reason_codes = _normalize_project_merge_branch_lifecycle_reason_codes(
+            [
+                "merge_branch_lifecycle_insufficient_truth",
+                "merge_branch_posture_insufficient_truth",
+                "merge_branch_cleanup_candidate_insufficient_truth",
+                "merge_branch_quarantine_candidate_insufficient_truth",
+                "merge_branch_local_main_sync_insufficient_truth",
+            ]
+        )
+        return {
+            "project_merge_branch_lifecycle_status": "insufficient_truth",
+            "project_merge_branch_lifecycle_reason": reason_codes[0],
+            "project_merge_branch_lifecycle_reason_codes": reason_codes,
+            "project_merge_ready_posture": "insufficient_truth",
+            "project_merge_ready": False,
+            "project_branch_cleanup_candidate_posture": "insufficient_truth",
+            "project_branch_cleanup_candidate": False,
+            "project_branch_quarantine_candidate_posture": "insufficient_truth",
+            "project_branch_quarantine_candidate": False,
+            "project_local_main_sync_posture": "insufficient_truth",
+            "project_local_main_sync_required": False,
+            "project_merge_branch_lifecycle_unavailable": True,
+        }
+
+    quarantine_candidate = bool(
+        final_human_review_required
+        or final_review_gate_status == "required"
+        or high_risk_defer_posture == "defer"
+        or bool(project_quality_gate_high_risk)
+        or continuation_failure_bucket_denied
+        or continuation_no_progress_stop_required
+        or completion_posture == "objective_blocked"
+        or priority_posture == "deferred"
+        or long_running_status in {"paused", "escalated", "safe_stop"}
+        or repair_status
+        in {
+            "executed_verification_failed",
+            "not_executed_precheck_blocked",
+            "not_executed_qualification_failed",
+            "not_executed_launch_failed",
+        }
+    )
+    merge_ready = bool(
+        not quarantine_candidate
+        and quality_gate_posture == "merge_ready"
+        and bool(project_quality_gate_merge_ready)
+        and not bool(project_quality_gate_retry_needed)
+        and completion_posture == "objective_completed"
+        and review_status == "assimilated"
+        and review_action == "accept"
+        and queue_status == "empty"
+        and normalized_self_healing_status in {"not_applicable", "not_selected", "executed"}
+    )
+    cleanup_candidate = bool(
+        not quarantine_candidate
+        and (
+            merge_ready
+            or (
+                completion_posture == "objective_completed"
+                and review_status == "assimilated"
+                and review_action == "accept"
+                and queue_status in {"empty", "blocked"}
+            )
+        )
+    )
+    local_main_sync_required = bool(
+        queue_status in {"empty", "blocked"}
+        and (
+            merge_ready
+            or cleanup_candidate
+            or quarantine_candidate
+            or priority_posture in {"deferred", "lower_priority"}
+            or processed_count > 0
+        )
+    )
+
+    merge_ready_posture = "merge_ready" if merge_ready else "not_merge_ready"
+    cleanup_posture = "candidate" if cleanup_candidate else "not_candidate"
+    quarantine_posture = "candidate" if quarantine_candidate else "not_candidate"
+    sync_posture = "sync_required" if local_main_sync_required else "sync_not_required"
+
+    reason_codes = ["merge_branch_lifecycle_compiled"]
+    reason_codes.append(
+        "merge_branch_posture_merge_ready"
+        if merge_ready
+        else "merge_branch_posture_not_merge_ready"
+    )
+    reason_codes.append(
+        "merge_branch_cleanup_candidate_yes"
+        if cleanup_candidate
+        else "merge_branch_cleanup_candidate_no"
+    )
+    reason_codes.append(
+        "merge_branch_quarantine_candidate_yes"
+        if quarantine_candidate
+        else "merge_branch_quarantine_candidate_no"
+    )
+    reason_codes.append(
+        "merge_branch_local_main_sync_required"
+        if local_main_sync_required
+        else "merge_branch_local_main_sync_not_required"
+    )
+    reason_codes = _normalize_project_merge_branch_lifecycle_reason_codes(reason_codes)
+
+    return {
+        "project_merge_branch_lifecycle_status": "available",
+        "project_merge_branch_lifecycle_reason": reason_codes[0],
+        "project_merge_branch_lifecycle_reason_codes": reason_codes,
+        "project_merge_ready_posture": merge_ready_posture,
+        "project_merge_ready": bool(merge_ready),
+        "project_branch_cleanup_candidate_posture": cleanup_posture,
+        "project_branch_cleanup_candidate": bool(cleanup_candidate),
+        "project_branch_quarantine_candidate_posture": quarantine_posture,
+        "project_branch_quarantine_candidate": bool(quarantine_candidate),
+        "project_local_main_sync_posture": sync_posture,
+        "project_local_main_sync_required": bool(local_main_sync_required),
+        "project_merge_branch_lifecycle_unavailable": False,
+    }
+
+
+def _normalize_project_failure_memory_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_FAILURE_MEMORY_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_FAILURE_MEMORY_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["failure_memory_insufficient_truth"]
+
+
+def _build_project_failure_memory_state(
+    *,
+    project_merge_branch_lifecycle_status: str,
+    project_branch_quarantine_candidate: bool,
+    failure_bucketing_status: str,
+    failure_bucketing_validity: str,
+    failure_bucketing_primary_bucket: str,
+    continuation_next_step_selection_status: str,
+    continuation_next_step_target: str,
+    continuation_no_progress_stop_required: bool,
+    continuation_failure_bucket_denied: bool,
+    review_assimilation_status: str,
+    review_assimilation_action: str,
+    self_healing_status: str,
+    supported_repair_execution_status: str,
+    execution_status: str,
+    execution_reason: str,
+    restart_result_status: str,
+    final_human_review_required: bool,
+    prior_retry_failure_count: int,
+    prior_repair_failure_count: int,
+    prior_review_issue_count: int,
+    prior_failure_bucket_recurrence_count: int,
+    prior_failure_bucket_value: str,
+) -> dict[str, Any]:
+    lifecycle_status = _normalize_text(
+        project_merge_branch_lifecycle_status,
+        default="insufficient_truth",
+    )
+    bucket_status = _normalize_text(
+        failure_bucketing_status,
+        default="insufficient_truth",
+    )
+    bucket_validity = _normalize_text(
+        failure_bucketing_validity,
+        default="insufficient_truth",
+    )
+    bucket_value = _normalize_text(
+        failure_bucketing_primary_bucket,
+        default="unknown",
+    )
+    next_step_status = _normalize_text(
+        continuation_next_step_selection_status,
+        default="insufficient_truth",
+    )
+    next_step_target = _normalize_text(
+        continuation_next_step_target,
+        default="none",
+    )
+    assimilation_status = _normalize_text(
+        review_assimilation_status,
+        default="insufficient_truth",
+    )
+    assimilation_action = _normalize_text(
+        review_assimilation_action,
+        default="none",
+    )
+    normalized_self_healing_status = _normalize_text(
+        self_healing_status,
+        default="insufficient_truth",
+    )
+    repair_status = _normalize_text(
+        supported_repair_execution_status,
+        default="not_selected",
+    )
+    normalized_execution_status = _normalize_text(
+        execution_status,
+        default="not_executed",
+    )
+    normalized_execution_reason = _normalize_text(
+        execution_reason,
+        default="restart_not_executed",
+    )
+    normalized_restart_result_status = _normalize_text(
+        restart_result_status,
+        default="not_attempted",
+    )
+    prior_bucket = _normalize_text(prior_failure_bucket_value, default="unknown")
+
+    truth_sufficient = bool(
+        lifecycle_status == "available"
+        and bucket_status not in {"", "unknown", "insufficient_truth"}
+        and bucket_validity in {"valid", "partial"}
+        and next_step_status in {"selected", "not_selected"}
+        and assimilation_status != "insufficient_truth"
+        and normalized_self_healing_status != "insufficient_truth"
+    )
+    if not truth_sufficient:
+        reason_codes = _normalize_project_failure_memory_reason_codes(
+            [
+                "failure_memory_insufficient_truth",
+            ]
+        )
+        return {
+            "project_failure_memory_status": "insufficient_truth",
+            "project_failure_memory_reason": reason_codes[0],
+            "project_failure_memory_reason_codes": reason_codes,
+            "project_failure_memory_ineffective_retry": False,
+            "project_failure_memory_failed_repair": False,
+            "project_failure_memory_repeated_review_issue": False,
+            "project_failure_memory_recurring_failure_bucket": False,
+            "project_failure_memory_retry_failure_count": _as_non_negative_int(
+                prior_retry_failure_count,
+                default=0,
+            ),
+            "project_failure_memory_repair_failure_count": _as_non_negative_int(
+                prior_repair_failure_count,
+                default=0,
+            ),
+            "project_failure_memory_review_issue_count": _as_non_negative_int(
+                prior_review_issue_count,
+                default=0,
+            ),
+            "project_failure_memory_failure_bucket_recurrence_count": _as_non_negative_int(
+                prior_failure_bucket_recurrence_count,
+                default=0,
+            ),
+            "project_failure_memory_last_failure_bucket": bucket_value,
+            "project_failure_memory_suppression_posture": "insufficient_truth",
+            "project_failure_memory_suppression_active": False,
+            "project_failure_memory_unavailable": True,
+        }
+
+    retry_failure_now = bool(
+        next_step_target == "retry"
+        and (
+            continuation_no_progress_stop_required
+            or normalized_execution_status != "executed"
+            or normalized_restart_result_status not in {"completed", "not_attempted"}
+            or normalized_execution_reason
+            in {
+                "continuation_budget_exhausted",
+                "continuation_no_progress_stop",
+                "failure_bucket_continuation_denied",
+                "continuation_next_step_not_selected",
+            }
+        )
+    )
+    failed_repair_now = bool(
+        repair_status
+        in {
+            "executed_verification_failed",
+            "not_executed_precheck_blocked",
+            "not_executed_qualification_failed",
+            "not_executed_launch_failed",
+        }
+    )
+    repeated_review_issue_now = bool(
+        assimilation_status == "assimilated"
+        and assimilation_action in {"retry", "replan", "split", "escalate"}
+    )
+    recurring_failure_bucket_now = bool(
+        bucket_value not in {"", "unknown", "insufficient_truth"}
+        and prior_bucket not in {"", "unknown", "insufficient_truth"}
+        and bucket_value == prior_bucket
+        and (
+            _as_non_negative_int(prior_failure_bucket_recurrence_count, default=0) > 0
+            or retry_failure_now
+            or failed_repair_now
+            or repeated_review_issue_now
+            or bool(continuation_failure_bucket_denied)
+        )
+    )
+
+    retry_failure_count = _as_non_negative_int(prior_retry_failure_count, default=0) + (
+        1 if retry_failure_now else 0
+    )
+    repair_failure_count = _as_non_negative_int(prior_repair_failure_count, default=0) + (
+        1 if failed_repair_now else 0
+    )
+    review_issue_count = _as_non_negative_int(prior_review_issue_count, default=0) + (
+        1 if repeated_review_issue_now else 0
+    )
+    failure_bucket_recurrence_count = _as_non_negative_int(
+        prior_failure_bucket_recurrence_count,
+        default=0,
+    ) + (1 if recurring_failure_bucket_now else 0)
+
+    suppression_posture = "none"
+    suppression_active = False
+    if final_human_review_required and bool(project_branch_quarantine_candidate):
+        if failure_bucket_recurrence_count >= 2:
+            suppression_posture = "suppress_failure_bucket"
+            suppression_active = True
+        elif review_issue_count >= 2:
+            suppression_posture = "suppress_review_issue"
+            suppression_active = True
+        elif repair_failure_count >= 2:
+            suppression_posture = "suppress_repair"
+            suppression_active = True
+        elif retry_failure_count >= 2:
+            suppression_posture = "suppress_retry"
+            suppression_active = True
+    elif failure_bucket_recurrence_count >= 3:
+        suppression_posture = "suppress_failure_bucket"
+        suppression_active = True
+    elif review_issue_count >= 3:
+        suppression_posture = "suppress_review_issue"
+        suppression_active = True
+    elif repair_failure_count >= 3:
+        suppression_posture = "suppress_repair"
+        suppression_active = True
+    elif retry_failure_count >= 3:
+        suppression_posture = "suppress_retry"
+        suppression_active = True
+    if suppression_posture not in _PROJECT_FAILURE_MEMORY_SUPPRESSION_POSTURES:
+        suppression_posture = "insufficient_truth"
+        suppression_active = False
+
+    reason_codes = ["failure_memory_compiled"]
+    reason_codes.append(
+        "failure_memory_ineffective_retry_detected"
+        if retry_failure_now
+        else "failure_memory_no_ineffective_retry"
+    )
+    reason_codes.append(
+        "failure_memory_failed_repair_detected"
+        if failed_repair_now
+        else "failure_memory_no_failed_repair"
+    )
+    reason_codes.append(
+        "failure_memory_repeated_review_issue_detected"
+        if repeated_review_issue_now
+        else "failure_memory_no_repeated_review_issue"
+    )
+    reason_codes.append(
+        "failure_memory_recurring_failure_bucket_detected"
+        if recurring_failure_bucket_now
+        else "failure_memory_no_recurring_failure_bucket"
+    )
+    if suppression_posture == "suppress_failure_bucket":
+        reason_codes.append("failure_memory_suppression_failure_bucket")
+    elif suppression_posture == "suppress_review_issue":
+        reason_codes.append("failure_memory_suppression_review_issue")
+    elif suppression_posture == "suppress_repair":
+        reason_codes.append("failure_memory_suppression_repair")
+    elif suppression_posture == "suppress_retry":
+        reason_codes.append("failure_memory_suppression_retry")
+    else:
+        reason_codes.append("failure_memory_suppression_none")
+    reason_codes = _normalize_project_failure_memory_reason_codes(reason_codes)
+
+    return {
+        "project_failure_memory_status": "available",
+        "project_failure_memory_reason": reason_codes[0],
+        "project_failure_memory_reason_codes": reason_codes,
+        "project_failure_memory_ineffective_retry": bool(retry_failure_now),
+        "project_failure_memory_failed_repair": bool(failed_repair_now),
+        "project_failure_memory_repeated_review_issue": bool(repeated_review_issue_now),
+        "project_failure_memory_recurring_failure_bucket": bool(
+            recurring_failure_bucket_now
+        ),
+        "project_failure_memory_retry_failure_count": retry_failure_count,
+        "project_failure_memory_repair_failure_count": repair_failure_count,
+        "project_failure_memory_review_issue_count": review_issue_count,
+        "project_failure_memory_failure_bucket_recurrence_count": (
+            failure_bucket_recurrence_count
+        ),
+        "project_failure_memory_last_failure_bucket": bucket_value,
+        "project_failure_memory_suppression_posture": suppression_posture,
+        "project_failure_memory_suppression_active": bool(suppression_active),
+        "project_failure_memory_unavailable": False,
+    }
+
+
+def _normalize_project_external_boundary_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_EXTERNAL_BOUNDARY_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_EXTERNAL_BOUNDARY_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["external_boundary_insufficient_truth"]
+
+
+def _build_project_external_boundary_state(
+    *,
+    project_failure_memory_status: str,
+    project_failure_memory_suppression_posture: str,
+    project_failure_memory_suppression_active: bool,
+    project_merge_branch_lifecycle_status: str,
+    project_merge_ready_posture: str,
+    project_branch_quarantine_candidate_posture: str,
+    project_local_main_sync_posture: str,
+    project_quality_gate_status: str,
+    project_quality_gate_posture: str,
+    project_quality_gate_risk_level: str,
+    project_pr_queue_status: str,
+    project_autonomy_budget_status: str,
+    project_priority_posture: str,
+    long_running_stability_status: str,
+    supported_repair_execution_status: str,
+    execution_reason: str,
+    final_human_review_required: bool,
+    final_human_review_gate_status: str,
+    manual_only_posture_active: bool,
+    fleet_manual_review_required: bool,
+    approval_reason_class: str,
+) -> dict[str, Any]:
+    failure_memory_status = _normalize_text(
+        project_failure_memory_status,
+        default="insufficient_truth",
+    )
+    suppression_posture = _normalize_text(
+        project_failure_memory_suppression_posture,
+        default="insufficient_truth",
+    )
+    lifecycle_status = _normalize_text(
+        project_merge_branch_lifecycle_status,
+        default="insufficient_truth",
+    )
+    merge_ready_posture = _normalize_text(
+        project_merge_ready_posture,
+        default="insufficient_truth",
+    )
+    quarantine_posture = _normalize_text(
+        project_branch_quarantine_candidate_posture,
+        default="insufficient_truth",
+    )
+    local_main_sync_posture = _normalize_text(
+        project_local_main_sync_posture,
+        default="insufficient_truth",
+    )
+    quality_gate_status = _normalize_text(
+        project_quality_gate_status,
+        default="insufficient_truth",
+    )
+    quality_gate_posture = _normalize_text(
+        project_quality_gate_posture,
+        default="insufficient_truth",
+    )
+    quality_gate_risk_level = _normalize_text(
+        project_quality_gate_risk_level,
+        default="insufficient_truth",
+    )
+    queue_status = _normalize_text(
+        project_pr_queue_status,
+        default="insufficient_truth",
+    )
+    autonomy_budget_status = _normalize_text(
+        project_autonomy_budget_status,
+        default="insufficient_truth",
+    )
+    priority_posture = _normalize_text(
+        project_priority_posture,
+        default="insufficient_truth",
+    )
+    long_running_status = _normalize_text(
+        long_running_stability_status,
+        default="insufficient_truth",
+    )
+    repair_status = _normalize_text(
+        supported_repair_execution_status,
+        default="not_selected",
+    )
+    normalized_execution_reason = _normalize_text(
+        execution_reason,
+        default="restart_not_executed",
+    )
+    final_review_gate_status = _normalize_text(
+        final_human_review_gate_status,
+        default="not_required",
+    )
+    normalized_approval_reason_class = _normalize_text(
+        approval_reason_class,
+        default="unknown",
+    )
+
+    truth_sufficient = bool(
+        failure_memory_status == "available"
+        and lifecycle_status == "available"
+        and quality_gate_status == "available"
+        and queue_status in _PROJECT_PR_QUEUE_STATUSES
+        and queue_status != "insufficient_truth"
+        and autonomy_budget_status == "available"
+        and priority_posture in _PROJECT_PRIORITY_POSTURES
+        and priority_posture != "insufficient_truth"
+    )
+    if not truth_sufficient:
+        reason_codes = _normalize_project_external_boundary_reason_codes(
+            ["external_boundary_insufficient_truth"]
+        )
+        return {
+            "project_external_boundary_status": "insufficient_truth",
+            "project_external_boundary_reason": reason_codes[0],
+            "project_external_boundary_reason_codes": reason_codes,
+            "project_external_dependency_posture": "insufficient_truth",
+            "project_external_dependency_available": False,
+            "project_external_dependency_blocked": False,
+            "project_external_manual_only_posture": "insufficient_truth",
+            "project_external_manual_only_required": False,
+            "project_external_network_boundary_posture": "insufficient_truth",
+            "project_external_ci_boundary_posture": "insufficient_truth",
+            "project_external_secrets_boundary_posture": "insufficient_truth",
+            "project_external_github_boundary_posture": "insufficient_truth",
+            "project_external_api_boundary_posture": "insufficient_truth",
+            "project_external_boundary_unavailable": True,
+        }
+
+    manual_only_required = bool(
+        manual_only_posture_active
+        or final_human_review_required
+        or final_review_gate_status == "required"
+        or fleet_manual_review_required
+        or normalized_approval_reason_class == "manual_only"
+    )
+
+    dependency_blocked = bool(
+        not manual_only_required
+        and (
+            bool(project_failure_memory_suppression_active)
+            or suppression_posture in {"suppress_retry", "suppress_repair", "suppress_review_issue", "suppress_failure_bucket"}
+            or quarantine_posture == "candidate"
+            or quality_gate_posture in {"retry_needed", "insufficient_truth"}
+            or merge_ready_posture != "merge_ready"
+            or queue_status == "blocked"
+            or priority_posture == "deferred"
+            or local_main_sync_posture == "sync_required"
+            or long_running_status in {"paused", "escalated"}
+            or normalized_execution_reason in {"restart_launch_failed"}
+            or repair_status in {"not_executed_launch_failed"}
+        )
+    )
+    dependency_available = bool(not manual_only_required and not dependency_blocked)
+    dependency_posture = "dependency_available"
+    if manual_only_required:
+        dependency_posture = "manual_only"
+    elif dependency_blocked:
+        dependency_posture = "dependency_blocked"
+    if dependency_posture not in _PROJECT_EXTERNAL_DEPENDENCY_POSTURES:
+        dependency_posture = "insufficient_truth"
+
+    if manual_only_required:
+        network_posture = "manual_only"
+        ci_posture = "manual_only"
+        secrets_posture = "manual_only"
+        github_posture = "manual_only"
+        api_posture = "manual_only"
+    else:
+        network_posture = (
+            "blocked"
+            if (
+                suppression_posture == "suppress_failure_bucket"
+                or long_running_status in {"paused", "escalated"}
+                or normalized_execution_reason == "restart_launch_failed"
+            )
+            else "clear"
+        )
+        ci_posture = (
+            "blocked"
+            if quality_gate_posture in {"retry_needed", "insufficient_truth"}
+            or quality_gate_risk_level == "high"
+            else "clear"
+        )
+        secrets_posture = (
+            "blocked"
+            if suppression_posture in {"suppress_repair", "suppress_failure_bucket"}
+            or repair_status in {"not_executed_precheck_blocked", "not_executed_launch_failed"}
+            else "clear"
+        )
+        github_posture = (
+            "blocked"
+            if merge_ready_posture != "merge_ready"
+            or quarantine_posture == "candidate"
+            or local_main_sync_posture == "sync_required"
+            else "clear"
+        )
+        api_posture = (
+            "blocked"
+            if suppression_posture in {"suppress_repair", "suppress_failure_bucket"}
+            or repair_status
+            in {
+                "executed_verification_failed",
+                "not_executed_qualification_failed",
+                "not_executed_launch_failed",
+            }
+            else "clear"
+        )
+
+    for boundary_posture in (
+        network_posture,
+        ci_posture,
+        secrets_posture,
+        github_posture,
+        api_posture,
+    ):
+        if boundary_posture not in _PROJECT_EXTERNAL_BOUNDARY_POSTURES:
+            reason_codes = _normalize_project_external_boundary_reason_codes(
+                ["external_boundary_insufficient_truth"]
+            )
+            return {
+                "project_external_boundary_status": "insufficient_truth",
+                "project_external_boundary_reason": reason_codes[0],
+                "project_external_boundary_reason_codes": reason_codes,
+                "project_external_dependency_posture": "insufficient_truth",
+                "project_external_dependency_available": False,
+                "project_external_dependency_blocked": False,
+                "project_external_manual_only_posture": "insufficient_truth",
+                "project_external_manual_only_required": False,
+                "project_external_network_boundary_posture": "insufficient_truth",
+                "project_external_ci_boundary_posture": "insufficient_truth",
+                "project_external_secrets_boundary_posture": "insufficient_truth",
+                "project_external_github_boundary_posture": "insufficient_truth",
+                "project_external_api_boundary_posture": "insufficient_truth",
+                "project_external_boundary_unavailable": True,
+            }
+
+    reason_codes = ["external_boundary_compiled"]
+    if dependency_posture == "manual_only":
+        reason_codes.append("external_dependency_manual_only")
+        reason_codes.append("external_boundary_manual_only")
+    elif dependency_posture == "dependency_blocked":
+        reason_codes.append("external_dependency_blocked")
+    else:
+        reason_codes.append("external_dependency_available")
+    reason_codes.append(
+        "external_network_boundary_blocked"
+        if network_posture == "blocked"
+        else "external_network_boundary_clear"
+    )
+    reason_codes.append(
+        "external_ci_boundary_blocked"
+        if ci_posture == "blocked"
+        else "external_ci_boundary_clear"
+    )
+    reason_codes.append(
+        "external_secrets_boundary_blocked"
+        if secrets_posture == "blocked"
+        else "external_secrets_boundary_clear"
+    )
+    reason_codes.append(
+        "external_github_boundary_blocked"
+        if github_posture == "blocked"
+        else "external_github_boundary_clear"
+    )
+    reason_codes.append(
+        "external_api_boundary_blocked"
+        if api_posture == "blocked"
+        else "external_api_boundary_clear"
+    )
+    reason_codes = _normalize_project_external_boundary_reason_codes(reason_codes)
+
+    return {
+        "project_external_boundary_status": "available",
+        "project_external_boundary_reason": reason_codes[0],
+        "project_external_boundary_reason_codes": reason_codes,
+        "project_external_dependency_posture": dependency_posture,
+        "project_external_dependency_available": bool(dependency_available),
+        "project_external_dependency_blocked": bool(dependency_blocked),
+        "project_external_manual_only_posture": (
+            "manual_only" if manual_only_required else "clear"
+        ),
+        "project_external_manual_only_required": bool(manual_only_required),
+        "project_external_network_boundary_posture": network_posture,
+        "project_external_ci_boundary_posture": ci_posture,
+        "project_external_secrets_boundary_posture": secrets_posture,
+        "project_external_github_boundary_posture": github_posture,
+        "project_external_api_boundary_posture": api_posture,
+        "project_external_boundary_unavailable": False,
+    }
+
+
+def _normalize_project_human_escalation_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_HUMAN_ESCALATION_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_HUMAN_ESCALATION_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["escalation_insufficient_truth"]
+
+
+def _build_project_human_escalation_state(
+    *,
+    final_human_review_gate_status: str,
+    final_human_review_required: bool,
+    final_human_review_reason: str,
+    objective_compiler_status: str,
+    objective_completion_posture: str,
+    objective_scope_drift_status: str,
+    project_autonomy_budget_status: str,
+    project_priority_posture: str,
+    project_high_risk_defer_posture: str,
+    project_run_budget_posture: str,
+    project_objective_budget_posture: str,
+    project_pr_retry_budget_posture: str,
+    project_quality_gate_status: str,
+    project_quality_gate_risk_level: str,
+    project_quality_gate_high_risk: bool,
+    project_merge_branch_lifecycle_status: str,
+    project_branch_quarantine_candidate_posture: str,
+    project_failure_memory_status: str,
+    project_failure_memory_suppression_posture: str,
+    project_failure_memory_suppression_active: bool,
+    project_failure_memory_retry_failure_count: int,
+    project_failure_memory_repair_failure_count: int,
+    project_failure_memory_review_issue_count: int,
+    project_failure_memory_failure_bucket_recurrence_count: int,
+    project_external_boundary_status: str,
+    project_external_dependency_posture: str,
+    project_external_manual_only_posture: str,
+    project_external_manual_only_required: bool,
+    long_running_stability_status: str,
+    supported_repair_execution_status: str,
+    manual_only_posture_active: bool,
+    fleet_manual_review_required: bool,
+) -> dict[str, Any]:
+    final_gate_status = _normalize_text(
+        final_human_review_gate_status,
+        default="not_required",
+    )
+    final_reason = _normalize_text(
+        final_human_review_reason,
+        default="final_review_not_required",
+    )
+    objective_status = _normalize_text(
+        objective_compiler_status,
+        default="insufficient_truth",
+    )
+    completion_posture = _normalize_text(
+        objective_completion_posture,
+        default="objective_insufficient_truth",
+    )
+    scope_drift_status = _normalize_text(
+        objective_scope_drift_status,
+        default="insufficient_truth",
+    )
+    autonomy_budget_status = _normalize_text(
+        project_autonomy_budget_status,
+        default="insufficient_truth",
+    )
+    priority_posture = _normalize_text(
+        project_priority_posture,
+        default="insufficient_truth",
+    )
+    high_risk_defer_posture = _normalize_text(
+        project_high_risk_defer_posture,
+        default="insufficient_truth",
+    )
+    run_budget_posture = _normalize_text(
+        project_run_budget_posture,
+        default="insufficient_truth",
+    )
+    objective_budget_posture = _normalize_text(
+        project_objective_budget_posture,
+        default="insufficient_truth",
+    )
+    pr_retry_budget_posture = _normalize_text(
+        project_pr_retry_budget_posture,
+        default="insufficient_truth",
+    )
+    quality_gate_status = _normalize_text(
+        project_quality_gate_status,
+        default="insufficient_truth",
+    )
+    quality_gate_risk_level = _normalize_text(
+        project_quality_gate_risk_level,
+        default="insufficient_truth",
+    )
+    lifecycle_status = _normalize_text(
+        project_merge_branch_lifecycle_status,
+        default="insufficient_truth",
+    )
+    quarantine_posture = _normalize_text(
+        project_branch_quarantine_candidate_posture,
+        default="insufficient_truth",
+    )
+    failure_memory_status = _normalize_text(
+        project_failure_memory_status,
+        default="insufficient_truth",
+    )
+    suppression_posture = _normalize_text(
+        project_failure_memory_suppression_posture,
+        default="insufficient_truth",
+    )
+    external_boundary_status = _normalize_text(
+        project_external_boundary_status,
+        default="insufficient_truth",
+    )
+    external_dependency_posture = _normalize_text(
+        project_external_dependency_posture,
+        default="insufficient_truth",
+    )
+    external_manual_only_posture = _normalize_text(
+        project_external_manual_only_posture,
+        default="insufficient_truth",
+    )
+    long_running_status = _normalize_text(
+        long_running_stability_status,
+        default="insufficient_truth",
+    )
+    repair_status = _normalize_text(
+        supported_repair_execution_status,
+        default="not_selected",
+    )
+
+    truth_sufficient = bool(
+        final_gate_status in _FINAL_HUMAN_REVIEW_GATE_STATUSES
+        and objective_status == "available"
+        and completion_posture in _OBJECTIVE_COMPLETION_POSTURES
+        and completion_posture != "objective_insufficient_truth"
+        and scope_drift_status in _OBJECTIVE_SCOPE_DRIFT_STATUSES
+        and scope_drift_status != "insufficient_truth"
+        and autonomy_budget_status == "available"
+        and priority_posture in _PROJECT_PRIORITY_POSTURES
+        and priority_posture != "insufficient_truth"
+        and high_risk_defer_posture in _PROJECT_HIGH_RISK_DEFER_POSTURES
+        and high_risk_defer_posture != "insufficient_truth"
+        and run_budget_posture in _PROJECT_BUDGET_POSTURES
+        and run_budget_posture != "insufficient_truth"
+        and objective_budget_posture in _PROJECT_BUDGET_POSTURES
+        and objective_budget_posture != "insufficient_truth"
+        and pr_retry_budget_posture in _PROJECT_PR_RETRY_BUDGET_POSTURES
+        and pr_retry_budget_posture != "insufficient_truth"
+        and quality_gate_status == "available"
+        and quality_gate_risk_level in _PROJECT_QUALITY_GATE_RISK_LEVELS
+        and quality_gate_risk_level != "insufficient_truth"
+        and lifecycle_status == "available"
+        and quarantine_posture in _PROJECT_BRANCH_CANDIDATE_POSTURES
+        and quarantine_posture != "insufficient_truth"
+        and failure_memory_status == "available"
+        and suppression_posture in _PROJECT_FAILURE_MEMORY_SUPPRESSION_POSTURES
+        and suppression_posture != "insufficient_truth"
+        and external_boundary_status == "available"
+        and external_dependency_posture in _PROJECT_EXTERNAL_DEPENDENCY_POSTURES
+        and external_dependency_posture != "insufficient_truth"
+        and external_manual_only_posture in _PROJECT_EXTERNAL_BOUNDARY_POSTURES
+        and external_manual_only_posture != "insufficient_truth"
+        and long_running_status in _LONG_RUNNING_STABILITY_STATUSES
+        and long_running_status != "insufficient_truth"
+    )
+    if not truth_sufficient:
+        reason_codes = _normalize_project_human_escalation_reason_codes(
+            ["escalation_insufficient_truth"]
+        )
+        return {
+            "project_human_escalation_status": "insufficient_truth",
+            "project_human_escalation_reason": reason_codes[0],
+            "project_human_escalation_reason_codes": reason_codes,
+            "project_human_escalation_posture": "insufficient_truth",
+            "project_human_escalation_required": False,
+            "project_architecture_risk_posture": "insufficient_truth",
+            "project_scope_risk_posture": "insufficient_truth",
+            "project_external_risk_posture": "insufficient_truth",
+            "project_budget_risk_posture": "insufficient_truth",
+            "project_repeated_failure_risk_posture": "insufficient_truth",
+            "project_manual_only_risk_posture": "insufficient_truth",
+            "project_human_escalation_unavailable": True,
+        }
+
+    architecture_risk_elevated = bool(
+        completion_posture == "objective_blocked"
+        or bool(project_quality_gate_high_risk)
+        or quarantine_posture == "candidate"
+        or long_running_status in {"paused", "escalated", "safe_stop"}
+        or repair_status == "executed_verification_failed"
+        or final_reason
+        in {
+            "final_review_high_risk_posture",
+            "final_review_supported_repair_verification_failed",
+        }
+    )
+    scope_risk_elevated = bool(
+        scope_drift_status == "detected"
+        or final_reason == "final_review_next_step_unresolved"
+    )
+    external_risk_elevated = bool(
+        external_dependency_posture in {"dependency_blocked", "manual_only"}
+        or external_manual_only_posture == "manual_only"
+        or bool(project_external_manual_only_required)
+    )
+    budget_risk_elevated = bool(
+        high_risk_defer_posture == "defer"
+        or priority_posture == "deferred"
+        or run_budget_posture == "exhausted"
+        or objective_budget_posture == "exhausted"
+        or pr_retry_budget_posture == "exhausted"
+    )
+    repeated_failure_risk_elevated = bool(
+        bool(project_failure_memory_suppression_active)
+        or suppression_posture != "none"
+        or _as_non_negative_int(project_failure_memory_retry_failure_count, default=0) > 1
+        or _as_non_negative_int(project_failure_memory_repair_failure_count, default=0)
+        > 0
+        or _as_non_negative_int(project_failure_memory_review_issue_count, default=0) > 1
+        or _as_non_negative_int(
+            project_failure_memory_failure_bucket_recurrence_count,
+            default=0,
+        )
+        > 0
+    )
+    manual_only_risk_elevated = bool(
+        bool(manual_only_posture_active)
+        or bool(fleet_manual_review_required)
+        or bool(project_external_manual_only_required)
+        or external_manual_only_posture == "manual_only"
+        or final_reason
+        in {
+            "final_review_manual_only_posture",
+            "final_review_explicit_manual_review_required",
+        }
+    )
+
+    escalation_required = bool(
+        final_human_review_required
+        or architecture_risk_elevated
+        or scope_risk_elevated
+        or external_risk_elevated
+        or budget_risk_elevated
+        or repeated_failure_risk_elevated
+        or manual_only_risk_elevated
+    )
+    posture = "escalation_required" if escalation_required else "not_required"
+    if posture not in _PROJECT_HUMAN_ESCALATION_POSTURES:
+        posture = "insufficient_truth"
+
+    reason_codes = ["escalation_compiled"]
+    reason_codes.append(
+        "escalation_required" if escalation_required else "escalation_not_required"
+    )
+    reason_codes.append(
+        "escalation_architecture_risk_elevated"
+        if architecture_risk_elevated
+        else "escalation_architecture_risk_clear"
+    )
+    reason_codes.append(
+        "escalation_scope_risk_elevated"
+        if scope_risk_elevated
+        else "escalation_scope_risk_clear"
+    )
+    reason_codes.append(
+        "escalation_external_risk_elevated"
+        if external_risk_elevated
+        else "escalation_external_risk_clear"
+    )
+    reason_codes.append(
+        "escalation_budget_risk_elevated"
+        if budget_risk_elevated
+        else "escalation_budget_risk_clear"
+    )
+    reason_codes.append(
+        "escalation_repeated_failure_risk_elevated"
+        if repeated_failure_risk_elevated
+        else "escalation_repeated_failure_risk_clear"
+    )
+    reason_codes.append(
+        "escalation_manual_only_risk_elevated"
+        if manual_only_risk_elevated
+        else "escalation_manual_only_risk_clear"
+    )
+    reason_codes = _normalize_project_human_escalation_reason_codes(reason_codes)
+
+    return {
+        "project_human_escalation_status": "available",
+        "project_human_escalation_reason": reason_codes[0],
+        "project_human_escalation_reason_codes": reason_codes,
+        "project_human_escalation_posture": posture,
+        "project_human_escalation_required": bool(escalation_required),
+        "project_architecture_risk_posture": (
+            "elevated" if architecture_risk_elevated else "clear"
+        ),
+        "project_scope_risk_posture": "elevated" if scope_risk_elevated else "clear",
+        "project_external_risk_posture": (
+            "elevated" if external_risk_elevated else "clear"
+        ),
+        "project_budget_risk_posture": "elevated" if budget_risk_elevated else "clear",
+        "project_repeated_failure_risk_posture": (
+            "elevated" if repeated_failure_risk_elevated else "clear"
+        ),
+        "project_manual_only_risk_posture": (
+            "elevated" if manual_only_risk_elevated else "clear"
+        ),
+        "project_human_escalation_unavailable": False,
+    }
+
+
+def _normalize_project_approval_notification_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_APPROVAL_NOTIFICATION_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_APPROVAL_NOTIFICATION_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["approval_notification_insufficient_truth"]
+
+
+def _build_project_approval_notification_state(
+    *,
+    approval_required: bool,
+    approval_email_status: str,
+    approval_email_validity: str,
+    approval_priority: str,
+    approval_reason_class: str,
+    proposed_next_direction: str,
+    delivery_mode: str,
+    delivery_outcome: str,
+    approval_response_status: str,
+    approval_response_validity: str,
+    response_received: bool,
+    response_decision_class: str,
+    project_human_escalation_status: str,
+    project_human_escalation_posture: str,
+    project_human_escalation_required: bool,
+    project_human_escalation_reason: str,
+    project_architecture_risk_posture: str,
+    project_scope_risk_posture: str,
+    project_external_risk_posture: str,
+    project_budget_risk_posture: str,
+    project_repeated_failure_risk_posture: str,
+    project_manual_only_risk_posture: str,
+    project_external_manual_only_posture: str,
+) -> dict[str, Any]:
+    normalized_email_status = _normalize_text(
+        approval_email_status,
+        default="insufficient_truth",
+    )
+    normalized_email_validity = _normalize_text(
+        approval_email_validity,
+        default="insufficient_truth",
+    )
+    normalized_priority = _normalize_text(approval_priority, default="unknown")
+    normalized_reason_class = _normalize_text(approval_reason_class, default="unknown")
+    normalized_direction = _normalize_text(proposed_next_direction, default="unknown")
+    normalized_delivery_mode = _normalize_text(delivery_mode, default="unknown")
+    normalized_delivery_outcome = _normalize_text(delivery_outcome, default="unknown")
+    normalized_response_status = _normalize_text(
+        approval_response_status,
+        default="insufficient_truth",
+    )
+    normalized_response_validity = _normalize_text(
+        approval_response_validity,
+        default="insufficient_truth",
+    )
+    normalized_response_decision_class = _normalize_text(
+        response_decision_class,
+        default="unknown",
+    )
+    escalation_status = _normalize_text(
+        project_human_escalation_status,
+        default="insufficient_truth",
+    )
+    escalation_posture = _normalize_text(
+        project_human_escalation_posture,
+        default="insufficient_truth",
+    )
+    escalation_reason = _normalize_text(
+        project_human_escalation_reason,
+        default="escalation_insufficient_truth",
+    )
+    architecture_risk_posture = _normalize_text(
+        project_architecture_risk_posture,
+        default="insufficient_truth",
+    )
+    scope_risk_posture = _normalize_text(
+        project_scope_risk_posture,
+        default="insufficient_truth",
+    )
+    external_risk_posture = _normalize_text(
+        project_external_risk_posture,
+        default="insufficient_truth",
+    )
+    budget_risk_posture = _normalize_text(
+        project_budget_risk_posture,
+        default="insufficient_truth",
+    )
+    repeated_failure_risk_posture = _normalize_text(
+        project_repeated_failure_risk_posture,
+        default="insufficient_truth",
+    )
+    manual_only_risk_posture = _normalize_text(
+        project_manual_only_risk_posture,
+        default="insufficient_truth",
+    )
+    external_manual_only_posture = _normalize_text(
+        project_external_manual_only_posture,
+        default="insufficient_truth",
+    )
+
+    truth_sufficient = bool(
+        normalized_email_validity == "valid"
+        and normalized_response_validity == "valid"
+        and normalized_email_status not in {"", "insufficient_truth"}
+        and escalation_status == "available"
+        and escalation_posture in _PROJECT_HUMAN_ESCALATION_POSTURES
+        and escalation_posture != "insufficient_truth"
+        and architecture_risk_posture in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+        and architecture_risk_posture != "insufficient_truth"
+        and scope_risk_posture in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+        and scope_risk_posture != "insufficient_truth"
+        and external_risk_posture in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+        and external_risk_posture != "insufficient_truth"
+        and budget_risk_posture in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+        and budget_risk_posture != "insufficient_truth"
+        and repeated_failure_risk_posture in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+        and repeated_failure_risk_posture != "insufficient_truth"
+        and manual_only_risk_posture in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+        and manual_only_risk_posture != "insufficient_truth"
+        and external_manual_only_posture in _PROJECT_EXTERNAL_BOUNDARY_POSTURES
+        and external_manual_only_posture != "insufficient_truth"
+    )
+    if not truth_sufficient:
+        reason_codes = _normalize_project_approval_notification_reason_codes(
+            ["approval_notification_insufficient_truth"]
+        )
+        return {
+            "project_approval_notification_status": "insufficient_truth",
+            "project_approval_notification_reason": reason_codes[0],
+            "project_approval_notification_reason_codes": reason_codes,
+            "project_approval_notification_ready_posture": "insufficient_truth",
+            "project_approval_notification_ready": False,
+            "project_approval_reply_required_posture": "insufficient_truth",
+            "project_approval_reply_required": False,
+            "project_approval_channel_posture": "insufficient_truth",
+            "project_approval_mobile_summary_posture": "insufficient_truth",
+            "project_approval_mobile_summary_compact": "",
+            "project_approval_mobile_summary_tokens": [],
+            "project_approval_notification_unavailable": True,
+        }
+
+    escalation_required = bool(
+        project_human_escalation_required
+        or escalation_posture == "escalation_required"
+    )
+    notification_required = bool(approval_required and escalation_required)
+
+    channel_posture = "insufficient_truth"
+    if not notification_required:
+        channel_posture = "not_required"
+    elif (
+        manual_only_risk_posture == "elevated"
+        or external_manual_only_posture == "manual_only"
+        or escalation_reason in {
+            "escalation_manual_only_risk_elevated",
+            "escalation_external_risk_elevated",
+        }
+    ):
+        channel_posture = "manual_only"
+    elif normalized_delivery_mode == "gmail_send" or normalized_delivery_outcome == "sent":
+        channel_posture = "email_send"
+    elif (
+        normalized_delivery_mode == "gmail_draft"
+        or normalized_delivery_outcome == "draft_created"
+    ):
+        channel_posture = "email_draft"
+    elif (
+        normalized_delivery_mode == "review_queue_only"
+        or normalized_delivery_outcome == "queued_for_review"
+    ):
+        channel_posture = "review_queue"
+    elif normalized_email_status in {"required", "delivered_for_review"}:
+        channel_posture = "review_queue"
+
+    if channel_posture not in _PROJECT_APPROVAL_CHANNEL_POSTURES:
+        channel_posture = "insufficient_truth"
+
+    notification_ready_posture = "insufficient_truth"
+    notification_ready = False
+    if not notification_required:
+        notification_ready_posture = "not_required"
+    elif channel_posture in {"email_send", "email_draft", "review_queue", "manual_only"}:
+        if normalized_email_status in {"required", "delivered_for_review"}:
+            notification_ready_posture = "ready"
+            notification_ready = True
+        else:
+            notification_ready_posture = "not_ready"
+
+    if notification_ready_posture not in _PROJECT_APPROVAL_NOTIFICATION_READY_POSTURES:
+        notification_ready_posture = "insufficient_truth"
+
+    terminal_response = normalized_response_status in {
+        "response_accepted",
+        "response_rejected",
+        "response_held",
+        "response_unsupported",
+    } or normalized_response_decision_class in {"approved", "rejected", "held", "unsupported"}
+    reply_required = bool(
+        notification_required
+        and not terminal_response
+        and normalized_response_status in {"awaiting_response", "response_received"}
+    )
+    reply_required_posture = (
+        "reply_required"
+        if reply_required
+        else (
+            "reply_not_required"
+            if notification_required or not notification_required
+            else "insufficient_truth"
+        )
+    )
+    if reply_required_posture not in _PROJECT_APPROVAL_REPLY_REQUIRED_POSTURES:
+        reply_required_posture = "insufficient_truth"
+
+    mobile_summary_posture = "insufficient_truth"
+    summary_tokens: list[str] = []
+    summary_compact = ""
+    if not notification_required:
+        mobile_summary_posture = "not_required"
+    elif notification_ready_posture in {"ready", "not_ready"}:
+        mobile_summary_posture = "available"
+        elevated_risks = [
+            risk_name
+            for risk_name, risk_posture in (
+                ("arch", architecture_risk_posture),
+                ("scope", scope_risk_posture),
+                ("ext", external_risk_posture),
+                ("budget", budget_risk_posture),
+                ("repeat", repeated_failure_risk_posture),
+                ("manual", manual_only_risk_posture),
+            )
+            if risk_posture == "elevated"
+        ]
+        risk_token = "+".join(elevated_risks) if elevated_risks else "none"
+        summary_tokens = _serialize_required_signals(
+            [
+                "escalate",
+                f"prio:{normalized_priority}",
+                f"dir:{normalized_direction}",
+                f"ch:{channel_posture}",
+                f"reply:{'yes' if reply_required else 'no'}",
+                f"risk:{risk_token}",
+            ]
+        )
+        summary_compact = " | ".join(summary_tokens[:6])
+
+    if mobile_summary_posture not in _PROJECT_APPROVAL_MOBILE_SUMMARY_POSTURES:
+        mobile_summary_posture = "insufficient_truth"
+
+    reason_codes = ["approval_notification_compiled"]
+    reason_codes.append(
+        "approval_escalation_required"
+        if escalation_required
+        else "approval_escalation_not_required"
+    )
+    if notification_ready_posture == "ready":
+        reason_codes.append("approval_notification_ready")
+    elif notification_ready_posture == "not_ready":
+        reason_codes.append("approval_notification_not_ready")
+    else:
+        reason_codes.append("approval_notification_not_required")
+    reason_codes.append(
+        "approval_reply_required"
+        if reply_required
+        else "approval_reply_not_required"
+    )
+    if channel_posture == "email_send":
+        reason_codes.append("approval_channel_email_send")
+    elif channel_posture == "email_draft":
+        reason_codes.append("approval_channel_email_draft")
+    elif channel_posture == "review_queue":
+        reason_codes.append("approval_channel_review_queue")
+    elif channel_posture == "manual_only":
+        reason_codes.append("approval_channel_manual_only")
+    elif channel_posture == "not_required":
+        reason_codes.append("approval_channel_not_required")
+    else:
+        reason_codes.append("approval_channel_insufficient_truth")
+    if mobile_summary_posture == "available":
+        reason_codes.append("approval_mobile_summary_available")
+    elif mobile_summary_posture == "not_required":
+        reason_codes.append("approval_mobile_summary_not_required")
+    else:
+        reason_codes.append("approval_mobile_summary_insufficient_truth")
+    reason_codes.append(
+        "approval_response_awaiting"
+        if not terminal_response and not response_received
+        else "approval_response_terminal"
+    )
+    reason_codes = _normalize_project_approval_notification_reason_codes(reason_codes)
+
+    return {
+        "project_approval_notification_status": "available",
+        "project_approval_notification_reason": reason_codes[0],
+        "project_approval_notification_reason_codes": reason_codes,
+        "project_approval_notification_ready_posture": notification_ready_posture,
+        "project_approval_notification_ready": bool(notification_ready),
+        "project_approval_reply_required_posture": reply_required_posture,
+        "project_approval_reply_required": bool(reply_required),
+        "project_approval_channel_posture": channel_posture,
+        "project_approval_mobile_summary_posture": mobile_summary_posture,
+        "project_approval_mobile_summary_compact": summary_compact,
+        "project_approval_mobile_summary_tokens": summary_tokens,
+        "project_approval_notification_unavailable": False,
+    }
+
+
+def _normalize_project_multi_objective_reason_codes(
+    reason_codes: list[str],
+) -> list[str]:
+    normalized = _serialize_required_signals(
+        [
+            reason
+            for reason in reason_codes
+            if reason in _PROJECT_MULTI_OBJECTIVE_REASON_CODES
+        ]
+    )
+    ordered = [
+        reason
+        for reason in _PROJECT_MULTI_OBJECTIVE_REASON_ORDER
+        if reason in normalized
+    ]
+    return ordered if ordered else ["multi_objective_insufficient_truth"]
+
+
+def _build_project_multi_objective_state(
+    *,
+    objective_id: str,
+    objective_compiler_status: str,
+    objective_completion_posture: str,
+    project_priority_posture: str,
+    project_high_risk_defer_posture: str,
+    project_run_budget_posture: str,
+    project_objective_budget_posture: str,
+    project_pr_retry_budget_posture: str,
+    project_merge_branch_lifecycle_status: str,
+    project_merge_ready_posture: str,
+    project_branch_quarantine_candidate_posture: str,
+    project_human_escalation_status: str,
+    project_human_escalation_required: bool,
+    project_approval_notification_status: str,
+    project_approval_notification_ready_posture: str,
+    project_approval_reply_required_posture: str,
+    project_pr_queue_status: str,
+    project_pr_queue_selected_slice_id: str,
+    project_pr_queue_processed_slice_ids_after: list[str],
+    project_pr_queue_item_count: int,
+    project_pr_queue_runnable_count: int,
+    project_pr_queue_blocked_count: int,
+    project_pr_queue_handoff_prepared: bool,
+) -> dict[str, Any]:
+    normalized_objective_id = _normalize_text(objective_id, default="")
+    objective_status = _normalize_text(
+        objective_compiler_status,
+        default="insufficient_truth",
+    )
+    completion_posture = _normalize_text(
+        objective_completion_posture,
+        default="objective_insufficient_truth",
+    )
+    priority_posture = _normalize_text(
+        project_priority_posture,
+        default="insufficient_truth",
+    )
+    high_risk_defer_posture = _normalize_text(
+        project_high_risk_defer_posture,
+        default="insufficient_truth",
+    )
+    run_budget_posture = _normalize_text(
+        project_run_budget_posture,
+        default="insufficient_truth",
+    )
+    objective_budget_posture = _normalize_text(
+        project_objective_budget_posture,
+        default="insufficient_truth",
+    )
+    pr_retry_budget_posture = _normalize_text(
+        project_pr_retry_budget_posture,
+        default="insufficient_truth",
+    )
+    lifecycle_status = _normalize_text(
+        project_merge_branch_lifecycle_status,
+        default="insufficient_truth",
+    )
+    merge_ready_posture = _normalize_text(
+        project_merge_ready_posture,
+        default="insufficient_truth",
+    )
+    quarantine_posture = _normalize_text(
+        project_branch_quarantine_candidate_posture,
+        default="insufficient_truth",
+    )
+    escalation_status = _normalize_text(
+        project_human_escalation_status,
+        default="insufficient_truth",
+    )
+    notification_status = _normalize_text(
+        project_approval_notification_status,
+        default="insufficient_truth",
+    )
+    notification_ready_posture = _normalize_text(
+        project_approval_notification_ready_posture,
+        default="insufficient_truth",
+    )
+    reply_required_posture = _normalize_text(
+        project_approval_reply_required_posture,
+        default="insufficient_truth",
+    )
+    queue_status = _normalize_text(project_pr_queue_status, default="insufficient_truth")
+    selected_slice_id = _normalize_text(project_pr_queue_selected_slice_id, default="")
+    processed_slice_ids = _normalize_string_list(project_pr_queue_processed_slice_ids_after)
+    queue_item_count = _as_non_negative_int(project_pr_queue_item_count, default=0)
+    queue_runnable_count = _as_non_negative_int(project_pr_queue_runnable_count, default=0)
+    queue_blocked_count = _as_non_negative_int(project_pr_queue_blocked_count, default=0)
+
+    truth_sufficient = bool(
+        normalized_objective_id
+        and objective_status == "available"
+        and completion_posture in _OBJECTIVE_COMPLETION_POSTURES
+        and completion_posture != "objective_insufficient_truth"
+        and priority_posture in _PROJECT_PRIORITY_POSTURES
+        and priority_posture != "insufficient_truth"
+        and high_risk_defer_posture in _PROJECT_HIGH_RISK_DEFER_POSTURES
+        and high_risk_defer_posture != "insufficient_truth"
+        and run_budget_posture in _PROJECT_BUDGET_POSTURES
+        and run_budget_posture != "insufficient_truth"
+        and objective_budget_posture in _PROJECT_BUDGET_POSTURES
+        and objective_budget_posture != "insufficient_truth"
+        and pr_retry_budget_posture in _PROJECT_PR_RETRY_BUDGET_POSTURES
+        and pr_retry_budget_posture != "insufficient_truth"
+        and lifecycle_status == "available"
+        and merge_ready_posture in _PROJECT_MERGE_READY_POSTURES
+        and merge_ready_posture != "insufficient_truth"
+        and quarantine_posture in _PROJECT_BRANCH_CANDIDATE_POSTURES
+        and quarantine_posture != "insufficient_truth"
+        and escalation_status == "available"
+        and notification_status == "available"
+        and notification_ready_posture in _PROJECT_APPROVAL_NOTIFICATION_READY_POSTURES
+        and notification_ready_posture != "insufficient_truth"
+        and reply_required_posture in _PROJECT_APPROVAL_REPLY_REQUIRED_POSTURES
+        and reply_required_posture != "insufficient_truth"
+        and queue_status in _PROJECT_PR_QUEUE_STATUSES
+        and queue_status != "insufficient_truth"
+    )
+    if not truth_sufficient:
+        reason_codes = _normalize_project_multi_objective_reason_codes(
+            ["multi_objective_insufficient_truth"]
+        )
+        return {
+            "project_multi_objective_status": "insufficient_truth",
+            "project_multi_objective_reason": reason_codes[0],
+            "project_multi_objective_reason_codes": reason_codes,
+            "project_active_objective_selection_posture": "insufficient_truth",
+            "project_active_objective_id": "",
+            "project_blocked_objective_deferral_posture": "insufficient_truth",
+            "project_blocked_objective_deferred": False,
+            "project_resumable_queue_ordering_posture": "insufficient_truth",
+            "project_resumable_queue_ordering_key": "",
+            "project_resumable_queue_next_slice_id": "",
+            "project_resumable_queue_has_pending": False,
+            "project_multi_objective_unavailable": True,
+        }
+
+    blocked_objective_deferred = bool(
+        completion_posture == "objective_blocked"
+        or priority_posture == "deferred"
+        or high_risk_defer_posture == "defer"
+        or bool(project_human_escalation_required)
+        or notification_ready_posture in {"ready", "not_ready"}
+        or reply_required_posture == "reply_required"
+        or quarantine_posture == "candidate"
+    )
+
+    active_selection_posture = (
+        "deferred" if blocked_objective_deferred else "selected"
+    )
+    if active_selection_posture not in _PROJECT_ACTIVE_OBJECTIVE_SELECTION_POSTURES:
+        active_selection_posture = "insufficient_truth"
+    blocked_deferral_posture = (
+        "deferred" if blocked_objective_deferred else "not_deferred"
+    )
+    if blocked_deferral_posture not in _PROJECT_BLOCKED_OBJECTIVE_DEFERRAL_POSTURES:
+        blocked_deferral_posture = "insufficient_truth"
+
+    queue_ordering_posture = "insufficient_truth"
+    if blocked_objective_deferred:
+        queue_ordering_posture = "deferred_non_runnable"
+    elif queue_status == "prepared":
+        queue_ordering_posture = "resume_selected_first"
+    elif queue_status == "blocked":
+        queue_ordering_posture = "resume_blocked"
+    elif queue_status == "empty":
+        if processed_slice_ids or bool(project_pr_queue_handoff_prepared):
+            queue_ordering_posture = "resume_completed_waiting"
+        else:
+            queue_ordering_posture = "resume_empty"
+    if queue_ordering_posture not in _PROJECT_RESUMABLE_QUEUE_ORDERING_POSTURES:
+        queue_ordering_posture = "insufficient_truth"
+
+    queue_has_pending = bool(
+        not blocked_objective_deferred
+        and (
+            queue_status == "prepared"
+            or queue_runnable_count > 0
+            or (queue_item_count > 0 and queue_status == "blocked" and queue_blocked_count > 0)
+        )
+    )
+    queue_ordering_key = (
+        f"{normalized_objective_id}:{queue_status}:{selected_slice_id or '-'}:{len(processed_slice_ids)}"
+    )
+
+    reason_codes = ["multi_objective_compiled"]
+    reason_codes.append(
+        "multi_objective_deferred"
+        if blocked_objective_deferred
+        else "multi_objective_selected"
+    )
+    reason_codes.append(
+        "multi_objective_blocked_objective_deferred"
+        if blocked_objective_deferred
+        else "multi_objective_blocked_objective_not_deferred"
+    )
+    if queue_ordering_posture == "resume_selected_first":
+        reason_codes.append("multi_objective_queue_resume_selected_first")
+    elif queue_ordering_posture == "resume_blocked":
+        reason_codes.append("multi_objective_queue_resume_blocked")
+    elif queue_ordering_posture == "resume_completed_waiting":
+        reason_codes.append("multi_objective_queue_resume_completed_waiting")
+    elif queue_ordering_posture == "resume_empty":
+        reason_codes.append("multi_objective_queue_resume_empty")
+    else:
+        reason_codes.append("multi_objective_queue_deferred_non_runnable")
+    if notification_ready_posture in {"ready", "not_ready"} or reply_required_posture == "reply_required":
+        reason_codes.append("multi_objective_approval_notification_deferred")
+    if bool(project_human_escalation_required):
+        reason_codes.append("multi_objective_escalation_deferred")
+    reason_codes = _normalize_project_multi_objective_reason_codes(reason_codes)
+
+    return {
+        "project_multi_objective_status": "available",
+        "project_multi_objective_reason": reason_codes[0],
+        "project_multi_objective_reason_codes": reason_codes,
+        "project_active_objective_selection_posture": active_selection_posture,
+        "project_active_objective_id": normalized_objective_id,
+        "project_blocked_objective_deferral_posture": blocked_deferral_posture,
+        "project_blocked_objective_deferred": bool(blocked_objective_deferred),
+        "project_resumable_queue_ordering_posture": queue_ordering_posture,
+        "project_resumable_queue_ordering_key": queue_ordering_key,
+        "project_resumable_queue_next_slice_id": selected_slice_id,
+        "project_resumable_queue_has_pending": bool(queue_has_pending),
+        "project_multi_objective_unavailable": False,
+    }
+
+
+def _classify_continuation_branch_type(
+    *,
+    approved_next_direction: str,
+    proposed_next_direction: str,
+) -> str:
+    direction = _normalize_text(
+        approved_next_direction or proposed_next_direction,
+        default="unknown",
+    )
+    if direction in {"same_lane_retry", "repair_retry"}:
+        return "retry"
+    if direction == "replan_preparation":
+        return "replan"
+    if direction == "truth_gathering":
+        return "truth_gather"
+    return "unknown"
+
+
 def _select_approved_restart_target_unit(
     manifest_units: list[Mapping[str, Any]],
 ) -> dict[str, Any] | None:
@@ -5338,6 +10025,470 @@ def _build_approved_restart_execution_summary_surface(
             source.get("automatic_restart_result_status"),
             default="not_attempted",
         ),
+        "approval_skip_gate_status": _normalize_text(
+            source.get("approval_skip_gate_status"),
+            default="approval_required",
+        ),
+        "approval_skip_allowed": bool(source.get("approval_skip_allowed", False)),
+        "approval_skip_applied": bool(source.get("approval_skip_applied", False)),
+        "approval_skip_reason": _normalize_text(
+            source.get("approval_skip_reason"),
+            default="skip_not_allowed",
+        ),
+        "continuation_budget_status": _normalize_text(
+            source.get("continuation_budget_status"),
+            default="insufficient_truth",
+        ),
+        "continuation_budget_decision": _normalize_text(
+            source.get("continuation_budget_decision"),
+            default="deny_insufficient_truth",
+        ),
+        "continuation_budget_reason": _normalize_text(
+            source.get("continuation_budget_reason"),
+            default="budget_insufficient_truth",
+        ),
+        "automatic_continuation_run_count": _as_non_negative_int(
+            source.get("automatic_continuation_run_count"),
+            default=0,
+        ),
+        "continuation_repair_playbook_selection_status": _normalize_text(
+            source.get("continuation_repair_playbook_selection_status"),
+            default="insufficient_truth",
+        ),
+        "continuation_repair_playbook_selected": bool(
+            source.get("continuation_repair_playbook_selected", False)
+        ),
+        "continuation_repair_playbook_class": _normalize_text(
+            source.get("continuation_repair_playbook_class"),
+            default="no_plan",
+        ),
+        "continuation_next_step_selection_status": _normalize_text(
+            source.get("continuation_next_step_selection_status"),
+            default="insufficient_truth",
+        ),
+        "continuation_next_step_selected": bool(
+            source.get("continuation_next_step_selected", False)
+        ),
+        "continuation_next_step_target": _normalize_text(
+            source.get("continuation_next_step_target"),
+            default="none",
+        ),
+        "continuation_next_step_reason": _normalize_text(
+            source.get("continuation_next_step_reason"),
+            default="next_step_not_selected",
+        ),
+        "supported_repair_execution_status": _normalize_text(
+            source.get("supported_repair_execution_status"),
+            default="not_selected",
+        ),
+        "supported_repair_execution_reason": _normalize_text(
+            source.get("supported_repair_execution_reason"),
+            default="repair_not_selected",
+        ),
+        "supported_repair_execution_attempted": bool(
+            source.get("supported_repair_execution_attempted", False)
+        ),
+        "supported_repair_executed": bool(
+            source.get("supported_repair_executed", False)
+        ),
+        "supported_repair_verification_passed": bool(
+            source.get("supported_repair_verification_passed", False)
+        ),
+        "supported_repair_verification_failed": bool(
+            source.get("supported_repair_verification_failed", False)
+        ),
+        "final_human_review_gate_status": _normalize_text(
+            source.get("final_human_review_gate_status"),
+            default="not_required",
+        ),
+        "final_human_review_required": bool(
+            source.get("final_human_review_required", False)
+        ),
+        "final_human_review_reason": _normalize_text(
+            source.get("final_human_review_reason"),
+            default="final_review_not_required",
+        ),
+        "final_human_gate_preserved": bool(
+            source.get("final_human_gate_preserved", False)
+        ),
+        "project_planning_summary_status": _normalize_text(
+            source.get("project_planning_summary_status"),
+            default="insufficient_truth",
+        ),
+        "project_planning_summary_available": bool(
+            source.get("project_planning_summary_available", False)
+        ),
+        "project_planning_summary_reason": _normalize_text(
+            source.get("project_planning_summary_reason"),
+            default="planning_summary_insufficient_truth",
+        ),
+        "project_planning_control_posture": _normalize_text(
+            source.get("project_planning_control_posture"),
+            default="unknown",
+        ),
+        "project_roadmap_status": _normalize_text(
+            source.get("project_roadmap_status"),
+            default="insufficient_truth",
+        ),
+        "project_roadmap_item_count": _as_non_negative_int(
+            source.get("project_roadmap_item_count"),
+            default=0,
+        ),
+        "project_pr_slicing_status": _normalize_text(
+            source.get("project_pr_slicing_status"),
+            default="insufficient_truth",
+        ),
+        "project_pr_slice_count": _as_non_negative_int(
+            source.get("project_pr_slice_count"),
+            default=0,
+        ),
+        "project_pr_one_pr_size_decision": _normalize_text(
+            source.get("project_pr_one_pr_size_decision"),
+            default="not_available",
+        ),
+        "implementation_prompt_status": _normalize_text(
+            source.get("implementation_prompt_status"),
+            default="insufficient_truth",
+        ),
+        "implementation_prompt_available": bool(
+            source.get("implementation_prompt_available", False)
+        ),
+        "implementation_prompt_reason": _normalize_text(
+            source.get("implementation_prompt_reason"),
+            default="prompt_planning_insufficient_truth",
+        ),
+        "implementation_prompt_slice_id": _normalize_text(
+            source.get("implementation_prompt_slice_id"),
+            default="",
+        ),
+        "implementation_prompt_roadmap_item_id": _normalize_text(
+            source.get("implementation_prompt_roadmap_item_id"),
+            default="",
+        ),
+        "project_pr_queue_status": _normalize_text(
+            source.get("project_pr_queue_status"),
+            default="insufficient_truth",
+        ),
+        "project_pr_queue_reason": _normalize_text(
+            source.get("project_pr_queue_reason"),
+            default="queue_state_insufficient_truth",
+        ),
+        "project_pr_queue_selected_slice_id": _normalize_text(
+            source.get("project_pr_queue_selected_slice_id"),
+            default="",
+        ),
+        "project_pr_queue_handoff_prepared": bool(
+            source.get("project_pr_queue_handoff_prepared", False)
+        ),
+        "project_pr_queue_processed_count": len(
+            _normalize_string_list(source.get("project_pr_queue_processed_slice_ids"))
+        ),
+        "review_assimilation_status": _normalize_text(
+            source.get("review_assimilation_status"),
+            default="insufficient_truth",
+        ),
+        "review_assimilation_action": _normalize_text(
+            source.get("review_assimilation_action"),
+            default="none",
+        ),
+        "review_assimilation_reason": _normalize_text(
+            source.get("review_assimilation_reason"),
+            default="assimilation_result_insufficient_truth",
+        ),
+        "review_assimilation_available": bool(
+            source.get("review_assimilation_available", False)
+        ),
+        "self_healing_status": _normalize_text(
+            source.get("self_healing_status"),
+            default="insufficient_truth",
+        ),
+        "self_healing_transition_target": _normalize_text(
+            source.get("self_healing_transition_target"),
+            default="none",
+        ),
+        "self_healing_transition_executed": bool(
+            source.get("self_healing_transition_executed", False)
+        ),
+        "self_healing_reason": _normalize_text(
+            source.get("self_healing_reason"),
+            default="self_healing_insufficient_assimilation_truth",
+        ),
+        "self_healing_human_fallback_preserved": bool(
+            source.get("self_healing_human_fallback_preserved", False)
+        ),
+        "long_running_stability_status": _normalize_text(
+            source.get("long_running_stability_status"),
+            default="insufficient_truth",
+        ),
+        "long_running_reason": _normalize_text(
+            source.get("long_running_reason"),
+            default="long_running_insufficient_truth_queue_state",
+        ),
+        "long_running_pause_required": bool(
+            source.get("long_running_pause_required", True)
+        ),
+        "long_running_resume_allowed": bool(
+            source.get("long_running_resume_allowed", False)
+        ),
+        "long_running_escalation_required": bool(
+            source.get("long_running_escalation_required", False)
+        ),
+        "objective_compiler_status": _normalize_text(
+            source.get("objective_compiler_status"),
+            default="insufficient_truth",
+        ),
+        "objective_completion_posture": _normalize_text(
+            source.get("objective_completion_posture"),
+            default="objective_insufficient_truth",
+        ),
+        "objective_done_criteria_status": _normalize_text(
+            source.get("objective_done_criteria_status"),
+            default="insufficient_truth",
+        ),
+        "objective_stop_criteria_status": _normalize_text(
+            source.get("objective_stop_criteria_status"),
+            default="insufficient_truth",
+        ),
+        "objective_scope_drift_status": _normalize_text(
+            source.get("objective_scope_drift_status"),
+            default="insufficient_truth",
+        ),
+        "objective_scope_drift_detected": bool(
+            source.get("objective_scope_drift_detected", False)
+        ),
+        "project_autonomy_budget_status": _normalize_text(
+            source.get("project_autonomy_budget_status"),
+            default="insufficient_truth",
+        ),
+        "project_priority_posture": _normalize_text(
+            source.get("project_priority_posture"),
+            default="insufficient_truth",
+        ),
+        "project_high_risk_defer_posture": _normalize_text(
+            source.get("project_high_risk_defer_posture"),
+            default="insufficient_truth",
+        ),
+        "project_run_budget_posture": _normalize_text(
+            source.get("project_run_budget_posture"),
+            default="insufficient_truth",
+        ),
+        "project_objective_budget_posture": _normalize_text(
+            source.get("project_objective_budget_posture"),
+            default="insufficient_truth",
+        ),
+        "project_pr_retry_budget_posture": _normalize_text(
+            source.get("project_pr_retry_budget_posture"),
+            default="insufficient_truth",
+        ),
+        "project_quality_gate_status": _normalize_text(
+            source.get("project_quality_gate_status"),
+            default="insufficient_truth",
+        ),
+        "project_quality_gate_posture": _normalize_text(
+            source.get("project_quality_gate_posture"),
+            default="insufficient_truth",
+        ),
+        "project_quality_gate_recommended_count": _as_non_negative_int(
+            source.get("project_quality_gate_recommended_count"),
+            default=0,
+        ),
+        "project_quality_gate_changed_area_class": _normalize_text(
+            source.get("project_quality_gate_changed_area_class"),
+            default="unknown",
+        ),
+        "project_quality_gate_risk_level": _normalize_text(
+            source.get("project_quality_gate_risk_level"),
+            default="insufficient_truth",
+        ),
+        "project_merge_branch_lifecycle_status": _normalize_text(
+            source.get("project_merge_branch_lifecycle_status"),
+            default="insufficient_truth",
+        ),
+        "project_merge_ready_posture": _normalize_text(
+            source.get("project_merge_ready_posture"),
+            default="insufficient_truth",
+        ),
+        "project_branch_cleanup_candidate_posture": _normalize_text(
+            source.get("project_branch_cleanup_candidate_posture"),
+            default="insufficient_truth",
+        ),
+        "project_branch_quarantine_candidate_posture": _normalize_text(
+            source.get("project_branch_quarantine_candidate_posture"),
+            default="insufficient_truth",
+        ),
+        "project_local_main_sync_posture": _normalize_text(
+            source.get("project_local_main_sync_posture"),
+            default="insufficient_truth",
+        ),
+        "project_failure_memory_status": _normalize_text(
+            source.get("project_failure_memory_status"),
+            default="insufficient_truth",
+        ),
+        "project_failure_memory_suppression_posture": _normalize_text(
+            source.get("project_failure_memory_suppression_posture"),
+            default="insufficient_truth",
+        ),
+        "project_failure_memory_suppression_active": bool(
+            source.get("project_failure_memory_suppression_active", False)
+        ),
+        "project_failure_memory_retry_failure_count": _as_non_negative_int(
+            source.get("project_failure_memory_retry_failure_count"),
+            default=0,
+        ),
+        "project_failure_memory_repair_failure_count": _as_non_negative_int(
+            source.get("project_failure_memory_repair_failure_count"),
+            default=0,
+        ),
+        "project_failure_memory_review_issue_count": _as_non_negative_int(
+            source.get("project_failure_memory_review_issue_count"),
+            default=0,
+        ),
+        "project_failure_memory_failure_bucket_recurrence_count": _as_non_negative_int(
+            source.get("project_failure_memory_failure_bucket_recurrence_count"),
+            default=0,
+        ),
+        "project_external_boundary_status": _normalize_text(
+            source.get("project_external_boundary_status"),
+            default="insufficient_truth",
+        ),
+        "project_external_dependency_posture": _normalize_text(
+            source.get("project_external_dependency_posture"),
+            default="insufficient_truth",
+        ),
+        "project_external_manual_only_posture": _normalize_text(
+            source.get("project_external_manual_only_posture"),
+            default="insufficient_truth",
+        ),
+        "project_external_network_boundary_posture": _normalize_text(
+            source.get("project_external_network_boundary_posture"),
+            default="insufficient_truth",
+        ),
+        "project_external_ci_boundary_posture": _normalize_text(
+            source.get("project_external_ci_boundary_posture"),
+            default="insufficient_truth",
+        ),
+        "project_external_secrets_boundary_posture": _normalize_text(
+            source.get("project_external_secrets_boundary_posture"),
+            default="insufficient_truth",
+        ),
+        "project_external_github_boundary_posture": _normalize_text(
+            source.get("project_external_github_boundary_posture"),
+            default="insufficient_truth",
+        ),
+        "project_external_api_boundary_posture": _normalize_text(
+            source.get("project_external_api_boundary_posture"),
+            default="insufficient_truth",
+        ),
+        "project_external_dependency_blocked": bool(
+            source.get("project_external_dependency_blocked", False)
+        ),
+        "project_external_manual_only_required": bool(
+            source.get("project_external_manual_only_required", False)
+        ),
+        "project_human_escalation_status": _normalize_text(
+            source.get("project_human_escalation_status"),
+            default="insufficient_truth",
+        ),
+        "project_human_escalation_posture": _normalize_text(
+            source.get("project_human_escalation_posture"),
+            default="insufficient_truth",
+        ),
+        "project_human_escalation_required": bool(
+            source.get("project_human_escalation_required", False)
+        ),
+        "project_human_escalation_reason": _normalize_text(
+            source.get("project_human_escalation_reason"),
+            default="escalation_insufficient_truth",
+        ),
+        "project_architecture_risk_posture": _normalize_text(
+            source.get("project_architecture_risk_posture"),
+            default="insufficient_truth",
+        ),
+        "project_scope_risk_posture": _normalize_text(
+            source.get("project_scope_risk_posture"),
+            default="insufficient_truth",
+        ),
+        "project_external_risk_posture": _normalize_text(
+            source.get("project_external_risk_posture"),
+            default="insufficient_truth",
+        ),
+        "project_budget_risk_posture": _normalize_text(
+            source.get("project_budget_risk_posture"),
+            default="insufficient_truth",
+        ),
+        "project_repeated_failure_risk_posture": _normalize_text(
+            source.get("project_repeated_failure_risk_posture"),
+            default="insufficient_truth",
+        ),
+        "project_manual_only_risk_posture": _normalize_text(
+            source.get("project_manual_only_risk_posture"),
+            default="insufficient_truth",
+        ),
+        "project_approval_notification_status": _normalize_text(
+            source.get("project_approval_notification_status"),
+            default="insufficient_truth",
+        ),
+        "project_approval_notification_ready_posture": _normalize_text(
+            source.get("project_approval_notification_ready_posture"),
+            default="insufficient_truth",
+        ),
+        "project_approval_notification_ready": bool(
+            source.get("project_approval_notification_ready", False)
+        ),
+        "project_approval_reply_required_posture": _normalize_text(
+            source.get("project_approval_reply_required_posture"),
+            default="insufficient_truth",
+        ),
+        "project_approval_reply_required": bool(
+            source.get("project_approval_reply_required", False)
+        ),
+        "project_approval_channel_posture": _normalize_text(
+            source.get("project_approval_channel_posture"),
+            default="insufficient_truth",
+        ),
+        "project_approval_mobile_summary_posture": _normalize_text(
+            source.get("project_approval_mobile_summary_posture"),
+            default="insufficient_truth",
+        ),
+        "project_approval_mobile_summary_compact": _normalize_text(
+            source.get("project_approval_mobile_summary_compact"),
+            default="",
+        ),
+        "project_approval_notification_reason": _normalize_text(
+            source.get("project_approval_notification_reason"),
+            default="approval_notification_insufficient_truth",
+        ),
+        "project_multi_objective_status": _normalize_text(
+            source.get("project_multi_objective_status"),
+            default="insufficient_truth",
+        ),
+        "project_multi_objective_reason": _normalize_text(
+            source.get("project_multi_objective_reason"),
+            default="multi_objective_insufficient_truth",
+        ),
+        "project_active_objective_selection_posture": _normalize_text(
+            source.get("project_active_objective_selection_posture"),
+            default="insufficient_truth",
+        ),
+        "project_blocked_objective_deferral_posture": _normalize_text(
+            source.get("project_blocked_objective_deferral_posture"),
+            default="insufficient_truth",
+        ),
+        "project_resumable_queue_ordering_posture": _normalize_text(
+            source.get("project_resumable_queue_ordering_posture"),
+            default="insufficient_truth",
+        ),
+        "project_resumable_queue_ordering_key": _normalize_text(
+            source.get("project_resumable_queue_ordering_key"),
+            default="",
+        ),
+        "project_resumable_queue_next_slice_id": _normalize_text(
+            source.get("project_resumable_queue_next_slice_id"),
+            default="",
+        ),
+        "project_resumable_queue_has_pending": bool(
+            source.get("project_resumable_queue_has_pending", False)
+        ),
     }
 
 
@@ -5345,18 +10496,30 @@ def _build_approved_restart_execution_contract_surface(
     *,
     run_id: str,
     objective_contract_payload: Mapping[str, Any] | None,
+    approval_email_delivery_payload: Mapping[str, Any] | None,
+    fleet_safety_control_payload: Mapping[str, Any] | None,
+    approval_runtime_rules_payload: Mapping[str, Any] | None,
+    failure_bucketing_hardening_payload: Mapping[str, Any] | None,
+    loop_hardening_contract_payload: Mapping[str, Any] | None,
     approved_restart_payload: Mapping[str, Any] | None,
     approval_response_payload: Mapping[str, Any] | None,
     approval_safety_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
     manifest_units: list[Mapping[str, Any]],
     adapter: CodexExecutorAdapter,
     dry_run: bool,
     now: Callable[[], datetime],
 ) -> dict[str, Any]:
     objective = dict(objective_contract_payload or {})
+    approval_email_delivery = dict(approval_email_delivery_payload or {})
+    fleet_safety_control = dict(fleet_safety_control_payload or {})
+    approval_runtime_rules = dict(approval_runtime_rules_payload or {})
+    failure_bucketing_hardening = dict(failure_bucketing_hardening_payload or {})
+    loop_hardening_contract = dict(loop_hardening_contract_payload or {})
     approved_restart = dict(approved_restart_payload or {})
     approval_response = dict(approval_response_payload or {})
     approval_safety = dict(approval_safety_payload or {})
+    prior_approved_restart_execution = dict(prior_approved_restart_execution_payload or {})
 
     objective_id = _normalize_text(objective.get("objective_id"), default="")
     approved_restart_status = _normalize_text(
@@ -5397,6 +10560,12 @@ def _build_approved_restart_execution_contract_surface(
         approval_response.get("response_command_normalized"),
         default="",
     )
+    response_received = bool(approval_response.get("response_received", False))
+    response_supported = bool(approval_response.get("response_supported", False))
+    approval_response_validity = _normalize_text(
+        approval_response.get("approval_response_validity"),
+        default="insufficient_truth",
+    )
 
     approval_safety_status = _normalize_text(
         approval_safety.get("approval_safety_status"),
@@ -5421,6 +10590,542 @@ def _build_approved_restart_execution_contract_surface(
     safety_delivery_deferred = bool(
         approval_safety.get("approval_delivery_deferred_by_safety", False)
     ) or approval_safety_status == "delivery_deferred"
+    approval_safety_validity = _normalize_text(
+        approval_safety.get("approval_safety_validity"),
+        default="insufficient_truth",
+    )
+
+    approval_required = bool(approval_email_delivery.get("approval_required", False))
+    approval_email_status = _normalize_text(
+        approval_email_delivery.get("approval_email_status"),
+        default="insufficient_truth",
+    )
+    approval_email_validity = _normalize_text(
+        approval_email_delivery.get("approval_email_validity"),
+        default="insufficient_truth",
+    )
+    approval_priority = _normalize_text(
+        approval_email_delivery.get("approval_priority"),
+        default="unknown",
+    )
+    approval_reason_class = _normalize_text(
+        approval_email_delivery.get("approval_reason_class"),
+        default="unknown",
+    )
+    proposed_next_direction = _normalize_text(
+        approval_email_delivery.get("proposed_next_direction"),
+        default="unknown",
+    )
+    proposed_target_lane = _normalize_text(
+        approval_email_delivery.get("proposed_target_lane"),
+        default="unknown",
+    )
+    proposed_restart_mode = _normalize_text(
+        approval_email_delivery.get("proposed_restart_mode"),
+        default="unknown",
+    )
+    proposed_action_class = _normalize_text(
+        approval_email_delivery.get("proposed_action_class"),
+        default="unknown",
+    )
+    approval_delivery_mode = _normalize_text(
+        approval_email_delivery.get("delivery_mode"),
+        default="unknown",
+    )
+    approval_delivery_outcome = _normalize_text(
+        approval_email_delivery.get("delivery_outcome"),
+        default="unknown",
+    )
+
+    fleet_safety_status = _normalize_text(
+        fleet_safety_control.get("fleet_safety_status"),
+        default="insufficient_truth",
+    )
+    fleet_safety_decision = _normalize_text(
+        fleet_safety_control.get("fleet_safety_decision"),
+        default="unknown",
+    )
+    fleet_restart_decision = _normalize_text(
+        fleet_safety_control.get("fleet_restart_decision"),
+        default="unknown",
+    )
+    fleet_safety_validity = _normalize_text(
+        fleet_safety_control.get("fleet_safety_validity"),
+        default="insufficient_truth",
+    )
+    fleet_manual_review_required = bool(
+        fleet_safety_control.get("fleet_manual_review_required", False)
+    )
+    bucket_severity = _normalize_text(
+        fleet_safety_control.get("bucket_severity"),
+        default=_normalize_text(
+            approval_email_delivery.get("bucket_severity"),
+            default="unknown",
+        ),
+    )
+
+    runtime_rules_mode = _normalize_text(
+        approval_runtime_rules.get("direction_rule_mode"),
+        default="unknown",
+    )
+    runtime_rules_present = bool(
+        _normalize_text(approval_runtime_rules.get("runtime_rules_version"), default="")
+    )
+    failure_bucketing_status = _normalize_text(
+        failure_bucketing_hardening.get("failure_bucketing_status"),
+        default="unknown",
+    )
+    failure_bucketing_validity = _normalize_text(
+        failure_bucketing_hardening.get("failure_bucketing_validity"),
+        default="unknown",
+    )
+    failure_bucketing_primary_bucket = _normalize_text(
+        failure_bucketing_hardening.get("primary_failure_bucket"),
+        default="unknown",
+    )
+    loop_hardening_status = _normalize_text(
+        loop_hardening_contract.get("loop_hardening_status"),
+        default="unknown",
+    )
+    loop_hardening_validity = _normalize_text(
+        loop_hardening_contract.get("loop_hardening_validity"),
+        default="unknown",
+    )
+    loop_no_progress_status = _normalize_text(
+        loop_hardening_contract.get("no_progress_status"),
+        default="unknown",
+    )
+    loop_no_progress_detected = bool(
+        loop_hardening_contract.get("no_progress_detected", False)
+    )
+    loop_no_progress_stop_required = bool(
+        loop_hardening_contract.get("no_progress_stop_required", False)
+    )
+
+    approval_skip_allowed = False
+    approval_skip_applied = False
+    approval_skip_gate_status = "approval_required"
+    approval_skip_gate_decision = "require_human_approval"
+    approval_skip_reason = "skip_not_allowed"
+    approval_skip_reason_codes: list[str] = []
+    approval_skip_effective_command = ""
+    approval_skip_effective_restart_decision = ""
+    approval_skip_effective_next_direction = ""
+    approval_skip_effective_target_lane = ""
+    approval_skip_effective_action_class = ""
+    approval_skip_human_gate_preserved = True
+
+    supported_skip_direction = proposed_next_direction in _APPROVAL_SKIP_DIRECTION_TO_POSTURE
+    hold_or_reject_posture = (
+        response_command_normalized in {"HOLD", "REJECT"}
+        or response_decision_class in {"held", "rejected"}
+        or approval_response_status in {"response_held", "response_rejected"}
+    )
+    response_already_approved = (
+        approval_response_status == "response_accepted"
+        and response_decision_class == "approved"
+        and (
+            response_supported
+            or response_command_normalized in {
+                "OK RETRY",
+                "OK REPLAN",
+                "OK TRUTH",
+                "OK CLOSE",
+            }
+        )
+    )
+    invalid_or_insufficient_truth = any(
+        (
+            not objective_id,
+            approval_email_validity != "valid",
+            approval_safety_validity != "valid",
+            fleet_safety_validity != "valid",
+            approval_response_validity != "valid",
+            approval_email_status in {"insufficient_truth", ""},
+            approval_safety_status == "insufficient_truth",
+            fleet_safety_status == "insufficient_truth",
+            runtime_rules_mode != "deterministic_rules_v1",
+            not runtime_rules_present,
+        )
+    )
+    safety_clear = bool(
+        approval_safety_status in {"safe_to_deliver", "not_applicable"}
+        and not safety_duplicate_pending
+        and not safety_cooldown_active
+        and not safety_loop_suspected
+        and not safety_delivery_blocked
+        and not safety_delivery_deferred
+    )
+    manual_review_required = bool(
+        fleet_manual_review_required
+        or fleet_restart_decision == "manual_only"
+        or fleet_safety_decision == "escalate_manual"
+        or proposed_next_direction == "manual_review_preparation"
+        or approval_reason_class == "manual_only"
+    )
+    high_risk_posture = bool(
+        approval_priority in {"high", "critical"}
+        or bucket_severity in {"high", "critical"}
+        or approval_reason_class
+        in {"lane_change_high_risk", "bucket_high_risk", "integrity_degraded"}
+        or fleet_safety_status in {"freeze", "stop", "degraded"}
+        or fleet_safety_decision in {"freeze_run", "stop_run", "hold_for_review"}
+    )
+    unsupported_posture = bool(
+        not supported_skip_direction
+        or proposed_action_class in {"unknown", "review_only", "stop_only"}
+        or proposed_restart_mode in {"blocked", "held", "approval_required_then_manual"}
+    )
+
+    if not approval_required:
+        approval_skip_gate_status = "not_applicable"
+        approval_skip_gate_decision = "not_applicable"
+        approval_skip_reason = "skip_not_applicable_approval_not_required"
+    elif response_already_approved:
+        approval_skip_reason = "skip_human_response_already_present"
+    elif hold_or_reject_posture:
+        approval_skip_reason = "skip_hold_or_reject_posture"
+    elif invalid_or_insufficient_truth:
+        approval_skip_gate_status = "insufficient_truth"
+        approval_skip_reason = "skip_invalid_or_insufficient_truth"
+    elif safety_duplicate_pending:
+        approval_skip_reason = "skip_safety_duplicate_pending"
+    elif safety_cooldown_active:
+        approval_skip_reason = "skip_safety_cooldown_active"
+    elif safety_loop_suspected:
+        approval_skip_reason = "skip_safety_loop_suspected"
+    elif safety_delivery_blocked:
+        approval_skip_reason = "skip_safety_delivery_blocked"
+    elif safety_delivery_deferred:
+        approval_skip_reason = "skip_safety_delivery_deferred"
+    elif not safety_clear:
+        approval_skip_reason = "skip_safety_not_clear"
+    elif manual_review_required:
+        approval_skip_reason = "skip_manual_review_required"
+    elif high_risk_posture:
+        approval_skip_reason = "skip_high_risk_posture"
+    elif unsupported_posture:
+        approval_skip_reason = "skip_unsupported_direction"
+    else:
+        approval_skip_allowed = True
+        approval_skip_applied = True
+        approval_skip_gate_status = "skip_allowed"
+        approval_skip_gate_decision = "skip_and_continue_once"
+        approval_skip_reason = "skip_allowed_low_risk"
+        mapped_posture = _APPROVAL_SKIP_DIRECTION_TO_POSTURE.get(proposed_next_direction, {})
+        approval_skip_effective_command = _normalize_text(
+            mapped_posture.get("response_command"),
+            default="",
+        )
+        approval_skip_effective_restart_decision = _normalize_text(
+            mapped_posture.get("restart_decision"),
+            default="unknown",
+        )
+        approval_skip_effective_next_direction = proposed_next_direction
+        approval_skip_effective_target_lane = proposed_target_lane
+        approval_skip_effective_action_class = proposed_action_class
+        approval_response_status = "response_accepted"
+        response_decision_class = "approved"
+        response_command_normalized = approval_skip_effective_command
+        approved_restart_status = "restart_allowed"
+        approved_restart_validity = "valid"
+        restart_decision = approval_skip_effective_restart_decision
+        restart_allowed = True
+        restart_blocked = False
+        restart_held = False
+        restart_manual_followup = False
+        approved_next_direction = approval_skip_effective_next_direction
+        approved_target_lane = approval_skip_effective_target_lane
+        approved_action_class = approval_skip_effective_action_class
+
+    approval_skip_human_gate_preserved = not approval_skip_applied
+    approval_skip_reason_codes = _normalize_approval_skip_reason_codes([approval_skip_reason])
+
+    continuation_budget_run_limit = _CONTINUATION_BUDGET_RUN_LIMIT_DEFAULT
+    continuation_budget_objective_limit = _CONTINUATION_BUDGET_OBJECTIVE_LIMIT_DEFAULT
+    continuation_budget_lane_limit = _CONTINUATION_BUDGET_LANE_LIMIT_DEFAULT
+    continuation_budget_branch_type = _classify_continuation_branch_type(
+        approved_next_direction=approved_next_direction,
+        proposed_next_direction=proposed_next_direction,
+    )
+    continuation_budget_branch_applicable = (
+        continuation_budget_branch_type in _CONTINUATION_BUDGET_BRANCH_TYPES
+    )
+    continuation_budget_branch_limit = _as_non_negative_int(
+        _CONTINUATION_BUDGET_BRANCH_LIMIT_DEFAULTS.get(continuation_budget_branch_type),
+        default=0,
+    )
+    continuation_budget_objective_key = _normalize_text(objective_id, default="")
+    continuation_budget_lane_key = _normalize_text(
+        approved_target_lane or proposed_target_lane,
+        default="unknown",
+    )
+    prior_continuation_run_count = _as_non_negative_int(
+        prior_approved_restart_execution.get("automatic_continuation_run_count"),
+        default=0,
+    )
+    prior_continuation_objective_count = _as_non_negative_int(
+        prior_approved_restart_execution.get("automatic_continuation_objective_count"),
+        default=0,
+    )
+    prior_continuation_lane_count = _as_non_negative_int(
+        prior_approved_restart_execution.get("automatic_continuation_lane_count"),
+        default=0,
+    )
+    prior_continuation_retry_count = _as_non_negative_int(
+        prior_approved_restart_execution.get("automatic_continuation_retry_count"),
+        default=0,
+    )
+    prior_continuation_replan_count = _as_non_negative_int(
+        prior_approved_restart_execution.get("automatic_continuation_replan_count"),
+        default=0,
+    )
+    prior_continuation_truth_gather_count = _as_non_negative_int(
+        prior_approved_restart_execution.get("automatic_continuation_truth_gather_count"),
+        default=0,
+    )
+    prior_continuation_objective_key = _normalize_text(
+        prior_approved_restart_execution.get("automatic_continuation_objective_key"),
+        default="",
+    )
+    prior_continuation_lane_key = _normalize_text(
+        prior_approved_restart_execution.get("automatic_continuation_lane_key"),
+        default="",
+    )
+    continuation_run_count_before = prior_continuation_run_count
+    continuation_objective_count_before = (
+        prior_continuation_objective_count
+        if continuation_budget_objective_key
+        and continuation_budget_objective_key == prior_continuation_objective_key
+        else 0
+    )
+    continuation_lane_count_before = (
+        prior_continuation_lane_count
+        if continuation_budget_lane_key
+        and continuation_budget_lane_key == prior_continuation_lane_key
+        else 0
+    )
+    continuation_branch_count_before = 0
+    if continuation_budget_branch_type == "retry":
+        continuation_branch_count_before = prior_continuation_retry_count
+    elif continuation_budget_branch_type == "replan":
+        continuation_branch_count_before = prior_continuation_replan_count
+    elif continuation_budget_branch_type == "truth_gather":
+        continuation_branch_count_before = prior_continuation_truth_gather_count
+    continuation_budget_truth_sufficient = bool(
+        continuation_budget_objective_key
+        and continuation_budget_lane_key
+        and continuation_budget_lane_key != "unknown"
+    )
+    continuation_budget_run_exhausted = (
+        continuation_run_count_before >= continuation_budget_run_limit
+    )
+    continuation_budget_objective_exhausted = (
+        continuation_objective_count_before >= continuation_budget_objective_limit
+    )
+    continuation_budget_lane_exhausted = (
+        continuation_lane_count_before >= continuation_budget_lane_limit
+    )
+    continuation_budget_branch_exhausted = bool(
+        continuation_budget_branch_applicable
+        and continuation_branch_count_before >= continuation_budget_branch_limit
+    )
+    continuation_branch_budget_status = "available"
+    continuation_branch_budget_decision = "allow_under_branch_ceiling"
+    continuation_branch_budget_reason = "branch_budget_available"
+    if not continuation_budget_branch_applicable:
+        continuation_branch_budget_status = "not_applicable"
+        continuation_branch_budget_decision = "not_applicable"
+        continuation_branch_budget_reason = "branch_budget_not_applicable"
+    elif continuation_budget_branch_exhausted:
+        continuation_branch_budget_status = "exhausted"
+        continuation_branch_budget_decision = "deny_branch_ceiling_exhausted"
+        continuation_branch_budget_reason = "branch_budget_exhausted"
+    continuation_branch_budget_reason_codes = (
+        _normalize_continuation_branch_budget_reason_codes(
+            [continuation_branch_budget_reason]
+        )
+    )
+    continuation_budget_exhausted = bool(
+        continuation_budget_run_exhausted
+        or continuation_budget_objective_exhausted
+        or continuation_budget_lane_exhausted
+        or continuation_budget_branch_exhausted
+    )
+    continuation_budget_status = "available"
+    continuation_budget_decision = "allow_under_budget"
+    continuation_budget_reason = "budget_available"
+    if not continuation_budget_truth_sufficient:
+        continuation_budget_status = "insufficient_truth"
+        continuation_budget_decision = "deny_insufficient_truth"
+        continuation_budget_reason = "budget_insufficient_truth"
+    elif continuation_budget_lane_exhausted:
+        continuation_budget_status = "exhausted"
+        continuation_budget_decision = "deny_budget_exhausted"
+        continuation_budget_reason = "budget_lane_exhausted"
+    elif continuation_budget_objective_exhausted:
+        continuation_budget_status = "exhausted"
+        continuation_budget_decision = "deny_budget_exhausted"
+        continuation_budget_reason = "budget_objective_exhausted"
+    elif continuation_budget_run_exhausted:
+        continuation_budget_status = "exhausted"
+        continuation_budget_decision = "deny_budget_exhausted"
+        continuation_budget_reason = "budget_run_exhausted"
+    elif continuation_budget_branch_exhausted:
+        continuation_budget_status = "exhausted"
+        continuation_budget_decision = "deny_budget_exhausted"
+        continuation_budget_reason = "budget_branch_exhausted"
+    continuation_budget_reason_codes = _normalize_continuation_budget_reason_codes(
+        [continuation_budget_reason]
+    )
+    continuation_repeated = continuation_run_count_before >= 1
+    continuation_no_progress_truth_sufficient = bool(
+        loop_hardening_validity in {"valid", "partial"}
+        and loop_hardening_status not in {"", "insufficient_truth", "unknown"}
+    )
+    continuation_no_progress_signal_detected = bool(
+        loop_no_progress_stop_required
+        or loop_no_progress_status == "confirmed"
+        or (loop_no_progress_detected and loop_no_progress_status in {"confirmed", "suspected"})
+    )
+    continuation_no_progress_stop_required = bool(
+        continuation_repeated
+        and continuation_no_progress_truth_sufficient
+        and continuation_no_progress_signal_detected
+    )
+    continuation_failure_bucket_truth_sufficient = bool(
+        failure_bucketing_validity == "valid"
+        and failure_bucketing_status == "classified"
+    )
+    continuation_failure_bucket_unsafe = (
+        failure_bucketing_primary_bucket in _CONTINUATION_UNSAFE_FAILURE_BUCKETS
+    )
+    continuation_failure_bucket_denied = bool(
+        continuation_failure_bucket_truth_sufficient
+        and continuation_failure_bucket_unsafe
+    )
+    continuation_repair_playbook_truth_sufficient = bool(
+        continuation_failure_bucket_truth_sufficient
+        and failure_bucketing_primary_bucket not in {"", "unknown"}
+    )
+    continuation_repair_playbook_mapping = _CONTINUATION_REPAIR_PLAYBOOKS.get(
+        failure_bucketing_primary_bucket,
+        {},
+    )
+    continuation_repair_playbook_supported_bucket = bool(
+        continuation_repair_playbook_mapping
+    )
+    continuation_repair_playbook_selected = bool(
+        continuation_repair_playbook_truth_sufficient
+        and continuation_repair_playbook_supported_bucket
+    )
+    continuation_repair_playbook_selection_status = "not_selected"
+    continuation_repair_playbook_reason = "playbook_bucket_unsupported"
+    if not continuation_repair_playbook_truth_sufficient:
+        continuation_repair_playbook_selection_status = "insufficient_truth"
+        continuation_repair_playbook_reason = "playbook_insufficient_truth"
+    elif continuation_repair_playbook_selected:
+        continuation_repair_playbook_selection_status = "selected"
+        continuation_repair_playbook_reason = "playbook_selected"
+    continuation_repair_playbook_class = _normalize_text(
+        continuation_repair_playbook_mapping.get("repair_plan_class"),
+        default="no_plan",
+    )
+    if continuation_repair_playbook_class not in REPAIR_PLAN_CLASSES:
+        continuation_repair_playbook_class = "no_plan"
+    continuation_repair_playbook_candidate_action = _normalize_text(
+        continuation_repair_playbook_mapping.get("repair_plan_candidate_action"),
+        default="no_action",
+    )
+    if continuation_repair_playbook_candidate_action not in REPAIR_PLAN_CANDIDATE_ACTIONS:
+        continuation_repair_playbook_candidate_action = "no_action"
+    if not continuation_repair_playbook_selected:
+        continuation_repair_playbook_class = "no_plan"
+        continuation_repair_playbook_candidate_action = "no_action"
+    continuation_repair_playbook_reason_codes = (
+        _normalize_continuation_repair_playbook_reason_codes(
+            [continuation_repair_playbook_reason]
+        )
+    )
+    continuation_next_step_truth_sufficient = bool(
+        objective_id
+        and approved_restart_validity == "valid"
+        and approval_safety_validity == "valid"
+        and approval_response_validity == "valid"
+    )
+    continuation_next_step_target = "none"
+    continuation_next_step_reason = "next_step_not_selected"
+    continuation_next_step_selection_status = "not_selected"
+    continuation_next_step_retry_eligible = bool(
+        approved_next_direction in {"same_lane_retry", "repair_retry"}
+        or proposed_next_direction in {"same_lane_retry", "repair_retry"}
+    )
+    continuation_next_step_replan_eligible = bool(
+        approved_next_direction == "replan_preparation"
+        or proposed_next_direction == "replan_preparation"
+    )
+    continuation_next_step_truth_insufficiency_explicit = bool(
+        failure_bucketing_primary_bucket in {"truth_missing", "external_truth_pending"}
+        or failure_bucketing_status == "insufficient_truth"
+        or failure_bucketing_validity == "insufficient_truth"
+    )
+    continuation_next_step_supported_repair_eligible = bool(
+        continuation_repair_playbook_selected
+    )
+    if not continuation_next_step_truth_sufficient:
+        continuation_next_step_selection_status = "insufficient_truth"
+        continuation_next_step_reason = "next_step_insufficient_truth"
+    elif continuation_next_step_supported_repair_eligible:
+        continuation_next_step_selection_status = "selected"
+        continuation_next_step_target = "supported_repair"
+        continuation_next_step_reason = "next_step_selected_supported_repair"
+    elif continuation_next_step_truth_insufficiency_explicit:
+        continuation_next_step_selection_status = "selected"
+        continuation_next_step_target = "truth_gather"
+        continuation_next_step_reason = "next_step_selected_truth_gather"
+    elif continuation_next_step_replan_eligible:
+        continuation_next_step_selection_status = "selected"
+        continuation_next_step_target = "replan"
+        continuation_next_step_reason = "next_step_selected_replan"
+    elif continuation_next_step_retry_eligible:
+        continuation_next_step_selection_status = "selected"
+        continuation_next_step_target = "retry"
+        continuation_next_step_reason = "next_step_selected_retry"
+    continuation_next_step_selected = (
+        continuation_next_step_selection_status == "selected"
+    )
+    if continuation_next_step_target not in _CONTINUATION_NEXT_STEP_TARGETS:
+        continuation_next_step_target = "none"
+        continuation_next_step_selection_status = "not_selected"
+        continuation_next_step_selected = False
+        continuation_next_step_reason = "next_step_not_selected"
+    continuation_next_step_reason_codes = (
+        _normalize_continuation_next_step_reason_codes(
+            [continuation_next_step_reason]
+        )
+    )
+    supported_repair_target_selected = continuation_next_step_target == "supported_repair"
+    supported_repair_execution_attempted = False
+    supported_repair_executed = False
+    supported_repair_verification_passed = False
+    supported_repair_verification_failed = False
+    supported_repair_execution_status = "not_selected"
+    supported_repair_execution_reason = "repair_not_selected"
+    supported_repair_execution_qualified = bool(
+        supported_repair_target_selected
+        and continuation_repair_playbook_selected
+        and continuation_repair_playbook_class
+        in _SUPPORTED_REPAIR_EXECUTABLE_PLAYBOOK_CLASSES
+        and continuation_repair_playbook_candidate_action
+        in _SUPPORTED_REPAIR_EXECUTABLE_CANDIDATE_ACTIONS
+    )
+    if supported_repair_target_selected:
+        if supported_repair_execution_qualified:
+            supported_repair_execution_status = "not_executed_launch_failed"
+            supported_repair_execution_reason = "repair_launch_failed"
+        else:
+            supported_repair_execution_status = "not_executed_qualification_failed"
+            supported_repair_execution_reason = "repair_qualification_failed"
 
     execution_status = "not_executed"
     execution_reason = "restart_not_executed"
@@ -5471,10 +11176,40 @@ def _build_approved_restart_execution_contract_surface(
         execution_reason = "safety_delivery_deferred"
     elif not safety_status_clear:
         execution_reason = "safety_not_clear"
+    elif not continuation_budget_truth_sufficient:
+        execution_reason = "continuation_budget_insufficient_truth"
+    elif continuation_budget_exhausted:
+        execution_reason = "continuation_budget_exhausted"
+        if approval_skip_applied:
+            approval_skip_applied = False
+            approval_skip_human_gate_preserved = True
+    elif continuation_no_progress_stop_required:
+        execution_reason = "continuation_no_progress_stop"
+        if approval_skip_applied:
+            approval_skip_applied = False
+            approval_skip_human_gate_preserved = True
+    elif continuation_failure_bucket_denied:
+        execution_reason = "failure_bucket_continuation_denied"
+        if approval_skip_applied:
+            approval_skip_applied = False
+            approval_skip_human_gate_preserved = True
+    elif not continuation_next_step_selected:
+        execution_reason = "continuation_next_step_not_selected"
+        if approval_skip_applied:
+            approval_skip_applied = False
+            approval_skip_human_gate_preserved = True
+    elif supported_repair_target_selected and not supported_repair_execution_qualified:
+        execution_reason = "supported_repair_qualification_failed"
+        if approval_skip_applied:
+            approval_skip_applied = False
+            approval_skip_human_gate_preserved = True
     else:
         target_entry = _select_approved_restart_target_unit(manifest_units)
         if not isinstance(target_entry, Mapping):
             execution_reason = "restart_target_missing"
+            if supported_repair_target_selected:
+                supported_repair_execution_status = "not_executed_launch_failed"
+                supported_repair_execution_reason = "repair_launch_failed"
         else:
             restart_target_pr_id = _normalize_text(target_entry.get("pr_id"), default="")
             target_prompt_path_text = _normalize_text(
@@ -5493,9 +11228,14 @@ def _build_approved_restart_execution_contract_surface(
                 or not target_work_dir.exists()
             ):
                 execution_reason = "restart_target_missing"
+                if supported_repair_target_selected:
+                    supported_repair_execution_status = "not_executed_launch_failed"
+                    supported_repair_execution_reason = "repair_launch_failed"
             else:
                 restart_launch_pr_id = f"{restart_target_pr_id}__approved_restart_once"
                 try:
+                    if supported_repair_target_selected:
+                        supported_repair_execution_attempted = True
                     launch_response = dict(
                         adapter.launch_job(
                             job_id=_normalize_text(run_id, default=""),
@@ -5516,11 +11256,17 @@ def _build_approved_restart_execution_contract_surface(
                 except Exception as exc:  # pragma: no cover - deterministic fallback
                     restart_error = _normalize_text(str(exc), default="automatic_restart_launch_failed")
                     execution_reason = "restart_launch_failed"
+                    if supported_repair_target_selected:
+                        supported_repair_execution_status = "not_executed_launch_failed"
+                        supported_repair_execution_reason = "repair_launch_failed"
                 else:
                     automatic_restart_attempted = True
                     restart_run_id = _normalize_text(launch_response.get("run_id"), default="")
                     if not restart_run_id:
                         execution_reason = "restart_launch_failed"
+                        if supported_repair_target_selected:
+                            supported_repair_execution_status = "not_executed_launch_failed"
+                            supported_repair_execution_reason = "repair_launch_failed"
                     else:
                         status_response = dict(adapter.poll_status(run_id=restart_run_id))
                         artifact_response = dict(adapter.collect_artifacts(run_id=restart_run_id))
@@ -5553,15 +11299,1336 @@ def _build_approved_restart_execution_contract_surface(
                         automatic_restart_count = 1
                         execution_status = "executed"
                         execution_reason = "restart_executed_once"
+                        if supported_repair_target_selected:
+                            supported_repair_executed = True
+                            if restart_result_status == "completed":
+                                supported_repair_verification_passed = True
+                                supported_repair_execution_status = (
+                                    "executed_verification_passed"
+                                )
+                                supported_repair_execution_reason = (
+                                    "repair_verification_passed"
+                                )
+                            else:
+                                supported_repair_verification_failed = True
+                                supported_repair_execution_status = (
+                                    "executed_verification_failed"
+                                )
+                                supported_repair_execution_reason = (
+                                    "repair_verification_failed"
+                                )
+                                execution_reason = "supported_repair_verification_failed"
+                                if approval_skip_applied:
+                                    approval_skip_applied = False
+                                    approval_skip_human_gate_preserved = True
 
     if execution_status != "executed":
         automatic_restart_executed = False
         automatic_restart_count = 0
         restart_result_status = "not_attempted"
+        if supported_repair_target_selected and execution_reason in {
+            "invalid_approved_restart_posture",
+            "response_not_approved",
+            "safety_duplicate_pending",
+            "safety_cooldown_active",
+            "safety_loop_suspected",
+            "safety_delivery_blocked",
+            "safety_delivery_deferred",
+            "safety_not_clear",
+            "continuation_budget_insufficient_truth",
+            "continuation_budget_exhausted",
+            "continuation_no_progress_stop",
+            "failure_bucket_continuation_denied",
+        }:
+            supported_repair_execution_status = "not_executed_precheck_blocked"
+            supported_repair_execution_reason = "repair_precheck_blocked"
+    continuation_increment = 1 if execution_status == "executed" else 0
+    continuation_run_count_after = continuation_run_count_before + continuation_increment
+    continuation_objective_count_after = (
+        continuation_objective_count_before + continuation_increment
+    )
+    continuation_lane_count_after = continuation_lane_count_before + continuation_increment
+    continuation_branch_increment = (
+        continuation_increment if continuation_budget_branch_applicable else 0
+    )
+    continuation_branch_count_after = (
+        continuation_branch_count_before + continuation_branch_increment
+    )
+    continuation_retry_count_after = prior_continuation_retry_count + (
+        continuation_increment if continuation_budget_branch_type == "retry" else 0
+    )
+    continuation_replan_count_after = prior_continuation_replan_count + (
+        continuation_increment if continuation_budget_branch_type == "replan" else 0
+    )
+    continuation_truth_gather_count_after = prior_continuation_truth_gather_count + (
+        continuation_increment if continuation_budget_branch_type == "truth_gather" else 0
+    )
+    continuation_budget_run_remaining = max(
+        0,
+        continuation_budget_run_limit - continuation_run_count_after,
+    )
+    continuation_budget_objective_remaining = max(
+        0,
+        continuation_budget_objective_limit - continuation_objective_count_after,
+    )
+    continuation_budget_lane_remaining = max(
+        0,
+        continuation_budget_lane_limit - continuation_lane_count_after,
+    )
+    continuation_budget_branch_remaining = max(
+        0,
+        continuation_budget_branch_limit - continuation_branch_count_after,
+    )
 
     execution_reason_codes = _normalize_approved_restart_execution_reason_codes(
         [execution_reason]
     )
+    supported_repair_execution_reason_codes = (
+        _normalize_supported_repair_execution_reason_codes(
+            [supported_repair_execution_reason]
+        )
+    )
+    manual_only_posture_active = bool(
+        failure_bucketing_primary_bucket == "manual_only"
+        or approval_reason_class == "manual_only"
+        or fleet_restart_decision == "manual_only"
+        or proposed_next_direction == "manual_review_preparation"
+    )
+    next_step_unresolved = bool(
+        execution_reason == "continuation_next_step_not_selected"
+        and continuation_budget_truth_sufficient
+        and safety_status_clear
+        and not continuation_budget_exhausted
+        and not continuation_no_progress_stop_required
+        and not continuation_failure_bucket_denied
+    )
+    supported_repair_escalation_failure = bool(
+        supported_repair_execution_status == "executed_verification_failed"
+    )
+    final_human_review_required = False
+    final_human_review_gate_status = "not_required"
+    final_human_review_reason = "final_review_not_required"
+    if manual_only_posture_active:
+        final_human_review_required = True
+        final_human_review_gate_status = "required"
+        final_human_review_reason = "final_review_manual_only_posture"
+    elif high_risk_posture:
+        final_human_review_required = True
+        final_human_review_gate_status = "required"
+        final_human_review_reason = "final_review_high_risk_posture"
+    elif supported_repair_escalation_failure:
+        final_human_review_required = True
+        final_human_review_gate_status = "required"
+        final_human_review_reason = "final_review_supported_repair_verification_failed"
+    elif next_step_unresolved and (manual_review_required or approval_required):
+        final_human_review_required = True
+        final_human_review_gate_status = "required"
+        final_human_review_reason = "final_review_next_step_unresolved"
+    elif manual_review_required:
+        final_human_review_required = True
+        final_human_review_gate_status = "required"
+        final_human_review_reason = "final_review_explicit_manual_review_required"
+    final_human_review_reason_codes = _normalize_final_human_review_gate_reason_codes(
+        [final_human_review_reason]
+    )
+    project_planning_summary_status = "insufficient_truth"
+    project_planning_summary_reason = "planning_summary_insufficient_truth"
+    project_planning_summary_available = False
+    project_planning_control_posture = "unknown"
+    planning_summary_truth_sufficient = bool(
+        objective_id
+        and (
+            final_human_review_required
+            or (
+                continuation_budget_status in {"available", "exhausted"}
+                and continuation_branch_budget_status
+                in _CONTINUATION_BUDGET_BRANCH_STATUSES
+                and continuation_next_step_selection_status in {"selected", "not_selected"}
+                and failure_bucketing_status not in {"", "unknown", "insufficient_truth"}
+            )
+        )
+    )
+    if planning_summary_truth_sufficient:
+        project_planning_summary_status = "available"
+        project_planning_summary_reason = "planning_summary_compiled"
+        project_planning_summary_available = True
+        if final_human_review_required:
+            project_planning_control_posture = "human_review_required"
+        elif execution_status == "executed":
+            project_planning_control_posture = "automation_executed"
+        elif execution_status == "not_executed":
+            project_planning_control_posture = "automation_blocked"
+    project_planning_summary_reason_codes = (
+        _normalize_project_planning_summary_reason_codes(
+            [project_planning_summary_reason]
+        )
+    )
+    project_planning_summary_compact: dict[str, Any] = {}
+    if project_planning_summary_available:
+        project_planning_summary_compact = {
+            "objective_id": objective_id,
+            "control_posture": project_planning_control_posture,
+            "automatic_restart_execution_status": execution_status,
+            "automatic_restart_execution_reason": execution_reason_codes[0],
+            "continuation_budget_status": continuation_budget_status,
+            "continuation_budget_branch_status": continuation_branch_budget_status,
+            "continuation_failure_bucket": failure_bucketing_primary_bucket,
+            "continuation_failure_bucket_denied": bool(continuation_failure_bucket_denied),
+            "continuation_repair_playbook_selection_status": (
+                continuation_repair_playbook_selection_status
+            ),
+            "continuation_next_step_selection_status": continuation_next_step_selection_status,
+            "continuation_next_step_target": continuation_next_step_target,
+            "supported_repair_execution_status": supported_repair_execution_status,
+            "supported_repair_verification_failed": bool(
+                supported_repair_verification_failed
+            ),
+            "final_human_review_required": bool(final_human_review_required),
+            "final_human_review_reason": final_human_review_reason_codes[0],
+        }
+    project_roadmap_status = "insufficient_truth"
+    project_roadmap_reason = "roadmap_insufficient_truth"
+    project_roadmap_available = False
+    project_roadmap_items: list[dict[str, Any]] = []
+    project_roadmap_item_count = 0
+    project_pr_slicing_status = "insufficient_truth"
+    project_pr_slicing_reason = "pr_slices_insufficient_truth"
+    project_pr_slicing_available = False
+    project_pr_slices: list[dict[str, Any]] = []
+    project_pr_slice_count = 0
+    project_pr_one_pr_size_decision = "not_available"
+    project_pr_prioritization_mode = "insufficient_truth"
+    if project_planning_summary_available:
+        project_roadmap_status = "available"
+        project_roadmap_reason = "roadmap_compiled"
+        project_roadmap_available = True
+        project_roadmap_items = _build_project_roadmap_items(
+            project_planning_summary_compact=project_planning_summary_compact,
+            planning_source_status="planning_summary_available",
+        )
+        project_roadmap_item_count = len(project_roadmap_items)
+        project_pr_slicing_status = "available"
+        project_pr_slicing_reason = "pr_slices_compiled"
+        project_pr_slicing_available = True
+        project_pr_slices = _build_project_pr_slices(project_roadmap_items)
+        project_pr_slice_count = len(project_pr_slices)
+        project_pr_one_pr_size_decision = "single_theme_single_pr"
+        project_pr_prioritization_mode = "blocked_last_narrow_first_prereq_first"
+    project_roadmap_reason_codes = _normalize_project_roadmap_reason_codes(
+        [project_roadmap_reason]
+    )
+    project_pr_slicing_reason_codes = _normalize_project_pr_slicing_reason_codes(
+        [project_pr_slicing_reason]
+    )
+    implementation_prompt_payload = _build_implementation_prompt_payload(
+        objective_id=objective_id,
+        project_planning_summary_status=project_planning_summary_status,
+        project_pr_slicing_status=project_pr_slicing_status,
+        project_pr_one_pr_size_decision=project_pr_one_pr_size_decision,
+        project_pr_slices=project_pr_slices,
+    )
+    implementation_prompt_status = _normalize_text(
+        implementation_prompt_payload.get("prompt_status"),
+        default="insufficient_truth",
+    )
+    implementation_prompt_available = bool(
+        implementation_prompt_payload.get("prompt_available", False)
+    )
+    implementation_prompt_reason_codes = _normalize_implementation_prompt_reason_codes(
+        list(implementation_prompt_payload.get("prompt_reason_codes", []))
+    )
+    implementation_prompt_payload["prompt_reason"] = implementation_prompt_reason_codes[0]
+    implementation_prompt_payload["prompt_reason_codes"] = implementation_prompt_reason_codes
+    prior_queue_processed_slice_ids = _serialize_required_signals(
+        _normalize_string_list(
+            prior_approved_restart_execution.get("project_pr_queue_processed_slice_ids")
+        )
+    )
+    project_pr_queue_state = _build_project_pr_queue_state(
+        project_pr_slicing_status=project_pr_slicing_status,
+        project_pr_slices=project_pr_slices,
+        implementation_prompt_payload=implementation_prompt_payload,
+        prior_processed_slice_ids=prior_queue_processed_slice_ids,
+    )
+    project_pr_queue_status = _normalize_text(
+        project_pr_queue_state.get("queue_status"),
+        default="insufficient_truth",
+    )
+    project_pr_queue_reason_codes = _normalize_project_pr_queue_reason_codes(
+        list(project_pr_queue_state.get("queue_reason_codes", []))
+    )
+    project_pr_queue_state["queue_reason"] = project_pr_queue_reason_codes[0]
+    project_pr_queue_state["queue_reason_codes"] = project_pr_queue_reason_codes
+    review_assimilation_state = _build_review_assimilation_state(
+        queue_status=project_pr_queue_status,
+        queue_reason=project_pr_queue_reason_codes[0],
+        queue_handoff_prepared=bool(project_pr_queue_state.get("queue_handoff_prepared", False)),
+        queue_handoff_payload=(
+            dict(project_pr_queue_state.get("queue_handoff_payload", {}))
+            if isinstance(project_pr_queue_state.get("queue_handoff_payload"), Mapping)
+            else {}
+        ),
+        restart_result_status=restart_result_status,
+        continuation_next_step_target=continuation_next_step_target,
+        continuation_next_step_reason=continuation_next_step_reason_codes[0],
+        continuation_next_step_truth_insufficiency_explicit=bool(
+            continuation_next_step_truth_insufficiency_explicit
+        ),
+        final_human_review_required=bool(final_human_review_required),
+        final_human_review_reason=final_human_review_reason_codes[0],
+    )
+    review_assimilation_status = _normalize_text(
+        review_assimilation_state.get("review_assimilation_status"),
+        default="insufficient_truth",
+    )
+    review_assimilation_action = _normalize_text(
+        review_assimilation_state.get("review_assimilation_action"),
+        default="none",
+    )
+    review_assimilation_reason_codes = _normalize_review_assimilation_reason_codes(
+        list(review_assimilation_state.get("review_assimilation_reason_codes", []))
+    )
+    review_assimilation_state["review_assimilation_reason"] = (
+        review_assimilation_reason_codes[0]
+    )
+    review_assimilation_state["review_assimilation_reason_codes"] = (
+        review_assimilation_reason_codes
+    )
+    prior_self_healing_transition_count = _as_non_negative_int(
+        prior_approved_restart_execution.get("self_healing_transition_count"),
+        default=0,
+    )
+    self_healing_state = _build_bounded_self_healing_state(
+        review_assimilation_status=review_assimilation_status,
+        review_assimilation_action=review_assimilation_action,
+        review_assimilation_available=bool(
+            review_assimilation_state.get("review_assimilation_available", False)
+        ),
+        review_assimilation_reviewable=bool(
+            review_assimilation_state.get("review_assimilation_reviewable", False)
+        ),
+        review_assimilation_queue_status=_normalize_text(
+            review_assimilation_state.get("review_assimilation_queue_status"),
+            default=project_pr_queue_status,
+        ),
+        continuation_next_step_truth_insufficiency_explicit=bool(
+            continuation_next_step_truth_insufficiency_explicit
+        ),
+        supported_repair_execution_status=supported_repair_execution_status,
+        continuation_repair_playbook_selected=bool(
+            continuation_repair_playbook_selected
+        ),
+        continuation_repair_playbook_class=continuation_repair_playbook_class,
+        continuation_repair_playbook_candidate_action=(
+            continuation_repair_playbook_candidate_action
+        ),
+        final_human_review_required=bool(final_human_review_required),
+        final_human_review_reason=final_human_review_reason_codes[0],
+        continuation_budget_status=continuation_budget_status,
+        continuation_branch_budget_status=continuation_branch_budget_status,
+        continuation_no_progress_stop_required=bool(
+            continuation_no_progress_stop_required
+        ),
+        continuation_failure_bucket_denied=bool(
+            continuation_failure_bucket_denied
+        ),
+        safety_duplicate_pending=bool(safety_duplicate_pending),
+        safety_cooldown_active=bool(safety_cooldown_active),
+        safety_loop_suspected=bool(safety_loop_suspected),
+        safety_delivery_blocked=bool(safety_delivery_blocked),
+        safety_delivery_deferred=bool(safety_delivery_deferred),
+        prior_self_healing_transition_count=prior_self_healing_transition_count,
+        self_healing_chain_limit=_SELF_HEALING_CHAIN_LIMIT_DEFAULT,
+        prior_continuation_retry_count=prior_continuation_retry_count,
+        prior_continuation_replan_count=prior_continuation_replan_count,
+        prior_continuation_truth_gather_count=prior_continuation_truth_gather_count,
+        continuation_retry_limit=_as_non_negative_int(
+            _CONTINUATION_BUDGET_BRANCH_LIMIT_DEFAULTS.get("retry", 0),
+            default=0,
+        ),
+        continuation_replan_limit=_as_non_negative_int(
+            _CONTINUATION_BUDGET_BRANCH_LIMIT_DEFAULTS.get("replan", 0),
+            default=0,
+        ),
+        continuation_truth_gather_limit=_as_non_negative_int(
+            _CONTINUATION_BUDGET_BRANCH_LIMIT_DEFAULTS.get("truth_gather", 0),
+            default=0,
+        ),
+    )
+    self_healing_status = _normalize_text(
+        self_healing_state.get("self_healing_status"),
+        default="insufficient_truth",
+    )
+    self_healing_reason_codes = _normalize_self_healing_reason_codes(
+        list(self_healing_state.get("self_healing_reason_codes", []))
+    )
+    self_healing_state["self_healing_reason"] = self_healing_reason_codes[0]
+    self_healing_state["self_healing_reason_codes"] = self_healing_reason_codes
+    prior_long_running_replay_key = _normalize_text(
+        prior_approved_restart_execution.get("long_running_replay_key"),
+        default="",
+    )
+    prior_long_running_progress_signature = _normalize_text(
+        prior_approved_restart_execution.get("long_running_progress_signature"),
+        default="",
+    )
+    prior_long_running_stale_cycle_count = _as_non_negative_int(
+        prior_approved_restart_execution.get("long_running_stale_cycle_count"),
+        default=0,
+    )
+    prior_long_running_stuck_cycle_count = _as_non_negative_int(
+        prior_approved_restart_execution.get("long_running_stuck_cycle_count"),
+        default=0,
+    )
+    prior_long_running_watchdog_heartbeat_at = _normalize_text(
+        prior_approved_restart_execution.get("long_running_watchdog_heartbeat_at"),
+        default="",
+    )
+    project_pr_queue_processed_count = len(
+        _normalize_string_list(
+            project_pr_queue_state.get("queue_processed_slice_ids_after")
+        )
+    )
+    long_running_state = _build_long_running_stability_state(
+        objective_id=objective_id,
+        queue_status=project_pr_queue_status,
+        queue_selected_slice_id=_normalize_text(
+            project_pr_queue_state.get("queue_selected_slice_id"),
+            default="",
+        ),
+        queue_handoff_prepared=bool(
+            project_pr_queue_state.get("queue_handoff_prepared", False)
+        ),
+        queue_processed_count=project_pr_queue_processed_count,
+        review_assimilation_status=review_assimilation_status,
+        review_assimilation_action=review_assimilation_action,
+        review_assimilation_available=bool(
+            review_assimilation_state.get("review_assimilation_available", False)
+        ),
+        self_healing_status=self_healing_status,
+        self_healing_transition_target=_normalize_text(
+            self_healing_state.get("self_healing_transition_target"),
+            default="none",
+        ),
+        self_healing_transition_executed=bool(
+            self_healing_state.get("self_healing_transition_executed", False)
+        ),
+        self_healing_human_fallback_preserved=bool(
+            self_healing_state.get("self_healing_human_fallback_preserved", True)
+        ),
+        self_healing_chain_budget_remaining_after=_as_non_negative_int(
+            self_healing_state.get("self_healing_chain_budget_remaining_after"),
+            default=0,
+        ),
+        self_healing_transition_count_after=_as_non_negative_int(
+            self_healing_state.get("self_healing_transition_count_after"),
+            default=prior_self_healing_transition_count,
+        ),
+        final_human_review_required=bool(final_human_review_required),
+        automatic_restart_executed=bool(automatic_restart_executed),
+        automatic_continuation_run_count=continuation_run_count_after,
+        prior_long_running_replay_key=prior_long_running_replay_key,
+        prior_long_running_progress_signature=prior_long_running_progress_signature,
+        prior_long_running_stale_cycle_count=prior_long_running_stale_cycle_count,
+        prior_long_running_stuck_cycle_count=prior_long_running_stuck_cycle_count,
+        prior_long_running_watchdog_heartbeat_at=prior_long_running_watchdog_heartbeat_at,
+        now=now,
+    )
+    long_running_status = _normalize_text(
+        long_running_state.get("long_running_stability_status"),
+        default="insufficient_truth",
+    )
+    long_running_reason_codes = _normalize_long_running_reason_codes(
+        list(long_running_state.get("long_running_reason_codes", []))
+    )
+    long_running_state["long_running_reason"] = long_running_reason_codes[0]
+    long_running_state["long_running_reason_codes"] = long_running_reason_codes
+    objective_compiler_state = _build_objective_done_compiler_state(
+        objective_id=objective_id,
+        project_planning_summary_status=project_planning_summary_status,
+        project_pr_slicing_status=project_pr_slicing_status,
+        project_pr_slice_count=project_pr_slice_count,
+        project_pr_queue_status=project_pr_queue_status,
+        project_pr_queue_reason=project_pr_queue_reason_codes[0],
+        project_pr_queue_processed_slice_ids_after=_normalize_string_list(
+            project_pr_queue_state.get("queue_processed_slice_ids_after")
+        ),
+        review_assimilation_reason=review_assimilation_reason_codes[0],
+        self_healing_human_fallback_preserved=bool(
+            self_healing_state.get("self_healing_human_fallback_preserved", True)
+        ),
+        long_running_stability_status=long_running_status,
+        final_human_review_required=bool(final_human_review_required),
+    )
+    objective_compiler_status = _normalize_text(
+        objective_compiler_state.get("objective_compiler_status"),
+        default="insufficient_truth",
+    )
+    objective_compiler_reason_codes = _normalize_objective_compiler_reason_codes(
+        list(objective_compiler_state.get("objective_compiler_reason_codes", []))
+    )
+    objective_compiler_state["objective_compiler_reason"] = (
+        objective_compiler_reason_codes[0]
+    )
+    objective_compiler_state["objective_compiler_reason_codes"] = (
+        objective_compiler_reason_codes
+    )
+    objective_done_criteria_status = _normalize_text(
+        objective_compiler_state.get("objective_done_criteria_status"),
+        default="insufficient_truth",
+    )
+    if objective_done_criteria_status not in _OBJECTIVE_DONE_CRITERIA_STATUSES:
+        objective_done_criteria_status = "insufficient_truth"
+    objective_stop_criteria_status = _normalize_text(
+        objective_compiler_state.get("objective_stop_criteria_status"),
+        default="insufficient_truth",
+    )
+    if objective_stop_criteria_status not in _OBJECTIVE_STOP_CRITERIA_STATUSES:
+        objective_stop_criteria_status = "insufficient_truth"
+    objective_completion_posture = _normalize_text(
+        objective_compiler_state.get("objective_completion_posture"),
+        default="objective_insufficient_truth",
+    )
+    if objective_completion_posture not in _OBJECTIVE_COMPLETION_POSTURES:
+        objective_completion_posture = "objective_insufficient_truth"
+    objective_scope_drift_status = _normalize_text(
+        objective_compiler_state.get("objective_scope_drift_status"),
+        default="insufficient_truth",
+    )
+    if objective_scope_drift_status not in _OBJECTIVE_SCOPE_DRIFT_STATUSES:
+        objective_scope_drift_status = "insufficient_truth"
+    project_autonomy_budget_state = _build_project_autonomy_budget_state(
+        project_planning_summary_status=project_planning_summary_status,
+        objective_compiler_status=objective_compiler_status,
+        objective_completion_posture=objective_completion_posture,
+        final_human_review_required=bool(final_human_review_required),
+        high_risk_posture=bool(high_risk_posture),
+        continuation_budget_truth_sufficient=bool(continuation_budget_truth_sufficient),
+        continuation_budget_status=continuation_budget_status,
+        continuation_budget_run_exhausted=bool(continuation_budget_run_exhausted),
+        continuation_budget_objective_exhausted=bool(continuation_budget_objective_exhausted),
+        continuation_budget_run_limit=continuation_budget_run_limit,
+        continuation_budget_objective_limit=continuation_budget_objective_limit,
+        continuation_budget_run_remaining=continuation_budget_run_remaining,
+        continuation_budget_objective_remaining=continuation_budget_objective_remaining,
+        continuation_budget_branch_type=continuation_budget_branch_type,
+        continuation_budget_branch_status=continuation_branch_budget_status,
+        continuation_budget_branch_exhausted=bool(continuation_budget_branch_exhausted),
+        continuation_budget_branch_limit=continuation_budget_branch_limit,
+        continuation_budget_branch_remaining=continuation_budget_branch_remaining,
+    )
+    project_autonomy_budget_status = _normalize_text(
+        project_autonomy_budget_state.get("project_autonomy_budget_status"),
+        default="insufficient_truth",
+    )
+    if project_autonomy_budget_status not in _PROJECT_AUTONOMY_BUDGET_STATUSES:
+        project_autonomy_budget_status = "insufficient_truth"
+    project_priority_posture = _normalize_text(
+        project_autonomy_budget_state.get("project_priority_posture"),
+        default="insufficient_truth",
+    )
+    if project_priority_posture not in _PROJECT_PRIORITY_POSTURES:
+        project_priority_posture = "insufficient_truth"
+    project_high_risk_defer_posture = _normalize_text(
+        project_autonomy_budget_state.get("project_high_risk_defer_posture"),
+        default="insufficient_truth",
+    )
+    if project_high_risk_defer_posture not in _PROJECT_HIGH_RISK_DEFER_POSTURES:
+        project_high_risk_defer_posture = "insufficient_truth"
+    project_run_budget_posture = _normalize_text(
+        project_autonomy_budget_state.get("project_run_budget_posture"),
+        default="insufficient_truth",
+    )
+    if project_run_budget_posture not in _PROJECT_BUDGET_POSTURES:
+        project_run_budget_posture = "insufficient_truth"
+    project_objective_budget_posture = _normalize_text(
+        project_autonomy_budget_state.get("project_objective_budget_posture"),
+        default="insufficient_truth",
+    )
+    if project_objective_budget_posture not in _PROJECT_BUDGET_POSTURES:
+        project_objective_budget_posture = "insufficient_truth"
+    project_pr_retry_budget_posture = _normalize_text(
+        project_autonomy_budget_state.get("project_pr_retry_budget_posture"),
+        default="insufficient_truth",
+    )
+    if project_pr_retry_budget_posture not in _PROJECT_PR_RETRY_BUDGET_POSTURES:
+        project_pr_retry_budget_posture = "insufficient_truth"
+    project_autonomy_budget_reason_codes = (
+        _normalize_project_autonomy_budget_reason_codes(
+            list(project_autonomy_budget_state.get("project_autonomy_budget_reason_codes", []))
+        )
+    )
+    project_autonomy_budget_state["project_autonomy_budget_reason"] = (
+        project_autonomy_budget_reason_codes[0]
+    )
+    project_autonomy_budget_state["project_autonomy_budget_reason_codes"] = (
+        project_autonomy_budget_reason_codes
+    )
+    project_quality_gate_state = _build_project_quality_gate_state(
+        project_planning_summary_status=project_planning_summary_status,
+        project_pr_slicing_status=project_pr_slicing_status,
+        implementation_prompt_status=implementation_prompt_status,
+        implementation_prompt_payload=implementation_prompt_payload,
+        project_pr_queue_status=project_pr_queue_status,
+        review_assimilation_status=review_assimilation_status,
+        review_assimilation_action=review_assimilation_action,
+        self_healing_status=self_healing_status,
+        long_running_stability_status=long_running_status,
+        objective_compiler_status=objective_compiler_status,
+        objective_completion_posture=objective_completion_posture,
+        objective_scope_drift_detected=bool(
+            objective_compiler_state.get("objective_scope_drift_detected", False)
+        ),
+        project_autonomy_budget_status=project_autonomy_budget_status,
+        project_priority_posture=project_priority_posture,
+        project_run_budget_posture=project_run_budget_posture,
+        project_objective_budget_posture=project_objective_budget_posture,
+        project_pr_retry_budget_posture=project_pr_retry_budget_posture,
+        project_high_risk_defer_posture=project_high_risk_defer_posture,
+        continuation_failure_bucket_denied=bool(continuation_failure_bucket_denied),
+        continuation_no_progress_stop_required=bool(
+            continuation_no_progress_stop_required
+        ),
+        continuation_next_step_selection_status=continuation_next_step_selection_status,
+        continuation_next_step_target=continuation_next_step_target,
+        supported_repair_execution_status=supported_repair_execution_status,
+        final_human_review_required=bool(final_human_review_required),
+    )
+    project_quality_gate_status = _normalize_text(
+        project_quality_gate_state.get("project_quality_gate_status"),
+        default="insufficient_truth",
+    )
+    if project_quality_gate_status not in _PROJECT_QUALITY_GATE_STATUSES:
+        project_quality_gate_status = "insufficient_truth"
+    project_quality_gate_posture = _normalize_text(
+        project_quality_gate_state.get("project_quality_gate_posture"),
+        default="insufficient_truth",
+    )
+    if project_quality_gate_posture not in _PROJECT_QUALITY_GATE_POSTURES:
+        project_quality_gate_posture = "insufficient_truth"
+    project_quality_gate_changed_area_class = _normalize_text(
+        project_quality_gate_state.get("project_quality_gate_changed_area_class"),
+        default="unknown",
+    )
+    if (
+        project_quality_gate_changed_area_class
+        not in _PROJECT_QUALITY_GATE_CHANGED_AREA_CLASSES
+    ):
+        project_quality_gate_changed_area_class = "unknown"
+    project_quality_gate_risk_level = _normalize_text(
+        project_quality_gate_state.get("project_quality_gate_risk_level"),
+        default="insufficient_truth",
+    )
+    if project_quality_gate_risk_level not in _PROJECT_QUALITY_GATE_RISK_LEVELS:
+        project_quality_gate_risk_level = "insufficient_truth"
+    project_quality_gate_reason_codes = _normalize_project_quality_gate_reason_codes(
+        list(project_quality_gate_state.get("project_quality_gate_reason_codes", []))
+    )
+    project_quality_gate_state["project_quality_gate_reason"] = (
+        project_quality_gate_reason_codes[0]
+    )
+    project_quality_gate_state["project_quality_gate_reason_codes"] = (
+        project_quality_gate_reason_codes
+    )
+    project_merge_branch_lifecycle_state = _build_project_merge_branch_lifecycle_state(
+        project_quality_gate_status=project_quality_gate_status,
+        project_quality_gate_posture=project_quality_gate_posture,
+        project_quality_gate_merge_ready=bool(
+            project_quality_gate_state.get("project_quality_gate_merge_ready", False)
+        ),
+        project_quality_gate_retry_needed=bool(
+            project_quality_gate_state.get("project_quality_gate_retry_needed", False)
+        ),
+        project_quality_gate_high_risk=bool(
+            project_quality_gate_state.get("project_quality_gate_high_risk", False)
+        ),
+        objective_compiler_status=objective_compiler_status,
+        objective_completion_posture=objective_completion_posture,
+        project_autonomy_budget_status=project_autonomy_budget_status,
+        project_priority_posture=project_priority_posture,
+        project_high_risk_defer_posture=project_high_risk_defer_posture,
+        project_pr_queue_status=project_pr_queue_status,
+        project_pr_queue_processed_count=project_pr_queue_processed_count,
+        review_assimilation_status=review_assimilation_status,
+        review_assimilation_action=review_assimilation_action,
+        self_healing_status=self_healing_status,
+        long_running_stability_status=long_running_status,
+        final_human_review_required=bool(final_human_review_required),
+        final_human_review_gate_status=final_human_review_gate_status,
+        continuation_failure_bucket_denied=bool(continuation_failure_bucket_denied),
+        continuation_no_progress_stop_required=bool(
+            continuation_no_progress_stop_required
+        ),
+        supported_repair_execution_status=supported_repair_execution_status,
+    )
+    project_merge_branch_lifecycle_status = _normalize_text(
+        project_merge_branch_lifecycle_state.get("project_merge_branch_lifecycle_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_merge_branch_lifecycle_status
+        not in _PROJECT_MERGE_BRANCH_LIFECYCLE_STATUSES
+    ):
+        project_merge_branch_lifecycle_status = "insufficient_truth"
+    project_merge_ready_posture = _normalize_text(
+        project_merge_branch_lifecycle_state.get("project_merge_ready_posture"),
+        default="insufficient_truth",
+    )
+    if project_merge_ready_posture not in _PROJECT_MERGE_READY_POSTURES:
+        project_merge_ready_posture = "insufficient_truth"
+    project_branch_cleanup_candidate_posture = _normalize_text(
+        project_merge_branch_lifecycle_state.get(
+            "project_branch_cleanup_candidate_posture"
+        ),
+        default="insufficient_truth",
+    )
+    if project_branch_cleanup_candidate_posture not in _PROJECT_BRANCH_CANDIDATE_POSTURES:
+        project_branch_cleanup_candidate_posture = "insufficient_truth"
+    project_branch_quarantine_candidate_posture = _normalize_text(
+        project_merge_branch_lifecycle_state.get(
+            "project_branch_quarantine_candidate_posture"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_branch_quarantine_candidate_posture
+        not in _PROJECT_BRANCH_CANDIDATE_POSTURES
+    ):
+        project_branch_quarantine_candidate_posture = "insufficient_truth"
+    project_local_main_sync_posture = _normalize_text(
+        project_merge_branch_lifecycle_state.get("project_local_main_sync_posture"),
+        default="insufficient_truth",
+    )
+    if project_local_main_sync_posture not in _PROJECT_LOCAL_MAIN_SYNC_POSTURES:
+        project_local_main_sync_posture = "insufficient_truth"
+    project_merge_branch_lifecycle_reason_codes = (
+        _normalize_project_merge_branch_lifecycle_reason_codes(
+            list(
+                project_merge_branch_lifecycle_state.get(
+                    "project_merge_branch_lifecycle_reason_codes",
+                    [],
+                )
+            )
+        )
+    )
+    project_merge_branch_lifecycle_state["project_merge_branch_lifecycle_reason"] = (
+        project_merge_branch_lifecycle_reason_codes[0]
+    )
+    project_merge_branch_lifecycle_state["project_merge_branch_lifecycle_reason_codes"] = (
+        project_merge_branch_lifecycle_reason_codes
+    )
+    project_failure_memory_state = _build_project_failure_memory_state(
+        project_merge_branch_lifecycle_status=project_merge_branch_lifecycle_status,
+        project_branch_quarantine_candidate=bool(
+            project_merge_branch_lifecycle_state.get(
+                "project_branch_quarantine_candidate",
+                False,
+            )
+        ),
+        failure_bucketing_status=failure_bucketing_status,
+        failure_bucketing_validity=failure_bucketing_validity,
+        failure_bucketing_primary_bucket=failure_bucketing_primary_bucket,
+        continuation_next_step_selection_status=continuation_next_step_selection_status,
+        continuation_next_step_target=continuation_next_step_target,
+        continuation_no_progress_stop_required=bool(
+            continuation_no_progress_stop_required
+        ),
+        continuation_failure_bucket_denied=bool(continuation_failure_bucket_denied),
+        review_assimilation_status=review_assimilation_status,
+        review_assimilation_action=review_assimilation_action,
+        self_healing_status=self_healing_status,
+        supported_repair_execution_status=supported_repair_execution_status,
+        execution_status=execution_status,
+        execution_reason=execution_reason,
+        restart_result_status=restart_result_status,
+        final_human_review_required=bool(final_human_review_required),
+        prior_retry_failure_count=_as_non_negative_int(
+            prior_approved_restart_execution.get(
+                "project_failure_memory_retry_failure_count"
+            ),
+            default=0,
+        ),
+        prior_repair_failure_count=_as_non_negative_int(
+            prior_approved_restart_execution.get(
+                "project_failure_memory_repair_failure_count"
+            ),
+            default=0,
+        ),
+        prior_review_issue_count=_as_non_negative_int(
+            prior_approved_restart_execution.get(
+                "project_failure_memory_review_issue_count"
+            ),
+            default=0,
+        ),
+        prior_failure_bucket_recurrence_count=_as_non_negative_int(
+            prior_approved_restart_execution.get(
+                "project_failure_memory_failure_bucket_recurrence_count"
+            ),
+            default=0,
+        ),
+        prior_failure_bucket_value=_normalize_text(
+            prior_approved_restart_execution.get(
+                "project_failure_memory_last_failure_bucket"
+            ),
+            default="unknown",
+        ),
+    )
+    project_failure_memory_status = _normalize_text(
+        project_failure_memory_state.get("project_failure_memory_status"),
+        default="insufficient_truth",
+    )
+    if project_failure_memory_status not in _PROJECT_FAILURE_MEMORY_STATUSES:
+        project_failure_memory_status = "insufficient_truth"
+    project_failure_memory_suppression_posture = _normalize_text(
+        project_failure_memory_state.get("project_failure_memory_suppression_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_failure_memory_suppression_posture
+        not in _PROJECT_FAILURE_MEMORY_SUPPRESSION_POSTURES
+    ):
+        project_failure_memory_suppression_posture = "insufficient_truth"
+    project_failure_memory_reason_codes = (
+        _normalize_project_failure_memory_reason_codes(
+            list(project_failure_memory_state.get("project_failure_memory_reason_codes", []))
+        )
+    )
+    project_failure_memory_state["project_failure_memory_reason"] = (
+        project_failure_memory_reason_codes[0]
+    )
+    project_failure_memory_state["project_failure_memory_reason_codes"] = (
+        project_failure_memory_reason_codes
+    )
+    project_external_boundary_state = _build_project_external_boundary_state(
+        project_failure_memory_status=project_failure_memory_status,
+        project_failure_memory_suppression_posture=project_failure_memory_suppression_posture,
+        project_failure_memory_suppression_active=bool(
+            project_failure_memory_state.get(
+                "project_failure_memory_suppression_active",
+                False,
+            )
+        ),
+        project_merge_branch_lifecycle_status=project_merge_branch_lifecycle_status,
+        project_merge_ready_posture=project_merge_ready_posture,
+        project_branch_quarantine_candidate_posture=project_branch_quarantine_candidate_posture,
+        project_local_main_sync_posture=project_local_main_sync_posture,
+        project_quality_gate_status=project_quality_gate_status,
+        project_quality_gate_posture=project_quality_gate_posture,
+        project_quality_gate_risk_level=project_quality_gate_risk_level,
+        project_pr_queue_status=project_pr_queue_status,
+        project_autonomy_budget_status=project_autonomy_budget_status,
+        project_priority_posture=project_priority_posture,
+        long_running_stability_status=long_running_status,
+        supported_repair_execution_status=supported_repair_execution_status,
+        execution_reason=execution_reason,
+        final_human_review_required=bool(final_human_review_required),
+        final_human_review_gate_status=final_human_review_gate_status,
+        manual_only_posture_active=bool(manual_only_posture_active),
+        fleet_manual_review_required=bool(fleet_manual_review_required),
+        approval_reason_class=approval_reason_class,
+    )
+    project_external_boundary_status = _normalize_text(
+        project_external_boundary_state.get("project_external_boundary_status"),
+        default="insufficient_truth",
+    )
+    if project_external_boundary_status not in _PROJECT_EXTERNAL_BOUNDARY_STATUSES:
+        project_external_boundary_status = "insufficient_truth"
+    project_external_dependency_posture = _normalize_text(
+        project_external_boundary_state.get("project_external_dependency_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_external_dependency_posture
+        not in _PROJECT_EXTERNAL_DEPENDENCY_POSTURES
+    ):
+        project_external_dependency_posture = "insufficient_truth"
+    project_external_manual_only_posture = _normalize_text(
+        project_external_boundary_state.get("project_external_manual_only_posture"),
+        default="insufficient_truth",
+    )
+    if project_external_manual_only_posture not in _PROJECT_EXTERNAL_BOUNDARY_POSTURES:
+        project_external_manual_only_posture = "insufficient_truth"
+    project_external_network_boundary_posture = _normalize_text(
+        project_external_boundary_state.get("project_external_network_boundary_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_external_network_boundary_posture
+        not in _PROJECT_EXTERNAL_BOUNDARY_POSTURES
+    ):
+        project_external_network_boundary_posture = "insufficient_truth"
+    project_external_ci_boundary_posture = _normalize_text(
+        project_external_boundary_state.get("project_external_ci_boundary_posture"),
+        default="insufficient_truth",
+    )
+    if project_external_ci_boundary_posture not in _PROJECT_EXTERNAL_BOUNDARY_POSTURES:
+        project_external_ci_boundary_posture = "insufficient_truth"
+    project_external_secrets_boundary_posture = _normalize_text(
+        project_external_boundary_state.get("project_external_secrets_boundary_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_external_secrets_boundary_posture
+        not in _PROJECT_EXTERNAL_BOUNDARY_POSTURES
+    ):
+        project_external_secrets_boundary_posture = "insufficient_truth"
+    project_external_github_boundary_posture = _normalize_text(
+        project_external_boundary_state.get("project_external_github_boundary_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_external_github_boundary_posture
+        not in _PROJECT_EXTERNAL_BOUNDARY_POSTURES
+    ):
+        project_external_github_boundary_posture = "insufficient_truth"
+    project_external_api_boundary_posture = _normalize_text(
+        project_external_boundary_state.get("project_external_api_boundary_posture"),
+        default="insufficient_truth",
+    )
+    if project_external_api_boundary_posture not in _PROJECT_EXTERNAL_BOUNDARY_POSTURES:
+        project_external_api_boundary_posture = "insufficient_truth"
+    project_external_boundary_reason_codes = (
+        _normalize_project_external_boundary_reason_codes(
+            list(
+                project_external_boundary_state.get(
+                    "project_external_boundary_reason_codes",
+                    [],
+                )
+            )
+        )
+    )
+    project_external_boundary_state["project_external_boundary_reason"] = (
+        project_external_boundary_reason_codes[0]
+    )
+    project_external_boundary_state["project_external_boundary_reason_codes"] = (
+        project_external_boundary_reason_codes
+    )
+    project_human_escalation_state = _build_project_human_escalation_state(
+        final_human_review_gate_status=final_human_review_gate_status,
+        final_human_review_required=bool(final_human_review_required),
+        final_human_review_reason=final_human_review_reason_codes[0],
+        objective_compiler_status=objective_compiler_status,
+        objective_completion_posture=objective_completion_posture,
+        objective_scope_drift_status=objective_scope_drift_status,
+        project_autonomy_budget_status=project_autonomy_budget_status,
+        project_priority_posture=project_priority_posture,
+        project_high_risk_defer_posture=project_high_risk_defer_posture,
+        project_run_budget_posture=project_run_budget_posture,
+        project_objective_budget_posture=project_objective_budget_posture,
+        project_pr_retry_budget_posture=project_pr_retry_budget_posture,
+        project_quality_gate_status=project_quality_gate_status,
+        project_quality_gate_risk_level=project_quality_gate_risk_level,
+        project_quality_gate_high_risk=bool(
+            project_quality_gate_state.get("project_quality_gate_high_risk", False)
+        ),
+        project_merge_branch_lifecycle_status=project_merge_branch_lifecycle_status,
+        project_branch_quarantine_candidate_posture=project_branch_quarantine_candidate_posture,
+        project_failure_memory_status=project_failure_memory_status,
+        project_failure_memory_suppression_posture=project_failure_memory_suppression_posture,
+        project_failure_memory_suppression_active=bool(
+            project_failure_memory_state.get(
+                "project_failure_memory_suppression_active",
+                False,
+            )
+        ),
+        project_failure_memory_retry_failure_count=_as_non_negative_int(
+            project_failure_memory_state.get("project_failure_memory_retry_failure_count"),
+            default=0,
+        ),
+        project_failure_memory_repair_failure_count=_as_non_negative_int(
+            project_failure_memory_state.get("project_failure_memory_repair_failure_count"),
+            default=0,
+        ),
+        project_failure_memory_review_issue_count=_as_non_negative_int(
+            project_failure_memory_state.get("project_failure_memory_review_issue_count"),
+            default=0,
+        ),
+        project_failure_memory_failure_bucket_recurrence_count=_as_non_negative_int(
+            project_failure_memory_state.get(
+                "project_failure_memory_failure_bucket_recurrence_count"
+            ),
+            default=0,
+        ),
+        project_external_boundary_status=project_external_boundary_status,
+        project_external_dependency_posture=project_external_dependency_posture,
+        project_external_manual_only_posture=project_external_manual_only_posture,
+        project_external_manual_only_required=bool(
+            project_external_boundary_state.get(
+                "project_external_manual_only_required",
+                False,
+            )
+        ),
+        long_running_stability_status=long_running_status,
+        supported_repair_execution_status=supported_repair_execution_status,
+        manual_only_posture_active=bool(manual_only_posture_active),
+        fleet_manual_review_required=bool(fleet_manual_review_required),
+    )
+    project_human_escalation_status = _normalize_text(
+        project_human_escalation_state.get("project_human_escalation_status"),
+        default="insufficient_truth",
+    )
+    if project_human_escalation_status not in _PROJECT_HUMAN_ESCALATION_STATUSES:
+        project_human_escalation_status = "insufficient_truth"
+    project_human_escalation_posture = _normalize_text(
+        project_human_escalation_state.get("project_human_escalation_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_human_escalation_posture
+        not in _PROJECT_HUMAN_ESCALATION_POSTURES
+    ):
+        project_human_escalation_posture = "insufficient_truth"
+    project_human_escalation_reason_codes = (
+        _normalize_project_human_escalation_reason_codes(
+            list(
+                project_human_escalation_state.get(
+                    "project_human_escalation_reason_codes",
+                    [],
+                )
+            )
+        )
+    )
+    project_human_escalation_state["project_human_escalation_reason"] = (
+        project_human_escalation_reason_codes[0]
+    )
+    project_human_escalation_state["project_human_escalation_reason_codes"] = (
+        project_human_escalation_reason_codes
+    )
+    project_architecture_risk_posture = _normalize_text(
+        project_human_escalation_state.get("project_architecture_risk_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_architecture_risk_posture
+        not in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+    ):
+        project_architecture_risk_posture = "insufficient_truth"
+    project_scope_risk_posture = _normalize_text(
+        project_human_escalation_state.get("project_scope_risk_posture"),
+        default="insufficient_truth",
+    )
+    if project_scope_risk_posture not in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES:
+        project_scope_risk_posture = "insufficient_truth"
+    project_external_risk_posture = _normalize_text(
+        project_human_escalation_state.get("project_external_risk_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_external_risk_posture
+        not in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+    ):
+        project_external_risk_posture = "insufficient_truth"
+    project_budget_risk_posture = _normalize_text(
+        project_human_escalation_state.get("project_budget_risk_posture"),
+        default="insufficient_truth",
+    )
+    if project_budget_risk_posture not in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES:
+        project_budget_risk_posture = "insufficient_truth"
+    project_repeated_failure_risk_posture = _normalize_text(
+        project_human_escalation_state.get("project_repeated_failure_risk_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_repeated_failure_risk_posture
+        not in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+    ):
+        project_repeated_failure_risk_posture = "insufficient_truth"
+    project_manual_only_risk_posture = _normalize_text(
+        project_human_escalation_state.get("project_manual_only_risk_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_manual_only_risk_posture
+        not in _PROJECT_HUMAN_ESCALATION_RISK_POSTURES
+    ):
+        project_manual_only_risk_posture = "insufficient_truth"
+    project_approval_notification_state = _build_project_approval_notification_state(
+        approval_required=bool(approval_required),
+        approval_email_status=approval_email_status,
+        approval_email_validity=approval_email_validity,
+        approval_priority=approval_priority,
+        approval_reason_class=approval_reason_class,
+        proposed_next_direction=proposed_next_direction,
+        delivery_mode=approval_delivery_mode,
+        delivery_outcome=approval_delivery_outcome,
+        approval_response_status=approval_response_status,
+        approval_response_validity=approval_response_validity,
+        response_received=bool(response_received),
+        response_decision_class=response_decision_class,
+        project_human_escalation_status=project_human_escalation_status,
+        project_human_escalation_posture=project_human_escalation_posture,
+        project_human_escalation_required=bool(
+            project_human_escalation_state.get("project_human_escalation_required", False)
+        ),
+        project_human_escalation_reason=project_human_escalation_reason_codes[0],
+        project_architecture_risk_posture=project_architecture_risk_posture,
+        project_scope_risk_posture=project_scope_risk_posture,
+        project_external_risk_posture=project_external_risk_posture,
+        project_budget_risk_posture=project_budget_risk_posture,
+        project_repeated_failure_risk_posture=project_repeated_failure_risk_posture,
+        project_manual_only_risk_posture=project_manual_only_risk_posture,
+        project_external_manual_only_posture=project_external_manual_only_posture,
+    )
+    project_approval_notification_status = _normalize_text(
+        project_approval_notification_state.get("project_approval_notification_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_approval_notification_status
+        not in _PROJECT_APPROVAL_NOTIFICATION_STATUSES
+    ):
+        project_approval_notification_status = "insufficient_truth"
+    project_approval_notification_ready_posture = _normalize_text(
+        project_approval_notification_state.get(
+            "project_approval_notification_ready_posture"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_approval_notification_ready_posture
+        not in _PROJECT_APPROVAL_NOTIFICATION_READY_POSTURES
+    ):
+        project_approval_notification_ready_posture = "insufficient_truth"
+    project_approval_reply_required_posture = _normalize_text(
+        project_approval_notification_state.get(
+            "project_approval_reply_required_posture"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_approval_reply_required_posture
+        not in _PROJECT_APPROVAL_REPLY_REQUIRED_POSTURES
+    ):
+        project_approval_reply_required_posture = "insufficient_truth"
+    project_approval_channel_posture = _normalize_text(
+        project_approval_notification_state.get("project_approval_channel_posture"),
+        default="insufficient_truth",
+    )
+    if project_approval_channel_posture not in _PROJECT_APPROVAL_CHANNEL_POSTURES:
+        project_approval_channel_posture = "insufficient_truth"
+    project_approval_mobile_summary_posture = _normalize_text(
+        project_approval_notification_state.get(
+            "project_approval_mobile_summary_posture"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_approval_mobile_summary_posture
+        not in _PROJECT_APPROVAL_MOBILE_SUMMARY_POSTURES
+    ):
+        project_approval_mobile_summary_posture = "insufficient_truth"
+    project_approval_notification_reason_codes = (
+        _normalize_project_approval_notification_reason_codes(
+            list(
+                project_approval_notification_state.get(
+                    "project_approval_notification_reason_codes",
+                    [],
+                )
+            )
+        )
+    )
+    project_approval_notification_state["project_approval_notification_reason"] = (
+        project_approval_notification_reason_codes[0]
+    )
+    project_approval_notification_state["project_approval_notification_reason_codes"] = (
+        project_approval_notification_reason_codes
+    )
+    project_multi_objective_state = _build_project_multi_objective_state(
+        objective_id=objective_id,
+        objective_compiler_status=objective_compiler_status,
+        objective_completion_posture=objective_completion_posture,
+        project_priority_posture=project_priority_posture,
+        project_high_risk_defer_posture=project_high_risk_defer_posture,
+        project_run_budget_posture=project_run_budget_posture,
+        project_objective_budget_posture=project_objective_budget_posture,
+        project_pr_retry_budget_posture=project_pr_retry_budget_posture,
+        project_merge_branch_lifecycle_status=project_merge_branch_lifecycle_status,
+        project_merge_ready_posture=project_merge_ready_posture,
+        project_branch_quarantine_candidate_posture=project_branch_quarantine_candidate_posture,
+        project_human_escalation_status=project_human_escalation_status,
+        project_human_escalation_required=bool(
+            project_human_escalation_state.get("project_human_escalation_required", False)
+        ),
+        project_approval_notification_status=project_approval_notification_status,
+        project_approval_notification_ready_posture=(
+            project_approval_notification_ready_posture
+        ),
+        project_approval_reply_required_posture=project_approval_reply_required_posture,
+        project_pr_queue_status=project_pr_queue_status,
+        project_pr_queue_selected_slice_id=_normalize_text(
+            project_pr_queue_state.get("queue_selected_slice_id"),
+            default="",
+        ),
+        project_pr_queue_processed_slice_ids_after=_normalize_string_list(
+            project_pr_queue_state.get("queue_processed_slice_ids_after")
+        ),
+        project_pr_queue_item_count=_as_non_negative_int(
+            project_pr_queue_state.get("queue_item_count"),
+            default=0,
+        ),
+        project_pr_queue_runnable_count=_as_non_negative_int(
+            project_pr_queue_state.get("queue_runnable_count"),
+            default=0,
+        ),
+        project_pr_queue_blocked_count=_as_non_negative_int(
+            project_pr_queue_state.get("queue_blocked_count"),
+            default=0,
+        ),
+        project_pr_queue_handoff_prepared=bool(
+            project_pr_queue_state.get("queue_handoff_prepared", False)
+        ),
+    )
+    project_multi_objective_status = _normalize_text(
+        project_multi_objective_state.get("project_multi_objective_status"),
+        default="insufficient_truth",
+    )
+    if project_multi_objective_status not in _PROJECT_MULTI_OBJECTIVE_STATUSES:
+        project_multi_objective_status = "insufficient_truth"
+    project_active_objective_selection_posture = _normalize_text(
+        project_multi_objective_state.get("project_active_objective_selection_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_active_objective_selection_posture
+        not in _PROJECT_ACTIVE_OBJECTIVE_SELECTION_POSTURES
+    ):
+        project_active_objective_selection_posture = "insufficient_truth"
+    project_blocked_objective_deferral_posture = _normalize_text(
+        project_multi_objective_state.get("project_blocked_objective_deferral_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_blocked_objective_deferral_posture
+        not in _PROJECT_BLOCKED_OBJECTIVE_DEFERRAL_POSTURES
+    ):
+        project_blocked_objective_deferral_posture = "insufficient_truth"
+    project_resumable_queue_ordering_posture = _normalize_text(
+        project_multi_objective_state.get("project_resumable_queue_ordering_posture"),
+        default="insufficient_truth",
+    )
+    if (
+        project_resumable_queue_ordering_posture
+        not in _PROJECT_RESUMABLE_QUEUE_ORDERING_POSTURES
+    ):
+        project_resumable_queue_ordering_posture = "insufficient_truth"
+    project_multi_objective_reason_codes = _normalize_project_multi_objective_reason_codes(
+        list(project_multi_objective_state.get("project_multi_objective_reason_codes", []))
+    )
+    project_multi_objective_state["project_multi_objective_reason"] = (
+        project_multi_objective_reason_codes[0]
+    )
+    project_multi_objective_state["project_multi_objective_reason_codes"] = (
+        project_multi_objective_reason_codes
+    )
+    if project_planning_summary_available:
+        project_planning_summary_compact.update(
+            {
+                "project_roadmap_status": project_roadmap_status,
+                "project_roadmap_item_count": project_roadmap_item_count,
+                "project_pr_slicing_status": project_pr_slicing_status,
+                "project_pr_slice_count": project_pr_slice_count,
+                "project_pr_one_pr_size_decision": project_pr_one_pr_size_decision,
+                "implementation_prompt_status": implementation_prompt_status,
+                "implementation_prompt_available": implementation_prompt_available,
+                "implementation_prompt_reason": implementation_prompt_reason_codes[0],
+                "project_pr_queue_status": project_pr_queue_status,
+                "project_pr_queue_reason": project_pr_queue_reason_codes[0],
+                "project_pr_queue_selected_slice_id": _normalize_text(
+                    project_pr_queue_state.get("queue_selected_slice_id"),
+                    default="",
+                ),
+                "project_pr_queue_handoff_prepared": bool(
+                    project_pr_queue_state.get("queue_handoff_prepared", False)
+                ),
+                "review_assimilation_status": review_assimilation_status,
+                "review_assimilation_action": review_assimilation_action,
+                "review_assimilation_reason": review_assimilation_reason_codes[0],
+                "self_healing_status": self_healing_status,
+                "self_healing_transition_target": _normalize_text(
+                    self_healing_state.get("self_healing_transition_target"),
+                    default="none",
+                ),
+                "self_healing_reason": self_healing_reason_codes[0],
+                "long_running_stability_status": long_running_status,
+                "long_running_reason": long_running_reason_codes[0],
+                "objective_compiler_status": objective_compiler_status,
+                "objective_completion_posture": objective_completion_posture,
+                "objective_done_criteria_status": objective_done_criteria_status,
+                "objective_stop_criteria_status": objective_stop_criteria_status,
+                "objective_scope_drift_status": objective_scope_drift_status,
+                "project_autonomy_budget_status": project_autonomy_budget_status,
+                "project_priority_posture": project_priority_posture,
+                "project_high_risk_defer_posture": project_high_risk_defer_posture,
+                "project_run_budget_posture": project_run_budget_posture,
+                "project_objective_budget_posture": project_objective_budget_posture,
+                "project_pr_retry_budget_posture": project_pr_retry_budget_posture,
+                "project_quality_gate_status": project_quality_gate_status,
+                "project_quality_gate_posture": project_quality_gate_posture,
+                "project_quality_gate_recommended_count": _as_non_negative_int(
+                    project_quality_gate_state.get("project_quality_gate_recommended_count"),
+                    default=0,
+                ),
+                "project_quality_gate_changed_area_class": project_quality_gate_changed_area_class,
+                "project_quality_gate_risk_level": project_quality_gate_risk_level,
+                "project_merge_branch_lifecycle_status": project_merge_branch_lifecycle_status,
+                "project_merge_ready_posture": project_merge_ready_posture,
+                "project_branch_cleanup_candidate_posture": project_branch_cleanup_candidate_posture,
+                "project_branch_quarantine_candidate_posture": project_branch_quarantine_candidate_posture,
+                "project_local_main_sync_posture": project_local_main_sync_posture,
+                "project_failure_memory_status": project_failure_memory_status,
+                "project_failure_memory_suppression_posture": (
+                    project_failure_memory_suppression_posture
+                ),
+                "project_failure_memory_suppression_active": bool(
+                    project_failure_memory_state.get(
+                        "project_failure_memory_suppression_active",
+                        False,
+                    )
+                ),
+                "project_external_boundary_status": project_external_boundary_status,
+                "project_external_dependency_posture": project_external_dependency_posture,
+                "project_external_manual_only_posture": project_external_manual_only_posture,
+                "project_external_network_boundary_posture": project_external_network_boundary_posture,
+                "project_external_github_boundary_posture": project_external_github_boundary_posture,
+                "project_human_escalation_status": project_human_escalation_status,
+                "project_human_escalation_posture": project_human_escalation_posture,
+                "project_human_escalation_required": bool(
+                    project_human_escalation_state.get(
+                        "project_human_escalation_required",
+                        False,
+                    )
+                ),
+                "project_architecture_risk_posture": project_architecture_risk_posture,
+                "project_scope_risk_posture": project_scope_risk_posture,
+                "project_external_risk_posture": project_external_risk_posture,
+                "project_budget_risk_posture": project_budget_risk_posture,
+                "project_repeated_failure_risk_posture": (
+                    project_repeated_failure_risk_posture
+                ),
+                "project_manual_only_risk_posture": project_manual_only_risk_posture,
+                "project_approval_notification_status": project_approval_notification_status,
+                "project_approval_notification_ready_posture": (
+                    project_approval_notification_ready_posture
+                ),
+                "project_approval_reply_required_posture": (
+                    project_approval_reply_required_posture
+                ),
+                "project_approval_channel_posture": project_approval_channel_posture,
+                "project_approval_mobile_summary_posture": (
+                    project_approval_mobile_summary_posture
+                ),
+                "project_multi_objective_status": project_multi_objective_status,
+                "project_active_objective_selection_posture": (
+                    project_active_objective_selection_posture
+                ),
+                "project_blocked_objective_deferral_posture": (
+                    project_blocked_objective_deferral_posture
+                ),
+                "project_resumable_queue_ordering_posture": (
+                    project_resumable_queue_ordering_posture
+                ),
+            }
+        )
 
     supporting_compact_truth_refs = _serialize_required_signals(
         [
@@ -5571,6 +12638,62 @@ def _build_approved_restart_execution_contract_surface(
             "approval_response_contract.response_decision_class" if response_decision_class else "",
             "approval_safety_contract.approval_safety_status" if approval_safety_status else "",
             "approval_safety_contract.approval_safety_decision" if approval_safety_decision else "",
+            "approval_email_delivery_contract.approval_email_status" if approval_email_status else "",
+            "approval_email_delivery_contract.proposed_next_direction" if proposed_next_direction else "",
+            "fleet_safety_control_contract.fleet_safety_status" if fleet_safety_status else "",
+            "approval_runtime_rules_contract.direction_rule_mode" if runtime_rules_mode else "",
+            "failure_bucketing_hardening_contract.primary_failure_bucket"
+            if failure_bucketing_primary_bucket
+            else "",
+            "loop_hardening_contract.no_progress_status" if loop_no_progress_status else "",
+            "approved_restart_execution_contract.project_planning_summary_status"
+            if project_planning_summary_status
+            else "",
+            "approved_restart_execution_contract.project_roadmap_status"
+            if project_roadmap_status
+            else "",
+            "approved_restart_execution_contract.implementation_prompt_status"
+            if implementation_prompt_status
+            else "",
+            "approved_restart_execution_contract.project_pr_queue_status"
+            if project_pr_queue_status
+            else "",
+            "approved_restart_execution_contract.review_assimilation_status"
+            if review_assimilation_status
+            else "",
+            "approved_restart_execution_contract.self_healing_status"
+            if self_healing_status
+            else "",
+            "approved_restart_execution_contract.long_running_stability_status"
+            if long_running_status
+            else "",
+            "approved_restart_execution_contract.objective_compiler_status"
+            if objective_compiler_status
+            else "",
+            "approved_restart_execution_contract.project_autonomy_budget_status"
+            if project_autonomy_budget_status
+            else "",
+            "approved_restart_execution_contract.project_quality_gate_status"
+            if project_quality_gate_status
+            else "",
+            "approved_restart_execution_contract.project_merge_branch_lifecycle_status"
+            if project_merge_branch_lifecycle_status
+            else "",
+            "approved_restart_execution_contract.project_failure_memory_status"
+            if project_failure_memory_status
+            else "",
+            "approved_restart_execution_contract.project_external_boundary_status"
+            if project_external_boundary_status
+            else "",
+            "approved_restart_execution_contract.project_human_escalation_status"
+            if project_human_escalation_status
+            else "",
+            "approved_restart_execution_contract.project_approval_notification_status"
+            if project_approval_notification_status
+            else "",
+            "approved_restart_execution_contract.project_multi_objective_status"
+            if project_multi_objective_status
+            else "",
         ]
     )
 
@@ -5627,6 +12750,911 @@ def _build_approved_restart_execution_contract_surface(
         "approval_delivery_deferred_by_safety": bool(
             approval_safety.get("approval_delivery_deferred_by_safety", False)
         ),
+        "approval_skip_gate_status": (
+            approval_skip_gate_status
+            if approval_skip_gate_status in _APPROVAL_SKIP_GATE_STATUSES
+            else "approval_required"
+        ),
+        "approval_skip_gate_decision": (
+            approval_skip_gate_decision
+            if approval_skip_gate_decision in _APPROVAL_SKIP_GATE_DECISIONS
+            else "require_human_approval"
+        ),
+        "approval_skip_allowed": bool(approval_skip_allowed),
+        "approval_skip_applied": bool(approval_skip_applied),
+        "approval_skip_human_gate_preserved": bool(approval_skip_human_gate_preserved),
+        "approval_skip_bounded_once": True,
+        "approval_skip_continuation_limit": 1,
+        "approval_skip_reason": approval_skip_reason_codes[0],
+        "approval_skip_reason_codes": approval_skip_reason_codes,
+        "approval_skip_supported_direction": bool(supported_skip_direction),
+        "approval_skip_safety_clear": bool(safety_clear),
+        "approval_skip_truth_sufficient": bool(not invalid_or_insufficient_truth),
+        "approval_skip_manual_review_required": bool(manual_review_required),
+        "approval_skip_high_risk_detected": bool(high_risk_posture),
+        "approval_skip_effective_response_command": _normalize_text(
+            approval_skip_effective_command,
+            default="",
+        ),
+        "approval_skip_effective_restart_decision": _normalize_text(
+            approval_skip_effective_restart_decision,
+            default="",
+        ),
+        "approval_skip_effective_next_direction": _normalize_text(
+            approval_skip_effective_next_direction,
+            default="",
+        ),
+        "approval_skip_effective_target_lane": _normalize_text(
+            approval_skip_effective_target_lane,
+            default="",
+        ),
+        "approval_skip_effective_action_class": _normalize_text(
+            approval_skip_effective_action_class,
+            default="",
+        ),
+        "continuation_budget_schema_version": _CONTINUATION_BUDGET_SCHEMA_VERSION,
+        "continuation_budget_status": (
+            continuation_budget_status
+            if continuation_budget_status in _CONTINUATION_BUDGET_STATUSES
+            else "insufficient_truth"
+        ),
+        "continuation_budget_decision": (
+            continuation_budget_decision
+            if continuation_budget_decision in _CONTINUATION_BUDGET_DECISIONS
+            else "deny_insufficient_truth"
+        ),
+        "continuation_budget_reason": continuation_budget_reason_codes[0],
+        "continuation_budget_reason_codes": continuation_budget_reason_codes,
+        "continuation_budget_truth_sufficient": bool(continuation_budget_truth_sufficient),
+        "continuation_budget_exhausted": bool(continuation_budget_exhausted),
+        "continuation_budget_run_exhausted": bool(continuation_budget_run_exhausted),
+        "continuation_budget_objective_exhausted": bool(continuation_budget_objective_exhausted),
+        "continuation_budget_lane_exhausted": bool(continuation_budget_lane_exhausted),
+        "continuation_budget_run_limit": continuation_budget_run_limit,
+        "continuation_budget_objective_limit": continuation_budget_objective_limit,
+        "continuation_budget_lane_limit": continuation_budget_lane_limit,
+        "continuation_budget_branch_type": (
+            continuation_budget_branch_type
+            if continuation_budget_branch_type in _CONTINUATION_BUDGET_BRANCH_TYPES
+            else "unknown"
+        ),
+        "continuation_budget_branch_limit": continuation_budget_branch_limit,
+        "continuation_budget_branch_status": (
+            continuation_branch_budget_status
+            if continuation_branch_budget_status in _CONTINUATION_BUDGET_BRANCH_STATUSES
+            else "not_applicable"
+        ),
+        "continuation_budget_branch_decision": (
+            continuation_branch_budget_decision
+            if continuation_branch_budget_decision in _CONTINUATION_BUDGET_BRANCH_DECISIONS
+            else "not_applicable"
+        ),
+        "continuation_budget_branch_reason": continuation_branch_budget_reason_codes[0],
+        "continuation_budget_branch_reason_codes": continuation_branch_budget_reason_codes,
+        "continuation_budget_branch_exhausted": bool(continuation_budget_branch_exhausted),
+        "continuation_no_progress_repeated": bool(continuation_repeated),
+        "continuation_no_progress_truth_sufficient": bool(
+            continuation_no_progress_truth_sufficient
+        ),
+        "continuation_no_progress_signal_detected": bool(
+            continuation_no_progress_signal_detected
+        ),
+        "continuation_no_progress_status": _normalize_text(
+            loop_no_progress_status,
+            default="unknown",
+        ),
+        "continuation_no_progress_stop_required": bool(
+            continuation_no_progress_stop_required
+        ),
+        "continuation_failure_bucket_status": _normalize_text(
+            failure_bucketing_status,
+            default="unknown",
+        ),
+        "continuation_failure_bucket_validity": _normalize_text(
+            failure_bucketing_validity,
+            default="unknown",
+        ),
+        "continuation_failure_bucket": _normalize_text(
+            failure_bucketing_primary_bucket,
+            default="unknown",
+        ),
+        "continuation_failure_bucket_unsafe": bool(
+            continuation_failure_bucket_unsafe
+        ),
+        "continuation_failure_bucket_denied": bool(
+            continuation_failure_bucket_denied
+        ),
+        "continuation_repair_playbook_selection_status": (
+            continuation_repair_playbook_selection_status
+            if continuation_repair_playbook_selection_status
+            in _CONTINUATION_REPAIR_PLAYBOOK_STATUSES
+            else "insufficient_truth"
+        ),
+        "continuation_repair_playbook_selected": bool(
+            continuation_repair_playbook_selected
+        ),
+        "continuation_repair_playbook_truth_sufficient": bool(
+            continuation_repair_playbook_truth_sufficient
+        ),
+        "continuation_repair_playbook_supported_bucket": bool(
+            continuation_repair_playbook_supported_bucket
+        ),
+        "continuation_repair_playbook_bucket": _normalize_text(
+            failure_bucketing_primary_bucket,
+            default="unknown",
+        ),
+        "continuation_repair_playbook_class": continuation_repair_playbook_class,
+        "continuation_repair_playbook_candidate_action": (
+            continuation_repair_playbook_candidate_action
+        ),
+        "continuation_repair_playbook_reason": continuation_repair_playbook_reason_codes[0],
+        "continuation_repair_playbook_reason_codes": (
+            continuation_repair_playbook_reason_codes
+        ),
+        "continuation_next_step_selection_status": (
+            continuation_next_step_selection_status
+            if continuation_next_step_selection_status
+            in _CONTINUATION_NEXT_STEP_SELECTION_STATUSES
+            else "insufficient_truth"
+        ),
+        "continuation_next_step_selected": bool(
+            continuation_next_step_selected
+        ),
+        "continuation_next_step_target": (
+            continuation_next_step_target
+            if continuation_next_step_target in _CONTINUATION_NEXT_STEP_TARGETS
+            else "none"
+        ),
+        "continuation_next_step_reason": continuation_next_step_reason_codes[0],
+        "continuation_next_step_reason_codes": continuation_next_step_reason_codes,
+        "continuation_next_step_truth_sufficient": bool(
+            continuation_next_step_truth_sufficient
+        ),
+        "continuation_next_step_truth_insufficiency_explicit": bool(
+            continuation_next_step_truth_insufficiency_explicit
+        ),
+        "continuation_next_step_supported_repair_eligible": bool(
+            continuation_next_step_supported_repair_eligible
+        ),
+        "continuation_next_step_replan_eligible": bool(
+            continuation_next_step_replan_eligible
+        ),
+        "continuation_next_step_retry_eligible": bool(
+            continuation_next_step_retry_eligible
+        ),
+        "supported_repair_execution_status": (
+            supported_repair_execution_status
+            if supported_repair_execution_status
+            in _SUPPORTED_REPAIR_EXECUTION_STATUSES
+            else "not_selected"
+        ),
+        "supported_repair_execution_reason": supported_repair_execution_reason_codes[0],
+        "supported_repair_execution_reason_codes": (
+            supported_repair_execution_reason_codes
+        ),
+        "supported_repair_execution_attempted": bool(
+            supported_repair_execution_attempted
+        ),
+        "supported_repair_execution_qualified": bool(
+            supported_repair_execution_qualified
+        ),
+        "supported_repair_executed": bool(
+            supported_repair_executed
+        ),
+        "supported_repair_verification_passed": bool(
+            supported_repair_verification_passed
+        ),
+        "supported_repair_verification_failed": bool(
+            supported_repair_verification_failed
+        ),
+        "final_human_review_gate_status": (
+            final_human_review_gate_status
+            if final_human_review_gate_status in _FINAL_HUMAN_REVIEW_GATE_STATUSES
+            else "not_required"
+        ),
+        "final_human_review_required": bool(
+            final_human_review_required
+        ),
+        "final_human_review_reason": final_human_review_reason_codes[0],
+        "final_human_review_reason_codes": final_human_review_reason_codes,
+        "final_human_gate_preserved": bool(
+            final_human_review_required
+        ),
+        "project_planning_summary_status": (
+            project_planning_summary_status
+            if project_planning_summary_status in _PROJECT_PLANNING_SUMMARY_STATUSES
+            else "insufficient_truth"
+        ),
+        "project_planning_summary_available": bool(
+            project_planning_summary_available
+        ),
+        "project_planning_summary_reason": project_planning_summary_reason_codes[0],
+        "project_planning_summary_reason_codes": (
+            project_planning_summary_reason_codes
+        ),
+        "project_planning_control_posture": _normalize_text(
+            project_planning_control_posture,
+            default="unknown",
+        ),
+        "project_planning_summary_compact": project_planning_summary_compact,
+        "project_roadmap_status": (
+            project_roadmap_status
+            if project_roadmap_status in _PROJECT_ROADMAP_STATUSES
+            else "insufficient_truth"
+        ),
+        "project_roadmap_available": bool(project_roadmap_available),
+        "project_roadmap_reason": project_roadmap_reason_codes[0],
+        "project_roadmap_reason_codes": project_roadmap_reason_codes,
+        "project_roadmap_item_count": project_roadmap_item_count,
+        "project_roadmap_items": project_roadmap_items,
+        "project_pr_slicing_status": (
+            project_pr_slicing_status
+            if project_pr_slicing_status in _PROJECT_PR_SLICING_STATUSES
+            else "insufficient_truth"
+        ),
+        "project_pr_slicing_available": bool(project_pr_slicing_available),
+        "project_pr_slicing_reason": project_pr_slicing_reason_codes[0],
+        "project_pr_slicing_reason_codes": project_pr_slicing_reason_codes,
+        "project_pr_slice_count": project_pr_slice_count,
+        "project_pr_slices": project_pr_slices,
+        "project_pr_one_pr_size_decision": (
+            project_pr_one_pr_size_decision
+            if project_pr_one_pr_size_decision in _PROJECT_PR_SIZE_DECISIONS
+            else "not_available"
+        ),
+        "project_pr_prioritization_mode": (
+            project_pr_prioritization_mode
+            if project_pr_prioritization_mode in _PROJECT_PR_PRIORITIZATION_MODES
+            else "insufficient_truth"
+        ),
+        "implementation_prompt_status": (
+            implementation_prompt_status
+            if implementation_prompt_status in _IMPLEMENTATION_PROMPT_STATUSES
+            else "insufficient_truth"
+        ),
+        "implementation_prompt_available": bool(implementation_prompt_available),
+        "implementation_prompt_reason": implementation_prompt_reason_codes[0],
+        "implementation_prompt_reason_codes": implementation_prompt_reason_codes,
+        "implementation_prompt_slice_id": _normalize_text(
+            implementation_prompt_payload.get("slice_id"),
+            default="",
+        ),
+        "implementation_prompt_roadmap_item_id": _normalize_text(
+            implementation_prompt_payload.get("roadmap_item_id"),
+            default="",
+        ),
+        "implementation_prompt_payload": dict(implementation_prompt_payload),
+        "project_pr_queue_status": (
+            project_pr_queue_status
+            if project_pr_queue_status in _PROJECT_PR_QUEUE_STATUSES
+            else "insufficient_truth"
+        ),
+        "project_pr_queue_reason": project_pr_queue_reason_codes[0],
+        "project_pr_queue_reason_codes": project_pr_queue_reason_codes,
+        "project_pr_queue_item_count": _as_non_negative_int(
+            project_pr_queue_state.get("queue_item_count"),
+            default=0,
+        ),
+        "project_pr_queue_runnable_count": _as_non_negative_int(
+            project_pr_queue_state.get("queue_runnable_count"),
+            default=0,
+        ),
+        "project_pr_queue_blocked_count": _as_non_negative_int(
+            project_pr_queue_state.get("queue_blocked_count"),
+            default=0,
+        ),
+        "project_pr_queue_selected_slice_id": _normalize_text(
+            project_pr_queue_state.get("queue_selected_slice_id"),
+            default="",
+        ),
+        "project_pr_queue_selected_roadmap_item_id": _normalize_text(
+            project_pr_queue_state.get("queue_selected_roadmap_item_id"),
+            default="",
+        ),
+        "project_pr_queue_selected_blocked": bool(
+            project_pr_queue_state.get("queue_selected_blocked", False)
+        ),
+        "project_pr_queue_handoff_prepared": bool(
+            project_pr_queue_state.get("queue_handoff_prepared", False)
+        ),
+        "project_pr_queue_handoff_payload": (
+            dict(project_pr_queue_state.get("queue_handoff_payload", {}))
+            if isinstance(project_pr_queue_state.get("queue_handoff_payload"), Mapping)
+            else {}
+        ),
+        "project_pr_queue_items": (
+            [
+                dict(item)
+                for item in project_pr_queue_state.get("queue_items", [])
+                if isinstance(item, Mapping)
+            ]
+            if isinstance(project_pr_queue_state.get("queue_items"), list)
+            else []
+        ),
+        "project_pr_queue_processed_slice_ids_before": _normalize_string_list(
+            project_pr_queue_state.get("queue_processed_slice_ids_before")
+        ),
+        "project_pr_queue_processed_slice_ids_after": _normalize_string_list(
+            project_pr_queue_state.get("queue_processed_slice_ids_after")
+        ),
+        "project_pr_queue_processed_slice_ids": _normalize_string_list(
+            project_pr_queue_state.get("queue_processed_slice_ids_after")
+        ),
+        "project_pr_queue_outcome": (
+            "queue_item_prepared"
+            if bool(project_pr_queue_state.get("queue_handoff_prepared", False))
+            else project_pr_queue_reason_codes[0]
+        ),
+        "review_assimilation_status": (
+            review_assimilation_status
+            if review_assimilation_status in _REVIEW_ASSIMILATION_STATUSES
+            else "insufficient_truth"
+        ),
+        "review_assimilation_action": (
+            review_assimilation_action
+            if review_assimilation_action in _REVIEW_ASSIMILATION_ACTIONS
+            else "none"
+        ),
+        "review_assimilation_reason": review_assimilation_reason_codes[0],
+        "review_assimilation_reason_codes": review_assimilation_reason_codes,
+        "review_assimilation_available": bool(
+            review_assimilation_state.get("review_assimilation_available", False)
+        ),
+        "review_assimilation_reviewable": bool(
+            review_assimilation_state.get("review_assimilation_reviewable", False)
+        ),
+        "review_assimilation_queue_status": _normalize_text(
+            review_assimilation_state.get("review_assimilation_queue_status"),
+            default="insufficient_truth",
+        ),
+        "review_assimilation_queue_reason": _normalize_text(
+            review_assimilation_state.get("review_assimilation_queue_reason"),
+            default="",
+        ),
+        "review_assimilation_result_status": _normalize_text(
+            review_assimilation_state.get("review_assimilation_result_status"),
+            default="not_attempted",
+        ),
+        "review_assimilation_handoff_slice_id": _normalize_text(
+            review_assimilation_state.get("review_assimilation_handoff_slice_id"),
+            default="",
+        ),
+        "review_assimilation_handoff_roadmap_item_id": _normalize_text(
+            review_assimilation_state.get("review_assimilation_handoff_roadmap_item_id"),
+            default="",
+        ),
+        "self_healing_status": (
+            self_healing_status
+            if self_healing_status in _SELF_HEALING_STATUSES
+            else "insufficient_truth"
+        ),
+        "self_healing_transition_selected": bool(
+            self_healing_state.get("self_healing_transition_selected", False)
+        ),
+        "self_healing_transition_target": _normalize_text(
+            self_healing_state.get("self_healing_transition_target"),
+            default="none",
+        ),
+        "self_healing_transition_allowed": bool(
+            self_healing_state.get("self_healing_transition_allowed", False)
+        ),
+        "self_healing_transition_executed": bool(
+            self_healing_state.get("self_healing_transition_executed", False)
+        ),
+        "self_healing_reason": self_healing_reason_codes[0],
+        "self_healing_reason_codes": self_healing_reason_codes,
+        "self_healing_chain_limit": _as_non_negative_int(
+            self_healing_state.get("self_healing_chain_limit"),
+            default=_SELF_HEALING_CHAIN_LIMIT_DEFAULT,
+        ),
+        "self_healing_transition_count_before": _as_non_negative_int(
+            self_healing_state.get("self_healing_transition_count_before"),
+            default=prior_self_healing_transition_count,
+        ),
+        "self_healing_transition_count_after": _as_non_negative_int(
+            self_healing_state.get("self_healing_transition_count_after"),
+            default=prior_self_healing_transition_count,
+        ),
+        "self_healing_transition_count": _as_non_negative_int(
+            self_healing_state.get("self_healing_transition_count_after"),
+            default=prior_self_healing_transition_count,
+        ),
+        "self_healing_chain_budget_remaining_before": _as_non_negative_int(
+            self_healing_state.get("self_healing_chain_budget_remaining_before"),
+            default=max(
+                0,
+                _SELF_HEALING_CHAIN_LIMIT_DEFAULT - prior_self_healing_transition_count,
+            ),
+        ),
+        "self_healing_chain_budget_remaining_after": _as_non_negative_int(
+            self_healing_state.get("self_healing_chain_budget_remaining_after"),
+            default=max(
+                0,
+                _SELF_HEALING_CHAIN_LIMIT_DEFAULT - prior_self_healing_transition_count,
+            ),
+        ),
+        "self_healing_human_fallback_preserved": bool(
+            self_healing_state.get("self_healing_human_fallback_preserved", True)
+        ),
+        "self_healing_source_assimilation_status": _normalize_text(
+            self_healing_state.get("self_healing_source_assimilation_status"),
+            default=review_assimilation_status,
+        ),
+        "self_healing_source_assimilation_action": _normalize_text(
+            self_healing_state.get("self_healing_source_assimilation_action"),
+            default=review_assimilation_action,
+        ),
+        "self_healing_truth_insufficiency_signal": bool(
+            self_healing_state.get("self_healing_truth_insufficiency_signal", False)
+        ),
+        "long_running_stability_status": (
+            long_running_status
+            if long_running_status in _LONG_RUNNING_STABILITY_STATUSES
+            else "insufficient_truth"
+        ),
+        "long_running_reason": long_running_reason_codes[0],
+        "long_running_reason_codes": long_running_reason_codes,
+        "long_running_watchdog_active": bool(
+            long_running_state.get("long_running_watchdog_active", False)
+        ),
+        "long_running_stale_detected": bool(
+            long_running_state.get("long_running_stale_detected", False)
+        ),
+        "long_running_stuck_detected": bool(
+            long_running_state.get("long_running_stuck_detected", False)
+        ),
+        "long_running_pause_required": bool(
+            long_running_state.get("long_running_pause_required", True)
+        ),
+        "long_running_resume_allowed": bool(
+            long_running_state.get("long_running_resume_allowed", False)
+        ),
+        "long_running_escalation_required": bool(
+            long_running_state.get("long_running_escalation_required", False)
+        ),
+        "long_running_safe_stop_required": bool(
+            long_running_state.get("long_running_safe_stop_required", True)
+        ),
+        "long_running_replay_safe": bool(
+            long_running_state.get("long_running_replay_safe", False)
+        ),
+        "long_running_replay_key": _normalize_text(
+            long_running_state.get("long_running_replay_key"),
+            default="",
+        ),
+        "long_running_progress_signature": _normalize_text(
+            long_running_state.get("long_running_progress_signature"),
+            default="",
+        ),
+        "long_running_resume_token": _normalize_text(
+            long_running_state.get("long_running_resume_token"),
+            default="",
+        ),
+        "long_running_watchdog_heartbeat_at": _normalize_text(
+            long_running_state.get("long_running_watchdog_heartbeat_at"),
+            default="",
+        ),
+        "long_running_watchdog_stale_after_seconds": _as_non_negative_int(
+            long_running_state.get("long_running_watchdog_stale_after_seconds"),
+            default=_LONG_RUNNING_STALE_AFTER_SECONDS_DEFAULT,
+        ),
+        "long_running_watchdog_stale_age_seconds": _as_non_negative_int(
+            long_running_state.get("long_running_watchdog_stale_age_seconds"),
+            default=0,
+        ),
+        "long_running_stale_cycle_count": _as_non_negative_int(
+            long_running_state.get("long_running_stale_cycle_count"),
+            default=0,
+        ),
+        "long_running_stuck_cycle_count": _as_non_negative_int(
+            long_running_state.get("long_running_stuck_cycle_count"),
+            default=0,
+        ),
+        "long_running_source_queue_status": _normalize_text(
+            long_running_state.get("long_running_source_queue_status"),
+            default="insufficient_truth",
+        ),
+        "long_running_source_review_assimilation_status": _normalize_text(
+            long_running_state.get("long_running_source_review_assimilation_status"),
+            default="insufficient_truth",
+        ),
+        "long_running_source_review_assimilation_action": _normalize_text(
+            long_running_state.get("long_running_source_review_assimilation_action"),
+            default="none",
+        ),
+        "long_running_source_self_healing_status": _normalize_text(
+            long_running_state.get("long_running_source_self_healing_status"),
+            default="insufficient_truth",
+        ),
+        "long_running_source_self_healing_target": _normalize_text(
+            long_running_state.get("long_running_source_self_healing_target"),
+            default="none",
+        ),
+        "objective_compiler_status": (
+            objective_compiler_status
+            if objective_compiler_status in _OBJECTIVE_COMPILER_STATUSES
+            else "insufficient_truth"
+        ),
+        "objective_compiler_reason": objective_compiler_reason_codes[0],
+        "objective_compiler_reason_codes": objective_compiler_reason_codes,
+        "current_objective_id": _normalize_text(
+            objective_compiler_state.get("current_objective_id"),
+            default="",
+        ),
+        "current_objective_available": bool(
+            objective_compiler_state.get("current_objective_available", False)
+        ),
+        "objective_done_criteria_status": objective_done_criteria_status,
+        "objective_done_criteria_met": bool(
+            objective_compiler_state.get("objective_done_criteria_met", False)
+        ),
+        "objective_done_remaining_slice_count": _as_non_negative_int(
+            objective_compiler_state.get("objective_done_remaining_slice_count"),
+            default=0,
+        ),
+        "objective_stop_criteria_status": objective_stop_criteria_status,
+        "objective_stop_criteria_met": bool(
+            objective_compiler_state.get("objective_stop_criteria_met", False)
+        ),
+        "objective_completion_posture": objective_completion_posture,
+        "objective_scope_drift_status": objective_scope_drift_status,
+        "objective_scope_drift_detected": bool(
+            objective_compiler_state.get("objective_scope_drift_detected", False)
+        ),
+        "objective_scope_drift_reason": _normalize_text(
+            objective_compiler_state.get("objective_scope_drift_reason"),
+            default="scope_drift_insufficient_truth",
+        ),
+        "objective_source_slice_count": _as_non_negative_int(
+            objective_compiler_state.get("objective_source_slice_count"),
+            default=0,
+        ),
+        "objective_source_processed_count": _as_non_negative_int(
+            objective_compiler_state.get("objective_source_processed_count"),
+            default=0,
+        ),
+        "objective_source_queue_status": _normalize_text(
+            objective_compiler_state.get("objective_source_queue_status"),
+            default="insufficient_truth",
+        ),
+        "project_autonomy_budget_status": project_autonomy_budget_status,
+        "project_autonomy_budget_reason": project_autonomy_budget_reason_codes[0],
+        "project_autonomy_budget_reason_codes": project_autonomy_budget_reason_codes,
+        "project_priority_posture": project_priority_posture,
+        "project_priority_deferred": bool(
+            project_autonomy_budget_state.get("project_priority_deferred", False)
+        ),
+        "project_high_risk_defer_posture": project_high_risk_defer_posture,
+        "project_high_risk_defer_active": bool(
+            project_autonomy_budget_state.get("project_high_risk_defer_active", False)
+        ),
+        "project_run_budget_posture": project_run_budget_posture,
+        "project_run_budget_limit": _as_non_negative_int(
+            project_autonomy_budget_state.get("project_run_budget_limit"),
+            default=0,
+        ),
+        "project_run_budget_remaining": _as_non_negative_int(
+            project_autonomy_budget_state.get("project_run_budget_remaining"),
+            default=0,
+        ),
+        "project_run_budget_exhausted": bool(
+            project_autonomy_budget_state.get("project_run_budget_exhausted", False)
+        ),
+        "project_objective_budget_posture": project_objective_budget_posture,
+        "project_objective_budget_limit": _as_non_negative_int(
+            project_autonomy_budget_state.get("project_objective_budget_limit"),
+            default=0,
+        ),
+        "project_objective_budget_remaining": _as_non_negative_int(
+            project_autonomy_budget_state.get("project_objective_budget_remaining"),
+            default=0,
+        ),
+        "project_objective_budget_exhausted": bool(
+            project_autonomy_budget_state.get("project_objective_budget_exhausted", False)
+        ),
+        "project_pr_retry_budget_posture": project_pr_retry_budget_posture,
+        "project_pr_retry_budget_applicable": bool(
+            project_autonomy_budget_state.get("project_pr_retry_budget_applicable", False)
+        ),
+        "project_pr_retry_budget_limit": _as_non_negative_int(
+            project_autonomy_budget_state.get("project_pr_retry_budget_limit"),
+            default=0,
+        ),
+        "project_pr_retry_budget_remaining": _as_non_negative_int(
+            project_autonomy_budget_state.get("project_pr_retry_budget_remaining"),
+            default=0,
+        ),
+        "project_pr_retry_budget_exhausted": bool(
+            project_autonomy_budget_state.get("project_pr_retry_budget_exhausted", False)
+        ),
+        "project_quality_gate_status": project_quality_gate_status,
+        "project_quality_gate_reason": project_quality_gate_reason_codes[0],
+        "project_quality_gate_reason_codes": project_quality_gate_reason_codes,
+        "project_quality_gate_posture": project_quality_gate_posture,
+        "project_quality_gate_merge_ready": bool(
+            project_quality_gate_state.get("project_quality_gate_merge_ready", False)
+        ),
+        "project_quality_gate_review_ready": bool(
+            project_quality_gate_state.get("project_quality_gate_review_ready", False)
+        ),
+        "project_quality_gate_retry_needed": bool(
+            project_quality_gate_state.get("project_quality_gate_retry_needed", False)
+        ),
+        "project_quality_gate_recommended": _normalize_string_list(
+            project_quality_gate_state.get("project_quality_gate_recommended")
+        ),
+        "project_quality_gate_recommended_count": _as_non_negative_int(
+            project_quality_gate_state.get("project_quality_gate_recommended_count"),
+            default=0,
+        ),
+        "project_quality_gate_changed_area_class": project_quality_gate_changed_area_class,
+        "project_quality_gate_risk_level": project_quality_gate_risk_level,
+        "project_quality_gate_high_risk": bool(
+            project_quality_gate_state.get("project_quality_gate_high_risk", False)
+        ),
+        "project_quality_gate_unavailable": bool(
+            project_quality_gate_state.get("project_quality_gate_unavailable", False)
+        ),
+        "project_merge_branch_lifecycle_status": project_merge_branch_lifecycle_status,
+        "project_merge_branch_lifecycle_reason": project_merge_branch_lifecycle_reason_codes[0],
+        "project_merge_branch_lifecycle_reason_codes": (
+            project_merge_branch_lifecycle_reason_codes
+        ),
+        "project_merge_ready_posture": project_merge_ready_posture,
+        "project_merge_ready": bool(
+            project_merge_branch_lifecycle_state.get("project_merge_ready", False)
+        ),
+        "project_branch_cleanup_candidate_posture": project_branch_cleanup_candidate_posture,
+        "project_branch_cleanup_candidate": bool(
+            project_merge_branch_lifecycle_state.get(
+                "project_branch_cleanup_candidate",
+                False,
+            )
+        ),
+        "project_branch_quarantine_candidate_posture": (
+            project_branch_quarantine_candidate_posture
+        ),
+        "project_branch_quarantine_candidate": bool(
+            project_merge_branch_lifecycle_state.get(
+                "project_branch_quarantine_candidate",
+                False,
+            )
+        ),
+        "project_local_main_sync_posture": project_local_main_sync_posture,
+        "project_local_main_sync_required": bool(
+            project_merge_branch_lifecycle_state.get(
+                "project_local_main_sync_required",
+                False,
+            )
+        ),
+        "project_merge_branch_lifecycle_unavailable": bool(
+            project_merge_branch_lifecycle_state.get(
+                "project_merge_branch_lifecycle_unavailable",
+                False,
+            )
+        ),
+        "project_failure_memory_status": project_failure_memory_status,
+        "project_failure_memory_reason": project_failure_memory_reason_codes[0],
+        "project_failure_memory_reason_codes": project_failure_memory_reason_codes,
+        "project_failure_memory_ineffective_retry": bool(
+            project_failure_memory_state.get(
+                "project_failure_memory_ineffective_retry",
+                False,
+            )
+        ),
+        "project_failure_memory_failed_repair": bool(
+            project_failure_memory_state.get(
+                "project_failure_memory_failed_repair",
+                False,
+            )
+        ),
+        "project_failure_memory_repeated_review_issue": bool(
+            project_failure_memory_state.get(
+                "project_failure_memory_repeated_review_issue",
+                False,
+            )
+        ),
+        "project_failure_memory_recurring_failure_bucket": bool(
+            project_failure_memory_state.get(
+                "project_failure_memory_recurring_failure_bucket",
+                False,
+            )
+        ),
+        "project_failure_memory_retry_failure_count": _as_non_negative_int(
+            project_failure_memory_state.get(
+                "project_failure_memory_retry_failure_count"
+            ),
+            default=0,
+        ),
+        "project_failure_memory_repair_failure_count": _as_non_negative_int(
+            project_failure_memory_state.get(
+                "project_failure_memory_repair_failure_count"
+            ),
+            default=0,
+        ),
+        "project_failure_memory_review_issue_count": _as_non_negative_int(
+            project_failure_memory_state.get(
+                "project_failure_memory_review_issue_count"
+            ),
+            default=0,
+        ),
+        "project_failure_memory_failure_bucket_recurrence_count": _as_non_negative_int(
+            project_failure_memory_state.get(
+                "project_failure_memory_failure_bucket_recurrence_count"
+            ),
+            default=0,
+        ),
+        "project_failure_memory_last_failure_bucket": _normalize_text(
+            project_failure_memory_state.get("project_failure_memory_last_failure_bucket"),
+            default="unknown",
+        ),
+        "project_failure_memory_suppression_posture": (
+            project_failure_memory_suppression_posture
+        ),
+        "project_failure_memory_suppression_active": bool(
+            project_failure_memory_state.get(
+                "project_failure_memory_suppression_active",
+                False,
+            )
+        ),
+        "project_failure_memory_unavailable": bool(
+            project_failure_memory_state.get("project_failure_memory_unavailable", False)
+        ),
+        "project_external_boundary_status": project_external_boundary_status,
+        "project_external_boundary_reason": project_external_boundary_reason_codes[0],
+        "project_external_boundary_reason_codes": project_external_boundary_reason_codes,
+        "project_external_dependency_posture": project_external_dependency_posture,
+        "project_external_dependency_available": bool(
+            project_external_boundary_state.get(
+                "project_external_dependency_available",
+                False,
+            )
+        ),
+        "project_external_dependency_blocked": bool(
+            project_external_boundary_state.get(
+                "project_external_dependency_blocked",
+                False,
+            )
+        ),
+        "project_external_manual_only_posture": project_external_manual_only_posture,
+        "project_external_manual_only_required": bool(
+            project_external_boundary_state.get(
+                "project_external_manual_only_required",
+                False,
+            )
+        ),
+        "project_external_network_boundary_posture": (
+            project_external_network_boundary_posture
+        ),
+        "project_external_ci_boundary_posture": project_external_ci_boundary_posture,
+        "project_external_secrets_boundary_posture": (
+            project_external_secrets_boundary_posture
+        ),
+        "project_external_github_boundary_posture": (
+            project_external_github_boundary_posture
+        ),
+        "project_external_api_boundary_posture": project_external_api_boundary_posture,
+        "project_external_boundary_unavailable": bool(
+            project_external_boundary_state.get(
+                "project_external_boundary_unavailable",
+                False,
+            )
+        ),
+        "project_human_escalation_status": project_human_escalation_status,
+        "project_human_escalation_reason": project_human_escalation_reason_codes[0],
+        "project_human_escalation_reason_codes": project_human_escalation_reason_codes,
+        "project_human_escalation_posture": project_human_escalation_posture,
+        "project_human_escalation_required": bool(
+            project_human_escalation_state.get("project_human_escalation_required", False)
+        ),
+        "project_architecture_risk_posture": project_architecture_risk_posture,
+        "project_scope_risk_posture": project_scope_risk_posture,
+        "project_external_risk_posture": project_external_risk_posture,
+        "project_budget_risk_posture": project_budget_risk_posture,
+        "project_repeated_failure_risk_posture": (
+            project_repeated_failure_risk_posture
+        ),
+        "project_manual_only_risk_posture": project_manual_only_risk_posture,
+        "project_human_escalation_unavailable": bool(
+            project_human_escalation_state.get(
+                "project_human_escalation_unavailable",
+                False,
+            )
+        ),
+        "project_approval_notification_status": project_approval_notification_status,
+        "project_approval_notification_reason": project_approval_notification_reason_codes[0],
+        "project_approval_notification_reason_codes": (
+            project_approval_notification_reason_codes
+        ),
+        "project_approval_notification_ready_posture": (
+            project_approval_notification_ready_posture
+        ),
+        "project_approval_notification_ready": bool(
+            project_approval_notification_state.get(
+                "project_approval_notification_ready",
+                False,
+            )
+        ),
+        "project_approval_reply_required_posture": (
+            project_approval_reply_required_posture
+        ),
+        "project_approval_reply_required": bool(
+            project_approval_notification_state.get(
+                "project_approval_reply_required",
+                False,
+            )
+        ),
+        "project_approval_channel_posture": project_approval_channel_posture,
+        "project_approval_mobile_summary_posture": (
+            project_approval_mobile_summary_posture
+        ),
+        "project_approval_mobile_summary_compact": _normalize_text(
+            project_approval_notification_state.get(
+                "project_approval_mobile_summary_compact"
+            ),
+            default="",
+        ),
+        "project_approval_mobile_summary_tokens": _normalize_string_list(
+            project_approval_notification_state.get(
+                "project_approval_mobile_summary_tokens"
+            )
+        ),
+        "project_approval_notification_unavailable": bool(
+            project_approval_notification_state.get(
+                "project_approval_notification_unavailable",
+                False,
+            )
+        ),
+        "project_multi_objective_status": project_multi_objective_status,
+        "project_multi_objective_reason": project_multi_objective_reason_codes[0],
+        "project_multi_objective_reason_codes": project_multi_objective_reason_codes,
+        "project_active_objective_selection_posture": (
+            project_active_objective_selection_posture
+        ),
+        "project_active_objective_id": _normalize_text(
+            project_multi_objective_state.get("project_active_objective_id"),
+            default="",
+        ),
+        "project_blocked_objective_deferral_posture": (
+            project_blocked_objective_deferral_posture
+        ),
+        "project_blocked_objective_deferred": bool(
+            project_multi_objective_state.get("project_blocked_objective_deferred", False)
+        ),
+        "project_resumable_queue_ordering_posture": (
+            project_resumable_queue_ordering_posture
+        ),
+        "project_resumable_queue_ordering_key": _normalize_text(
+            project_multi_objective_state.get("project_resumable_queue_ordering_key"),
+            default="",
+        ),
+        "project_resumable_queue_next_slice_id": _normalize_text(
+            project_multi_objective_state.get("project_resumable_queue_next_slice_id"),
+            default="",
+        ),
+        "project_resumable_queue_has_pending": bool(
+            project_multi_objective_state.get("project_resumable_queue_has_pending", False)
+        ),
+        "project_multi_objective_unavailable": bool(
+            project_multi_objective_state.get("project_multi_objective_unavailable", False)
+        ),
+        "automatic_continuation_branch_count_before": continuation_branch_count_before,
+        "automatic_continuation_branch_count": continuation_branch_count_after,
+        "automatic_continuation_retry_count": continuation_retry_count_after,
+        "automatic_continuation_replan_count": continuation_replan_count_after,
+        "automatic_continuation_truth_gather_count": continuation_truth_gather_count_after,
+        "automatic_continuation_run_count_before": continuation_run_count_before,
+        "automatic_continuation_run_count": continuation_run_count_after,
+        "automatic_continuation_objective_count_before": continuation_objective_count_before,
+        "automatic_continuation_objective_count": continuation_objective_count_after,
+        "automatic_continuation_lane_count_before": continuation_lane_count_before,
+        "automatic_continuation_lane_count": continuation_lane_count_after,
+        "automatic_continuation_objective_key": continuation_budget_objective_key,
+        "automatic_continuation_lane_key": continuation_budget_lane_key,
+        "continuation_budget_run_remaining": continuation_budget_run_remaining,
+        "continuation_budget_objective_remaining": continuation_budget_objective_remaining,
+        "continuation_budget_lane_remaining": continuation_budget_lane_remaining,
+        "continuation_budget_branch_remaining": continuation_budget_branch_remaining,
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
 
@@ -9322,13 +17350,22 @@ class PlannedExecutionRunner:
         approved_restart_execution_contract_path = (
             run_root / "approved_restart_execution_contract.json"
         )
+        prior_approved_restart_execution_contract_payload = _read_json_object_if_exists(
+            approved_restart_execution_contract_path
+        )
         approved_restart_execution_contract_payload = (
             _build_approved_restart_execution_contract_surface(
                 run_id=resolved_job_id,
                 objective_contract_payload=objective_contract_payload,
+                approval_email_delivery_payload=approval_email_delivery_contract_payload,
+                fleet_safety_control_payload=fleet_safety_control_contract_payload,
+                approval_runtime_rules_payload=approval_runtime_rules_contract_payload,
+                failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
+                loop_hardening_contract_payload=loop_hardening_contract_payload,
                 approved_restart_payload=approved_restart_contract_payload,
                 approval_response_payload=approval_response_contract_payload,
                 approval_safety_payload=approval_safety_contract_payload,
+                prior_approved_restart_execution_payload=prior_approved_restart_execution_contract_payload,
                 manifest_units=manifest_units,
                 adapter=self.adapter,
                 dry_run=dry_run,

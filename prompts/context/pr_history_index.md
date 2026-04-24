@@ -18,3 +18,17 @@ Compact prior-increment index for prompt reuse. Use this file as a stable, low-t
 - PR72 one bounded supported_repair execute-verify loop
 - PR73 explicit final human-review-required gate
 - PR74 deterministic project-planning summary/compiler
+- PR75 deterministic roadmap generation, bounded PR slicing, and simple prioritization/order
+- PR76 deterministic implementation-prompt generation from bounded PR slices
+- PR77 deterministic bounded PR-queue state and one-item execution handoff preparation
+- PR78 deterministic review-assimilation from bounded queue/handoff/result outcomes
+- PR79 deterministic bounded self-healing transitions from review-assimilation outputs
+- PR80 deterministic long-running stability with watchdog, stale/stuck detection, replay-safe pause/resume
+- PR81 deterministic objective / done-criteria compiler from planning, queue, recovery, and stability state
+- PR82 deterministic project-level prioritization and autonomy-budget compiler from objective/completion and bounded execution state
+- PR83 deterministic quality-gate orchestration with merge-ready / review-ready / retry-needed posture
+- PR84 deterministic merge / branch lifecycle compiler with merge-ready, cleanup, quarantine, and local-main-sync posture
+- PR85 deterministic failure-memory and repeated-mistake suppression compiler from retry/repair/review/lifecycle state
+- PR86 deterministic external dependency boundary compiler for GitHub/CI/secrets/network/manual-only posture
+- PR87 deterministic project-level human escalation compiler from review, boundary, budget, and failure-risk state
+- PR88 deterministic mobile-friendly approval-notification posture from approval-email/reply and escalation state

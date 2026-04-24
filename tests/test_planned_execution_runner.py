@@ -570,6 +570,18 @@ from automation.orchestration.planned_execution_runner import _execute_bounded_m
 from automation.orchestration.planned_execution_runner import _execute_bounded_pr_creation
 from automation.orchestration.planned_execution_runner import _execute_bounded_push
 from automation.orchestration.planned_execution_runner import _execute_bounded_rollback
+from automation.orchestration.planned_execution_runner import _build_bounded_self_healing_state
+from automation.orchestration.planned_execution_runner import _build_project_external_boundary_state
+from automation.orchestration.planned_execution_runner import _build_project_failure_memory_state
+from automation.orchestration.planned_execution_runner import _build_project_approval_notification_state
+from automation.orchestration.planned_execution_runner import _build_project_human_escalation_state
+from automation.orchestration.planned_execution_runner import _build_project_multi_objective_state
+from automation.orchestration.planned_execution_runner import _build_long_running_stability_state
+from automation.orchestration.planned_execution_runner import _build_objective_done_compiler_state
+from automation.orchestration.planned_execution_runner import _build_project_autonomy_budget_state
+from automation.orchestration.planned_execution_runner import _build_project_merge_branch_lifecycle_state
+from automation.orchestration.planned_execution_runner import _build_project_quality_gate_state
+from automation.orchestration.planned_execution_runner import _build_review_assimilation_state
 from automation.orchestration.planned_execution_runner import _with_rollback_aftermath_surface
 from automation.orchestration.repair_suggestion_contract import REPAIR_PRECONDITION_STATUSES
 from automation.orchestration.repair_suggestion_contract import REPAIR_REASON_CODES
@@ -10863,6 +10875,5061 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
                 self.assertFalse(execution_payload["automatic_restart_attempted"])
                 self.assertEqual(execution_payload["automatic_restart_count"], 0)
                 self.assertEqual(len(transport.launch_order), 3)
+
+    def test_runner_allows_one_low_risk_approval_skip_and_executes_once(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+            transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            execution_payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(
+            execution_payload["automatic_restart_execution_status"], "executed"
+        )
+        self.assertTrue(execution_payload["automatic_restart_executed"])
+        self.assertEqual(execution_payload["automatic_restart_count"], 1)
+        self.assertTrue(execution_payload["approval_skip_allowed"])
+        self.assertTrue(execution_payload["approval_skip_applied"])
+        self.assertEqual(execution_payload["approval_skip_gate_status"], "skip_allowed")
+        self.assertEqual(execution_payload["approval_skip_gate_decision"], "skip_and_continue_once")
+        self.assertEqual(execution_payload["approval_skip_reason"], "skip_allowed_low_risk")
+        self.assertFalse(execution_payload["approval_skip_human_gate_preserved"])
+        self.assertEqual(
+            execution_payload["approval_skip_effective_response_command"],
+            "OK REPLAN",
+        )
+        self.assertEqual(
+            execution_payload["approval_skip_effective_restart_decision"],
+            "allow_replan_preparation",
+        )
+        self.assertEqual(execution_payload["response_command_normalized"], "OK REPLAN")
+        self.assertEqual(
+            execution_payload["restart_decision"], "allow_replan_preparation"
+        )
+        self.assertEqual(execution_payload["final_human_review_gate_status"], "not_required")
+        self.assertFalse(execution_payload["final_human_review_required"])
+        self.assertEqual(
+            execution_payload["final_human_review_reason"],
+            "final_review_not_required",
+        )
+        self.assertFalse(execution_payload["final_human_gate_preserved"])
+        self.assertEqual(
+            execution_payload["project_planning_summary_status"],
+            "available",
+        )
+        self.assertTrue(execution_payload["project_planning_summary_available"])
+        self.assertEqual(
+            execution_payload["project_planning_summary_reason"],
+            "planning_summary_compiled",
+        )
+        self.assertEqual(
+            execution_payload["project_planning_control_posture"],
+            "automation_executed",
+        )
+        self.assertEqual(
+            execution_payload["project_autonomy_budget_status"],
+            "available",
+        )
+        self.assertEqual(execution_payload["project_priority_posture"], "active")
+        self.assertFalse(execution_payload["project_priority_deferred"])
+        self.assertEqual(
+            execution_payload["project_high_risk_defer_posture"],
+            "clear",
+        )
+        self.assertEqual(execution_payload["project_run_budget_posture"], "available")
+        self.assertEqual(
+            execution_payload["project_objective_budget_posture"],
+            "available",
+        )
+        self.assertEqual(
+            execution_payload["project_pr_retry_budget_posture"],
+            "not_applicable",
+        )
+        self.assertEqual(
+            execution_payload["project_quality_gate_status"],
+            "available",
+        )
+        self.assertEqual(
+            execution_payload["project_quality_gate_posture"],
+            "retry_needed",
+        )
+        self.assertFalse(execution_payload["project_quality_gate_merge_ready"])
+        self.assertFalse(execution_payload["project_quality_gate_review_ready"])
+        self.assertTrue(execution_payload["project_quality_gate_retry_needed"])
+        self.assertEqual(
+            execution_payload["project_quality_gate_changed_area_class"],
+            "runner_and_tests",
+        )
+        self.assertEqual(
+            execution_payload["project_quality_gate_risk_level"],
+            "moderate",
+        )
+        self.assertIn(
+            "targeted_regression",
+            execution_payload["project_quality_gate_recommended"],
+        )
+        self.assertEqual(
+            execution_payload["project_merge_branch_lifecycle_status"],
+            "available",
+        )
+        self.assertEqual(
+            execution_payload["project_merge_ready_posture"],
+            "not_merge_ready",
+        )
+        self.assertFalse(execution_payload["project_merge_ready"])
+        self.assertEqual(
+            execution_payload["project_branch_cleanup_candidate_posture"],
+            "not_candidate",
+        )
+        self.assertFalse(execution_payload["project_branch_cleanup_candidate"])
+        self.assertEqual(
+            execution_payload["project_branch_quarantine_candidate_posture"],
+            "not_candidate",
+        )
+        self.assertFalse(execution_payload["project_branch_quarantine_candidate"])
+        self.assertEqual(
+            execution_payload["project_local_main_sync_posture"],
+            "sync_not_required",
+        )
+        self.assertFalse(execution_payload["project_local_main_sync_required"])
+        self.assertEqual(execution_payload["project_roadmap_status"], "available")
+        self.assertTrue(execution_payload["project_roadmap_available"])
+        self.assertEqual(
+            execution_payload["project_roadmap_reason"],
+            "roadmap_compiled",
+        )
+        self.assertEqual(execution_payload["project_roadmap_item_count"], 6)
+        self.assertEqual(
+            execution_payload["project_roadmap_items"][0]["roadmap_item_id"],
+            "roadmap_continuation_budget",
+        )
+        self.assertEqual(execution_payload["project_pr_slicing_status"], "available")
+        self.assertTrue(execution_payload["project_pr_slicing_available"])
+        self.assertEqual(
+            execution_payload["project_pr_slicing_reason"],
+            "pr_slices_compiled",
+        )
+        self.assertEqual(execution_payload["project_pr_slice_count"], 6)
+        self.assertEqual(
+            execution_payload["project_pr_one_pr_size_decision"],
+            "single_theme_single_pr",
+        )
+        self.assertEqual(
+            execution_payload["project_pr_prioritization_mode"],
+            "blocked_last_narrow_first_prereq_first",
+        )
+        self.assertEqual(
+            execution_payload["project_pr_slices"][0]["roadmap_item_id"],
+            "roadmap_continuation_budget",
+        )
+        self.assertEqual(
+            execution_payload["implementation_prompt_status"],
+            "available",
+        )
+        self.assertTrue(execution_payload["implementation_prompt_available"])
+        self.assertEqual(
+            execution_payload["implementation_prompt_reason"],
+            "prompt_compiled",
+        )
+        self.assertEqual(
+            execution_payload["implementation_prompt_slice_id"],
+            "slice_01_continuation_budget",
+        )
+        self.assertEqual(
+            execution_payload["implementation_prompt_roadmap_item_id"],
+            "roadmap_continuation_budget",
+        )
+        self.assertEqual(
+            execution_payload["implementation_prompt_payload"]["prompt_status"],
+            "available",
+        )
+        self.assertEqual(
+            execution_payload["implementation_prompt_payload"]["slice_id"],
+            "slice_01_continuation_budget",
+        )
+        self.assertEqual(
+            execution_payload["implementation_prompt_payload"]["roadmap_item_id"],
+            "roadmap_continuation_budget",
+        )
+        self.assertIn(
+            "automation/orchestration/planned_execution_runner.py",
+            execution_payload["implementation_prompt_payload"]["preferred_files"],
+        )
+        self.assertIn(
+            "/home/rai/codex-local-runner/prompts/base_codex_return_format.md",
+            execution_payload["implementation_prompt_payload"]["preserved_constraints_ref"],
+        )
+        self.assertEqual(execution_payload["project_pr_queue_status"], "prepared")
+        self.assertEqual(execution_payload["project_pr_queue_reason"], "queue_item_prepared")
+        self.assertEqual(execution_payload["project_pr_queue_item_count"], 6)
+        self.assertEqual(execution_payload["project_pr_queue_runnable_count"], 6)
+        self.assertEqual(execution_payload["project_pr_queue_blocked_count"], 0)
+        self.assertEqual(
+            execution_payload["project_pr_queue_selected_slice_id"],
+            "slice_01_continuation_budget",
+        )
+        self.assertEqual(
+            execution_payload["project_pr_queue_selected_roadmap_item_id"],
+            "roadmap_continuation_budget",
+        )
+        self.assertTrue(execution_payload["project_pr_queue_handoff_prepared"])
+        self.assertEqual(
+            execution_payload["project_pr_queue_handoff_payload"]["slice_id"],
+            "slice_01_continuation_budget",
+        )
+        self.assertEqual(
+            execution_payload["project_pr_queue_outcome"],
+            "queue_item_prepared",
+        )
+        self.assertEqual(
+            execution_payload["review_assimilation_status"],
+            "assimilated",
+        )
+        self.assertEqual(
+            execution_payload["review_assimilation_action"],
+            "accept",
+        )
+        self.assertEqual(
+            execution_payload["review_assimilation_reason"],
+            "assimilation_accept_succeeded",
+        )
+        self.assertTrue(execution_payload["review_assimilation_available"])
+        self.assertEqual(
+            execution_payload["self_healing_status"],
+            "not_applicable",
+        )
+        self.assertFalse(execution_payload["self_healing_transition_selected"])
+        self.assertEqual(
+            execution_payload["self_healing_transition_target"],
+            "none",
+        )
+        self.assertFalse(execution_payload["self_healing_transition_executed"])
+        self.assertEqual(
+            execution_payload["self_healing_reason"],
+            "self_healing_not_applicable_assimilation_accept",
+        )
+        self.assertTrue(execution_payload["self_healing_human_fallback_preserved"])
+        self.assertEqual(execution_payload["self_healing_transition_count"], 0)
+        self.assertEqual(
+            execution_payload["long_running_stability_status"],
+            "safe_stop",
+        )
+        self.assertEqual(
+            execution_payload["long_running_reason"],
+            "long_running_safe_stop_human_fallback",
+        )
+        self.assertTrue(execution_payload["long_running_pause_required"])
+        self.assertFalse(execution_payload["long_running_resume_allowed"])
+        self.assertTrue(execution_payload["long_running_safe_stop_required"])
+        self.assertEqual(
+            execution_payload["project_pr_queue_processed_slice_ids_before"],
+            [],
+        )
+        self.assertEqual(
+            execution_payload["project_pr_queue_processed_slice_ids_after"],
+            ["slice_01_continuation_budget"],
+        )
+        self.assertEqual(len(transport.launch_order), 4)
+        self.assertEqual(
+            len([item for item in transport.launch_order if item.endswith("__approved_restart_once")]),
+            1,
+        )
+
+    def test_runner_pr_queue_blocks_when_prompt_is_unavailable_for_selected_slice(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+
+        payloads: list[dict[str, object]] = []
+        launch_counts: list[int] = []
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+            for _ in range(2):
+                transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+                runner = PlannedExecutionRunner(
+                    adapter=CodexExecutorAdapter(transport=transport)
+                )
+                with (
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                        return_value=approval_email_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                        return_value=response_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                        return_value=approved_restart_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                        return_value=approval_safety_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                        return_value=fleet_safety_payload,
+                    ),
+                ):
+                    manifest = runner.run(
+                        artifacts_input_dir=artifacts_dir,
+                        output_dir=out_dir,
+                        dry_run=True,
+                        stop_on_failure=True,
+                    )
+                run_root = out_dir / manifest["job_id"]
+                payloads.append(
+                    json.loads(
+                        (run_root / "approved_restart_execution_contract.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+                )
+                launch_counts.append(len(transport.launch_order))
+
+        first, second = payloads
+        self.assertEqual(first["project_pr_queue_status"], "prepared")
+        self.assertEqual(second["project_pr_queue_status"], "blocked")
+        self.assertEqual(
+            second["project_pr_queue_reason"],
+            "prompt_unavailable_for_selected_slice",
+        )
+        self.assertEqual(
+            second["project_pr_queue_selected_slice_id"],
+            "slice_02_branch_ceiling",
+        )
+        self.assertEqual(
+            second["implementation_prompt_slice_id"],
+            "slice_01_continuation_budget",
+        )
+        self.assertFalse(second["project_pr_queue_handoff_prepared"])
+        self.assertEqual(second["project_pr_queue_handoff_payload"], {})
+        self.assertEqual(
+            second["project_pr_queue_processed_slice_ids_before"],
+            ["slice_01_continuation_budget"],
+        )
+        self.assertEqual(
+            second["project_pr_queue_processed_slice_ids_after"],
+            ["slice_01_continuation_budget"],
+        )
+        self.assertEqual(
+            second["project_pr_queue_outcome"],
+            "prompt_unavailable_for_selected_slice",
+        )
+        self.assertEqual(second["review_assimilation_status"], "no_action")
+        self.assertEqual(second["review_assimilation_action"], "none")
+        self.assertEqual(
+            second["review_assimilation_reason"],
+            "assimilation_prompt_unavailable",
+        )
+        self.assertFalse(second["review_assimilation_available"])
+        self.assertEqual(second["self_healing_status"], "not_applicable")
+        self.assertEqual(
+            second["self_healing_reason"],
+            "self_healing_not_applicable_assimilation_no_action",
+        )
+        self.assertFalse(second["self_healing_transition_selected"])
+        self.assertFalse(second["self_healing_transition_executed"])
+        self.assertTrue(second["self_healing_human_fallback_preserved"])
+        self.assertEqual(second["long_running_stability_status"], "safe_stop")
+        self.assertEqual(
+            second["long_running_reason"],
+            "long_running_safe_stop_queue_blocked",
+        )
+        self.assertTrue(second["long_running_pause_required"])
+        self.assertEqual(launch_counts, [4, 4])
+
+    def test_runner_pr_queue_reports_empty_when_all_slices_are_already_processed(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        all_processed_slice_ids = [
+            "slice_01_continuation_budget",
+            "slice_02_branch_ceiling",
+            "slice_03_failure_bucket_gate",
+            "slice_04_next_step_selection",
+            "slice_05_supported_repair_posture",
+            "slice_06_human_review_gate",
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+
+            transport_first = _RecordingDryRunTransport(status_by_pr_id=status_map)
+            runner_first = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport_first)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+            ):
+                first_manifest = runner_first.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+
+            run_root = out_dir / first_manifest["job_id"]
+            prior_payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            prior_payload["project_pr_queue_processed_slice_ids"] = all_processed_slice_ids
+            (run_root / "approved_restart_execution_contract.json").write_text(
+                json.dumps(prior_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            transport_second = _RecordingDryRunTransport(status_by_pr_id=status_map)
+            runner_second = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport_second)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+            ):
+                second_manifest = runner_second.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+
+            second_payload = json.loads(
+                (out_dir / second_manifest["job_id"] / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(second_payload["project_pr_queue_status"], "empty")
+        self.assertEqual(second_payload["project_pr_queue_reason"], "queue_empty")
+        self.assertEqual(second_payload["project_pr_queue_runnable_count"], 0)
+        self.assertEqual(second_payload["project_pr_queue_item_count"], 6)
+        self.assertFalse(second_payload["project_pr_queue_handoff_prepared"])
+        self.assertEqual(second_payload["project_pr_queue_handoff_payload"], {})
+        self.assertEqual(
+            second_payload["project_pr_queue_processed_slice_ids_before"],
+            all_processed_slice_ids,
+        )
+        self.assertEqual(
+            second_payload["project_pr_queue_processed_slice_ids_after"],
+            all_processed_slice_ids,
+        )
+        self.assertEqual(second_payload["project_pr_queue_outcome"], "queue_empty")
+        self.assertEqual(second_payload["review_assimilation_status"], "no_action")
+        self.assertEqual(second_payload["review_assimilation_action"], "none")
+        self.assertEqual(
+            second_payload["review_assimilation_reason"],
+            "assimilation_queue_empty",
+        )
+        self.assertFalse(second_payload["review_assimilation_available"])
+        self.assertEqual(second_payload["self_healing_status"], "not_applicable")
+        self.assertEqual(
+            second_payload["self_healing_reason"],
+            "self_healing_not_applicable_assimilation_no_action",
+        )
+        self.assertFalse(second_payload["self_healing_transition_selected"])
+        self.assertFalse(second_payload["self_healing_transition_executed"])
+        self.assertTrue(second_payload["self_healing_human_fallback_preserved"])
+        self.assertEqual(second_payload["long_running_stability_status"], "safe_stop")
+        self.assertEqual(
+            second_payload["long_running_reason"],
+            "long_running_safe_stop_queue_empty",
+        )
+        self.assertTrue(second_payload["long_running_pause_required"])
+
+    def test_review_assimilation_maps_failed_results_to_bounded_next_actions(self) -> None:
+        cases = (
+            (
+                "retry",
+                {
+                    "restart_result_status": "failed",
+                    "continuation_next_step_target": "retry",
+                    "continuation_next_step_reason": "next_step_selected_retry",
+                    "continuation_next_step_truth_insufficiency_explicit": False,
+                    "final_human_review_required": False,
+                    "final_human_review_reason": "final_review_not_required",
+                },
+                ("assimilated", "retry", "assimilation_retry_retryable_failure"),
+            ),
+            (
+                "replan",
+                {
+                    "restart_result_status": "failed",
+                    "continuation_next_step_target": "replan",
+                    "continuation_next_step_reason": "next_step_selected_replan",
+                    "continuation_next_step_truth_insufficiency_explicit": False,
+                    "final_human_review_required": False,
+                    "final_human_review_reason": "final_review_not_required",
+                },
+                ("assimilated", "replan", "assimilation_replan_design_invalid"),
+            ),
+            (
+                "split",
+                {
+                    "restart_result_status": "failed",
+                    "continuation_next_step_target": "truth_gather",
+                    "continuation_next_step_reason": "next_step_selected_truth_gather",
+                    "continuation_next_step_truth_insufficiency_explicit": True,
+                    "final_human_review_required": False,
+                    "final_human_review_reason": "final_review_not_required",
+                },
+                ("assimilated", "split", "assimilation_split_scope_signal"),
+            ),
+            (
+                "escalate",
+                {
+                    "restart_result_status": "failed",
+                    "continuation_next_step_target": "none",
+                    "continuation_next_step_reason": "next_step_not_selected",
+                    "continuation_next_step_truth_insufficiency_explicit": False,
+                    "final_human_review_required": True,
+                    "final_human_review_reason": "final_review_supported_repair_verification_failed",
+                },
+                ("assimilated", "escalate", "assimilation_escalate_manual_followup"),
+            ),
+        )
+
+        for case_id, case_input, expected in cases:
+            with self.subTest(case=case_id):
+                payload = _build_review_assimilation_state(
+                    queue_status="prepared",
+                    queue_reason="queue_item_prepared",
+                    queue_handoff_prepared=True,
+                    queue_handoff_payload={
+                        "slice_id": "slice_01_continuation_budget",
+                        "roadmap_item_id": "roadmap_continuation_budget",
+                    },
+                    restart_result_status=str(case_input["restart_result_status"]),
+                    continuation_next_step_target=str(
+                        case_input["continuation_next_step_target"]
+                    ),
+                    continuation_next_step_reason=str(
+                        case_input["continuation_next_step_reason"]
+                    ),
+                    continuation_next_step_truth_insufficiency_explicit=bool(
+                        case_input["continuation_next_step_truth_insufficiency_explicit"]
+                    ),
+                    final_human_review_required=bool(
+                        case_input["final_human_review_required"]
+                    ),
+                    final_human_review_reason=str(case_input["final_human_review_reason"]),
+                )
+                self.assertEqual(payload["review_assimilation_status"], expected[0])
+                self.assertEqual(payload["review_assimilation_action"], expected[1])
+                self.assertEqual(payload["review_assimilation_reason"], expected[2])
+                self.assertTrue(payload["review_assimilation_available"])
+
+    def test_bounded_self_healing_selects_single_transition_from_assimilation(self) -> None:
+        cases = (
+            ("retry", "retry", "self_healing_executed_retry"),
+            ("replan", "replan", "self_healing_executed_replan"),
+            ("split", "truth_gather", "self_healing_executed_truth_gather"),
+            (
+                "escalate",
+                "alternative_supported_repair",
+                "self_healing_executed_alternative_supported_repair",
+            ),
+        )
+        for action, expected_target, expected_reason in cases:
+            with self.subTest(action=action):
+                payload = _build_bounded_self_healing_state(
+                    review_assimilation_status="assimilated",
+                    review_assimilation_action=action,
+                    review_assimilation_available=True,
+                    review_assimilation_reviewable=True,
+                    review_assimilation_queue_status="prepared",
+                    continuation_next_step_truth_insufficiency_explicit=(action == "split"),
+                    supported_repair_execution_status="executed_verification_failed",
+                    continuation_repair_playbook_selected=True,
+                    continuation_repair_playbook_class="replan_plan",
+                    continuation_repair_playbook_candidate_action="request_replan",
+                    final_human_review_required=(action == "escalate"),
+                    final_human_review_reason=(
+                        "final_review_supported_repair_verification_failed"
+                        if action == "escalate"
+                        else "final_review_not_required"
+                    ),
+                    continuation_budget_status="available",
+                    continuation_branch_budget_status="available",
+                    continuation_no_progress_stop_required=False,
+                    continuation_failure_bucket_denied=False,
+                    safety_duplicate_pending=False,
+                    safety_cooldown_active=False,
+                    safety_loop_suspected=False,
+                    safety_delivery_blocked=False,
+                    safety_delivery_deferred=False,
+                    prior_self_healing_transition_count=0,
+                    self_healing_chain_limit=1,
+                    prior_continuation_retry_count=0,
+                    prior_continuation_replan_count=0,
+                    prior_continuation_truth_gather_count=0,
+                    continuation_retry_limit=2,
+                    continuation_replan_limit=2,
+                    continuation_truth_gather_limit=2,
+                )
+                self.assertEqual(payload["self_healing_status"], "executed")
+                self.assertEqual(payload["self_healing_transition_target"], expected_target)
+                self.assertTrue(payload["self_healing_transition_selected"])
+                self.assertTrue(payload["self_healing_transition_executed"])
+                self.assertEqual(payload["self_healing_reason"], expected_reason)
+                self.assertEqual(payload["self_healing_transition_count_before"], 0)
+                self.assertEqual(payload["self_healing_transition_count_after"], 1)
+                self.assertEqual(payload["self_healing_chain_budget_remaining_after"], 0)
+                self.assertFalse(payload["self_healing_human_fallback_preserved"])
+
+    def test_bounded_self_healing_blocks_on_budget_and_non_action_assimilation(self) -> None:
+        budget_exhausted = _build_bounded_self_healing_state(
+            review_assimilation_status="assimilated",
+            review_assimilation_action="retry",
+            review_assimilation_available=True,
+            review_assimilation_reviewable=True,
+            review_assimilation_queue_status="prepared",
+            continuation_next_step_truth_insufficiency_explicit=False,
+            supported_repair_execution_status="executed_verification_failed",
+            continuation_repair_playbook_selected=True,
+            continuation_repair_playbook_class="replan_plan",
+            continuation_repair_playbook_candidate_action="request_replan",
+            final_human_review_required=False,
+            final_human_review_reason="final_review_not_required",
+            continuation_budget_status="available",
+            continuation_branch_budget_status="available",
+            continuation_no_progress_stop_required=False,
+            continuation_failure_bucket_denied=False,
+            safety_duplicate_pending=False,
+            safety_cooldown_active=False,
+            safety_loop_suspected=False,
+            safety_delivery_blocked=False,
+            safety_delivery_deferred=False,
+            prior_self_healing_transition_count=1,
+            self_healing_chain_limit=1,
+            prior_continuation_retry_count=0,
+            prior_continuation_replan_count=0,
+            prior_continuation_truth_gather_count=0,
+            continuation_retry_limit=2,
+            continuation_replan_limit=2,
+            continuation_truth_gather_limit=2,
+        )
+        self.assertEqual(budget_exhausted["self_healing_status"], "blocked")
+        self.assertEqual(
+            budget_exhausted["self_healing_reason"],
+            "self_healing_blocked_budget_exhausted",
+        )
+        self.assertFalse(budget_exhausted["self_healing_transition_executed"])
+        self.assertTrue(budget_exhausted["self_healing_human_fallback_preserved"])
+
+        no_action = _build_bounded_self_healing_state(
+            review_assimilation_status="no_action",
+            review_assimilation_action="none",
+            review_assimilation_available=False,
+            review_assimilation_reviewable=False,
+            review_assimilation_queue_status="empty",
+            continuation_next_step_truth_insufficiency_explicit=False,
+            supported_repair_execution_status="not_selected",
+            continuation_repair_playbook_selected=False,
+            continuation_repair_playbook_class="no_plan",
+            continuation_repair_playbook_candidate_action="no_action",
+            final_human_review_required=False,
+            final_human_review_reason="final_review_not_required",
+            continuation_budget_status="available",
+            continuation_branch_budget_status="not_applicable",
+            continuation_no_progress_stop_required=False,
+            continuation_failure_bucket_denied=False,
+            safety_duplicate_pending=False,
+            safety_cooldown_active=False,
+            safety_loop_suspected=False,
+            safety_delivery_blocked=False,
+            safety_delivery_deferred=False,
+            prior_self_healing_transition_count=0,
+            self_healing_chain_limit=1,
+            prior_continuation_retry_count=0,
+            prior_continuation_replan_count=0,
+            prior_continuation_truth_gather_count=0,
+            continuation_retry_limit=2,
+            continuation_replan_limit=2,
+            continuation_truth_gather_limit=2,
+        )
+        self.assertEqual(no_action["self_healing_status"], "not_applicable")
+        self.assertEqual(
+            no_action["self_healing_reason"],
+            "self_healing_not_applicable_assimilation_no_action",
+        )
+        self.assertEqual(no_action["self_healing_transition_target"], "none")
+        self.assertFalse(no_action["self_healing_transition_executed"])
+        self.assertTrue(no_action["self_healing_human_fallback_preserved"])
+
+    def test_long_running_stability_detects_stale_and_stuck(self) -> None:
+        now_fn = lambda: datetime.fromisoformat("2026-04-23T12:30:00+00:00")
+        stale_payload = _build_long_running_stability_state(
+            objective_id="obj-1",
+            queue_status="prepared",
+            queue_selected_slice_id="slice_01",
+            queue_handoff_prepared=True,
+            queue_processed_count=1,
+            review_assimilation_status="assimilated",
+            review_assimilation_action="retry",
+            review_assimilation_available=True,
+            self_healing_status="selected",
+            self_healing_transition_target="retry",
+            self_healing_transition_executed=False,
+            self_healing_human_fallback_preserved=False,
+            self_healing_chain_budget_remaining_after=1,
+            self_healing_transition_count_after=0,
+            final_human_review_required=False,
+            automatic_restart_executed=False,
+            automatic_continuation_run_count=1,
+            prior_long_running_replay_key="obj-1|slice_01|assimilated|retry|selected|retry",
+            prior_long_running_progress_signature="1|1|0|restart_not_executed|self_healing_not_executed",
+            prior_long_running_stale_cycle_count=0,
+            prior_long_running_stuck_cycle_count=0,
+            prior_long_running_watchdog_heartbeat_at="2026-04-23T12:00:00+00:00",
+            now=now_fn,
+        )
+        self.assertEqual(stale_payload["long_running_stability_status"], "paused")
+        self.assertEqual(
+            stale_payload["long_running_reason"],
+            "long_running_paused_stale_watchdog",
+        )
+        self.assertTrue(stale_payload["long_running_stale_detected"])
+        self.assertFalse(stale_payload["long_running_stuck_detected"])
+        self.assertTrue(stale_payload["long_running_pause_required"])
+        self.assertTrue(stale_payload["long_running_resume_allowed"])
+        self.assertTrue(stale_payload["long_running_replay_safe"])
+        self.assertEqual(stale_payload["long_running_stuck_cycle_count"], 1)
+
+        stuck_payload = _build_long_running_stability_state(
+            objective_id="obj-1",
+            queue_status="prepared",
+            queue_selected_slice_id="slice_01",
+            queue_handoff_prepared=True,
+            queue_processed_count=1,
+            review_assimilation_status="assimilated",
+            review_assimilation_action="retry",
+            review_assimilation_available=True,
+            self_healing_status="selected",
+            self_healing_transition_target="retry",
+            self_healing_transition_executed=False,
+            self_healing_human_fallback_preserved=False,
+            self_healing_chain_budget_remaining_after=1,
+            self_healing_transition_count_after=0,
+            final_human_review_required=False,
+            automatic_restart_executed=False,
+            automatic_continuation_run_count=1,
+            prior_long_running_replay_key="obj-1|slice_01|assimilated|retry|selected|retry",
+            prior_long_running_progress_signature="1|1|0|restart_not_executed|self_healing_not_executed",
+            prior_long_running_stale_cycle_count=1,
+            prior_long_running_stuck_cycle_count=1,
+            prior_long_running_watchdog_heartbeat_at="2026-04-23T12:20:00+00:00",
+            now=now_fn,
+        )
+        self.assertEqual(stuck_payload["long_running_stability_status"], "escalated")
+        self.assertEqual(
+            stuck_payload["long_running_reason"],
+            "long_running_escalated_stuck_detection",
+        )
+        self.assertTrue(stuck_payload["long_running_stuck_detected"])
+        self.assertTrue(stuck_payload["long_running_escalation_required"])
+        self.assertTrue(stuck_payload["long_running_pause_required"])
+        self.assertFalse(stuck_payload["long_running_resume_allowed"])
+
+    def test_long_running_stability_resume_ready_and_safe_stop_postures(self) -> None:
+        now_fn = lambda: datetime.fromisoformat("2026-04-23T13:00:00+00:00")
+        resume_payload = _build_long_running_stability_state(
+            objective_id="obj-2",
+            queue_status="prepared",
+            queue_selected_slice_id="slice_02",
+            queue_handoff_prepared=True,
+            queue_processed_count=2,
+            review_assimilation_status="assimilated",
+            review_assimilation_action="retry",
+            review_assimilation_available=False,
+            self_healing_status="selected",
+            self_healing_transition_target="retry",
+            self_healing_transition_executed=False,
+            self_healing_human_fallback_preserved=False,
+            self_healing_chain_budget_remaining_after=1,
+            self_healing_transition_count_after=0,
+            final_human_review_required=False,
+            automatic_restart_executed=False,
+            automatic_continuation_run_count=2,
+            prior_long_running_replay_key="",
+            prior_long_running_progress_signature="",
+            prior_long_running_stale_cycle_count=0,
+            prior_long_running_stuck_cycle_count=0,
+            prior_long_running_watchdog_heartbeat_at="",
+            now=now_fn,
+        )
+        self.assertEqual(resume_payload["long_running_stability_status"], "resume_ready")
+        self.assertEqual(
+            resume_payload["long_running_reason"],
+            "long_running_resume_ready_replay_safe",
+        )
+        self.assertTrue(resume_payload["long_running_resume_allowed"])
+        self.assertTrue(resume_payload["long_running_replay_safe"])
+        self.assertTrue(resume_payload["long_running_resume_token"])
+
+        safe_stop_payload = _build_long_running_stability_state(
+            objective_id="obj-2",
+            queue_status="blocked",
+            queue_selected_slice_id="slice_02",
+            queue_handoff_prepared=False,
+            queue_processed_count=2,
+            review_assimilation_status="no_action",
+            review_assimilation_action="none",
+            review_assimilation_available=False,
+            self_healing_status="not_applicable",
+            self_healing_transition_target="none",
+            self_healing_transition_executed=False,
+            self_healing_human_fallback_preserved=True,
+            self_healing_chain_budget_remaining_after=1,
+            self_healing_transition_count_after=0,
+            final_human_review_required=False,
+            automatic_restart_executed=False,
+            automatic_continuation_run_count=2,
+            prior_long_running_replay_key="",
+            prior_long_running_progress_signature="",
+            prior_long_running_stale_cycle_count=0,
+            prior_long_running_stuck_cycle_count=0,
+            prior_long_running_watchdog_heartbeat_at="",
+            now=now_fn,
+        )
+        self.assertEqual(safe_stop_payload["long_running_stability_status"], "safe_stop")
+        self.assertEqual(
+            safe_stop_payload["long_running_reason"],
+            "long_running_safe_stop_queue_blocked",
+        )
+        self.assertTrue(safe_stop_payload["long_running_pause_required"])
+        self.assertTrue(safe_stop_payload["long_running_safe_stop_required"])
+
+        budget_exhausted_payload = _build_long_running_stability_state(
+            objective_id="obj-2",
+            queue_status="prepared",
+            queue_selected_slice_id="slice_02",
+            queue_handoff_prepared=True,
+            queue_processed_count=2,
+            review_assimilation_status="assimilated",
+            review_assimilation_action="retry",
+            review_assimilation_available=True,
+            self_healing_status="selected",
+            self_healing_transition_target="retry",
+            self_healing_transition_executed=False,
+            self_healing_human_fallback_preserved=False,
+            self_healing_chain_budget_remaining_after=0,
+            self_healing_transition_count_after=1,
+            final_human_review_required=False,
+            automatic_restart_executed=False,
+            automatic_continuation_run_count=2,
+            prior_long_running_replay_key="",
+            prior_long_running_progress_signature="",
+            prior_long_running_stale_cycle_count=0,
+            prior_long_running_stuck_cycle_count=0,
+            prior_long_running_watchdog_heartbeat_at="",
+            now=now_fn,
+        )
+        self.assertEqual(
+            budget_exhausted_payload["long_running_stability_status"],
+            "safe_stop",
+        )
+        self.assertEqual(
+            budget_exhausted_payload["long_running_reason"],
+            "long_running_safe_stop_chain_budget_exhausted",
+        )
+        self.assertTrue(budget_exhausted_payload["long_running_pause_required"])
+
+        escalated_payload = _build_long_running_stability_state(
+            objective_id="obj-2",
+            queue_status="prepared",
+            queue_selected_slice_id="slice_02",
+            queue_handoff_prepared=True,
+            queue_processed_count=2,
+            review_assimilation_status="assimilated",
+            review_assimilation_action="replan",
+            review_assimilation_available=True,
+            self_healing_status="selected",
+            self_healing_transition_target="replan",
+            self_healing_transition_executed=False,
+            self_healing_human_fallback_preserved=False,
+            self_healing_chain_budget_remaining_after=1,
+            self_healing_transition_count_after=0,
+            final_human_review_required=True,
+            automatic_restart_executed=False,
+            automatic_continuation_run_count=2,
+            prior_long_running_replay_key="",
+            prior_long_running_progress_signature="",
+            prior_long_running_stale_cycle_count=0,
+            prior_long_running_stuck_cycle_count=0,
+            prior_long_running_watchdog_heartbeat_at="",
+            now=now_fn,
+        )
+        self.assertEqual(escalated_payload["long_running_stability_status"], "escalated")
+        self.assertEqual(
+            escalated_payload["long_running_reason"],
+            "long_running_escalated_final_human_review_required",
+        )
+        self.assertTrue(escalated_payload["long_running_escalation_required"])
+        self.assertTrue(escalated_payload["long_running_pause_required"])
+
+    def test_objective_done_compiler_active_posture_when_work_remains(self) -> None:
+        payload = _build_objective_done_compiler_state(
+            objective_id="objective-active",
+            project_planning_summary_status="available",
+            project_pr_slicing_status="available",
+            project_pr_slice_count=3,
+            project_pr_queue_status="prepared",
+            project_pr_queue_reason="queue_item_prepared",
+            project_pr_queue_processed_slice_ids_after=["slice_01"],
+            review_assimilation_reason="assimilation_accept_success",
+            self_healing_human_fallback_preserved=False,
+            long_running_stability_status="monitoring",
+            final_human_review_required=False,
+        )
+
+        self.assertEqual(payload["objective_compiler_status"], "available")
+        self.assertTrue(payload["current_objective_available"])
+        self.assertEqual(payload["objective_done_criteria_status"], "not_met")
+        self.assertFalse(payload["objective_done_criteria_met"])
+        self.assertEqual(payload["objective_done_remaining_slice_count"], 2)
+        self.assertEqual(payload["objective_stop_criteria_status"], "continue")
+        self.assertFalse(payload["objective_stop_criteria_met"])
+        self.assertEqual(payload["objective_completion_posture"], "objective_active")
+        self.assertEqual(payload["objective_scope_drift_status"], "clear")
+        self.assertFalse(payload["objective_scope_drift_detected"])
+
+    def test_objective_done_compiler_completed_posture_when_done_criteria_met(self) -> None:
+        payload = _build_objective_done_compiler_state(
+            objective_id="objective-complete",
+            project_planning_summary_status="available",
+            project_pr_slicing_status="available",
+            project_pr_slice_count=2,
+            project_pr_queue_status="empty",
+            project_pr_queue_reason="queue_empty",
+            project_pr_queue_processed_slice_ids_after=["slice_01", "slice_02"],
+            review_assimilation_reason="assimilation_accept_success",
+            self_healing_human_fallback_preserved=False,
+            long_running_stability_status="monitoring",
+            final_human_review_required=False,
+        )
+
+        self.assertEqual(payload["objective_compiler_status"], "available")
+        self.assertEqual(payload["objective_done_criteria_status"], "met")
+        self.assertTrue(payload["objective_done_criteria_met"])
+        self.assertEqual(payload["objective_done_remaining_slice_count"], 0)
+        self.assertEqual(payload["objective_completion_posture"], "objective_completed")
+        self.assertEqual(payload["objective_scope_drift_status"], "clear")
+        self.assertFalse(payload["objective_scope_drift_detected"])
+
+    def test_objective_done_compiler_blocked_posture_for_explicit_review_gate(self) -> None:
+        payload = _build_objective_done_compiler_state(
+            objective_id="objective-blocked",
+            project_planning_summary_status="available",
+            project_pr_slicing_status="available",
+            project_pr_slice_count=4,
+            project_pr_queue_status="blocked",
+            project_pr_queue_reason="queue_selected_blocked",
+            project_pr_queue_processed_slice_ids_after=["slice_01"],
+            review_assimilation_reason="assimilation_escalate_signal",
+            self_healing_human_fallback_preserved=True,
+            long_running_stability_status="escalated",
+            final_human_review_required=True,
+        )
+
+        self.assertEqual(payload["objective_compiler_status"], "available")
+        self.assertEqual(payload["objective_stop_criteria_status"], "stop")
+        self.assertTrue(payload["objective_stop_criteria_met"])
+        self.assertEqual(payload["objective_completion_posture"], "objective_blocked")
+        self.assertIn(
+            "stop_criteria_human_review_required",
+            payload["objective_compiler_reason_codes"],
+        )
+
+    def test_objective_done_compiler_insufficient_posture_when_objective_truth_missing(self) -> None:
+        payload = _build_objective_done_compiler_state(
+            objective_id="",
+            project_planning_summary_status="insufficient_truth",
+            project_pr_slicing_status="insufficient_truth",
+            project_pr_slice_count=0,
+            project_pr_queue_status="insufficient_truth",
+            project_pr_queue_reason="queue_state_insufficient_truth",
+            project_pr_queue_processed_slice_ids_after=[],
+            review_assimilation_reason="assimilation_insufficient_truth",
+            self_healing_human_fallback_preserved=True,
+            long_running_stability_status="insufficient_truth",
+            final_human_review_required=False,
+        )
+
+        self.assertEqual(payload["objective_compiler_status"], "insufficient_truth")
+        self.assertFalse(payload["current_objective_available"])
+        self.assertEqual(payload["objective_done_criteria_status"], "insufficient_truth")
+        self.assertEqual(payload["objective_stop_criteria_status"], "insufficient_truth")
+        self.assertEqual(
+            payload["objective_completion_posture"],
+            "objective_insufficient_truth",
+        )
+        self.assertEqual(payload["objective_scope_drift_status"], "insufficient_truth")
+
+    def test_objective_done_compiler_detects_scope_drift_from_queue_prompt_mismatch(self) -> None:
+        payload = _build_objective_done_compiler_state(
+            objective_id="objective-scope-drift",
+            project_planning_summary_status="available",
+            project_pr_slicing_status="available",
+            project_pr_slice_count=3,
+            project_pr_queue_status="blocked",
+            project_pr_queue_reason="prompt_unavailable_for_selected_slice",
+            project_pr_queue_processed_slice_ids_after=["slice_01"],
+            review_assimilation_reason="assimilation_accept_success",
+            self_healing_human_fallback_preserved=False,
+            long_running_stability_status="monitoring",
+            final_human_review_required=False,
+        )
+
+        self.assertEqual(payload["objective_compiler_status"], "available")
+        self.assertEqual(payload["objective_scope_drift_status"], "detected")
+        self.assertTrue(payload["objective_scope_drift_detected"])
+        self.assertEqual(
+            payload["objective_scope_drift_reason"],
+            "scope_drift_detected_queue_prompt_mismatch",
+        )
+
+    def test_project_autonomy_budget_compiler_compiles_active_posture(self) -> None:
+        payload = _build_project_autonomy_budget_state(
+            project_planning_summary_status="available",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_active",
+            final_human_review_required=False,
+            high_risk_posture=False,
+            continuation_budget_truth_sufficient=True,
+            continuation_budget_status="available",
+            continuation_budget_run_exhausted=False,
+            continuation_budget_objective_exhausted=False,
+            continuation_budget_run_limit=2,
+            continuation_budget_objective_limit=2,
+            continuation_budget_run_remaining=1,
+            continuation_budget_objective_remaining=1,
+            continuation_budget_branch_type="retry",
+            continuation_budget_branch_status="available",
+            continuation_budget_branch_exhausted=False,
+            continuation_budget_branch_limit=2,
+            continuation_budget_branch_remaining=1,
+        )
+
+        self.assertEqual(payload["project_autonomy_budget_status"], "available")
+        self.assertEqual(payload["project_priority_posture"], "active")
+        self.assertFalse(payload["project_priority_deferred"])
+        self.assertEqual(payload["project_high_risk_defer_posture"], "clear")
+        self.assertFalse(payload["project_high_risk_defer_active"])
+        self.assertEqual(payload["project_run_budget_posture"], "available")
+        self.assertEqual(payload["project_objective_budget_posture"], "available")
+        self.assertEqual(payload["project_pr_retry_budget_posture"], "available")
+        self.assertTrue(payload["project_pr_retry_budget_applicable"])
+        self.assertFalse(payload["project_pr_retry_budget_exhausted"])
+
+    def test_project_autonomy_budget_compiler_defers_for_high_risk_or_blocked(self) -> None:
+        payload = _build_project_autonomy_budget_state(
+            project_planning_summary_status="available",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_blocked",
+            final_human_review_required=True,
+            high_risk_posture=True,
+            continuation_budget_truth_sufficient=True,
+            continuation_budget_status="available",
+            continuation_budget_run_exhausted=False,
+            continuation_budget_objective_exhausted=False,
+            continuation_budget_run_limit=2,
+            continuation_budget_objective_limit=2,
+            continuation_budget_run_remaining=2,
+            continuation_budget_objective_remaining=2,
+            continuation_budget_branch_type="replan",
+            continuation_budget_branch_status="available",
+            continuation_budget_branch_exhausted=False,
+            continuation_budget_branch_limit=2,
+            continuation_budget_branch_remaining=2,
+        )
+
+        self.assertEqual(payload["project_autonomy_budget_status"], "available")
+        self.assertEqual(payload["project_priority_posture"], "deferred")
+        self.assertTrue(payload["project_priority_deferred"])
+        self.assertEqual(payload["project_high_risk_defer_posture"], "defer")
+        self.assertTrue(payload["project_high_risk_defer_active"])
+        self.assertEqual(payload["project_pr_retry_budget_posture"], "not_applicable")
+        self.assertFalse(payload["project_pr_retry_budget_applicable"])
+
+    def test_project_autonomy_budget_compiler_marks_exhausted_run_and_retry_budget(self) -> None:
+        payload = _build_project_autonomy_budget_state(
+            project_planning_summary_status="available",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_active",
+            final_human_review_required=False,
+            high_risk_posture=False,
+            continuation_budget_truth_sufficient=True,
+            continuation_budget_status="exhausted",
+            continuation_budget_run_exhausted=True,
+            continuation_budget_objective_exhausted=False,
+            continuation_budget_run_limit=2,
+            continuation_budget_objective_limit=2,
+            continuation_budget_run_remaining=0,
+            continuation_budget_objective_remaining=1,
+            continuation_budget_branch_type="retry",
+            continuation_budget_branch_status="exhausted",
+            continuation_budget_branch_exhausted=True,
+            continuation_budget_branch_limit=2,
+            continuation_budget_branch_remaining=0,
+        )
+
+        self.assertEqual(payload["project_autonomy_budget_status"], "available")
+        self.assertEqual(payload["project_priority_posture"], "lower_priority")
+        self.assertEqual(payload["project_run_budget_posture"], "exhausted")
+        self.assertTrue(payload["project_run_budget_exhausted"])
+        self.assertEqual(payload["project_pr_retry_budget_posture"], "exhausted")
+        self.assertTrue(payload["project_pr_retry_budget_exhausted"])
+
+    def test_project_autonomy_budget_compiler_emits_insufficient_posture(self) -> None:
+        payload = _build_project_autonomy_budget_state(
+            project_planning_summary_status="insufficient_truth",
+            objective_compiler_status="insufficient_truth",
+            objective_completion_posture="objective_insufficient_truth",
+            final_human_review_required=False,
+            high_risk_posture=False,
+            continuation_budget_truth_sufficient=False,
+            continuation_budget_status="insufficient_truth",
+            continuation_budget_run_exhausted=False,
+            continuation_budget_objective_exhausted=False,
+            continuation_budget_run_limit=2,
+            continuation_budget_objective_limit=2,
+            continuation_budget_run_remaining=0,
+            continuation_budget_objective_remaining=0,
+            continuation_budget_branch_type="unknown",
+            continuation_budget_branch_status="not_applicable",
+            continuation_budget_branch_exhausted=False,
+            continuation_budget_branch_limit=0,
+            continuation_budget_branch_remaining=0,
+        )
+
+        self.assertEqual(payload["project_autonomy_budget_status"], "insufficient_truth")
+        self.assertEqual(payload["project_priority_posture"], "insufficient_truth")
+        self.assertEqual(payload["project_run_budget_posture"], "insufficient_truth")
+        self.assertEqual(payload["project_objective_budget_posture"], "insufficient_truth")
+        self.assertEqual(payload["project_pr_retry_budget_posture"], "insufficient_truth")
+        self.assertEqual(payload["project_high_risk_defer_posture"], "insufficient_truth")
+
+    def test_project_quality_gate_compiler_emits_merge_ready_posture(self) -> None:
+        payload = _build_project_quality_gate_state(
+            project_planning_summary_status="available",
+            project_pr_slicing_status="available",
+            implementation_prompt_status="available",
+            implementation_prompt_payload={
+                "preferred_files": [
+                    "automation/orchestration/planned_execution_runner.py",
+                    "tests/test_planned_execution_runner.py",
+                ],
+                "bounded_scope_class": "runner_and_tests",
+            },
+            project_pr_queue_status="empty",
+            review_assimilation_status="assimilated",
+            review_assimilation_action="accept",
+            self_healing_status="not_applicable",
+            long_running_stability_status="monitoring",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_completed",
+            objective_scope_drift_detected=False,
+            project_autonomy_budget_status="available",
+            project_priority_posture="active",
+            project_run_budget_posture="available",
+            project_objective_budget_posture="available",
+            project_pr_retry_budget_posture="available",
+            project_high_risk_defer_posture="clear",
+            continuation_failure_bucket_denied=False,
+            continuation_no_progress_stop_required=False,
+            continuation_next_step_selection_status="not_selected",
+            continuation_next_step_target="none",
+            supported_repair_execution_status="executed_verification_passed",
+            final_human_review_required=False,
+        )
+
+        self.assertEqual(payload["project_quality_gate_status"], "available")
+        self.assertEqual(payload["project_quality_gate_posture"], "merge_ready")
+        self.assertTrue(payload["project_quality_gate_merge_ready"])
+        self.assertFalse(payload["project_quality_gate_review_ready"])
+        self.assertFalse(payload["project_quality_gate_retry_needed"])
+        self.assertEqual(payload["project_quality_gate_changed_area_class"], "runner_and_tests")
+        self.assertEqual(payload["project_quality_gate_risk_level"], "low")
+        self.assertEqual(
+            payload["project_quality_gate_recommended"],
+            ["unit", "targeted_regression", "lint", "typecheck"],
+        )
+
+    def test_project_quality_gate_compiler_emits_retry_needed_posture(self) -> None:
+        payload = _build_project_quality_gate_state(
+            project_planning_summary_status="available",
+            project_pr_slicing_status="available",
+            implementation_prompt_status="available",
+            implementation_prompt_payload={
+                "preferred_files": ["automation/orchestration/planned_execution_runner.py"],
+                "bounded_scope_class": "runner_only",
+            },
+            project_pr_queue_status="prepared",
+            review_assimilation_status="assimilated",
+            review_assimilation_action="retry",
+            self_healing_status="selected",
+            long_running_stability_status="monitoring",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_active",
+            objective_scope_drift_detected=False,
+            project_autonomy_budget_status="available",
+            project_priority_posture="active",
+            project_run_budget_posture="available",
+            project_objective_budget_posture="available",
+            project_pr_retry_budget_posture="available",
+            project_high_risk_defer_posture="clear",
+            continuation_failure_bucket_denied=False,
+            continuation_no_progress_stop_required=False,
+            continuation_next_step_selection_status="selected",
+            continuation_next_step_target="retry",
+            supported_repair_execution_status="not_selected",
+            final_human_review_required=False,
+        )
+
+        self.assertEqual(payload["project_quality_gate_status"], "available")
+        self.assertEqual(payload["project_quality_gate_posture"], "retry_needed")
+        self.assertFalse(payload["project_quality_gate_merge_ready"])
+        self.assertFalse(payload["project_quality_gate_review_ready"])
+        self.assertTrue(payload["project_quality_gate_retry_needed"])
+        self.assertEqual(payload["project_quality_gate_changed_area_class"], "runner_only")
+        self.assertEqual(payload["project_quality_gate_risk_level"], "moderate")
+        self.assertIn("targeted_regression", payload["project_quality_gate_recommended"])
+
+    def test_project_quality_gate_compiler_emits_review_ready_for_high_risk_defer(self) -> None:
+        payload = _build_project_quality_gate_state(
+            project_planning_summary_status="available",
+            project_pr_slicing_status="available",
+            implementation_prompt_status="available",
+            implementation_prompt_payload={
+                "preferred_files": ["automation/orchestration/planned_execution_runner.py"],
+                "bounded_scope_class": "runner_only",
+            },
+            project_pr_queue_status="blocked",
+            review_assimilation_status="no_action",
+            review_assimilation_action="none",
+            self_healing_status="not_applicable",
+            long_running_stability_status="safe_stop",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_blocked",
+            objective_scope_drift_detected=True,
+            project_autonomy_budget_status="available",
+            project_priority_posture="deferred",
+            project_run_budget_posture="available",
+            project_objective_budget_posture="available",
+            project_pr_retry_budget_posture="not_applicable",
+            project_high_risk_defer_posture="defer",
+            continuation_failure_bucket_denied=True,
+            continuation_no_progress_stop_required=True,
+            continuation_next_step_selection_status="not_selected",
+            continuation_next_step_target="none",
+            supported_repair_execution_status="not_executed_precheck_blocked",
+            final_human_review_required=True,
+        )
+
+        self.assertEqual(payload["project_quality_gate_status"], "available")
+        self.assertIn(
+            payload["project_quality_gate_posture"],
+            {"review_ready", "retry_needed"},
+        )
+        self.assertFalse(payload["project_quality_gate_merge_ready"])
+        self.assertEqual(payload["project_quality_gate_risk_level"], "high")
+        self.assertTrue(payload["project_quality_gate_high_risk"])
+        self.assertIn("targeted_regression", payload["project_quality_gate_recommended"])
+
+    def test_project_quality_gate_compiler_emits_insufficient_posture(self) -> None:
+        payload = _build_project_quality_gate_state(
+            project_planning_summary_status="insufficient_truth",
+            project_pr_slicing_status="insufficient_truth",
+            implementation_prompt_status="insufficient_truth",
+            implementation_prompt_payload={},
+            project_pr_queue_status="insufficient_truth",
+            review_assimilation_status="insufficient_truth",
+            review_assimilation_action="none",
+            self_healing_status="insufficient_truth",
+            long_running_stability_status="insufficient_truth",
+            objective_compiler_status="insufficient_truth",
+            objective_completion_posture="objective_insufficient_truth",
+            objective_scope_drift_detected=False,
+            project_autonomy_budget_status="insufficient_truth",
+            project_priority_posture="insufficient_truth",
+            project_run_budget_posture="insufficient_truth",
+            project_objective_budget_posture="insufficient_truth",
+            project_pr_retry_budget_posture="insufficient_truth",
+            project_high_risk_defer_posture="insufficient_truth",
+            continuation_failure_bucket_denied=False,
+            continuation_no_progress_stop_required=False,
+            continuation_next_step_selection_status="insufficient_truth",
+            continuation_next_step_target="none",
+            supported_repair_execution_status="not_selected",
+            final_human_review_required=False,
+        )
+
+        self.assertEqual(payload["project_quality_gate_status"], "insufficient_truth")
+        self.assertEqual(payload["project_quality_gate_posture"], "insufficient_truth")
+        self.assertTrue(payload["project_quality_gate_unavailable"])
+        self.assertEqual(payload["project_quality_gate_recommended"], [])
+        self.assertEqual(payload["project_quality_gate_recommended_count"], 0)
+
+    def test_project_merge_branch_lifecycle_compiler_emits_merge_ready_cleanup_and_sync(self) -> None:
+        payload = _build_project_merge_branch_lifecycle_state(
+            project_quality_gate_status="available",
+            project_quality_gate_posture="merge_ready",
+            project_quality_gate_merge_ready=True,
+            project_quality_gate_retry_needed=False,
+            project_quality_gate_high_risk=False,
+            objective_compiler_status="available",
+            objective_completion_posture="objective_completed",
+            project_autonomy_budget_status="available",
+            project_priority_posture="active",
+            project_high_risk_defer_posture="clear",
+            project_pr_queue_status="empty",
+            project_pr_queue_processed_count=2,
+            review_assimilation_status="assimilated",
+            review_assimilation_action="accept",
+            self_healing_status="not_applicable",
+            long_running_stability_status="monitoring",
+            final_human_review_required=False,
+            final_human_review_gate_status="not_required",
+            continuation_failure_bucket_denied=False,
+            continuation_no_progress_stop_required=False,
+            supported_repair_execution_status="executed_verification_passed",
+        )
+
+        self.assertEqual(payload["project_merge_branch_lifecycle_status"], "available")
+        self.assertEqual(payload["project_merge_ready_posture"], "merge_ready")
+        self.assertTrue(payload["project_merge_ready"])
+        self.assertEqual(payload["project_branch_cleanup_candidate_posture"], "candidate")
+        self.assertTrue(payload["project_branch_cleanup_candidate"])
+        self.assertEqual(payload["project_branch_quarantine_candidate_posture"], "not_candidate")
+        self.assertFalse(payload["project_branch_quarantine_candidate"])
+        self.assertEqual(payload["project_local_main_sync_posture"], "sync_required")
+        self.assertTrue(payload["project_local_main_sync_required"])
+        self.assertFalse(payload["project_merge_branch_lifecycle_unavailable"])
+
+    def test_project_merge_branch_lifecycle_compiler_emits_quarantine_candidate(self) -> None:
+        payload = _build_project_merge_branch_lifecycle_state(
+            project_quality_gate_status="available",
+            project_quality_gate_posture="review_ready",
+            project_quality_gate_merge_ready=False,
+            project_quality_gate_retry_needed=True,
+            project_quality_gate_high_risk=True,
+            objective_compiler_status="available",
+            objective_completion_posture="objective_blocked",
+            project_autonomy_budget_status="available",
+            project_priority_posture="deferred",
+            project_high_risk_defer_posture="defer",
+            project_pr_queue_status="blocked",
+            project_pr_queue_processed_count=1,
+            review_assimilation_status="no_action",
+            review_assimilation_action="none",
+            self_healing_status="selected",
+            long_running_stability_status="safe_stop",
+            final_human_review_required=True,
+            final_human_review_gate_status="required",
+            continuation_failure_bucket_denied=True,
+            continuation_no_progress_stop_required=True,
+            supported_repair_execution_status="executed_verification_failed",
+        )
+
+        self.assertEqual(payload["project_merge_branch_lifecycle_status"], "available")
+        self.assertEqual(payload["project_merge_ready_posture"], "not_merge_ready")
+        self.assertFalse(payload["project_merge_ready"])
+        self.assertEqual(payload["project_branch_cleanup_candidate_posture"], "not_candidate")
+        self.assertFalse(payload["project_branch_cleanup_candidate"])
+        self.assertEqual(payload["project_branch_quarantine_candidate_posture"], "candidate")
+        self.assertTrue(payload["project_branch_quarantine_candidate"])
+        self.assertEqual(payload["project_local_main_sync_posture"], "sync_required")
+        self.assertTrue(payload["project_local_main_sync_required"])
+
+    def test_project_merge_branch_lifecycle_compiler_emits_insufficient_posture(self) -> None:
+        payload = _build_project_merge_branch_lifecycle_state(
+            project_quality_gate_status="insufficient_truth",
+            project_quality_gate_posture="insufficient_truth",
+            project_quality_gate_merge_ready=False,
+            project_quality_gate_retry_needed=False,
+            project_quality_gate_high_risk=False,
+            objective_compiler_status="insufficient_truth",
+            objective_completion_posture="objective_insufficient_truth",
+            project_autonomy_budget_status="insufficient_truth",
+            project_priority_posture="insufficient_truth",
+            project_high_risk_defer_posture="insufficient_truth",
+            project_pr_queue_status="insufficient_truth",
+            project_pr_queue_processed_count=0,
+            review_assimilation_status="insufficient_truth",
+            review_assimilation_action="none",
+            self_healing_status="insufficient_truth",
+            long_running_stability_status="insufficient_truth",
+            final_human_review_required=False,
+            final_human_review_gate_status="not_required",
+            continuation_failure_bucket_denied=False,
+            continuation_no_progress_stop_required=False,
+            supported_repair_execution_status="not_selected",
+        )
+
+        self.assertEqual(payload["project_merge_branch_lifecycle_status"], "insufficient_truth")
+        self.assertEqual(payload["project_merge_ready_posture"], "insufficient_truth")
+        self.assertEqual(payload["project_branch_cleanup_candidate_posture"], "insufficient_truth")
+        self.assertEqual(
+            payload["project_branch_quarantine_candidate_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(payload["project_local_main_sync_posture"], "insufficient_truth")
+        self.assertTrue(payload["project_merge_branch_lifecycle_unavailable"])
+
+    def test_project_failure_memory_compiler_emits_retry_suppression(self) -> None:
+        payload = _build_project_failure_memory_state(
+            project_merge_branch_lifecycle_status="available",
+            project_branch_quarantine_candidate=True,
+            failure_bucketing_status="classified",
+            failure_bucketing_validity="valid",
+            failure_bucketing_primary_bucket="same_failure_exhausted",
+            continuation_next_step_selection_status="selected",
+            continuation_next_step_target="retry",
+            continuation_no_progress_stop_required=True,
+            continuation_failure_bucket_denied=False,
+            review_assimilation_status="assimilated",
+            review_assimilation_action="retry",
+            self_healing_status="executed",
+            supported_repair_execution_status="not_selected",
+            execution_status="not_executed",
+            execution_reason="continuation_no_progress_stop",
+            restart_result_status="not_attempted",
+            final_human_review_required=True,
+            prior_retry_failure_count=1,
+            prior_repair_failure_count=0,
+            prior_review_issue_count=0,
+            prior_failure_bucket_recurrence_count=0,
+            prior_failure_bucket_value="other_bucket",
+        )
+
+        self.assertEqual(payload["project_failure_memory_status"], "available")
+        self.assertTrue(payload["project_failure_memory_ineffective_retry"])
+        self.assertEqual(payload["project_failure_memory_retry_failure_count"], 2)
+        self.assertEqual(
+            payload["project_failure_memory_suppression_posture"],
+            "suppress_retry",
+        )
+        self.assertTrue(payload["project_failure_memory_suppression_active"])
+        self.assertFalse(payload["project_failure_memory_unavailable"])
+
+    def test_project_failure_memory_compiler_emits_failed_repair_and_bucket_recurrence(self) -> None:
+        payload = _build_project_failure_memory_state(
+            project_merge_branch_lifecycle_status="available",
+            project_branch_quarantine_candidate=True,
+            failure_bucketing_status="classified",
+            failure_bucketing_validity="valid",
+            failure_bucketing_primary_bucket="verification_failure",
+            continuation_next_step_selection_status="selected",
+            continuation_next_step_target="supported_repair",
+            continuation_no_progress_stop_required=False,
+            continuation_failure_bucket_denied=True,
+            review_assimilation_status="assimilated",
+            review_assimilation_action="replan",
+            self_healing_status="selected",
+            supported_repair_execution_status="executed_verification_failed",
+            execution_status="not_executed",
+            execution_reason="supported_repair_verification_failed",
+            restart_result_status="failed",
+            final_human_review_required=True,
+            prior_retry_failure_count=0,
+            prior_repair_failure_count=1,
+            prior_review_issue_count=0,
+            prior_failure_bucket_recurrence_count=1,
+            prior_failure_bucket_value="verification_failure",
+        )
+
+        self.assertEqual(payload["project_failure_memory_status"], "available")
+        self.assertTrue(payload["project_failure_memory_failed_repair"])
+        self.assertTrue(payload["project_failure_memory_recurring_failure_bucket"])
+        self.assertEqual(payload["project_failure_memory_repair_failure_count"], 2)
+        self.assertEqual(
+            payload["project_failure_memory_failure_bucket_recurrence_count"],
+            2,
+        )
+        self.assertEqual(
+            payload["project_failure_memory_suppression_posture"],
+            "suppress_failure_bucket",
+        )
+        self.assertTrue(payload["project_failure_memory_suppression_active"])
+
+    def test_project_failure_memory_compiler_emits_insufficient_posture(self) -> None:
+        payload = _build_project_failure_memory_state(
+            project_merge_branch_lifecycle_status="insufficient_truth",
+            project_branch_quarantine_candidate=False,
+            failure_bucketing_status="insufficient_truth",
+            failure_bucketing_validity="insufficient_truth",
+            failure_bucketing_primary_bucket="unknown",
+            continuation_next_step_selection_status="insufficient_truth",
+            continuation_next_step_target="none",
+            continuation_no_progress_stop_required=False,
+            continuation_failure_bucket_denied=False,
+            review_assimilation_status="insufficient_truth",
+            review_assimilation_action="none",
+            self_healing_status="insufficient_truth",
+            supported_repair_execution_status="not_selected",
+            execution_status="not_executed",
+            execution_reason="restart_not_executed",
+            restart_result_status="not_attempted",
+            final_human_review_required=False,
+            prior_retry_failure_count=0,
+            prior_repair_failure_count=0,
+            prior_review_issue_count=0,
+            prior_failure_bucket_recurrence_count=0,
+            prior_failure_bucket_value="unknown",
+        )
+
+        self.assertEqual(payload["project_failure_memory_status"], "insufficient_truth")
+        self.assertEqual(
+            payload["project_failure_memory_suppression_posture"],
+            "insufficient_truth",
+        )
+        self.assertTrue(payload["project_failure_memory_unavailable"])
+
+    def test_project_external_boundary_compiler_emits_dependency_available_posture(self) -> None:
+        payload = _build_project_external_boundary_state(
+            project_failure_memory_status="available",
+            project_failure_memory_suppression_posture="none",
+            project_failure_memory_suppression_active=False,
+            project_merge_branch_lifecycle_status="available",
+            project_merge_ready_posture="merge_ready",
+            project_branch_quarantine_candidate_posture="not_candidate",
+            project_local_main_sync_posture="sync_not_required",
+            project_quality_gate_status="available",
+            project_quality_gate_posture="merge_ready",
+            project_quality_gate_risk_level="low",
+            project_pr_queue_status="empty",
+            project_autonomy_budget_status="available",
+            project_priority_posture="active",
+            long_running_stability_status="monitoring",
+            supported_repair_execution_status="executed_verification_passed",
+            execution_reason="restart_executed_once",
+            final_human_review_required=False,
+            final_human_review_gate_status="not_required",
+            manual_only_posture_active=False,
+            fleet_manual_review_required=False,
+            approval_reason_class="restart_hold",
+        )
+
+        self.assertEqual(payload["project_external_boundary_status"], "available")
+        self.assertEqual(
+            payload["project_external_dependency_posture"],
+            "dependency_available",
+        )
+        self.assertTrue(payload["project_external_dependency_available"])
+        self.assertFalse(payload["project_external_dependency_blocked"])
+        self.assertEqual(payload["project_external_manual_only_posture"], "clear")
+        self.assertFalse(payload["project_external_manual_only_required"])
+        self.assertEqual(payload["project_external_network_boundary_posture"], "clear")
+        self.assertEqual(payload["project_external_ci_boundary_posture"], "clear")
+        self.assertEqual(payload["project_external_secrets_boundary_posture"], "clear")
+        self.assertEqual(payload["project_external_github_boundary_posture"], "clear")
+        self.assertEqual(payload["project_external_api_boundary_posture"], "clear")
+        self.assertFalse(payload["project_external_boundary_unavailable"])
+
+    def test_project_external_boundary_compiler_emits_manual_only_posture(self) -> None:
+        payload = _build_project_external_boundary_state(
+            project_failure_memory_status="available",
+            project_failure_memory_suppression_posture="suppress_failure_bucket",
+            project_failure_memory_suppression_active=True,
+            project_merge_branch_lifecycle_status="available",
+            project_merge_ready_posture="not_merge_ready",
+            project_branch_quarantine_candidate_posture="candidate",
+            project_local_main_sync_posture="sync_required",
+            project_quality_gate_status="available",
+            project_quality_gate_posture="review_ready",
+            project_quality_gate_risk_level="high",
+            project_pr_queue_status="blocked",
+            project_autonomy_budget_status="available",
+            project_priority_posture="deferred",
+            long_running_stability_status="safe_stop",
+            supported_repair_execution_status="executed_verification_failed",
+            execution_reason="supported_repair_verification_failed",
+            final_human_review_required=True,
+            final_human_review_gate_status="required",
+            manual_only_posture_active=True,
+            fleet_manual_review_required=True,
+            approval_reason_class="manual_only",
+        )
+
+        self.assertEqual(payload["project_external_boundary_status"], "available")
+        self.assertEqual(payload["project_external_dependency_posture"], "manual_only")
+        self.assertFalse(payload["project_external_dependency_available"])
+        self.assertFalse(payload["project_external_dependency_blocked"])
+        self.assertEqual(payload["project_external_manual_only_posture"], "manual_only")
+        self.assertTrue(payload["project_external_manual_only_required"])
+        self.assertEqual(payload["project_external_network_boundary_posture"], "manual_only")
+        self.assertEqual(payload["project_external_ci_boundary_posture"], "manual_only")
+        self.assertEqual(payload["project_external_secrets_boundary_posture"], "manual_only")
+        self.assertEqual(payload["project_external_github_boundary_posture"], "manual_only")
+        self.assertEqual(payload["project_external_api_boundary_posture"], "manual_only")
+
+    def test_project_external_boundary_compiler_emits_insufficient_posture(self) -> None:
+        payload = _build_project_external_boundary_state(
+            project_failure_memory_status="insufficient_truth",
+            project_failure_memory_suppression_posture="insufficient_truth",
+            project_failure_memory_suppression_active=False,
+            project_merge_branch_lifecycle_status="insufficient_truth",
+            project_merge_ready_posture="insufficient_truth",
+            project_branch_quarantine_candidate_posture="insufficient_truth",
+            project_local_main_sync_posture="insufficient_truth",
+            project_quality_gate_status="insufficient_truth",
+            project_quality_gate_posture="insufficient_truth",
+            project_quality_gate_risk_level="insufficient_truth",
+            project_pr_queue_status="insufficient_truth",
+            project_autonomy_budget_status="insufficient_truth",
+            project_priority_posture="insufficient_truth",
+            long_running_stability_status="insufficient_truth",
+            supported_repair_execution_status="not_selected",
+            execution_reason="restart_not_executed",
+            final_human_review_required=False,
+            final_human_review_gate_status="not_required",
+            manual_only_posture_active=False,
+            fleet_manual_review_required=False,
+            approval_reason_class="unknown",
+        )
+
+        self.assertEqual(payload["project_external_boundary_status"], "insufficient_truth")
+        self.assertEqual(
+            payload["project_external_dependency_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_external_manual_only_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_external_network_boundary_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_external_github_boundary_posture"],
+            "insufficient_truth",
+        )
+        self.assertTrue(payload["project_external_boundary_unavailable"])
+
+    def test_project_human_escalation_compiler_emits_escalation_required(self) -> None:
+        payload = _build_project_human_escalation_state(
+            final_human_review_gate_status="required",
+            final_human_review_required=True,
+            final_human_review_reason="final_review_high_risk_posture",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_blocked",
+            objective_scope_drift_status="detected",
+            project_autonomy_budget_status="available",
+            project_priority_posture="deferred",
+            project_high_risk_defer_posture="defer",
+            project_run_budget_posture="exhausted",
+            project_objective_budget_posture="available",
+            project_pr_retry_budget_posture="exhausted",
+            project_quality_gate_status="available",
+            project_quality_gate_risk_level="high",
+            project_quality_gate_high_risk=True,
+            project_merge_branch_lifecycle_status="available",
+            project_branch_quarantine_candidate_posture="candidate",
+            project_failure_memory_status="available",
+            project_failure_memory_suppression_posture="suppress_failure_bucket",
+            project_failure_memory_suppression_active=True,
+            project_failure_memory_retry_failure_count=2,
+            project_failure_memory_repair_failure_count=1,
+            project_failure_memory_review_issue_count=2,
+            project_failure_memory_failure_bucket_recurrence_count=1,
+            project_external_boundary_status="available",
+            project_external_dependency_posture="dependency_blocked",
+            project_external_manual_only_posture="clear",
+            project_external_manual_only_required=False,
+            long_running_stability_status="escalated",
+            supported_repair_execution_status="executed_verification_failed",
+            manual_only_posture_active=False,
+            fleet_manual_review_required=False,
+        )
+
+        self.assertEqual(payload["project_human_escalation_status"], "available")
+        self.assertEqual(
+            payload["project_human_escalation_posture"],
+            "escalation_required",
+        )
+        self.assertTrue(payload["project_human_escalation_required"])
+        self.assertEqual(payload["project_architecture_risk_posture"], "elevated")
+        self.assertEqual(payload["project_scope_risk_posture"], "elevated")
+        self.assertEqual(payload["project_external_risk_posture"], "elevated")
+        self.assertEqual(payload["project_budget_risk_posture"], "elevated")
+        self.assertEqual(
+            payload["project_repeated_failure_risk_posture"],
+            "elevated",
+        )
+        self.assertEqual(payload["project_manual_only_risk_posture"], "clear")
+        self.assertFalse(payload["project_human_escalation_unavailable"])
+
+    def test_project_human_escalation_compiler_emits_not_required(self) -> None:
+        payload = _build_project_human_escalation_state(
+            final_human_review_gate_status="not_required",
+            final_human_review_required=False,
+            final_human_review_reason="final_review_not_required",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_active",
+            objective_scope_drift_status="clear",
+            project_autonomy_budget_status="available",
+            project_priority_posture="active",
+            project_high_risk_defer_posture="clear",
+            project_run_budget_posture="available",
+            project_objective_budget_posture="available",
+            project_pr_retry_budget_posture="not_applicable",
+            project_quality_gate_status="available",
+            project_quality_gate_risk_level="low",
+            project_quality_gate_high_risk=False,
+            project_merge_branch_lifecycle_status="available",
+            project_branch_quarantine_candidate_posture="not_candidate",
+            project_failure_memory_status="available",
+            project_failure_memory_suppression_posture="none",
+            project_failure_memory_suppression_active=False,
+            project_failure_memory_retry_failure_count=0,
+            project_failure_memory_repair_failure_count=0,
+            project_failure_memory_review_issue_count=0,
+            project_failure_memory_failure_bucket_recurrence_count=0,
+            project_external_boundary_status="available",
+            project_external_dependency_posture="dependency_available",
+            project_external_manual_only_posture="clear",
+            project_external_manual_only_required=False,
+            long_running_stability_status="monitoring",
+            supported_repair_execution_status="executed_verification_passed",
+            manual_only_posture_active=False,
+            fleet_manual_review_required=False,
+        )
+
+        self.assertEqual(payload["project_human_escalation_status"], "available")
+        self.assertEqual(
+            payload["project_human_escalation_posture"],
+            "not_required",
+        )
+        self.assertFalse(payload["project_human_escalation_required"])
+        self.assertEqual(payload["project_architecture_risk_posture"], "clear")
+        self.assertEqual(payload["project_scope_risk_posture"], "clear")
+        self.assertEqual(payload["project_external_risk_posture"], "clear")
+        self.assertEqual(payload["project_budget_risk_posture"], "clear")
+        self.assertEqual(payload["project_repeated_failure_risk_posture"], "clear")
+        self.assertEqual(payload["project_manual_only_risk_posture"], "clear")
+        self.assertFalse(payload["project_human_escalation_unavailable"])
+
+    def test_project_human_escalation_compiler_emits_insufficient(self) -> None:
+        payload = _build_project_human_escalation_state(
+            final_human_review_gate_status="not_required",
+            final_human_review_required=False,
+            final_human_review_reason="final_review_not_required",
+            objective_compiler_status="insufficient_truth",
+            objective_completion_posture="objective_insufficient_truth",
+            objective_scope_drift_status="insufficient_truth",
+            project_autonomy_budget_status="insufficient_truth",
+            project_priority_posture="insufficient_truth",
+            project_high_risk_defer_posture="insufficient_truth",
+            project_run_budget_posture="insufficient_truth",
+            project_objective_budget_posture="insufficient_truth",
+            project_pr_retry_budget_posture="insufficient_truth",
+            project_quality_gate_status="insufficient_truth",
+            project_quality_gate_risk_level="insufficient_truth",
+            project_quality_gate_high_risk=False,
+            project_merge_branch_lifecycle_status="insufficient_truth",
+            project_branch_quarantine_candidate_posture="insufficient_truth",
+            project_failure_memory_status="insufficient_truth",
+            project_failure_memory_suppression_posture="insufficient_truth",
+            project_failure_memory_suppression_active=False,
+            project_failure_memory_retry_failure_count=0,
+            project_failure_memory_repair_failure_count=0,
+            project_failure_memory_review_issue_count=0,
+            project_failure_memory_failure_bucket_recurrence_count=0,
+            project_external_boundary_status="insufficient_truth",
+            project_external_dependency_posture="insufficient_truth",
+            project_external_manual_only_posture="insufficient_truth",
+            project_external_manual_only_required=False,
+            long_running_stability_status="insufficient_truth",
+            supported_repair_execution_status="not_selected",
+            manual_only_posture_active=False,
+            fleet_manual_review_required=False,
+        )
+
+        self.assertEqual(
+            payload["project_human_escalation_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_human_escalation_posture"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["project_human_escalation_required"])
+        self.assertEqual(
+            payload["project_architecture_risk_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(payload["project_scope_risk_posture"], "insufficient_truth")
+        self.assertEqual(payload["project_external_risk_posture"], "insufficient_truth")
+        self.assertEqual(payload["project_budget_risk_posture"], "insufficient_truth")
+        self.assertEqual(
+            payload["project_repeated_failure_risk_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_manual_only_risk_posture"],
+            "insufficient_truth",
+        )
+        self.assertTrue(payload["project_human_escalation_unavailable"])
+
+    def test_project_approval_notification_compiler_emits_ready_reply_required(self) -> None:
+        payload = _build_project_approval_notification_state(
+            approval_required=True,
+            approval_email_status="required",
+            approval_email_validity="valid",
+            approval_priority="high",
+            approval_reason_class="manual_only",
+            proposed_next_direction="replan_preparation",
+            delivery_mode="gmail_draft",
+            delivery_outcome="draft_created",
+            approval_response_status="awaiting_response",
+            approval_response_validity="valid",
+            response_received=False,
+            response_decision_class="unknown",
+            project_human_escalation_status="available",
+            project_human_escalation_posture="escalation_required",
+            project_human_escalation_required=True,
+            project_human_escalation_reason="escalation_manual_only_risk_elevated",
+            project_architecture_risk_posture="clear",
+            project_scope_risk_posture="clear",
+            project_external_risk_posture="elevated",
+            project_budget_risk_posture="elevated",
+            project_repeated_failure_risk_posture="clear",
+            project_manual_only_risk_posture="elevated",
+            project_external_manual_only_posture="manual_only",
+        )
+
+        self.assertEqual(payload["project_approval_notification_status"], "available")
+        self.assertEqual(payload["project_approval_notification_ready_posture"], "ready")
+        self.assertTrue(payload["project_approval_notification_ready"])
+        self.assertEqual(payload["project_approval_reply_required_posture"], "reply_required")
+        self.assertTrue(payload["project_approval_reply_required"])
+        self.assertEqual(payload["project_approval_channel_posture"], "manual_only")
+        self.assertEqual(payload["project_approval_mobile_summary_posture"], "available")
+        self.assertTrue(payload["project_approval_mobile_summary_compact"])
+        self.assertIn("escalate", payload["project_approval_mobile_summary_tokens"])
+        self.assertFalse(payload["project_approval_notification_unavailable"])
+
+    def test_project_approval_notification_compiler_emits_not_required(self) -> None:
+        payload = _build_project_approval_notification_state(
+            approval_required=True,
+            approval_email_status="not_required",
+            approval_email_validity="valid",
+            approval_priority="low",
+            approval_reason_class="restart_hold",
+            proposed_next_direction="same_lane_retry",
+            delivery_mode="not_applicable",
+            delivery_outcome="skipped",
+            approval_response_status="response_accepted",
+            approval_response_validity="valid",
+            response_received=True,
+            response_decision_class="approved",
+            project_human_escalation_status="available",
+            project_human_escalation_posture="not_required",
+            project_human_escalation_required=False,
+            project_human_escalation_reason="escalation_not_required",
+            project_architecture_risk_posture="clear",
+            project_scope_risk_posture="clear",
+            project_external_risk_posture="clear",
+            project_budget_risk_posture="clear",
+            project_repeated_failure_risk_posture="clear",
+            project_manual_only_risk_posture="clear",
+            project_external_manual_only_posture="clear",
+        )
+
+        self.assertEqual(payload["project_approval_notification_status"], "available")
+        self.assertEqual(
+            payload["project_approval_notification_ready_posture"],
+            "not_required",
+        )
+        self.assertFalse(payload["project_approval_notification_ready"])
+        self.assertEqual(
+            payload["project_approval_reply_required_posture"],
+            "reply_not_required",
+        )
+        self.assertFalse(payload["project_approval_reply_required"])
+        self.assertEqual(payload["project_approval_channel_posture"], "not_required")
+        self.assertEqual(
+            payload["project_approval_mobile_summary_posture"],
+            "not_required",
+        )
+        self.assertEqual(payload["project_approval_mobile_summary_compact"], "")
+        self.assertFalse(payload["project_approval_notification_unavailable"])
+
+    def test_project_approval_notification_compiler_emits_insufficient(self) -> None:
+        payload = _build_project_approval_notification_state(
+            approval_required=True,
+            approval_email_status="insufficient_truth",
+            approval_email_validity="insufficient_truth",
+            approval_priority="unknown",
+            approval_reason_class="unknown",
+            proposed_next_direction="unknown",
+            delivery_mode="unknown",
+            delivery_outcome="unknown",
+            approval_response_status="insufficient_truth",
+            approval_response_validity="insufficient_truth",
+            response_received=False,
+            response_decision_class="unknown",
+            project_human_escalation_status="insufficient_truth",
+            project_human_escalation_posture="insufficient_truth",
+            project_human_escalation_required=False,
+            project_human_escalation_reason="escalation_insufficient_truth",
+            project_architecture_risk_posture="insufficient_truth",
+            project_scope_risk_posture="insufficient_truth",
+            project_external_risk_posture="insufficient_truth",
+            project_budget_risk_posture="insufficient_truth",
+            project_repeated_failure_risk_posture="insufficient_truth",
+            project_manual_only_risk_posture="insufficient_truth",
+            project_external_manual_only_posture="insufficient_truth",
+        )
+
+        self.assertEqual(
+            payload["project_approval_notification_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_approval_notification_ready_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_approval_reply_required_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_approval_channel_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_approval_mobile_summary_posture"],
+            "insufficient_truth",
+        )
+        self.assertTrue(payload["project_approval_notification_unavailable"])
+
+    def test_project_multi_objective_compiler_emits_selected_resumable_posture(self) -> None:
+        payload = _build_project_multi_objective_state(
+            objective_id="obj-1",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_active",
+            project_priority_posture="active",
+            project_high_risk_defer_posture="clear",
+            project_run_budget_posture="available",
+            project_objective_budget_posture="available",
+            project_pr_retry_budget_posture="not_applicable",
+            project_merge_branch_lifecycle_status="available",
+            project_merge_ready_posture="not_merge_ready",
+            project_branch_quarantine_candidate_posture="not_candidate",
+            project_human_escalation_status="available",
+            project_human_escalation_required=False,
+            project_approval_notification_status="available",
+            project_approval_notification_ready_posture="not_required",
+            project_approval_reply_required_posture="reply_not_required",
+            project_pr_queue_status="prepared",
+            project_pr_queue_selected_slice_id="slice_01",
+            project_pr_queue_processed_slice_ids_after=[],
+            project_pr_queue_item_count=3,
+            project_pr_queue_runnable_count=1,
+            project_pr_queue_blocked_count=0,
+            project_pr_queue_handoff_prepared=True,
+        )
+
+        self.assertEqual(payload["project_multi_objective_status"], "available")
+        self.assertEqual(
+            payload["project_active_objective_selection_posture"],
+            "selected",
+        )
+        self.assertEqual(payload["project_active_objective_id"], "obj-1")
+        self.assertEqual(
+            payload["project_blocked_objective_deferral_posture"],
+            "not_deferred",
+        )
+        self.assertFalse(payload["project_blocked_objective_deferred"])
+        self.assertEqual(
+            payload["project_resumable_queue_ordering_posture"],
+            "resume_selected_first",
+        )
+        self.assertEqual(payload["project_resumable_queue_next_slice_id"], "slice_01")
+        self.assertTrue(payload["project_resumable_queue_has_pending"])
+        self.assertFalse(payload["project_multi_objective_unavailable"])
+
+    def test_project_multi_objective_compiler_emits_deferred_posture(self) -> None:
+        payload = _build_project_multi_objective_state(
+            objective_id="obj-2",
+            objective_compiler_status="available",
+            objective_completion_posture="objective_blocked",
+            project_priority_posture="deferred",
+            project_high_risk_defer_posture="defer",
+            project_run_budget_posture="available",
+            project_objective_budget_posture="available",
+            project_pr_retry_budget_posture="available",
+            project_merge_branch_lifecycle_status="available",
+            project_merge_ready_posture="not_merge_ready",
+            project_branch_quarantine_candidate_posture="candidate",
+            project_human_escalation_status="available",
+            project_human_escalation_required=True,
+            project_approval_notification_status="available",
+            project_approval_notification_ready_posture="ready",
+            project_approval_reply_required_posture="reply_required",
+            project_pr_queue_status="prepared",
+            project_pr_queue_selected_slice_id="slice_02",
+            project_pr_queue_processed_slice_ids_after=["slice_01"],
+            project_pr_queue_item_count=4,
+            project_pr_queue_runnable_count=1,
+            project_pr_queue_blocked_count=2,
+            project_pr_queue_handoff_prepared=False,
+        )
+
+        self.assertEqual(payload["project_multi_objective_status"], "available")
+        self.assertEqual(
+            payload["project_active_objective_selection_posture"],
+            "deferred",
+        )
+        self.assertEqual(
+            payload["project_blocked_objective_deferral_posture"],
+            "deferred",
+        )
+        self.assertTrue(payload["project_blocked_objective_deferred"])
+        self.assertEqual(
+            payload["project_resumable_queue_ordering_posture"],
+            "deferred_non_runnable",
+        )
+        self.assertFalse(payload["project_resumable_queue_has_pending"])
+        self.assertFalse(payload["project_multi_objective_unavailable"])
+
+    def test_project_multi_objective_compiler_emits_insufficient(self) -> None:
+        payload = _build_project_multi_objective_state(
+            objective_id="",
+            objective_compiler_status="insufficient_truth",
+            objective_completion_posture="objective_insufficient_truth",
+            project_priority_posture="insufficient_truth",
+            project_high_risk_defer_posture="insufficient_truth",
+            project_run_budget_posture="insufficient_truth",
+            project_objective_budget_posture="insufficient_truth",
+            project_pr_retry_budget_posture="insufficient_truth",
+            project_merge_branch_lifecycle_status="insufficient_truth",
+            project_merge_ready_posture="insufficient_truth",
+            project_branch_quarantine_candidate_posture="insufficient_truth",
+            project_human_escalation_status="insufficient_truth",
+            project_human_escalation_required=False,
+            project_approval_notification_status="insufficient_truth",
+            project_approval_notification_ready_posture="insufficient_truth",
+            project_approval_reply_required_posture="insufficient_truth",
+            project_pr_queue_status="insufficient_truth",
+            project_pr_queue_selected_slice_id="",
+            project_pr_queue_processed_slice_ids_after=[],
+            project_pr_queue_item_count=0,
+            project_pr_queue_runnable_count=0,
+            project_pr_queue_blocked_count=0,
+            project_pr_queue_handoff_prepared=False,
+        )
+
+        self.assertEqual(payload["project_multi_objective_status"], "insufficient_truth")
+        self.assertEqual(
+            payload["project_active_objective_selection_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_blocked_objective_deferral_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_resumable_queue_ordering_posture"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["project_resumable_queue_has_pending"])
+        self.assertTrue(payload["project_multi_objective_unavailable"])
+
+    def test_runner_preserves_approval_gate_when_skip_is_not_allowed(self) -> None:
+        base_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        blocked_cases = (
+            (
+                "cooldown_active",
+                base_email_payload,
+                {
+                    "approval_safety_status": "cooldown_active",
+                    "approval_safety_validity": "valid",
+                    "approval_safety_decision": "defer_until_cooldown_expires",
+                    "approval_pending_duplicate": False,
+                    "approval_cooldown_active": True,
+                    "approval_loop_suspected": False,
+                    "approval_delivery_blocked_by_safety": False,
+                    "approval_delivery_deferred_by_safety": True,
+                    "approval_delivery_allowed_by_safety": False,
+                },
+                "skip_safety_cooldown_active",
+            ),
+            (
+                "insufficient_truth",
+                {
+                    **base_email_payload,
+                    "approval_email_validity": "insufficient_truth",
+                    "proposed_next_direction": "unknown",
+                    "proposed_action_class": "unknown",
+                },
+                {
+                    "approval_safety_status": "safe_to_deliver",
+                    "approval_safety_validity": "valid",
+                    "approval_safety_decision": "allow_delivery",
+                    "approval_pending_duplicate": False,
+                    "approval_cooldown_active": False,
+                    "approval_loop_suspected": False,
+                    "approval_delivery_blocked_by_safety": False,
+                    "approval_delivery_deferred_by_safety": False,
+                    "approval_delivery_allowed_by_safety": True,
+                },
+                "skip_invalid_or_insufficient_truth",
+            ),
+            (
+                "unsupported_direction",
+                {
+                    **base_email_payload,
+                    "proposed_next_direction": "stop_no_restart",
+                    "proposed_action_class": "stop_only",
+                },
+                {
+                    "approval_safety_status": "safe_to_deliver",
+                    "approval_safety_validity": "valid",
+                    "approval_safety_decision": "allow_delivery",
+                    "approval_pending_duplicate": False,
+                    "approval_cooldown_active": False,
+                    "approval_loop_suspected": False,
+                    "approval_delivery_blocked_by_safety": False,
+                    "approval_delivery_deferred_by_safety": False,
+                    "approval_delivery_allowed_by_safety": True,
+                },
+                "skip_unsupported_direction",
+            ),
+        )
+
+        for case_id, email_payload, safety_payload, expected_skip_reason in blocked_cases:
+            with self.subTest(case=case_id):
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    root = Path(tmp_dir)
+                    artifacts_dir = self._write_planning_artifacts(root)
+                    out_dir = root / "artifacts" / "executions"
+                    transport = _RecordingDryRunTransport()
+                    runner = PlannedExecutionRunner(
+                        adapter=CodexExecutorAdapter(transport=transport)
+                    )
+                    with (
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                            return_value=email_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                            return_value=response_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                            return_value=approved_restart_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                            return_value=safety_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                            return_value=fleet_safety_payload,
+                        ),
+                    ):
+                        manifest = runner.run(
+                            artifacts_input_dir=artifacts_dir,
+                            output_dir=out_dir,
+                            dry_run=True,
+                            stop_on_failure=True,
+                        )
+                    run_root = out_dir / manifest["job_id"]
+                    execution_payload = json.loads(
+                        (run_root / "approved_restart_execution_contract.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+
+                self.assertEqual(
+                    execution_payload["automatic_restart_execution_status"],
+                    "not_executed",
+                )
+                self.assertFalse(execution_payload["automatic_restart_executed"])
+                self.assertFalse(execution_payload["automatic_restart_attempted"])
+                self.assertEqual(execution_payload["automatic_restart_count"], 0)
+                self.assertFalse(execution_payload["approval_skip_allowed"])
+                self.assertFalse(execution_payload["approval_skip_applied"])
+                self.assertEqual(
+                    execution_payload["approval_skip_gate_decision"],
+                    "require_human_approval",
+                )
+                self.assertTrue(execution_payload["approval_skip_human_gate_preserved"])
+                self.assertEqual(
+                    execution_payload["approval_skip_reason"],
+                    expected_skip_reason,
+                )
+                self.assertEqual(len(transport.launch_order), 3)
+
+    def test_runner_continuation_budget_exhausts_after_repeated_auto_continuations(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+
+        payloads: list[dict[str, object]] = []
+        launch_counts: list[int] = []
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+            for _ in range(3):
+                transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+                runner = PlannedExecutionRunner(
+                    adapter=CodexExecutorAdapter(transport=transport)
+                )
+                with (
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                        return_value=approval_email_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                        return_value=response_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                        return_value=approved_restart_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                        return_value=approval_safety_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                        return_value=fleet_safety_payload,
+                    ),
+                ):
+                    manifest = runner.run(
+                        artifacts_input_dir=artifacts_dir,
+                        output_dir=out_dir,
+                        dry_run=True,
+                        stop_on_failure=True,
+                    )
+                run_root = out_dir / manifest["job_id"]
+                payload = json.loads(
+                    (run_root / "approved_restart_execution_contract.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                payloads.append(payload)
+                launch_counts.append(len(transport.launch_order))
+
+        first, second, third = payloads
+        self.assertEqual(first["automatic_restart_execution_status"], "executed")
+        self.assertEqual(second["automatic_restart_execution_status"], "executed")
+        self.assertEqual(third["automatic_restart_execution_status"], "not_executed")
+        self.assertEqual(first["automatic_continuation_run_count"], 1)
+        self.assertEqual(second["automatic_continuation_run_count"], 2)
+        self.assertEqual(third["automatic_continuation_run_count"], 2)
+        self.assertEqual(first["continuation_budget_status"], "available")
+        self.assertEqual(second["continuation_budget_status"], "available")
+        self.assertEqual(third["continuation_budget_status"], "exhausted")
+        self.assertEqual(
+            third["automatic_restart_execution_reason"],
+            "continuation_budget_exhausted",
+        )
+        self.assertEqual(third["continuation_budget_decision"], "deny_budget_exhausted")
+        self.assertTrue(third["continuation_budget_exhausted"])
+        self.assertEqual(third["project_autonomy_budget_status"], "available")
+        self.assertEqual(third["project_priority_posture"], "lower_priority")
+        self.assertEqual(third["project_run_budget_posture"], "exhausted")
+        self.assertTrue(third["project_run_budget_exhausted"])
+        self.assertEqual(third["project_pr_retry_budget_posture"], "not_applicable")
+        self.assertEqual(third["project_quality_gate_status"], "available")
+        self.assertEqual(third["project_quality_gate_posture"], "retry_needed")
+        self.assertTrue(third["project_quality_gate_retry_needed"])
+        self.assertFalse(third["project_quality_gate_merge_ready"])
+        self.assertEqual(third["project_merge_branch_lifecycle_status"], "available")
+        self.assertEqual(third["project_merge_ready_posture"], "not_merge_ready")
+        self.assertFalse(third["project_merge_ready"])
+        self.assertEqual(
+            third["project_branch_cleanup_candidate_posture"],
+            "not_candidate",
+        )
+        self.assertEqual(
+            third["project_branch_quarantine_candidate_posture"],
+            "not_candidate",
+        )
+        self.assertTrue(third["approval_skip_human_gate_preserved"])
+        self.assertFalse(third["approval_skip_applied"])
+        self.assertEqual(launch_counts, [4, 4, 3])
+
+    def test_runner_continuation_budget_precedence_is_deterministic(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        cases = (
+            (
+                "lane_precedence",
+                {"run": 1, "objective": 1, "lane": 2},
+                "budget_lane_exhausted",
+            ),
+            (
+                "objective_precedence",
+                {"run": 1, "objective": 2, "lane": 1},
+                "budget_objective_exhausted",
+            ),
+            (
+                "run_precedence",
+                {"run": 2, "objective": 1, "lane": 1},
+                "budget_run_exhausted",
+            ),
+        )
+
+        for case_id, seeded_counts, expected_budget_reason in cases:
+            with self.subTest(case=case_id):
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    root = Path(tmp_dir)
+                    artifacts_dir = self._write_planning_artifacts(root)
+                    out_dir = root / "artifacts" / "executions"
+                    status_map = {
+                        "project-planned-exec-pr-01__approved_restart_once": "completed",
+                    }
+                    transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+                    runner = PlannedExecutionRunner(
+                        adapter=CodexExecutorAdapter(transport=transport)
+                    )
+                    with (
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                            return_value=approval_email_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                            return_value=response_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                            return_value=approved_restart_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                            return_value=approval_safety_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                            return_value=fleet_safety_payload,
+                        ),
+                    ):
+                        manifest = runner.run(
+                            artifacts_input_dir=artifacts_dir,
+                            output_dir=out_dir,
+                            dry_run=True,
+                            stop_on_failure=True,
+                        )
+                    run_root = out_dir / manifest["job_id"]
+                    baseline_payload = json.loads(
+                        (run_root / "approved_restart_execution_contract.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+                    seeded_payload = {
+                        "automatic_continuation_run_count": seeded_counts["run"],
+                        "automatic_continuation_objective_count": seeded_counts["objective"],
+                        "automatic_continuation_lane_count": seeded_counts["lane"],
+                        "automatic_continuation_objective_key": baseline_payload[
+                            "automatic_continuation_objective_key"
+                        ],
+                        "automatic_continuation_lane_key": baseline_payload[
+                            "automatic_continuation_lane_key"
+                        ],
+                    }
+                    (run_root / "approved_restart_execution_contract.json").write_text(
+                        json.dumps(seeded_payload, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+
+                    transport_second = _RecordingDryRunTransport(status_by_pr_id=status_map)
+                    runner_second = PlannedExecutionRunner(
+                        adapter=CodexExecutorAdapter(transport=transport_second)
+                    )
+                    with (
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                            return_value=approval_email_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                            return_value=response_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                            return_value=approved_restart_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                            return_value=approval_safety_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                            return_value=fleet_safety_payload,
+                        ),
+                    ):
+                        manifest_second = runner_second.run(
+                            artifacts_input_dir=artifacts_dir,
+                            output_dir=out_dir,
+                            dry_run=True,
+                            stop_on_failure=True,
+                        )
+                    run_root_second = out_dir / manifest_second["job_id"]
+                    payload = json.loads(
+                        (run_root_second / "approved_restart_execution_contract.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+
+                self.assertEqual(
+                    payload["automatic_restart_execution_status"],
+                    "not_executed",
+                )
+                self.assertEqual(
+                    payload["automatic_restart_execution_reason"],
+                    "continuation_budget_exhausted",
+                )
+                self.assertEqual(payload["continuation_budget_status"], "exhausted")
+                self.assertEqual(payload["continuation_budget_reason"], expected_budget_reason)
+                self.assertEqual(payload["continuation_budget_branch_status"], "available")
+                self.assertFalse(payload["continuation_budget_branch_exhausted"])
+                self.assertEqual(len(transport_second.launch_order), 3)
+
+    def test_runner_continuation_branch_ceiling_is_enforced(self) -> None:
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        cases = (
+            ("retry", "same_lane_retry", "review_and_restart", "retry"),
+            ("replan", "replan_preparation", "review_and_replan", "replan"),
+            ("truth_gather", "truth_gathering", "review_and_recollect", "truth_gather"),
+        )
+
+        for case_id, direction, action_class, expected_branch in cases:
+            with self.subTest(case=case_id):
+                approval_email_payload = {
+                    "approval_email_status": "required",
+                    "approval_email_validity": "valid",
+                    "approval_required": True,
+                    "approval_priority": "low",
+                    "approval_reason_class": "restart_hold",
+                    "proposed_next_direction": direction,
+                    "proposed_target_lane": direction,
+                    "proposed_restart_mode": "approval_required_then_restart",
+                    "proposed_action_class": action_class,
+                }
+                failure_bucketing_payload = {
+                    "failure_bucketing_status": "classified",
+                    "failure_bucketing_validity": "valid",
+                    "primary_failure_bucket": "unknown",
+                }
+                if expected_branch == "truth_gather":
+                    failure_bucketing_payload = {
+                        "failure_bucketing_status": "insufficient_truth",
+                        "failure_bucketing_validity": "insufficient_truth",
+                        "primary_failure_bucket": "truth_missing",
+                    }
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    root = Path(tmp_dir)
+                    artifacts_dir = self._write_planning_artifacts(root)
+                    out_dir = root / "artifacts" / "executions"
+                    status_map = {
+                        "project-planned-exec-pr-01__approved_restart_once": "completed",
+                    }
+                    transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+                    runner = PlannedExecutionRunner(
+                        adapter=CodexExecutorAdapter(transport=transport)
+                    )
+                    with (
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                            return_value=approval_email_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                            return_value=response_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                            return_value=approved_restart_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                            return_value=approval_safety_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                            return_value=fleet_safety_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                            return_value=failure_bucketing_payload,
+                        ),
+                    ):
+                        manifest = runner.run(
+                            artifacts_input_dir=artifacts_dir,
+                            output_dir=out_dir,
+                            dry_run=True,
+                            stop_on_failure=True,
+                        )
+                    run_root = out_dir / manifest["job_id"]
+                    baseline_payload = json.loads(
+                        (run_root / "approved_restart_execution_contract.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+                    self.assertEqual(
+                        baseline_payload["automatic_restart_execution_status"],
+                        "executed",
+                    )
+                    self.assertEqual(
+                        baseline_payload["continuation_budget_branch_type"],
+                        expected_branch,
+                    )
+                    self.assertEqual(
+                        baseline_payload["continuation_budget_branch_status"],
+                        "available",
+                    )
+                    self.assertEqual(
+                        baseline_payload["continuation_budget_branch_reason"],
+                        "branch_budget_available",
+                    )
+                    self.assertEqual(
+                        baseline_payload["automatic_continuation_branch_count"],
+                        1,
+                    )
+
+                    seeded_payload = {
+                        "automatic_continuation_run_count": 0,
+                        "automatic_continuation_objective_count": 0,
+                        "automatic_continuation_lane_count": 0,
+                        "automatic_continuation_objective_key": baseline_payload[
+                            "automatic_continuation_objective_key"
+                        ],
+                        "automatic_continuation_lane_key": baseline_payload[
+                            "automatic_continuation_lane_key"
+                        ],
+                        "automatic_continuation_retry_count": (
+                            2 if expected_branch == "retry" else 0
+                        ),
+                        "automatic_continuation_replan_count": (
+                            2 if expected_branch == "replan" else 0
+                        ),
+                        "automatic_continuation_truth_gather_count": (
+                            2 if expected_branch == "truth_gather" else 0
+                        ),
+                    }
+                    (run_root / "approved_restart_execution_contract.json").write_text(
+                        json.dumps(seeded_payload, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+
+                    transport_second = _RecordingDryRunTransport(status_by_pr_id=status_map)
+                    runner_second = PlannedExecutionRunner(
+                        adapter=CodexExecutorAdapter(transport=transport_second)
+                    )
+                    with (
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                            return_value=approval_email_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                            return_value=response_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                            return_value=approved_restart_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                            return_value=approval_safety_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                            return_value=fleet_safety_payload,
+                        ),
+                        patch(
+                            "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                            return_value=failure_bucketing_payload,
+                        ),
+                    ):
+                        manifest_second = runner_second.run(
+                            artifacts_input_dir=artifacts_dir,
+                            output_dir=out_dir,
+                            dry_run=True,
+                            stop_on_failure=True,
+                        )
+                    run_root_second = out_dir / manifest_second["job_id"]
+                    payload = json.loads(
+                        (run_root_second / "approved_restart_execution_contract.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
+
+                self.assertEqual(
+                    payload["automatic_restart_execution_status"],
+                    "not_executed",
+                )
+                self.assertEqual(
+                    payload["automatic_restart_execution_reason"],
+                    "continuation_budget_exhausted",
+                )
+                self.assertEqual(payload["continuation_budget_status"], "exhausted")
+                self.assertEqual(payload["continuation_budget_reason"], "budget_branch_exhausted")
+                self.assertEqual(payload["continuation_budget_branch_type"], expected_branch)
+                self.assertEqual(payload["continuation_budget_branch_status"], "exhausted")
+                self.assertEqual(
+                    payload["continuation_budget_branch_decision"],
+                    "deny_branch_ceiling_exhausted",
+                )
+                self.assertEqual(
+                    payload["continuation_budget_branch_reason"],
+                    "branch_budget_exhausted",
+                )
+                self.assertTrue(payload["continuation_budget_branch_exhausted"])
+                self.assertFalse(payload["continuation_budget_run_exhausted"])
+                self.assertFalse(payload["continuation_budget_objective_exhausted"])
+                self.assertFalse(payload["continuation_budget_lane_exhausted"])
+                self.assertTrue(payload["approval_skip_human_gate_preserved"])
+                self.assertFalse(payload["approval_skip_applied"])
+                self.assertEqual(payload["automatic_continuation_branch_count"], 2)
+                self.assertEqual(len(transport_second.launch_order), 3)
+
+    def test_runner_denies_repeated_continuation_on_no_progress(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stop_required",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "confirmed",
+            "no_progress_detected": True,
+            "no_progress_stop_required": True,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "valid",
+            "primary_failure_bucket": "objective_gap",
+        }
+
+        payloads: list[dict[str, object]] = []
+        launch_counts: list[int] = []
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+            for _ in range(2):
+                transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+                runner = PlannedExecutionRunner(
+                    adapter=CodexExecutorAdapter(transport=transport)
+                )
+                with (
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                        return_value=approval_email_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                        return_value=response_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                        return_value=approved_restart_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                        return_value=approval_safety_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                        return_value=fleet_safety_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                        return_value=loop_hardening_payload,
+                    ),
+                    patch(
+                        "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                        return_value=failure_bucketing_payload,
+                    ),
+                ):
+                    manifest = runner.run(
+                        artifacts_input_dir=artifacts_dir,
+                        output_dir=out_dir,
+                        dry_run=True,
+                        stop_on_failure=True,
+                    )
+                run_root = out_dir / manifest["job_id"]
+                payload = json.loads(
+                    (run_root / "approved_restart_execution_contract.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                payloads.append(payload)
+                launch_counts.append(len(transport.launch_order))
+
+        first, second = payloads
+        self.assertEqual(first["automatic_restart_execution_status"], "executed")
+        self.assertEqual(second["automatic_restart_execution_status"], "not_executed")
+        self.assertEqual(
+            second["automatic_restart_execution_reason"],
+            "continuation_no_progress_stop",
+        )
+        self.assertEqual(second["continuation_budget_status"], "available")
+        self.assertEqual(second["continuation_budget_branch_status"], "available")
+        self.assertTrue(second["continuation_no_progress_repeated"])
+        self.assertTrue(second["continuation_no_progress_signal_detected"])
+        self.assertTrue(second["continuation_no_progress_stop_required"])
+        self.assertFalse(second["continuation_failure_bucket_denied"])
+        self.assertTrue(second["approval_skip_human_gate_preserved"])
+        self.assertFalse(second["approval_skip_applied"])
+        self.assertEqual(launch_counts, [4, 3])
+
+    def test_runner_denies_continuation_for_unsafe_failure_bucket(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "truth_gathering",
+            "proposed_target_lane": "truth_gathering",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_recollect",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "valid",
+            "primary_failure_bucket": "manual_only",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            transport = _RecordingDryRunTransport()
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "not_executed")
+        self.assertEqual(
+            payload["automatic_restart_execution_reason"],
+            "failure_bucket_continuation_denied",
+        )
+        self.assertEqual(payload["continuation_budget_status"], "available")
+        self.assertEqual(payload["continuation_budget_branch_status"], "available")
+        self.assertFalse(payload["continuation_no_progress_stop_required"])
+        self.assertTrue(payload["continuation_failure_bucket_unsafe"])
+        self.assertTrue(payload["continuation_failure_bucket_denied"])
+        self.assertEqual(payload["continuation_failure_bucket"], "manual_only")
+        self.assertEqual(
+            payload["continuation_repair_playbook_selection_status"],
+            "not_selected",
+        )
+        self.assertFalse(payload["continuation_repair_playbook_selected"])
+        self.assertFalse(payload["continuation_repair_playbook_supported_bucket"])
+        self.assertEqual(payload["continuation_repair_playbook_class"], "no_plan")
+        self.assertEqual(payload["continuation_repair_playbook_candidate_action"], "no_action")
+        self.assertEqual(
+            payload["continuation_repair_playbook_reason"],
+            "playbook_bucket_unsupported",
+        )
+        self.assertEqual(
+            payload["continuation_next_step_selection_status"],
+            "not_selected",
+        )
+        self.assertFalse(payload["continuation_next_step_selected"])
+        self.assertEqual(payload["continuation_next_step_target"], "none")
+        self.assertEqual(payload["supported_repair_execution_status"], "not_selected")
+        self.assertEqual(payload["supported_repair_execution_reason"], "repair_not_selected")
+        self.assertFalse(payload["supported_repair_execution_attempted"])
+        self.assertFalse(payload["supported_repair_executed"])
+        self.assertFalse(payload["supported_repair_verification_passed"])
+        self.assertFalse(payload["supported_repair_verification_failed"])
+        self.assertEqual(payload["final_human_review_gate_status"], "required")
+        self.assertTrue(payload["final_human_review_required"])
+        self.assertEqual(
+            payload["final_human_review_reason"],
+            "final_review_manual_only_posture",
+        )
+        self.assertTrue(payload["final_human_gate_preserved"])
+        self.assertEqual(payload["project_planning_summary_status"], "available")
+        self.assertTrue(payload["project_planning_summary_available"])
+        self.assertEqual(
+            payload["project_planning_summary_reason"],
+            "planning_summary_compiled",
+        )
+        self.assertEqual(
+            payload["project_planning_control_posture"],
+            "human_review_required",
+        )
+        self.assertTrue(payload["approval_skip_human_gate_preserved"])
+        self.assertFalse(payload["approval_skip_applied"])
+        self.assertEqual(len(transport.launch_order), 3)
+
+    def test_runner_final_human_review_required_for_high_risk_posture(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "critical",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "critical",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "valid",
+            "primary_failure_bucket": "retry_exhausted",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            transport = _RecordingDryRunTransport()
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "not_executed")
+        self.assertEqual(payload["final_human_review_gate_status"], "required")
+        self.assertTrue(payload["final_human_review_required"])
+        self.assertEqual(
+            payload["final_human_review_reason"],
+            "final_review_high_risk_posture",
+        )
+        self.assertTrue(payload["final_human_gate_preserved"])
+        self.assertEqual(payload["project_planning_summary_status"], "available")
+        self.assertTrue(payload["project_planning_summary_available"])
+        self.assertEqual(
+            payload["project_planning_summary_reason"],
+            "planning_summary_compiled",
+        )
+        self.assertEqual(
+            payload["project_planning_control_posture"],
+            "human_review_required",
+        )
+        self.assertEqual(payload["objective_compiler_status"], "available")
+        self.assertTrue(payload["current_objective_available"])
+        self.assertEqual(payload["objective_done_criteria_status"], "not_met")
+        self.assertEqual(payload["objective_stop_criteria_status"], "stop")
+        self.assertEqual(payload["objective_completion_posture"], "objective_blocked")
+        self.assertFalse(payload["objective_scope_drift_detected"])
+        self.assertEqual(payload["objective_scope_drift_status"], "clear")
+        self.assertEqual(payload["project_autonomy_budget_status"], "available")
+        self.assertEqual(payload["project_priority_posture"], "deferred")
+        self.assertTrue(payload["project_priority_deferred"])
+        self.assertEqual(payload["project_high_risk_defer_posture"], "defer")
+        self.assertTrue(payload["project_high_risk_defer_active"])
+        self.assertEqual(payload["project_run_budget_posture"], "available")
+        self.assertEqual(payload["project_objective_budget_posture"], "available")
+        self.assertEqual(payload["project_pr_retry_budget_posture"], "not_applicable")
+        self.assertEqual(payload["project_quality_gate_status"], "available")
+        self.assertEqual(payload["project_quality_gate_posture"], "review_ready")
+        self.assertFalse(payload["project_quality_gate_merge_ready"])
+        self.assertTrue(payload["project_quality_gate_review_ready"])
+        self.assertFalse(payload["project_quality_gate_retry_needed"])
+        self.assertEqual(payload["project_quality_gate_risk_level"], "high")
+        self.assertTrue(payload["project_quality_gate_high_risk"])
+        self.assertIn("targeted_regression", payload["project_quality_gate_recommended"])
+        self.assertEqual(payload["project_merge_branch_lifecycle_status"], "available")
+        self.assertEqual(payload["project_merge_ready_posture"], "not_merge_ready")
+        self.assertFalse(payload["project_merge_ready"])
+        self.assertEqual(payload["project_branch_cleanup_candidate_posture"], "not_candidate")
+        self.assertFalse(payload["project_branch_cleanup_candidate"])
+        self.assertEqual(
+            payload["project_branch_quarantine_candidate_posture"],
+            "candidate",
+        )
+        self.assertTrue(payload["project_branch_quarantine_candidate"])
+        self.assertEqual(payload["project_local_main_sync_posture"], "sync_required")
+        self.assertTrue(payload["project_local_main_sync_required"])
+        self.assertEqual(payload["project_failure_memory_status"], "available")
+        self.assertIn(
+            payload["project_failure_memory_suppression_posture"],
+            {
+                "none",
+                "suppress_retry",
+                "suppress_repair",
+                "suppress_review_issue",
+                "suppress_failure_bucket",
+            },
+        )
+        self.assertIn(
+            payload["project_failure_memory_last_failure_bucket"],
+            {"retry_exhausted", "unknown"},
+        )
+        self.assertGreaterEqual(payload["project_failure_memory_retry_failure_count"], 0)
+        self.assertGreaterEqual(payload["project_failure_memory_repair_failure_count"], 0)
+        self.assertEqual(
+            payload["project_failure_memory_suppression_active"],
+            payload["project_failure_memory_suppression_posture"] != "none",
+        )
+        self.assertEqual(payload["project_external_boundary_status"], "available")
+        self.assertEqual(payload["project_external_dependency_posture"], "manual_only")
+        self.assertFalse(payload["project_external_dependency_available"])
+        self.assertFalse(payload["project_external_dependency_blocked"])
+        self.assertEqual(payload["project_external_manual_only_posture"], "manual_only")
+        self.assertTrue(payload["project_external_manual_only_required"])
+        self.assertEqual(
+            payload["project_external_github_boundary_posture"],
+            "manual_only",
+        )
+        self.assertEqual(payload["project_human_escalation_status"], "available")
+        self.assertEqual(
+            payload["project_human_escalation_posture"],
+            "escalation_required",
+        )
+        self.assertTrue(payload["project_human_escalation_required"])
+        self.assertEqual(payload["project_manual_only_risk_posture"], "elevated")
+        self.assertEqual(payload["project_external_risk_posture"], "elevated")
+        self.assertEqual(payload["project_budget_risk_posture"], "elevated")
+        self.assertFalse(payload["project_human_escalation_unavailable"])
+        self.assertEqual(
+            payload["project_approval_notification_status"],
+            "available",
+        )
+        self.assertEqual(
+            payload["project_approval_notification_ready_posture"],
+            "ready",
+        )
+        self.assertTrue(payload["project_approval_notification_ready"])
+        self.assertEqual(
+            payload["project_approval_reply_required_posture"],
+            "reply_required",
+        )
+        self.assertTrue(payload["project_approval_reply_required"])
+        self.assertEqual(
+            payload["project_approval_channel_posture"],
+            "manual_only",
+        )
+        self.assertEqual(
+            payload["project_approval_mobile_summary_posture"],
+            "available",
+        )
+        self.assertTrue(payload["project_approval_mobile_summary_compact"])
+        self.assertFalse(payload["project_approval_notification_unavailable"])
+        self.assertEqual(payload["project_multi_objective_status"], "available")
+        self.assertEqual(
+            payload["project_active_objective_selection_posture"],
+            "deferred",
+        )
+        self.assertEqual(
+            payload["project_blocked_objective_deferral_posture"],
+            "deferred",
+        )
+        self.assertTrue(payload["project_blocked_objective_deferred"])
+        self.assertEqual(
+            payload["project_resumable_queue_ordering_posture"],
+            "deferred_non_runnable",
+        )
+        self.assertFalse(payload["project_resumable_queue_has_pending"])
+        self.assertFalse(payload["project_multi_objective_unavailable"])
+        self.assertEqual(payload["project_roadmap_status"], "available")
+        self.assertTrue(payload["project_roadmap_available"])
+        self.assertEqual(payload["project_roadmap_reason"], "roadmap_compiled")
+        self.assertEqual(payload["project_roadmap_item_count"], 6)
+        human_review_items = [
+            item
+            for item in payload["project_roadmap_items"]
+            if item.get("roadmap_item_id") == "roadmap_human_review_gate"
+        ]
+        self.assertEqual(len(human_review_items), 1)
+        self.assertTrue(human_review_items[0]["blocked"])
+        self.assertEqual(payload["project_pr_slicing_status"], "available")
+        self.assertTrue(payload["project_pr_slicing_available"])
+        self.assertEqual(payload["project_pr_slicing_reason"], "pr_slices_compiled")
+        self.assertEqual(payload["project_pr_slice_count"], 6)
+        self.assertEqual(
+            payload["project_pr_one_pr_size_decision"],
+            "single_theme_single_pr",
+        )
+        self.assertEqual(payload["implementation_prompt_status"], "available")
+        self.assertTrue(payload["implementation_prompt_available"])
+        self.assertEqual(payload["implementation_prompt_reason"], "prompt_compiled")
+        self.assertEqual(
+            payload["implementation_prompt_slice_id"],
+            "slice_01_continuation_budget",
+        )
+        self.assertEqual(
+            payload["implementation_prompt_roadmap_item_id"],
+            "roadmap_continuation_budget",
+        )
+        self.assertEqual(
+            payload["implementation_prompt_payload"]["prompt_status"],
+            "available",
+        )
+        self.assertTrue(
+            payload["implementation_prompt_payload"]["out_of_scope"]
+        )
+        self.assertEqual(payload["project_pr_queue_status"], "prepared")
+        self.assertEqual(payload["project_pr_queue_reason"], "queue_item_prepared")
+        self.assertEqual(payload["project_pr_queue_item_count"], 6)
+        self.assertEqual(payload["project_pr_queue_selected_slice_id"], "slice_01_continuation_budget")
+        self.assertTrue(payload["project_pr_queue_handoff_prepared"])
+        self.assertEqual(payload["project_pr_queue_outcome"], "queue_item_prepared")
+        self.assertEqual(len(transport.launch_order), 3)
+
+    def test_runner_selects_repair_playbook_for_supported_failure_bucket(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "valid",
+            "primary_failure_bucket": "retry_exhausted",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+            transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "executed")
+        self.assertEqual(
+            payload["continuation_repair_playbook_selection_status"],
+            "selected",
+        )
+        self.assertTrue(payload["continuation_repair_playbook_selected"])
+        self.assertTrue(payload["continuation_repair_playbook_truth_sufficient"])
+        self.assertTrue(payload["continuation_repair_playbook_supported_bucket"])
+        self.assertEqual(payload["continuation_repair_playbook_bucket"], "retry_exhausted")
+        self.assertEqual(payload["continuation_repair_playbook_class"], "replan_plan")
+        self.assertEqual(
+            payload["continuation_repair_playbook_candidate_action"],
+            "request_replan",
+        )
+        self.assertEqual(
+            payload["continuation_repair_playbook_reason"],
+            "playbook_selected",
+        )
+        self.assertEqual(
+            payload["continuation_next_step_selection_status"],
+            "selected",
+        )
+        self.assertTrue(payload["continuation_next_step_selected"])
+        self.assertEqual(payload["continuation_next_step_target"], "supported_repair")
+        self.assertEqual(
+            payload["continuation_next_step_reason"],
+            "next_step_selected_supported_repair",
+        )
+        self.assertEqual(
+            payload["supported_repair_execution_status"],
+            "executed_verification_passed",
+        )
+        self.assertEqual(
+            payload["supported_repair_execution_reason"],
+            "repair_verification_passed",
+        )
+        self.assertTrue(payload["supported_repair_execution_attempted"])
+        self.assertTrue(payload["supported_repair_execution_qualified"])
+        self.assertTrue(payload["supported_repair_executed"])
+        self.assertTrue(payload["supported_repair_verification_passed"])
+        self.assertFalse(payload["supported_repair_verification_failed"])
+        self.assertEqual(payload["final_human_review_gate_status"], "not_required")
+        self.assertFalse(payload["final_human_review_required"])
+        self.assertEqual(
+            payload["final_human_review_reason"],
+            "final_review_not_required",
+        )
+        self.assertFalse(payload["final_human_gate_preserved"])
+        self.assertEqual(len(transport.launch_order), 4)
+
+    def test_runner_supported_repair_execution_verification_failure_preserves_human_gate(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "valid",
+            "primary_failure_bucket": "retry_exhausted",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "failed",
+            }
+            transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "executed")
+        self.assertEqual(
+            payload["automatic_restart_execution_reason"],
+            "supported_repair_verification_failed",
+        )
+        self.assertEqual(
+            payload["supported_repair_execution_status"],
+            "executed_verification_failed",
+        )
+        self.assertEqual(
+            payload["supported_repair_execution_reason"],
+            "repair_verification_failed",
+        )
+        self.assertTrue(payload["supported_repair_execution_attempted"])
+        self.assertTrue(payload["supported_repair_execution_qualified"])
+        self.assertTrue(payload["supported_repair_executed"])
+        self.assertFalse(payload["supported_repair_verification_passed"])
+        self.assertTrue(payload["supported_repair_verification_failed"])
+        self.assertEqual(payload["final_human_review_gate_status"], "required")
+        self.assertTrue(payload["final_human_review_required"])
+        self.assertEqual(
+            payload["final_human_review_reason"],
+            "final_review_supported_repair_verification_failed",
+        )
+        self.assertTrue(payload["final_human_gate_preserved"])
+        self.assertEqual(len(transport.launch_order), 4)
+
+    def test_runner_supported_repair_not_executed_when_launch_fails(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "valid",
+            "primary_failure_bucket": "retry_exhausted",
+        }
+
+        class _SupportedRepairLaunchFailureTransport(_RecordingDryRunTransport):
+            def launch_job(self, **kwargs):  # type: ignore[override]
+                pr_id = str(kwargs.get("pr_id", ""))
+                self.launch_order.append(pr_id)
+                if pr_id.endswith("__approved_restart_once"):
+                    raise RuntimeError("mocked supported repair launch failure")
+                return super(_RecordingDryRunTransport, self).launch_job(**kwargs)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            transport = _SupportedRepairLaunchFailureTransport()
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "not_executed")
+        self.assertEqual(
+            payload["automatic_restart_execution_reason"],
+            "restart_launch_failed",
+        )
+        self.assertEqual(
+            payload["supported_repair_execution_status"],
+            "not_executed_launch_failed",
+        )
+        self.assertEqual(
+            payload["supported_repair_execution_reason"],
+            "repair_launch_failed",
+        )
+        self.assertTrue(payload["supported_repair_execution_attempted"])
+        self.assertTrue(payload["supported_repair_execution_qualified"])
+        self.assertFalse(payload["supported_repair_executed"])
+        self.assertFalse(payload["supported_repair_verification_passed"])
+        self.assertFalse(payload["supported_repair_verification_failed"])
+        self.assertEqual(len(transport.launch_order), 4)
+
+    def test_runner_supported_repair_not_executed_when_playbook_is_not_executable(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "valid",
+            "primary_failure_bucket": "no_progress",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            transport = _RecordingDryRunTransport()
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "not_executed")
+        self.assertEqual(
+            payload["automatic_restart_execution_reason"],
+            "supported_repair_qualification_failed",
+        )
+        self.assertEqual(
+            payload["supported_repair_execution_status"],
+            "not_executed_qualification_failed",
+        )
+        self.assertEqual(
+            payload["supported_repair_execution_reason"],
+            "repair_qualification_failed",
+        )
+        self.assertFalse(payload["supported_repair_execution_attempted"])
+        self.assertFalse(payload["supported_repair_execution_qualified"])
+        self.assertFalse(payload["supported_repair_executed"])
+        self.assertFalse(payload["supported_repair_verification_passed"])
+        self.assertFalse(payload["supported_repair_verification_failed"])
+        self.assertTrue(payload["approval_skip_human_gate_preserved"])
+        self.assertFalse(payload["approval_skip_applied"])
+        self.assertEqual(len(transport.launch_order), 3)
+
+    def test_runner_does_not_select_repair_playbook_when_bucket_truth_is_insufficient(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "replan_preparation",
+            "proposed_target_lane": "replan_preparation",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_replan",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "partial",
+            "primary_failure_bucket": "retry_exhausted",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+            transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "executed")
+        self.assertEqual(
+            payload["continuation_repair_playbook_selection_status"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["continuation_repair_playbook_selected"])
+        self.assertFalse(payload["continuation_repair_playbook_truth_sufficient"])
+        self.assertTrue(payload["continuation_repair_playbook_supported_bucket"])
+        self.assertEqual(payload["continuation_repair_playbook_class"], "no_plan")
+        self.assertEqual(payload["continuation_repair_playbook_candidate_action"], "no_action")
+        self.assertEqual(
+            payload["continuation_repair_playbook_reason"],
+            "playbook_insufficient_truth",
+        )
+        self.assertEqual(
+            payload["continuation_next_step_selection_status"],
+            "selected",
+        )
+        self.assertTrue(payload["continuation_next_step_selected"])
+        self.assertEqual(payload["continuation_next_step_target"], "replan")
+        self.assertEqual(
+            payload["continuation_next_step_reason"],
+            "next_step_selected_replan",
+        )
+        self.assertEqual(payload["supported_repair_execution_status"], "not_selected")
+        self.assertEqual(payload["supported_repair_execution_reason"], "repair_not_selected")
+        self.assertFalse(payload["supported_repair_execution_attempted"])
+        self.assertFalse(payload["supported_repair_executed"])
+        self.assertFalse(payload["supported_repair_verification_passed"])
+        self.assertFalse(payload["supported_repair_verification_failed"])
+        self.assertEqual(
+            payload["project_planning_summary_status"],
+            "available",
+        )
+        self.assertTrue(payload["project_planning_summary_available"])
+        self.assertEqual(
+            payload["project_planning_summary_reason"],
+            "planning_summary_compiled",
+        )
+        self.assertEqual(len(transport.launch_order), 4)
+
+    def test_runner_selects_truth_gather_next_step_when_truth_insufficiency_is_explicit(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "same_lane_retry",
+            "proposed_target_lane": "same_lane_retry",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_restart",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "insufficient_truth",
+            "failure_bucketing_validity": "insufficient_truth",
+            "primary_failure_bucket": "unknown",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+            transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "executed")
+        self.assertEqual(
+            payload["continuation_next_step_selection_status"],
+            "selected",
+        )
+        self.assertTrue(payload["continuation_next_step_selected"])
+        self.assertEqual(payload["continuation_next_step_target"], "truth_gather")
+        self.assertTrue(payload["continuation_next_step_truth_insufficiency_explicit"])
+        self.assertEqual(
+            payload["continuation_next_step_reason"],
+            "next_step_selected_truth_gather",
+        )
+        self.assertEqual(payload["supported_repair_execution_status"], "not_selected")
+        self.assertEqual(payload["supported_repair_execution_reason"], "repair_not_selected")
+        self.assertFalse(payload["supported_repair_execution_attempted"])
+        self.assertFalse(payload["supported_repair_executed"])
+        self.assertFalse(payload["supported_repair_verification_passed"])
+        self.assertFalse(payload["supported_repair_verification_failed"])
+        self.assertEqual(
+            payload["project_planning_summary_status"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["project_planning_summary_available"])
+        self.assertEqual(
+            payload["project_planning_summary_reason"],
+            "planning_summary_insufficient_truth",
+        )
+        self.assertEqual(payload["project_autonomy_budget_status"], "insufficient_truth")
+        self.assertEqual(payload["project_priority_posture"], "insufficient_truth")
+        self.assertEqual(payload["project_run_budget_posture"], "insufficient_truth")
+        self.assertEqual(
+            payload["project_objective_budget_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_pr_retry_budget_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_high_risk_defer_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(payload["project_quality_gate_status"], "insufficient_truth")
+        self.assertEqual(payload["project_quality_gate_posture"], "insufficient_truth")
+        self.assertTrue(payload["project_quality_gate_unavailable"])
+        self.assertEqual(payload["project_quality_gate_recommended"], [])
+        self.assertEqual(
+            payload["project_merge_branch_lifecycle_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_merge_ready_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_branch_cleanup_candidate_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_branch_quarantine_candidate_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_local_main_sync_posture"],
+            "insufficient_truth",
+        )
+        self.assertTrue(payload["project_merge_branch_lifecycle_unavailable"])
+        self.assertEqual(
+            payload["project_failure_memory_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_failure_memory_suppression_posture"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["project_failure_memory_suppression_active"])
+        self.assertTrue(payload["project_failure_memory_unavailable"])
+        self.assertEqual(
+            payload["project_external_boundary_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_external_dependency_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_external_manual_only_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_external_network_boundary_posture"],
+            "insufficient_truth",
+        )
+        self.assertTrue(payload["project_external_boundary_unavailable"])
+        self.assertEqual(
+            payload["project_human_escalation_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_human_escalation_posture"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["project_human_escalation_required"])
+        self.assertTrue(payload["project_human_escalation_unavailable"])
+        self.assertEqual(
+            payload["project_approval_notification_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_approval_notification_ready_posture"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["project_approval_notification_ready"])
+        self.assertEqual(
+            payload["project_approval_reply_required_posture"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["project_approval_reply_required"])
+        self.assertEqual(
+            payload["project_approval_channel_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_approval_mobile_summary_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(payload["project_approval_mobile_summary_compact"], "")
+        self.assertTrue(payload["project_approval_notification_unavailable"])
+        self.assertEqual(
+            payload["project_multi_objective_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_active_objective_selection_posture"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["project_blocked_objective_deferral_posture"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["project_blocked_objective_deferred"])
+        self.assertEqual(
+            payload["project_resumable_queue_ordering_posture"],
+            "insufficient_truth",
+        )
+        self.assertFalse(payload["project_resumable_queue_has_pending"])
+        self.assertTrue(payload["project_multi_objective_unavailable"])
+        self.assertEqual(payload["objective_compiler_status"], "insufficient_truth")
+        self.assertFalse(payload["current_objective_available"])
+        self.assertEqual(
+            payload["objective_done_criteria_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["objective_stop_criteria_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(
+            payload["objective_completion_posture"],
+            "objective_insufficient_truth",
+        )
+        self.assertEqual(
+            payload["objective_scope_drift_status"],
+            "insufficient_truth",
+        )
+        self.assertEqual(payload["project_roadmap_status"], "insufficient_truth")
+        self.assertFalse(payload["project_roadmap_available"])
+        self.assertEqual(
+            payload["project_roadmap_reason"],
+            "roadmap_insufficient_truth",
+        )
+        self.assertEqual(payload["project_roadmap_item_count"], 0)
+        self.assertEqual(payload["project_roadmap_items"], [])
+        self.assertEqual(payload["project_pr_slicing_status"], "insufficient_truth")
+        self.assertFalse(payload["project_pr_slicing_available"])
+        self.assertEqual(
+            payload["project_pr_slicing_reason"],
+            "pr_slices_insufficient_truth",
+        )
+        self.assertEqual(payload["project_pr_slice_count"], 0)
+        self.assertEqual(payload["project_pr_slices"], [])
+        self.assertEqual(payload["project_pr_one_pr_size_decision"], "not_available")
+        self.assertEqual(payload["implementation_prompt_status"], "insufficient_truth")
+        self.assertFalse(payload["implementation_prompt_available"])
+        self.assertEqual(
+            payload["implementation_prompt_reason"],
+            "prompt_planning_insufficient_truth",
+        )
+        self.assertEqual(payload["implementation_prompt_slice_id"], "")
+        self.assertEqual(payload["implementation_prompt_roadmap_item_id"], "")
+        self.assertEqual(
+            payload["implementation_prompt_payload"]["prompt_status"],
+            "insufficient_truth",
+        )
+        self.assertFalse(
+            payload["implementation_prompt_payload"]["prompt_available"]
+        )
+        self.assertEqual(
+            payload["implementation_prompt_payload"]["prompt_reason"],
+            "prompt_planning_insufficient_truth",
+        )
+        self.assertEqual(payload["implementation_prompt_payload"]["preferred_files"], [])
+        self.assertEqual(payload["project_pr_queue_status"], "insufficient_truth")
+        self.assertEqual(
+            payload["project_pr_queue_reason"],
+            "queue_state_insufficient_truth",
+        )
+        self.assertEqual(payload["project_pr_queue_item_count"], 0)
+        self.assertEqual(payload["project_pr_queue_runnable_count"], 0)
+        self.assertEqual(payload["project_pr_queue_blocked_count"], 0)
+        self.assertEqual(payload["project_pr_queue_selected_slice_id"], "")
+        self.assertFalse(payload["project_pr_queue_handoff_prepared"])
+        self.assertEqual(payload["project_pr_queue_handoff_payload"], {})
+        self.assertEqual(payload["project_pr_queue_outcome"], "queue_state_insufficient_truth")
+        self.assertEqual(payload["review_assimilation_status"], "insufficient_truth")
+        self.assertEqual(payload["review_assimilation_action"], "none")
+        self.assertEqual(
+            payload["review_assimilation_reason"],
+            "assimilation_queue_state_insufficient_truth",
+        )
+        self.assertFalse(payload["review_assimilation_available"])
+        self.assertEqual(payload["long_running_stability_status"], "insufficient_truth")
+        self.assertEqual(
+            payload["long_running_reason"],
+            "long_running_insufficient_truth_queue_state",
+        )
+        self.assertTrue(payload["long_running_pause_required"])
+        self.assertEqual(len(transport.launch_order), 4)
+
+    def test_runner_selects_retry_next_step_when_retry_is_supported(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "restart_hold",
+            "proposed_next_direction": "same_lane_retry",
+            "proposed_target_lane": "same_lane_retry",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_restart",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "valid",
+            "primary_failure_bucket": "unknown",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            status_map = {
+                "project-planned-exec-pr-01__approved_restart_once": "completed",
+            }
+            transport = _RecordingDryRunTransport(status_by_pr_id=status_map)
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "executed")
+        self.assertEqual(
+            payload["continuation_next_step_selection_status"],
+            "selected",
+        )
+        self.assertTrue(payload["continuation_next_step_selected"])
+        self.assertEqual(payload["continuation_next_step_target"], "retry")
+        self.assertEqual(
+            payload["continuation_next_step_reason"],
+            "next_step_selected_retry",
+        )
+        self.assertEqual(payload["supported_repair_execution_status"], "not_selected")
+        self.assertEqual(payload["supported_repair_execution_reason"], "repair_not_selected")
+        self.assertFalse(payload["supported_repair_execution_attempted"])
+        self.assertFalse(payload["supported_repair_executed"])
+        self.assertFalse(payload["supported_repair_verification_passed"])
+        self.assertFalse(payload["supported_repair_verification_failed"])
+        self.assertEqual(len(transport.launch_order), 4)
+
+    def test_runner_blocks_execution_when_no_supported_next_step_is_selected(self) -> None:
+        approval_email_payload = {
+            "approval_email_status": "required",
+            "approval_email_validity": "valid",
+            "approval_required": True,
+            "approval_priority": "low",
+            "approval_reason_class": "closure_decision_required",
+            "proposed_next_direction": "closure_followup",
+            "proposed_target_lane": "closure_followup",
+            "proposed_restart_mode": "approval_required_then_restart",
+            "proposed_action_class": "review_and_close_followup",
+        }
+        response_payload = {
+            "approval_response_status": "awaiting_response",
+            "approval_response_validity": "valid",
+            "response_received": False,
+            "response_command_normalized": "",
+            "response_supported": False,
+            "response_decision_class": "unknown",
+        }
+        approved_restart_payload = {
+            "approved_restart_status": "not_ready",
+            "approved_restart_validity": "valid",
+            "restart_decision": "unknown",
+            "restart_allowed": False,
+            "restart_blocked": True,
+            "restart_held": False,
+            "restart_requires_manual_followup": False,
+            "approved_next_direction": "unknown",
+            "approved_target_lane": "unknown",
+            "approved_action_class": "unknown",
+            "response_decision_class": "unknown",
+            "response_command_normalized": "",
+        }
+        approval_safety_payload = {
+            "approval_safety_status": "safe_to_deliver",
+            "approval_safety_validity": "valid",
+            "approval_safety_confidence": "high",
+            "approval_safety_decision": "allow_delivery",
+            "approval_pending_duplicate": False,
+            "approval_cooldown_active": False,
+            "approval_loop_suspected": False,
+            "approval_delivery_blocked_by_safety": False,
+            "approval_delivery_deferred_by_safety": False,
+            "approval_delivery_allowed_by_safety": True,
+        }
+        fleet_safety_payload = {
+            "fleet_safety_status": "allow",
+            "fleet_safety_validity": "valid",
+            "fleet_safety_decision": "proceed",
+            "fleet_restart_decision": "restart_allowed",
+            "fleet_manual_review_required": False,
+            "bucket_severity": "low",
+        }
+        loop_hardening_payload = {
+            "loop_hardening_status": "stable",
+            "loop_hardening_validity": "valid",
+            "no_progress_status": "none",
+            "no_progress_detected": False,
+            "no_progress_stop_required": False,
+        }
+        failure_bucketing_payload = {
+            "failure_bucketing_status": "classified",
+            "failure_bucketing_validity": "valid",
+            "primary_failure_bucket": "unknown",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            transport = _RecordingDryRunTransport()
+            runner = PlannedExecutionRunner(
+                adapter=CodexExecutorAdapter(transport=transport)
+            )
+            with (
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_email_delivery_contract_surface",
+                    return_value=approval_email_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_response_contract_surface",
+                    return_value=response_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approved_restart_contract_surface",
+                    return_value=approved_restart_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_approval_safety_contract_surface",
+                    return_value=approval_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_fleet_safety_control_contract_surface",
+                    return_value=fleet_safety_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_loop_hardening_contract_surface",
+                    return_value=loop_hardening_payload,
+                ),
+                patch(
+                    "automation.orchestration.planned_execution_runner.build_failure_bucketing_hardening_contract_surface",
+                    return_value=failure_bucketing_payload,
+                ),
+            ):
+                manifest = runner.run(
+                    artifacts_input_dir=artifacts_dir,
+                    output_dir=out_dir,
+                    dry_run=True,
+                    stop_on_failure=True,
+                )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(payload["automatic_restart_execution_status"], "not_executed")
+        self.assertEqual(
+            payload["automatic_restart_execution_reason"],
+            "continuation_next_step_not_selected",
+        )
+        self.assertEqual(
+            payload["continuation_next_step_selection_status"],
+            "not_selected",
+        )
+        self.assertFalse(payload["continuation_next_step_selected"])
+        self.assertEqual(payload["continuation_next_step_target"], "none")
+        self.assertEqual(
+            payload["continuation_next_step_reason"],
+            "next_step_not_selected",
+        )
+        self.assertTrue(payload["approval_skip_human_gate_preserved"])
+        self.assertFalse(payload["approval_skip_applied"])
+        self.assertEqual(len(transport.launch_order), 3)
 
     def test_operator_explainability_distinguishes_action_specific_denial(self) -> None:
         run_state = _augment_run_state_with_operator_explainability(
