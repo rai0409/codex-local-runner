@@ -1,0 +1,34 @@
+PR history index
+Compact prior-increment index for prompt reuse. Use this file as a stable, low-token reference for existing implemented increments.
+
+- PR59 approval email delivery
+- PR60 deterministic runtime/token-reduction helpers
+- PR61 downstream approval delivery handoff
+- PR62 approval response ingest and approved restart decision
+- PR63 approval safety / dedup / cooldown / loop suspicion
+- PR64 deterministic local git/PR workflow helpers
+- PR65 one-shot bounded automatic restart execution
+- PR66 narrow low-risk approval-skip gating
+- PR67 continuation-budget gating at run/objective/lane scope
+- PR68 branch-specific continuation ceilings
+- PR69 no-progress stopping and failure-bucket continuation denial
+- PR70 failure-bucket -> repair-playbook selection
+- PR71 deterministic next-step selection
+- PR72 one bounded supported_repair execute-verify loop
+- PR73 explicit final human-review-required gate
+- PR74 deterministic project-planning summary/compiler
+- PR75 deterministic roadmap generation, bounded PR slicing, and simple prioritization/order
+- PR76 deterministic implementation-prompt generation from bounded PR slices
+- PR77 deterministic bounded PR-queue state and one-item execution handoff preparation
+- PR78 deterministic review-assimilation from bounded queue/handoff/result outcomes
+- PR79 deterministic bounded self-healing transitions from review-assimilation outputs
+- PR80 deterministic long-running stability with watchdog, stale/stuck detection, replay-safe pause/resume
+- PR81 deterministic objective / done-criteria compiler from planning, queue, recovery, and stability state
+- PR82 deterministic project-level prioritization and autonomy-budget compiler from objective/completion and bounded execution state
+- PR83 deterministic quality-gate orchestration with merge-ready / review-ready / retry-needed posture
+- PR84 deterministic merge / branch lifecycle compiler with merge-ready, cleanup, quarantine, and local-main-sync posture
+- PR85 deterministic failure-memory and repeated-mistake suppression compiler from retry/repair/review/lifecycle state
+- PR85 deterministic failure-memory and repeated-mistake suppression compiler from retry/repair/review/lifecycle state
+- PR86 deterministic external dependency boundary compiler for GitHub/CI/secrets/network/manual-only posture
+- PR87 deterministic project-level human escalation compiler from review, boundary, budget, and failure-risk state
+- PR88 deterministic mobile-friendly approval-notification posture from approval-email/reply and escalation state
