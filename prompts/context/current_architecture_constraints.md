@@ -1,7 +1,6 @@
 # Current architecture constraints
 
-These are the current preserved constraints for new narrow PR prompts.
-Reuse and preserve unless a prompt explicitly says otherwise.
+These are the current preserved constraints for new narrow PR prompts. Reuse and preserve unless a prompt explicitly says otherwise.
 
 ## Core preserved behavior
 - Preserve PR63 approval safety gates and precedence.
@@ -26,16 +25,9 @@ Reuse and preserve unless a prompt explicitly says otherwise.
 - Preserve PR83 deterministic quality-gate orchestration with merge-ready / review-ready / retry-needed posture.
 - Preserve PR84 deterministic merge / branch lifecycle compiler with merge-ready, cleanup, quarantine, and local-main-sync posture.
 - Preserve PR85 deterministic failure-memory and repeated-mistake suppression compiler from retry/repair/review/lifecycle state.
-- Preserve PR85 deterministic failure-memory and repeated-mistake suppression compiler from retry/repair/review/lifecycle state.
 - Preserve PR86 deterministic external dependency boundary compiler for GitHub/CI/secrets/network/manual-only posture.
 - Preserve PR87 deterministic project-level human escalation compiler from review, boundary, budget, and failure-risk state.
 - Preserve PR88 deterministic mobile-friendly approval-notification posture from approval-email/reply and escalation state.
-
-
-
-
-@@
- ## Long-running stability constraints
 
 ## Prompting / implementation constraints
 - Prefer changing `automation/orchestration/planned_execution_runner.py` and `tests/test_planned_execution_runner.py` first.
@@ -174,18 +166,6 @@ Reuse and preserve unless a prompt explicitly says otherwise.
 - If lifecycle truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate merge, cleanup, quarantine, or sync posture.
 - Do not perform merge, branch cleanup, branch deletion, or git sync actions while adding lifecycle compilation.
 - Do not redesign queue, review-assimilation, self-healing, long-running stability, or quality-gate behavior during lifecycle compilation.
-
-## Failure-memory / suppression constraints
-- Derive failure-memory and repeated-mistake suppression posture only from existing deterministic retry, repair, review, failure-bucket, queue, assimilation, self-healing, lifecycle, budget, and fallback state.
-- Reuse PR84 merge / branch lifecycle posture directly when practical.
-- Preserve compact machine-readable memory outputs only for:
-  - ineffective_retry
-  - failed_repair
-  - repeated_review_issue
-  - recurring_failure_bucket
-  - suppression_posture
-- If memory truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate recurrence or suppression.
-- Do not introduce probabilistic behavior, broad learning frameworks, or broad control-path redesign while adding failure-memory / suppression compilation.
 
 ## Failure-memory / suppression constraints
 - Derive failure-memory and repeated-mistake suppression posture only from existing deterministic retry, repair, review, failure-bucket, queue, assimilation, self-healing, lifecycle, budget, and fallback state.

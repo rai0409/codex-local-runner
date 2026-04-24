@@ -1,4 +1,5 @@
-PR history index
+# PR history index
+
 Compact prior-increment index for prompt reuse. Use this file as a stable, low-token reference for existing implemented increments.
 
 - PR59 approval email delivery
@@ -27,7 +28,6 @@ Compact prior-increment index for prompt reuse. Use this file as a stable, low-t
 - PR82 deterministic project-level prioritization and autonomy-budget compiler from objective/completion and bounded execution state
 - PR83 deterministic quality-gate orchestration with merge-ready / review-ready / retry-needed posture
 - PR84 deterministic merge / branch lifecycle compiler with merge-ready, cleanup, quarantine, and local-main-sync posture
-- PR85 deterministic failure-memory and repeated-mistake suppression compiler from retry/repair/review/lifecycle state
 - PR85 deterministic failure-memory and repeated-mistake suppression compiler from retry/repair/review/lifecycle state
 - PR86 deterministic external dependency boundary compiler for GitHub/CI/secrets/network/manual-only posture
 - PR87 deterministic project-level human escalation compiler from review, boundary, budget, and failure-risk state
