@@ -1,0 +1,1439 @@
+# Current architecture constraints
+
+These are the current preserved constraints for new narrow PR prompts. Reuse and preserve unless a prompt explicitly says otherwise.
+
+## Core preserved behavior
+- Preserve PR63 approval safety gates and precedence.
+- Preserve PR65 one-shot bounded automatic restart execution.
+- Preserve PR66 narrow low-risk approval-skip gating.
+- Preserve PR67 continuation-budget gating at run/objective/lane scope.
+- Preserve PR68 branch-specific continuation ceilings for retry / replan / truth_gather.
+- Preserve PR69 no-progress stopping and failure-bucket continuation denial.
+- Preserve PR70 deterministic failure-bucket -> repair-playbook selection.
+- Preserve PR71 deterministic next-step selection among retry / replan / truth_gather / supported_repair.
+- Preserve PR72 one bounded supported_repair execute-verify loop.
+- Preserve PR73 explicit final human-review-required gate.
+- Preserve PR74 deterministic project-planning summary/compiler.
+- Preserve PR75 deterministic roadmap generation, bounded PR slicing, and simple prioritization/order.
+- Preserve PR76 deterministic implementation-prompt generation from bounded PR slices.
+- Preserve PR77 deterministic bounded PR-queue state and one-item execution handoff preparation.
+- Preserve PR78 deterministic review-assimilation from bounded queue/handoff/result outcomes.
+- Preserve PR79 deterministic bounded self-healing transitions from review-assimilation outputs.
+- Preserve PR80 deterministic long-running stability with watchdog, stale/stuck detection, replay-safe pause/resume.
+- Preserve PR81 deterministic objective / done-criteria compiler from planning, queue, recovery, and stability state.
+- Preserve PR82 deterministic project-level prioritization and autonomy-budget compiler from objective/completion and bounded execution state.
+- Preserve PR83 deterministic quality-gate orchestration with merge-ready / review-ready / retry-needed posture.
+- Preserve PR84 deterministic merge / branch lifecycle compiler with merge-ready, cleanup, quarantine, and local-main-sync posture.
+- Preserve PR85 deterministic failure-memory and repeated-mistake suppression compiler from retry/repair/review/lifecycle state.
+- Preserve PR86 deterministic external dependency boundary compiler for GitHub/CI/secrets/network/manual-only posture.
+- Preserve PR87 deterministic project-level human escalation compiler from review, boundary, budget, and failure-risk state.
+- Preserve PR88 deterministic mobile-friendly approval-notification posture from approval-email/reply and escalation state.
+- Preserve PR89 deterministic multi-objective / project-queue compiler for selected, deferred, resumable, and insufficient posture.
+- Preserve PR90 repo-side autonomy browser orchestrator source-of-truth spec at:
+  - `/home/rai/codex-local-runner/prompts/context/autonomy_browser_orchestrator_spec.md`
+- Preserve PR91 deterministic browser task envelope, fixed JSON response posture, invalid/unavailable handling, and chat rotation/handoff foundation.
+- Preserve PR92 deterministic browser UI readiness, selector-definition contract, UI failure posture, no-runtime-DOM/session-check flags, and metadata-only recovery recommendation foundation.
+- Preserve PR93 deterministic browser prompt payload compiler metadata, summary-first section availability/status posture, required JSON schema reference, compact token posture, and no-runtime browser send/read/session-check flags.
+- Preserve PR94 deterministic browser response assimilation metadata, fixed-JSON decision/risk/score/proof posture, candidate next-action posture, and non-execution runtime guards.
+- Preserve PR95 deterministic browser UI recovery decision metadata, retry-count posture, handoff-dependency posture, recovery candidate selection, and non-execution runtime guards.
+- Preserve PR96 deterministic browser handoff summary compiler metadata, rotation/new-chat handoff trigger posture, section availability/status posture, compact payload posture, and no-delivery runtime guards.
+- Preserve PR97 deterministic browser execution handoff contract metadata, future-executor prerequisite posture, execution kind/block posture, executor contract version, and no-runtime execution guards.
+- Preserve PR98 deterministic browser executor interface/stub contract metadata, PR97 source-contract validation posture, non-execution stub/dry-run receipt shape, and strict no-browser/no-Playwright capability guards.
+- Preserve PR99 deterministic browser single-command queue/read-model metadata, dry-run non-execution command receipt contract, PR98 executor-interface gating, and no-dispatch/no-runtime guards.
+- Preserve PR100 deterministic Playwright availability, browser session configuration, launch preflight metadata, optional import-safe posture, and no-launch/no-DOM/no-send runtime guards.
+- Preserve PR101 bounded one-attempt browser launch/page-open helper, ChatGPT page-open posture, login interruption detection, compact launch receipt metadata, and no-send/no-response/no-loop guards.
+- Preserve PR102 bounded selector resolver and read-only DOM readiness probe, critical selector status metadata, login-interruption-aware probe stop posture, compact DOM readiness receipt, and no-fill/no-send/no-response/no-loop guards.
+- Preserve PR103 bounded prompt-fill-only path gated by PR102 DOM readiness, existing prepared prompt text usage, chat_input-only fill target, compact fill receipt metadata, and no-send/no-wait/no-parse/no-recovery guards.
+- Preserve PR104 bounded send-click-only path gated by PR103 prompt fill, reused send_trigger selector contract, compact send receipt metadata, and no-wait/no-read/no-parse/no-recovery guards.
+- Preserve PR105 bounded response wait/read path gated by PR104 send-click receipt, reused response-phase selector posture, compact response read receipt metadata, and no-JSON-parse/no-decision/no-recovery/no-loop guards.
+- Preserve PR106 bounded fixed-JSON parse classification and compact browser execution receipt metadata gated by PR105 response read, with no decision execution and no runtime control-flow mutation.
+- Preserve PR107 bounded minimal browser recovery path from PR106 receipt outcomes, at-most-one page_reload/new_chat action, pause_for_login posture, compact recovery receipt metadata, and no-refill/no-resend/no-rewait/no-reparse/no-loop guards.
+- Preserve PR108 deterministic one-command browser executor finalizer, final receipt classification from PR99-PR107 metadata, stop-after-one-outcome posture, and no-additional-execution/no-queue-drain guards.
+- Preserve PR109 deterministic final receipt assimilation and next-action classification from PR108 one-command finalizer, same-prompt retry policy/reason metadata, and metadata-only/no-execution autonomous development guards.
+- Preserve PR110 deterministic metadata-only next-prompt draft and md-update draft layer from PR109 fields, compact draft payload/command shapes, and no-prompt-send/no-md-write/no-shell/no-control-flow-mutation guards.
+- Preserve PR111 deterministic metadata-only autonomous continuation gate and duplicate/retry policy classification from PR109/PR110 metadata, with allowed/blocked/pause/human-review/insufficient postures and no-execution runtime guards.
+- Preserve PR112 deterministic metadata-only one-PR-at-a-time autonomous controller, selecting exactly one action candidate from PR111 gate output, compact controller receipt/runtime posture, and no selected-action execution guards.
+- Preserve PR113 deterministic metadata-only autonomous run ledger and selected-action receipt layer from PR112 controller output, safe compact action identity/fingerprinting, duplicate-risk classification, and no-execution side-effect guards.
+- Preserve PR114 deterministic metadata-only autonomous safety switch / manual override / safe-stop / execution-permission compiler from PR113 ledger/action receipt, with strict no-execution runtime posture.
+- Preserve PR115 deterministic metadata-only execution bridge from PR114 execution_permission with strict no-execution runtime posture.
+- Preserve PR116 deterministic metadata-only bounded multi-step budget/compiler from PR115 execution bridge, with controller_max_steps=3, hard_limit=5 metadata-only, failure/retry/Codex budgets, one next-step candidate, stop/block reasons, and no-execution runtime posture.
+- Preserve PR117 deterministic metadata-only score-gated one-step wrapper from PR116 budget/candidate metadata, with structured score bands, hard-gate checks, single-action receipt, batch-continue candidate posture, and no-loop/no-execution runtime guards.
+- Preserve PR118 deterministic metadata-only batch continuation evaluator and observability-stop-summary layer from PR116/PR117, with no-approval continuation candidate classification, compact operator summary kind, remaining-budget posture, and no-next-step/no-loop runtime guards.
+- Preserve PR119 deterministic metadata-only cooldown / retry-hardening / loop-risk suppression / rolling continuation gate from PR118, with rolling continue permission/reason/next-action and strict no-execution posture for PR120 handoff.
+- Preserve PR120 deterministic metadata-only bounded rolling autonomous operation contract from PR116-PR119, with final contract status/mode/permission, next-safe-action, stop reason, policy surfaces, compact operator summary kind, contract receipt, and no-execution posture.
+- Preserve PR121 deterministic metadata-only bounded rolling contract invocation from PR120, with one invocation receipt, score>=92 extra-hard-gate no-approval threshold, simple-task score>=90 path, derived after-counters, and no-execution/no-loop posture.
+- Preserve PR122 deterministic metadata-only bounded invocation dispatcher from PR121, mapping one invocation to one dispatch candidate, classifying task size/risk, emitting one dispatch receipt, and preserving no-execution/no-loop posture.
+- Preserve PR123 deterministic metadata-only action-specific executor readiness from PR122, mapping one dispatch candidate to one executor candidate, classifying side-effect/risk/low-vs-standard path posture, emitting one executor receipt, and preserving no-execution/no-loop posture.
+- Preserve PR124 deterministic metadata-only low + standard risk execution adapter from PR123, mapping executor candidates to md/browser enqueue adapter candidates, classifying low/standard/high risk policy, emitting one adapter receipt, and preserving no-actual-execution posture.
+- Preserve PR125 constrained low-risk md actual apply from PR124, allowing at most one deterministic context .md write to approved targets using structured md payload, duplicate/anchor/diff checks, one md-apply receipt, and no-browser/no-Codex/no-shell/no-loop posture.
+- Preserve PR126 deterministic metadata-only browser command enqueue preparation from PR124 standard-risk browser enqueue candidates, with structured prompt source/fingerprint/duplicate/retry checks, one browser enqueue receipt, and no browser execution/no queue-drain posture.
+- Preserve PR127 bounded browser one-command actual execution from PR126 prepared browser command envelopes, using existing browser primitives for launch/page/selector/fill/send/one wait-read, emitting one browser execution receipt, and preserving no queue-drain/no second-command/no-Codex/no-counter/no-loop posture.
+- Preserve PR128 metadata-only browser execution result assimilation and Codex invocation candidate preparation from PR127, classifying one browser send/read receipt into response usability, bounded structured implementation handoff, one Codex candidate receipt, retry-browser candidate posture, and no-Codex/no-shell/no-md/no-counter/no-loop posture.
+- Preserve PR129 bounded one-Codex-execution path from PR128 ready Codex invocation candidate, enforcing one attempt only, no tests/validation/sanity, no repair loop, compact result receipt, and no browser/md/queue/counter/git/github mutation posture.
+- Preserve PR130 metadata-only Codex execution result assimilation from PR129, normalizing success/failure/timeout/block, files changed, tests-not-run policy, validation targets, quality/next posture, and one result receipt with no new execution/no counter/no git/github/no loop posture.
+- Preserve PR131 bounded run ledger/counter persistence from PR130, deriving event kind, step/failure/retry deltas, fingerprint/duplicate posture, persisting through an existing explicit path when available, otherwise prepared metadata-only, with one receipt and no new execution/no batch-loop posture.
+- Preserve PR132 bounded short-batch runner from PR120-PR131 compact fields, max_steps=3, hard_limit=5 metadata-only, one-step-at-a-time re-gating, failure/retry ceilings, stop-reason normalization, one batch receipt, and no daemon/no queue-drain/no git/github/no tests posture.
+
+
+## Prompting / implementation constraints
+- Prefer changing `automation/orchestration/planned_execution_runner.py` and `tests/test_planned_execution_runner.py` first.
+- Touch summary / artifact / inspect surfaces only if strictly required.
+- Additive changes only.
+- Deterministic outputs and decisions only.
+- Local-first only.
+- No free-form NLP.
+- No broad controller / scheduler / autopilot framework redesign.
+- Preserve human-gated fallback whenever automation cannot proceed safely.
+- For autonomy-browser phase prompts, reference the PR90 spec file directly instead of re-explaining full policy text in each prompt.
+
+## Browser-orchestrator foundation constraints
+- Preserve PR91 browser-task foundation as state-only / contract-only unless a later prompt explicitly introduces real browser execution.
+- Browser task classes must remain compact and machine-readable:
+  - planner
+  - review
+  - repair
+  - scoring
+  - prompt_generator
+  - test_spec
+- Preserve fixed JSON browser-response posture:
+  - valid
+  - invalid_response
+  - unavailable
+  - inactive
+- Preserve compact browser chat rotation / handoff posture:
+  - turn_count
+  - rotation_due
+  - handoff_summary_required
+  - handoff_summary_available
+- Do not make runtime behavior depend on successful real browser automation until a prompt explicitly adds Playwright execution.
+- Do not introduce real ChatGPT browser sending, login/session handling, DOM selectors, or Playwright page interaction unless explicitly scoped.
+
+## Planning / slicing constraints
+- Derive roadmap and PR slices only from the existing deterministic planning summary surface.
+- If planning summary truth is insufficient, preserve deterministic insufficient state and emit zero roadmap items / zero PR slices.
+- Preserve deterministic ordering behavior:
+  - blocked-last
+  - narrower-scope-first
+  - prerequisites-before-dependents
+- Preserve bounded PR sizing posture:
+  - single_theme_single_pr
+  - avoid mixing unrelated subsystems
+  - do not widen bounded slice scope during later prompt generation or queue preparation
+
+## Boundedness defaults
+- Do not introduce unbounded chaining.
+- Preserve one-shot bounded restart behavior unless a prompt explicitly changes it.
+- Preserve existing continuation budgets / ceilings / denial precedence unless a prompt explicitly changes them.
+
+## Prompt-generation constraints
+- Derive implementation prompt payloads only from existing deterministic bounded PR-slice state.
+- If slice or planning truth is insufficient, preserve deterministic prompt unavailable/insufficient state and do not emit speculative payload content.
+- Preserve compact machine-readable prompt payload shape rather than verbose prose-only prompt state.
+- Preserve bounded slice intent during prompt generation:
+  - do not widen bounded slice scope
+  - do not merge multiple slices during prompt generation
+  - preserve slice identity and roadmap-item linkage when available
+
+## Queue / handoff constraints
+- Derive queue selection and one-item handoff only from existing deterministic PR-slice state and implementation-prompt payload state.
+- Prepare at most one runnable queue item per decision step.
+- If prompt payload is unavailable/insufficient for the selected slice, preserve blocked/non-handoff state and do not fabricate execution handoff.
+- Preserve compact deterministic queue outcomes such as:
+  - prepared
+  - blocked
+  - empty
+  - insufficient_truth
+- Do not introduce queue draining or broad scheduler behavior during queue-state/handoff preparation.
+
+## Review / assimilation constraints
+- Derive review-assimilation only from existing deterministic bounded queue/handoff/result posture.
+- If queue state is empty, blocked, prompt-unavailable, or insufficient_truth, preserve compact no-action or unavailable assimilation state and do not fabricate bounded next actions.
+- Preserve bounded assimilation actions only:
+  - accept
+  - retry
+  - replan
+  - split
+  - escalate
+- Preserve compact machine-readable assimilation state, including queue/result linkage when available.
+- Do not introduce broad self-healing chains or redesign queue behavior during review-assimilation.
+
+## Self-healing constraints
+- Derive bounded self-healing transitions only from existing deterministic review-assimilation outputs and already-available bounded execution/safety state.
+- Allow at most one bounded self-healing transition per chain budget window.
+- Preserve bounded transition mapping only:
+  - retry -> retry
+  - replan -> replan
+  - split -> truth_gather
+  - escalate -> alternative_supported_repair only when explicitly allowed
+- If review assimilation is no_action, unavailable, insufficient_truth, or current queue posture is non-runnable, preserve compact non-transition state and do not fabricate recovery.
+- Preserve human fallback on safety blocks, continuation/no-progress/failure denies, exhausted budgets, and final human-review-required posture unless an explicit narrow exception already exists.
+- Do not introduce unbounded retry/replan/repair loops or redesign queue behavior during self-healing.
+
+## Long-running stability constraints
+- Derive long-running stability only from existing deterministic queue, review-assimilation, self-healing, fallback, and final-review state.
+- Preserve bounded long-running behavior:
+  - no blind continuation on queue empty / blocked / insufficient_truth
+  - no blind continuation on human-fallback-preserved or final-human-review-required posture
+  - no blind continuation when self-healing chain budget is exhausted
+- Preserve deterministic stale/stuck handling:
+  - stale -> paused or safe-stop
+  - stuck -> escalated or safe-stop
+  - resume_ready only when deterministic replay-safe state exists
+- Preserve compact machine-readable long-running state, including replay-safe identity / signature / resume-token style fields when available.
+- Do not redesign queue, review-assimilation, or self-healing behavior while adding long-running stability.
+
+## Objective / completion constraints
+- Derive objective identity, done criteria, stop criteria, completion posture, and scope-drift signals only from existing deterministic planning, queue, review-assimilation, self-healing, long-running stability, fallback, and final-review state.
+- Preserve compact completion posture only:
+  - objective_active
+  - objective_completed
+  - objective_blocked
+  - objective_insufficient_truth
+- If objective or completion truth is insufficient, preserve compact insufficient/unavailable state and do not fabricate completion claims.
+- Derive done criteria only from already-available machine-readable bounded execution signals such as slice count, processed slice count, queue posture, and explicit completion-compatible state.
+- Derive stop criteria only from already-available explicit stop signals such as final human review, preserved human fallback, and long-running pause/escalation posture.
+- Emit scope-drift only from explicit deterministic signals such as queue/prompt mismatch or split-compatible posture; never speculate.
+- Do not redesign planning, queue, self-healing, or long-running control flow while adding objective/completion compilation.
+
+## Prioritization / autonomy-budget constraints
+- Derive project-level prioritization and autonomy-budget posture only from existing deterministic objective/completion, planning, queue, review-assimilation, self-healing, long-running stability, budget, risk, fallback, and final-review state.
+- Reuse PR81 objective/completion posture directly when practical; do not create a separate objective truth owner.
+- Preserve compact machine-readable posture for:
+  - project priority
+  - per-objective budget
+  - per-run budget
+  - per-PR retry budget
+  - high-risk defer / lower-priority posture
+- If prioritization or budget truth is insufficient, preserve compact insufficient/unavailable state and do not fabricate budget numbers or project priority.
+- Do not redesign existing execution/control flow while adding prioritization/budget compilation.
+- Do not introduce a broad scoring framework in this layer.
+
+## Quality-gate constraints
+- Derive quality-gate posture only from existing deterministic slice, prompt, queue, result, objective/completion, prioritization/budget, risk, and fallback state.
+- Reuse PR82 project-level prioritization / autonomy-budget posture directly when practical.
+- Preserve compact recommended gate outputs only from bounded set:
+  - unit
+  - targeted_regression
+  - lint
+  - typecheck
+- Preserve compact posture outputs only:
+  - merge_ready
+  - review_ready
+  - retry_needed
+  - insufficient_truth
+- If quality-gate truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate gate requirements.
+- Do not execute validation or redesign existing execution/control flow while adding quality-gate compilation.
+
+## Merge / branch lifecycle constraints
+- Derive merge / branch lifecycle posture only from existing deterministic quality-gate, objective/completion, prioritization/budget, queue, result, fallback, and final-review state.
+- Reuse PR83 quality-gate posture directly when practical.
+- Preserve compact machine-readable lifecycle outputs only:
+  - merge_ready / not_merge_ready / insufficient_truth
+  - cleanup_candidate posture
+  - quarantine_candidate posture
+  - local_main_sync posture
+- If lifecycle truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate merge, cleanup, quarantine, or sync posture.
+- Do not perform merge, branch cleanup, branch deletion, or git sync actions while adding lifecycle compilation.
+- Do not redesign queue, review-assimilation, self-healing, long-running stability, or quality-gate behavior during lifecycle compilation.
+
+## Failure-memory / suppression constraints
+- Derive failure-memory and repeated-mistake suppression posture only from existing deterministic retry, repair, review, failure-bucket, queue, assimilation, self-healing, lifecycle, budget, and fallback state.
+- Reuse PR84 merge / branch lifecycle posture directly when practical.
+- Preserve compact machine-readable memory outputs only for:
+  - ineffective_retry
+  - failed_repair
+  - repeated_review_issue
+  - recurring_failure_bucket
+  - suppression_posture
+- If memory truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate recurrence or suppression.
+- Do not introduce probabilistic behavior, broad learning frameworks, or broad control-path redesign while adding failure-memory / suppression compilation.
+
+## External dependency boundary constraints
+- Derive external dependency boundary posture only from existing deterministic dependency/block/manual-only/fallback/lifecycle/memory/suppression state.
+- Reuse PR85 failure-memory / suppression posture directly when practical.
+- Preserve compact machine-readable dependency posture only:
+  - dependency_available
+  - dependency_blocked
+  - manual_only
+  - insufficient_truth
+- Preserve compact boundary posture for:
+  - network
+  - CI
+  - secrets
+  - GitHub
+  - external_API
+- If boundary truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate dependency availability or manual-only state.
+- Do not introduce uncontrolled external actions or redesign execution/control flow while adding external-boundary compilation.
+
+## Human escalation constraints
+- Derive project-level human escalation posture only from existing deterministic final-review, external-boundary, budget, completion, quality, lifecycle, memory, suppression, and fallback state.
+- Preserve PR73 final human-review-required behavior and extend it project-level only.
+- Reuse PR86 external-boundary posture directly when practical.
+- Preserve compact machine-readable escalation outputs only for:
+  - escalation_status / posture / required / reason / reason_codes
+  - architecture_risk
+  - scope_risk
+  - external_risk
+  - budget_risk
+  - repeated_failure_risk
+  - manual_only_risk
+- If escalation truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate escalation reasons.
+- Do not redesign approval delivery, queue, review-assimilation, self-healing, long-running stability, or lifecycle behavior while adding project-level human escalation compilation.
+
+## Approval-notification constraints
+- Derive approval-notification posture only from existing deterministic approval email/reply-ingest signals and project-level escalation state.
+- Reuse existing PR59 / PR61 / PR62 approval-email and reply-ingest posture directly when practical.
+- Reuse project-level escalation posture directly when practical.
+- Preserve compact machine-readable approval-notification outputs only for:
+  - notification_ready posture
+  - reply_required posture
+  - approval_channel posture
+  - mobile_friendly concise approval summary posture
+  - unavailable / insufficient posture
+- If approval-notification truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate delivery readiness or reply-required state.
+- Do not redesign approval delivery flow, reply grammar/parsing, queue behavior, or execution/control flow while adding approval-notification compilation.
+
+## Multi-objective / project-queue constraints
+- Derive multi-objective and project-queue posture only from existing deterministic objective/completion, prioritization/budget, lifecycle, escalation, approval-notification, queue, and fallback state.
+- Reuse PR81 objective/completion posture directly when practical.
+- Reuse PR82 prioritization/autonomy-budget posture directly when practical.
+- Reuse PR84 lifecycle posture directly when practical.
+- Reuse PR87 human escalation posture directly when practical.
+- Reuse PR88 approval-notification posture directly when practical.
+- Preserve compact machine-readable outputs only for:
+  - active_objective_selection posture
+  - blocked_objective_deferral posture
+  - resumable_project_queue_ordering posture
+  - unavailable / insufficient posture
+- Preserve existing one-item bounded queue behavior unchanged.
+- If multi-objective truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate queue ordering or objective priority.
+- Do not redesign queue execution, unbounded draining, scheduler behavior, approval flow, or execution/control flow while adding multi-objective / project-queue compilation.
+
+
+## Browser UI foundation constraints
+- Preserve PR91 browser task envelope, fixed JSON response posture, invalid/unavailable/inactive handling, and chat rotation/handoff foundation.
+- Preserve PR92 browser UI readiness and selector-definition contract as metadata-only.
+- PR92 selector availability means selector-definition availability only, not runtime DOM availability.
+- Preserve PR92 no-runtime-check posture:
+  - `project_browser_ui_runtime_dom_checked=False`
+  - `project_browser_ui_runtime_session_checked=False`
+- Preserve PR92 recovery posture as metadata-only:
+  - `project_browser_ui_recovery_metadata_only=True`
+  - `project_browser_ui_recovery_attempted=False`
+- Preserve PR93 browser prompt payload compiler as metadata-only.
+- PR93 prompt payload readiness means summary-first payload metadata is internally complete only, not that a prompt was sent.
+- Preserve PR93 section handling as availability/status metadata only; do not synthesize large prompt bodies unless already present in deterministic state.
+- Preserve PR93 runtime posture:
+  - `project_browser_prompt_runtime_metadata_only=True`
+  - `project_browser_prompt_runtime_no_browser_send=True`
+  - `project_browser_prompt_runtime_no_dom_read=True`
+  - `project_browser_prompt_runtime_no_session_check=True`
+  - `project_browser_prompt_runtime_dom_checked=False`
+  - `project_browser_prompt_runtime_session_checked=False`
+  - `project_browser_prompt_runtime_recovery_attempted=False`
+- Preserve PR94 browser response assimilation as metadata-only.
+- PR94 assimilated decisions are candidate next-action metadata only and must not mutate queues, execute retries, execute repairs, execute restarts, perform browser actions, or trigger external operations.
+- PR94 score posture is advisory metadata only and must not override hard gates, safety gates, approval gates, or insufficient_truth posture.
+- Preserve PR94 runtime non-execution posture:
+  - `project_browser_assimilation_runtime_no_queue_mutation=True`
+  - `project_browser_assimilation_runtime_no_retry_execution=True`
+  - `project_browser_assimilation_runtime_no_repair_execution=True`
+  - `project_browser_assimilation_runtime_no_restart_execution=True`
+  - `project_browser_assimilation_runtime_no_browser_action=True`
+- Do not infer successful browser execution from PR94 assimilation metadata.
+- Preserve PR95 browser UI recovery decision as metadata-only.
+- PR95 recovery candidates are candidate metadata only and must not execute same-chat retry, resend, page reload, new-chat handoff, login recovery, browser action, queue mutation, retry, repair, restart, or external operation.
+- Preserve PR95 retry-count posture as derived metadata only; do not introduce persistent counters, new storage, or a new retry tracker.
+- Preserve PR95 handoff-dependency posture as metadata only; do not compile, synthesize, open, or deliver handoff summaries in PR95.
+- Preserve PR95 runtime non-execution posture:
+  - `project_browser_recovery_runtime_no_same_chat_retry_execution=True`
+  - `project_browser_recovery_runtime_no_resend_execution=True`
+  - `project_browser_recovery_runtime_no_page_reload_execution=True`
+  - `project_browser_recovery_runtime_no_new_chat_execution=True`
+  - `project_browser_recovery_runtime_no_login_recovery_execution=True`
+  - `project_browser_recovery_runtime_no_browser_action=True`
+- Do not infer successful recovery execution from PR95 recovery decision metadata.
+- Preserve PR96 browser handoff summary compiler as metadata-only.
+- PR96 handoff_compile_status=ready and handoff_payload_posture=compact_ready mean required handoff metadata is internally complete only, not that a new chat was opened or a handoff was delivered.
+- Preserve PR96 handoff section handling as availability/status metadata only; do not synthesize broad free-form project history unless already present in deterministic state.
+- Preserve PR96 runtime non-execution posture:
+  - `project_browser_handoff_runtime_no_new_chat_execution=True`
+  - `project_browser_handoff_runtime_no_browser_send=True`
+  - `project_browser_handoff_runtime_no_dom_read=True`
+  - `project_browser_handoff_runtime_no_session_check=True`
+  - `project_browser_handoff_runtime_no_handoff_delivery=True`
+- Do not infer successful new-chat creation, browser execution, or handoff delivery from PR96 handoff metadata.
+- Preserve PR97 browser execution handoff contract as metadata-only.
+- PR97 execution_handoff_status=ready means future executor contract metadata is internally complete only, not that Playwright/browser execution is allowed or has occurred.
+- Preserve PR97 executor contract version:
+  - `project_browser_executor_contract_version=browser_execution_handoff_v1`
+- Preserve PR97 runtime non-execution posture:
+  - `project_browser_execution_runtime_no_playwright_execution=True`
+  - `project_browser_execution_runtime_no_browser_open=True`
+  - `project_browser_execution_runtime_no_dom_interaction=True`
+  - `project_browser_execution_runtime_no_browser_send=True`
+  - `project_browser_execution_runtime_no_response_wait=True`
+  - `project_browser_execution_runtime_no_retry_execution=True`
+  - `project_browser_execution_runtime_no_reload_execution=True`
+  - `project_browser_execution_runtime_no_new_chat_execution=True`
+  - `project_browser_execution_runtime_no_login_recovery=True`
+  - `project_browser_execution_runtime_no_external_operation=True`
+- Do not infer successful Playwright execution, browser opening, DOM interaction, prompt sending, response waiting, retry, reload, new-chat creation, login recovery, or external operation from PR97 execution handoff metadata.
+- Preserve PR98 browser executor interface/stub contract as metadata-only.
+- PR98 executor_interface_status=contract_ready means local interface contract shape is internally complete only, not that Playwright/browser execution is available or allowed.
+- Preserve PR98 source-contract validation posture from PR97:
+  - `project_browser_executor_contract_source_version`
+  - `project_browser_executor_interface_contract_version`
+- Preserve PR98 non-execution stub/dry-run receipt posture:
+  - `project_browser_executor_receipt_kind`
+  - `project_browser_executor_receipt_status`
+- Preserve PR98 strict no-browser/no-Playwright capability guards:
+  - `does_not_open_browser`
+  - `does_not_call_playwright`
+  - `does_not_touch_dom`
+  - `does_not_send_prompt`
+  - `does_not_wait_response`
+- Do not infer successful Playwright execution, browser opening, DOM interaction, prompt sending, response waiting, retry, reload, new-chat creation, login recovery, or external operation from PR98 executor interface/stub metadata.
+- Preserve PR99 browser command queue as a single-command read-model only, not a persistent executable queue.
+- PR99 command_queue_status=prepared means one future command is selected and represented as metadata only, not that it was dispatched or executed.
+- Preserve PR99 dry-run command receipt semantics:
+  - `project_browser_command_receipt_status`
+  - `project_browser_command_receipt_kind`
+  - `project_browser_command_receipt_result=not_executed`
+- Preserve PR99 runtime non-execution posture:
+  - `project_browser_command_runtime_no_playwright_execution=True`
+  - `project_browser_command_runtime_no_browser_open=True`
+  - `project_browser_command_runtime_no_dom_interaction=True`
+  - `project_browser_command_runtime_no_browser_send=True`
+  - `project_browser_command_runtime_no_response_wait=True`
+  - `project_browser_command_runtime_no_retry_execution=True`
+  - `project_browser_command_runtime_no_reload_execution=True`
+  - `project_browser_command_runtime_no_new_chat_execution=True`
+  - `project_browser_command_runtime_no_login_recovery=True`
+  - `project_browser_command_runtime_no_external_operation=True`
+- Do not infer command execution, browser execution, DOM access, prompt sending, response waiting, retry, reload, new-chat creation, login recovery, or external operation from PR99 command queue / dry-run receipt metadata.
+- Preserve PR100 Playwright availability / browser session config / launch preflight as metadata-only.
+- PR100 launch_preflight_status=ready means launch preflight metadata is internally complete only, not that a browser was launched.
+- Preserve PR100 optional import-safe posture:
+  - `project_browser_playwright_import_posture`
+- Preserve PR100 browser session config posture:
+  - `project_browser_session_config_status`
+  - `project_browser_session_mode`
+- Preserve PR100 launch preflight posture:
+  - `project_browser_launch_preflight_status`
+  - `project_browser_launch_preflight_mode`
+  - `project_browser_login_preflight_posture`
+  - `project_browser_runtime_block_reason`
+  - `project_browser_launch_receipt_status`
+  - `project_browser_launch_receipt_kind`
+- Preserve PR100 no-launch/no-DOM/no-send posture:
+  - browser launch must not occur in PR100
+  - page creation must not occur in PR100
+  - DOM interaction must not occur in PR100
+  - prompt send/read must not occur in PR100
+  - response wait must not occur in PR100
+  - login/session recovery must not occur in PR100
+- Do not infer browser launch, page creation, DOM access, prompt sending, response waiting, login/session recovery, or execution success from PR100 launch preflight metadata.
+- Preserve PR101 bounded browser launch/page-open behavior as one-attempt only.
+- PR101 browser_launch_status=launched means browser launch succeeded only, not that ChatGPT is ready for prompt fill/send/read.
+- PR101 chatgpt_page_status=opened means page navigation/open succeeded only, not that selectors are resolved.
+- Preserve PR101 login interruption posture as pause-for-login metadata only; do not automate login or session recovery.
+- Preserve PR101 launch/page-open receipt posture:
+  - `project_browser_launch_status`
+  - `project_browser_context_status`
+  - `project_browser_page_open_status`
+  - `project_browser_chatgpt_page_status`
+  - `project_browser_login_interruption_status`
+  - `project_browser_launch_receipt_status`
+  - `project_browser_launch_receipt_kind`
+- Preserve PR101 no-send/no-response/no-loop posture:
+  - prompt fill must not occur in PR101
+  - send click must not occur in PR101
+  - response wait/read must not occur in PR101
+  - selector resolver / DOM readiness must not occur in PR101
+  - retry/reload/new-chat execution must not occur in PR101
+  - executor loop must not occur in PR101
+- Do not infer selector readiness, prompt send, response availability, login recovery, retry/reload/new-chat execution, or executor-loop activity from PR101 launch/page-open metadata.
+- Preserve PR102 selector resolver / read-only DOM readiness probe behavior as bounded and read-only.
+- PR102 dom_readiness_status=ready means the page appears ready for future prompt fill only, not that prompt fill/send/read occurred.
+- Preserve PR102 selector target posture:
+  - `project_browser_selector_resolver_status`
+  - `project_browser_selector_probe_status`
+  - `project_browser_selector_target_status`
+  - `project_browser_dom_readiness_status`
+  - `project_browser_dom_probe_block_reason`
+  - `project_browser_selector_probe_receipt_status`
+  - `project_browser_selector_probe_receipt_kind`
+- Preserve PR102 no-fill/no-send/no-response/no-loop posture:
+  - prompt fill must not occur in PR102
+  - send click must not occur in PR102
+  - response wait/read must not occur in PR102
+  - JSON parse must not occur in PR102
+  - retry/reload/new-chat execution must not occur in PR102
+  - executor loop must not occur in PR102
+- Do not infer prompt fill, send click, response availability, JSON parse, recovery execution, or executor-loop activity from PR102 selector/readiness metadata.
+- Preserve PR103 prompt fill as fill-only behavior gated by PR102 DOM readiness.
+- PR103 prompt_fill_status=filled means prompt text was placed in the input only, not that it was sent.
+- Preserve PR103 prompt source and target posture:
+  - `project_browser_prompt_fill_status`
+  - `project_browser_prompt_fill_source_status`
+  - `project_browser_prompt_fill_target_status`
+  - `project_browser_prompt_fill_block_reason`
+  - `project_browser_prompt_fill_receipt_status`
+  - `project_browser_prompt_fill_receipt_kind`
+- Preserve PR103 no-send/no-wait/no-parse/no-recovery posture:
+  - send click must not occur in PR103
+  - Enter submit must not occur in PR103
+  - response wait/read must not occur in PR103
+  - JSON parse must not occur in PR103
+  - retry/reload/new-chat execution must not occur in PR103
+  - executor loop must not occur in PR103
+- Do not infer send click, response availability, JSON parse, recovery execution, or executor-loop activity from PR103 prompt-fill metadata.
+- Preserve PR104 send click as send-click-only behavior gated by PR103 prompt fill.
+- PR104 prompt_send_status=sent means the send click completed only, not that ChatGPT accepted the prompt or produced a response.
+- Preserve PR104 send target and receipt posture:
+  - `project_browser_prompt_send_status`
+  - `project_browser_prompt_send_target_status`
+  - `project_browser_prompt_send_block_reason`
+  - `project_browser_prompt_send_runtime_posture`
+  - `project_browser_prompt_send_receipt_status`
+  - `project_browser_prompt_send_receipt_kind`
+- Preserve PR104 no-wait/no-read/no-parse/no-recovery posture:
+  - response wait/read must not occur in PR104
+  - assistant response extraction must not occur in PR104
+  - JSON parse must not occur in PR104
+  - retry/reload/new-chat execution must not occur in PR104
+  - executor loop must not occur in PR104
+- Do not infer response completion, assistant response availability, JSON parse, recovery execution, or executor-loop activity from PR104 send-click metadata.
+- Preserve PR105 response wait/read as bounded read-only response capture gated by PR104 send-click receipt.
+- PR105 response_read_status=read means latest assistant response text was captured only, not that JSON parse or decision execution occurred.
+- Preserve PR105 response wait/read posture:
+  - `project_browser_response_wait_status`
+  - `project_browser_response_read_status`
+  - `project_browser_response_text_status`
+  - `project_browser_response_wait_block_reason`
+  - `project_browser_response_runtime_posture`
+  - `project_browser_response_read_receipt_status`
+  - `project_browser_response_read_receipt_kind`
+- Preserve PR105 no-JSON-parse/no-decision/no-recovery/no-loop posture:
+  - JSON parse must not occur in PR105
+  - decision execution must not occur in PR105
+  - response assimilation execution must not occur in PR105
+  - retry/reload/new-chat execution must not occur in PR105
+  - login recovery must not occur in PR105
+  - executor loop must not occur in PR105
+- Do not infer JSON validity, decision acceptance, task success, recovery execution, or executor-loop activity from PR105 response wait/read metadata.
+- Preserve PR106 fixed-JSON parse classification as parse-only behavior gated by PR105 response read.
+- PR106 response_json_parse_status=valid means JSON parse and fixed schema check passed only, not that parsed decisions were executed.
+- Preserve PR106 browser execution receipt posture:
+  - `project_browser_response_json_parse_status`
+  - `project_browser_response_json_schema_status`
+  - `project_browser_response_json_decision_status`
+  - `project_browser_execution_receipt_status`
+  - `project_browser_execution_receipt_kind`
+  - `project_browser_execution_result_status`
+  - `project_browser_response_parse_block_reason`
+  - `project_browser_response_parse_runtime_*`
+- Preserve PR106 no-decision/no-runtime-control-flow-mutation posture:
+  - parsed decisions must not execute in PR106
+  - response assimilation execution must not occur in PR106
+  - queue mutation must not occur in PR106
+  - retry/reload/new-chat execution must not occur in PR106
+  - repair/restart/approval execution must not occur in PR106
+  - executor loop must not occur in PR106
+- Do not infer task success, decision acceptance, recovery execution, queue advancement, or executor-loop activity from PR106 JSON parse / execution receipt metadata.
+- Preserve PR107 minimal browser recovery as bounded at-most-one recovery action.
+- PR107 browser_recovery_status=recovered means one recovery action completed only, not that the original task succeeded.
+- Preserve PR107 recovery posture:
+  - `project_browser_recovery_status`
+  - `project_browser_recovery_action`
+  - `project_browser_recovery_block_reason`
+  - `project_browser_recovery_receipt_status`
+  - `project_browser_recovery_receipt_kind`
+  - `project_browser_recovery_runtime_*`
+- Accept the existing PR107 recovery reason field names as implemented; do not introduce duplicate recovery reason fields.
+- Preserve PR107 no-refill/no-resend/no-rewait/no-reparse/no-loop posture:
+  - prompt refill must not occur in PR107
+  - resend must not occur in PR107
+  - response wait/read must not occur in PR107
+  - JSON parse/reparse must not occur in PR107
+  - decision execution must not occur in PR107
+  - queue mutation must not occur in PR107
+  - executor loop must not occur in PR107
+- Do not infer original task success, response validity, queue advancement, decision execution, or executor-loop activity from PR107 recovery metadata.
+- Preserve PR108 one-command browser executor finalizer as metadata/final-receipt compilation only.
+- PR108 one_command_executor_status=completed means one browser command reached a terminal receipt only, not that the whole project completed.
+- PR108 one_command_executor_result=success means PR106 produced a valid parsed browser response receipt only; it must not trigger continuation, merge, repair, restart, approval, next prompt generation, or another browser command.
+- PR108 completed_with_recovery means PR107 completed one recovery action only, not that the original task succeeded.
+- Preserve PR108 final receipt posture:
+  - `project_browser_one_command_executor_status`
+  - `project_browser_one_command_executor_result`
+  - `project_browser_one_command_executor_stop_reason`
+  - `project_browser_one_command_executor_receipt_status`
+  - `project_browser_one_command_executor_receipt_kind`
+  - `project_browser_one_command_executor_runtime_*`
+- Preserve PR108 no-additional-execution posture:
+  - browser launch must not occur in PR108
+  - prompt fill/send must not occur in PR108
+  - response wait/read must not occur in PR108
+  - JSON parse/reparse must not occur in PR108
+  - page reload/new-chat/login recovery must not occur in PR108
+  - queue drain/polling/second-command execution must not occur in PR108
+  - next prompt generation must not occur in PR108
+  - retry/repair/restart/approval execution must not occur in PR108
+  - background loop must not occur in PR108
+- Do not infer project completion, continuation permission, next-prompt readiness, queue advancement, or autonomous loop activity from PR108 one-command final receipt metadata.
+- Preserve PR109 final receipt assimilation as metadata-only classification from PR108 one-command finalizer.
+- PR109 autonomous_dev_outcome means autonomous development classification only, not project completion or continuation permission.
+- Preserve PR109 next-action and same-prompt retry posture:
+  - `project_browser_autonomous_dev_assimilation_status`
+  - `project_browser_autonomous_dev_outcome`
+  - `project_browser_autonomous_dev_next_action`
+  - `project_browser_autonomous_dev_stop_reason`
+  - `project_browser_same_prompt_retry_policy`
+  - `project_browser_same_prompt_retry_reason`
+  - `project_browser_autonomous_dev_runtime_*`
+- Preserve PR109 same-prompt retry semantics:
+  - same prompt must not be blocked only because it is identical
+  - same prompt may be meaningful after timeout, response_unavailable, page_reload_completed, new_chat_opened, login_resumed, or rate-limit-like posture when exposed by existing metadata
+  - same prompt should be blocked when same prompt + same failure + no context change + retry budget exhausted
+  - PR109 only classifies retry candidacy; later gates decide
+- Preserve PR109 no-execution posture:
+  - next prompt generation must not occur in PR109
+  - .md writes must not occur in PR109
+  - browser actions must not occur in PR109
+  - queue/retry/repair/restart/approval/continuation execution must not occur in PR109
+  - executor loop must not occur in PR109
+- Do not infer prompt readiness, md update readiness, continuation permission, or autonomous loop activity from PR109 classification metadata.
+- Preserve PR110 next-prompt draft and md-update draft as metadata-only outputs from PR109 classification.
+- PR110 draft readiness means a candidate draft shape is available only, not that it has been sent, written, or executed.
+- Preserve PR110 draft posture:
+  - `project_browser_autonomous_next_prompt_draft_status`
+  - `project_browser_autonomous_next_prompt_kind`
+  - `project_browser_autonomous_next_prompt_scope`
+  - `project_browser_autonomous_next_prompt_source`
+  - `project_browser_autonomous_next_prompt_block_reason`
+  - `project_browser_autonomous_md_update_draft_status`
+  - `project_browser_autonomous_md_update_kind`
+  - `project_browser_autonomous_md_update_command_draft_status`
+  - `project_browser_autonomous_md_update_block_reason`
+  - `project_browser_autonomous_draft_runtime_*`
+- Preserve PR110 no-execution/no-write posture:
+  - prompt send must not occur in PR110
+  - browser action must not occur in PR110
+  - .md write must not occur in PR110
+  - shell command execution must not occur in PR110
+  - queue/retry/repair/restart/approval/continuation mutation must not occur in PR110
+  - executor loop must not occur in PR110
+- Do not infer sent prompts, applied md updates, shell execution, continuation permission, or autonomous controller activity from PR110 draft metadata.
+- Preserve PR111 autonomous continuation gate as metadata-only gating from PR109/PR110 outputs.
+- PR111 gate_status=allowed means a later controller may select one candidate action only; it must not execute in PR111.
+- Preserve PR111 continuation / duplicate / retry posture:
+  - `project_browser_autonomous_continuation_gate_status`
+  - `project_browser_autonomous_continuation_next_action`
+  - `project_browser_autonomous_continuation_block_reason`
+  - `project_browser_autonomous_duplicate_policy_status`
+  - `project_browser_autonomous_duplicate_reason`
+  - `project_browser_autonomous_retry_budget_posture`
+  - `project_browser_autonomous_gate_runtime_*`
+- Preserve PR111 same-prompt retry policy:
+  - same prompt retry may be allowed only for explicitly allowed transient/context-change reasons
+  - duplicate should block when same prompt + same failure + no context change + no allowed retry reason
+  - retry budget exhaustion must block retry
+  - PR111 only gates; it must not resend
+- Preserve PR111 no-execution posture:
+  - prompt send must not occur in PR111
+  - .md write must not occur in PR111
+  - shell command execution must not occur in PR111
+  - browser action must not occur in PR111
+  - queue/retry/repair/restart/approval/continuation mutation must not occur in PR111
+  - controller loop must not occur in PR111
+- Do not infer executed prompts, applied md updates, browser execution, retry execution, continuation execution, or autonomous controller activity from PR111 gate metadata.
+- Preserve PR112 autonomous controller as metadata-only one-action selection.
+- PR112 selected_one_action means exactly one action candidate was selected and receipt is ready; it must not execute that action.
+- Preserve PR112 controller posture:
+  - `project_browser_autonomous_controller_status`
+  - `project_browser_autonomous_controller_action`
+  - `project_browser_autonomous_controller_action_source`
+  - `project_browser_autonomous_controller_stop_reason`
+  - `project_browser_autonomous_controller_receipt_status`
+  - `project_browser_autonomous_controller_receipt_kind`
+  - `project_browser_autonomous_controller_runtime_*`
+- Preserve PR112 action semantics:
+  - `use_md_update_draft` must not edit files or run md-update commands
+  - `use_next_prompt_draft` must not send prompts
+  - `retry_same_prompt` must not resend prompts
+  - `pause_for_login` must not automate login
+  - `human_review` must not execute approval/restart actions
+- Preserve PR112 no-execution posture:
+  - prompt send must not occur in PR112
+  - .md write must not occur in PR112
+  - shell command execution must not occur in PR112
+  - browser action must not occur in PR112
+  - queue/retry/repair/restart/approval/continuation mutation must not occur in PR112
+  - multiple action selection/execution must not occur in PR112
+  - controller loop/background runtime must not occur in PR112
+- Do not infer executed prompts, applied md updates, browser execution, retry execution, continuation execution, or multi-step autonomous operation from PR112 controller metadata.
+- Preserve PR113 autonomous run ledger and selected-action receipt as metadata-only traceability.
+- PR113 action receipt means the selected action candidate was recorded only; it must not imply selected action execution.
+- Preserve PR113 ledger/action posture:
+  - `project_browser_autonomous_run_ledger_status`
+  - `project_browser_autonomous_run_ledger_entry_status`
+  - `project_browser_autonomous_run_ledger_entry_kind`
+  - `project_browser_autonomous_action_identity_status`
+  - `project_browser_autonomous_action_kind`
+  - `project_browser_autonomous_action_fingerprint_status`
+  - `project_browser_autonomous_action_duplicate_status`
+  - `project_browser_autonomous_action_receipt_status`
+  - `project_browser_autonomous_action_receipt_kind`
+  - `project_browser_autonomous_ledger_runtime_*`
+- Preserve PR113 fingerprint safety:
+  - fingerprints must use compact safe fields only
+  - full prompt bodies, full md command bodies, broad response text, DOM text, secrets, cookies, tokens, and auth/session values must not be fingerprint inputs
+  - duplicate_status=clear means no duplicate was detected from available compact metadata; it does not prove no duplicate exists globally
+- Preserve PR113 no-execution posture:
+  - selected action execution must not occur in PR113
+  - prompt send must not occur in PR113
+  - .md write must not occur in PR113
+  - shell command execution must not occur in PR113
+  - browser action must not occur in PR113
+  - queue/retry/repair/restart/approval/continuation mutation must not occur in PR113
+  - multiple action execution/controller loop must not occur in PR113
+- Do not infer executed prompts, applied md updates, browser execution, retry execution, continuation execution, or multi-step autonomous operation from PR113 ledger metadata.
+- Preserve PR114 autonomous safety switch / manual override / safe-stop / execution-permission compiler as metadata-only.
+- PR114 execution_permission is the decision authority for later autonomous execution candidates.
+- Preserve PR114 safety posture:
+  - `project_browser_autonomous_safety_switch_status`
+  - `project_browser_autonomous_manual_override_status`
+  - `project_browser_autonomous_manual_override_reason`
+  - `project_browser_autonomous_safe_stop_status`
+  - `project_browser_autonomous_safe_stop_reason`
+  - `project_browser_autonomous_execution_permission`
+  - `project_browser_autonomous_safety_runtime_*`
+- Preserve PR114 no-execution posture:
+  - selected action execution must not occur in PR114
+  - prompt send must not occur in PR114
+  - .md write must not occur in PR114
+  - shell command execution must not occur in PR114
+  - browser action must not occur in PR114
+  - queue/retry/repair/restart/approval/continuation mutation must not occur in PR114
+  - multi-step execution/controller loop must not occur in PR114
+- Preserve PR115 autonomous execution bridge as metadata-only propagation from PR114 execution_permission.
+- PR115 execution bridge must not reinterpret, upgrade, downgrade, or override PR114 safety decisions.
+- Preserve PR115 bridge posture:
+  - `project_browser_autonomous_execution_bridge_status`
+  - `project_browser_autonomous_execution_bridge_permission`
+  - `project_browser_autonomous_execution_bridge_reason`
+  - `project_browser_autonomous_execution_bridge_source_status`
+  - `project_browser_autonomous_execution_bridge_runtime_posture`
+- Preserve PR115 no-execution posture:
+  - selected action execution must not occur in PR115
+  - prompt send must not occur in PR115
+  - .md write must not occur in PR115
+  - shell command execution must not occur in PR115
+  - browser/Playwright/DOM action must not occur in PR115
+  - queue/retry/repair/restart/approval/continuation/project-state mutation must not occur in PR115
+  - loop/controller/multi-step execution must not occur in PR115
+- Do not infer executed prompts, applied md updates, browser execution, retry execution, continuation execution, or multi-step autonomous operation from PR114/PR115 safety or bridge metadata.
+- Preserve PR116 bounded multi-step budget/compiler as metadata-only.
+- PR116 prepares budgets and one next-step candidate for later execution wrappers; it must not execute steps.
+- Preserve PR116 multistep posture:
+  - `project_browser_autonomous_multistep_budget_status`
+  - `project_browser_autonomous_multistep_permission`
+  - `project_browser_autonomous_multistep_next_step_candidate`
+  - `project_browser_autonomous_multistep_stop_reason`
+  - `project_browser_autonomous_multistep_controller_max_steps`
+  - `project_browser_autonomous_multistep_controller_hard_limit`
+  - `project_browser_autonomous_multistep_current_step_count`
+  - `project_browser_autonomous_multistep_remaining_steps`
+  - `project_browser_autonomous_multistep_max_failures`
+  - `project_browser_autonomous_multistep_current_failure_count`
+  - `project_browser_autonomous_multistep_remaining_failures`
+  - `project_browser_autonomous_multistep_same_prompt_retry_limit`
+  - `project_browser_autonomous_multistep_same_prompt_retry_count`
+  - `project_browser_autonomous_multistep_same_prompt_retry_remaining`
+  - `project_browser_autonomous_multistep_codex_execution_limit`
+  - `project_browser_autonomous_multistep_codex_repair_limit`
+  - `project_browser_autonomous_multistep_budget_source_status`
+  - `project_browser_autonomous_multistep_runtime_posture`
+- Preserve PR116 budget semantics:
+  - controller_max_steps=3 is the normal budget
+  - controller_hard_limit=5 is metadata only in PR116
+  - remaining_steps must be computed from controller_max_steps=3, not hard_limit=5
+  - hard_limit must not increase allowed execution in PR116
+  - max_failures=2
+  - same_prompt_retry_limit=2
+  - codex_execution_limit=1
+  - codex_repair_limit=1
+- Preserve PR116 next-step semantics:
+  - next_step_candidate is a budgeted candidate only
+  - apply_md_update must not edit files in PR116
+  - send_next_prompt and retry_same_prompt must not send prompts in PR116
+  - PR117 or later decides whether to execute one candidate
+- Preserve PR116 no-execution posture:
+  - selected action execution must not occur in PR116
+  - prompt send must not occur in PR116
+  - .md write must not occur in PR116
+  - shell command execution must not occur in PR116
+  - browser/Playwright/DOM action must not occur in PR116
+  - queue/retry/repair/restart/approval/continuation/project-state mutation must not occur in PR116
+  - loop/controller/background runtime must not occur in PR116
+- Do not infer executed prompts, applied md updates, browser execution, retry execution, continuation execution, or multi-step autonomous operation from PR116 budget/compiler metadata.
+- Preserve PR117 score-gated one-step wrapper as metadata-only.
+- PR117 records exactly one step candidate receipt and must not start a next step.
+- Preserve PR117 step posture:
+  - `project_browser_autonomous_step_wrapper_status`
+  - `project_browser_autonomous_step_action`
+  - `project_browser_autonomous_step_score_status`
+  - `project_browser_autonomous_step_safety_score`
+  - `project_browser_autonomous_step_score_band`
+  - `project_browser_autonomous_step_auto_approval_posture`
+  - `project_browser_autonomous_step_execution_status`
+  - `project_browser_autonomous_step_execution_result`
+  - `project_browser_autonomous_step_receipt_status`
+  - `project_browser_autonomous_step_receipt_kind`
+  - `project_browser_autonomous_step_stop_reason`
+  - `project_browser_autonomous_step_batch_posture`
+  - `project_browser_autonomous_step_runtime_posture`
+- Preserve PR117 score semantics:
+  - score >=95 plus all hard gates clear may become auto_safe_without_approval
+  - score 90-94 is auto_candidate only and must not start no-approval continuation in PR117
+  - score 75-89 should require or recommend human review
+  - score below 75 should block
+  - scoring must use existing structured metadata only and must not infer score from free text
+- Preserve PR117 batch semantics:
+  - batch_continue_candidate is a candidate only
+  - PR117 must not start the next step
+  - short batches continue by repeated bounded receipts, not by unbounded loops
+- Preserve PR117 no-execution posture:
+  - prompt send must not occur in PR117
+  - browser/Playwright/DOM action must not occur in PR117
+  - Codex execution must not occur in PR117
+  - .md write must not occur in PR117 unless an existing explicit structured md-apply path already exists and all hard gates pass
+  - shell command execution must not occur in PR117
+  - test execution must not occur in PR117
+  - queue drain must not occur in PR117
+  - retry/repair/restart/approval/continuation execution must not occur in PR117
+  - multi-step loop/background runtime must not occur in PR117
+- Do not infer executed prompts, applied md updates, browser execution, Codex execution, retry execution, continuation execution, or multi-step autonomous operation from PR117 one-step wrapper metadata.
+- Preserve PR118 batch continuation evaluator and observability-stop-summary as metadata-only.
+- PR118 may classify future short-batch continuation, but must not start the next step.
+- Preserve PR118 batch/observability posture:
+  - `project_browser_autonomous_batch_evaluation_status`
+  - `project_browser_autonomous_batch_continue_permission`
+  - `project_browser_autonomous_batch_continue_reason`
+  - `project_browser_autonomous_batch_next_action`
+  - `project_browser_autonomous_batch_score_summary_status`
+  - `project_browser_autonomous_batch_score_summary`
+  - `project_browser_autonomous_observability_status`
+  - `project_browser_autonomous_current_phase`
+  - `project_browser_autonomous_last_action`
+  - `project_browser_autonomous_last_result`
+  - `project_browser_autonomous_last_stop_reason`
+  - `project_browser_autonomous_remaining_budget_status`
+  - `project_browser_autonomous_operator_summary_status`
+  - `project_browser_autonomous_operator_summary_kind`
+  - `project_browser_autonomous_observability_runtime_posture`
+- Preserve PR118 no-approval continuation semantics:
+  - no-approval continuation requires score>=95 and all hard gates clear
+  - score 90-94 is not enough for no-approval continuation in PR118
+  - allowed_candidate means a later PR/run may continue a short batch; it is not execution
+- Preserve PR118 observability semantics:
+  - operator summary must remain compact and machine-readable
+  - do not emit long free-form summary text
+  - stop summary is metadata only and must not mutate state
+- Preserve PR118 no-execution posture:
+  - next step start must not occur in PR118
+  - prompt send must not occur in PR118
+  - .md write must not occur in PR118
+  - shell command execution must not occur in PR118
+  - Codex execution must not occur in PR118
+  - browser/Playwright/DOM action must not occur in PR118
+  - queue/retry/repair/restart/approval/continuation/project-state mutation must not occur in PR118
+  - loop/background runtime must not occur in PR118
+- Do not infer executed prompts, applied md updates, browser execution, Codex execution, retry execution, continuation execution, or multi-step autonomous operation from PR118 batch/observability metadata.
+- Preserve PR119 cooldown / retry-hardening / loop-risk suppression / rolling continuation gate as metadata-only.
+- PR119 may classify future rolling continuation, but must not start the next step.
+- Preserve PR119 rolling/cooldown/retry/loop posture:
+  - `project_browser_autonomous_rolling_gate_status`
+  - `project_browser_autonomous_rolling_continue_permission`
+  - `project_browser_autonomous_rolling_continue_reason`
+  - `project_browser_autonomous_cooldown_status`
+  - `project_browser_autonomous_cooldown_reason`
+  - `project_browser_autonomous_retry_hardening_status`
+  - `project_browser_autonomous_same_prompt_retry_remaining`
+  - `project_browser_autonomous_same_failure_count`
+  - `project_browser_autonomous_loop_risk_status`
+  - `project_browser_autonomous_loop_risk_reason`
+  - `project_browser_autonomous_rolling_next_action`
+  - `project_browser_autonomous_rolling_runtime_posture`
+- Preserve PR119 no-approval rolling semantics:
+  - no-approval rolling continuation requires score>=95 and all hard gates clear
+  - score 90-94 must not become no-approval rolling continuation in PR119
+  - cooldown_required blocks rolling continuation
+  - retry_budget_exhausted blocks rolling continuation
+  - loop_suspected blocks rolling continuation
+  - duplicate action/prompt blocks rolling continuation unless later structured reset clears it
+- Preserve PR119 no-execution posture:
+  - next step start must not occur in PR119
+  - prompt send must not occur in PR119
+  - .md write must not occur in PR119
+  - shell command execution must not occur in PR119
+  - Codex execution must not occur in PR119
+  - browser/Playwright/DOM action must not occur in PR119
+  - queue/retry/repair/restart/approval/continuation/project-state mutation must not occur in PR119
+  - sleep/wait/schedule must not occur in PR119
+  - loop/background runtime must not occur in PR119
+- Do not infer executed prompts, applied md updates, browser execution, Codex execution, retry execution, continuation execution, scheduled retry, or multi-step autonomous operation from PR119 rolling gate metadata.
+- Preserve PR120 bounded rolling autonomous operation contract as metadata-only.
+- PR120 may classify future short-batch continuation, but must not start the next step.
+- Preserve PR120 operation contract posture:
+  - `project_browser_autonomous_operation_contract_status`
+  - `project_browser_autonomous_operation_mode`
+  - `project_browser_autonomous_operation_permission`
+  - `project_browser_autonomous_operation_next_safe_action`
+  - `project_browser_autonomous_operation_stop_reason`
+  - `project_browser_autonomous_operation_batch_policy_status`
+  - `project_browser_autonomous_operation_batch_size_policy`
+  - `project_browser_autonomous_operation_no_approval_policy`
+  - `project_browser_autonomous_operation_score_policy`
+  - `project_browser_autonomous_operation_budget_policy`
+  - `project_browser_autonomous_operation_cooldown_policy`
+  - `project_browser_autonomous_operation_loop_policy`
+  - `project_browser_autonomous_operation_operator_summary_status`
+  - `project_browser_autonomous_operation_operator_summary_kind`
+  - `project_browser_autonomous_operation_contract_receipt_status`
+  - `project_browser_autonomous_operation_contract_receipt_kind`
+  - `project_browser_autonomous_operation_runtime_posture`
+- Preserve PR120 bounded rolling semantics:
+  - no-approval continuation requires score>=95 and all hard gates clear
+  - score 90-94 must not become no-approval continuation in PR120
+  - normal short-batch budget is 3 steps
+  - hard limit 5 is metadata only in PR120
+  - PR120 must not increase remaining_steps using hard limit
+  - cooldown_required blocks continuation
+  - retry_budget_exhausted blocks continuation
+  - loop_suspected blocks continuation
+  - duplicate action/prompt blocks continuation unless later structured reset clears it
+- Preserve PR120 no-execution posture:
+  - next step start must not occur in PR120
+  - prompt send must not occur in PR120
+  - .md write must not occur in PR120
+  - shell command execution must not occur in PR120
+  - Codex execution must not occur in PR120
+  - browser/Playwright/DOM action must not occur in PR120
+  - queue/retry/repair/restart/approval/continuation/project-state mutation must not occur in PR120
+  - sleep/wait/schedule must not occur in PR120
+  - loop/background runtime must not occur in PR120
+- Do not infer executed prompts, applied md updates, browser execution, Codex execution, retry execution, continuation execution, scheduled retry, or multi-step autonomous operation from PR120 operation contract metadata.
+- Preserve PR121 bounded rolling contract invocation as metadata-only.
+- PR121 may consume PR120 operation contract once and emit exactly one invocation receipt, but must not execute the invocation.
+- Preserve PR121 invocation posture:
+  - `project_browser_autonomous_invocation_status`
+  - `project_browser_autonomous_invocation_kind`
+  - `project_browser_autonomous_invocation_permission`
+  - `project_browser_autonomous_invocation_action`
+  - `project_browser_autonomous_invocation_source_status`
+  - `project_browser_autonomous_invocation_block_reason`
+  - `project_browser_autonomous_invocation_receipt_status`
+  - `project_browser_autonomous_invocation_receipt_kind`
+  - `project_browser_autonomous_invocation_counter_posture`
+  - `project_browser_autonomous_invocation_remaining_steps_after`
+  - `project_browser_autonomous_invocation_remaining_failures_after`
+  - `project_browser_autonomous_invocation_same_prompt_retry_remaining_after`
+  - `project_browser_autonomous_invocation_no_approval_threshold`
+  - `project_browser_autonomous_invocation_simple_task_threshold`
+  - `project_browser_autonomous_invocation_threshold_used`
+  - `project_browser_autonomous_invocation_task_size_status`
+  - `project_browser_autonomous_invocation_simple_task_status`
+  - `project_browser_autonomous_invocation_extra_hard_gate_status`
+  - `project_browser_autonomous_invocation_extra_hard_gate_reason`
+  - `project_browser_autonomous_invocation_simple_task_gate_status`
+  - `project_browser_autonomous_invocation_simple_task_gate_reason`
+  - `project_browser_autonomous_invocation_runtime_posture`
+- Preserve PR121 no-approval invocation semantics:
+  - standard no-approval invocation requires score>=92 plus all extra hard gates clear
+  - simple low-risk metadata-only invocation may use score>=90 only when simple_task_status=true and all simple-task hard gates clear
+  - score 90-91 must not become no-approval invocation unless simple-task gates are clear
+  - score>=92 and score>=95 must not bypass extra hard gates
+  - PR121 invocation receipt does not imply prompt send, browser action, Codex execution, .md write, or continuation execution
+- Preserve PR121 no-execution posture:
+  - actual next step start must not occur in PR121
+  - prompt send must not occur in PR121
+  - .md write must not occur in PR121
+  - shell command execution must not occur in PR121
+  - Codex execution must not occur in PR121
+  - browser/Playwright/DOM action must not occur in PR121
+  - queue/retry/repair/restart/approval/continuation/project-state mutation must not occur in PR121
+  - sleep/wait/schedule must not occur in PR121
+  - loop/background runtime must not occur in PR121
+- Do not infer executed prompts, applied md updates, browser execution, Codex execution, retry execution, continuation execution, scheduled retry, or multi-step autonomous operation from PR121 invocation metadata.
+- Preserve PR122 bounded invocation dispatcher as metadata-only.
+- PR122 may consume PR121 invocation metadata once and emit exactly one dispatch candidate receipt, but must not execute the dispatch.
+- Preserve PR122 dispatch posture:
+  - `project_browser_autonomous_dispatch_status`
+  - `project_browser_autonomous_dispatch_kind`
+  - `project_browser_autonomous_dispatch_permission`
+  - `project_browser_autonomous_dispatch_action`
+  - `project_browser_autonomous_dispatch_source_status`
+  - `project_browser_autonomous_dispatch_risk_status`
+  - `project_browser_autonomous_dispatch_task_size_status`
+  - `project_browser_autonomous_dispatch_block_reason`
+  - `project_browser_autonomous_dispatch_receipt_status`
+  - `project_browser_autonomous_dispatch_receipt_kind`
+  - `project_browser_autonomous_dispatch_runtime_posture`
+- Preserve PR122 dispatch semantics:
+  - `prepare_next_prompt_handoff` must not send a prompt
+  - `prepare_retry_same_prompt_handoff` must not resend a prompt
+  - `prepare_md_update_handoff` must not write files
+  - dispatch receipt does not imply execution
+  - high-risk mapped dispatch action must block unless later structured human-review approval exists
+- Preserve PR122 no-execution posture:
+  - actual next step start must not occur in PR122
+  - prompt send must not occur in PR122
+  - .md write must not occur in PR122
+  - shell command execution must not occur in PR122
+  - Codex execution must not occur in PR122
+  - browser/Playwright/DOM action must not occur in PR122
+  - queue/retry/repair/restart/approval/continuation/project-state mutation must not occur in PR122
+  - sleep/wait/schedule must not occur in PR122
+  - loop/background runtime must not occur in PR122
+- Do not infer executed prompts, applied md updates, browser execution, Codex execution, retry execution, continuation execution, scheduled retry, or multi-step autonomous operation from PR122 dispatch metadata.
+- Preserve PR123 action-specific executor readiness as metadata-only.
+- PR123 may consume PR122 dispatch metadata once and emit exactly one executor candidate receipt, but must not execute the candidate.
+- Preserve PR123 executor posture:
+  - `project_browser_autonomous_executor_readiness_status`
+  - `project_browser_autonomous_executor_candidate_kind`
+  - `project_browser_autonomous_executor_permission`
+  - `project_browser_autonomous_executor_action`
+  - `project_browser_autonomous_executor_source_status`
+  - `project_browser_autonomous_executor_risk_status`
+  - `project_browser_autonomous_executor_side_effect_status`
+  - `project_browser_autonomous_executor_low_risk_path_status`
+  - `project_browser_autonomous_executor_standard_path_status`
+  - `project_browser_autonomous_executor_block_reason`
+  - `project_browser_autonomous_executor_receipt_status`
+  - `project_browser_autonomous_executor_receipt_kind`
+  - `project_browser_autonomous_executor_runtime_posture`
+- Preserve PR123 executor semantics:
+  - `next_prompt_handoff_executor_candidate` must not send a prompt
+  - `retry_same_prompt_handoff_executor_candidate` must not resend a prompt
+  - `md_update_handoff_executor_candidate` must not write files
+  - executor receipt does not imply execution
+  - high-risk executor candidate must block unless later structured human-review approval exists
+  - standard candidate must not be upgraded to low risk
+- Preserve PR123 no-execution posture:
+  - actual execution must not occur in PR123
+  - actual next step start must not occur in PR123
+  - prompt send must not occur in PR123
+  - .md write must not occur in PR123
+  - shell command execution must not occur in PR123
+  - Codex execution must not occur in PR123
+  - browser/Playwright/DOM action must not occur in PR123
+  - queue/retry/repair/restart/approval/continuation/counter/project-state mutation must not occur in PR123
+  - sleep/wait/schedule must not occur in PR123
+  - loop/background runtime must not occur in PR123
+- Do not infer executed prompts, applied md updates, browser execution, Codex execution, retry execution, continuation execution, scheduled retry, counter mutation, or multi-step autonomous operation from PR123 executor metadata.
+- Preserve PR124 low + standard risk execution adapter as metadata-only.
+- PR124 may consume PR123 executor readiness metadata once and emit exactly one execution adapter receipt, but must not execute the candidate.
+- Preserve PR124 execution adapter posture:
+  - `project_browser_autonomous_execution_adapter_status`
+  - `project_browser_autonomous_execution_adapter_kind`
+  - `project_browser_autonomous_execution_adapter_permission`
+  - `project_browser_autonomous_execution_adapter_action`
+  - `project_browser_autonomous_execution_adapter_source_status`
+  - `project_browser_autonomous_execution_adapter_risk_status`
+  - `project_browser_autonomous_execution_adapter_side_effect_class`
+  - `project_browser_autonomous_execution_adapter_low_risk_policy_status`
+  - `project_browser_autonomous_execution_adapter_standard_policy_status`
+  - `project_browser_autonomous_execution_adapter_high_risk_policy_status`
+  - `project_browser_autonomous_execution_adapter_block_reason`
+  - `project_browser_autonomous_execution_adapter_receipt_status`
+  - `project_browser_autonomous_execution_adapter_receipt_kind`
+  - `project_browser_autonomous_execution_adapter_runtime_posture`
+- Preserve PR124 risk policy:
+  - low risk may become executable_candidate
+  - standard risk may become execution_ready_candidate
+  - high risk must block or require human_review
+  - simple_task_90 path may only be low risk when all simple-task gates remain clear
+  - standard_92 path may be low or standard depending on PR123 risk metadata
+  - standard risk must not be upgraded to low risk
+  - high risk must not be downgraded without explicit structured human-review approval
+- Preserve PR124 action semantics:
+  - `md_update_apply_candidate` must not write files in PR124
+  - `browser_prompt_enqueue_candidate` must not enqueue a real browser command or send a prompt in PR124
+  - `browser_retry_enqueue_candidate` must not enqueue a real browser command or resend a prompt in PR124
+  - `codex_invocation_candidate` must not call Codex in PR124
+  - PR124 must not introduce new Codex invocation mapping unless explicitly present in existing compact metadata
+- Preserve PR124 no-execution posture:
+  - actual execution must not occur in PR124
+  - actual next step start must not occur in PR124
+  - prompt send must not occur in PR124
+  - browser enqueue must not occur in PR124
+  - .md write must not occur in PR124
+  - shell command execution must not occur in PR124
+  - Codex execution must not occur in PR124
+  - browser/Playwright/DOM action must not occur in PR124
+  - queue/retry/repair/restart/approval/continuation/counter/project-state mutation must not occur in PR124
+  - sleep/wait/schedule must not occur in PR124
+  - loop/background runtime must not occur in PR124
+- Do not infer executed prompts, browser enqueue, applied md updates, browser execution, Codex execution, retry execution, continuation execution, scheduled retry, counter mutation, or multi-step autonomous operation from PR124 execution adapter metadata.
+- Preserve PR125 constrained md actual apply as the first low-risk actual execution path.
+- PR125 may consume PR124 low-risk `md_update_apply_candidate` once and apply at most one deterministic context `.md` write.
+- Preserve PR125 md apply posture:
+  - `project_browser_autonomous_md_apply_status`
+  - `project_browser_autonomous_md_apply_kind`
+  - `project_browser_autonomous_md_apply_permission`
+  - `project_browser_autonomous_md_apply_target_status`
+  - `project_browser_autonomous_md_apply_target_path`
+  - `project_browser_autonomous_md_apply_source_status`
+  - `project_browser_autonomous_md_apply_change_status`
+  - `project_browser_autonomous_md_apply_duplicate_status`
+  - `project_browser_autonomous_md_apply_anchor_status`
+  - `project_browser_autonomous_md_apply_diff_scope_status`
+  - `project_browser_autonomous_md_apply_write_status`
+  - `project_browser_autonomous_md_apply_block_reason`
+  - `project_browser_autonomous_md_apply_receipt_status`
+  - `project_browser_autonomous_md_apply_receipt_kind`
+  - `project_browser_autonomous_md_apply_runtime_posture`
+- Preserve PR125 allowed actual write scope:
+  - only one target file may be written
+  - allowed targets are `prompts/context/pr_history_index.md` and `prompts/context/current_architecture_constraints.md`
+  - structured md update payload is required
+  - target/duplicate/anchor/diff-scope checks must pass
+  - duplicate already present must become skipped duplicate_noop receipt with no write
+  - missing structured payload, disallowed target, missing anchor, or too-large diff must block
+  - no shell command may be used for the write path
+- Preserve PR125 no-other-execution posture:
+  - prompt send must not occur in PR125
+  - browser enqueue/action must not occur in PR125
+  - Playwright/DOM action must not occur in PR125
+  - Codex execution must not occur in PR125
+  - shell command execution must not occur in PR125
+  - queue/retry/repair/restart/approval/continuation/counter/project-state mutation must not occur in PR125
+  - sleep/wait/schedule must not occur in PR125
+  - loop/background runtime must not occur in PR125
+- Do not infer prompt send, browser enqueue, browser execution, Codex execution, retry execution, continuation execution, scheduled retry, counter mutation, or multi-step autonomous operation from PR125 md apply metadata.
+- Preserve PR126 browser command enqueue preparation as metadata/prepared-envelope only.
+- PR126 may consume PR124 standard-risk browser enqueue candidates once and emit exactly one browser enqueue receipt, but must not execute the command.
+- Preserve PR126 browser enqueue posture:
+  - `project_browser_autonomous_browser_enqueue_status`
+  - `project_browser_autonomous_browser_enqueue_kind`
+  - `project_browser_autonomous_browser_enqueue_permission`
+  - `project_browser_autonomous_browser_enqueue_action`
+  - `project_browser_autonomous_browser_enqueue_source_status`
+  - `project_browser_autonomous_browser_enqueue_command_type`
+  - `project_browser_autonomous_browser_enqueue_envelope_status`
+  - `project_browser_autonomous_browser_enqueue_prompt_source_status`
+  - `project_browser_autonomous_browser_enqueue_prompt_fingerprint_status`
+  - `project_browser_autonomous_browser_enqueue_duplicate_status`
+  - `project_browser_autonomous_browser_enqueue_retry_budget_status`
+  - `project_browser_autonomous_browser_enqueue_block_reason`
+  - `project_browser_autonomous_browser_enqueue_receipt_status`
+  - `project_browser_autonomous_browser_enqueue_receipt_kind`
+  - `project_browser_autonomous_browser_enqueue_runtime_posture`
+- Preserve PR126 browser enqueue semantics:
+  - `enqueue_next_prompt_command` prepares a command only and must not send a prompt
+  - `enqueue_retry_same_prompt_command` prepares a command only and must not resend a prompt
+  - duplicate prompt must become skipped duplicate_noop receipt with no new envelope
+  - missing, empty, or too-large prompt payload must block
+  - retry budget exhausted must block retry enqueue
+  - PR126 must not create a new browser queue implementation
+  - if no existing explicit browser command queue metadata path is already wired, emit metadata-only enqueue receipt
+  - do not store full prompt text in new PR126 fields; use existing structured prompt payload surfaces only
+- Preserve PR126 no-execution posture:
+  - browser execution must not occur in PR126
+  - Playwright launch must not occur in PR126
+  - DOM interaction must not occur in PR126
+  - prompt send/send click must not occur in PR126
+  - response wait/read must not occur in PR126
+  - Codex execution must not occur in PR126
+  - .md write must not occur in PR126
+  - shell command execution must not occur in PR126
+  - queue drain must not occur in PR126
+  - retry/repair/restart/approval/continuation/counter/project-state mutation must not occur in PR126
+  - sleep/wait/schedule must not occur in PR126
+  - loop/background runtime must not occur in PR126
+- Do not infer prompt send, browser execution, response read, Codex execution, applied md updates, retry execution, continuation execution, scheduled retry, counter mutation, or multi-step autonomous operation from PR126 browser enqueue metadata.
+- Preserve PR127 bounded browser one-command actual execution.
+- PR127 may consume exactly one PR126 prepared browser command envelope and execute exactly one browser command:
+  - `send_next_prompt`
+  - `retry_same_prompt`
+- Preserve PR127 browser execution posture:
+  - `project_browser_autonomous_browser_execution_status`
+  - `project_browser_autonomous_browser_execution_kind`
+  - `project_browser_autonomous_browser_execution_permission`
+  - `project_browser_autonomous_browser_execution_command_type`
+  - `project_browser_autonomous_browser_execution_source_status`
+  - `project_browser_autonomous_browser_execution_launch_status`
+  - `project_browser_autonomous_browser_execution_page_status`
+  - `project_browser_autonomous_browser_execution_selector_status`
+  - `project_browser_autonomous_browser_execution_prompt_fill_status`
+  - `project_browser_autonomous_browser_execution_send_status`
+  - `project_browser_autonomous_browser_execution_response_wait_status`
+  - `project_browser_autonomous_browser_execution_response_read_status`
+  - `project_browser_autonomous_browser_execution_response_text_status`
+  - `project_browser_autonomous_browser_execution_block_reason`
+  - `project_browser_autonomous_browser_execution_receipt_status`
+  - `project_browser_autonomous_browser_execution_receipt_kind`
+  - `project_browser_autonomous_browser_execution_runtime_posture`
+- Preserve PR127 execution limits:
+  - one command only
+  - no queue drain
+  - no second command
+  - no Codex execution
+  - no .md write
+  - no shell command execution
+  - no retry/repair/restart/approval/continuation/counter/project-state mutation
+  - no loop/background runtime
+- Preserve PR127 browser safety:
+  - duplicate prompt must block with no send
+  - retry budget exhausted must block retry
+  - login interruption must pause
+  - selectors not ready must block
+  - prompt missing/empty/too-large must block
+  - response timeout must emit timeout receipt
+  - response empty must emit blocked/failed receipt
+  - response too large must not store broad response text
+  - do not store credentials, cookies, tokens, auth/session values, broad DOM text, or broad response text
+- Do not infer Codex execution, applied md updates, retry execution, continuation execution, scheduled retry, counter mutation, queue drain, second-command execution, or multi-step autonomous operation from PR127 browser execution metadata.
+- Preserve PR128 browser result assimilation and Codex invocation candidate preparation as metadata-only.
+- PR128 may consume exactly one PR127 browser execution receipt and emit at most one Codex invocation candidate receipt, but must not execute Codex.
+- Preserve PR128 result/candidate posture:
+  - `project_browser_autonomous_result_assimilation_status`
+  - `project_browser_autonomous_result_assimilation_kind`
+  - `project_browser_autonomous_browser_result_outcome`
+  - `project_browser_autonomous_response_usability_status`
+  - `project_browser_autonomous_response_handoff_status`
+  - `project_browser_autonomous_response_handoff_kind`
+  - `project_browser_autonomous_codex_invocation_candidate_status`
+  - `project_browser_autonomous_codex_invocation_candidate_kind`
+  - `project_browser_autonomous_codex_invocation_permission`
+  - `project_browser_autonomous_codex_invocation_prompt_source_status`
+  - `project_browser_autonomous_codex_invocation_scope_status`
+  - `project_browser_autonomous_codex_invocation_no_tests_policy`
+  - `project_browser_autonomous_codex_invocation_token_posture`
+  - `project_browser_autonomous_result_assimilation_block_reason`
+  - `project_browser_autonomous_result_assimilation_receipt_status`
+  - `project_browser_autonomous_result_assimilation_receipt_kind`
+  - `project_browser_autonomous_result_assimilation_runtime_posture`
+- Preserve PR128 Codex candidate policy:
+  - PR128 must not execute Codex
+  - PR128 must not run shell commands
+  - PR128 must not write files
+  - PR128 must not synthesize Codex prompts from raw/free-form response text
+  - PR128 may only use existing structured/bounded implementation handoff payloads by id/fingerprint
+  - PR128 must not store or forward broad response text into new candidate fields
+  - missing structured handoff payload must block with `codex_prompt_missing` or `insufficient_truth`
+  - empty/timeout/too-large responses must not become Codex-ready candidates
+  - Codex candidate requires bounded scope, compact token posture, no-tests policy enforced, and upstream gates clear
+  - multiple Codex candidate payloads must block with insufficient_truth or candidate_not_ready
+- Preserve PR128 no-execution posture:
+  - Codex execution must not occur in PR128
+  - shell command execution must not occur in PR128
+  - .md write must not occur in PR128
+  - prompt send must not occur in PR128
+  - browser enqueue/action must not occur in PR128
+  - response wait/read must not occur in PR128
+  - retry/repair/restart/approval/continuation/counter/project-state mutation must not occur in PR128
+  - sleep/wait/schedule must not occur in PR128
+  - loop/background runtime must not occur in PR128
+- Do not infer Codex execution, shell execution, applied md updates, prompt send, browser enqueue/execution, response wait/read, retry execution, continuation execution, scheduled retry, counter mutation, or multi-step autonomous operation from PR128 result-assimilation metadata.
+- Preserve PR129 bounded one-Codex-execution path.
+- PR129 may consume exactly one PR128 ready Codex invocation candidate and execute exactly one Codex attempt.
+- Preserve PR129 Codex execution posture:
+  - `project_browser_autonomous_codex_execution_status`
+  - `project_browser_autonomous_codex_execution_kind`
+  - `project_browser_autonomous_codex_execution_permission`
+  - `project_browser_autonomous_codex_execution_source_status`
+  - `project_browser_autonomous_codex_execution_candidate_status`
+  - `project_browser_autonomous_codex_execution_prompt_status`
+  - `project_browser_autonomous_codex_execution_scope_status`
+  - `project_browser_autonomous_codex_execution_token_posture`
+  - `project_browser_autonomous_codex_execution_no_tests_policy`
+  - `project_browser_autonomous_codex_execution_attempt_count`
+  - `project_browser_autonomous_codex_execution_max_attempts`
+  - `project_browser_autonomous_codex_execution_repair_loop_status`
+  - `project_browser_autonomous_codex_execution_result_status`
+  - `project_browser_autonomous_codex_execution_files_changed_status`
+  - `project_browser_autonomous_codex_execution_tests_status`
+  - `project_browser_autonomous_codex_execution_block_reason`
+  - `project_browser_autonomous_codex_execution_receipt_status`
+  - `project_browser_autonomous_codex_execution_receipt_kind`
+  - `project_browser_autonomous_codex_execution_runtime_posture`
+- Preserve PR129 Codex execution limits:
+  - one Codex attempt only
+  - max_attempts=1
+  - no second Codex attempt
+  - no repair loop
+  - no retry loop
+  - no tests, validation commands, or sanity checks
+  - no arbitrary shell execution outside existing bounded Codex adapter
+  - no new subprocess/shell execution owner
+  - if bounded Codex adapter is unavailable, block with candidate_not_ready or insufficient_truth
+  - multiple Codex candidates must block with candidate_not_ready or insufficient_truth
+- Preserve PR129 no-other-execution posture:
+  - browser action must not occur in PR129
+  - prompt send/browser enqueue must not occur in PR129
+  - .md write must not occur in PR129
+  - queue/retry/repair/restart/approval/continuation/counter/project-state mutation must not occur in PR129
+  - git commit/push/PR creation/merge/GitHub mutation must not occur in PR129
+  - sleep/wait/schedule must not occur in PR129
+  - loop/background runtime must not occur in PR129
+- Do not infer tests, validation, repair execution, retry execution, browser execution, applied md updates, continuation execution, scheduled retry, counter mutation, git/github mutation, or multi-step autonomous operation from PR129 Codex execution metadata.
+- Preserve PR130 Codex result assimilation as metadata-only.
+- PR130 may consume one PR129 Codex execution receipt and emit one post-Codex result receipt, but must not execute anything.
+- Preserve PR130 fields with prefix `project_browser_autonomous_codex_result_*`.
+- Preserve PR130 result policy:
+  - succeeded + files_changed=changed -> `ready_for_ledger_update`
+  - succeeded + files_changed=none -> `needs_review` / `ready_for_validation_planning`
+  - failed/timeout -> retry/repair candidate metadata only; no retry/repair execution
+  - tests attempted despite instruction -> block with `tests_policy_violation`
+  - too many files changed -> block or human_review with `files_changed_too_many`
+- Preserve PR130 no-execution posture:
+  - no new Codex execution
+  - no tests, validation commands, sanity checks, or shell execution
+  - no browser action, prompt send, browser enqueue, or .md write
+  - no queue/retry/repair/restart/approval/continuation/counter/project-state mutation
+  - no git commit/push/PR creation/merge/GitHub mutation
+  - no loop/background runtime
+- Do not infer validation, retry, repair, counter update, git/github mutation, or multi-step operation from PR130 metadata.
+- Preserve PR131 run ledger/counter persistence semantics.
+- PR131 may consume one PR130 result receipt and emit one ledger/counter receipt.
+- Preserve PR131 fields with prefix `project_browser_autonomous_run_ledger_*`.
+- PR131 event/delta policy:
+  - success+changed -> step_delta=1, failure_delta=0
+  - success+no_change -> step_delta=1, failure_delta=0
+  - failed/timeout -> step_delta=1, failure_delta=1
+  - blocked/pause/human_review/insufficient -> no counter increment unless mirrored metadata requires otherwise
+- PR131 must build duplicate-safe event fingerprints from compact safe fields only.
+- PR131 may persist only through an existing explicit ledger/counter persistence path.
+- If no explicit persistence path exists, PR131 must emit prepared metadata-only and must not create a new store.
+- Downstream PRs must not treat PR131 prepared metadata-only as persisted counters.
+- Preserve PR131 no-execution posture:
+  - no Codex/browser/prompt/md/shell/test/git/github execution
+  - no queue/retry/repair/restart/approval/continuation/project-state mutation
+  - no batch loop/background runtime
+- Preserve PR132 short-batch semantics.
+- PR132 may run at most 3 autonomous steps through existing bounded paths only.
+- PR132 hard_limit=5 is metadata-only and must not allow more than 3 steps.
+- PR132 must re-check PR114 safety, PR119 cooldown/loop, PR120 contract, and PR131 ledger/counter posture before each step.
+- PR132 must not treat PR131 prepared metadata-only as persisted counters.
+- PR132 stop conditions include max_steps_reached, budget_exhausted, failure_budget_exhausted, retry_budget_exhausted, cooldown_required, loop_suspected, duplicate_detected, ledger_not_persisted, pause_required, human_review_required, insufficient_truth.
+- Preserve PR132 fields with prefix `project_browser_autonomous_short_batch_*`.
+- Preserve PR132 no-long-running posture:
+  - no fourth step
+  - no queue drain
+  - no long-running daemon/background runtime
+  - no scheduler redesign
+  - no git/github mutation
+  - no tests/validation/sanity commands
+- Do not infer browser availability, DOM availability, login/session availability, or ChatGPT UI availability from PR92 metadata.
+- Do not infer browser send completion, browser response availability, DOM availability, login/session availability, or ChatGPT UI availability from PR93 prompt payload metadata.
+- Do not implement real Playwright execution, DOM interaction, browser send/read, login/session recovery, page reload, or new-chat execution unless a later prompt explicitly scopes it.
+- Future browser-orchestrator PRs should reuse PR91/PR92/PR93/PR94/PR95/PR96/PR97/PR98/PR99/PR100/PR101/PR102/PR103/PR104/PR105/PR106/PR107/PR108/PR109/PR110/PR111/PR112/PR113/PR114/PR115/PR116/PR117/PR118/PR119/PR120/PR121/PR122/PR123/PR124/PR125/PR126/PR127/PR128/PR129/PR130/PR131/PR132 compact fields instead of introducing a second browser state owner.
+
+## Codex usage reduction policy for PR133+
+
+Preserve this policy for PR133 and later autonomous-development prompts.
+
+- Codex is used for code modification only.
+- Codex output should be one line only:
+  - `done`
+  - `blocked:<short_reason>`
+  - `failed:<short_reason>`
+- Do not ask Codex for long summaries, implementation reports, validation explanations, or PR evaluations.
+- Evaluate Codex runs from saved local artifacts instead of Codex prose:
+  - diffstat
+  - changed files
+  - patch
+  - symbol extraction
+  - forbidden-pattern scan
+  - compact receipt
+- Codex must treat `prompts/context/*.md` as read-only source of truth.
+- `.md` updates are performed outside Codex by ChatGPT/local Python or by the existing constrained md-apply path.
+- Codex prompts should use contract-style instructions, not long natural-language explanations.
+- Preferred file should normally be limited to:
+  - `automation/orchestration/planned_execution_runner.py`
+- Codex must not search repository-wide by default.
+- Allowed search is only inside the preferred file for existing symbols, helper patterns, normalization wiring, compact summary wiring, supporting truth refs, and final payload wiring.
+- If required symbols are missing from the preferred file, Codex should return `blocked:missing_symbols` unless the prompt explicitly allows a narrow fallback.
+- Do not create new modules, edit tests, run tests, run validation commands, run sanity checks, or refactor unrelated code.
+- Do not introduce a new execution owner unless the PR explicitly permits actual execution.
+
+## PR133+ common autonomous layer contract
+
+For PR133 and later autonomous-runtime layers:
+
+- One PR = one helper / one layer.
+- Additive changes only.
+- Preferred file:
+  - `automation/orchestration/planned_execution_runner.py`
+- Preserve existing PR59+ behavior unless the prompt explicitly says otherwise.
+- Use compact deterministic enum/int fields.
+- Use prefix:
+  - `project_browser_autonomous_<layer>_*`
+- Include these field categories when relevant:
+  - `status`
+  - `kind`
+  - `permission`
+  - `source_status`
+  - `block_reason`
+  - `receipt_status`
+  - `receipt_kind`
+  - `runtime_posture`
+- Emit exactly one receipt for the new layer.
+- Wire the new layer into:
+  - normalization/defaults
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart execution contract payload
+- Do not store broad free-form text, broad DOM text, broad response text, credentials, cookies, tokens, auth/session values, or secrets.
+- Do not add a new persistence store unless the prompt explicitly allows it.
+- Do not treat metadata-only prepared state as persisted state.
+- Do not infer execution from metadata receipts.
+
+## PR133+ default forbidden actions
+
+Unless the PR explicitly permits the action, Codex must not add:
+
+- new Codex execution
+- browser execution
+- Playwright launch
+- DOM interaction
+- prompt send
+- browser enqueue
+- `.md` write
+- shell execution
+- test execution
+- validation command execution
+- sanity command execution
+- queue drain
+- retry execution
+- repair execution
+- restart execution
+- approval execution
+- continuation execution
+- counter mutation
+- project-state mutation
+- git commit
+- git push
+- PR creation
+- auto merge
+- GitHub mutation
+- long-running daemon
+- background scheduler
+- unrelated refactor
+
+## PR133+ local evaluation artifacts
+
+After each Codex run, prefer local artifacts for evaluation:
+
+- `artifacts/pr_runs/PRxxx/diffstat.txt`
+- `artifacts/pr_runs/PRxxx/files.txt`
+- `artifacts/pr_runs/PRxxx/patch.diff`
+- `artifacts/pr_runs/PRxxx/scan.json`
+- `artifacts/pr_runs/PRxxx/receipt.txt`
+
+Normal ChatGPT review should use the compact local report first.  
+Full patch review should be used only when the scan flags risk or the compact report is insufficient.

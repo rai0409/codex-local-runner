@@ -574,6 +574,7 @@ from automation.orchestration.planned_execution_runner import _build_bounded_sel
 from automation.orchestration.planned_execution_runner import _build_project_external_boundary_state
 from automation.orchestration.planned_execution_runner import _build_project_failure_memory_state
 from automation.orchestration.planned_execution_runner import _build_project_approval_notification_state
+from automation.orchestration.planned_execution_runner import _build_project_browser_task_state
 from automation.orchestration.planned_execution_runner import _build_project_human_escalation_state
 from automation.orchestration.planned_execution_runner import _build_project_multi_objective_state
 from automation.orchestration.planned_execution_runner import _build_long_running_stability_state
@@ -13181,6 +13182,212 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         )
         self.assertFalse(payload["project_resumable_queue_has_pending"])
         self.assertTrue(payload["project_multi_objective_unavailable"])
+
+    def test_project_browser_task_compiler_emits_valid_structured_response(self) -> None:
+        payload = _build_project_browser_task_state(
+            objective_id="obj-1",
+            project_planning_summary_status="available",
+            project_pr_slicing_status="available",
+            implementation_prompt_status="available",
+            project_pr_queue_status="prepared",
+            project_pr_queue_handoff_prepared=True,
+            review_assimilation_status="available",
+            review_assimilation_action="accept",
+            continuation_next_step_target="retry",
+            continuation_repair_playbook_selection_status="not_selected",
+            supported_repair_execution_status="not_selected",
+            project_human_escalation_required=False,
+            project_approval_notification_status="available",
+            project_approval_notification_ready_posture="not_required",
+            project_approval_reply_required_posture="reply_not_required",
+            project_external_boundary_status="available",
+            project_external_dependency_posture="dependency_available",
+            prior_browser_state={
+                "project_browser_task_requested_type": "scoring",
+                "project_browser_task_step_id": "step-1",
+                "project_browser_chat_turn_count": 12,
+                "project_browser_task_response_raw": {
+                    "status": "ok",
+                    "task_type": "scoring",
+                    "objective_id": "obj-1",
+                    "step_id": "step-1",
+                    "success_score": 96,
+                    "confidence_score": 94,
+                    "decision": "continue",
+                    "decision_reason": "stable",
+                    "risk_level": "low",
+                    "risks": [],
+                    "proofs": [],
+                    "required_actions": [],
+                    "blocked_by": [],
+                    "suggested_next_prompt": "next",
+                    "summary": "ok",
+                    "token_list": ["stable"],
+                },
+            },
+        )
+
+        self.assertEqual(payload["project_browser_task_status"], "available")
+        self.assertEqual(payload["project_browser_task_type"], "scoring")
+        self.assertEqual(payload["project_browser_task_envelope_status"], "ready")
+        self.assertEqual(payload["project_browser_response_status"], "valid")
+        self.assertTrue(payload["project_browser_response_valid"])
+        self.assertFalse(payload["project_browser_response_invalid"])
+        self.assertFalse(payload["project_browser_response_unavailable"])
+        self.assertEqual(payload["project_browser_chat_turn_posture"], "under_target")
+        self.assertFalse(payload["project_browser_chat_rotation_due"])
+        self.assertFalse(payload["project_browser_handoff_summary_required"])
+        self.assertFalse(payload["project_browser_handoff_summary_available"])
+        self.assertEqual(payload["project_browser_retry_limit"], 2)
+        self.assertEqual(payload["project_browser_continuation_threshold"], 90)
+        self.assertEqual(payload["project_browser_chat_rotation_target"], 80)
+        self.assertIn("scoring", payload["project_browser_task_supported_types"])
+
+    def test_project_browser_task_compiler_emits_invalid_structured_response(self) -> None:
+        payload = _build_project_browser_task_state(
+            objective_id="obj-2",
+            project_planning_summary_status="available",
+            project_pr_slicing_status="available",
+            implementation_prompt_status="available",
+            project_pr_queue_status="prepared",
+            project_pr_queue_handoff_prepared=True,
+            review_assimilation_status="available",
+            review_assimilation_action="accept",
+            continuation_next_step_target="retry",
+            continuation_repair_playbook_selection_status="not_selected",
+            supported_repair_execution_status="not_selected",
+            project_human_escalation_required=False,
+            project_approval_notification_status="available",
+            project_approval_notification_ready_posture="not_required",
+            project_approval_reply_required_posture="reply_not_required",
+            project_external_boundary_status="available",
+            project_external_dependency_posture="dependency_available",
+            prior_browser_state={
+                "project_browser_task_requested_type": "review",
+                "project_browser_chat_turn_count": 10,
+                "project_browser_task_response_raw": "{bad json",
+            },
+        )
+
+        self.assertEqual(payload["project_browser_task_status"], "invalid_response")
+        self.assertEqual(payload["project_browser_task_type"], "review")
+        self.assertEqual(payload["project_browser_response_status"], "invalid_response")
+        self.assertFalse(payload["project_browser_response_valid"])
+        self.assertTrue(payload["project_browser_response_invalid"])
+        self.assertFalse(payload["project_browser_response_unavailable"])
+        self.assertEqual(payload["project_browser_handoff_summary_posture"], "not_required")
+
+    def test_project_browser_task_compiler_emits_rotation_due_handoff_required(self) -> None:
+        base_kwargs = {
+            "objective_id": "obj-3",
+            "project_planning_summary_status": "available",
+            "project_pr_slicing_status": "available",
+            "implementation_prompt_status": "available",
+            "project_pr_queue_status": "prepared",
+            "project_pr_queue_handoff_prepared": True,
+            "review_assimilation_status": "available",
+            "review_assimilation_action": "accept",
+            "continuation_next_step_target": "retry",
+            "continuation_repair_playbook_selection_status": "not_selected",
+            "supported_repair_execution_status": "not_selected",
+            "project_human_escalation_required": False,
+            "project_approval_notification_status": "available",
+            "project_approval_notification_ready_posture": "ready",
+            "project_approval_reply_required_posture": "reply_required",
+            "project_external_boundary_status": "available",
+            "project_external_dependency_posture": "dependency_available",
+        }
+        payload_required = _build_project_browser_task_state(
+            **base_kwargs,
+            prior_browser_state={
+                "project_browser_task_requested_type": "review",
+                "project_browser_chat_turn_count": 80,
+                "project_browser_task_response_raw": {
+                    "status": "ok",
+                    "task_type": "review",
+                    "objective_id": "obj-3",
+                    "step_id": "review:prepared",
+                    "success_score": 91,
+                    "confidence_score": 92,
+                    "decision": "retry",
+                    "decision_reason": "needs followup",
+                    "risk_level": "medium",
+                    "risks": [],
+                    "proofs": [],
+                    "required_actions": [],
+                    "blocked_by": [],
+                    "suggested_next_prompt": "retry",
+                    "summary": "retry",
+                    "token_list": [],
+                },
+            },
+        )
+        payload_available = _build_project_browser_task_state(
+            **base_kwargs,
+            prior_browser_state={
+                "project_browser_task_requested_type": "review",
+                "project_browser_chat_turn_count": 81,
+                "project_browser_handoff_summary_available": True,
+                "project_browser_handoff_summary": "carry-forward",
+                "project_browser_task_response_raw": {
+                    "status": "ok",
+                    "task_type": "review",
+                    "objective_id": "obj-3",
+                    "step_id": "review:prepared",
+                    "success_score": 92,
+                    "confidence_score": 93,
+                    "decision": "continue",
+                    "decision_reason": "handoff ready",
+                    "risk_level": "medium",
+                    "risks": [],
+                    "proofs": [],
+                    "required_actions": [],
+                    "blocked_by": [],
+                    "suggested_next_prompt": "continue",
+                    "summary": "continue",
+                    "token_list": [],
+                },
+            },
+        )
+
+        self.assertEqual(payload_required["project_browser_chat_turn_posture"], "rotation_due")
+        self.assertTrue(payload_required["project_browser_chat_rotation_due"])
+        self.assertTrue(payload_required["project_browser_handoff_summary_required"])
+        self.assertFalse(payload_required["project_browser_handoff_summary_available"])
+        self.assertEqual(payload_required["project_browser_handoff_summary_posture"], "required")
+        self.assertEqual(payload_available["project_browser_handoff_summary_posture"], "available")
+        self.assertTrue(payload_available["project_browser_handoff_summary_available"])
+
+    def test_project_browser_task_compiler_emits_inactive_when_no_path_is_active(self) -> None:
+        payload = _build_project_browser_task_state(
+            objective_id="",
+            project_planning_summary_status="insufficient_truth",
+            project_pr_slicing_status="insufficient_truth",
+            implementation_prompt_status="insufficient_truth",
+            project_pr_queue_status="insufficient_truth",
+            project_pr_queue_handoff_prepared=False,
+            review_assimilation_status="insufficient_truth",
+            review_assimilation_action="none",
+            continuation_next_step_target="none",
+            continuation_repair_playbook_selection_status="insufficient_truth",
+            supported_repair_execution_status="not_selected",
+            project_human_escalation_required=False,
+            project_approval_notification_status="insufficient_truth",
+            project_approval_notification_ready_posture="insufficient_truth",
+            project_approval_reply_required_posture="insufficient_truth",
+            project_external_boundary_status="insufficient_truth",
+            project_external_dependency_posture="insufficient_truth",
+            prior_browser_state={},
+        )
+
+        self.assertEqual(payload["project_browser_task_status"], "inactive")
+        self.assertEqual(payload["project_browser_task_type"], "none")
+        self.assertEqual(payload["project_browser_task_envelope_status"], "inactive")
+        self.assertEqual(payload["project_browser_response_status"], "inactive")
+        self.assertEqual(payload["project_browser_chat_turn_posture"], "inactive")
+        self.assertFalse(payload["project_browser_chat_rotation_due"])
+        self.assertFalse(payload["project_browser_handoff_summary_required"])
+        self.assertEqual(payload["project_browser_handoff_summary_posture"], "not_required")
 
     def test_runner_preserves_approval_gate_when_skip_is_not_allowed(self) -> None:
         base_email_payload = {

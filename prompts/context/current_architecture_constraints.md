@@ -1,225 +1,419 @@
 # Current architecture constraints
 
-These are the current preserved constraints for new narrow PR prompts. Reuse and preserve unless a prompt explicitly says otherwise.
+Compressed source of truth for narrow PR prompts.
+Keep the full historical version separately for audit/recovery.
 
-## Core preserved behavior
-- Preserve PR63 approval safety gates and precedence.
-- Preserve PR65 one-shot bounded automatic restart execution.
-- Preserve PR66 narrow low-risk approval-skip gating.
-- Preserve PR67 continuation-budget gating at run/objective/lane scope.
-- Preserve PR68 branch-specific continuation ceilings for retry / replan / truth_gather.
-- Preserve PR69 no-progress stopping and failure-bucket continuation denial.
-- Preserve PR70 deterministic failure-bucket -> repair-playbook selection.
-- Preserve PR71 deterministic next-step selection among retry / replan / truth_gather / supported_repair.
-- Preserve PR72 one bounded supported_repair execute-verify loop.
-- Preserve PR73 explicit final human-review-required gate.
-- Preserve PR74 deterministic project-planning summary/compiler.
-- Preserve PR75 deterministic roadmap generation, bounded PR slicing, and simple prioritization/order.
-- Preserve PR76 deterministic implementation-prompt generation from bounded PR slices.
-- Preserve PR77 deterministic bounded PR-queue state and one-item execution handoff preparation.
-- Preserve PR78 deterministic review-assimilation from bounded queue/handoff/result outcomes.
-- Preserve PR79 deterministic bounded self-healing transitions from review-assimilation outputs.
-- Preserve PR80 deterministic long-running stability with watchdog, stale/stuck detection, replay-safe pause/resume.
-- Preserve PR81 deterministic objective / done-criteria compiler from planning, queue, recovery, and stability state.
-- Preserve PR82 deterministic project-level prioritization and autonomy-budget compiler from objective/completion and bounded execution state.
-- Preserve PR83 deterministic quality-gate orchestration with merge-ready / review-ready / retry-needed posture.
-- Preserve PR84 deterministic merge / branch lifecycle compiler with merge-ready, cleanup, quarantine, and local-main-sync posture.
-- Preserve PR85 deterministic failure-memory and repeated-mistake suppression compiler from retry/repair/review/lifecycle state.
-- Preserve PR86 deterministic external dependency boundary compiler for GitHub/CI/secrets/network/manual-only posture.
-- Preserve PR87 deterministic project-level human escalation compiler from review, boundary, budget, and failure-risk state.
-- Preserve PR88 deterministic mobile-friendly approval-notification posture from approval-email/reply and escalation state.
+## Architecture summary through PR124
 
-## Prompting / implementation constraints
-- Prefer changing `automation/orchestration/planned_execution_runner.py` and `tests/test_planned_execution_runner.py` first.
-- Touch summary / artifact / inspect surfaces only if strictly required.
+The system is a deterministic, local-first, bounded autonomous-development runner.
+
+Preserve PR63+ safety behavior:
+- Safety, approval, manual override, safe-stop, human-review, and insufficient-truth gates override automation.
+- Human fallback must remain available whenever automation cannot proceed safely.
+- Outputs and control decisions must be deterministic and compact.
+- Do not add broad controller, scheduler, or autopilot redesign unless explicitly scoped.
+
+Preserve PR91+ browser-orchestrator foundation:
+- Browser/task state is compact and machine-readable.
+- Metadata-only layers do not imply browser execution.
+- Browser execution may occur only through explicitly scoped bounded execution paths.
+- Do not infer prompt send, DOM interaction, response read, recovery, retry, or continuation from metadata receipts.
+
+Preserve PR109+ autonomous-development metadata pipeline:
+- Assimilation, draft, continuation, controller, ledger, safety, bridge, budget, wrapper, batch evaluation, rolling gate, operation contract, invocation, dispatcher, executor readiness, and execution adapter layers are deterministic and bounded.
+- Metadata-only receipts never imply execution.
+- Each new layer should emit compact status/kind/permission/source/block/receipt/runtime posture fields when relevant.
+- Each new layer should emit exactly one receipt.
+
+Preserve PR116+ budget policy:
+- Normal controller max steps is 3.
+- Hard limit 5 is metadata-only unless explicitly changed.
+- max_failures=2.
+- same_prompt_retry_limit=2.
+- Budget exhaustion, cooldown, loop risk, duplicate risk, pause, human_review, insufficient_truth, and manual override stop continuation.
+
+Preserve PR121+ no-approval thresholds:
+- Standard no-approval continuation requires score>=92 plus extra hard gates clear.
+- Simple low-risk path may use score>=90 only when simple-task gates are clear.
+- Scores must not bypass hard gates.
+
+Preserve PR124 execution adapter boundary:
+- PR124 maps executor candidates to md/browser enqueue adapter candidates.
+- Low risk may become executable_candidate.
+- Standard risk may become execution_ready_candidate.
+- High risk must block or require human_review.
+- PR124 itself must not execute, send, enqueue, write, call Codex, drain queues, mutate counters, or loop.
+
+## Detailed preserved behavior from PR125 onward
+
+### PR125 constrained `.md` actual apply
+
+PR125 is the first low-risk actual execution path.
+
+Preserve:
+- PR125 may consume one PR124 low-risk `md_update_apply_candidate`.
+- PR125 may apply at most one deterministic context `.md` write.
+- Allowed targets:
+  - `prompts/context/pr_history_index.md`
+  - `prompts/context/current_architecture_constraints.md`
+- Structured md update payload is required.
+- Target, duplicate, anchor, and diff-scope checks must pass.
+- Duplicate already present becomes skipped duplicate_noop receipt with no write.
+- Missing structured payload, disallowed target, missing anchor, or too-large diff must block.
+- No shell command may be used for the write path.
+- Preserve fields with prefix:
+  - `project_browser_autonomous_md_apply_*`
+
+PR125 must not:
+- send prompts
+- enqueue or execute browser actions
+- perform Playwright/DOM actions
+- execute Codex
+- execute shell commands
+- mutate queue/retry/repair/restart/approval/continuation/counter/project state
+- sleep, schedule, loop, or start background runtime
+
+Do not infer prompt send, browser enqueue, browser execution, Codex execution, retry execution, continuation execution, scheduled retry, counter mutation, or multi-step autonomous operation from PR125 md apply metadata.
+
+### PR126 browser command enqueue preparation
+
+PR126 is metadata/prepared-envelope only.
+
+Preserve:
+- PR126 may consume one PR124 standard-risk browser enqueue candidate.
+- PR126 emits exactly one browser enqueue receipt.
+- It prepares:
+  - `enqueue_next_prompt_command`
+  - `enqueue_retry_same_prompt_command`
+- Duplicate prompt becomes skipped duplicate_noop receipt with no new envelope.
+- Missing, empty, or too-large prompt payload blocks.
+- Retry budget exhausted blocks retry enqueue.
+- PR126 must not create a new browser queue implementation.
+- If no explicit browser command queue metadata path exists, emit metadata-only enqueue receipt.
+- Do not store full prompt text in new PR126 fields; use existing structured prompt payload surfaces only.
+- Preserve fields with prefix:
+  - `project_browser_autonomous_browser_enqueue_*`
+
+PR126 must not:
+- execute browser
+- launch Playwright
+- touch DOM
+- send prompt / send click
+- wait/read response
+- execute Codex
+- write `.md`
+- execute shell
+- drain queues
+- mutate retry/repair/restart/approval/continuation/counter/project state
+- sleep, schedule, loop, or start background runtime
+
+Do not infer prompt send, browser execution, response read, Codex execution, applied md updates, retry execution, continuation execution, scheduled retry, counter mutation, or multi-step autonomous operation from PR126 browser enqueue metadata.
+
+### PR127 bounded browser one-command actual execution
+
+PR127 is the bounded browser execution path.
+
+Preserve:
+- PR127 may consume exactly one PR126 prepared browser command envelope.
+- PR127 may execute exactly one browser command:
+  - `send_next_prompt`
+  - `retry_same_prompt`
+- It uses existing browser primitives for launch/page/selector/fill/send/one wait-read.
+- It emits one browser execution receipt.
+- Preserve fields with prefix:
+  - `project_browser_autonomous_browser_execution_*`
+
+PR127 limits:
+- one command only
+- no queue drain
+- no second command
+- no Codex execution
+- no `.md` write
+- no shell command execution
+- no retry/repair/restart/approval/continuation/counter/project-state mutation
+- no loop/background runtime
+
+PR127 safety:
+- duplicate prompt blocks with no send
+- retry budget exhausted blocks retry
+- login interruption pauses
+- selectors not ready block
+- prompt missing/empty/too-large blocks
+- response timeout emits timeout receipt
+- response empty emits blocked/failed receipt
+- response too large must not store broad response text
+- never store credentials, cookies, tokens, auth/session values, broad DOM text, or broad response text
+
+Do not infer Codex execution, applied md updates, retry execution, continuation execution, scheduled retry, counter mutation, queue drain, second-command execution, or multi-step autonomous operation from PR127 browser execution metadata.
+
+### PR128 browser result assimilation and Codex candidate
+
+PR128 is metadata-only.
+
+Preserve:
+- PR128 consumes exactly one PR127 browser execution receipt.
+- PR128 emits at most one Codex invocation candidate receipt.
+- It classifies browser result usability and bounded structured implementation handoff.
+- It may classify retry-browser candidate posture.
+- Preserve fields with prefix:
+  - `project_browser_autonomous_result_assimilation_*`
+  - `project_browser_autonomous_codex_invocation_*`
+
+PR128 Codex candidate policy:
+- PR128 must not execute Codex.
+- PR128 must not run shell commands.
+- PR128 must not write files.
+- PR128 must not synthesize Codex prompts from raw/free-form response text.
+- PR128 may only use existing structured/bounded implementation handoff payloads by id/fingerprint.
+- PR128 must not store or forward broad response text into new candidate fields.
+- Missing structured handoff payload blocks with `codex_prompt_missing` or `insufficient_truth`.
+- Empty, timeout, or too-large responses must not become Codex-ready candidates.
+- Candidate requires bounded scope, compact token posture, no-tests policy enforced, and upstream gates clear.
+- Multiple Codex candidate payloads block with insufficient_truth or candidate_not_ready.
+
+Do not infer Codex execution, shell execution, applied md updates, prompt send, browser enqueue/execution, response wait/read, retry execution, continuation execution, scheduled retry, counter mutation, or multi-step autonomous operation from PR128 result-assimilation metadata.
+
+### PR129 bounded one-Codex-execution path
+
+PR129 is the only bounded Codex execution path in this phase.
+
+Preserve:
+- PR129 may consume exactly one PR128 ready Codex invocation candidate.
+- PR129 may execute exactly one Codex attempt.
+- `max_attempts=1`.
+- No second Codex attempt.
+- No repair loop.
+- No retry loop.
+- No tests, validation commands, or sanity checks.
+- No arbitrary shell execution outside existing bounded Codex adapter.
+- No new subprocess/shell execution owner.
+- If bounded Codex adapter is unavailable, block with candidate_not_ready or insufficient_truth.
+- Multiple Codex candidates block with candidate_not_ready or insufficient_truth.
+- Preserve fields with prefix:
+  - `project_browser_autonomous_codex_execution_*`
+
+PR129 must not:
+- perform browser action
+- send prompts or browser enqueue
+- write `.md`
+- mutate queue/retry/repair/restart/approval/continuation/counter/project state
+- perform git commit/push/PR creation/merge/GitHub mutation
+- sleep, schedule, loop, or start background runtime
+
+Do not infer tests, validation, repair execution, retry execution, browser execution, applied md updates, continuation execution, scheduled retry, counter mutation, git/github mutation, or multi-step autonomous operation from PR129 Codex execution metadata.
+
+### PR130 Codex result assimilation
+
+PR130 is metadata-only.
+
+Preserve:
+- PR130 consumes one PR129 Codex execution receipt.
+- PR130 emits one post-Codex result receipt.
+- PR130 executes nothing.
+- Preserve fields with prefix:
+  - `project_browser_autonomous_codex_result_*`
+
+PR130 result policy:
+- `succeeded + files_changed=changed` -> `ready_for_ledger_update`
+- `succeeded + files_changed=none` -> `needs_review` / `ready_for_validation_planning`
+- `failed/timeout` -> retry/repair candidate metadata only; no retry/repair execution
+- tests attempted despite instruction -> block with `tests_policy_violation`
+- too many files changed -> block or human_review with `files_changed_too_many`
+
+PR130 must not:
+- execute Codex
+- run tests, validation, sanity, or shell commands
+- perform browser action, prompt send, browser enqueue, or `.md` write
+- mutate queue/retry/repair/restart/approval/continuation/counter/project state
+- perform git/GitHub mutation
+- loop or start background runtime
+
+Do not infer validation, retry, repair, counter update, git/GitHub mutation, or multi-step operation from PR130 metadata.
+
+### PR131 run ledger / counter persistence
+
+Preserve:
+- PR131 consumes one PR130 result receipt.
+- PR131 emits one ledger/counter receipt.
+- PR131 preserves fields with prefix:
+  - `project_browser_autonomous_run_ledger_*`
+
+Event/delta policy:
+- success+changed -> step_delta=1, failure_delta=0
+- success+no_change -> step_delta=1, failure_delta=0
+- failed/timeout -> step_delta=1, failure_delta=1
+- blocked/pause/human_review/insufficient -> no counter increment unless mirrored metadata requires otherwise
+
+PR131 requirements:
+- Build duplicate-safe event fingerprints from compact safe fields only.
+- Persist only through an existing explicit ledger/counter persistence path.
+- If no explicit persistence path exists, emit prepared metadata-only.
+- Do not create a new store.
+- Downstream PRs must not treat PR131 prepared metadata-only as persisted counters.
+
+PR131 must not:
+- execute Codex/browser/prompt/md/shell/test/git/GitHub actions
+- mutate queue/retry/repair/restart/approval/continuation/project state
+- run batch loop/background runtime
+
+### PR132 short-batch runner
+
+Preserve:
+- PR132 may run at most 3 autonomous steps through existing bounded paths only.
+- `hard_limit=5` is metadata-only and must not allow more than 3 steps.
+- PR132 must re-check PR114 safety, PR119 cooldown/loop, PR120 contract, and PR131 ledger/counter posture before each step.
+- PR132 must not treat PR131 prepared metadata-only as persisted counters.
+- Preserve fields with prefix:
+  - `project_browser_autonomous_short_batch_*`
+
+Stop conditions:
+- max_steps_reached
+- budget_exhausted
+- failure_budget_exhausted
+- retry_budget_exhausted
+- cooldown_required
+- loop_suspected
+- duplicate_detected
+- ledger_not_persisted
+- pause_required
+- human_review_required
+- insufficient_truth
+
+PR132 no-long-running posture:
+- no fourth step
+- no queue drain
+- no long-running daemon/background runtime
+- no scheduler redesign
+- no git/GitHub mutation
+- no tests/validation/sanity commands
+
+Do not infer browser availability, DOM availability, login/session availability, or ChatGPT UI availability from PR92 metadata.
+Do not infer browser send completion, browser response availability, DOM availability, login/session availability, or ChatGPT UI availability from PR93 prompt payload metadata.
+Do not implement real Playwright execution, DOM interaction, browser send/read, login/session recovery, page reload, or new-chat execution unless a later prompt explicitly scopes it.
+Future browser-orchestrator PRs should reuse PR91-PR133 compact fields instead of introducing a second browser state owner.
+
+
+### PR133 resume checkpoint / watchdog
+
+- Preserve PR133 resume checkpoint/watchdog metadata layer: consume PR132 short-batch, PR131 ledger/counter, PR119 cooldown/loop, and safety/manual-stop posture; emit exactly one resume/watchdog receipt; expose compact fields in normalization/defaults, compact summary, supporting truth refs, and final approved restart execution contract payload; keep metadata-only, no next-batch start, no resume execution, no browser/Codex/md/shell/queue/git/GitHub execution; treat `short_batch_stop_reason=none` as blocked with `short_batch_not_stopped_safely`, not resumeable.
+
+PR133 requirements:
+- `project_browser_autonomous_resume_*` and `project_browser_autonomous_watchdog_*` are compact deterministic fields.
+- PR133 may create checkpoint/watchdog metadata only.
+- PR133 must not start the next short batch.
+- PR133 must not execute resume.
+- PR133 must not mutate queue/retry/repair/restart/approval/continuation/counter/project state.
+- PR133 must not run tests, validation commands, shell writes, browser actions, Codex execution, git/GitHub mutation, daemon, or scheduler.
+- `short_batch_stop_reason=max_steps_reached` may allow `resume_next_short_batch_later` only when ledger is persisted and watchdog/gates are clear.
+- `short_batch_stop_reason=none` must not allow `resume_from_checkpoint`; it must be blocked as `short_batch_not_stopped_safely`.
+
+## Default PR style for PR133+
+
+- One PR = one helper / one layer.
 - Additive changes only.
-- Deterministic outputs and decisions only.
-- Local-first only.
-- No free-form NLP.
-- No broad controller / scheduler / autopilot framework redesign.
-- Preserve human-gated fallback whenever automation cannot proceed safely.
+- Preferred editable file:
+  - `automation/orchestration/planned_execution_runner.py`
+- Preserve existing PR59+ behavior unless the prompt explicitly says otherwise.
+- Do not create new modules unless explicitly scoped.
+- Do not edit tests unless explicitly scoped.
+- Do not run tests, validation commands, or sanity checks unless explicitly scoped.
+- Do not edit `prompts/context/*.md` from Codex unless explicitly using constrained PR125 md-apply.
+- Use compact deterministic enum/int fields.
+- Use prefix:
+  - `project_browser_autonomous_<layer>_*`
+- Include when relevant:
+  - status
+  - kind
+  - permission
+  - source_status
+  - block_reason
+  - receipt_status
+  - receipt_kind
+  - runtime_posture
+- Emit exactly one receipt.
+- Wire new layers into existing normalization/defaults, compact planning summary, supporting truth refs, and final approved restart execution contract payload when those surfaces exist.
+- Do not store broad free-form text, broad DOM text, broad response text, credentials, cookies, tokens, auth/session values, or secrets.
+- Do not add a new persistence store unless explicitly scoped.
+- Do not treat metadata-only prepared state as persisted state.
+- Do not infer execution from metadata receipts.
 
-## Planning / slicing constraints
-- Derive roadmap and PR slices only from the existing deterministic planning summary surface.
-- If planning summary truth is insufficient, preserve deterministic insufficient state and emit zero roadmap items / zero PR slices.
-- Preserve deterministic ordering behavior:
-  - blocked-last
-  - narrower-scope-first
-  - prerequisites-before-dependents
-- Preserve bounded PR sizing posture:
-  - single_theme_single_pr
-  - avoid mixing unrelated subsystems
-  - do not widen bounded slice scope during later prompt generation or queue preparation
+## Default forbidden actions for PR133+
 
-## Boundedness defaults
-- Do not introduce unbounded chaining.
-- Preserve one-shot bounded restart behavior unless a prompt explicitly changes it.
-- Preserve existing continuation budgets / ceilings / denial precedence unless a prompt explicitly changes them.
+Unless explicitly allowed by the current PR, do not add:
+- new Codex execution
+- browser execution
+- Playwright launch
+- DOM interaction
+- prompt send
+- browser enqueue
+- `.md` write
+- shell execution
+- test execution
+- validation command execution
+- sanity command execution
+- queue drain
+- retry execution
+- repair execution
+- restart execution
+- approval execution
+- continuation execution
+- counter mutation
+- project-state mutation
+- git commit
+- git push
+- PR creation
+- auto merge
+- GitHub mutation
+- long-running daemon
+- background scheduler
+- unrelated refactor
 
-## Prompt-generation constraints
-- Derive implementation prompt payloads only from existing deterministic bounded PR-slice state.
-- If slice or planning truth is insufficient, preserve deterministic prompt unavailable/insufficient state and do not emit speculative payload content.
-- Preserve compact machine-readable prompt payload shape rather than verbose prose-only prompt state.
-- Preserve bounded slice intent during prompt generation:
-  - do not widen bounded slice scope
-  - do not merge multiple slices during prompt generation
-  - preserve slice identity and roadmap-item linkage when available
+## Codex usage reduction / access policy for PR133+
 
-## Queue / handoff constraints
-- Derive queue selection and one-item handoff only from existing deterministic PR-slice state and implementation-prompt payload state.
-- Prepare at most one runnable queue item per decision step.
-- If prompt payload is unavailable/insufficient for the selected slice, preserve blocked/non-handoff state and do not fabricate execution handoff.
-- Preserve compact deterministic queue outcomes such as:
-  - prepared
-  - blocked
-  - empty
-  - insufficient_truth
-- Do not introduce queue draining or broad scheduler behavior during queue-state/handoff preparation.
+- Codex is used for code modification only.
+- Codex output should normally be one line only:
+  - `done`
+  - `blocked:<short_reason>`
+  - `failed:<short_reason>`
+- Do not ask Codex for long summaries, implementation reports, validation explanations, PR evaluations, or broad investigation reports.
+- Evaluate Codex runs from saved local artifacts instead of Codex prose:
+  - diffstat
+  - changed files
+  - patch
+  - symbol extraction
+  - forbidden-pattern scan
+  - compact receipt
+- Prefer relative repo paths rooted at `codex-local-runner`.
+- Do not use absolute filesystem paths as the only editable target unless the environment explicitly requires it.
+- Preferred editable file for narrow autonomous PRs:
+  - `automation/orchestration/planned_execution_runner.py`
+- Codex may edit the preferred file only through normal patch/edit.
+- Direct patch/edit of the preferred file is allowed and is not shell execution.
+- Shell execution remains forbidden unless explicitly permitted.
+- Codex must treat `prompts/context/*.md` as read-only source of truth unless the PR explicitly uses constrained PR125 md-apply.
+- `.md` updates are performed outside Codex by ChatGPT/local Python or by the existing constrained md-apply path.
+- Codex prompts should use contract-style instructions, not long natural-language explanations.
+- Codex must not search repository-wide by default.
+- Allowed search is only inside the preferred file for existing symbols, helper patterns, normalization/defaults wiring, compact summary wiring, supporting truth refs, and final payload wiring.
+- If required symbols are missing from the preferred file, return `blocked:missing_symbols` or `blocked:missing_pr_symbols` unless the prompt explicitly allows a narrow fallback.
+- If the preferred file cannot be edited through normal patch/edit, return `blocked:preferred_file_unavailable`.
+- Do not create new modules, edit tests, run tests, run validation commands, run sanity checks, or refactor unrelated code.
+- Do not introduce a new execution owner unless the PR explicitly permits actual execution.
 
-## Review / assimilation constraints
-- Derive review-assimilation only from existing deterministic bounded queue/handoff/result posture.
-- If queue state is empty, blocked, prompt-unavailable, or insufficient_truth, preserve compact no-action or unavailable assimilation state and do not fabricate bounded next actions.
-- Preserve bounded assimilation actions only:
-  - accept
-  - retry
-  - replan
-  - split
-  - escalate
-- Preserve compact machine-readable assimilation state, including queue/result linkage when available.
-- Do not introduce broad self-healing chains or redesign queue behavior during review-assimilation.
+## Local evaluation artifacts
 
-## Self-healing constraints
-- Derive bounded self-healing transitions only from existing deterministic review-assimilation outputs and already-available bounded execution/safety state.
-- Allow at most one bounded self-healing transition per chain budget window.
-- Preserve bounded transition mapping only:
-  - retry -> retry
-  - replan -> replan
-  - split -> truth_gather
-  - escalate -> alternative_supported_repair only when explicitly allowed
-- If review assimilation is no_action, unavailable, insufficient_truth, or current queue posture is non-runnable, preserve compact non-transition state and do not fabricate recovery.
-- Preserve human fallback on safety blocks, continuation/no-progress/failure denies, exhausted budgets, and final human-review-required posture unless an explicit narrow exception already exists.
-- Do not introduce unbounded retry/replan/repair loops or redesign queue behavior during self-healing.
+After each Codex run, prefer local artifacts:
+- `artifacts/pr_runs/PRxxx/diffstat.txt`
+- `artifacts/pr_runs/PRxxx/files.txt`
+- `artifacts/pr_runs/PRxxx/patch.diff`
+- `artifacts/pr_runs/PRxxx/scan.json`
+- `artifacts/pr_runs/PRxxx/receipt.txt`
 
-## Long-running stability constraints
-- Derive long-running stability only from existing deterministic queue, review-assimilation, self-healing, fallback, and final-review state.
-- Preserve bounded long-running behavior:
-  - no blind continuation on queue empty / blocked / insufficient_truth
-  - no blind continuation on human-fallback-preserved or final-human-review-required posture
-  - no blind continuation when self-healing chain budget is exhausted
-- Preserve deterministic stale/stuck handling:
-  - stale -> paused or safe-stop
-  - stuck -> escalated or safe-stop
-  - resume_ready only when deterministic replay-safe state exists
-- Preserve compact machine-readable long-running state, including replay-safe identity / signature / resume-token style fields when available.
-- Do not redesign queue, review-assimilation, or self-healing behavior while adding long-running stability.
+Use compact local report first.
 
-## Objective / completion constraints
-- Derive objective identity, done criteria, stop criteria, completion posture, and scope-drift signals only from existing deterministic planning, queue, review-assimilation, self-healing, long-running stability, fallback, and final-review state.
-- Preserve compact completion posture only:
-  - objective_active
-  - objective_completed
-  - objective_blocked
-  - objective_insufficient_truth
-- If objective or completion truth is insufficient, preserve compact insufficient/unavailable state and do not fabricate completion claims.
-- Derive done criteria only from already-available machine-readable bounded execution signals such as slice count, processed slice count, queue posture, and explicit completion-compatible state.
-- Derive stop criteria only from already-available explicit stop signals such as final human review, preserved human fallback, and long-running pause/escalation posture.
-- Emit scope-drift only from explicit deterministic signals such as queue/prompt mismatch or split-compatible posture; never speculate.
-- Do not redesign planning, queue, self-healing, or long-running control flow while adding objective/completion compilation.
-
-## Prioritization / autonomy-budget constraints
-- Derive project-level prioritization and autonomy-budget posture only from existing deterministic objective/completion, planning, queue, review-assimilation, self-healing, long-running stability, budget, risk, fallback, and final-review state.
-- Reuse PR81 objective/completion posture directly when practical; do not create a separate objective truth owner.
-- Preserve compact machine-readable posture for:
-  - project priority
-  - per-objective budget
-  - per-run budget
-  - per-PR retry budget
-  - high-risk defer / lower-priority posture
-- If prioritization or budget truth is insufficient, preserve compact insufficient/unavailable state and do not fabricate budget numbers or project priority.
-- Do not redesign existing execution/control flow while adding prioritization/budget compilation.
-- Do not introduce a broad scoring framework in this layer.
-
-## Quality-gate constraints
-- Derive quality-gate posture only from existing deterministic slice, prompt, queue, result, objective/completion, prioritization/budget, risk, and fallback state.
-- Reuse PR82 project-level prioritization / autonomy-budget posture directly when practical.
-- Preserve compact recommended gate outputs only from bounded set:
-  - unit
-  - targeted_regression
-  - lint
-  - typecheck
-- Preserve compact posture outputs only:
-  - merge_ready
-  - review_ready
-  - retry_needed
-  - insufficient_truth
-- If quality-gate truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate gate requirements.
-- Do not execute validation or redesign existing execution/control flow while adding quality-gate compilation.
-
-## Merge / branch lifecycle constraints
-- Derive merge / branch lifecycle posture only from existing deterministic quality-gate, objective/completion, prioritization/budget, queue, result, fallback, and final-review state.
-- Reuse PR83 quality-gate posture directly when practical.
-- Preserve compact machine-readable lifecycle outputs only:
-  - merge_ready / not_merge_ready / insufficient_truth
-  - cleanup_candidate posture
-  - quarantine_candidate posture
-  - local_main_sync posture
-- If lifecycle truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate merge, cleanup, quarantine, or sync posture.
-- Do not perform merge, branch cleanup, branch deletion, or git sync actions while adding lifecycle compilation.
-- Do not redesign queue, review-assimilation, self-healing, long-running stability, or quality-gate behavior during lifecycle compilation.
-
-## Failure-memory / suppression constraints
-- Derive failure-memory and repeated-mistake suppression posture only from existing deterministic retry, repair, review, failure-bucket, queue, assimilation, self-healing, lifecycle, budget, and fallback state.
-- Reuse PR84 merge / branch lifecycle posture directly when practical.
-- Preserve compact machine-readable memory outputs only for:
-  - ineffective_retry
-  - failed_repair
-  - repeated_review_issue
-  - recurring_failure_bucket
-  - suppression_posture
-- If memory truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate recurrence or suppression.
-- Do not introduce probabilistic behavior, broad learning frameworks, or broad control-path redesign while adding failure-memory / suppression compilation.
-
-## External dependency boundary constraints
-- Derive external dependency boundary posture only from existing deterministic dependency/block/manual-only/fallback/lifecycle/memory/suppression state.
-- Reuse PR85 failure-memory / suppression posture directly when practical.
-- Preserve compact machine-readable dependency posture only:
-  - dependency_available
-  - dependency_blocked
-  - manual_only
-  - insufficient_truth
-- Preserve compact boundary posture for:
-  - network
-  - CI
-  - secrets
-  - GitHub
-  - external_API
-- If boundary truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate dependency availability or manual-only state.
-- Do not introduce uncontrolled external actions or redesign execution/control flow while adding external-boundary compilation.
-
-## Human escalation constraints
-- Derive project-level human escalation posture only from existing deterministic final-review, external-boundary, budget, completion, quality, lifecycle, memory, suppression, and fallback state.
-- Preserve PR73 final human-review-required behavior and extend it project-level only.
-- Reuse PR86 external-boundary posture directly when practical.
-- Preserve compact machine-readable escalation outputs only for:
-  - escalation_status / posture / required / reason / reason_codes
-  - architecture_risk
-  - scope_risk
-  - external_risk
-  - budget_risk
-  - repeated_failure_risk
-  - manual_only_risk
-- If escalation truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate escalation reasons.
-- Do not redesign approval delivery, queue, review-assimilation, self-healing, long-running stability, or lifecycle behavior while adding project-level human escalation compilation.
-
-## Approval-notification constraints
-- Derive approval-notification posture only from existing deterministic approval email/reply-ingest signals and project-level escalation state.
-- Reuse existing PR59 / PR61 / PR62 approval-email and reply-ingest posture directly when practical.
-- Reuse project-level escalation posture directly when practical.
-- Preserve compact machine-readable approval-notification outputs only for:
-  - notification_ready posture
-  - reply_required posture
-  - approval_channel posture
-  - mobile_friendly concise approval summary posture
-  - unavailable / insufficient posture
-- If approval-notification truth is insufficient, preserve compact unavailable/insufficient state and do not fabricate delivery readiness or reply-required state.
-- Do not redesign approval delivery flow, reply grammar/parsing, queue behavior, or execution/control flow while adding approval-notification compilation.
+Review full patch only when:
+- scan flags risk
+- changed files are unexpected
+- forbidden patterns are detected
+- compact report is insufficient
+- the PR touches execution, persistence, browser, Codex, queue, git/GitHub, or scheduler behavior

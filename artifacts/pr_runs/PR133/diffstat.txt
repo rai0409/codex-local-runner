@@ -1,0 +1,5 @@
+ .../orchestration/planned_execution_runner.py      | 62440 +++++++++++++++----
+ .../context/current_architecture_constraints.md    |   623 +-
+ prompts/context/pr_history_index.md                |    44 +
+ tests/test_planned_execution_runner.py             |   207 +
+ 4 files changed, 52270 insertions(+), 11044 deletions(-)
