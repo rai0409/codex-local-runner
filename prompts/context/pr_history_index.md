@@ -77,3 +77,145 @@ Compact prior-increment index for prompt reuse. Use this file as a stable, low-t
 - PR131 bounded run ledger/counter persistence from PR130, deriving event kind, step/failure/retry deltas, fingerprint/duplicate posture, persisting through an existing explicit path when available, otherwise prepared metadata-only, with one receipt and no new execution/no batch-loop posture.
 - PR132 bounded short-batch runner from PR120-PR131 compact fields, max_steps=3, hard_limit=5 metadata-only, one-step-at-a-time re-gating, failure/retry ceilings, stop-reason normalization, one batch receipt, and no daemon/no queue-drain/no git/github/no tests posture.
 - PR133 resume checkpoint/watchdog metadata layer consuming PR132 short-batch, PR131 ledger/counter, PR119 cooldown/loop, and safety/manual-stop posture; emits one resume/watchdog receipt, exposes compact fields in summary/truth refs/final payload, keeps metadata-only/no-next-batch/no-resume-execution posture, and treats stop_reason=none as blocked short_batch_not_stopped_safely.
+- PR134 bounded rolling controller candidate metadata layer consuming PR133 resume/watchdog, PR132 short-batch, PR131 ledger/counter, and PR119 cooldown/loop posture; emits compact `project_browser_autonomous_rolling_controller_*` fields, exposes them through summary/truth refs/final payload, and prepares only `prepare_next_short_batch_later` when resume/watchdog/ledger/cooldown/loop gates are clear.
+- PR135 bounded rolling continuation launcher metadata layer consuming PR134 rolling controller, PR133 resume/watchdog, PR132 short-batch, and PR131 ledger/counter posture; emits compact `project_browser_autonomous_rolling_continuation_*` fields, exposes them through summary/truth refs/final payload, and prepares only a bounded one-short-batch launcher candidate without starting the next batch.
+- PR136 bounded rolling multi-launch gate/runner metadata layer consuming PR135 rolling continuation, PR132 short-batch, PR131 ledger/counter, cooldown/loop, watchdog, and invocation-path posture; emits compact `project_browser_autonomous_rolling_multi_launch_*` fields with max_launches=2, per_launch_max_steps=3, total_step_budget=6, failure_budget=1, and blocks actual launch while `project_browser_autonomous_short_batch_invocation_path_status=unavailable`.
+
+---
+
+## PR137 — short-batch next_action invocation adapter
+
+Status: completed / ready as a dependency for the next bounded rolling execution work.
+
+Primary file:
+
+```text
+automation/orchestration/planned_execution_runner.py
+```
+
+Primary builder:
+
+```text
+_build_project_browser_autonomous_short_batch_invocation_state
+```
+
+Summary:
+
+PR137 connects the PR132 short-batch next_action producer to existing local runtime state call paths without adding new executors or unbounded execution.
+
+Verified call-path refs:
+
+```text
+run_one_md_apply        -> project_browser_autonomous_md_apply_state
+run_one_browser_command -> project_browser_autonomous_browser_execution_state
+run_one_codex_attempt   -> project_browser_autonomous_codex_execution_state
+assimilate_result       -> project_browser_autonomous_codex_result_assimilation_state
+persist_ledger          -> project_browser_autonomous_run_ledger_persistence_state
+stop                    -> no_runtime_invocation_stop
+```
+
+Important correction:
+
+Earlier PR137 iterations overclaimed `reused_existing_state_call_path` based only on status/receipt fields. The final PR137 requires `call_path_ref != none` and `missing_inputs == []` for non-stop `actual_bounded_invocation`.
+
+Safety boundaries preserved:
+
+```text
+multi-launch execution
+daemon
+scheduler
+sleep loop
+queue drain
+unbounded autonomous execution
+new browser executor
+new Codex executor
+new ledger persistence mechanism
+GitHub mutation
+```
+
+
+---
+
+## Prompt138 result and Prompt139 planned follow-up
+
+### Prompt138 status
+
+Prompt138 completed the B-only prepared bounded rolling execution layer.
+
+Primary builder:
+
+```text
+_build_project_browser_autonomous_rolling_execution_state
+```
+
+Primary field prefix:
+
+```text
+project_browser_autonomous_rolling_execution_*
+```
+
+Prompt138 consumed:
+
+```text
+PR136 rolling_multi_launch gate
+PR137 short_batch_invocation adapter
+```
+
+Prompt138 produced prepared-only bounded rolling execution metadata:
+
+```text
+project_browser_autonomous_rolling_execution_runtime_capability=prepared_only
+project_browser_autonomous_rolling_execution_launches_allowed=2
+project_browser_autonomous_rolling_execution_launches_attempted=0
+project_browser_autonomous_rolling_execution_launches_completed=0
+```
+
+Prompt138 intentionally did not implement actual launch execution.
+
+### Prompt139 planned follow-up
+
+Prompt139 should address A only through existing safe bounded launch helper discovery and classification.
+
+Prompt139 must first add or update:
+
+```text
+project_browser_autonomous_rolling_execution_launch_helper_status
+project_browser_autonomous_rolling_execution_launch_helper_ref
+project_browser_autonomous_rolling_execution_launch_helper_missing_inputs
+project_browser_autonomous_rolling_execution_launch_execution_mode
+```
+
+Prompt139 should classify whether a safe existing bounded launch helper or call path exists.
+
+If no helper exists:
+
+```text
+launch_helper_status=unavailable
+launch_helper_ref=none
+launch_execution_mode=prepared_only_helper_missing
+launches_attempted=0
+launches_completed=0
+block_reason=bounded_launch_helper_missing
+```
+
+If a helper exists and is safely invoked:
+
+```text
+launches_attempted may increase only after real invocation
+launches_completed may increase only after receipt/ledger-confirmed completion
+```
+
+Prompt139 must not create new executors, daemon, scheduler, sleep loop, queue drain, GitHub mutation path, PR creation, merge execution, or CI auto-fix loop.
+
+### Important status wording
+
+Do not describe Prompt138 or Prompt139 as complete always-on autonomous development.
+
+Accurate wording:
+
+```text
+Prompt138 completed the prepared-only bounded rolling execution state.
+Prompt139 is intended to determine whether actual bounded launch execution can be connected through an existing safe helper.
+Complete always-on autonomous development remains not yet implemented.
+```
+

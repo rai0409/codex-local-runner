@@ -290,7 +290,7 @@ PR132 no-long-running posture:
 Do not infer browser availability, DOM availability, login/session availability, or ChatGPT UI availability from PR92 metadata.
 Do not infer browser send completion, browser response availability, DOM availability, login/session availability, or ChatGPT UI availability from PR93 prompt payload metadata.
 Do not implement real Playwright execution, DOM interaction, browser send/read, login/session recovery, page reload, or new-chat execution unless a later prompt explicitly scopes it.
-Future browser-orchestrator PRs should reuse PR91-PR133 compact fields instead of introducing a second browser state owner.
+Future browser-orchestrator PRs should reuse PR91-PR136 compact fields instead of introducing a second browser state owner.
 
 
 ### PR133 resume checkpoint / watchdog
@@ -306,6 +306,88 @@ PR133 requirements:
 - PR133 must not run tests, validation commands, shell writes, browser actions, Codex execution, git/GitHub mutation, daemon, or scheduler.
 - `short_batch_stop_reason=max_steps_reached` may allow `resume_next_short_batch_later` only when ledger is persisted and watchdog/gates are clear.
 - `short_batch_stop_reason=none` must not allow `resume_from_checkpoint`; it must be blocked as `short_batch_not_stopped_safely`.
+
+### PR134 bounded rolling controller candidate
+
+- Preserve PR134 bounded rolling controller candidate metadata layer.
+- PR134 consumes PR133 resume/watchdog fields, PR132 short-batch posture, PR131 ledger/counter posture, and PR119 cooldown/loop posture.
+- PR134 emits compact deterministic `project_browser_autonomous_rolling_controller_*` fields.
+- PR134 exposes rolling controller fields through normalization/defaults, compact planning summary, supporting truth refs, and final approved restart execution contract payload.
+- PR134 may emit `prepared` only when:
+  - PR133 resume permission is `allowed_candidate`
+  - PR133 resume next action is `resume_next_short_batch_later`
+  - PR133 watchdog is clear
+  - PR132 short-batch stop reason is `max_steps_reached`
+  - PR131 ledger/counter posture is persisted
+  - PR119 cooldown is `not_required`
+  - PR119 loop risk is `clear`
+- PR134 must block or mirror pause/human_review/insufficient/stale/missing/duplicate/manual-stop/cooldown/loop/ledger-not-persisted postures.
+- PR134 must not start the next short batch.
+- PR134 must not execute resume.
+- PR134 must not create a daemon/background scheduler.
+- PR134 must not drain queues, mutate counters/project state, execute browser/Codex/md/shell actions, run tests/validation/sanity, or perform git/GitHub mutation.
+- PR134 prepared state means candidate only:
+  - `project_browser_autonomous_rolling_controller_next_action=prepare_next_short_batch_later`
+  - no actual continuation execution is implied.
+
+### PR135 bounded rolling continuation launcher
+
+- Preserve PR135 bounded rolling continuation launcher metadata layer.
+- PR135 consumes PR134 rolling controller fields, PR133 resume/watchdog fields, PR132 short-batch posture, and PR131 ledger/counter posture.
+- PR135 emits compact deterministic `project_browser_autonomous_rolling_continuation_*` fields.
+- PR135 exposes rolling continuation fields through normalization/defaults, compact planning summary, supporting truth refs, and final approved restart execution contract payload.
+- PR135 may emit `prepared` only when:
+  - PR134 rolling controller status is `prepared`
+  - PR134 rolling controller permission is `allowed_candidate`
+  - PR134 rolling controller source status is `valid`
+  - PR134 rolling controller receipt status is `ready`
+  - PR134 rolling controller next action is `prepare_next_short_batch_later`
+  - PR133 resume permission is `allowed_candidate`
+  - PR133 resume next action is `resume_next_short_batch_later`
+  - PR133 watchdog is clear
+  - PR132 short-batch stop reason is `max_steps_reached`
+  - PR131 ledger/counter posture is persisted
+- PR135 prepared state means launcher metadata only:
+  - `project_browser_autonomous_rolling_continuation_next_action=launch_one_short_batch_later`
+  - `project_browser_autonomous_rolling_continuation_launch_mode=bounded_one_short_batch`
+  - `project_browser_autonomous_rolling_continuation_max_next_batch_steps=3`
+- PR135 must block or mirror pause/human_review/insufficient/stale/missing/duplicate/manual-stop/ledger-not-persisted postures.
+- PR135 must not start the next short batch.
+- PR135 must not execute rolling continuation.
+- PR135 must not create a daemon/background scheduler.
+- PR135 must not drain queues, mutate counters/project state, execute browser/Codex/md/shell actions, run tests/validation/sanity, or perform git/GitHub mutation.
+- `launch_one_short_batch_later` is metadata only and does not imply execution.
+
+### PR136 bounded rolling multi-launch gate
+
+- Preserve PR136 bounded rolling multi-launch gate/runner metadata layer.
+- PR136 consumes PR135 rolling continuation fields, PR132 short-batch posture, PR131 ledger/counter posture, cooldown/loop posture, watchdog posture, and short-batch invocation-path posture.
+- PR136 emits compact deterministic `project_browser_autonomous_rolling_multi_launch_*` fields.
+- PR136 exposes rolling multi-launch fields through normalization/defaults, compact planning summary, supporting truth refs, and final approved restart execution contract payload.
+- PR136 hard limits:
+  - `project_browser_autonomous_rolling_multi_launch_max_launches=2`
+  - `project_browser_autonomous_rolling_multi_launch_per_launch_max_steps=3`
+  - `project_browser_autonomous_rolling_multi_launch_total_step_budget=6`
+  - `project_browser_autonomous_rolling_multi_launch_failure_budget=1`
+  - no third launch
+  - no unbounded loop
+  - no daemon/background scheduler
+  - no sleep loop
+  - no arbitrary queue drain
+- PR136 may emit `prepared` with `next_action=launch_up_to_two_short_batches` only when:
+  - PR135 rolling continuation is prepared/allowed/ready
+  - PR135 next action is `launch_one_short_batch_later`
+  - launch mode is `bounded_one_short_batch`
+  - ledger/counter posture is persisted
+  - cooldown is `not_required`
+  - loop risk is `clear`
+  - watchdog is clear
+  - duplicate status is clear
+  - short-batch invocation path is `available`
+- Current PR136 behavior must block actual launch with `short_batch_invocation_path_unavailable` while:
+  - `project_browser_autonomous_short_batch_invocation_path_status=unavailable`
+- PR136 must not fake execution, infer execution from metadata, create a new browser/Codex executor, create a new ledger persistence mechanism, create a daemon/scheduler, drain queues, or perform git/GitHub mutation.
+- PR137+ must provide an explicit bounded short-batch invocation adapter before PR136 can become actual multi-launch.
 
 ## Default PR style for PR133+
 
@@ -417,3 +499,189 @@ Review full patch only when:
 - forbidden patterns are detected
 - compact report is insufficient
 - the PR touches execution, persistence, browser, Codex, queue, git/GitHub, or scheduler behavior
+
+---
+
+## PR137 Architecture Constraint — short-batch invocation adapter
+
+PR137 introduced the short-batch next_action invocation adapter in:
+
+```text
+automation/orchestration/planned_execution_runner.py
+```
+
+Primary builder:
+
+```text
+_build_project_browser_autonomous_short_batch_invocation_state
+```
+
+Important fields:
+
+```text
+project_browser_autonomous_short_batch_invocation_status
+project_browser_autonomous_short_batch_invocation_permission
+project_browser_autonomous_short_batch_invocation_receipt_status
+project_browser_autonomous_short_batch_invocation_path_status
+project_browser_autonomous_short_batch_invocation_runtime_capability
+project_browser_autonomous_short_batch_invocation_next_action
+project_browser_autonomous_short_batch_invocation_delegation_mode
+project_browser_autonomous_short_batch_invocation_call_path_ref
+project_browser_autonomous_short_batch_invocation_missing_inputs
+```
+
+Verified next_action call-path refs:
+
+```text
+run_one_md_apply        -> project_browser_autonomous_md_apply_state
+run_one_browser_command -> project_browser_autonomous_browser_execution_state
+run_one_codex_attempt   -> project_browser_autonomous_codex_execution_state
+assimilate_result       -> project_browser_autonomous_codex_result_assimilation_state
+persist_ledger          -> project_browser_autonomous_run_ledger_persistence_state
+stop                    -> no_runtime_invocation_stop
+```
+
+For non-stop actions, `actual_bounded_invocation` is valid only when:
+
+```text
+path_status=available
+runtime_capability=actual_bounded_invocation
+receipt_status=ready
+delegation_mode in {reused_existing_state_call_path, invoked_existing_builder}
+call_path_ref != none
+missing_inputs == []
+```
+
+For `next_action=stop`, no runtime invocation is allowed:
+
+```text
+delegation_mode=no_runtime_invocation_stop
+call_path_ref=none
+```
+
+PR137 must not add:
+
+```text
+multi-launch execution
+daemon
+scheduler
+sleep loop
+queue drain
+unbounded autonomous execution
+new browser executor
+new Codex executor
+new ledger persistence mechanism
+GitHub mutation
+```
+
+
+---
+
+## Prompt139 architecture constraints — bounded launch helper discovery and execution honesty
+
+Prompt138 completed only the B-side prepared rolling execution state.
+
+Prompt138 did not implement actual launch execution.
+
+Prompt139 must therefore treat actual launch execution as unproven until an existing safe bounded launch helper or call path is identified.
+
+### Prompt139 hard constraints
+
+Prompt139 must not create:
+
+```text
+new browser executor
+new Codex executor
+new ledger persistence mechanism
+new GitHub write path
+daemon
+scheduler
+sleep loop
+queue drain
+unbounded autonomous execution
+third launch
+automatic PR creation
+automatic merge
+CI auto-fix loop
+```
+
+### Launch helper rule
+
+Prompt139 must first classify whether an existing safe bounded launch helper or call path exists.
+
+Required classification fields:
+
+```text
+project_browser_autonomous_rolling_execution_launch_helper_status
+project_browser_autonomous_rolling_execution_launch_helper_ref
+project_browser_autonomous_rolling_execution_launch_helper_missing_inputs
+project_browser_autonomous_rolling_execution_launch_execution_mode
+```
+
+Allowed `launch_helper_status` values:
+
+```text
+available
+unavailable
+insufficient_truth
+```
+
+Allowed `launch_execution_mode` values:
+
+```text
+existing_helper_invoked
+existing_call_path_reused
+prepared_only_helper_missing
+terminal_stop
+insufficient_truth
+```
+
+### Execution honesty rule
+
+Prompt139 must not set:
+
+```text
+project_browser_autonomous_rolling_execution_launches_attempted > 0
+```
+
+unless an existing safe bounded launch helper or call path was actually invoked.
+
+Prompt139 must not set:
+
+```text
+project_browser_autonomous_rolling_execution_launches_completed > 0
+```
+
+unless receipt and ledger evidence confirm real launch completion.
+
+Readiness, status fields, `call_path_ref`, PR136 gates, or PR137 gates alone are not sufficient evidence for attempted or completed launch execution.
+
+### Missing helper rule
+
+If no existing safe bounded launch helper or call path exists, Prompt139 must not fake execution.
+
+It must emit or preserve:
+
+```text
+project_browser_autonomous_rolling_execution_launch_helper_status=unavailable
+project_browser_autonomous_rolling_execution_launch_helper_ref=none
+project_browser_autonomous_rolling_execution_launch_execution_mode=prepared_only_helper_missing
+project_browser_autonomous_rolling_execution_runtime_capability=prepared_only
+project_browser_autonomous_rolling_execution_launches_attempted=0
+project_browser_autonomous_rolling_execution_launches_completed=0
+project_browser_autonomous_rolling_execution_block_reason=bounded_launch_helper_missing
+```
+
+### Bound rule
+
+If a proven existing helper is invoked, Prompt139 must enforce:
+
+```text
+max_launches=2
+per_launch_max_steps=3
+total_step_budget=6
+failure_budget=1
+```
+
+It must never perform or claim a third launch.
+
