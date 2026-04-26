@@ -685,3 +685,29 @@ failure_budget=1
 
 It must never perform or claim a third launch.
 
+
+---
+
+## Prompt144-Prompt149 architecture constraints
+
+Prompt144-Prompt146 established the one-bounded launch truth model:
+
+- Candidate safety must be classified before actual invocation.
+- attempted=1 is allowed only after a real selected mapped existing invocation call path is actually invoked.
+- completed=1 is allowed only with explicit confirmed action-specific completion evidence.
+- attempted=1 alone, ready receipt alone, and state existence alone must not imply completion.
+- completed must never exceed attempted.
+
+Prompt149 established runner result JSON accounting constraints:
+
+- Runner result accounting should preserve raw Codex-reported values.
+- Runner result accounting should add git-accounted values from staged and unstaged git diff/status.
+- Public changed_files/additions/deletions should match final accounting values.
+- Dry-run must not claim live worktree mutation accounting.
+
+Prompt147 constraints:
+
+- Prompt147 may prepare launch_1 / launch_2 state separation only.
+- Prompt147 must not execute launch_2.
+- Prompt147 must not implement max-two rolling execution.
+- Prompt147 must not add a loop, daemon, scheduler, queue drain, new executor, GitHub mutation, PR creation, or merge.

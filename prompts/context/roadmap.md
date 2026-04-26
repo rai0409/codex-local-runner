@@ -500,3 +500,23 @@ max-two-launchはまだしない
 second launchはまだしない
 new executorは作らない
 GitHub mutationはしない
+
+---
+
+## Current checkpoint update after Prompt149
+
+Current checkpoint:
+
+checkpoint-prompt149-result-json-accounting-ready
+
+Completed:
+
+- Prompt145: one bounded existing invocation attempt bridge.
+- Prompt146: completion evidence evaluator.
+- Prompt149: runner result JSON accounting correction.
+
+Next:
+
+Prompt147 — launch_1 / launch_2 state separation
+
+Prompt147 must prepare launch_2 as candidate-only metadata. It must not execute launch_2, must not implement max-two rolling execution, and must not change Prompt149 accounting behavior.

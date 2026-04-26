@@ -219,3 +219,14 @@ Prompt139 is intended to determine whether actual bounded launch execution can b
 Complete always-on autonomous development remains not yet implemented.
 ```
 
+
+---
+
+## Prompt144-Prompt149 local runner progress
+
+- Prompt144 callable candidate safety validation for one_bounded_launch.
+- Prompt145 one bounded existing invocation attempt bridge.
+- Prompt146 completion evidence evaluator.
+- Prompt149 runner result JSON accounting correction from staged + unstaged git diff/status.
+- Current next step: Prompt147 launch_1 / launch_2 state separation.
+- Prompt147 must not execute launch_2 or implement max-two rolling execution.
