@@ -40273,7 +40273,8 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
         "candidate_safety_validation_consumed",
         "callable_candidate_inputs_ready_handoff_consumed",
         "attempted_only_after_real_invocation",
-        "completed_forced_zero_in_prompt145",
+        "completion_evidence_gated_prompt146",
+        "completed_only_with_explicit_evidence",
         "no_attempt_from_state_reuse_only",
         "no_attempt_from_readiness_observation_only",
         "max_steps_3_contract",
@@ -40290,6 +40291,430 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
         "no_queue_drain",
         "no_github_mutation",
     ]
+    generic_completion_evidence_refs = {
+        "state_exists",
+        "ready_receipt",
+        "receipt_ready",
+    }
+    completion_evidence_ref_catalog = {
+        "run_one_md_apply": [
+            "project_browser_autonomous_md_apply_write_status",
+            "project_browser_autonomous_md_apply_change_status",
+            "project_browser_autonomous_md_apply_receipt_kind",
+        ],
+        "run_one_browser_command": [
+            "project_browser_autonomous_browser_execution_send_status",
+            "project_browser_autonomous_browser_execution_response_wait_status",
+            "project_browser_autonomous_browser_execution_response_read_status",
+        ],
+        "run_one_codex_attempt": [
+            "project_browser_autonomous_codex_execution_attempt_count",
+            "project_browser_autonomous_codex_execution_result_status",
+        ],
+        "assimilate_result": [
+            "project_browser_autonomous_codex_result_outcome",
+            "project_browser_autonomous_codex_result_next_posture",
+        ],
+        "persist_ledger": [
+            "project_browser_autonomous_run_ledger_event_kind",
+            "project_browser_autonomous_run_ledger_counter_posture",
+        ],
+    }
+
+    def _surface_scalar_value(
+        surface_state: Mapping[str, Any],
+        field_name: str,
+    ) -> str:
+        if field_name not in surface_state:
+            return ""
+        raw_value = surface_state.get(field_name)
+        if raw_value is None:
+            return ""
+        if isinstance(raw_value, (str, int, float, bool)):
+            return _normalize_text(str(raw_value), default="")
+        return ""
+
+    def _derive_missing_completion_surfaces(
+        surface_state: Mapping[str, Any],
+        candidate_surfaces: list[str],
+    ) -> list[str]:
+        normalized_surfaces = _normalize_string_list(candidate_surfaces)
+        missing_surfaces = [
+            surface_name
+            for surface_name in normalized_surfaces
+            if _surface_scalar_value(surface_state, surface_name) in {"", "insufficient_truth"}
+        ]
+        return missing_surfaces or normalized_surfaces
+
+    def _evaluate_action_completion_evidence(
+        *,
+        action_name: str,
+        invoked_state: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        normalized_action_name = _normalize_text(action_name, default="none")
+        completion_surfaces = _normalize_string_list(
+            completion_evidence_ref_catalog.get(normalized_action_name, [])
+        )
+        invoked_mapping = dict(invoked_state) if isinstance(invoked_state, Mapping) else {}
+        if not invoked_mapping or not completion_surfaces:
+            return {
+                "completion_evidence_status": "unavailable",
+                "completion_evidence_reason": "explicit_completion_evidence_missing",
+                "completion_evidence_refs": [],
+                "completion_result_status": "not_completed",
+                "completion_result_reason": "completion_evidence_unavailable",
+                "missing_completion_evidence_surfaces": (
+                    completion_surfaces or ["completion_evidence_truth"]
+                ),
+                "completion_allowed_refs": completion_surfaces,
+            }
+
+        surface_values = {
+            surface_name: _surface_scalar_value(invoked_mapping, surface_name)
+            for surface_name in completion_surfaces
+        }
+
+        def _refs(*surface_names: str) -> list[str]:
+            return [
+                surface_name
+                for surface_name in _normalize_string_list(surface_names)
+                if surface_values.get(surface_name, "") not in {"", "insufficient_truth"}
+            ]
+
+        def _completion_payload(
+            *,
+            evidence_status: str,
+            evidence_reason: str,
+            evidence_refs: list[str],
+            result_status: str,
+            result_reason: str,
+            missing_surfaces: list[str] | None = None,
+        ) -> dict[str, Any]:
+            return {
+                "completion_evidence_status": evidence_status,
+                "completion_evidence_reason": evidence_reason,
+                "completion_evidence_refs": _normalize_string_list(evidence_refs),
+                "completion_result_status": result_status,
+                "completion_result_reason": result_reason,
+                "missing_completion_evidence_surfaces": _normalize_string_list(
+                    missing_surfaces or []
+                ),
+                "completion_allowed_refs": completion_surfaces,
+            }
+
+        missing_completion_surfaces = _derive_missing_completion_surfaces(
+            invoked_mapping,
+            completion_surfaces,
+        )
+
+        if normalized_action_name == "run_one_md_apply":
+            write_status = surface_values.get(
+                "project_browser_autonomous_md_apply_write_status",
+                "",
+            )
+            change_status = surface_values.get(
+                "project_browser_autonomous_md_apply_change_status",
+                "",
+            )
+            receipt_kind = surface_values.get(
+                "project_browser_autonomous_md_apply_receipt_kind",
+                "",
+            )
+            if write_status == "written" and change_status == "ready":
+                return _completion_payload(
+                    evidence_status="confirmed",
+                    evidence_reason="explicit_completion_evidence_confirmed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_md_apply_write_status",
+                        "project_browser_autonomous_md_apply_change_status",
+                    ),
+                    result_status="completed",
+                    result_reason="explicit_completion_evidence_confirmed",
+                )
+            if (
+                write_status == "skipped"
+                and change_status == "duplicate_noop"
+                and receipt_kind == "duplicate_noop_receipt"
+            ):
+                return _completion_payload(
+                    evidence_status="confirmed",
+                    evidence_reason="explicit_completion_evidence_confirmed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_md_apply_write_status",
+                        "project_browser_autonomous_md_apply_change_status",
+                        "project_browser_autonomous_md_apply_receipt_kind",
+                    ),
+                    result_status="completed",
+                    result_reason="explicit_completion_evidence_confirmed",
+                )
+            if write_status in {"blocked", "failed"} or change_status in {
+                "blocked",
+                "too_large",
+                "anchor_missing",
+            }:
+                return _completion_payload(
+                    evidence_status="failed",
+                    evidence_reason="completion_evidence_failed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_md_apply_write_status",
+                        "project_browser_autonomous_md_apply_change_status",
+                    ),
+                    result_status="failed",
+                    result_reason="completion_evidence_failed",
+                )
+            if any(
+                surface_values.get(surface_name, "")
+                for surface_name in completion_surfaces
+            ):
+                return _completion_payload(
+                    evidence_status="ambiguous",
+                    evidence_reason="completion_evidence_ambiguous",
+                    evidence_refs=_refs(*completion_surfaces),
+                    result_status="not_completed",
+                    result_reason="completion_evidence_ambiguous",
+                )
+            return _completion_payload(
+                evidence_status="unavailable",
+                evidence_reason="explicit_completion_evidence_missing",
+                evidence_refs=[],
+                result_status="not_completed",
+                result_reason="completion_evidence_unavailable",
+                missing_surfaces=missing_completion_surfaces,
+            )
+
+        if normalized_action_name == "run_one_browser_command":
+            send_status = surface_values.get(
+                "project_browser_autonomous_browser_execution_send_status",
+                "",
+            )
+            response_wait_status = surface_values.get(
+                "project_browser_autonomous_browser_execution_response_wait_status",
+                "",
+            )
+            response_read_status = surface_values.get(
+                "project_browser_autonomous_browser_execution_response_read_status",
+                "",
+            )
+            if send_status == "sent" and response_read_status == "read":
+                return _completion_payload(
+                    evidence_status="confirmed",
+                    evidence_reason="explicit_completion_evidence_confirmed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_browser_execution_send_status",
+                        "project_browser_autonomous_browser_execution_response_wait_status",
+                        "project_browser_autonomous_browser_execution_response_read_status",
+                    ),
+                    result_status="completed",
+                    result_reason="explicit_completion_evidence_confirmed",
+                )
+            if (
+                send_status in {"blocked", "failed"}
+                or response_wait_status in {"blocked", "failed", "timeout"}
+                or response_read_status in {"blocked", "failed", "empty"}
+            ):
+                return _completion_payload(
+                    evidence_status="failed",
+                    evidence_reason="completion_evidence_failed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_browser_execution_send_status",
+                        "project_browser_autonomous_browser_execution_response_wait_status",
+                        "project_browser_autonomous_browser_execution_response_read_status",
+                    ),
+                    result_status="failed",
+                    result_reason="completion_evidence_failed",
+                )
+            if any(
+                surface_values.get(surface_name, "")
+                for surface_name in completion_surfaces
+            ):
+                return _completion_payload(
+                    evidence_status="ambiguous",
+                    evidence_reason="completion_evidence_ambiguous",
+                    evidence_refs=_refs(*completion_surfaces),
+                    result_status="not_completed",
+                    result_reason="completion_evidence_ambiguous",
+                )
+            return _completion_payload(
+                evidence_status="unavailable",
+                evidence_reason="explicit_completion_evidence_missing",
+                evidence_refs=[],
+                result_status="not_completed",
+                result_reason="completion_evidence_unavailable",
+                missing_surfaces=missing_completion_surfaces,
+            )
+
+        if normalized_action_name == "run_one_codex_attempt":
+            attempt_count = surface_values.get(
+                "project_browser_autonomous_codex_execution_attempt_count",
+                "",
+            )
+            result_status = surface_values.get(
+                "project_browser_autonomous_codex_execution_result_status",
+                "",
+            )
+            if attempt_count == "1" and result_status == "succeeded":
+                return _completion_payload(
+                    evidence_status="confirmed",
+                    evidence_reason="explicit_completion_evidence_confirmed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_codex_execution_attempt_count",
+                        "project_browser_autonomous_codex_execution_result_status",
+                    ),
+                    result_status="completed",
+                    result_reason="explicit_completion_evidence_confirmed",
+                )
+            if result_status in {"failed", "timeout", "blocked", "not_executed"}:
+                return _completion_payload(
+                    evidence_status="failed",
+                    evidence_reason="completion_evidence_failed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_codex_execution_attempt_count",
+                        "project_browser_autonomous_codex_execution_result_status",
+                    ),
+                    result_status="failed",
+                    result_reason="completion_evidence_failed",
+                )
+            if any(
+                surface_values.get(surface_name, "")
+                for surface_name in completion_surfaces
+            ):
+                return _completion_payload(
+                    evidence_status="ambiguous",
+                    evidence_reason="completion_evidence_ambiguous",
+                    evidence_refs=_refs(*completion_surfaces),
+                    result_status="not_completed",
+                    result_reason="completion_evidence_ambiguous",
+                )
+            return _completion_payload(
+                evidence_status="unavailable",
+                evidence_reason="explicit_completion_evidence_missing",
+                evidence_refs=[],
+                result_status="not_completed",
+                result_reason="completion_evidence_unavailable",
+                missing_surfaces=missing_completion_surfaces,
+            )
+
+        if normalized_action_name == "assimilate_result":
+            outcome = surface_values.get(
+                "project_browser_autonomous_codex_result_outcome",
+                "",
+            )
+            next_posture = surface_values.get(
+                "project_browser_autonomous_codex_result_next_posture",
+                "",
+            )
+            if outcome in {
+                "codex_succeeded",
+                "codex_failed",
+                "codex_timeout",
+                "codex_blocked",
+                "codex_not_executed",
+            } and next_posture in {
+                "ready_for_ledger_update",
+                "ready_for_validation_planning",
+                "retry_candidate",
+                "repair_candidate",
+                "human_review_required",
+                "pause_required",
+                "blocked",
+            }:
+                return _completion_payload(
+                    evidence_status="confirmed",
+                    evidence_reason="explicit_completion_evidence_confirmed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_codex_result_outcome",
+                        "project_browser_autonomous_codex_result_next_posture",
+                    ),
+                    result_status="completed",
+                    result_reason="explicit_completion_evidence_confirmed",
+                )
+            if any(
+                surface_values.get(surface_name, "")
+                for surface_name in completion_surfaces
+            ):
+                return _completion_payload(
+                    evidence_status="ambiguous",
+                    evidence_reason="completion_evidence_ambiguous",
+                    evidence_refs=_refs(*completion_surfaces),
+                    result_status="not_completed",
+                    result_reason="completion_evidence_ambiguous",
+                )
+            return _completion_payload(
+                evidence_status="unavailable",
+                evidence_reason="explicit_completion_evidence_missing",
+                evidence_refs=[],
+                result_status="not_completed",
+                result_reason="completion_evidence_unavailable",
+                missing_surfaces=missing_completion_surfaces,
+            )
+
+        if normalized_action_name == "persist_ledger":
+            event_kind = surface_values.get(
+                "project_browser_autonomous_run_ledger_event_kind",
+                "",
+            )
+            counter_posture = surface_values.get(
+                "project_browser_autonomous_run_ledger_counter_posture",
+                "",
+            )
+            if counter_posture == "persisted" and event_kind in {
+                "codex_success_changed",
+                "codex_success_no_change",
+                "codex_failed",
+                "codex_timeout",
+                "codex_blocked",
+                "human_review_required",
+                "pause_required",
+            }:
+                return _completion_payload(
+                    evidence_status="confirmed",
+                    evidence_reason="explicit_completion_evidence_confirmed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_run_ledger_event_kind",
+                        "project_browser_autonomous_run_ledger_counter_posture",
+                    ),
+                    result_status="completed",
+                    result_reason="explicit_completion_evidence_confirmed",
+                )
+            if counter_posture == "blocked":
+                return _completion_payload(
+                    evidence_status="failed",
+                    evidence_reason="completion_evidence_failed",
+                    evidence_refs=_refs(
+                        "project_browser_autonomous_run_ledger_event_kind",
+                        "project_browser_autonomous_run_ledger_counter_posture",
+                    ),
+                    result_status="failed",
+                    result_reason="completion_evidence_failed",
+                )
+            if any(
+                surface_values.get(surface_name, "")
+                for surface_name in completion_surfaces
+            ):
+                return _completion_payload(
+                    evidence_status="ambiguous",
+                    evidence_reason="completion_evidence_ambiguous",
+                    evidence_refs=_refs(*completion_surfaces),
+                    result_status="not_completed",
+                    result_reason="completion_evidence_ambiguous",
+                )
+            return _completion_payload(
+                evidence_status="unavailable",
+                evidence_reason="explicit_completion_evidence_missing",
+                evidence_refs=[],
+                result_status="not_completed",
+                result_reason="completion_evidence_unavailable",
+                missing_surfaces=missing_completion_surfaces,
+            )
+
+        return _completion_payload(
+            evidence_status="unavailable",
+            evidence_reason="explicit_completion_evidence_missing",
+            evidence_refs=[],
+            result_status="not_completed",
+            result_reason="completion_evidence_unavailable",
+            missing_surfaces=completion_surfaces or ["completion_evidence_truth"],
+        )
 
     def _base_state(
         *,
@@ -40329,6 +40754,13 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
         invocation_attempt_reason: str = "insufficient_truth",
         invocation_result_status: str = "insufficient_truth",
         invocation_result_evidence: list[str] | None = None,
+        completion_evidence_status: str = "insufficient_truth",
+        completion_evidence_reason: str = "insufficient_truth_for_completion_evidence",
+        completion_evidence_refs: list[str] | None = None,
+        completion_result_status: str = "insufficient_truth",
+        completion_result_reason: str = "insufficient_truth_for_completion_evidence",
+        missing_completion_evidence_surfaces: list[str] | None = None,
+        completion_allowed_refs: list[str] | None = None,
         actual_invocation_called: bool = False,
     ) -> dict[str, Any]:
         normalized_attempted = _as_non_negative_int(attempted, default=0)
@@ -40408,6 +40840,31 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
         )
         normalized_invocation_result_evidence = _normalize_string_list(
             invocation_result_evidence or []
+        )
+        normalized_completion_evidence_status = _normalize_text(
+            completion_evidence_status,
+            default="insufficient_truth",
+        )
+        normalized_completion_evidence_reason = _normalize_text(
+            completion_evidence_reason,
+            default="insufficient_truth_for_completion_evidence",
+        )
+        normalized_completion_evidence_refs = _normalize_string_list(
+            completion_evidence_refs or []
+        )
+        normalized_completion_result_status = _normalize_text(
+            completion_result_status,
+            default="insufficient_truth",
+        )
+        normalized_completion_result_reason = _normalize_text(
+            completion_result_reason,
+            default="insufficient_truth_for_completion_evidence",
+        )
+        normalized_missing_completion_evidence_surfaces = _normalize_string_list(
+            missing_completion_evidence_surfaces or []
+        )
+        normalized_completion_allowed_refs = _normalize_string_list(
+            completion_allowed_refs or []
         )
         allowed_action_callability_values = {
             "callable_candidate_inputs_ready",
@@ -40571,7 +41028,176 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
                 normalized_attempted = 1
         if normalized_attempted > 1:
             normalized_attempted = 1
-        normalized_completed = 0
+        if normalized_completion_evidence_status not in {
+            "confirmed",
+            "unavailable",
+            "ambiguous",
+            "failed",
+            "not_attempted",
+            "terminal_stop",
+            "insufficient_truth",
+        }:
+            normalized_completion_evidence_status = "insufficient_truth"
+        if normalized_completion_result_status not in {
+            "completed",
+            "not_completed",
+            "failed",
+            "not_attempted",
+            "terminal_stop",
+            "insufficient_truth",
+        }:
+            normalized_completion_result_status = "insufficient_truth"
+        normalized_completion_evidence_refs = [
+            ref_name
+            for ref_name in normalized_completion_evidence_refs
+            if ref_name not in generic_completion_evidence_refs
+        ]
+        normalized_missing_completion_evidence_surfaces = [
+            surface_name
+            for surface_name in normalized_missing_completion_evidence_surfaces
+            if surface_name not in generic_completion_evidence_refs
+        ]
+
+        if normalized_candidate_safety_status == "terminal_stop":
+            normalized_completion_evidence_status = "terminal_stop"
+            normalized_completion_evidence_reason = "terminal_stop_no_completion_evaluation"
+            normalized_completion_evidence_refs = []
+            normalized_completion_result_status = "terminal_stop"
+            normalized_completion_result_reason = "terminal_stop_no_completion_evaluation"
+            normalized_missing_completion_evidence_surfaces = []
+            normalized_completed = 0
+        elif normalized_candidate_safety_status == "insufficient_truth":
+            normalized_completion_evidence_status = "insufficient_truth"
+            normalized_completion_evidence_reason = (
+                "insufficient_truth_for_completion_evidence"
+            )
+            normalized_completion_evidence_refs = []
+            normalized_completion_result_status = "insufficient_truth"
+            normalized_completion_result_reason = (
+                "insufficient_truth_for_completion_evidence"
+            )
+            normalized_missing_completion_evidence_surfaces = [
+                "completion_evidence_truth"
+            ]
+            normalized_completed = 0
+        elif normalized_attempted == 0:
+            normalized_completion_evidence_status = "not_attempted"
+            normalized_completion_evidence_reason = "no_invocation_attempted"
+            normalized_completion_evidence_refs = []
+            normalized_completion_result_status = "not_attempted"
+            normalized_completion_result_reason = "no_invocation_attempted"
+            normalized_missing_completion_evidence_surfaces = []
+            normalized_completed = 0
+        else:
+            valid_completion_refs = [
+                ref_name
+                for ref_name in normalized_completion_evidence_refs
+                if ref_name in normalized_completion_allowed_refs
+            ]
+            completion_refs_invalid = bool(
+                normalized_completion_evidence_refs
+                and len(valid_completion_refs) != len(normalized_completion_evidence_refs)
+            )
+            completion_refs_generic_only = not valid_completion_refs
+            if normalized_completion_evidence_status == "confirmed":
+                completion_guards_satisfied = bool(
+                    normalized_attempted == 1
+                    and normalized_completion_result_status == "completed"
+                    and not completion_refs_invalid
+                    and not completion_refs_generic_only
+                    and normalized_execution_mode
+                    != "prepared_only_invocation_not_callable"
+                    and normalized_invocation_attempt_status == "invoked_once"
+                    and normalized_invocation_result_status != "not_invoked"
+                )
+                if completion_guards_satisfied:
+                    normalized_completion_evidence_reason = (
+                        "explicit_completion_evidence_confirmed"
+                    )
+                    normalized_completion_result_reason = (
+                        "explicit_completion_evidence_confirmed"
+                    )
+                    normalized_completion_evidence_refs = valid_completion_refs
+                    normalized_missing_completion_evidence_surfaces = []
+                    normalized_completed = 1
+                else:
+                    normalized_completion_result_status = "not_completed"
+                    if completion_refs_invalid or completion_refs_generic_only:
+                        normalized_completion_evidence_status = "unavailable"
+                        normalized_completion_evidence_reason = (
+                            "explicit_completion_evidence_missing"
+                        )
+                        normalized_completion_result_reason = (
+                            "completion_evidence_unavailable"
+                        )
+                        normalized_missing_completion_evidence_surfaces = (
+                            normalized_completion_allowed_refs
+                        )
+                    else:
+                        normalized_completion_evidence_status = "ambiguous"
+                        normalized_completion_evidence_reason = (
+                            "completion_evidence_ambiguous"
+                        )
+                        normalized_completion_result_reason = (
+                            "completion_evidence_ambiguous"
+                        )
+                        normalized_missing_completion_evidence_surfaces = []
+                    normalized_completion_evidence_refs = valid_completion_refs
+                    normalized_completed = 0
+            elif normalized_completion_evidence_status == "failed":
+                normalized_completion_evidence_reason = "completion_evidence_failed"
+                normalized_completion_result_status = "failed"
+                normalized_completion_result_reason = "completion_evidence_failed"
+                normalized_completion_evidence_refs = valid_completion_refs
+                normalized_missing_completion_evidence_surfaces = []
+                normalized_completed = 0
+            elif normalized_completion_evidence_status == "ambiguous":
+                normalized_completion_evidence_reason = "completion_evidence_ambiguous"
+                normalized_completion_result_status = "not_completed"
+                normalized_completion_result_reason = "completion_evidence_ambiguous"
+                normalized_completion_evidence_refs = valid_completion_refs
+                normalized_missing_completion_evidence_surfaces = []
+                normalized_completed = 0
+            elif normalized_completion_evidence_status == "unavailable":
+                normalized_completion_evidence_reason = "explicit_completion_evidence_missing"
+                normalized_completion_evidence_refs = []
+                normalized_completion_result_status = "not_completed"
+                normalized_completion_result_reason = "completion_evidence_unavailable"
+                normalized_missing_completion_evidence_surfaces = (
+                    normalized_missing_completion_evidence_surfaces
+                    or normalized_completion_allowed_refs
+                )
+                normalized_completed = 0
+            elif normalized_completion_evidence_status == "insufficient_truth":
+                normalized_completion_evidence_reason = (
+                    "insufficient_truth_for_completion_evidence"
+                )
+                normalized_completion_evidence_refs = []
+                normalized_completion_result_status = "insufficient_truth"
+                normalized_completion_result_reason = (
+                    "insufficient_truth_for_completion_evidence"
+                )
+                normalized_missing_completion_evidence_surfaces = [
+                    "completion_evidence_truth"
+                ]
+                normalized_completed = 0
+            else:
+                normalized_completion_evidence_status = "unavailable"
+                normalized_completion_evidence_reason = "explicit_completion_evidence_missing"
+                normalized_completion_evidence_refs = []
+                normalized_completion_result_status = "not_completed"
+                normalized_completion_result_reason = "completion_evidence_unavailable"
+                normalized_missing_completion_evidence_surfaces = (
+                    normalized_completion_allowed_refs
+                )
+                normalized_completed = 0
+
+        if normalized_completed > normalized_attempted:
+            normalized_completed = normalized_attempted
+        if normalized_completed > 1:
+            normalized_completed = 1
+        if normalized_attempted == 0:
+            normalized_completed = 0
 
         return {
             "project_browser_autonomous_one_bounded_launch_status": status,
@@ -40669,6 +41295,24 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             "project_browser_autonomous_one_bounded_launch_invocation_result_evidence": (
                 normalized_invocation_result_evidence
             ),
+            "project_browser_autonomous_one_bounded_launch_completion_evidence_status": (
+                normalized_completion_evidence_status
+            ),
+            "project_browser_autonomous_one_bounded_launch_completion_evidence_reason": (
+                normalized_completion_evidence_reason
+            ),
+            "project_browser_autonomous_one_bounded_launch_completion_evidence_refs": (
+                normalized_completion_evidence_refs
+            ),
+            "project_browser_autonomous_one_bounded_launch_completion_result_status": (
+                normalized_completion_result_status
+            ),
+            "project_browser_autonomous_one_bounded_launch_completion_result_reason": (
+                normalized_completion_result_reason
+            ),
+            "project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces": (
+                normalized_missing_completion_evidence_surfaces
+            ),
             "project_browser_autonomous_one_bounded_launch_attempted": normalized_attempted,
             "project_browser_autonomous_one_bounded_launch_completed": normalized_completed,
             "project_browser_autonomous_one_bounded_launch_max_steps": max_steps,
@@ -40711,6 +41355,13 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             invocation_attempt_reason="insufficient_truth",
             invocation_result_status="insufficient_truth",
             invocation_result_evidence=["invocation_bridge_insufficient_truth"],
+            completion_evidence_status="insufficient_truth",
+            completion_evidence_reason="insufficient_truth_for_completion_evidence",
+            completion_evidence_refs=[],
+            completion_result_status="insufficient_truth",
+            completion_result_reason="insufficient_truth_for_completion_evidence",
+            missing_completion_evidence_surfaces=["completion_evidence_truth"],
+            completion_allowed_refs=[],
         )
 
     def _blocked_state(
@@ -40786,6 +41437,13 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
                 if invocation_result_evidence is not None
                 else ["no_actual_invocation_performed"]
             ),
+            completion_evidence_status="not_attempted",
+            completion_evidence_reason="no_invocation_attempted",
+            completion_evidence_refs=[],
+            completion_result_status="not_attempted",
+            completion_result_reason="no_invocation_attempted",
+            missing_completion_evidence_surfaces=[],
+            completion_allowed_refs=[],
         )
 
     def _prepared_non_invoked_state(
@@ -40848,6 +41506,16 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             invocation_attempt_reason=invocation_attempt_reason,
             invocation_result_status="not_invoked",
             invocation_result_evidence=invocation_result_evidence,
+            completion_evidence_status="not_attempted",
+            completion_evidence_reason="no_invocation_attempted",
+            completion_evidence_refs=[],
+            completion_result_status="not_attempted",
+            completion_result_reason="no_invocation_attempted",
+            missing_completion_evidence_surfaces=[],
+            completion_allowed_refs=completion_evidence_ref_catalog.get(
+                short_batch_invocation_next_action,
+                [],
+            ),
         )
 
     if rolling_execution_status not in {
@@ -40992,6 +41660,13 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             invocation_attempt_reason="stop_next_action",
             invocation_result_status="terminal_stop",
             invocation_result_evidence=["terminal_stop_no_runtime_invocation"],
+            completion_evidence_status="terminal_stop",
+            completion_evidence_reason="terminal_stop_no_completion_evaluation",
+            completion_evidence_refs=[],
+            completion_result_status="terminal_stop",
+            completion_result_reason="terminal_stop_no_completion_evaluation",
+            missing_completion_evidence_surfaces=[],
+            completion_allowed_refs=[],
         )
 
     if (
@@ -41470,6 +42145,10 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             "existing_invocation_call_path_invoked",
             f"receipt_status={invoked_receipt_status_raw}",
         ]
+    completion_evidence_state = _evaluate_action_completion_evidence(
+        action_name=short_batch_invocation_next_action,
+        invoked_state=invoked_state,
+    )
 
     return _base_state(
         status="prepared",
@@ -41510,6 +42189,31 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
         invocation_attempt_reason="existing_invocation_call_path_invoked_once",
         invocation_result_status=invocation_result_status,
         invocation_result_evidence=invocation_result_evidence,
+        completion_evidence_status=_normalize_text(
+            completion_evidence_state.get("completion_evidence_status"),
+            default="unavailable",
+        ),
+        completion_evidence_reason=_normalize_text(
+            completion_evidence_state.get("completion_evidence_reason"),
+            default="explicit_completion_evidence_missing",
+        ),
+        completion_evidence_refs=_normalize_string_list(
+            completion_evidence_state.get("completion_evidence_refs")
+        ),
+        completion_result_status=_normalize_text(
+            completion_evidence_state.get("completion_result_status"),
+            default="not_completed",
+        ),
+        completion_result_reason=_normalize_text(
+            completion_evidence_state.get("completion_result_reason"),
+            default="completion_evidence_unavailable",
+        ),
+        missing_completion_evidence_surfaces=_normalize_string_list(
+            completion_evidence_state.get("missing_completion_evidence_surfaces")
+        ),
+        completion_allowed_refs=_normalize_string_list(
+            completion_evidence_state.get("completion_allowed_refs")
+        ),
         actual_invocation_called=True,
     )
 
@@ -55004,6 +55708,118 @@ def _build_approved_restart_execution_contract_surface(
             )
         )
     )
+    one_bounded_launch_completion_ref_catalog = {
+        "run_one_md_apply": [
+            "project_browser_autonomous_md_apply_write_status",
+            "project_browser_autonomous_md_apply_change_status",
+            "project_browser_autonomous_md_apply_receipt_kind",
+        ],
+        "run_one_browser_command": [
+            "project_browser_autonomous_browser_execution_send_status",
+            "project_browser_autonomous_browser_execution_response_wait_status",
+            "project_browser_autonomous_browser_execution_response_read_status",
+        ],
+        "run_one_codex_attempt": [
+            "project_browser_autonomous_codex_execution_attempt_count",
+            "project_browser_autonomous_codex_execution_result_status",
+        ],
+        "assimilate_result": [
+            "project_browser_autonomous_codex_result_outcome",
+            "project_browser_autonomous_codex_result_next_posture",
+        ],
+        "persist_ledger": [
+            "project_browser_autonomous_run_ledger_event_kind",
+            "project_browser_autonomous_run_ledger_counter_posture",
+        ],
+    }
+    one_bounded_launch_generic_completion_refs = {
+        "state_exists",
+        "ready_receipt",
+        "receipt_ready",
+    }
+    allowed_one_bounded_launch_completion_refs = _normalize_string_list(
+        one_bounded_launch_completion_ref_catalog.get(
+            project_browser_autonomous_one_bounded_launch_invocation_next_action,
+            [],
+        )
+    )
+    project_browser_autonomous_one_bounded_launch_completion_evidence_status = (
+        _normalize_text(
+            project_browser_autonomous_one_bounded_launch_state.get(
+                "project_browser_autonomous_one_bounded_launch_completion_evidence_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    if project_browser_autonomous_one_bounded_launch_completion_evidence_status not in {
+        "confirmed",
+        "unavailable",
+        "ambiguous",
+        "failed",
+        "not_attempted",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_one_bounded_launch_completion_evidence_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+        _normalize_text(
+            project_browser_autonomous_one_bounded_launch_state.get(
+                "project_browser_autonomous_one_bounded_launch_completion_evidence_reason"
+            ),
+            default="insufficient_truth_for_completion_evidence",
+        )
+    )
+    project_browser_autonomous_one_bounded_launch_completion_evidence_refs = (
+        _normalize_string_list(
+            project_browser_autonomous_one_bounded_launch_state.get(
+                "project_browser_autonomous_one_bounded_launch_completion_evidence_refs"
+            )
+        )
+    )
+    original_one_bounded_launch_completion_evidence_refs = list(
+        project_browser_autonomous_one_bounded_launch_completion_evidence_refs
+    )
+    project_browser_autonomous_one_bounded_launch_completion_evidence_refs = [
+        ref_name
+        for ref_name in project_browser_autonomous_one_bounded_launch_completion_evidence_refs
+        if ref_name not in one_bounded_launch_generic_completion_refs
+    ]
+    project_browser_autonomous_one_bounded_launch_completion_result_status = (
+        _normalize_text(
+            project_browser_autonomous_one_bounded_launch_state.get(
+                "project_browser_autonomous_one_bounded_launch_completion_result_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    if project_browser_autonomous_one_bounded_launch_completion_result_status not in {
+        "completed",
+        "not_completed",
+        "failed",
+        "not_attempted",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_one_bounded_launch_completion_result_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+        _normalize_text(
+            project_browser_autonomous_one_bounded_launch_state.get(
+                "project_browser_autonomous_one_bounded_launch_completion_result_reason"
+            ),
+            default="insufficient_truth_for_completion_evidence",
+        )
+    )
+    project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = (
+        _normalize_string_list(
+            project_browser_autonomous_one_bounded_launch_state.get(
+                "project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces"
+            )
+        )
+    )
     project_browser_autonomous_one_bounded_launch_action_required_inputs = (
         _normalize_string_list(
             project_browser_autonomous_one_bounded_launch_state.get(
@@ -55192,7 +56008,212 @@ def _build_approved_restart_execution_contract_surface(
             project_browser_autonomous_one_bounded_launch_attempted = 1
     if project_browser_autonomous_one_bounded_launch_attempted > 1:
         project_browser_autonomous_one_bounded_launch_attempted = 1
-    project_browser_autonomous_one_bounded_launch_completed = 0
+    filtered_one_bounded_launch_completion_evidence_refs = [
+        ref_name
+        for ref_name in project_browser_autonomous_one_bounded_launch_completion_evidence_refs
+        if ref_name in allowed_one_bounded_launch_completion_refs
+    ]
+    one_bounded_launch_completion_refs_invalid = bool(
+        original_one_bounded_launch_completion_evidence_refs
+        and len(filtered_one_bounded_launch_completion_evidence_refs)
+        != len(project_browser_autonomous_one_bounded_launch_completion_evidence_refs)
+    )
+    if project_browser_autonomous_one_bounded_launch_candidate_safety_status == "terminal_stop":
+        project_browser_autonomous_one_bounded_launch_completion_evidence_status = (
+            "terminal_stop"
+        )
+        project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+            "terminal_stop_no_completion_evaluation"
+        )
+        project_browser_autonomous_one_bounded_launch_completion_evidence_refs = []
+        project_browser_autonomous_one_bounded_launch_completion_result_status = (
+            "terminal_stop"
+        )
+        project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+            "terminal_stop_no_completion_evaluation"
+        )
+        project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = []
+        project_browser_autonomous_one_bounded_launch_completed = 0
+    elif (
+        project_browser_autonomous_one_bounded_launch_candidate_safety_status
+        == "insufficient_truth"
+    ):
+        project_browser_autonomous_one_bounded_launch_completion_evidence_status = (
+            "insufficient_truth"
+        )
+        project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+            "insufficient_truth_for_completion_evidence"
+        )
+        project_browser_autonomous_one_bounded_launch_completion_evidence_refs = []
+        project_browser_autonomous_one_bounded_launch_completion_result_status = (
+            "insufficient_truth"
+        )
+        project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+            "insufficient_truth_for_completion_evidence"
+        )
+        project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = [
+            "completion_evidence_truth"
+        ]
+        project_browser_autonomous_one_bounded_launch_completed = 0
+    elif project_browser_autonomous_one_bounded_launch_attempted == 0:
+        project_browser_autonomous_one_bounded_launch_completion_evidence_status = (
+            "not_attempted"
+        )
+        project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+            "no_invocation_attempted"
+        )
+        project_browser_autonomous_one_bounded_launch_completion_evidence_refs = []
+        project_browser_autonomous_one_bounded_launch_completion_result_status = (
+            "not_attempted"
+        )
+        project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+            "no_invocation_attempted"
+        )
+        project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = []
+        project_browser_autonomous_one_bounded_launch_completed = 0
+    else:
+        project_browser_autonomous_one_bounded_launch_completion_evidence_refs = (
+            filtered_one_bounded_launch_completion_evidence_refs
+        )
+        if project_browser_autonomous_one_bounded_launch_completion_evidence_status == "failed":
+            project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+                "completion_evidence_failed"
+            )
+            project_browser_autonomous_one_bounded_launch_completion_result_status = (
+                "failed"
+            )
+            project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+                "completion_evidence_failed"
+            )
+            project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = []
+            project_browser_autonomous_one_bounded_launch_completed = 0
+        elif (
+            project_browser_autonomous_one_bounded_launch_completion_evidence_status
+            == "ambiguous"
+        ):
+            project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+                "completion_evidence_ambiguous"
+            )
+            project_browser_autonomous_one_bounded_launch_completion_result_status = (
+                "not_completed"
+            )
+            project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+                "completion_evidence_ambiguous"
+            )
+            project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = []
+            project_browser_autonomous_one_bounded_launch_completed = 0
+        elif (
+            project_browser_autonomous_one_bounded_launch_completion_evidence_status
+            == "confirmed"
+        ):
+            completed_guards_satisfied = bool(
+                project_browser_autonomous_one_bounded_launch_completion_result_status
+                == "completed"
+                and not one_bounded_launch_completion_refs_invalid
+                and project_browser_autonomous_one_bounded_launch_completion_evidence_refs
+                and project_browser_autonomous_one_bounded_launch_execution_mode
+                != "prepared_only_invocation_not_callable"
+                and project_browser_autonomous_one_bounded_launch_invocation_attempt_status
+                == "invoked_once"
+                and project_browser_autonomous_one_bounded_launch_invocation_result_status
+                != "not_invoked"
+            )
+            if completed_guards_satisfied:
+                project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+                    "explicit_completion_evidence_confirmed"
+                )
+                project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+                    "explicit_completion_evidence_confirmed"
+                )
+                project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = []
+                project_browser_autonomous_one_bounded_launch_completed = 1
+            else:
+                if (
+                    not project_browser_autonomous_one_bounded_launch_completion_evidence_refs
+                    or not allowed_one_bounded_launch_completion_refs
+                ):
+                    project_browser_autonomous_one_bounded_launch_completion_evidence_status = (
+                        "unavailable"
+                    )
+                    project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+                        "explicit_completion_evidence_missing"
+                    )
+                    project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+                        "completion_evidence_unavailable"
+                    )
+                    project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = (
+                        allowed_one_bounded_launch_completion_refs
+                    )
+                else:
+                    project_browser_autonomous_one_bounded_launch_completion_evidence_status = (
+                        "ambiguous"
+                    )
+                    project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+                        "completion_evidence_ambiguous"
+                    )
+                    project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+                        "completion_evidence_ambiguous"
+                    )
+                    project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = []
+                project_browser_autonomous_one_bounded_launch_completion_result_status = (
+                    "not_completed"
+                )
+                project_browser_autonomous_one_bounded_launch_completed = 0
+        elif (
+            project_browser_autonomous_one_bounded_launch_completion_evidence_status
+            == "insufficient_truth"
+        ):
+            project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+                "insufficient_truth_for_completion_evidence"
+            )
+            project_browser_autonomous_one_bounded_launch_completion_evidence_refs = []
+            project_browser_autonomous_one_bounded_launch_completion_result_status = (
+                "insufficient_truth"
+            )
+            project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+                "insufficient_truth_for_completion_evidence"
+            )
+            project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = [
+                "completion_evidence_truth"
+            ]
+            project_browser_autonomous_one_bounded_launch_completed = 0
+        else:
+            project_browser_autonomous_one_bounded_launch_completion_evidence_status = (
+                "unavailable"
+            )
+            project_browser_autonomous_one_bounded_launch_completion_evidence_reason = (
+                "explicit_completion_evidence_missing"
+            )
+            project_browser_autonomous_one_bounded_launch_completion_evidence_refs = []
+            project_browser_autonomous_one_bounded_launch_completion_result_status = (
+                "not_completed"
+            )
+            project_browser_autonomous_one_bounded_launch_completion_result_reason = (
+                "completion_evidence_unavailable"
+            )
+            project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces = (
+                allowed_one_bounded_launch_completion_refs
+            )
+            project_browser_autonomous_one_bounded_launch_completed = 0
+    if project_browser_autonomous_one_bounded_launch_completed > 1:
+        project_browser_autonomous_one_bounded_launch_completed = 1
+    if (
+        project_browser_autonomous_one_bounded_launch_completed
+        > project_browser_autonomous_one_bounded_launch_attempted
+    ):
+        project_browser_autonomous_one_bounded_launch_completed = (
+            project_browser_autonomous_one_bounded_launch_attempted
+        )
+    if project_browser_autonomous_one_bounded_launch_attempted == 0:
+        project_browser_autonomous_one_bounded_launch_completed = 0
+    if (
+        project_browser_autonomous_one_bounded_launch_completion_evidence_status
+        != "confirmed"
+        or project_browser_autonomous_one_bounded_launch_completion_result_status
+        != "completed"
+        or not project_browser_autonomous_one_bounded_launch_completion_evidence_refs
+    ):
+        project_browser_autonomous_one_bounded_launch_completed = 0
     if project_browser_autonomous_one_bounded_launch_max_steps != 3:
         project_browser_autonomous_one_bounded_launch_max_steps = 3
     if project_browser_autonomous_one_bounded_launch_failure_budget != 1:
@@ -56704,6 +57725,24 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_one_bounded_launch_invocation_result_evidence": (
                     project_browser_autonomous_one_bounded_launch_invocation_result_evidence
                 ),
+                "project_browser_autonomous_one_bounded_launch_completion_evidence_status": (
+                    project_browser_autonomous_one_bounded_launch_completion_evidence_status
+                ),
+                "project_browser_autonomous_one_bounded_launch_completion_evidence_reason": (
+                    project_browser_autonomous_one_bounded_launch_completion_evidence_reason
+                ),
+                "project_browser_autonomous_one_bounded_launch_completion_evidence_refs": (
+                    project_browser_autonomous_one_bounded_launch_completion_evidence_refs
+                ),
+                "project_browser_autonomous_one_bounded_launch_completion_result_status": (
+                    project_browser_autonomous_one_bounded_launch_completion_result_status
+                ),
+                "project_browser_autonomous_one_bounded_launch_completion_result_reason": (
+                    project_browser_autonomous_one_bounded_launch_completion_result_reason
+                ),
+                "project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces": (
+                    project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces
+                ),
                 "project_browser_autonomous_one_bounded_launch_attempted": (
                     project_browser_autonomous_one_bounded_launch_attempted
                 ),
@@ -57189,6 +58228,24 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_invocation_result_evidence"
             if project_browser_autonomous_one_bounded_launch_invocation_result_evidence
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_completion_evidence_status"
+            if project_browser_autonomous_one_bounded_launch_completion_evidence_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_completion_evidence_reason"
+            if project_browser_autonomous_one_bounded_launch_completion_evidence_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_completion_evidence_refs"
+            if project_browser_autonomous_one_bounded_launch_completion_evidence_refs
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_completion_result_status"
+            if project_browser_autonomous_one_bounded_launch_completion_result_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_completion_result_reason"
+            if project_browser_autonomous_one_bounded_launch_completion_result_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces"
+            if project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_attempted"
             if project_browser_autonomous_one_bounded_launch_attempted
@@ -62288,6 +63345,24 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_one_bounded_launch_invocation_result_evidence": (
             project_browser_autonomous_one_bounded_launch_invocation_result_evidence
+        ),
+        "project_browser_autonomous_one_bounded_launch_completion_evidence_status": (
+            project_browser_autonomous_one_bounded_launch_completion_evidence_status
+        ),
+        "project_browser_autonomous_one_bounded_launch_completion_evidence_reason": (
+            project_browser_autonomous_one_bounded_launch_completion_evidence_reason
+        ),
+        "project_browser_autonomous_one_bounded_launch_completion_evidence_refs": (
+            project_browser_autonomous_one_bounded_launch_completion_evidence_refs
+        ),
+        "project_browser_autonomous_one_bounded_launch_completion_result_status": (
+            project_browser_autonomous_one_bounded_launch_completion_result_status
+        ),
+        "project_browser_autonomous_one_bounded_launch_completion_result_reason": (
+            project_browser_autonomous_one_bounded_launch_completion_result_reason
+        ),
+        "project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces": (
+            project_browser_autonomous_one_bounded_launch_missing_completion_evidence_surfaces
         ),
         "project_browser_autonomous_one_bounded_launch_attempted": (
             project_browser_autonomous_one_bounded_launch_attempted
