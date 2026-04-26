@@ -42218,6 +42218,611 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
     )
 
 
+def _build_project_browser_autonomous_two_launch_preparation_state(
+    *,
+    autonomous_one_bounded_launch_attempted: int,
+    autonomous_one_bounded_launch_completed: int,
+    autonomous_one_bounded_launch_completion_evidence_status: str,
+    autonomous_one_bounded_launch_completion_result_status: str,
+    autonomous_one_bounded_launch_stop_reason: str,
+    autonomous_short_batch_invocation_path_status: str,
+    autonomous_short_batch_invocation_runtime_capability: str,
+    autonomous_short_batch_invocation_receipt_status: str,
+    autonomous_short_batch_invocation_missing_inputs: list[str] | None,
+    autonomous_cooldown_status: str,
+    autonomous_loop_risk_status: str,
+    autonomous_run_ledger_duplicate_status: str,
+    autonomous_watchdog_duplicate_receipt_posture: str,
+    autonomous_short_batch_failures: int,
+    autonomous_rolling_multi_launch_failure_budget: int,
+    autonomous_two_launch_callsite_available_vars: list[str] | None,
+) -> dict[str, Any]:
+    launch_1_attempted = _as_non_negative_int(
+        autonomous_one_bounded_launch_attempted,
+        default=0,
+    )
+    if launch_1_attempted > 1:
+        launch_1_attempted = 1
+    launch_1_completed = _as_non_negative_int(
+        autonomous_one_bounded_launch_completed,
+        default=0,
+    )
+    if launch_1_completed > 1:
+        launch_1_completed = 1
+    completion_evidence_status = _normalize_text(
+        autonomous_one_bounded_launch_completion_evidence_status,
+        default="insufficient_truth",
+    )
+    if completion_evidence_status not in {
+        "confirmed",
+        "unavailable",
+        "ambiguous",
+        "failed",
+        "not_attempted",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        completion_evidence_status = "insufficient_truth"
+    completion_result_status = _normalize_text(
+        autonomous_one_bounded_launch_completion_result_status,
+        default="insufficient_truth",
+    )
+    if completion_result_status not in {
+        "completed",
+        "not_completed",
+        "failed",
+        "not_attempted",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        completion_result_status = "insufficient_truth"
+    launch_1_stop_reason = _normalize_text(
+        autonomous_one_bounded_launch_stop_reason,
+        default="insufficient_truth",
+    )
+    short_batch_invocation_path_status = _normalize_text(
+        autonomous_short_batch_invocation_path_status,
+        default="insufficient_truth",
+    )
+    if short_batch_invocation_path_status not in {
+        "available",
+        "unavailable",
+        "insufficient_truth",
+    }:
+        short_batch_invocation_path_status = "insufficient_truth"
+    short_batch_invocation_runtime_capability = _normalize_text(
+        autonomous_short_batch_invocation_runtime_capability,
+        default="insufficient_truth",
+    )
+    if short_batch_invocation_runtime_capability not in {
+        "actual_bounded_invocation",
+        "partial_runtime_parts_available",
+        "metadata_only",
+        "unavailable",
+        "insufficient_truth",
+    }:
+        short_batch_invocation_runtime_capability = "insufficient_truth"
+    short_batch_invocation_receipt_status = _normalize_text(
+        autonomous_short_batch_invocation_receipt_status,
+        default="insufficient_truth",
+    )
+    if short_batch_invocation_receipt_status not in {
+        "ready",
+        "blocked",
+        "pause_required",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        short_batch_invocation_receipt_status = "insufficient_truth"
+    short_batch_invocation_missing_inputs = _normalize_string_list(
+        autonomous_short_batch_invocation_missing_inputs or []
+    )
+    cooldown_status = _normalize_text(
+        autonomous_cooldown_status,
+        default="insufficient_truth",
+    )
+    if cooldown_status not in {
+        "not_required",
+        "required",
+        "blocked",
+        "insufficient_truth",
+    }:
+        cooldown_status = "insufficient_truth"
+    loop_risk_status = _normalize_text(
+        autonomous_loop_risk_status,
+        default="insufficient_truth",
+    )
+    if loop_risk_status not in {"clear", "suspected", "blocked", "insufficient_truth"}:
+        loop_risk_status = "insufficient_truth"
+    run_ledger_duplicate_status = _normalize_text(
+        autonomous_run_ledger_duplicate_status,
+        default="insufficient_truth",
+    )
+    if run_ledger_duplicate_status not in {
+        "clear",
+        "duplicate_detected",
+        "insufficient_truth",
+    }:
+        run_ledger_duplicate_status = "insufficient_truth"
+    watchdog_duplicate_receipt_posture = _normalize_text(
+        autonomous_watchdog_duplicate_receipt_posture,
+        default="insufficient_truth",
+    )
+    if watchdog_duplicate_receipt_posture not in {
+        "clear",
+        "duplicate_detected",
+        "insufficient_truth",
+    }:
+        watchdog_duplicate_receipt_posture = "insufficient_truth"
+    short_batch_failures = _as_non_negative_int(
+        autonomous_short_batch_failures,
+        default=0,
+    )
+    rolling_multi_launch_failure_budget = _as_non_negative_int(
+        autonomous_rolling_multi_launch_failure_budget,
+        default=0,
+    )
+
+    callsite_available_vars = set(
+        _normalize_string_list(autonomous_two_launch_callsite_available_vars or [])
+    )
+    launch_2_required_inputs = [
+        "project_browser_autonomous_one_bounded_launch_attempted",
+        "project_browser_autonomous_one_bounded_launch_completed",
+        "project_browser_autonomous_one_bounded_launch_completion_evidence_status",
+        "project_browser_autonomous_one_bounded_launch_completion_result_status",
+        "project_browser_autonomous_one_bounded_launch_stop_reason",
+        "project_browser_autonomous_short_batch_invocation_path_status",
+        "project_browser_autonomous_short_batch_invocation_runtime_capability",
+        "project_browser_autonomous_short_batch_invocation_receipt_status",
+        "project_browser_autonomous_short_batch_invocation_missing_inputs",
+        "project_browser_autonomous_cooldown_status",
+        "project_browser_autonomous_loop_risk_status",
+        "project_browser_autonomous_run_ledger_duplicate_status",
+        "project_browser_autonomous_watchdog_duplicate_receipt_posture",
+        "project_browser_autonomous_short_batch_failures",
+        "project_browser_autonomous_rolling_multi_launch_failure_budget",
+    ]
+    launch_2_available_inputs = [
+        input_name
+        for input_name in launch_2_required_inputs
+        if input_name in callsite_available_vars
+    ]
+
+    def _base_state(
+        *,
+        preparation_status: str,
+        preparation_permission: str,
+        preparation_reason: str,
+        preparation_receipt_status: str,
+        launch_1_status: str,
+        launch_1_result_status: str,
+        launch_2_candidate_status: str,
+        launch_2_permission: str,
+        launch_2_block_reason: str,
+        launch_2_allowed: int,
+        launch_2_next_action: str,
+    ) -> dict[str, Any]:
+        normalized_preparation_status = _normalize_text(
+            preparation_status,
+            default="insufficient_truth",
+        )
+        if normalized_preparation_status not in {
+            "prepared",
+            "blocked",
+            "terminal_stop",
+            "insufficient_truth",
+        }:
+            normalized_preparation_status = "insufficient_truth"
+        normalized_preparation_permission = _normalize_text(
+            preparation_permission,
+            default="insufficient_truth",
+        )
+        if normalized_preparation_permission not in {
+            "allowed_candidate",
+            "blocked",
+            "not_applicable",
+            "insufficient_truth",
+        }:
+            normalized_preparation_permission = "insufficient_truth"
+        normalized_preparation_reason = _normalize_text(
+            preparation_reason,
+            default="insufficient_truth",
+        )
+        normalized_preparation_receipt_status = _normalize_text(
+            preparation_receipt_status,
+            default="insufficient_truth",
+        )
+        if normalized_preparation_receipt_status not in {
+            "ready",
+            "blocked",
+            "insufficient_truth",
+        }:
+            normalized_preparation_receipt_status = "insufficient_truth"
+        normalized_launch_1_status = _normalize_text(
+            launch_1_status,
+            default="insufficient_truth",
+        )
+        if normalized_launch_1_status not in {
+            "completed",
+            "attempted_not_completed",
+            "not_attempted",
+            "blocked",
+            "terminal_stop",
+            "insufficient_truth",
+        }:
+            normalized_launch_1_status = "insufficient_truth"
+        normalized_launch_1_result_status = _normalize_text(
+            launch_1_result_status,
+            default="insufficient_truth",
+        )
+        if normalized_launch_1_result_status not in {
+            "completed",
+            "not_completed",
+            "failed",
+            "blocked",
+            "not_attempted",
+            "terminal_stop",
+            "insufficient_truth",
+        }:
+            normalized_launch_1_result_status = "insufficient_truth"
+        normalized_launch_2_candidate_status = _normalize_text(
+            launch_2_candidate_status,
+            default="blocked_insufficient_truth",
+        )
+        if normalized_launch_2_candidate_status not in {
+            "prepared_candidate",
+            "blocked_launch_1_not_completed",
+            "blocked_missing_inputs",
+            "blocked_failure_budget",
+            "blocked_loop_or_duplicate_risk",
+            "blocked_terminal_stop",
+            "blocked_human_review",
+            "blocked_insufficient_truth",
+            "not_applicable",
+        }:
+            normalized_launch_2_candidate_status = "blocked_insufficient_truth"
+        normalized_launch_2_permission = _normalize_text(
+            launch_2_permission,
+            default="insufficient_truth",
+        )
+        if normalized_launch_2_permission not in {
+            "allowed_candidate",
+            "blocked",
+            "not_applicable",
+            "insufficient_truth",
+        }:
+            normalized_launch_2_permission = "insufficient_truth"
+        normalized_launch_2_block_reason = _normalize_text(
+            launch_2_block_reason,
+            default="insufficient_truth",
+        )
+        normalized_launch_2_required_inputs = _normalize_string_list(
+            launch_2_required_inputs
+        )
+        normalized_launch_2_available_inputs = [
+            input_name
+            for input_name in _normalize_string_list(launch_2_available_inputs)
+            if input_name in set(normalized_launch_2_required_inputs)
+        ]
+        normalized_launch_2_missing_inputs = [
+            input_name
+            for input_name in normalized_launch_2_required_inputs
+            if input_name not in set(normalized_launch_2_available_inputs)
+        ]
+        normalized_launch_2_allowed = _as_non_negative_int(
+            launch_2_allowed,
+            default=0,
+        )
+        if normalized_launch_2_allowed > 1:
+            normalized_launch_2_allowed = 1
+        normalized_launch_2_next_action = _normalize_text(
+            launch_2_next_action,
+            default="do_not_launch",
+        )
+        if normalized_launch_2_next_action not in {
+            "prepare_second_bounded_launch_later",
+            "do_not_launch",
+            "human_review_required",
+            "insufficient_truth",
+        }:
+            normalized_launch_2_next_action = "do_not_launch"
+
+        if (
+            launch_1_completed != 1
+            or normalized_launch_2_permission != "allowed_candidate"
+            or normalized_launch_2_candidate_status != "prepared_candidate"
+            or normalized_launch_2_missing_inputs
+        ):
+            normalized_launch_2_allowed = 0
+        else:
+            normalized_launch_2_allowed = 1
+        if normalized_launch_2_allowed != 1:
+            normalized_launch_2_next_action = "do_not_launch"
+        else:
+            normalized_launch_2_next_action = "prepare_second_bounded_launch_later"
+
+        return {
+            "project_browser_autonomous_two_launch_preparation_status": (
+                normalized_preparation_status
+            ),
+            "project_browser_autonomous_two_launch_preparation_permission": (
+                normalized_preparation_permission
+            ),
+            "project_browser_autonomous_two_launch_preparation_reason": (
+                normalized_preparation_reason
+            ),
+            "project_browser_autonomous_two_launch_preparation_receipt_status": (
+                normalized_preparation_receipt_status
+            ),
+            "project_browser_autonomous_launch_1_status": normalized_launch_1_status,
+            "project_browser_autonomous_launch_1_attempted": launch_1_attempted,
+            "project_browser_autonomous_launch_1_completed": launch_1_completed,
+            "project_browser_autonomous_launch_1_result_status": (
+                normalized_launch_1_result_status
+            ),
+            "project_browser_autonomous_launch_1_stop_reason": launch_1_stop_reason,
+            "project_browser_autonomous_launch_1_completion_evidence_status": (
+                completion_evidence_status
+            ),
+            "project_browser_autonomous_launch_1_completion_result_status": (
+                completion_result_status
+            ),
+            "project_browser_autonomous_launch_2_candidate_status": (
+                normalized_launch_2_candidate_status
+            ),
+            "project_browser_autonomous_launch_2_permission": (
+                normalized_launch_2_permission
+            ),
+            "project_browser_autonomous_launch_2_allowed": normalized_launch_2_allowed,
+            "project_browser_autonomous_launch_2_block_reason": (
+                normalized_launch_2_block_reason
+            ),
+            "project_browser_autonomous_launch_2_required_inputs": (
+                normalized_launch_2_required_inputs
+            ),
+            "project_browser_autonomous_launch_2_available_inputs": (
+                normalized_launch_2_available_inputs
+            ),
+            "project_browser_autonomous_launch_2_missing_inputs": (
+                normalized_launch_2_missing_inputs
+            ),
+            "project_browser_autonomous_launch_2_next_action": (
+                normalized_launch_2_next_action
+            ),
+        }
+
+    launch_1_terminal_stop = (
+        launch_1_stop_reason == "stop_next_action"
+        or completion_evidence_status == "terminal_stop"
+        or completion_result_status == "terminal_stop"
+    )
+    launch_1_insufficient_truth = False
+    if launch_1_terminal_stop:
+        launch_1_status = "terminal_stop"
+        launch_1_result_status = "terminal_stop"
+    elif launch_1_attempted == 0:
+        launch_1_status = "not_attempted"
+        launch_1_result_status = "not_attempted"
+    elif launch_1_completed == 0:
+        launch_1_status = "attempted_not_completed"
+        if completion_evidence_status == "insufficient_truth" or completion_result_status == (
+            "insufficient_truth"
+        ):
+            launch_1_result_status = "insufficient_truth"
+            launch_1_insufficient_truth = True
+        elif completion_result_status == "failed":
+            launch_1_result_status = "failed"
+        elif completion_result_status in {"not_completed", "not_attempted", "completed"}:
+            if completion_result_status == "completed":
+                launch_1_result_status = "insufficient_truth"
+                launch_1_insufficient_truth = True
+            else:
+                launch_1_result_status = "not_completed"
+        else:
+            launch_1_result_status = "not_completed"
+    else:
+        if (
+            completion_evidence_status == "confirmed"
+            and completion_result_status == "completed"
+        ):
+            launch_1_status = "completed"
+            launch_1_result_status = "completed"
+        else:
+            launch_1_status = "insufficient_truth"
+            launch_1_result_status = "insufficient_truth"
+            launch_1_insufficient_truth = True
+
+    if launch_1_terminal_stop:
+        return _base_state(
+            preparation_status="terminal_stop",
+            preparation_permission="blocked",
+            preparation_reason=launch_1_stop_reason or "launch_1_terminal_stop",
+            preparation_receipt_status="ready",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_terminal_stop",
+            launch_2_permission="blocked",
+            launch_2_block_reason=launch_1_stop_reason or "launch_1_terminal_stop",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    if launch_1_insufficient_truth:
+        return _base_state(
+            preparation_status="insufficient_truth",
+            preparation_permission="insufficient_truth",
+            preparation_reason="launch_1_insufficient_truth",
+            preparation_receipt_status="insufficient_truth",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_insufficient_truth",
+            launch_2_permission="insufficient_truth",
+            launch_2_block_reason="launch_1_insufficient_truth",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    launch_2_missing_inputs = [
+        input_name
+        for input_name in launch_2_required_inputs
+        if input_name not in set(launch_2_available_inputs)
+    ]
+    if launch_2_missing_inputs:
+        return _base_state(
+            preparation_status="blocked",
+            preparation_permission="blocked",
+            preparation_reason="launch_2_required_inputs_missing",
+            preparation_receipt_status="blocked",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_missing_inputs",
+            launch_2_permission="blocked",
+            launch_2_block_reason="launch_2_required_inputs_missing",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    if launch_1_completed != 1:
+        return _base_state(
+            preparation_status="blocked",
+            preparation_permission="blocked",
+            preparation_reason="launch_1_not_completed",
+            preparation_receipt_status="blocked",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_launch_1_not_completed",
+            launch_2_permission="blocked",
+            launch_2_block_reason="launch_1_not_completed",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    if short_batch_invocation_receipt_status == "human_review_required":
+        return _base_state(
+            preparation_status="blocked",
+            preparation_permission="blocked",
+            preparation_reason="short_batch_invocation_human_review_required",
+            preparation_receipt_status="blocked",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_human_review",
+            launch_2_permission="blocked",
+            launch_2_block_reason="short_batch_invocation_human_review_required",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    if (
+        short_batch_invocation_path_status == "insufficient_truth"
+        or short_batch_invocation_runtime_capability == "insufficient_truth"
+        or short_batch_invocation_receipt_status in {"pause_required", "insufficient_truth"}
+        or cooldown_status == "insufficient_truth"
+        or loop_risk_status == "insufficient_truth"
+        or run_ledger_duplicate_status == "insufficient_truth"
+        or watchdog_duplicate_receipt_posture == "insufficient_truth"
+    ):
+        return _base_state(
+            preparation_status="insufficient_truth",
+            preparation_permission="insufficient_truth",
+            preparation_reason="launch_2_gate_insufficient_truth",
+            preparation_receipt_status="insufficient_truth",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_insufficient_truth",
+            launch_2_permission="insufficient_truth",
+            launch_2_block_reason="launch_2_gate_insufficient_truth",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    if (
+        short_batch_invocation_missing_inputs
+        or short_batch_invocation_path_status != "available"
+        or short_batch_invocation_runtime_capability != "actual_bounded_invocation"
+    ):
+        return _base_state(
+            preparation_status="blocked",
+            preparation_permission="blocked",
+            preparation_reason="short_batch_invocation_missing_inputs_present",
+            preparation_receipt_status="blocked",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_missing_inputs",
+            launch_2_permission="blocked",
+            launch_2_block_reason="short_batch_invocation_missing_inputs_present",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    if short_batch_invocation_receipt_status != "ready":
+        return _base_state(
+            preparation_status="insufficient_truth",
+            preparation_permission="insufficient_truth",
+            preparation_reason="short_batch_invocation_receipt_not_ready",
+            preparation_receipt_status="insufficient_truth",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_insufficient_truth",
+            launch_2_permission="insufficient_truth",
+            launch_2_block_reason="short_batch_invocation_receipt_not_ready",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    if (
+        cooldown_status in {"required", "blocked"}
+        or rolling_multi_launch_failure_budget <= 0
+        or short_batch_failures >= rolling_multi_launch_failure_budget
+    ):
+        return _base_state(
+            preparation_status="blocked",
+            preparation_permission="blocked",
+            preparation_reason="failure_budget_or_cooldown_blocked",
+            preparation_receipt_status="blocked",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_failure_budget",
+            launch_2_permission="blocked",
+            launch_2_block_reason="failure_budget_or_cooldown_blocked",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    if (
+        loop_risk_status in {"suspected", "blocked"}
+        or run_ledger_duplicate_status == "duplicate_detected"
+        or watchdog_duplicate_receipt_posture == "duplicate_detected"
+    ):
+        return _base_state(
+            preparation_status="blocked",
+            preparation_permission="blocked",
+            preparation_reason="loop_or_duplicate_risk_detected",
+            preparation_receipt_status="blocked",
+            launch_1_status=launch_1_status,
+            launch_1_result_status=launch_1_result_status,
+            launch_2_candidate_status="blocked_loop_or_duplicate_risk",
+            launch_2_permission="blocked",
+            launch_2_block_reason="loop_or_duplicate_risk_detected",
+            launch_2_allowed=0,
+            launch_2_next_action="do_not_launch",
+        )
+
+    return _base_state(
+        preparation_status="prepared",
+        preparation_permission="allowed_candidate",
+        preparation_reason="launch_2_candidate_prepared",
+        preparation_receipt_status="ready",
+        launch_1_status=launch_1_status,
+        launch_1_result_status=launch_1_result_status,
+        launch_2_candidate_status="prepared_candidate",
+        launch_2_permission="allowed_candidate",
+        launch_2_block_reason="none",
+        launch_2_allowed=1,
+        launch_2_next_action="prepare_second_bounded_launch_later",
+    )
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -56245,6 +56850,328 @@ def _build_approved_restart_execution_contract_surface(
         ):
             project_browser_autonomous_rolling_execution_stop_reason = "none"
 
+    project_browser_autonomous_two_launch_preparation_state = (
+        _build_project_browser_autonomous_two_launch_preparation_state(
+            autonomous_one_bounded_launch_attempted=(
+                project_browser_autonomous_one_bounded_launch_attempted
+            ),
+            autonomous_one_bounded_launch_completed=(
+                project_browser_autonomous_one_bounded_launch_completed
+            ),
+            autonomous_one_bounded_launch_completion_evidence_status=(
+                project_browser_autonomous_one_bounded_launch_completion_evidence_status
+            ),
+            autonomous_one_bounded_launch_completion_result_status=(
+                project_browser_autonomous_one_bounded_launch_completion_result_status
+            ),
+            autonomous_one_bounded_launch_stop_reason=(
+                project_browser_autonomous_one_bounded_launch_stop_reason
+            ),
+            autonomous_short_batch_invocation_path_status=(
+                project_browser_autonomous_short_batch_invocation_path_status
+            ),
+            autonomous_short_batch_invocation_runtime_capability=(
+                project_browser_autonomous_short_batch_invocation_runtime_capability
+            ),
+            autonomous_short_batch_invocation_receipt_status=(
+                project_browser_autonomous_short_batch_invocation_receipt_status
+            ),
+            autonomous_short_batch_invocation_missing_inputs=(
+                project_browser_autonomous_short_batch_invocation_missing_inputs
+            ),
+            autonomous_cooldown_status=project_browser_autonomous_cooldown_status,
+            autonomous_loop_risk_status=project_browser_autonomous_loop_risk_status,
+            autonomous_run_ledger_duplicate_status=(
+                project_browser_autonomous_run_ledger_duplicate_status
+            ),
+            autonomous_watchdog_duplicate_receipt_posture=(
+                project_browser_autonomous_watchdog_duplicate_receipt_posture
+            ),
+            autonomous_short_batch_failures=project_browser_autonomous_short_batch_failures,
+            autonomous_rolling_multi_launch_failure_budget=(
+                project_browser_autonomous_rolling_multi_launch_failure_budget
+            ),
+            autonomous_two_launch_callsite_available_vars=list(locals().keys()),
+        )
+    )
+    project_browser_autonomous_two_launch_preparation_status = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_two_launch_preparation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_two_launch_preparation_status not in {
+        "prepared",
+        "blocked",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_two_launch_preparation_status = "insufficient_truth"
+    project_browser_autonomous_two_launch_preparation_permission = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_two_launch_preparation_permission"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_two_launch_preparation_permission not in {
+        "allowed_candidate",
+        "blocked",
+        "not_applicable",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_two_launch_preparation_permission = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_two_launch_preparation_reason = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_two_launch_preparation_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_two_launch_preparation_receipt_status = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_two_launch_preparation_receipt_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_two_launch_preparation_receipt_status not in {
+        "ready",
+        "blocked",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_two_launch_preparation_receipt_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_launch_1_status = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_1_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_launch_1_status not in {
+        "completed",
+        "attempted_not_completed",
+        "not_attempted",
+        "blocked",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_1_status = "insufficient_truth"
+    project_browser_autonomous_launch_1_attempted = _as_non_negative_int(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_1_attempted"
+        ),
+        default=0,
+    )
+    if project_browser_autonomous_launch_1_attempted > 1:
+        project_browser_autonomous_launch_1_attempted = 1
+    if (
+        project_browser_autonomous_launch_1_attempted
+        != project_browser_autonomous_one_bounded_launch_attempted
+    ):
+        project_browser_autonomous_launch_1_attempted = (
+            project_browser_autonomous_one_bounded_launch_attempted
+        )
+    project_browser_autonomous_launch_1_completed = _as_non_negative_int(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_1_completed"
+        ),
+        default=0,
+    )
+    if project_browser_autonomous_launch_1_completed > 1:
+        project_browser_autonomous_launch_1_completed = 1
+    if (
+        project_browser_autonomous_launch_1_completed
+        != project_browser_autonomous_one_bounded_launch_completed
+    ):
+        project_browser_autonomous_launch_1_completed = (
+            project_browser_autonomous_one_bounded_launch_completed
+        )
+    if (
+        project_browser_autonomous_launch_1_completed
+        > project_browser_autonomous_launch_1_attempted
+    ):
+        project_browser_autonomous_launch_1_completed = (
+            project_browser_autonomous_launch_1_attempted
+        )
+    project_browser_autonomous_launch_1_result_status = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_1_result_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_launch_1_result_status not in {
+        "completed",
+        "not_completed",
+        "failed",
+        "blocked",
+        "not_attempted",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_1_result_status = "insufficient_truth"
+    project_browser_autonomous_launch_1_stop_reason = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_1_stop_reason"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_launch_1_stop_reason
+        != project_browser_autonomous_one_bounded_launch_stop_reason
+    ):
+        project_browser_autonomous_launch_1_stop_reason = (
+            project_browser_autonomous_one_bounded_launch_stop_reason
+        )
+    project_browser_autonomous_launch_1_completion_evidence_status = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_1_completion_evidence_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_launch_1_completion_evidence_status not in {
+        "confirmed",
+        "unavailable",
+        "ambiguous",
+        "failed",
+        "not_attempted",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_1_completion_evidence_status = (
+            "insufficient_truth"
+        )
+    if (
+        project_browser_autonomous_launch_1_completion_evidence_status
+        != project_browser_autonomous_one_bounded_launch_completion_evidence_status
+    ):
+        project_browser_autonomous_launch_1_completion_evidence_status = (
+            project_browser_autonomous_one_bounded_launch_completion_evidence_status
+        )
+    project_browser_autonomous_launch_1_completion_result_status = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_1_completion_result_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_launch_1_completion_result_status not in {
+        "completed",
+        "not_completed",
+        "failed",
+        "not_attempted",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_1_completion_result_status = (
+            "insufficient_truth"
+        )
+    if (
+        project_browser_autonomous_launch_1_completion_result_status
+        != project_browser_autonomous_one_bounded_launch_completion_result_status
+    ):
+        project_browser_autonomous_launch_1_completion_result_status = (
+            project_browser_autonomous_one_bounded_launch_completion_result_status
+        )
+    project_browser_autonomous_launch_2_candidate_status = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_2_candidate_status"
+        ),
+        default="blocked_insufficient_truth",
+    )
+    if project_browser_autonomous_launch_2_candidate_status not in {
+        "prepared_candidate",
+        "blocked_launch_1_not_completed",
+        "blocked_missing_inputs",
+        "blocked_failure_budget",
+        "blocked_loop_or_duplicate_risk",
+        "blocked_terminal_stop",
+        "blocked_human_review",
+        "blocked_insufficient_truth",
+        "not_applicable",
+    }:
+        project_browser_autonomous_launch_2_candidate_status = (
+            "blocked_insufficient_truth"
+        )
+    project_browser_autonomous_launch_2_permission = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_2_permission"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_launch_2_permission not in {
+        "allowed_candidate",
+        "blocked",
+        "not_applicable",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_2_permission = "insufficient_truth"
+    project_browser_autonomous_launch_2_block_reason = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_2_block_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_launch_2_required_inputs = _normalize_string_list(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_2_required_inputs"
+        )
+    )
+    project_browser_autonomous_launch_2_available_inputs = _normalize_string_list(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_2_available_inputs"
+        )
+    )
+    allowed_launch_2_required_inputs = set(
+        project_browser_autonomous_launch_2_required_inputs
+    )
+    project_browser_autonomous_launch_2_available_inputs = [
+        input_name
+        for input_name in project_browser_autonomous_launch_2_available_inputs
+        if input_name in allowed_launch_2_required_inputs
+    ]
+    project_browser_autonomous_launch_2_missing_inputs = [
+        input_name
+        for input_name in project_browser_autonomous_launch_2_required_inputs
+        if input_name
+        not in set(project_browser_autonomous_launch_2_available_inputs)
+    ]
+    project_browser_autonomous_launch_2_allowed = _as_non_negative_int(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_2_allowed"
+        ),
+        default=0,
+    )
+    if project_browser_autonomous_launch_2_allowed > 1:
+        project_browser_autonomous_launch_2_allowed = 1
+    if (
+        project_browser_autonomous_launch_1_completed != 1
+        or project_browser_autonomous_launch_2_permission != "allowed_candidate"
+        or project_browser_autonomous_launch_2_candidate_status != "prepared_candidate"
+        or project_browser_autonomous_launch_2_missing_inputs
+    ):
+        project_browser_autonomous_launch_2_allowed = 0
+    else:
+        project_browser_autonomous_launch_2_allowed = 1
+    project_browser_autonomous_launch_2_next_action = _normalize_text(
+        project_browser_autonomous_two_launch_preparation_state.get(
+            "project_browser_autonomous_launch_2_next_action"
+        ),
+        default="do_not_launch",
+    )
+    if project_browser_autonomous_launch_2_next_action not in {
+        "prepare_second_bounded_launch_later",
+        "do_not_launch",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_2_next_action = "do_not_launch"
+    if project_browser_autonomous_launch_2_allowed != 1:
+        project_browser_autonomous_launch_2_next_action = "do_not_launch"
+    else:
+        project_browser_autonomous_launch_2_next_action = (
+            "prepare_second_bounded_launch_later"
+        )
+
     if project_planning_summary_available:
         project_planning_summary_compact.update(
             {
@@ -57758,6 +58685,63 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_one_bounded_launch_stop_reason": (
                     project_browser_autonomous_one_bounded_launch_stop_reason
                 ),
+                "project_browser_autonomous_two_launch_preparation_status": (
+                    project_browser_autonomous_two_launch_preparation_status
+                ),
+                "project_browser_autonomous_two_launch_preparation_permission": (
+                    project_browser_autonomous_two_launch_preparation_permission
+                ),
+                "project_browser_autonomous_two_launch_preparation_reason": (
+                    project_browser_autonomous_two_launch_preparation_reason
+                ),
+                "project_browser_autonomous_two_launch_preparation_receipt_status": (
+                    project_browser_autonomous_two_launch_preparation_receipt_status
+                ),
+                "project_browser_autonomous_launch_1_status": (
+                    project_browser_autonomous_launch_1_status
+                ),
+                "project_browser_autonomous_launch_1_attempted": (
+                    project_browser_autonomous_launch_1_attempted
+                ),
+                "project_browser_autonomous_launch_1_completed": (
+                    project_browser_autonomous_launch_1_completed
+                ),
+                "project_browser_autonomous_launch_1_result_status": (
+                    project_browser_autonomous_launch_1_result_status
+                ),
+                "project_browser_autonomous_launch_1_stop_reason": (
+                    project_browser_autonomous_launch_1_stop_reason
+                ),
+                "project_browser_autonomous_launch_1_completion_evidence_status": (
+                    project_browser_autonomous_launch_1_completion_evidence_status
+                ),
+                "project_browser_autonomous_launch_1_completion_result_status": (
+                    project_browser_autonomous_launch_1_completion_result_status
+                ),
+                "project_browser_autonomous_launch_2_candidate_status": (
+                    project_browser_autonomous_launch_2_candidate_status
+                ),
+                "project_browser_autonomous_launch_2_permission": (
+                    project_browser_autonomous_launch_2_permission
+                ),
+                "project_browser_autonomous_launch_2_allowed": (
+                    project_browser_autonomous_launch_2_allowed
+                ),
+                "project_browser_autonomous_launch_2_block_reason": (
+                    project_browser_autonomous_launch_2_block_reason
+                ),
+                "project_browser_autonomous_launch_2_required_inputs": (
+                    project_browser_autonomous_launch_2_required_inputs
+                ),
+                "project_browser_autonomous_launch_2_available_inputs": (
+                    project_browser_autonomous_launch_2_available_inputs
+                ),
+                "project_browser_autonomous_launch_2_missing_inputs": (
+                    project_browser_autonomous_launch_2_missing_inputs
+                ),
+                "project_browser_autonomous_launch_2_next_action": (
+                    project_browser_autonomous_launch_2_next_action
+                ),
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -58252,6 +59236,63 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_completed"
             if project_browser_autonomous_one_bounded_launch_completed
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_two_launch_preparation_status"
+            if project_browser_autonomous_two_launch_preparation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_two_launch_preparation_permission"
+            if project_browser_autonomous_two_launch_preparation_permission
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_two_launch_preparation_reason"
+            if project_browser_autonomous_two_launch_preparation_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_two_launch_preparation_receipt_status"
+            if project_browser_autonomous_two_launch_preparation_receipt_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_1_status"
+            if project_browser_autonomous_launch_1_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_1_attempted"
+            if project_browser_autonomous_launch_1_attempted
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_1_completed"
+            if project_browser_autonomous_launch_1_completed
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_1_result_status"
+            if project_browser_autonomous_launch_1_result_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_1_stop_reason"
+            if project_browser_autonomous_launch_1_stop_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_1_completion_evidence_status"
+            if project_browser_autonomous_launch_1_completion_evidence_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_1_completion_result_status"
+            if project_browser_autonomous_launch_1_completion_result_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_candidate_status"
+            if project_browser_autonomous_launch_2_candidate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_permission"
+            if project_browser_autonomous_launch_2_permission
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_allowed"
+            if project_browser_autonomous_launch_2_allowed
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_block_reason"
+            if project_browser_autonomous_launch_2_block_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_required_inputs"
+            if project_browser_autonomous_launch_2_required_inputs
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_available_inputs"
+            if project_browser_autonomous_launch_2_available_inputs
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_missing_inputs"
+            if project_browser_autonomous_launch_2_missing_inputs
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_next_action"
+            if project_browser_autonomous_launch_2_next_action
             else "",
             ]
     )
@@ -63378,6 +64419,63 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_one_bounded_launch_stop_reason": (
             project_browser_autonomous_one_bounded_launch_stop_reason
+        ),
+        "project_browser_autonomous_two_launch_preparation_status": (
+            project_browser_autonomous_two_launch_preparation_status
+        ),
+        "project_browser_autonomous_two_launch_preparation_permission": (
+            project_browser_autonomous_two_launch_preparation_permission
+        ),
+        "project_browser_autonomous_two_launch_preparation_reason": (
+            project_browser_autonomous_two_launch_preparation_reason
+        ),
+        "project_browser_autonomous_two_launch_preparation_receipt_status": (
+            project_browser_autonomous_two_launch_preparation_receipt_status
+        ),
+        "project_browser_autonomous_launch_1_status": (
+            project_browser_autonomous_launch_1_status
+        ),
+        "project_browser_autonomous_launch_1_attempted": (
+            project_browser_autonomous_launch_1_attempted
+        ),
+        "project_browser_autonomous_launch_1_completed": (
+            project_browser_autonomous_launch_1_completed
+        ),
+        "project_browser_autonomous_launch_1_result_status": (
+            project_browser_autonomous_launch_1_result_status
+        ),
+        "project_browser_autonomous_launch_1_stop_reason": (
+            project_browser_autonomous_launch_1_stop_reason
+        ),
+        "project_browser_autonomous_launch_1_completion_evidence_status": (
+            project_browser_autonomous_launch_1_completion_evidence_status
+        ),
+        "project_browser_autonomous_launch_1_completion_result_status": (
+            project_browser_autonomous_launch_1_completion_result_status
+        ),
+        "project_browser_autonomous_launch_2_candidate_status": (
+            project_browser_autonomous_launch_2_candidate_status
+        ),
+        "project_browser_autonomous_launch_2_permission": (
+            project_browser_autonomous_launch_2_permission
+        ),
+        "project_browser_autonomous_launch_2_allowed": (
+            project_browser_autonomous_launch_2_allowed
+        ),
+        "project_browser_autonomous_launch_2_block_reason": (
+            project_browser_autonomous_launch_2_block_reason
+        ),
+        "project_browser_autonomous_launch_2_required_inputs": (
+            project_browser_autonomous_launch_2_required_inputs
+        ),
+        "project_browser_autonomous_launch_2_available_inputs": (
+            project_browser_autonomous_launch_2_available_inputs
+        ),
+        "project_browser_autonomous_launch_2_missing_inputs": (
+            project_browser_autonomous_launch_2_missing_inputs
+        ),
+        "project_browser_autonomous_launch_2_next_action": (
+            project_browser_autonomous_launch_2_next_action
         ),
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
