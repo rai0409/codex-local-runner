@@ -711,3 +711,24 @@ Prompt147 constraints:
 - Prompt147 must not execute launch_2.
 - Prompt147 must not implement max-two rolling execution.
 - Prompt147 must not add a loop, daemon, scheduler, queue drain, new executor, GitHub mutation, PR creation, or merge.
+
+---
+
+## Current local autonomy constraints after Prompt147
+
+The current repository state supports:
+
+- candidate safety validation before invocation
+- one bounded existing invocation attempt
+- explicit completion evidence evaluation
+- result JSON accounting correction from git diff/status
+- launch_1 / launch_2 state separation
+
+Hard constraints for Prompt148:
+
+- Prompt148 may execute at most one second bounded launch.
+- Prompt148 must never execute or prepare a third launch.
+- Prompt148 must not add an unbounded loop.
+- Prompt148 must not add daemon, scheduler, sleep loop, queue drain, retry loop, new browser executor, new Codex executor, GitHub mutation, PR creation, or PR merge.
+- Prompt148 must not change Prompt149 result JSON accounting.
+- If a safe reusable second-launch invocation surface is not available, Prompt148 must block with insufficient_truth and must not invent a new invocation path.

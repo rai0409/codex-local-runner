@@ -520,3 +520,31 @@ Next:
 Prompt147 — launch_1 / launch_2 state separation
 
 Prompt147 must prepare launch_2 as candidate-only metadata. It must not execute launch_2, must not implement max-two rolling execution, and must not change Prompt149 accounting behavior.
+
+---
+
+## Current checkpoint update after Prompt147
+
+Current checkpoint:
+
+checkpoint-prompt147-launch-state-separation-ready
+
+Completed:
+
+- Prompt144: callable candidate safety validation.
+- Prompt145: one bounded existing invocation attempt bridge.
+- Prompt146: completion evidence evaluator.
+- Prompt149: runner result JSON accounting correction.
+- Prompt147: launch_1 / launch_2 state separation.
+
+Next:
+
+Prompt148 — execute bounded max-two rolling launch from Prompt147 launch_2 candidate.
+
+Prompt148 must:
+- execute at most one second bounded launch
+- stop at max_launches=2
+- not create a third launch
+- not add unbounded loop / daemon / scheduler / queue drain
+- not mutate GitHub
+- not change Prompt149 accounting

@@ -230,3 +230,44 @@ Complete always-on autonomous development remains not yet implemented.
 - Prompt149 runner result JSON accounting correction from staged + unstaged git diff/status.
 - Current next step: Prompt147 launch_1 / launch_2 state separation.
 - Prompt147 must not execute launch_2 or implement max-two rolling execution.
+
+---
+
+## Prompt144-Prompt149 local runner milestone summary
+
+### Prompt144 — callable candidate safety validation
+
+- Added candidate safety classification for one_bounded_launch.
+- Added candidate safety status/reason/evidence/risk flags.
+- Preserved no actual invocation, attempted=0, completed=0.
+
+### Prompt145 — one bounded existing invocation attempt bridge
+
+- Added one bounded existing invocation bridge.
+- attempted=1 is allowed only after a real selected mapped existing invocation call path is actually invoked.
+- Reusing state, observing readiness, or mapping a state_ref does not count as actual invocation.
+- completed remained evidence-gated and was deferred to Prompt146.
+
+### Prompt146 — completion evidence evaluator
+
+- Added completion evidence/result fields.
+- completed=1 is allowed only with explicit confirmed action-specific completion evidence.
+- attempted=1 alone, ready receipt alone, and state existence alone do not imply completion.
+- Enforced completed <= attempted.
+
+### Prompt149 — runner result JSON accounting correction
+
+- Added runner result accounting from staged + unstaged git diff/status.
+- Public changed_files/additions/deletions now follow final git-accounted values.
+- Preserves Codex-reported raw fields and git-accounted/final accounting fields.
+- Dry-run does not claim live worktree mutation accounting.
+
+### Prompt147 — launch_1 / launch_2 state separation
+
+- Added launch_1 / launch_2 state separation.
+- launch_1 mirrors one_bounded_launch attempted/completed/completion evidence.
+- launch_2 is candidate-only metadata.
+- launch_2_allowed=1 does not imply attempted=1, completed=1, launches_attempted=2, launches_completed=2, or runtime invocation.
+- No second launch execution was added.
+- No max-two rolling execution was added.
+- Next step: Prompt148 max-two bounded rolling execution.
