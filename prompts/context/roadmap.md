@@ -1,384 +1,502 @@
-# Autonomous Development Roadmap
+# codex-local-runner Roadmap — Prompt144後の完全自律開発フロー化
 
-## Current status
-
-This repository is not yet a complete always-on autonomous development system.
-
-The current system has strong deterministic planning, control, safety, receipt, ledger, retry, and short-batch invocation foundations. It can determine next actions and prove safe invocation paths for bounded short-batch steps.
-
-It does not yet reliably execute an unattended max-two-launch rolling loop, and it does not yet provide a complete always-on autonomous development workflow.
-
-## Completed or mostly completed foundations
-
-The following foundations are considered present:
-
-```text
-planning artifacts
-roadmap / PR slicing
-implementation prompt compilation
-planned execution runner foundation
-Codex executor adapter foundation
-normalized execution result surfaces
-deterministic next_action controller
-authority / routing / progression contracts
-bounded execution and authorization contracts
-approval safety / bounded restart posture
-retry / re-entry posture
-verification / closure posture
-failure memory / suppression posture
-quality gate / branch lifecycle posture
-queue / handoff state surfaces
-human escalation state
-fleet safety / retention / artifact surfaces
-```
-
-## Local autonomous browser/development stack
-
-The local `planned_execution_runner.py` stack has reached:
-
-```text
-PR132 short-batch next_action producer
-PR136 bounded rolling multi-launch gate
-PR137 short-batch invocation adapter
-```
-
-PR137 is considered completed as a dependency for the next bounded rolling execution work.
-
-Primary PR137 builder:
-
-```text
-_build_project_browser_autonomous_short_batch_invocation_state
-```
-
-Important PR137 fields:
-
-```text
-project_browser_autonomous_short_batch_invocation_status
-project_browser_autonomous_short_batch_invocation_permission
-project_browser_autonomous_short_batch_invocation_receipt_status
-project_browser_autonomous_short_batch_invocation_path_status
-project_browser_autonomous_short_batch_invocation_runtime_capability
-project_browser_autonomous_short_batch_invocation_next_action
-project_browser_autonomous_short_batch_invocation_delegation_mode
-project_browser_autonomous_short_batch_invocation_call_path_ref
-project_browser_autonomous_short_batch_invocation_missing_inputs
-```
-
-Verified PR137 next_action call-path refs:
-
-```text
-run_one_md_apply        -> project_browser_autonomous_md_apply_state
-run_one_browser_command -> project_browser_autonomous_browser_execution_state
-run_one_codex_attempt   -> project_browser_autonomous_codex_execution_state
-assimilate_result       -> project_browser_autonomous_codex_result_assimilation_state
-persist_ledger          -> project_browser_autonomous_run_ledger_persistence_state
-stop                    -> no_runtime_invocation_stop
-```
-
-## Strict PR137 rule
-
-For non-stop actions, `actual_bounded_invocation` is valid only when all are true:
-
-```text
-project_browser_autonomous_short_batch_invocation_path_status=available
-project_browser_autonomous_short_batch_invocation_runtime_capability=actual_bounded_invocation
-project_browser_autonomous_short_batch_invocation_receipt_status=ready
-project_browser_autonomous_short_batch_invocation_delegation_mode in {
-  reused_existing_state_call_path,
-  invoked_existing_builder
-}
-project_browser_autonomous_short_batch_invocation_call_path_ref != none
-project_browser_autonomous_short_batch_invocation_missing_inputs == []
-```
-
-For `next_action=stop`:
-
-```text
-project_browser_autonomous_short_batch_invocation_delegation_mode=no_runtime_invocation_stop
-project_browser_autonomous_short_batch_invocation_call_path_ref=none
-```
-
-## Critical gap
-
-The next missing component is:
-
-```text
-project_browser_autonomous_rolling_execution_*
-```
-
-This should consume:
-
-```text
-PR136 rolling_multi_launch gate
-PR137 short_batch_invocation adapter
-```
-
-and produce a bounded rolling execution state.
-
-## Prompt138 target
-
-Prompt138 must implement B first:
-
-```text
-B. Prepare a bounded max-two-launch rolling_execution_* state.
-```
-
-Prompt138 must not claim complete autonomy.
-
-Prompt138 may implement A only if a safe existing bounded launch execution helper is already available:
-
-```text
-A. Actually execute up to two launches.
-```
-
-A is allowed only when:
-
-```text
-an existing bounded launch execution helper exists
-no new executor is created
-no daemon / scheduler / sleep loop is created
-no queue is drained
-no GitHub mutation path is introduced
-launches_attempted is incremented only after a real attempt
-launches_completed is incremented only after receipt/ledger-confirmed completion
-```
-
-If A is not possible in Prompt138:
-
-```text
-status=prepared
-launches_attempted=0
-launches_completed=0
-runtime_capability=prepared_only
-block_reason or stop_reason=bounded_launch_helper_missing
-```
-
-## Future roadmap after Prompt138
-
-```text
-Prompt138:
-  bounded rolling execution state and strict gates.
-
-Prompt139:
-  actual bounded launch helper connection if not completed in Prompt138.
-
-Later:
-  runner entrypoint integration.
-
-Later:
-  approval / GitHub write / PR creation integration.
-
-Later:
-  scheduler / queue integration.
-
-Later:
-  fully unattended autonomous development only after all safety, receipt, ledger, and stop gates are proven.
-```
-
-## Explicit non-goals until proven
-
-Do not claim or add:
-
-```text
-complete always-on autopilot
-unbounded autonomous execution
-daemon
-scheduler
-sleep loop
-queue drain
-third launch
-new browser executor
-new Codex executor
-new ledger persistence mechanism
-automatic GitHub PR creation
-automatic push / merge
-CI auto-fix loop
-```
-
+最終更新:
+- Prompt144完了後
+- checkpoint-prompt144-candidate-safety-ready 作成済み
+- 現在地点: one_bounded_launch の candidate safety validation まで完了
+- 次: Prompt145
 
 ---
 
-## Prompt138 result — B-only bounded rolling execution state
+## 0. 現在地
 
-### Status
+現在、以下までは完了している。
 
-Prompt138 completed the B-only prepared bounded rolling execution layer.
+### Prompt143まで
 
-This does not mean complete autonomous development is finished.
+- action-specific input wiring classification
+- selected next_action ごとの required_inputs / available_inputs / missing_inputs の分類
+- actual local variables から available_inputs を算出
+- callable_candidate_inputs_ready になれる状態の追加
+- actual invocation はまだ実行しない
+- attempted=0
+- completed=0
 
-Prompt138 intentionally did not implement A, actual launch execution.
+### Prompt144完了
 
-### Primary implementation file
+Prompt144で、one_bounded_launch に candidate safety 判定層を追加した。
 
-```text
-automation/orchestration/planned_execution_runner.py
-```
+追加済みフィールド:
 
-### New builder
+- `project_browser_autonomous_one_bounded_launch_candidate_safety_status`
+- `project_browser_autonomous_one_bounded_launch_candidate_safety_reason`
+- `project_browser_autonomous_one_bounded_launch_candidate_safety_evidence`
+- `project_browser_autonomous_one_bounded_launch_candidate_risk_flags`
+- `project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status`
+- `project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status`
 
-```text
-_build_project_browser_autonomous_rolling_execution_state
-```
+分類可能な状態:
 
-### New field prefix
+- `callable_candidate_safe`
+- `unsafe_to_reinvoke`
+- `state_only`
+- `missing_inputs`
+- `terminal_stop`
+- `insufficient_truth`
 
-```text
-project_browser_autonomous_rolling_execution_*
-```
+Prompt144の重要な制約:
 
-### Added rolling_execution fields
+- actual invocation は実行しない
+- attempted=0
+- completed=0
+- new executor なし
+- daemon / scheduler / sleep loop / queue drain なし
+- GitHub mutation なし
+- max-two-launch なし
+- second launch なし
 
-```text
-project_browser_autonomous_rolling_execution_status
-project_browser_autonomous_rolling_execution_kind
-project_browser_autonomous_rolling_execution_permission
-project_browser_autonomous_rolling_execution_source_status
-project_browser_autonomous_rolling_execution_block_reason
-project_browser_autonomous_rolling_execution_receipt_status
-project_browser_autonomous_rolling_execution_receipt_kind
-project_browser_autonomous_rolling_execution_next_action
-project_browser_autonomous_rolling_execution_runtime_capability
-project_browser_autonomous_rolling_execution_launches_allowed
-project_browser_autonomous_rolling_execution_launches_attempted
-project_browser_autonomous_rolling_execution_launches_completed
-project_browser_autonomous_rolling_execution_max_launches
-project_browser_autonomous_rolling_execution_per_launch_max_steps
-project_browser_autonomous_rolling_execution_total_step_budget
-project_browser_autonomous_rolling_execution_failure_budget
-project_browser_autonomous_rolling_execution_stop_reason
-project_browser_autonomous_rolling_execution_invocation_runtime_capability
-project_browser_autonomous_rolling_execution_invocation_delegation_mode
-project_browser_autonomous_rolling_execution_invocation_call_path_ref
-project_browser_autonomous_rolling_execution_invocation_receipt_status
-project_browser_autonomous_rolling_execution_runtime_posture
-```
+Prompt144の実行確認:
 
-### Consumed PR136 gates
+- runner経由 live 実行成功
+- py_compile 成功
+- `automation/orchestration/planned_execution_runner.py` のみ変更
+- checkpoint tag:
+  - `checkpoint-prompt144-candidate-safety-ready`
 
-Prompt138 consumes:
+戻し方:
 
-```text
-project_browser_autonomous_rolling_multi_launch_status == prepared
-project_browser_autonomous_rolling_multi_launch_permission == allowed_candidate
-project_browser_autonomous_rolling_multi_launch_receipt_status == ready
-project_browser_autonomous_rolling_multi_launch_next_action == launch_up_to_two_short_batches
-```
+```bash
+git reset --hard checkpoint-prompt144-candidate-safety-ready
+1. 目標
 
-Failures map to:
+最終目標は、現在の手動開発フローをローカルrunner内で自動化すること。
 
-```text
-rolling_multi_launch_not_ready
-rolling_multi_launch_action_not_launch
-```
+現在の手動フロー:
 
-### Consumed PR137 gates
+ChatGPTが次Promptを作る
+ユーザーがCodexへ渡す
+Codexが実装する
+ユーザーが結果をChatGPTへ貼る
+ChatGPTが評価する
+次Promptへ進むか判断する
+必要ならfix Promptを生成する
 
-Prompt138 consumes:
+目標フロー:
 
-```text
-project_browser_autonomous_short_batch_invocation_path_status == available
-project_browser_autonomous_short_batch_invocation_runtime_capability == actual_bounded_invocation
-project_browser_autonomous_short_batch_invocation_receipt_status == ready
-project_browser_autonomous_short_batch_invocation_delegation_mode in {
-  reused_existing_state_call_path,
-  invoked_existing_builder,
-  no_runtime_invocation_stop
-}
-```
+runnerが現在状態を読む
+runnerが次Promptを生成または選択する
+runnerがCodexへ渡す
+Codexが実装する
+runnerがresult JSON / git diff / validationを読む
+runnerがChatGPT内部接続へ判断を依頼する
+ChatGPTがdecision JSONを返す
+runnerが次Prompt / fix / stop / human_reviewを選ぶ
+bounded条件内で繰り返す
+危険時は停止またはrollbackする
+2. ロードマップ概要
 
-For non-stop invocation actions, Prompt138 also requires:
+最短・安全ルート:
 
-```text
-project_browser_autonomous_short_batch_invocation_call_path_ref != none
-project_browser_autonomous_short_batch_invocation_missing_inputs == []
-```
+Prompt145
+one actual invocation
+attempted=1
+completed=0固定
+Prompt146
+completion evidence評価
+completed=1の厳密判定
+Prompt149
+Codex result JSON accounting修正
+changed_files / additions / deletions を実diffと一致させる
+Prompt147
+launch_1 / launch_2 準備
+最大2 launchの状態分離
+Prompt148
+max-two rolling execution
+最大2回までのbounded実行
+Prompt150
+ChatGPT decision JSON schema
+Prompt151
+runner → ChatGPT internal call
+Prompt152
+decision → next prompt generator
+Prompt153
+bounded autonomous loop controller
+Prompt154
+rollback / checkpoint / human review gate
+Prompt155
+local autonomous development loop
+Prompt156以降
+GitHub PR作成 / CI / merge
+3. Prompt145 — one actual invocation / attempted=1
+目的
 
-For invocation `next_action=stop`, Prompt138 emits terminal-stop posture without runtime invocation.
+Prompt144で candidate_safety_status=callable_candidate_safe になった場合だけ、既存call pathを1回だけ実際に呼ぶ。
 
-### B-only behavior
-
-Prompt138 implemented prepared-only bounded rolling execution:
-
-```text
-project_browser_autonomous_rolling_execution_runtime_capability=prepared_only
-project_browser_autonomous_rolling_execution_launches_allowed=2
-project_browser_autonomous_rolling_execution_launches_attempted=0
-project_browser_autonomous_rolling_execution_launches_completed=0
-```
-
-The builder returns 0 for both `launches_attempted` and `launches_completed` in all branches.
-
-Normalization hard-clamps any non-zero value back to 0.
-
-### What Prompt138 did not implement
-
-Prompt138 did not implement A:
-
-```text
-actual launch execution
-bounded launch helper invocation
-launches_attempted > 0
-launches_completed > 0
-```
-
-Prompt138 also did not add:
-
-```text
-complete autonomy claim
+許可すること
+実際に既存call pathを1回呼んだ場合だけ:
+project_browser_autonomous_one_bounded_launch_attempted=1
+禁止すること
+completed=1
+max-two-launch
+second launch
+third launch
+loop
+retry loop
 daemon
 scheduler
 sleep loop
 queue drain
-unbounded autonomous execution
-third launch
+new browser executor
+new Codex executor
+new ledger persistence
+GitHub mutation
+PR作成
+PR merge
+厳格ルール
+既存state dictを再利用しただけなら attempted=0
+実際にmapped call pathを呼んだ場合だけ attempted=1
+呼べなかった場合は attempted=0
+Prompt145では completed=0 固定を推奨
+completed=1はPrompt146に任せる
+成功条件
+py_compile成功
+candidate_safety_status=callable_candidate_safe の場合のみ実行候補
+hard risk flags があれば実行しない
+actual invocationできた場合だけ attempted=1
+completed=0
+new executorなし
+GitHub mutationなし
+4. Prompt146 — completion evidence / completed=1判定
+目的
+
+Prompt145で attempted=1 になった後、本当に完了したかを判定する。
+
+判定対象
+receipt_status
+receipt_kind
+result evidence
+action-specific completion evidence
+validation result
+state transition evidence
+ledger evidence, if already existing and safe
+厳格ルール
+attempted=1 だけでは completed=1 にしない
+receipt_status=ready だけでは completed=1 にしない
+state存在だけでは completed=1 にしない
+explicit completion evidence がある場合のみ completed=1
+evidenceが曖昧なら completed=0
+成功条件
+completion evidence available and confirmed:
+completed=1
+completion evidence unavailable / ambiguous:
+completed=0
+5. Prompt149 — Codex result JSON accounting修正
+目的
+
+Codex実行後の result JSON が実際のgit diffを正しく表すようにする。
+
+背景
+
+Prompt144実行時に以下の不整合が発生した。
+
+実際の git diff --stat
+automation/orchestration/planned_execution_runner.py
+571 insertions / 11 deletions
+result.json
+changed_files=[]
+additions=0
+deletions=0
+
+これは完全自律loopでは危険。
+
+修正対象
+changed_files
+additions
+deletions
+diff_stat
+validation_status
+commands_run
+stdout_path
+stderr_path
+worktree_dirty
+generated_patch_summary
+必須ルール
+git diff --name-only を反映
+git diff --numstat を反映
+py_compile結果を反映
+result.json と実worktree差分を一致させる
+Codexが変更した場合、changed_filesが空にならないようにする
+成功条件
+
+実際にファイル変更がある場合:
+
+changed_files に対象ファイルが入る
+additions/deletions が0ではない
+worktree_dirty が正しく反映される
+6. Prompt147 — launch_1 / launch_2 準備
+目的
+
+最大2 launchへ進む前に、1回目と2回目の状態を分離する。
+
+追加・整理する状態
+launch_1_attempted
+launch_1_completed
+launch_1_status
+launch_1_result_status
+launch_1_stop_reason
+launch_2_allowed
+launch_2_block_reason
+launch_2_candidate_status
+launch_2_required_inputs
+launch_2_missing_inputs
+Prompt147でやらないこと
+2回目のactual execution
+max-two-launch actual execution
+loop
+daemon
+scheduler
+sleep loop
+queue drain
+GitHub mutation
+成功条件
+1回目結果から2回目へ進めるか分類できる
+2回目が許可されない理由を明示できる
+7. Prompt148 — max-two rolling execution
+目的
+
+最大2回までの bounded rolling execution を実装する。
+
+許可すること
+最大2回までの実行
+1回目の結果に応じて2回目へ進む
+failure_budget内で停止判断する
+禁止すること
+3回目
+unbounded loop
+daemon
+scheduler
+sleep loop
+queue drain
+GitHub mutation
+PR作成
+PR merge
+成功条件
+最大2 launchまで実行可能
+2回を超えない
+失敗時は止まる
+risk時は止まる
+missing inputs時は止まる
+8. Prompt150 — ChatGPT decision JSON schema
+目的
+
+ChatGPT内部接続時の入出力JSONを固定する。
+
+入力JSON例
+{
+  "current_prompt_id": "Prompt145",
+  "codex_result": {},
+  "git_diff_summary": {},
+  "validation": {},
+  "risk_flags": [],
+  "current_state": {},
+  "allowed_next_actions": []
+}
+出力JSON例
+{
+  "decision": "proceed | fix | stop | human_review",
+  "next_prompt_id": "Prompt146",
+  "reason": "...",
+  "required_constraints": [],
+  "risk_flags": [],
+  "confidence": "high | medium | low"
+}
+成功条件
+ChatGPTの判断をJSONとして機械的に読める
+自由文依存を減らせる
+fix / proceed / stop / human_review の分岐が可能
+9. Prompt151 — runner → ChatGPT internal call
+目的
+
+runnerからChatGPTへ内部問い合わせできるようにする。
+
+処理
+Codex result JSONを読む
+git diff JSONを読む
+validation結果を読む
+current stateを読む
+ChatGPT decision schemaへ詰める
+ChatGPTへ問い合わせる
+decision JSONを保存する
+成功条件
+runnerがChatGPT判断をJSONとして受け取れる
+ユーザーが毎回Codex結果をChatGPTへ貼らなくてよくなる
+10. Prompt152 — decision → next prompt generator
+目的
+
+ChatGPT decision JSONから次Promptを生成または選択する。
+
+分岐
+decision=proceed
+次Promptへ進む
+decision=fix
+fix Promptを生成する
+decision=stop
+停止する
+decision=human_review
+人間確認へ回す
+成功条件
+Codex結果 → ChatGPT判断 → 次Prompt生成 が自動でつながる
+ユーザーが毎回Promptを手で作らなくてよい
+11. Prompt153 — bounded autonomous loop controller
+目的
+
+以下のサイクルをboundedに回す。
+
+prompt生成
+Codex実行
+result JSON取得
+git diff取得
+ChatGPT判断
+次prompt生成
+再実行または停止
+初期制限
+max_prompts=3
+max_codex_runs=2
+failure_budget=1
+unsafe時はhuman_review
+unexpected diff時は停止
+GitHub mutationは禁止
+成功条件
+bounded範囲で自律的に開発サイクルを回せる
+無限loopしない
+失敗時に止まる
+12. Prompt154 — rollback / checkpoint / human review gate
+目的
+
+自律loopで壊れたときに戻れるようにする。
+
+必須機能
+checkpoint commit/tag
+rollback command
+dirty worktree検出
+unexpected file changes検出
+human_review_required
+stop_reason明示
+rollback_reason明示
+成功条件
+自律loopが失敗しても安全に戻れる
+危険時に人間確認へ止められる
+13. Prompt155 — local autonomous development loop
+目的
+
+ローカルで現在の開発フローを完全自律に近づける。
+
+実現する流れ
+runnerが現在状態を読む
+ChatGPTに次prompt判断を聞く
+promptを生成する
+Codexへ渡す
+Codexが実装する
+result JSONを保存する
+git diff / validation を読む
+ChatGPTに評価させる
+次prompt / fix / stop / human_review を決める
+上限内で繰り返す
+成功条件
+人間が毎回promptを貼らなくてよい
+人間が毎回Codex結果をChatGPTへ貼らなくてよい
+runnerがboundedに回す
+危険時は止まる
+rollback可能
+14. Prompt156以降 — GitHub PR作成 / CI / merge
+
+GitHub mutationは影響が大きいため、ローカル自律loopが安定してから行う。
+
+Prompt156
+branch作成
+commit作成
+push
+draft PR作成
+Prompt157
+CI結果取得
+status check確認
+Prompt158
+PR comment作成
+review summary作成
+Prompt159
+merge可能判定
+human approval gate
+Prompt160
+auto-mergeまたはmanual merge support
+15. 完了基準
+Prompt146後
+1回の実行単位が成立
+attempted/completedを正しく分けられる
+Prompt148後
+最大2回までのbounded自動実行が成立
+Prompt152後
+ChatGPT内部接続による次prompt判断が成立
+Prompt155後
+ローカル完全自律開発loopが成立
+Prompt160以降
+GitHub PR/merge込みの完全自律に近づく
+16. 最短見積もり
+
+ローカル完全自動化まで:
+
+Prompt145
+Prompt146
+Prompt149
+Prompt147
+Prompt148
+Prompt150
+Prompt151
+Prompt152
+Prompt153
+Prompt154
+Prompt155
+
+合計:
+
+あと11 Prompt
+
+fix込みの現実的見積もり:
+
+あと12〜14 Prompt
+
+GitHub PR/merge込み:
+
+あと15〜18 Prompt程度
+17. 厳格な禁止事項
+
+次の段階に進むまで禁止:
+
+unbounded loop
+常駐daemon
+scheduler
+sleep loop
+queue drain
+3回以上のlaunch
 new browser executor
 new Codex executor
 new ledger persistence mechanism
-new GitHub write path
 GitHub mutation
-PR creation
+PR作成
 PR merge
 CI auto-fix loop
-```
+18. 次の一手
 
-### Validation
+次に実行すべきPrompt:
 
-Prompt138 validation:
+Prompt145 — execute exactly one bounded existing invocation only when Prompt144 candidate is safe / attempted may become 1 / completed remains 0
 
-```text
-python -m py_compile automation/orchestration/planned_execution_runner.py
-```
+Prompt145の厳格方針:
 
-Result:
-
-```text
-passed
-```
-
-### Next roadmap item
-
-Next step is Prompt139.
-
-Prompt139 must not create a new executor.
-
-Prompt139 should first search for an existing safe bounded launch helper or call path.
-
-If an existing helper exists and can be safely invoked:
-
-```text
-connect it to project_browser_autonomous_rolling_execution_*
-attempt at most 2 launches
-increment launches_attempted only after real invocation
-increment launches_completed only after receipt/ledger-confirmed completion
-never attempt a third launch
-```
-
-If no safe helper exists:
-
-```text
-do not fake execution
-keep launches_attempted=0
-keep launches_completed=0
-emit bounded_launch_helper_missing
-```
-
+actual invocationは1回だけ
+attempted=1は実際に呼んだ場合だけ
+completed=0固定
+completed=1はPrompt146へ回す
+max-two-launchはまだしない
+second launchはまだしない
+new executorは作らない
+GitHub mutationはしない
