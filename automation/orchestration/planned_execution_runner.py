@@ -40020,6 +40020,14 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
                 "autonomous_md_update_draft_compact": "project_browser_autonomous_draft_state",
                 "autonomous_md_update_command_draft": "project_browser_autonomous_draft_state",
             },
+            "receipt_evidence_inputs": [
+                "project_browser_autonomous_md_apply_receipt_status",
+                "project_browser_autonomous_md_apply_receipt_kind",
+            ],
+            "completion_evidence_inputs": [
+                "project_browser_autonomous_md_apply_write_status",
+                "project_browser_autonomous_md_apply_change_status",
+            ],
         },
         "run_one_browser_command": {
             "builder_ref": "_build_project_browser_autonomous_browser_execution_state",
@@ -40070,6 +40078,14 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
                 "browser_queue_handoff_payload": "project_pr_queue_state",
                 "prior_browser_state": "prior_approved_restart_execution",
             },
+            "receipt_evidence_inputs": [
+                "project_browser_autonomous_browser_execution_receipt_status",
+                "project_browser_autonomous_browser_execution_receipt_kind",
+            ],
+            "completion_evidence_inputs": [
+                "project_browser_autonomous_browser_execution_send_status",
+                "project_browser_autonomous_browser_execution_response_read_status",
+            ],
         },
         "run_one_codex_attempt": {
             "builder_ref": "_build_project_browser_autonomous_codex_execution_state",
@@ -40120,6 +40136,14 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
                 "project_pr_queue_handoff_payload": "project_pr_queue_state",
                 "project_pr_queue_selected_slice_id": "project_pr_queue_state",
             },
+            "receipt_evidence_inputs": [
+                "project_browser_autonomous_codex_execution_receipt_status",
+                "project_browser_autonomous_codex_execution_receipt_kind",
+            ],
+            "completion_evidence_inputs": [
+                "project_browser_autonomous_codex_execution_attempt_count",
+                "project_browser_autonomous_codex_execution_result_status",
+            ],
         },
         "assimilate_result": {
             "builder_ref": "_build_project_browser_autonomous_codex_result_assimilation_state",
@@ -40154,6 +40178,14 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
                     "project_browser_autonomous_codex_execution_suggested_validation_targets"
                 ),
             },
+            "receipt_evidence_inputs": [
+                "project_browser_autonomous_codex_result_receipt_status",
+                "project_browser_autonomous_codex_result_receipt_kind",
+            ],
+            "completion_evidence_inputs": [
+                "project_browser_autonomous_codex_result_outcome",
+                "project_browser_autonomous_codex_result_next_posture",
+            ],
         },
         "persist_ledger": {
             "builder_ref": "_build_project_browser_autonomous_run_ledger_persistence_state",
@@ -40186,18 +40218,28 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             "source_var_by_required_input": {
                 "prior_compact_state": "prior_approved_restart_execution",
             },
+            "receipt_evidence_inputs": [
+                "project_browser_autonomous_run_ledger_receipt_status",
+                "project_browser_autonomous_run_ledger_receipt_kind",
+            ],
+            "completion_evidence_inputs": [
+                "project_browser_autonomous_run_ledger_event_kind",
+                "project_browser_autonomous_run_ledger_counter_posture",
+            ],
         },
     }
     runtime_posture = [
         "one_bounded_launch_helper_only",
         "single_launch_path_only",
         "action_specific_callability_classification",
+        "candidate_safety_validation_only",
         "callable_candidate_inputs_ready_handoff_only",
         "no_attempt_from_state_reuse_only",
         "max_steps_3_contract",
         "failure_budget_1_contract",
-        "attempted_forced_zero_in_pr143",
-        "completed_forced_zero_in_pr143",
+        "attempted_forced_zero_in_prompt144",
+        "completed_forced_zero_in_prompt144",
+        "no_actual_invocation_in_prompt144",
         "no_multi_launch",
         "no_new_executor",
         "no_daemon",
@@ -40235,6 +40277,12 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
         action_state_ref: str = "none",
         action_input_wiring_status: str = "insufficient_truth",
         action_input_wiring_reason: str = "insufficient_truth",
+        candidate_safety_status: str = "insufficient_truth",
+        candidate_safety_reason: str = "insufficient_truth",
+        candidate_safety_evidence: list[str] | None = None,
+        candidate_risk_flags: list[str] | None = None,
+        candidate_receipt_evidence_status: str = "insufficient_truth",
+        candidate_completion_evidence_status: str = "insufficient_truth",
     ) -> dict[str, Any]:
         normalized_attempted = _as_non_negative_int(attempted, default=0)
         normalized_completed = _as_non_negative_int(completed, default=0)
@@ -40277,6 +40325,28 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             action_input_wiring_reason,
             default="insufficient_truth",
         )
+        normalized_candidate_safety_status = _normalize_text(
+            candidate_safety_status,
+            default="insufficient_truth",
+        )
+        normalized_candidate_safety_reason = _normalize_text(
+            candidate_safety_reason,
+            default="insufficient_truth",
+        )
+        normalized_candidate_safety_evidence = _normalize_string_list(
+            candidate_safety_evidence or []
+        )
+        normalized_candidate_risk_flags = _normalize_string_list(
+            candidate_risk_flags or []
+        )
+        normalized_candidate_receipt_evidence_status = _normalize_text(
+            candidate_receipt_evidence_status,
+            default="insufficient_truth",
+        )
+        normalized_candidate_completion_evidence_status = _normalize_text(
+            candidate_completion_evidence_status,
+            default="insufficient_truth",
+        )
         allowed_action_callability_values = {
             "callable_candidate_inputs_ready",
             "state_only",
@@ -40315,14 +40385,81 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             "insufficient_truth",
         }:
             normalized_action_input_wiring_status = "insufficient_truth"
+        if normalized_candidate_safety_status not in {
+            "callable_candidate_safe",
+            "unsafe_to_reinvoke",
+            "state_only",
+            "missing_inputs",
+            "terminal_stop",
+            "insufficient_truth",
+        }:
+            normalized_candidate_safety_status = "insufficient_truth"
+        allowed_candidate_risk_flags = {
+            "missing_inputs",
+            "state_only",
+            "unsafe_to_reinvoke",
+            "duplicate_execution_risk",
+            "github_mutation_risk",
+            "new_executor_required",
+            "queue_drain_risk",
+            "unbounded_loop_risk",
+            "receipt_evidence_missing",
+            "completion_evidence_missing",
+            "builder_mapping_mismatch",
+            "action_state_ref_missing",
+            "insufficient_truth",
+        }
+        normalized_candidate_risk_flags = [
+            flag
+            for flag in normalized_candidate_risk_flags
+            if flag in allowed_candidate_risk_flags
+        ]
+        if normalized_candidate_receipt_evidence_status not in {
+            "available",
+            "unavailable",
+            "unsafe",
+            "terminal_stop",
+            "insufficient_truth",
+        }:
+            normalized_candidate_receipt_evidence_status = "insufficient_truth"
+        if normalized_candidate_completion_evidence_status not in {
+            "available",
+            "unavailable",
+            "unsafe",
+            "terminal_stop",
+            "insufficient_truth",
+        }:
+            normalized_candidate_completion_evidence_status = "insufficient_truth"
 
         normalized_attempted = 0
         normalized_completed = 0
+        if normalized_execution_mode not in {
+            "prepared_only_invocation_not_callable",
+            "terminal_stop",
+            "insufficient_truth",
+        }:
+            normalized_execution_mode = "prepared_only_invocation_not_callable"
         if normalized_execution_mode != "prepared_only_invocation_not_callable":
             normalized_execution_missing_inputs = []
         if normalized_execution_mode in {"terminal_stop", "insufficient_truth"}:
             normalized_execution_ref = "none"
             normalized_execution_missing_inputs = []
+        if normalized_candidate_safety_status == "terminal_stop":
+            normalized_execution_mode = "terminal_stop"
+            normalized_execution_ref = "none"
+            normalized_execution_receipt_status = "ready"
+            normalized_candidate_receipt_evidence_status = "terminal_stop"
+            normalized_candidate_completion_evidence_status = "terminal_stop"
+        elif normalized_candidate_safety_status == "insufficient_truth":
+            normalized_execution_mode = "insufficient_truth"
+            normalized_execution_ref = "none"
+            normalized_execution_receipt_status = "insufficient_truth"
+            normalized_candidate_receipt_evidence_status = "insufficient_truth"
+            normalized_candidate_completion_evidence_status = "insufficient_truth"
+        else:
+            normalized_execution_mode = "prepared_only_invocation_not_callable"
+            normalized_execution_ref = "none"
+            normalized_execution_receipt_status = "unavailable"
 
         return {
             "project_browser_autonomous_one_bounded_launch_status": status,
@@ -40390,6 +40527,24 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             "project_browser_autonomous_one_bounded_launch_action_input_wiring_reason": (
                 normalized_action_input_wiring_reason
             ),
+            "project_browser_autonomous_one_bounded_launch_candidate_safety_status": (
+                normalized_candidate_safety_status
+            ),
+            "project_browser_autonomous_one_bounded_launch_candidate_safety_reason": (
+                normalized_candidate_safety_reason
+            ),
+            "project_browser_autonomous_one_bounded_launch_candidate_safety_evidence": (
+                normalized_candidate_safety_evidence
+            ),
+            "project_browser_autonomous_one_bounded_launch_candidate_risk_flags": (
+                normalized_candidate_risk_flags
+            ),
+            "project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status": (
+                normalized_candidate_receipt_evidence_status
+            ),
+            "project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status": (
+                normalized_candidate_completion_evidence_status
+            ),
             "project_browser_autonomous_one_bounded_launch_attempted": normalized_attempted,
             "project_browser_autonomous_one_bounded_launch_completed": normalized_completed,
             "project_browser_autonomous_one_bounded_launch_max_steps": max_steps,
@@ -40422,6 +40577,12 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             action_required_inputs=[],
             action_available_inputs=[],
             action_missing_inputs=[],
+            candidate_safety_status="insufficient_truth",
+            candidate_safety_reason="insufficient_truth",
+            candidate_safety_evidence=["candidate_safety_insufficient_truth"],
+            candidate_risk_flags=["insufficient_truth"],
+            candidate_receipt_evidence_status="insufficient_truth",
+            candidate_completion_evidence_status="insufficient_truth",
         )
 
     def _blocked_state(
@@ -40436,6 +40597,12 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
         action_state_ref: str = "none",
         action_input_wiring_status: str = "insufficient_truth",
         action_input_wiring_reason: str = "insufficient_truth",
+        candidate_safety_status: str = "state_only",
+        candidate_safety_reason: str = "one_bounded_launch_gates_not_ready",
+        candidate_safety_evidence: list[str] | None = None,
+        candidate_risk_flags: list[str] | None = None,
+        candidate_receipt_evidence_status: str = "unavailable",
+        candidate_completion_evidence_status: str = "unavailable",
     ) -> dict[str, Any]:
         return _base_state(
             status="blocked",
@@ -40464,6 +40631,21 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             action_state_ref=action_state_ref,
             action_input_wiring_status=action_input_wiring_status,
             action_input_wiring_reason=action_input_wiring_reason,
+            candidate_safety_status=candidate_safety_status,
+            candidate_safety_reason=candidate_safety_reason,
+            candidate_safety_evidence=(
+                candidate_safety_evidence
+                if candidate_safety_evidence is not None
+                else [
+                    "one_bounded_launch_candidate_not_ready",
+                    "actual_invocation_deferred",
+                ]
+            ),
+            candidate_risk_flags=(
+                candidate_risk_flags if candidate_risk_flags is not None else ["state_only"]
+            ),
+            candidate_receipt_evidence_status=candidate_receipt_evidence_status,
+            candidate_completion_evidence_status=candidate_completion_evidence_status,
         )
 
     if rolling_execution_status not in {
@@ -40598,6 +40780,12 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             action_state_ref="none",
             action_input_wiring_status="terminal_stop",
             action_input_wiring_reason="stop_next_action",
+            candidate_safety_status="terminal_stop",
+            candidate_safety_reason="stop_next_action",
+            candidate_safety_evidence=["terminal_stop_no_runtime_invocation"],
+            candidate_risk_flags=[],
+            candidate_receipt_evidence_status="terminal_stop",
+            candidate_completion_evidence_status="terminal_stop",
         )
 
     if (
@@ -40646,6 +40834,12 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
     action_required_inputs = _normalize_string_list(
         action_bridge_config.get("required_inputs")
     )
+    action_receipt_evidence_inputs = _normalize_string_list(
+        action_bridge_config.get("receipt_evidence_inputs")
+    )
+    action_completion_evidence_inputs = _normalize_string_list(
+        action_bridge_config.get("completion_evidence_inputs")
+    )
     action_source_var_by_required_input = (
         dict(action_bridge_config.get("source_var_by_required_input", {}))
         if isinstance(action_bridge_config.get("source_var_by_required_input"), Mapping)
@@ -40677,33 +40871,62 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
         for input_name in action_required_inputs
         if input_name not in set(action_available_inputs)
     ]
+
+    def _all_scope_fields_available(field_names: list[str]) -> bool:
+        return bool(field_names) and all(
+            _normalize_text(field_name, default="") in one_bounded_launch_callsite_available_vars
+            for field_name in field_names
+        )
+
     if expected_invocation_call_path_ref == "none":
         return _insufficient_truth_state()
     if short_batch_invocation_call_path_ref != expected_invocation_call_path_ref:
         return _blocked_state(
-            block_reason="short_batch_invocation_call_path_missing",
-            action_callability="state_only",
-            action_callability_reason="selected_action_state_only",
+            block_reason="one_bounded_launch_invocation_not_callable",
+            action_callability="unsafe_to_reinvoke",
+            action_callability_reason="selected_action_unsafe_to_reinvoke",
             action_required_inputs=action_required_inputs,
             action_available_inputs=action_available_inputs,
             action_missing_inputs=[],
             action_builder_ref=selected_action_builder_ref,
             action_state_ref=expected_invocation_call_path_ref,
             action_input_wiring_status="unsafe",
-            action_input_wiring_reason="selected_action_state_only",
+            action_input_wiring_reason="selected_action_unsafe_to_reinvoke",
+            candidate_safety_status="unsafe_to_reinvoke",
+            candidate_safety_reason="selected_action_candidate_has_hard_risk",
+            candidate_safety_evidence=[
+                "selected_action_mapping_unverified",
+                "actual_invocation_deferred",
+            ],
+            candidate_risk_flags=[
+                "unsafe_to_reinvoke",
+                "builder_mapping_mismatch",
+                "action_state_ref_missing",
+            ],
+            candidate_receipt_evidence_status="unsafe",
+            candidate_completion_evidence_status="unsafe",
         )
     if short_batch_invocation_call_path_ref in {"", "none"}:
         return _blocked_state(
-            block_reason="short_batch_invocation_call_path_missing",
-            action_callability="state_only",
-            action_callability_reason="selected_action_state_only",
+            block_reason="one_bounded_launch_invocation_not_callable",
+            action_callability="unsafe_to_reinvoke",
+            action_callability_reason="selected_action_unsafe_to_reinvoke",
             action_required_inputs=action_required_inputs,
             action_available_inputs=action_available_inputs,
             action_missing_inputs=[],
             action_builder_ref=selected_action_builder_ref,
             action_state_ref=expected_invocation_call_path_ref,
             action_input_wiring_status="unsafe",
-            action_input_wiring_reason="selected_action_state_only",
+            action_input_wiring_reason="selected_action_unsafe_to_reinvoke",
+            candidate_safety_status="unsafe_to_reinvoke",
+            candidate_safety_reason="selected_action_candidate_has_hard_risk",
+            candidate_safety_evidence=[
+                "selected_action_mapping_unverified",
+                "actual_invocation_deferred",
+            ],
+            candidate_risk_flags=["unsafe_to_reinvoke", "action_state_ref_missing"],
+            candidate_receipt_evidence_status="unsafe",
+            candidate_completion_evidence_status="unsafe",
         )
     if short_batch_invocation_missing_inputs:
         action_input_wiring_status = (
@@ -40715,7 +40938,7 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             else "selected_action_missing_inputs"
         )
         return _blocked_state(
-            block_reason="short_batch_invocation_missing_inputs",
+            block_reason="one_bounded_launch_invocation_not_callable",
             action_callability="missing_inputs",
             action_callability_reason=action_input_wiring_reason,
             action_required_inputs=action_required_inputs,
@@ -40725,6 +40948,15 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             action_state_ref=expected_invocation_call_path_ref,
             action_input_wiring_status=action_input_wiring_status,
             action_input_wiring_reason=action_input_wiring_reason,
+            candidate_safety_status="missing_inputs",
+            candidate_safety_reason="selected_action_missing_inputs",
+            candidate_safety_evidence=[
+                "required_inputs_not_fully_available",
+                "actual_invocation_deferred",
+            ],
+            candidate_risk_flags=[],
+            candidate_receipt_evidence_status="unavailable",
+            candidate_completion_evidence_status="unavailable",
         )
     if action_missing_inputs:
         action_input_wiring_status = (
@@ -40762,6 +40994,126 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
             action_state_ref=expected_invocation_call_path_ref,
             action_input_wiring_status=action_input_wiring_status,
             action_input_wiring_reason=action_input_wiring_reason,
+            candidate_safety_status="missing_inputs",
+            candidate_safety_reason="selected_action_missing_inputs",
+            candidate_safety_evidence=[
+                "required_inputs_not_fully_available",
+                "actual_invocation_deferred",
+            ],
+            candidate_risk_flags=[],
+            candidate_receipt_evidence_status="unavailable",
+            candidate_completion_evidence_status="unavailable",
+        )
+
+    candidate_risk_flags: list[str] = []
+    candidate_safety_evidence = [
+        "required_inputs_available",
+        "selected_action_mapping_verified",
+        "one_invocation_only",
+        "no_new_executor_required",
+        "no_max_two_launch_in_prompt144",
+        "no_actual_invocation_in_prompt144",
+    ]
+    if selected_action_builder_ref == "none":
+        candidate_risk_flags.append("builder_mapping_mismatch")
+    if expected_invocation_call_path_ref == "none":
+        candidate_risk_flags.append("action_state_ref_missing")
+    if not action_required_inputs:
+        candidate_risk_flags.append("insufficient_truth")
+    receipt_evidence_available = _all_scope_fields_available(action_receipt_evidence_inputs)
+    completion_evidence_available = _all_scope_fields_available(
+        action_completion_evidence_inputs
+    )
+    if not receipt_evidence_available:
+        candidate_risk_flags.append("receipt_evidence_missing")
+    if receipt_evidence_available and not completion_evidence_available:
+        candidate_risk_flags.append("completion_evidence_missing")
+    hard_risk_flags = {
+        "unsafe_to_reinvoke",
+        "duplicate_execution_risk",
+        "github_mutation_risk",
+        "new_executor_required",
+        "queue_drain_risk",
+        "unbounded_loop_risk",
+        "builder_mapping_mismatch",
+        "action_state_ref_missing",
+        "insufficient_truth",
+    }
+    if set(candidate_risk_flags) & hard_risk_flags:
+        return _base_state(
+            status="prepared",
+            kind="one_bounded_launch_prepared",
+            permission="allowed_candidate",
+            source_status="valid",
+            block_reason="one_bounded_launch_invocation_not_callable",
+            receipt_status="ready",
+            receipt_kind="one_bounded_launch_prepared_receipt",
+            next_action="invoke_existing_short_batch_call_path_once",
+            runtime_capability="prepared_one_launch",
+            attempted=0,
+            completed=0,
+            stop_reason="one_bounded_launch_invocation_not_callable",
+            execution_mode="prepared_only_invocation_not_callable",
+            execution_ref="none",
+            execution_receipt_status="unavailable",
+            execution_receipt_kind="one_bounded_launch_invocation_unavailable_receipt",
+            execution_missing_inputs=["existing_invocation_call_path"],
+            action_callability="unsafe_to_reinvoke",
+            action_callability_reason="selected_action_unsafe_to_reinvoke",
+            action_required_inputs=action_required_inputs,
+            action_available_inputs=action_available_inputs,
+            action_missing_inputs=[],
+            action_builder_ref=selected_action_builder_ref,
+            action_state_ref=expected_invocation_call_path_ref,
+            action_input_wiring_status="unsafe",
+            action_input_wiring_reason="selected_action_unsafe_to_reinvoke",
+            candidate_safety_status="unsafe_to_reinvoke",
+            candidate_safety_reason="selected_action_candidate_has_hard_risk",
+            candidate_safety_evidence=[
+                "selected_action_mapping_verified",
+                "actual_invocation_deferred",
+            ],
+            candidate_risk_flags=["unsafe_to_reinvoke", *candidate_risk_flags],
+            candidate_receipt_evidence_status="unsafe",
+            candidate_completion_evidence_status="unsafe",
+        )
+    if not receipt_evidence_available:
+        return _base_state(
+            status="prepared",
+            kind="one_bounded_launch_prepared",
+            permission="allowed_candidate",
+            source_status="valid",
+            block_reason="one_bounded_launch_invocation_not_callable",
+            receipt_status="ready",
+            receipt_kind="one_bounded_launch_prepared_receipt",
+            next_action="invoke_existing_short_batch_call_path_once",
+            runtime_capability="prepared_one_launch",
+            attempted=0,
+            completed=0,
+            stop_reason="one_bounded_launch_invocation_not_callable",
+            execution_mode="prepared_only_invocation_not_callable",
+            execution_ref="none",
+            execution_receipt_status="unavailable",
+            execution_receipt_kind="one_bounded_launch_invocation_unavailable_receipt",
+            execution_missing_inputs=["existing_invocation_call_path"],
+            action_callability="state_only",
+            action_callability_reason="selected_action_state_only",
+            action_required_inputs=action_required_inputs,
+            action_available_inputs=action_available_inputs,
+            action_missing_inputs=[],
+            action_builder_ref=selected_action_builder_ref,
+            action_state_ref=expected_invocation_call_path_ref,
+            action_input_wiring_status="ready",
+            action_input_wiring_reason="selected_action_inputs_ready",
+            candidate_safety_status="state_only",
+            candidate_safety_reason="selected_action_state_only",
+            candidate_safety_evidence=[
+                "receipt_evidence_unavailable",
+                "actual_invocation_deferred",
+            ],
+            candidate_risk_flags=["state_only", "receipt_evidence_missing"],
+            candidate_receipt_evidence_status="unavailable",
+            candidate_completion_evidence_status="unavailable",
         )
 
     return _base_state(
@@ -40791,6 +41143,14 @@ def _build_project_browser_autonomous_one_bounded_launch_state(
         action_state_ref=expected_invocation_call_path_ref,
         action_input_wiring_status="ready",
         action_input_wiring_reason="selected_action_inputs_ready",
+        candidate_safety_status="callable_candidate_safe",
+        candidate_safety_reason="selected_action_candidate_safe_for_one_invocation",
+        candidate_safety_evidence=candidate_safety_evidence,
+        candidate_risk_flags=candidate_risk_flags,
+        candidate_receipt_evidence_status="available",
+        candidate_completion_evidence_status=(
+            "available" if completion_evidence_available else "unavailable"
+        ),
     )
 
 
@@ -54124,6 +54484,111 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_one_bounded_launch_action_input_wiring_reason = (
             "insufficient_truth"
         )
+    project_browser_autonomous_one_bounded_launch_candidate_safety_status = _normalize_text(
+        project_browser_autonomous_one_bounded_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_candidate_safety_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_one_bounded_launch_candidate_safety_status not in {
+        "callable_candidate_safe",
+        "unsafe_to_reinvoke",
+        "state_only",
+        "missing_inputs",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_one_bounded_launch_candidate_safety_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_bounded_launch_candidate_safety_reason = _normalize_text(
+        project_browser_autonomous_one_bounded_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_candidate_safety_reason"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_one_bounded_launch_candidate_safety_reason not in {
+        "selected_action_candidate_safe_for_one_invocation",
+        "selected_action_candidate_has_hard_risk",
+        "selected_action_missing_inputs",
+        "selected_action_unsafe_to_reinvoke",
+        "selected_action_state_only",
+        "one_bounded_launch_gates_not_ready",
+        "stop_next_action",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_one_bounded_launch_candidate_safety_reason = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_bounded_launch_candidate_safety_evidence = (
+        _normalize_string_list(
+            project_browser_autonomous_one_bounded_launch_state.get(
+                "project_browser_autonomous_one_bounded_launch_candidate_safety_evidence"
+            )
+        )
+    )
+    project_browser_autonomous_one_bounded_launch_candidate_risk_flags = (
+        _normalize_string_list(
+            project_browser_autonomous_one_bounded_launch_state.get(
+                "project_browser_autonomous_one_bounded_launch_candidate_risk_flags"
+            )
+        )
+    )
+    allowed_one_bounded_launch_candidate_risk_flags = {
+        "missing_inputs",
+        "state_only",
+        "unsafe_to_reinvoke",
+        "duplicate_execution_risk",
+        "github_mutation_risk",
+        "new_executor_required",
+        "queue_drain_risk",
+        "unbounded_loop_risk",
+        "receipt_evidence_missing",
+        "completion_evidence_missing",
+        "builder_mapping_mismatch",
+        "action_state_ref_missing",
+        "insufficient_truth",
+    }
+    project_browser_autonomous_one_bounded_launch_candidate_risk_flags = [
+        risk_flag
+        for risk_flag in project_browser_autonomous_one_bounded_launch_candidate_risk_flags
+        if risk_flag in allowed_one_bounded_launch_candidate_risk_flags
+    ]
+    project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status = _normalize_text(
+        project_browser_autonomous_one_bounded_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status not in {
+        "available",
+        "unavailable",
+        "unsafe",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status = _normalize_text(
+        project_browser_autonomous_one_bounded_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status
+        not in {
+            "available",
+            "unavailable",
+            "unsafe",
+            "terminal_stop",
+            "insufficient_truth",
+        }
+    ):
+        project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status = (
+            "insufficient_truth"
+        )
     project_browser_autonomous_one_bounded_launch_action_required_inputs = (
         _normalize_string_list(
             project_browser_autonomous_one_bounded_launch_state.get(
@@ -54161,6 +54626,26 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_one_bounded_launch_action_missing_inputs = []
         project_browser_autonomous_one_bounded_launch_action_builder_ref = "none"
         project_browser_autonomous_one_bounded_launch_action_state_ref = "none"
+    if (
+        project_browser_autonomous_one_bounded_launch_candidate_safety_status
+        == "terminal_stop"
+    ):
+        project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status = (
+            "terminal_stop"
+        )
+        project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status = (
+            "terminal_stop"
+        )
+    elif (
+        project_browser_autonomous_one_bounded_launch_candidate_safety_status
+        == "insufficient_truth"
+    ):
+        project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status = (
+            "insufficient_truth"
+        )
+        project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status = (
+            "insufficient_truth"
+        )
     project_browser_autonomous_one_bounded_launch_attempted = _as_non_negative_int(
         project_browser_autonomous_one_bounded_launch_state.get(
             "project_browser_autonomous_one_bounded_launch_attempted"
@@ -54228,6 +54713,27 @@ def _build_approved_restart_execution_contract_surface(
     ):
         project_browser_autonomous_one_bounded_launch_execution_mode = (
             "prepared_only_invocation_not_callable"
+        )
+    if project_browser_autonomous_one_bounded_launch_candidate_safety_status == "terminal_stop":
+        project_browser_autonomous_one_bounded_launch_execution_mode = "terminal_stop"
+        project_browser_autonomous_one_bounded_launch_execution_ref = "none"
+        project_browser_autonomous_one_bounded_launch_execution_receipt_status = "ready"
+    elif (
+        project_browser_autonomous_one_bounded_launch_candidate_safety_status
+        == "insufficient_truth"
+    ):
+        project_browser_autonomous_one_bounded_launch_execution_mode = "insufficient_truth"
+        project_browser_autonomous_one_bounded_launch_execution_ref = "none"
+        project_browser_autonomous_one_bounded_launch_execution_receipt_status = (
+            "insufficient_truth"
+        )
+    else:
+        project_browser_autonomous_one_bounded_launch_execution_mode = (
+            "prepared_only_invocation_not_callable"
+        )
+        project_browser_autonomous_one_bounded_launch_execution_ref = "none"
+        project_browser_autonomous_one_bounded_launch_execution_receipt_status = (
+            "unavailable"
         )
     project_browser_autonomous_one_bounded_launch_attempted = 0
     project_browser_autonomous_one_bounded_launch_completed = 0
@@ -55712,6 +56218,24 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_one_bounded_launch_action_input_wiring_reason": (
                     project_browser_autonomous_one_bounded_launch_action_input_wiring_reason
                 ),
+                "project_browser_autonomous_one_bounded_launch_candidate_safety_status": (
+                    project_browser_autonomous_one_bounded_launch_candidate_safety_status
+                ),
+                "project_browser_autonomous_one_bounded_launch_candidate_safety_reason": (
+                    project_browser_autonomous_one_bounded_launch_candidate_safety_reason
+                ),
+                "project_browser_autonomous_one_bounded_launch_candidate_safety_evidence": (
+                    project_browser_autonomous_one_bounded_launch_candidate_safety_evidence
+                ),
+                "project_browser_autonomous_one_bounded_launch_candidate_risk_flags": (
+                    project_browser_autonomous_one_bounded_launch_candidate_risk_flags
+                ),
+                "project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status": (
+                    project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status
+                ),
+                "project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status": (
+                    project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status
+                ),
                 "project_browser_autonomous_one_bounded_launch_attempted": (
                     project_browser_autonomous_one_bounded_launch_attempted
                 ),
@@ -56167,6 +56691,24 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_action_input_wiring_reason"
             if project_browser_autonomous_one_bounded_launch_action_input_wiring_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_candidate_safety_status"
+            if project_browser_autonomous_one_bounded_launch_candidate_safety_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_candidate_safety_reason"
+            if project_browser_autonomous_one_bounded_launch_candidate_safety_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_candidate_safety_evidence"
+            if project_browser_autonomous_one_bounded_launch_candidate_safety_evidence
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_candidate_risk_flags"
+            if project_browser_autonomous_one_bounded_launch_candidate_risk_flags
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status"
+            if project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status"
+            if project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status
             else "",
             ]
     )
@@ -61230,6 +61772,24 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_one_bounded_launch_action_input_wiring_reason": (
             project_browser_autonomous_one_bounded_launch_action_input_wiring_reason
+        ),
+        "project_browser_autonomous_one_bounded_launch_candidate_safety_status": (
+            project_browser_autonomous_one_bounded_launch_candidate_safety_status
+        ),
+        "project_browser_autonomous_one_bounded_launch_candidate_safety_reason": (
+            project_browser_autonomous_one_bounded_launch_candidate_safety_reason
+        ),
+        "project_browser_autonomous_one_bounded_launch_candidate_safety_evidence": (
+            project_browser_autonomous_one_bounded_launch_candidate_safety_evidence
+        ),
+        "project_browser_autonomous_one_bounded_launch_candidate_risk_flags": (
+            project_browser_autonomous_one_bounded_launch_candidate_risk_flags
+        ),
+        "project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status": (
+            project_browser_autonomous_one_bounded_launch_candidate_receipt_evidence_status
+        ),
+        "project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status": (
+            project_browser_autonomous_one_bounded_launch_candidate_completion_evidence_status
         ),
         "project_browser_autonomous_one_bounded_launch_attempted": (
             project_browser_autonomous_one_bounded_launch_attempted
