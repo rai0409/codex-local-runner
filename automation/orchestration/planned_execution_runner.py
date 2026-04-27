@@ -45852,6 +45852,470 @@ def _build_project_browser_autonomous_chatgpt_implementation_response_state(
     }
 
 
+def _build_project_browser_autonomous_safe_patch_apply_gate_state(
+    *,
+    patch_candidate_status: str,
+    patch_candidate_source_status: str,
+    patch_candidate_block_reason: str,
+    response_status: str,
+    output_kind: str,
+    expected_patch_path: str,
+    touched_files: list[str] | None,
+    forbidden_touched_files: list[str] | None,
+    allowed_files: list[str] | None,
+    forbidden_files: list[str] | None,
+    unsafe_operation_flags: list[str] | None,
+    human_review_required: bool,
+    rollback_required: bool,
+    worktree_status: str,
+    worktree_dirty: bool | None,
+) -> dict[str, Any]:
+    allowed_output_kinds = {
+        "patch_plan",
+        "unified_diff",
+        "full_file_replacement",
+        "manual_steps",
+        "instructions_only",
+        "none",
+    }
+    patch_like_output_kinds = {"unified_diff", "full_file_replacement"}
+    runtime_posture = [
+        "metadata_only_safe_patch_apply_gate",
+        "no_patch_writing",
+        "no_patch_generation",
+        "no_patch_application",
+        "no_git_apply_execution",
+        "no_git_reset",
+        "no_git_clean",
+        "no_autonomous_loop",
+        "no_github_mutation",
+    ]
+    allowed_next_actions = {
+        "wait_for_valid_patch_candidate",
+        "prepare_dry_run_apply_later",
+        "human_review_required",
+        "rollback_required",
+        "manual_fix_patch_candidate",
+        "insufficient_truth",
+    }
+
+    normalized_patch_candidate_status = _normalize_text(
+        patch_candidate_status,
+        default="insufficient_truth",
+    )
+    normalized_patch_candidate_source_status = _normalize_text(
+        patch_candidate_source_status,
+        default="insufficient_truth",
+    )
+    normalized_patch_candidate_block_reason = _normalize_text(
+        patch_candidate_block_reason,
+        default="insufficient_truth",
+    )
+    normalized_response_status = _normalize_text(
+        response_status,
+        default="insufficient_truth",
+    )
+    normalized_output_kind = _normalize_text(output_kind, default="none")
+    if normalized_output_kind not in allowed_output_kinds:
+        normalized_output_kind = "none"
+    normalized_expected_patch_path = _normalize_text(expected_patch_path, default="")
+    normalized_touched_files = _normalize_string_list(touched_files or [])
+    normalized_forbidden_touched_files = _normalize_string_list(
+        forbidden_touched_files or []
+    )
+    normalized_allowed_files = _normalize_string_list(allowed_files or [])
+    normalized_forbidden_files = _normalize_string_list(forbidden_files or [])
+    normalized_unsafe_operation_flags = _normalize_string_list(
+        unsafe_operation_flags or []
+    )
+
+    required_inputs = [
+        "patch_candidate_status",
+        "response_status",
+        "output_kind",
+        "expected_patch_path",
+        "touched_files",
+        "allowed_files",
+        "forbidden_files",
+    ]
+    available_inputs: list[str] = []
+    if normalized_patch_candidate_status:
+        available_inputs.append("patch_candidate_status")
+    if normalized_response_status:
+        available_inputs.append("response_status")
+    if normalized_output_kind and normalized_output_kind != "none":
+        available_inputs.append("output_kind")
+    if normalized_expected_patch_path:
+        available_inputs.append("expected_patch_path")
+    if normalized_touched_files:
+        available_inputs.append("touched_files")
+    if normalized_allowed_files:
+        available_inputs.append("allowed_files")
+    if normalized_forbidden_files:
+        available_inputs.append("forbidden_files")
+    missing_inputs = _serialize_required_signals(
+        [
+            input_name
+            for input_name in required_inputs
+            if input_name not in set(available_inputs)
+        ]
+    )
+
+    normalized_worktree_status = _normalize_text(worktree_status, default="insufficient_truth")
+    worktree_dirty_known = isinstance(worktree_dirty, bool)
+    normalized_worktree_dirty = bool(worktree_dirty) if worktree_dirty_known else False
+    if normalized_worktree_status in {"clean", "dirty"}:
+        normalized_worktree_dirty = normalized_worktree_status == "dirty"
+        worktree_dirty_known = True
+    elif worktree_dirty_known:
+        normalized_worktree_status = "dirty" if normalized_worktree_dirty else "clean"
+    else:
+        normalized_worktree_status = "insufficient_truth"
+
+    def _normalize_repo_path(path_text: str) -> str:
+        value = _normalize_text(path_text, default="")
+        if not value:
+            return ""
+        value = value.replace("\\", "/")
+        if value.startswith("a/") or value.startswith("b/"):
+            value = value[2:]
+        value = value.strip().strip("`").strip("\"")
+        if value == "/dev/null":
+            return ""
+        return value
+
+    def _path_matches_scope(candidate: str, scope_items: list[str]) -> bool:
+        normalized_candidate = _normalize_repo_path(candidate)
+        if not normalized_candidate:
+            return False
+        for scope_item in scope_items:
+            normalized_scope = _normalize_repo_path(scope_item)
+            if not normalized_scope:
+                continue
+            if normalized_candidate == normalized_scope:
+                return True
+            if normalized_candidate.startswith(normalized_scope.rstrip("/") + "/"):
+                return True
+        return False
+
+    outside_allowed_files = _serialize_required_signals(
+        [
+            path
+            for path in normalized_touched_files
+            if normalized_allowed_files
+            and not _path_matches_scope(path, normalized_allowed_files)
+        ]
+    )
+
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    next_action = "insufficient_truth"
+    dry_run_required = False
+    dry_run_status = "not_ready"
+    apply_allowed = False
+    apply_performed = False
+    validation_required = False
+    validation_commands: list[str] = []
+
+    if rollback_required:
+        status = "blocked_rollback_required"
+        source_status = "rollback_required"
+        block_reason = "rollback_required"
+        next_action = "rollback_required"
+    elif human_review_required:
+        status = "blocked_human_review_required"
+        source_status = "human_review_required"
+        block_reason = "human_review_required"
+        next_action = "human_review_required"
+    elif normalized_response_status == "waiting_for_manual_response":
+        status = "blocked_waiting_for_manual_response"
+        source_status = "response_waiting_for_manual_response"
+        block_reason = "waiting_for_manual_response"
+        next_action = "wait_for_valid_patch_candidate"
+    elif normalized_patch_candidate_status == "insufficient_truth":
+        status = "insufficient_truth"
+        source_status = normalized_patch_candidate_source_status
+        block_reason = "insufficient_truth"
+        next_action = "insufficient_truth"
+    elif normalized_patch_candidate_status == "waiting":
+        status = "blocked_no_patch_candidate"
+        source_status = normalized_patch_candidate_source_status
+        block_reason = "patch_candidate_waiting"
+        next_action = "wait_for_valid_patch_candidate"
+    elif normalized_patch_candidate_status == "blocked":
+        status = "blocked_invalid_candidate"
+        source_status = normalized_patch_candidate_source_status
+        block_reason = normalized_patch_candidate_block_reason or "invalid_patch_candidate"
+        next_action = "manual_fix_patch_candidate"
+    elif normalized_patch_candidate_status != "candidate_ready_for_later_gate":
+        status = "blocked_no_patch_candidate"
+        source_status = normalized_patch_candidate_source_status
+        block_reason = "patch_candidate_not_ready"
+        next_action = "wait_for_valid_patch_candidate"
+    elif normalized_output_kind not in patch_like_output_kinds:
+        status = "blocked_output_kind"
+        source_status = "patch_candidate_ready"
+        block_reason = "patch_candidate_output_kind_not_patch_like"
+        next_action = "manual_fix_patch_candidate"
+    elif normalized_output_kind == "full_file_replacement":
+        status = "blocked_output_kind"
+        source_status = "patch_candidate_ready"
+        block_reason = "full_file_replacement_requires_human_review"
+        next_action = "human_review_required"
+    elif not normalized_expected_patch_path:
+        status = "blocked_missing_patch_path"
+        source_status = "patch_candidate_ready"
+        block_reason = "missing_expected_patch_path"
+        next_action = "manual_fix_patch_candidate"
+        missing_inputs = _serialize_required_signals(
+            [*missing_inputs, "expected_patch_path"]
+        )
+    elif not Path(normalized_expected_patch_path).exists():
+        status = "blocked_missing_patch_path"
+        source_status = "patch_candidate_ready"
+        block_reason = "expected_patch_path_unavailable"
+        next_action = "manual_fix_patch_candidate"
+    elif not normalized_touched_files:
+        status = "blocked_missing_touched_files"
+        source_status = "patch_candidate_ready"
+        block_reason = "missing_touched_files_for_patch_like_candidate"
+        next_action = "manual_fix_patch_candidate"
+        missing_inputs = _serialize_required_signals([*missing_inputs, "touched_files"])
+    elif not normalized_allowed_files or not normalized_forbidden_files:
+        status = "insufficient_truth"
+        source_status = "missing_scope_constraints"
+        block_reason = "missing_scope_constraints"
+        next_action = "insufficient_truth"
+        if not normalized_allowed_files:
+            missing_inputs = _serialize_required_signals([*missing_inputs, "allowed_files"])
+        if not normalized_forbidden_files:
+            missing_inputs = _serialize_required_signals([*missing_inputs, "forbidden_files"])
+    elif normalized_forbidden_touched_files or outside_allowed_files:
+        status = "blocked_forbidden_files"
+        source_status = "patch_candidate_ready"
+        block_reason = "forbidden_or_out_of_scope_files_touched"
+        next_action = "manual_fix_patch_candidate"
+    elif normalized_unsafe_operation_flags:
+        status = "blocked_unsafe_operations"
+        source_status = "patch_candidate_ready"
+        block_reason = "unsafe_operations_detected"
+        next_action = "manual_fix_patch_candidate"
+    elif not worktree_dirty_known or normalized_worktree_status == "insufficient_truth":
+        status = "insufficient_truth"
+        source_status = "worktree_truth_unavailable"
+        block_reason = "worktree_truth_unavailable"
+        next_action = "insufficient_truth"
+    elif normalized_worktree_dirty:
+        status = "blocked_dirty_worktree"
+        source_status = "worktree_dirty"
+        block_reason = "dirty_worktree"
+        next_action = "manual_fix_patch_candidate"
+    else:
+        status = "ready_for_dry_run_later"
+        source_status = "safe_patch_candidate_ready"
+        block_reason = "none"
+        next_action = "prepare_dry_run_apply_later"
+        dry_run_required = True
+        dry_run_status = "required_not_performed"
+        validation_required = True
+        validation_commands = [
+            f"git apply --check {normalized_expected_patch_path}",
+        ]
+
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    safe_candidate_status = "insufficient_truth"
+    if normalized_patch_candidate_status == "candidate_ready_for_later_gate":
+        safe_candidate_status = "candidate_ready_for_later_gate"
+    elif normalized_patch_candidate_status in {"blocked", "waiting", "insufficient_truth"}:
+        safe_candidate_status = normalized_patch_candidate_status
+
+    validation_status = status
+    validation_source_status = source_status
+    validation_block_reason = block_reason
+    validation_next_action = next_action
+
+    return {
+        "project_browser_autonomous_safe_patch_apply_gate_status": status,
+        "project_browser_autonomous_safe_patch_apply_gate_source_status": source_status,
+        "project_browser_autonomous_safe_patch_apply_gate_block_reason": block_reason,
+        "project_browser_autonomous_safe_patch_apply_gate_patch_candidate_status": (
+            normalized_patch_candidate_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_expected_patch_path": (
+            normalized_expected_patch_path
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_touched_files": (
+            normalized_touched_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_forbidden_touched_files": (
+            _serialize_required_signals(
+                [*normalized_forbidden_touched_files, *outside_allowed_files]
+            )
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_allowed_files": (
+            normalized_allowed_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_forbidden_files": (
+            normalized_forbidden_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_worktree_status": (
+            normalized_worktree_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_worktree_dirty": (
+            bool(normalized_worktree_dirty)
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_dry_run_required": (
+            bool(dry_run_required)
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_dry_run_status": (
+            dry_run_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_apply_allowed": (
+            bool(apply_allowed)
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_apply_performed": (
+            bool(apply_performed)
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_validation_required": (
+            bool(validation_required)
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_validation_commands": (
+            _normalize_string_list(validation_commands)
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_missing_inputs": (
+            missing_inputs
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_next_action": next_action,
+        "project_browser_autonomous_safe_patch_apply_gate_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_status": (
+            safe_candidate_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_source_status": (
+            normalized_patch_candidate_source_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_block_reason": (
+            normalized_patch_candidate_block_reason
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_patch_candidate_status": (
+            normalized_patch_candidate_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_expected_patch_path": (
+            normalized_expected_patch_path
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_touched_files": (
+            normalized_touched_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_forbidden_touched_files": (
+            _serialize_required_signals(
+                [*normalized_forbidden_touched_files, *outside_allowed_files]
+            )
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_allowed_files": (
+            normalized_allowed_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_forbidden_files": (
+            normalized_forbidden_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_worktree_status": (
+            normalized_worktree_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_worktree_dirty": (
+            bool(normalized_worktree_dirty)
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_dry_run_required": (
+            bool(dry_run_required)
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_dry_run_status": (
+            dry_run_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_apply_allowed": (
+            bool(apply_allowed)
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_apply_performed": (
+            bool(apply_performed)
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_validation_required": (
+            bool(validation_required)
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_validation_commands": (
+            _normalize_string_list(validation_commands)
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_next_action": (
+            next_action
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_status": (
+            validation_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_source_status": (
+            validation_source_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_block_reason": (
+            validation_block_reason
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_patch_candidate_status": (
+            normalized_patch_candidate_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_expected_patch_path": (
+            normalized_expected_patch_path
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_touched_files": (
+            normalized_touched_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_forbidden_touched_files": (
+            _serialize_required_signals(
+                [*normalized_forbidden_touched_files, *outside_allowed_files]
+            )
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_allowed_files": (
+            normalized_allowed_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_forbidden_files": (
+            normalized_forbidden_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_worktree_status": (
+            normalized_worktree_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_worktree_dirty": (
+            bool(normalized_worktree_dirty)
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_dry_run_required": (
+            bool(dry_run_required)
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_dry_run_status": (
+            dry_run_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_apply_allowed": (
+            bool(apply_allowed)
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_apply_performed": (
+            bool(apply_performed)
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_validation_required": (
+            bool(validation_required)
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_validation_commands": (
+            _normalize_string_list(validation_commands)
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_missing_inputs": (
+            missing_inputs
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_next_action": (
+            validation_next_action
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_runtime_posture": (
+            runtime_posture
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -62342,6 +62806,505 @@ def _build_approved_restart_execution_contract_surface(
             )
         )
     )
+    project_browser_autonomous_safe_patch_apply_gate_worktree_status_hint = _normalize_text(
+        prior_approved_restart_execution.get(
+            "project_browser_autonomous_safe_patch_apply_gate_worktree_status"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_safe_patch_apply_gate_worktree_dirty_hint_raw = (
+        prior_approved_restart_execution.get(
+            "project_browser_autonomous_safe_patch_apply_gate_worktree_dirty"
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_worktree_dirty_hint: bool | None = None
+    if isinstance(project_browser_autonomous_safe_patch_apply_gate_worktree_dirty_hint_raw, bool):
+        project_browser_autonomous_safe_patch_apply_gate_worktree_dirty_hint = (
+            project_browser_autonomous_safe_patch_apply_gate_worktree_dirty_hint_raw
+        )
+    else:
+        normalized_worktree_dirty_hint_text = _normalize_text(
+            project_browser_autonomous_safe_patch_apply_gate_worktree_dirty_hint_raw,
+            default="",
+        ).lower()
+        if normalized_worktree_dirty_hint_text in {"true", "1", "yes"}:
+            project_browser_autonomous_safe_patch_apply_gate_worktree_dirty_hint = True
+        elif normalized_worktree_dirty_hint_text in {"false", "0", "no"}:
+            project_browser_autonomous_safe_patch_apply_gate_worktree_dirty_hint = False
+
+    project_browser_autonomous_safe_patch_apply_gate_state = (
+        _build_project_browser_autonomous_safe_patch_apply_gate_state(
+            patch_candidate_status=project_browser_autonomous_chatgpt_patch_candidate_status,
+            patch_candidate_source_status=(
+                project_browser_autonomous_chatgpt_patch_candidate_source_status
+            ),
+            patch_candidate_block_reason=(
+                project_browser_autonomous_chatgpt_patch_candidate_block_reason
+            ),
+            response_status=project_browser_autonomous_chatgpt_implementation_response_status,
+            output_kind=project_browser_autonomous_chatgpt_patch_candidate_output_kind,
+            expected_patch_path=(
+                project_browser_autonomous_chatgpt_patch_candidate_expected_patch_path
+            ),
+            touched_files=project_browser_autonomous_chatgpt_patch_candidate_touched_files,
+            forbidden_touched_files=(
+                project_browser_autonomous_chatgpt_patch_candidate_forbidden_touched_files
+            ),
+            allowed_files=project_browser_autonomous_chatgpt_implementation_response_allowed_files,
+            forbidden_files=(
+                project_browser_autonomous_chatgpt_implementation_response_forbidden_files
+            ),
+            unsafe_operation_flags=(
+                project_browser_autonomous_chatgpt_patch_candidate_unsafe_operation_flags
+            ),
+            human_review_required=(
+                project_browser_autonomous_chatgpt_decision_consumption_human_review_required
+            ),
+            rollback_required=(
+                project_browser_autonomous_chatgpt_decision_consumption_rollback_required
+            ),
+            worktree_status=(
+                project_browser_autonomous_safe_patch_apply_gate_worktree_status_hint
+            ),
+            worktree_dirty=(
+                project_browser_autonomous_safe_patch_apply_gate_worktree_dirty_hint
+            ),
+        )
+    )
+    safe_patch_apply_gate_allowed_statuses = {
+        "ready_for_dry_run_later",
+        "blocked_no_patch_candidate",
+        "blocked_waiting_for_manual_response",
+        "blocked_invalid_candidate",
+        "blocked_forbidden_files",
+        "blocked_unsafe_operations",
+        "blocked_dirty_worktree",
+        "blocked_missing_patch_path",
+        "blocked_missing_touched_files",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "blocked_output_kind",
+        "insufficient_truth",
+    }
+    safe_patch_apply_allowed_next_actions = {
+        "wait_for_valid_patch_candidate",
+        "prepare_dry_run_apply_later",
+        "human_review_required",
+        "rollback_required",
+        "manual_fix_patch_candidate",
+        "insufficient_truth",
+    }
+    safe_patch_apply_candidate_allowed_statuses = {
+        "candidate_ready_for_later_gate",
+        "blocked",
+        "waiting",
+        "insufficient_truth",
+    }
+    project_browser_autonomous_safe_patch_apply_gate_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_safe_patch_apply_gate_status
+        not in safe_patch_apply_gate_allowed_statuses
+    ):
+        project_browser_autonomous_safe_patch_apply_gate_status = "insufficient_truth"
+    project_browser_autonomous_safe_patch_apply_gate_source_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_source_status"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_safe_patch_apply_gate_block_reason = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_block_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_safe_patch_apply_gate_patch_candidate_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_patch_candidate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_safe_patch_apply_gate_patch_candidate_status
+        not in safe_patch_apply_candidate_allowed_statuses
+    ):
+        project_browser_autonomous_safe_patch_apply_gate_patch_candidate_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_safe_patch_apply_gate_expected_patch_path = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_expected_patch_path"
+        ),
+        default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+    )
+    project_browser_autonomous_safe_patch_apply_gate_touched_files = _normalize_string_list(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_touched_files"
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_forbidden_touched_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_gate_forbidden_touched_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_allowed_files = _normalize_string_list(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_allowed_files"
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_forbidden_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_gate_forbidden_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_worktree_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_worktree_status"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_safe_patch_apply_gate_worktree_dirty = bool(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_worktree_dirty",
+            False,
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_dry_run_required = bool(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_dry_run_required",
+            False,
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_dry_run_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_dry_run_status"
+        ),
+        default="not_ready",
+    )
+    project_browser_autonomous_safe_patch_apply_gate_apply_allowed = False
+    project_browser_autonomous_safe_patch_apply_gate_apply_performed = False
+    project_browser_autonomous_safe_patch_apply_gate_validation_required = bool(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_validation_required",
+            False,
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_validation_commands = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_gate_validation_commands"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_missing_inputs = _normalize_string_list(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_missing_inputs"
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_gate_next_action = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_gate_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_safe_patch_apply_gate_next_action
+        not in safe_patch_apply_allowed_next_actions
+    ):
+        project_browser_autonomous_safe_patch_apply_gate_next_action = "insufficient_truth"
+    project_browser_autonomous_safe_patch_apply_gate_runtime_posture = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_gate_runtime_posture"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_candidate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_safe_patch_apply_candidate_status
+        not in safe_patch_apply_candidate_allowed_statuses
+    ):
+        project_browser_autonomous_safe_patch_apply_candidate_status = "insufficient_truth"
+    project_browser_autonomous_safe_patch_apply_candidate_source_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_candidate_source_status"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_block_reason = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_candidate_block_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_patch_candidate_status = (
+        _normalize_text(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_candidate_patch_candidate_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    if (
+        project_browser_autonomous_safe_patch_apply_candidate_patch_candidate_status
+        not in safe_patch_apply_candidate_allowed_statuses
+    ):
+        project_browser_autonomous_safe_patch_apply_candidate_patch_candidate_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_safe_patch_apply_candidate_expected_patch_path = (
+        _normalize_text(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_candidate_expected_patch_path"
+            ),
+            default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_touched_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_candidate_touched_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_forbidden_touched_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_candidate_forbidden_touched_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_allowed_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_candidate_allowed_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_forbidden_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_candidate_forbidden_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_worktree_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_candidate_worktree_status"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_worktree_dirty = bool(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_candidate_worktree_dirty",
+            False,
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_dry_run_required = bool(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_candidate_dry_run_required",
+            False,
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_dry_run_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_candidate_dry_run_status"
+        ),
+        default="not_ready",
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_apply_allowed = False
+    project_browser_autonomous_safe_patch_apply_candidate_apply_performed = False
+    project_browser_autonomous_safe_patch_apply_candidate_validation_required = bool(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_candidate_validation_required",
+            False,
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_validation_commands = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_candidate_validation_commands"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_candidate_next_action = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_candidate_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_safe_patch_apply_candidate_next_action
+        not in safe_patch_apply_allowed_next_actions
+    ):
+        project_browser_autonomous_safe_patch_apply_candidate_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_safe_patch_apply_candidate_runtime_posture = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_candidate_runtime_posture"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_validation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_safe_patch_apply_validation_status
+        not in safe_patch_apply_gate_allowed_statuses
+    ):
+        project_browser_autonomous_safe_patch_apply_validation_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_safe_patch_apply_validation_source_status = (
+        _normalize_text(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_source_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_block_reason = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_validation_block_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_safe_patch_apply_validation_patch_candidate_status = (
+        _normalize_text(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_patch_candidate_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    if (
+        project_browser_autonomous_safe_patch_apply_validation_patch_candidate_status
+        not in safe_patch_apply_candidate_allowed_statuses
+    ):
+        project_browser_autonomous_safe_patch_apply_validation_patch_candidate_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_safe_patch_apply_validation_expected_patch_path = (
+        _normalize_text(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_expected_patch_path"
+            ),
+            default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_touched_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_touched_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_forbidden_touched_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_forbidden_touched_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_allowed_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_allowed_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_forbidden_files = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_forbidden_files"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_worktree_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_validation_worktree_status"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_safe_patch_apply_validation_worktree_dirty = bool(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_validation_worktree_dirty",
+            False,
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_dry_run_required = bool(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_validation_dry_run_required",
+            False,
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_dry_run_status = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_validation_dry_run_status"
+        ),
+        default="not_ready",
+    )
+    project_browser_autonomous_safe_patch_apply_validation_apply_allowed = False
+    project_browser_autonomous_safe_patch_apply_validation_apply_performed = False
+    project_browser_autonomous_safe_patch_apply_validation_validation_required = bool(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_validation_validation_required",
+            False,
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_validation_commands = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_validation_commands"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_missing_inputs = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_missing_inputs"
+            )
+        )
+    )
+    project_browser_autonomous_safe_patch_apply_validation_next_action = _normalize_text(
+        project_browser_autonomous_safe_patch_apply_gate_state.get(
+            "project_browser_autonomous_safe_patch_apply_validation_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_safe_patch_apply_validation_next_action
+        not in safe_patch_apply_allowed_next_actions
+    ):
+        project_browser_autonomous_safe_patch_apply_validation_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_safe_patch_apply_validation_runtime_posture = (
+        _normalize_string_list(
+            project_browser_autonomous_safe_patch_apply_gate_state.get(
+                "project_browser_autonomous_safe_patch_apply_validation_runtime_posture"
+            )
+        )
+    )
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -64456,6 +65419,183 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_chatgpt_patch_candidate_runtime_posture": (
                     project_browser_autonomous_chatgpt_patch_candidate_runtime_posture
                 ),
+                "project_browser_autonomous_safe_patch_apply_gate_status": (
+                    project_browser_autonomous_safe_patch_apply_gate_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_source_status": (
+                    project_browser_autonomous_safe_patch_apply_gate_source_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_block_reason": (
+                    project_browser_autonomous_safe_patch_apply_gate_block_reason
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_patch_candidate_status": (
+                    project_browser_autonomous_safe_patch_apply_gate_patch_candidate_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_expected_patch_path": (
+                    project_browser_autonomous_safe_patch_apply_gate_expected_patch_path
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_touched_files": (
+                    project_browser_autonomous_safe_patch_apply_gate_touched_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_forbidden_touched_files": (
+                    project_browser_autonomous_safe_patch_apply_gate_forbidden_touched_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_allowed_files": (
+                    project_browser_autonomous_safe_patch_apply_gate_allowed_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_forbidden_files": (
+                    project_browser_autonomous_safe_patch_apply_gate_forbidden_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_worktree_status": (
+                    project_browser_autonomous_safe_patch_apply_gate_worktree_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_worktree_dirty": (
+                    project_browser_autonomous_safe_patch_apply_gate_worktree_dirty
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_dry_run_required": (
+                    project_browser_autonomous_safe_patch_apply_gate_dry_run_required
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_dry_run_status": (
+                    project_browser_autonomous_safe_patch_apply_gate_dry_run_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_apply_allowed": (
+                    project_browser_autonomous_safe_patch_apply_gate_apply_allowed
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_apply_performed": (
+                    project_browser_autonomous_safe_patch_apply_gate_apply_performed
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_validation_required": (
+                    project_browser_autonomous_safe_patch_apply_gate_validation_required
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_validation_commands": (
+                    project_browser_autonomous_safe_patch_apply_gate_validation_commands
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_missing_inputs": (
+                    project_browser_autonomous_safe_patch_apply_gate_missing_inputs
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_next_action": (
+                    project_browser_autonomous_safe_patch_apply_gate_next_action
+                ),
+                "project_browser_autonomous_safe_patch_apply_gate_runtime_posture": (
+                    project_browser_autonomous_safe_patch_apply_gate_runtime_posture
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_status": (
+                    project_browser_autonomous_safe_patch_apply_candidate_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_source_status": (
+                    project_browser_autonomous_safe_patch_apply_candidate_source_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_block_reason": (
+                    project_browser_autonomous_safe_patch_apply_candidate_block_reason
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_patch_candidate_status": (
+                    project_browser_autonomous_safe_patch_apply_candidate_patch_candidate_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_expected_patch_path": (
+                    project_browser_autonomous_safe_patch_apply_candidate_expected_patch_path
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_touched_files": (
+                    project_browser_autonomous_safe_patch_apply_candidate_touched_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_forbidden_touched_files": (
+                    project_browser_autonomous_safe_patch_apply_candidate_forbidden_touched_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_allowed_files": (
+                    project_browser_autonomous_safe_patch_apply_candidate_allowed_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_forbidden_files": (
+                    project_browser_autonomous_safe_patch_apply_candidate_forbidden_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_worktree_status": (
+                    project_browser_autonomous_safe_patch_apply_candidate_worktree_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_worktree_dirty": (
+                    project_browser_autonomous_safe_patch_apply_candidate_worktree_dirty
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_dry_run_required": (
+                    project_browser_autonomous_safe_patch_apply_candidate_dry_run_required
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_dry_run_status": (
+                    project_browser_autonomous_safe_patch_apply_candidate_dry_run_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_apply_allowed": (
+                    project_browser_autonomous_safe_patch_apply_candidate_apply_allowed
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_apply_performed": (
+                    project_browser_autonomous_safe_patch_apply_candidate_apply_performed
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_validation_required": (
+                    project_browser_autonomous_safe_patch_apply_candidate_validation_required
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_validation_commands": (
+                    project_browser_autonomous_safe_patch_apply_candidate_validation_commands
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_next_action": (
+                    project_browser_autonomous_safe_patch_apply_candidate_next_action
+                ),
+                "project_browser_autonomous_safe_patch_apply_candidate_runtime_posture": (
+                    project_browser_autonomous_safe_patch_apply_candidate_runtime_posture
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_status": (
+                    project_browser_autonomous_safe_patch_apply_validation_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_source_status": (
+                    project_browser_autonomous_safe_patch_apply_validation_source_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_block_reason": (
+                    project_browser_autonomous_safe_patch_apply_validation_block_reason
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_patch_candidate_status": (
+                    project_browser_autonomous_safe_patch_apply_validation_patch_candidate_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_expected_patch_path": (
+                    project_browser_autonomous_safe_patch_apply_validation_expected_patch_path
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_touched_files": (
+                    project_browser_autonomous_safe_patch_apply_validation_touched_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_forbidden_touched_files": (
+                    project_browser_autonomous_safe_patch_apply_validation_forbidden_touched_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_allowed_files": (
+                    project_browser_autonomous_safe_patch_apply_validation_allowed_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_forbidden_files": (
+                    project_browser_autonomous_safe_patch_apply_validation_forbidden_files
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_worktree_status": (
+                    project_browser_autonomous_safe_patch_apply_validation_worktree_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_worktree_dirty": (
+                    project_browser_autonomous_safe_patch_apply_validation_worktree_dirty
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_dry_run_required": (
+                    project_browser_autonomous_safe_patch_apply_validation_dry_run_required
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_dry_run_status": (
+                    project_browser_autonomous_safe_patch_apply_validation_dry_run_status
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_apply_allowed": (
+                    project_browser_autonomous_safe_patch_apply_validation_apply_allowed
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_apply_performed": (
+                    project_browser_autonomous_safe_patch_apply_validation_apply_performed
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_validation_required": (
+                    project_browser_autonomous_safe_patch_apply_validation_validation_required
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_validation_commands": (
+                    project_browser_autonomous_safe_patch_apply_validation_validation_commands
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_missing_inputs": (
+                    project_browser_autonomous_safe_patch_apply_validation_missing_inputs
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_next_action": (
+                    project_browser_autonomous_safe_patch_apply_validation_next_action
+                ),
+                "project_browser_autonomous_safe_patch_apply_validation_runtime_posture": (
+                    project_browser_autonomous_safe_patch_apply_validation_runtime_posture
+                ),
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -65226,6 +66366,21 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chatgpt_patch_candidate_next_action"
             if project_browser_autonomous_chatgpt_patch_candidate_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_safe_patch_apply_gate_status"
+            if project_browser_autonomous_safe_patch_apply_gate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_safe_patch_apply_gate_next_action"
+            if project_browser_autonomous_safe_patch_apply_gate_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_safe_patch_apply_candidate_status"
+            if project_browser_autonomous_safe_patch_apply_candidate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_safe_patch_apply_validation_status"
+            if project_browser_autonomous_safe_patch_apply_validation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_safe_patch_apply_validation_next_action"
+            if project_browser_autonomous_safe_patch_apply_validation_next_action
             else "",
             ]
     )
@@ -70964,6 +72119,183 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_chatgpt_patch_candidate_runtime_posture": (
             project_browser_autonomous_chatgpt_patch_candidate_runtime_posture
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_status": (
+            project_browser_autonomous_safe_patch_apply_gate_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_source_status": (
+            project_browser_autonomous_safe_patch_apply_gate_source_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_block_reason": (
+            project_browser_autonomous_safe_patch_apply_gate_block_reason
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_patch_candidate_status": (
+            project_browser_autonomous_safe_patch_apply_gate_patch_candidate_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_expected_patch_path": (
+            project_browser_autonomous_safe_patch_apply_gate_expected_patch_path
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_touched_files": (
+            project_browser_autonomous_safe_patch_apply_gate_touched_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_forbidden_touched_files": (
+            project_browser_autonomous_safe_patch_apply_gate_forbidden_touched_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_allowed_files": (
+            project_browser_autonomous_safe_patch_apply_gate_allowed_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_forbidden_files": (
+            project_browser_autonomous_safe_patch_apply_gate_forbidden_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_worktree_status": (
+            project_browser_autonomous_safe_patch_apply_gate_worktree_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_worktree_dirty": (
+            project_browser_autonomous_safe_patch_apply_gate_worktree_dirty
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_dry_run_required": (
+            project_browser_autonomous_safe_patch_apply_gate_dry_run_required
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_dry_run_status": (
+            project_browser_autonomous_safe_patch_apply_gate_dry_run_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_apply_allowed": (
+            project_browser_autonomous_safe_patch_apply_gate_apply_allowed
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_apply_performed": (
+            project_browser_autonomous_safe_patch_apply_gate_apply_performed
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_validation_required": (
+            project_browser_autonomous_safe_patch_apply_gate_validation_required
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_validation_commands": (
+            project_browser_autonomous_safe_patch_apply_gate_validation_commands
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_missing_inputs": (
+            project_browser_autonomous_safe_patch_apply_gate_missing_inputs
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_next_action": (
+            project_browser_autonomous_safe_patch_apply_gate_next_action
+        ),
+        "project_browser_autonomous_safe_patch_apply_gate_runtime_posture": (
+            project_browser_autonomous_safe_patch_apply_gate_runtime_posture
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_status": (
+            project_browser_autonomous_safe_patch_apply_candidate_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_source_status": (
+            project_browser_autonomous_safe_patch_apply_candidate_source_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_block_reason": (
+            project_browser_autonomous_safe_patch_apply_candidate_block_reason
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_patch_candidate_status": (
+            project_browser_autonomous_safe_patch_apply_candidate_patch_candidate_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_expected_patch_path": (
+            project_browser_autonomous_safe_patch_apply_candidate_expected_patch_path
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_touched_files": (
+            project_browser_autonomous_safe_patch_apply_candidate_touched_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_forbidden_touched_files": (
+            project_browser_autonomous_safe_patch_apply_candidate_forbidden_touched_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_allowed_files": (
+            project_browser_autonomous_safe_patch_apply_candidate_allowed_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_forbidden_files": (
+            project_browser_autonomous_safe_patch_apply_candidate_forbidden_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_worktree_status": (
+            project_browser_autonomous_safe_patch_apply_candidate_worktree_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_worktree_dirty": (
+            project_browser_autonomous_safe_patch_apply_candidate_worktree_dirty
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_dry_run_required": (
+            project_browser_autonomous_safe_patch_apply_candidate_dry_run_required
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_dry_run_status": (
+            project_browser_autonomous_safe_patch_apply_candidate_dry_run_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_apply_allowed": (
+            project_browser_autonomous_safe_patch_apply_candidate_apply_allowed
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_apply_performed": (
+            project_browser_autonomous_safe_patch_apply_candidate_apply_performed
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_validation_required": (
+            project_browser_autonomous_safe_patch_apply_candidate_validation_required
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_validation_commands": (
+            project_browser_autonomous_safe_patch_apply_candidate_validation_commands
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_next_action": (
+            project_browser_autonomous_safe_patch_apply_candidate_next_action
+        ),
+        "project_browser_autonomous_safe_patch_apply_candidate_runtime_posture": (
+            project_browser_autonomous_safe_patch_apply_candidate_runtime_posture
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_status": (
+            project_browser_autonomous_safe_patch_apply_validation_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_source_status": (
+            project_browser_autonomous_safe_patch_apply_validation_source_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_block_reason": (
+            project_browser_autonomous_safe_patch_apply_validation_block_reason
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_patch_candidate_status": (
+            project_browser_autonomous_safe_patch_apply_validation_patch_candidate_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_expected_patch_path": (
+            project_browser_autonomous_safe_patch_apply_validation_expected_patch_path
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_touched_files": (
+            project_browser_autonomous_safe_patch_apply_validation_touched_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_forbidden_touched_files": (
+            project_browser_autonomous_safe_patch_apply_validation_forbidden_touched_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_allowed_files": (
+            project_browser_autonomous_safe_patch_apply_validation_allowed_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_forbidden_files": (
+            project_browser_autonomous_safe_patch_apply_validation_forbidden_files
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_worktree_status": (
+            project_browser_autonomous_safe_patch_apply_validation_worktree_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_worktree_dirty": (
+            project_browser_autonomous_safe_patch_apply_validation_worktree_dirty
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_dry_run_required": (
+            project_browser_autonomous_safe_patch_apply_validation_dry_run_required
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_dry_run_status": (
+            project_browser_autonomous_safe_patch_apply_validation_dry_run_status
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_apply_allowed": (
+            project_browser_autonomous_safe_patch_apply_validation_apply_allowed
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_apply_performed": (
+            project_browser_autonomous_safe_patch_apply_validation_apply_performed
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_validation_required": (
+            project_browser_autonomous_safe_patch_apply_validation_validation_required
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_validation_commands": (
+            project_browser_autonomous_safe_patch_apply_validation_validation_commands
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_missing_inputs": (
+            project_browser_autonomous_safe_patch_apply_validation_missing_inputs
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_next_action": (
+            project_browser_autonomous_safe_patch_apply_validation_next_action
+        ),
+        "project_browser_autonomous_safe_patch_apply_validation_runtime_posture": (
+            project_browser_autonomous_safe_patch_apply_validation_runtime_posture
         ),
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
