@@ -42823,6 +42823,1020 @@ def _build_project_browser_autonomous_two_launch_preparation_state(
     )
 
 
+def _build_project_browser_autonomous_max_two_launch_execution_state(
+    *,
+    autonomous_two_launch_preparation_status: str,
+    autonomous_two_launch_preparation_permission: str,
+    autonomous_two_launch_preparation_reason: str,
+    autonomous_two_launch_preparation_receipt_status: str,
+    autonomous_launch_1_status: str,
+    autonomous_launch_1_attempted: int,
+    autonomous_launch_1_completed: int,
+    autonomous_launch_1_result_status: str,
+    autonomous_launch_2_candidate_status: str,
+    autonomous_launch_2_permission: str,
+    autonomous_launch_2_allowed: int,
+    autonomous_launch_2_block_reason: str,
+    autonomous_launch_2_missing_inputs: list[str] | None,
+    autonomous_launch_2_next_action: str,
+    autonomous_short_batch_invocation_path_status: str,
+    autonomous_short_batch_invocation_runtime_capability: str,
+    autonomous_short_batch_invocation_receipt_status: str,
+    autonomous_short_batch_invocation_delegation_mode: str,
+    autonomous_short_batch_invocation_call_path_ref: str,
+    autonomous_short_batch_invocation_missing_inputs: list[str] | None,
+    autonomous_short_batch_invocation_next_action: str,
+    autonomous_cooldown_status: str,
+    autonomous_loop_risk_status: str,
+    autonomous_run_ledger_duplicate_status: str,
+    autonomous_watchdog_duplicate_receipt_posture: str,
+    autonomous_short_batch_failures: int,
+    autonomous_rolling_multi_launch_failure_budget: int,
+    autonomous_rolling_execution_launch_helper_status: str,
+    autonomous_rolling_execution_launch_helper_ref: str,
+    autonomous_rolling_execution_launch_helper_missing_inputs: list[str] | None,
+    autonomous_rolling_execution_launch_execution_mode: str,
+    autonomous_rolling_execution_launch_receipt_status: str,
+    autonomous_rolling_execution_status: str,
+    autonomous_rolling_execution_permission: str,
+    autonomous_rolling_execution_source_status: str,
+    autonomous_rolling_execution_receipt_status: str,
+    autonomous_rolling_execution_runtime_capability: str,
+    autonomous_rolling_execution_launches_allowed: int,
+    autonomous_rolling_execution_launches_attempted: int,
+    autonomous_rolling_execution_launches_completed: int,
+    autonomous_rolling_multi_launch_status: str,
+    autonomous_rolling_multi_launch_permission: str,
+    autonomous_rolling_multi_launch_source_status: str,
+    autonomous_rolling_multi_launch_receipt_status: str,
+    autonomous_rolling_multi_launch_next_action: str,
+    autonomous_one_bounded_launch_callsite_available_vars: list[str] | None,
+    autonomous_one_bounded_launch_callsite_values: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    two_launch_preparation_status = _normalize_text(
+        autonomous_two_launch_preparation_status,
+        default="insufficient_truth",
+    )
+    if two_launch_preparation_status not in {
+        "prepared",
+        "blocked",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        two_launch_preparation_status = "insufficient_truth"
+    two_launch_preparation_permission = _normalize_text(
+        autonomous_two_launch_preparation_permission,
+        default="insufficient_truth",
+    )
+    if two_launch_preparation_permission not in {
+        "allowed_candidate",
+        "blocked",
+        "not_applicable",
+        "insufficient_truth",
+    }:
+        two_launch_preparation_permission = "insufficient_truth"
+    two_launch_preparation_reason = _normalize_text(
+        autonomous_two_launch_preparation_reason,
+        default="insufficient_truth",
+    )
+    two_launch_preparation_receipt_status = _normalize_text(
+        autonomous_two_launch_preparation_receipt_status,
+        default="insufficient_truth",
+    )
+    if two_launch_preparation_receipt_status not in {
+        "ready",
+        "blocked",
+        "insufficient_truth",
+    }:
+        two_launch_preparation_receipt_status = "insufficient_truth"
+    launch_1_status = _normalize_text(
+        autonomous_launch_1_status,
+        default="insufficient_truth",
+    )
+    if launch_1_status not in {
+        "completed",
+        "attempted_not_completed",
+        "not_attempted",
+        "blocked",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        launch_1_status = "insufficient_truth"
+    launch_1_attempted = _as_non_negative_int(
+        autonomous_launch_1_attempted,
+        default=0,
+    )
+    if launch_1_attempted > 1:
+        launch_1_attempted = 1
+    launch_1_completed = _as_non_negative_int(
+        autonomous_launch_1_completed,
+        default=0,
+    )
+    if launch_1_completed > 1:
+        launch_1_completed = 1
+    if launch_1_completed > launch_1_attempted:
+        launch_1_completed = launch_1_attempted
+    launch_1_result_status = _normalize_text(
+        autonomous_launch_1_result_status,
+        default="insufficient_truth",
+    )
+    if launch_1_result_status not in {
+        "completed",
+        "not_completed",
+        "failed",
+        "blocked",
+        "not_attempted",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        launch_1_result_status = "insufficient_truth"
+    launch_2_candidate_status = _normalize_text(
+        autonomous_launch_2_candidate_status,
+        default="blocked_insufficient_truth",
+    )
+    if launch_2_candidate_status not in {
+        "prepared_candidate",
+        "blocked_launch_1_not_completed",
+        "blocked_missing_inputs",
+        "blocked_failure_budget",
+        "blocked_loop_or_duplicate_risk",
+        "blocked_terminal_stop",
+        "blocked_human_review",
+        "blocked_insufficient_truth",
+        "not_applicable",
+    }:
+        launch_2_candidate_status = "blocked_insufficient_truth"
+    launch_2_permission = _normalize_text(
+        autonomous_launch_2_permission,
+        default="insufficient_truth",
+    )
+    if launch_2_permission not in {
+        "allowed_candidate",
+        "blocked",
+        "not_applicable",
+        "insufficient_truth",
+    }:
+        launch_2_permission = "insufficient_truth"
+    launch_2_allowed = _as_non_negative_int(
+        autonomous_launch_2_allowed,
+        default=0,
+    )
+    if launch_2_allowed > 1:
+        launch_2_allowed = 1
+    launch_2_block_reason = _normalize_text(
+        autonomous_launch_2_block_reason,
+        default="insufficient_truth",
+    )
+    launch_2_missing_inputs = _normalize_string_list(
+        autonomous_launch_2_missing_inputs or []
+    )
+    launch_2_next_action = _normalize_text(
+        autonomous_launch_2_next_action,
+        default="do_not_launch",
+    )
+    if launch_2_next_action not in {
+        "prepare_second_bounded_launch_later",
+        "do_not_launch",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        launch_2_next_action = "do_not_launch"
+    short_batch_invocation_path_status = _normalize_text(
+        autonomous_short_batch_invocation_path_status,
+        default="insufficient_truth",
+    )
+    if short_batch_invocation_path_status not in {
+        "available",
+        "unavailable",
+        "insufficient_truth",
+    }:
+        short_batch_invocation_path_status = "insufficient_truth"
+    short_batch_invocation_runtime_capability = _normalize_text(
+        autonomous_short_batch_invocation_runtime_capability,
+        default="insufficient_truth",
+    )
+    if short_batch_invocation_runtime_capability not in {
+        "actual_bounded_invocation",
+        "partial_runtime_parts_available",
+        "metadata_only",
+        "unavailable",
+        "insufficient_truth",
+    }:
+        short_batch_invocation_runtime_capability = "insufficient_truth"
+    short_batch_invocation_receipt_status = _normalize_text(
+        autonomous_short_batch_invocation_receipt_status,
+        default="insufficient_truth",
+    )
+    if short_batch_invocation_receipt_status not in {
+        "ready",
+        "blocked",
+        "pause_required",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        short_batch_invocation_receipt_status = "insufficient_truth"
+    short_batch_invocation_delegation_mode = _normalize_text(
+        autonomous_short_batch_invocation_delegation_mode,
+        default="insufficient_truth",
+    )
+    if short_batch_invocation_delegation_mode not in {
+        "invoked_existing_builder",
+        "reused_existing_state_call_path",
+        "not_callable_missing_inputs",
+        "no_runtime_invocation_stop",
+        "insufficient_truth",
+    }:
+        short_batch_invocation_delegation_mode = "insufficient_truth"
+    short_batch_invocation_call_path_ref = _normalize_text(
+        autonomous_short_batch_invocation_call_path_ref,
+        default="none",
+    )
+    short_batch_invocation_missing_inputs = _normalize_string_list(
+        autonomous_short_batch_invocation_missing_inputs or []
+    )
+    short_batch_invocation_next_action = _normalize_text(
+        autonomous_short_batch_invocation_next_action,
+        default="none",
+    )
+    cooldown_status = _normalize_text(
+        autonomous_cooldown_status,
+        default="insufficient_truth",
+    )
+    if cooldown_status not in {
+        "not_required",
+        "required",
+        "blocked",
+        "insufficient_truth",
+    }:
+        cooldown_status = "insufficient_truth"
+    loop_risk_status = _normalize_text(
+        autonomous_loop_risk_status,
+        default="insufficient_truth",
+    )
+    if loop_risk_status not in {"clear", "suspected", "blocked", "insufficient_truth"}:
+        loop_risk_status = "insufficient_truth"
+    run_ledger_duplicate_status = _normalize_text(
+        autonomous_run_ledger_duplicate_status,
+        default="insufficient_truth",
+    )
+    if run_ledger_duplicate_status not in {
+        "clear",
+        "duplicate_detected",
+        "blocked",
+        "insufficient_truth",
+    }:
+        run_ledger_duplicate_status = "insufficient_truth"
+    watchdog_duplicate_receipt_posture = _normalize_text(
+        autonomous_watchdog_duplicate_receipt_posture,
+        default="insufficient_truth",
+    )
+    if watchdog_duplicate_receipt_posture not in {
+        "clear",
+        "duplicate_detected",
+        "insufficient_truth",
+    }:
+        watchdog_duplicate_receipt_posture = "insufficient_truth"
+    short_batch_failures = _as_non_negative_int(
+        autonomous_short_batch_failures,
+        default=0,
+    )
+    rolling_multi_launch_failure_budget = _as_non_negative_int(
+        autonomous_rolling_multi_launch_failure_budget,
+        default=0,
+    )
+    rolling_execution_launch_helper_status = _normalize_text(
+        autonomous_rolling_execution_launch_helper_status,
+        default="unavailable",
+    )
+    if rolling_execution_launch_helper_status not in {
+        "available",
+        "unavailable",
+        "insufficient_truth",
+    }:
+        rolling_execution_launch_helper_status = "insufficient_truth"
+    rolling_execution_launch_helper_ref = _normalize_text(
+        autonomous_rolling_execution_launch_helper_ref,
+        default="none",
+    )
+    rolling_execution_launch_helper_missing_inputs = _normalize_string_list(
+        autonomous_rolling_execution_launch_helper_missing_inputs or []
+    )
+    rolling_execution_launch_execution_mode = _normalize_text(
+        autonomous_rolling_execution_launch_execution_mode,
+        default="prepared_only_helper_missing",
+    )
+    if rolling_execution_launch_execution_mode not in {
+        "existing_call_path_reused",
+        "prepared_only_helper_missing",
+        "insufficient_truth",
+    }:
+        rolling_execution_launch_execution_mode = "insufficient_truth"
+    rolling_execution_launch_receipt_status = _normalize_text(
+        autonomous_rolling_execution_launch_receipt_status,
+        default="insufficient_truth",
+    )
+    if rolling_execution_launch_receipt_status not in {
+        "ready",
+        "unavailable",
+        "insufficient_truth",
+    }:
+        rolling_execution_launch_receipt_status = "insufficient_truth"
+    one_bounded_launch_callsite_values = (
+        dict(autonomous_one_bounded_launch_callsite_values)
+        if isinstance(autonomous_one_bounded_launch_callsite_values, Mapping)
+        else {}
+    )
+    one_bounded_launch_callsite_available_vars = set(
+        _normalize_string_list(autonomous_one_bounded_launch_callsite_available_vars or [])
+    )
+    for candidate_name in one_bounded_launch_callsite_values:
+        normalized_candidate_name = _normalize_text(candidate_name, default="")
+        if normalized_candidate_name:
+            one_bounded_launch_callsite_available_vars.add(normalized_candidate_name)
+
+    max_launches_allowed = 2
+    total_step_budget = 6
+    failure_budget = 1
+    reusable_surface_name = "existing_one_bounded_launch_invocation_helper"
+
+    def _finalize_counts(
+        *,
+        launch_2_attempt_status: str,
+        launch_2_execution_mode: str,
+        launch_2_execution_ref: str,
+        launch_2_execution_receipt_status: str,
+        launch_2_attempted: int,
+        launch_2_completed: int,
+        next_action: str,
+    ) -> tuple[int, int, int, str]:
+        normalized_launch_2_attempted = _as_non_negative_int(
+            launch_2_attempted,
+            default=0,
+        )
+        if normalized_launch_2_attempted > 1:
+            normalized_launch_2_attempted = 1
+        normalized_launch_2_completed = _as_non_negative_int(
+            launch_2_completed,
+            default=0,
+        )
+        if normalized_launch_2_completed > 1:
+            normalized_launch_2_completed = 1
+        if (
+            launch_2_attempt_status != "invoked_once"
+            or launch_2_execution_mode != "second_existing_invocation_call_path_invoked"
+            or _normalize_text(launch_2_execution_ref, default="none") in {"", "none"}
+            or launch_2_execution_receipt_status != "ready"
+        ):
+            normalized_launch_2_attempted = 0
+        if normalized_launch_2_completed > normalized_launch_2_attempted:
+            normalized_launch_2_completed = normalized_launch_2_attempted
+        max_two_launches_attempted = launch_1_attempted + normalized_launch_2_attempted
+        max_two_launches_completed = launch_1_completed + normalized_launch_2_completed
+        if max_two_launches_attempted > max_launches_allowed:
+            max_two_launches_attempted = max_launches_allowed
+        if max_two_launches_completed > max_launches_allowed:
+            max_two_launches_completed = max_launches_allowed
+        if max_two_launches_completed > max_two_launches_attempted:
+            max_two_launches_completed = max_two_launches_attempted
+        max_two_launches_remaining = max_launches_allowed - max_two_launches_attempted
+        if max_two_launches_remaining < 0:
+            max_two_launches_remaining = 0
+        normalized_next_action = next_action
+        if max_two_launches_attempted >= max_launches_allowed:
+            max_two_launches_remaining = 0
+            if normalized_next_action not in {
+                "stop_after_second_launch_attempt",
+                "stop_max_two_launch_complete",
+            }:
+                normalized_next_action = "stop_max_two_launch_complete"
+        return (
+            normalized_launch_2_attempted,
+            normalized_launch_2_completed,
+            max_two_launches_attempted,
+            max_two_launches_completed,
+            max_two_launches_remaining,
+            normalized_next_action,
+        )
+
+    def _state(
+        *,
+        max_two_status: str,
+        max_two_permission: str,
+        max_two_reason: str,
+        max_two_receipt_status: str,
+        max_two_mode: str,
+        max_two_block_reason: str,
+        launch_2_attempt_status: str,
+        launch_2_attempt_reason: str,
+        launch_2_execution_mode: str,
+        launch_2_execution_ref: str,
+        launch_2_execution_receipt_status: str,
+        launch_2_execution_receipt_kind: str,
+        launch_2_result_status: str,
+        launch_2_result_reason: str,
+        launch_2_attempted: int,
+        launch_2_completed: int,
+        max_two_next_action: str,
+        launch_2_pause_status: str,
+        launch_2_pause_reason: str,
+        launch_2_missing_reusable_invocation_surface: list[str] | None = None,
+    ) -> dict[str, Any]:
+        (
+            normalized_launch_2_attempted,
+            normalized_launch_2_completed,
+            max_two_launches_attempted,
+            max_two_launches_completed,
+            max_two_launches_remaining,
+            normalized_next_action,
+        ) = _finalize_counts(
+            launch_2_attempt_status=launch_2_attempt_status,
+            launch_2_execution_mode=launch_2_execution_mode,
+            launch_2_execution_ref=launch_2_execution_ref,
+            launch_2_execution_receipt_status=launch_2_execution_receipt_status,
+            launch_2_attempted=launch_2_attempted,
+            launch_2_completed=launch_2_completed,
+            next_action=max_two_next_action,
+        )
+        return {
+            "project_browser_autonomous_max_two_launch_execution_status": (
+                max_two_status
+            ),
+            "project_browser_autonomous_max_two_launch_execution_permission": (
+                max_two_permission
+            ),
+            "project_browser_autonomous_max_two_launch_execution_reason": (
+                max_two_reason
+            ),
+            "project_browser_autonomous_max_two_launch_execution_receipt_status": (
+                max_two_receipt_status
+            ),
+            "project_browser_autonomous_max_two_launch_execution_mode": (
+                max_two_mode
+            ),
+            "project_browser_autonomous_max_two_launch_execution_block_reason": (
+                max_two_block_reason
+            ),
+            "project_browser_autonomous_launch_2_attempt_status": (
+                launch_2_attempt_status
+            ),
+            "project_browser_autonomous_launch_2_attempt_reason": (
+                launch_2_attempt_reason
+            ),
+            "project_browser_autonomous_launch_2_execution_mode": (
+                launch_2_execution_mode
+            ),
+            "project_browser_autonomous_launch_2_execution_ref": (
+                _normalize_text(launch_2_execution_ref, default="none")
+            ),
+            "project_browser_autonomous_launch_2_execution_receipt_status": (
+                launch_2_execution_receipt_status
+            ),
+            "project_browser_autonomous_launch_2_execution_receipt_kind": (
+                _normalize_text(launch_2_execution_receipt_kind, default="none")
+            ),
+            "project_browser_autonomous_launch_2_result_status": (
+                launch_2_result_status
+            ),
+            "project_browser_autonomous_launch_2_result_reason": (
+                launch_2_result_reason
+            ),
+            "project_browser_autonomous_launch_2_attempted": (
+                normalized_launch_2_attempted
+            ),
+            "project_browser_autonomous_launch_2_completed": (
+                normalized_launch_2_completed
+            ),
+            "project_browser_autonomous_max_two_launches_allowed": (
+                max_launches_allowed
+            ),
+            "project_browser_autonomous_max_two_launches_attempted": (
+                max_two_launches_attempted
+            ),
+            "project_browser_autonomous_max_two_launches_completed": (
+                max_two_launches_completed
+            ),
+            "project_browser_autonomous_max_two_launches_remaining": (
+                max_two_launches_remaining
+            ),
+            "project_browser_autonomous_max_two_launch_total_step_budget": (
+                total_step_budget
+            ),
+            "project_browser_autonomous_max_two_launch_failure_budget": (
+                failure_budget
+            ),
+            "project_browser_autonomous_max_two_launch_next_action": (
+                normalized_next_action
+            ),
+            "project_browser_autonomous_launch_2_pause_status": (
+                launch_2_pause_status
+            ),
+            "project_browser_autonomous_launch_2_pause_reason": (
+                launch_2_pause_reason
+            ),
+            "project_browser_autonomous_launch_2_missing_reusable_invocation_surface": (
+                _normalize_string_list(
+                    launch_2_missing_reusable_invocation_surface or []
+                )
+            ),
+        }
+
+    helper_surface_available = bool(
+        rolling_execution_launch_helper_status == "available"
+        and rolling_execution_launch_helper_ref
+        == "project_browser_autonomous_one_bounded_launch_state"
+        and not rolling_execution_launch_helper_missing_inputs
+        and rolling_execution_launch_execution_mode == "existing_call_path_reused"
+        and rolling_execution_launch_receipt_status == "ready"
+    )
+    if not helper_surface_available:
+        return _state(
+            max_two_status="blocked",
+            max_two_permission="blocked",
+            max_two_reason="reusable_second_launch_invocation_surface_missing",
+            max_two_receipt_status="blocked",
+            max_two_mode="insufficient_truth",
+            max_two_block_reason="reusable_second_launch_invocation_surface_missing",
+            launch_2_attempt_status="insufficient_truth",
+            launch_2_attempt_reason="reusable_second_launch_invocation_surface_missing",
+            launch_2_execution_mode="insufficient_truth",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="insufficient_truth",
+            launch_2_execution_receipt_kind="insufficient_truth_second_launch_receipt",
+            launch_2_result_status="insufficient_truth",
+            launch_2_result_reason="reusable_second_launch_invocation_surface_missing",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="insufficient_truth",
+            launch_2_pause_status="not_applicable",
+            launch_2_pause_reason="not_applicable",
+            launch_2_missing_reusable_invocation_surface=[reusable_surface_name],
+        )
+    if not callable(_build_project_browser_autonomous_one_bounded_launch_state):
+        return _state(
+            max_two_status="blocked",
+            max_two_permission="blocked",
+            max_two_reason="reusable_second_launch_invocation_surface_missing",
+            max_two_receipt_status="blocked",
+            max_two_mode="insufficient_truth",
+            max_two_block_reason="reusable_second_launch_invocation_surface_missing",
+            launch_2_attempt_status="insufficient_truth",
+            launch_2_attempt_reason="reusable_second_launch_invocation_surface_missing",
+            launch_2_execution_mode="insufficient_truth",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="insufficient_truth",
+            launch_2_execution_receipt_kind="insufficient_truth_second_launch_receipt",
+            launch_2_result_status="insufficient_truth",
+            launch_2_result_reason="reusable_second_launch_invocation_surface_missing",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="insufficient_truth",
+            launch_2_pause_status="not_applicable",
+            launch_2_pause_reason="not_applicable",
+            launch_2_missing_reusable_invocation_surface=[reusable_surface_name],
+        )
+
+    if (
+        two_launch_preparation_status == "terminal_stop"
+        or launch_1_status == "terminal_stop"
+        or launch_1_result_status == "terminal_stop"
+        or launch_2_candidate_status == "blocked_terminal_stop"
+    ):
+        return _state(
+            max_two_status="terminal_stop",
+            max_two_permission="not_applicable",
+            max_two_reason=launch_2_block_reason or two_launch_preparation_reason or "terminal_stop",
+            max_two_receipt_status="ready",
+            max_two_mode="blocked_terminal_stop",
+            max_two_block_reason=launch_2_block_reason or "terminal_stop",
+            launch_2_attempt_status="terminal_stop",
+            launch_2_attempt_reason=launch_2_block_reason or "terminal_stop",
+            launch_2_execution_mode="blocked_terminal_stop",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="not_applicable",
+            launch_2_execution_receipt_kind="none",
+            launch_2_result_status="terminal_stop",
+            launch_2_result_reason=launch_2_block_reason or "terminal_stop",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="stop_max_two_launch_complete",
+            launch_2_pause_status="not_applicable",
+            launch_2_pause_reason="not_applicable",
+        )
+
+    if (
+        two_launch_preparation_status == "insufficient_truth"
+        or two_launch_preparation_permission == "insufficient_truth"
+        or two_launch_preparation_receipt_status == "insufficient_truth"
+        or launch_1_status == "insufficient_truth"
+        or launch_1_result_status == "insufficient_truth"
+        or launch_2_candidate_status == "blocked_insufficient_truth"
+        or launch_2_permission == "insufficient_truth"
+        or launch_2_next_action == "insufficient_truth"
+        or short_batch_invocation_path_status == "insufficient_truth"
+        or short_batch_invocation_runtime_capability == "insufficient_truth"
+        or short_batch_invocation_receipt_status == "insufficient_truth"
+        or short_batch_invocation_delegation_mode == "insufficient_truth"
+        or cooldown_status == "insufficient_truth"
+        or loop_risk_status == "insufficient_truth"
+        or run_ledger_duplicate_status == "insufficient_truth"
+        or watchdog_duplicate_receipt_posture == "insufficient_truth"
+        or rolling_execution_launch_helper_status == "insufficient_truth"
+        or rolling_execution_launch_execution_mode == "insufficient_truth"
+        or rolling_execution_launch_receipt_status == "insufficient_truth"
+    ):
+        return _state(
+            max_two_status="insufficient_truth",
+            max_two_permission="insufficient_truth",
+            max_two_reason=two_launch_preparation_reason or "insufficient_truth",
+            max_two_receipt_status="insufficient_truth",
+            max_two_mode="insufficient_truth",
+            max_two_block_reason=launch_2_block_reason or "insufficient_truth",
+            launch_2_attempt_status="insufficient_truth",
+            launch_2_attempt_reason=launch_2_block_reason or "insufficient_truth",
+            launch_2_execution_mode="insufficient_truth",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="insufficient_truth",
+            launch_2_execution_receipt_kind="insufficient_truth_second_launch_receipt",
+            launch_2_result_status="insufficient_truth",
+            launch_2_result_reason=launch_2_block_reason or "insufficient_truth",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="insufficient_truth",
+            launch_2_pause_status="not_applicable",
+            launch_2_pause_reason="not_applicable",
+        )
+
+    if short_batch_invocation_receipt_status == "pause_required":
+        return _state(
+            max_two_status="paused",
+            max_two_permission="paused",
+            max_two_reason="pause_required",
+            max_two_receipt_status="pause_required",
+            max_two_mode="blocked_pause_required",
+            max_two_block_reason="pause_required",
+            launch_2_attempt_status="not_invoked_pause_required",
+            launch_2_attempt_reason="pause_required",
+            launch_2_execution_mode="blocked_pause_required",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="pause_required",
+            launch_2_execution_receipt_kind="pause_required_second_launch_receipt",
+            launch_2_result_status="paused",
+            launch_2_result_reason="pause_required",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="pause_required",
+            launch_2_pause_status="pause_required",
+            launch_2_pause_reason="short_batch_invocation_pause_required",
+        )
+
+    if (
+        short_batch_invocation_receipt_status == "human_review_required"
+        or launch_2_candidate_status == "blocked_human_review"
+        or launch_2_next_action == "human_review_required"
+    ):
+        return _state(
+            max_two_status="blocked",
+            max_two_permission="blocked",
+            max_two_reason="human_review_required",
+            max_two_receipt_status="blocked",
+            max_two_mode="blocked_human_review",
+            max_two_block_reason="human_review_required",
+            launch_2_attempt_status="not_invoked_hard_risk",
+            launch_2_attempt_reason="human_review_required",
+            launch_2_execution_mode="blocked_human_review",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="blocked",
+            launch_2_execution_receipt_kind="blocked_second_launch_receipt",
+            launch_2_result_status="blocked",
+            launch_2_result_reason="human_review_required",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="human_review_required",
+            launch_2_pause_status="not_applicable",
+            launch_2_pause_reason="not_applicable",
+        )
+
+    if (
+        launch_2_allowed != 1
+        or launch_2_permission != "allowed_candidate"
+        or launch_2_candidate_status != "prepared_candidate"
+        or launch_2_next_action != "prepare_second_bounded_launch_later"
+        or two_launch_preparation_status != "prepared"
+        or two_launch_preparation_permission != "allowed_candidate"
+        or two_launch_preparation_receipt_status != "ready"
+        or launch_1_attempted != 1
+        or launch_1_completed != 1
+        or launch_1_result_status != "completed"
+    ):
+        return _state(
+            max_two_status="blocked",
+            max_two_permission="blocked",
+            max_two_reason="launch_2_candidate_not_allowed",
+            max_two_receipt_status="blocked",
+            max_two_mode="blocked_candidate_not_allowed",
+            max_two_block_reason=launch_2_block_reason or "launch_2_candidate_not_allowed",
+            launch_2_attempt_status="not_invoked_candidate_not_allowed",
+            launch_2_attempt_reason=launch_2_block_reason or "launch_2_candidate_not_allowed",
+            launch_2_execution_mode="blocked_candidate_not_allowed",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="not_applicable",
+            launch_2_execution_receipt_kind="none",
+            launch_2_result_status="blocked",
+            launch_2_result_reason=launch_2_block_reason or "launch_2_candidate_not_allowed",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="stop_second_launch_not_allowed",
+            launch_2_pause_status="not_applicable",
+            launch_2_pause_reason="not_applicable",
+        )
+
+    if (
+        launch_2_missing_inputs
+        or short_batch_invocation_missing_inputs
+        or short_batch_invocation_path_status != "available"
+        or short_batch_invocation_runtime_capability != "actual_bounded_invocation"
+        or short_batch_invocation_receipt_status != "ready"
+        or short_batch_invocation_call_path_ref in {"", "none"}
+    ):
+        return _state(
+            max_two_status="blocked",
+            max_two_permission="blocked",
+            max_two_reason="launch_2_missing_inputs",
+            max_two_receipt_status="blocked",
+            max_two_mode="blocked_missing_inputs",
+            max_two_block_reason=(
+                launch_2_block_reason
+                or (
+                    "short_batch_invocation_call_path_missing"
+                    if short_batch_invocation_call_path_ref in {"", "none"}
+                    else "launch_2_missing_inputs"
+                )
+            ),
+            launch_2_attempt_status="not_invoked_missing_inputs",
+            launch_2_attempt_reason=(
+                launch_2_block_reason
+                or (
+                    "short_batch_invocation_call_path_missing"
+                    if short_batch_invocation_call_path_ref in {"", "none"}
+                    else "launch_2_missing_inputs"
+                )
+            ),
+            launch_2_execution_mode="blocked_missing_inputs",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="blocked",
+            launch_2_execution_receipt_kind="blocked_second_launch_receipt",
+            launch_2_result_status="blocked",
+            launch_2_result_reason=(
+                launch_2_block_reason
+                or (
+                    "short_batch_invocation_call_path_missing"
+                    if short_batch_invocation_call_path_ref in {"", "none"}
+                    else "launch_2_missing_inputs"
+                )
+            ),
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="stop_second_launch_not_allowed",
+            launch_2_pause_status="none",
+            launch_2_pause_reason="none",
+        )
+
+    if (
+        cooldown_status in {"required", "blocked"}
+        or rolling_multi_launch_failure_budget <= 0
+        or short_batch_failures >= failure_budget
+    ):
+        return _state(
+            max_two_status="blocked",
+            max_two_permission="blocked",
+            max_two_reason="failure_budget_exhausted",
+            max_two_receipt_status="blocked",
+            max_two_mode="blocked_failure_budget",
+            max_two_block_reason="failure_budget_exhausted",
+            launch_2_attempt_status="not_invoked_failure_budget",
+            launch_2_attempt_reason="failure_budget_exhausted",
+            launch_2_execution_mode="blocked_failure_budget",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="blocked",
+            launch_2_execution_receipt_kind="blocked_second_launch_receipt",
+            launch_2_result_status="blocked",
+            launch_2_result_reason="failure_budget_exhausted",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="stop_second_launch_not_allowed",
+            launch_2_pause_status="none",
+            launch_2_pause_reason="none",
+        )
+
+    if (
+        loop_risk_status in {"suspected", "blocked"}
+        or run_ledger_duplicate_status in {"duplicate_detected", "blocked"}
+        or watchdog_duplicate_receipt_posture == "duplicate_detected"
+    ):
+        return _state(
+            max_two_status="blocked",
+            max_two_permission="blocked",
+            max_two_reason="loop_or_duplicate_risk_detected",
+            max_two_receipt_status="blocked",
+            max_two_mode="blocked_loop_or_duplicate_risk",
+            max_two_block_reason="loop_or_duplicate_risk_detected",
+            launch_2_attempt_status="not_invoked_loop_or_duplicate_risk",
+            launch_2_attempt_reason="loop_or_duplicate_risk_detected",
+            launch_2_execution_mode="blocked_loop_or_duplicate_risk",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="blocked",
+            launch_2_execution_receipt_kind="blocked_second_launch_receipt",
+            launch_2_result_status="blocked",
+            launch_2_result_reason="loop_or_duplicate_risk_detected",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="stop_second_launch_not_allowed",
+            launch_2_pause_status="none",
+            launch_2_pause_reason="none",
+        )
+
+    second_launch_state = _build_project_browser_autonomous_one_bounded_launch_state(
+        autonomous_rolling_execution_status=autonomous_rolling_execution_status,
+        autonomous_rolling_execution_permission=autonomous_rolling_execution_permission,
+        autonomous_rolling_execution_source_status=autonomous_rolling_execution_source_status,
+        autonomous_rolling_execution_receipt_status=autonomous_rolling_execution_receipt_status,
+        autonomous_rolling_execution_runtime_capability=(
+            autonomous_rolling_execution_runtime_capability
+        ),
+        autonomous_rolling_execution_launches_allowed=(
+            autonomous_rolling_execution_launches_allowed
+        ),
+        autonomous_rolling_execution_launches_attempted=(
+            autonomous_rolling_execution_launches_attempted
+        ),
+        autonomous_rolling_execution_launches_completed=(
+            autonomous_rolling_execution_launches_completed
+        ),
+        autonomous_rolling_multi_launch_status=autonomous_rolling_multi_launch_status,
+        autonomous_rolling_multi_launch_permission=(
+            autonomous_rolling_multi_launch_permission
+        ),
+        autonomous_rolling_multi_launch_source_status=(
+            autonomous_rolling_multi_launch_source_status
+        ),
+        autonomous_rolling_multi_launch_receipt_status=(
+            autonomous_rolling_multi_launch_receipt_status
+        ),
+        autonomous_rolling_multi_launch_next_action=(
+            autonomous_rolling_multi_launch_next_action
+        ),
+        autonomous_short_batch_invocation_path_status=(
+            autonomous_short_batch_invocation_path_status
+        ),
+        autonomous_short_batch_invocation_runtime_capability=(
+            autonomous_short_batch_invocation_runtime_capability
+        ),
+        autonomous_short_batch_invocation_receipt_status=(
+            autonomous_short_batch_invocation_receipt_status
+        ),
+        autonomous_short_batch_invocation_delegation_mode=(
+            autonomous_short_batch_invocation_delegation_mode
+        ),
+        autonomous_short_batch_invocation_call_path_ref=(
+            autonomous_short_batch_invocation_call_path_ref
+        ),
+        autonomous_short_batch_invocation_missing_inputs=(
+            autonomous_short_batch_invocation_missing_inputs
+        ),
+        autonomous_short_batch_invocation_next_action=(
+            autonomous_short_batch_invocation_next_action
+        ),
+        autonomous_one_bounded_launch_callsite_available_vars=(
+            list(one_bounded_launch_callsite_available_vars)
+        ),
+        autonomous_one_bounded_launch_callsite_values=one_bounded_launch_callsite_values,
+    )
+    second_launch_attempted = _as_non_negative_int(
+        second_launch_state.get("project_browser_autonomous_one_bounded_launch_attempted"),
+        default=0,
+    )
+    second_launch_completed = _as_non_negative_int(
+        second_launch_state.get("project_browser_autonomous_one_bounded_launch_completed"),
+        default=0,
+    )
+    second_launch_execution_ref = _normalize_text(
+        second_launch_state.get("project_browser_autonomous_one_bounded_launch_execution_ref"),
+        default="none",
+    )
+    second_launch_execution_receipt_status = _normalize_text(
+        second_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_execution_receipt_status"
+        ),
+        default="insufficient_truth",
+    )
+    second_launch_execution_receipt_kind = _normalize_text(
+        second_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_execution_receipt_kind"
+        ),
+        default="insufficient_truth_second_launch_receipt",
+    )
+    second_launch_invocation_attempt_status = _normalize_text(
+        second_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_invocation_attempt_status"
+        ),
+        default="insufficient_truth",
+    )
+    second_launch_completion_result_status = _normalize_text(
+        second_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_completion_result_status"
+        ),
+        default="insufficient_truth",
+    )
+    second_launch_completion_result_reason = _normalize_text(
+        second_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_completion_result_reason"
+        ),
+        default="insufficient_truth_for_completion_evidence",
+    )
+    second_launch_completion_evidence_status = _normalize_text(
+        second_launch_state.get(
+            "project_browser_autonomous_one_bounded_launch_completion_evidence_status"
+        ),
+        default="insufficient_truth",
+    )
+    second_launch_attempt_confirmed = bool(
+        second_launch_attempted == 1
+        and second_launch_invocation_attempt_status == "invoked_once"
+        and second_launch_execution_ref not in {"", "none"}
+        and second_launch_execution_receipt_status == "ready"
+    )
+    if not second_launch_attempt_confirmed:
+        return _state(
+            max_two_status="insufficient_truth",
+            max_two_permission="insufficient_truth",
+            max_two_reason="second_launch_invocation_not_confirmed",
+            max_two_receipt_status="insufficient_truth",
+            max_two_mode="insufficient_truth",
+            max_two_block_reason="second_launch_invocation_not_confirmed",
+            launch_2_attempt_status="insufficient_truth",
+            launch_2_attempt_reason="second_launch_invocation_not_confirmed",
+            launch_2_execution_mode="insufficient_truth",
+            launch_2_execution_ref="none",
+            launch_2_execution_receipt_status="insufficient_truth",
+            launch_2_execution_receipt_kind=second_launch_execution_receipt_kind,
+            launch_2_result_status="insufficient_truth",
+            launch_2_result_reason="second_launch_invocation_not_confirmed",
+            launch_2_attempted=0,
+            launch_2_completed=0,
+            max_two_next_action="insufficient_truth",
+            launch_2_pause_status="not_applicable",
+            launch_2_pause_reason="not_applicable",
+        )
+
+    second_launch_result_status = "attempted_not_completed"
+    if second_launch_completed == 1 and second_launch_completion_result_status == "completed":
+        second_launch_result_status = "completed"
+    elif second_launch_completion_result_status == "failed":
+        second_launch_result_status = "failed"
+    elif second_launch_completion_result_status == "insufficient_truth":
+        second_launch_result_status = "insufficient_truth"
+
+    return _state(
+        max_two_status=(
+            "completed" if second_launch_result_status == "completed" else "attempted"
+        ),
+        max_two_permission="allowed",
+        max_two_reason=(
+            "second_launch_completed"
+            if second_launch_result_status == "completed"
+            else "second_launch_attempted"
+        ),
+        max_two_receipt_status="ready",
+        max_two_mode="second_existing_invocation_call_path_invoked",
+        max_two_block_reason="none",
+        launch_2_attempt_status="invoked_once",
+        launch_2_attempt_reason="second_existing_invocation_call_path_invoked_once",
+        launch_2_execution_mode="second_existing_invocation_call_path_invoked",
+        launch_2_execution_ref=second_launch_execution_ref,
+        launch_2_execution_receipt_status=second_launch_execution_receipt_status,
+        launch_2_execution_receipt_kind=second_launch_execution_receipt_kind,
+        launch_2_result_status=second_launch_result_status,
+        launch_2_result_reason=(
+            second_launch_completion_result_reason
+            if second_launch_result_status != "completed"
+            else "explicit_completion_evidence_confirmed"
+        ),
+        launch_2_attempted=1,
+        launch_2_completed=(
+            1
+            if (
+                second_launch_completed == 1
+                and second_launch_completion_evidence_status == "confirmed"
+                and second_launch_completion_result_status == "completed"
+            )
+            else 0
+        ),
+        max_two_next_action="stop_after_second_launch_attempt",
+        launch_2_pause_status="none",
+        launch_2_pause_reason="none",
+    )
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -57171,6 +58185,448 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_launch_2_next_action = (
             "prepare_second_bounded_launch_later"
         )
+    project_browser_autonomous_max_two_launch_execution_state = (
+        _build_project_browser_autonomous_max_two_launch_execution_state(
+            autonomous_two_launch_preparation_status=(
+                project_browser_autonomous_two_launch_preparation_status
+            ),
+            autonomous_two_launch_preparation_permission=(
+                project_browser_autonomous_two_launch_preparation_permission
+            ),
+            autonomous_two_launch_preparation_reason=(
+                project_browser_autonomous_two_launch_preparation_reason
+            ),
+            autonomous_two_launch_preparation_receipt_status=(
+                project_browser_autonomous_two_launch_preparation_receipt_status
+            ),
+            autonomous_launch_1_status=project_browser_autonomous_launch_1_status,
+            autonomous_launch_1_attempted=project_browser_autonomous_launch_1_attempted,
+            autonomous_launch_1_completed=project_browser_autonomous_launch_1_completed,
+            autonomous_launch_1_result_status=project_browser_autonomous_launch_1_result_status,
+            autonomous_launch_2_candidate_status=(
+                project_browser_autonomous_launch_2_candidate_status
+            ),
+            autonomous_launch_2_permission=project_browser_autonomous_launch_2_permission,
+            autonomous_launch_2_allowed=project_browser_autonomous_launch_2_allowed,
+            autonomous_launch_2_block_reason=(
+                project_browser_autonomous_launch_2_block_reason
+            ),
+            autonomous_launch_2_missing_inputs=(
+                project_browser_autonomous_launch_2_missing_inputs
+            ),
+            autonomous_launch_2_next_action=project_browser_autonomous_launch_2_next_action,
+            autonomous_short_batch_invocation_path_status=(
+                project_browser_autonomous_short_batch_invocation_path_status
+            ),
+            autonomous_short_batch_invocation_runtime_capability=(
+                project_browser_autonomous_short_batch_invocation_runtime_capability
+            ),
+            autonomous_short_batch_invocation_receipt_status=(
+                project_browser_autonomous_short_batch_invocation_receipt_status
+            ),
+            autonomous_short_batch_invocation_delegation_mode=(
+                project_browser_autonomous_short_batch_invocation_delegation_mode
+            ),
+            autonomous_short_batch_invocation_call_path_ref=(
+                project_browser_autonomous_short_batch_invocation_call_path_ref
+            ),
+            autonomous_short_batch_invocation_missing_inputs=(
+                project_browser_autonomous_short_batch_invocation_missing_inputs
+            ),
+            autonomous_short_batch_invocation_next_action=(
+                project_browser_autonomous_short_batch_invocation_next_action
+            ),
+            autonomous_cooldown_status=project_browser_autonomous_cooldown_status,
+            autonomous_loop_risk_status=project_browser_autonomous_loop_risk_status,
+            autonomous_run_ledger_duplicate_status=(
+                project_browser_autonomous_run_ledger_duplicate_status
+            ),
+            autonomous_watchdog_duplicate_receipt_posture=(
+                project_browser_autonomous_watchdog_duplicate_receipt_posture
+            ),
+            autonomous_short_batch_failures=project_browser_autonomous_short_batch_failures,
+            autonomous_rolling_multi_launch_failure_budget=(
+                project_browser_autonomous_rolling_multi_launch_failure_budget
+            ),
+            autonomous_rolling_execution_launch_helper_status=(
+                project_browser_autonomous_rolling_execution_launch_helper_status
+            ),
+            autonomous_rolling_execution_launch_helper_ref=(
+                project_browser_autonomous_rolling_execution_launch_helper_ref
+            ),
+            autonomous_rolling_execution_launch_helper_missing_inputs=(
+                project_browser_autonomous_rolling_execution_launch_helper_missing_inputs
+            ),
+            autonomous_rolling_execution_launch_execution_mode=(
+                project_browser_autonomous_rolling_execution_launch_execution_mode
+            ),
+            autonomous_rolling_execution_launch_receipt_status=(
+                project_browser_autonomous_rolling_execution_launch_receipt_status
+            ),
+            autonomous_rolling_execution_status=(
+                project_browser_autonomous_rolling_execution_status
+            ),
+            autonomous_rolling_execution_permission=(
+                project_browser_autonomous_rolling_execution_permission
+            ),
+            autonomous_rolling_execution_source_status=(
+                project_browser_autonomous_rolling_execution_source_status
+            ),
+            autonomous_rolling_execution_receipt_status=(
+                project_browser_autonomous_rolling_execution_receipt_status
+            ),
+            autonomous_rolling_execution_runtime_capability=(
+                project_browser_autonomous_rolling_execution_runtime_capability
+            ),
+            autonomous_rolling_execution_launches_allowed=(
+                project_browser_autonomous_rolling_execution_launches_allowed
+            ),
+            autonomous_rolling_execution_launches_attempted=(
+                project_browser_autonomous_rolling_execution_launches_attempted
+            ),
+            autonomous_rolling_execution_launches_completed=(
+                project_browser_autonomous_rolling_execution_launches_completed
+            ),
+            autonomous_rolling_multi_launch_status=(
+                project_browser_autonomous_rolling_multi_launch_status
+            ),
+            autonomous_rolling_multi_launch_permission=(
+                project_browser_autonomous_rolling_multi_launch_permission
+            ),
+            autonomous_rolling_multi_launch_source_status=(
+                project_browser_autonomous_rolling_multi_launch_source_status
+            ),
+            autonomous_rolling_multi_launch_receipt_status=(
+                project_browser_autonomous_rolling_multi_launch_receipt_status
+            ),
+            autonomous_rolling_multi_launch_next_action=(
+                project_browser_autonomous_rolling_multi_launch_next_action
+            ),
+            autonomous_one_bounded_launch_callsite_available_vars=list(locals().keys()),
+            autonomous_one_bounded_launch_callsite_values=dict(locals()),
+        )
+    )
+    project_browser_autonomous_max_two_launch_execution_status = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launch_execution_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_max_two_launch_execution_status not in {
+        "completed",
+        "attempted",
+        "prepared",
+        "blocked",
+        "paused",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_max_two_launch_execution_status = "insufficient_truth"
+    project_browser_autonomous_max_two_launch_execution_permission = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launch_execution_permission"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_max_two_launch_execution_permission not in {
+        "allowed",
+        "blocked",
+        "paused",
+        "not_applicable",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_max_two_launch_execution_permission = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_max_two_launch_execution_reason = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launch_execution_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_max_two_launch_execution_receipt_status = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launch_execution_receipt_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_max_two_launch_execution_receipt_status not in {
+        "ready",
+        "blocked",
+        "pause_required",
+        "not_applicable",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_max_two_launch_execution_receipt_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_max_two_launch_execution_mode = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launch_execution_mode"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_max_two_launch_execution_mode not in {
+        "second_existing_invocation_call_path_invoked",
+        "prepared_second_launch_not_invoked",
+        "blocked_candidate_not_allowed",
+        "blocked_missing_inputs",
+        "blocked_pause_required",
+        "blocked_human_review",
+        "blocked_failure_budget",
+        "blocked_loop_or_duplicate_risk",
+        "blocked_terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_max_two_launch_execution_mode = "insufficient_truth"
+    project_browser_autonomous_max_two_launch_execution_block_reason = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launch_execution_block_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_launch_2_attempt_status = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_attempt_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_launch_2_attempt_status not in {
+        "invoked_once",
+        "not_invoked_candidate_not_allowed",
+        "not_invoked_missing_inputs",
+        "not_invoked_pause_required",
+        "not_invoked_hard_risk",
+        "not_invoked_failure_budget",
+        "not_invoked_loop_or_duplicate_risk",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_2_attempt_status = "insufficient_truth"
+    project_browser_autonomous_launch_2_attempt_reason = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_attempt_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_launch_2_execution_mode = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_execution_mode"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_launch_2_execution_mode not in {
+        "second_existing_invocation_call_path_invoked",
+        "prepared_second_launch_not_invoked",
+        "blocked_candidate_not_allowed",
+        "blocked_missing_inputs",
+        "blocked_pause_required",
+        "blocked_human_review",
+        "blocked_failure_budget",
+        "blocked_loop_or_duplicate_risk",
+        "blocked_terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_2_execution_mode = "insufficient_truth"
+    project_browser_autonomous_launch_2_execution_ref = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_execution_ref"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_launch_2_execution_ref not in {
+        "none",
+        "project_browser_autonomous_md_apply_state",
+        "project_browser_autonomous_browser_execution_state",
+        "project_browser_autonomous_codex_execution_state",
+        "project_browser_autonomous_codex_result_assimilation_state",
+        "project_browser_autonomous_run_ledger_persistence_state",
+        "_build_project_browser_autonomous_md_apply_state",
+        "_build_project_browser_autonomous_browser_execution_state",
+        "_build_project_browser_autonomous_codex_execution_state",
+        "_build_project_browser_autonomous_codex_result_assimilation_state",
+        "_build_project_browser_autonomous_run_ledger_persistence_state",
+    }:
+        project_browser_autonomous_launch_2_execution_ref = "none"
+    project_browser_autonomous_launch_2_execution_receipt_status = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_execution_receipt_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_launch_2_execution_receipt_status not in {
+        "ready",
+        "blocked",
+        "pause_required",
+        "not_applicable",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_2_execution_receipt_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_launch_2_execution_receipt_kind = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_execution_receipt_kind"
+        ),
+        default="none",
+    )
+    project_browser_autonomous_launch_2_result_status = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_result_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_launch_2_result_status not in {
+        "completed",
+        "attempted_not_completed",
+        "not_attempted",
+        "failed",
+        "paused",
+        "blocked",
+        "terminal_stop",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_launch_2_result_status = "insufficient_truth"
+    project_browser_autonomous_launch_2_result_reason = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_result_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_launch_2_attempted = _as_non_negative_int(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_attempted"
+        ),
+        default=0,
+    )
+    if project_browser_autonomous_launch_2_attempted > 1:
+        project_browser_autonomous_launch_2_attempted = 1
+    if (
+        project_browser_autonomous_launch_2_attempt_status != "invoked_once"
+        or project_browser_autonomous_max_two_launch_execution_mode
+        != "second_existing_invocation_call_path_invoked"
+        or project_browser_autonomous_launch_2_execution_ref == "none"
+        or project_browser_autonomous_launch_2_execution_receipt_status != "ready"
+    ):
+        project_browser_autonomous_launch_2_attempted = 0
+    project_browser_autonomous_launch_2_completed = _as_non_negative_int(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_completed"
+        ),
+        default=0,
+    )
+    if project_browser_autonomous_launch_2_completed > 1:
+        project_browser_autonomous_launch_2_completed = 1
+    if (
+        project_browser_autonomous_launch_2_attempted == 0
+        or project_browser_autonomous_launch_2_result_status != "completed"
+    ):
+        project_browser_autonomous_launch_2_completed = 0
+    if (
+        project_browser_autonomous_launch_2_completed
+        > project_browser_autonomous_launch_2_attempted
+    ):
+        project_browser_autonomous_launch_2_completed = (
+            project_browser_autonomous_launch_2_attempted
+        )
+    project_browser_autonomous_max_two_launches_allowed = _as_non_negative_int(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launches_allowed"
+        ),
+        default=2,
+    )
+    if project_browser_autonomous_max_two_launches_allowed != 2:
+        project_browser_autonomous_max_two_launches_allowed = 2
+    project_browser_autonomous_max_two_launches_attempted = (
+        project_browser_autonomous_launch_1_attempted
+        + project_browser_autonomous_launch_2_attempted
+    )
+    if project_browser_autonomous_max_two_launches_attempted > 2:
+        project_browser_autonomous_max_two_launches_attempted = 2
+    project_browser_autonomous_max_two_launches_completed = (
+        project_browser_autonomous_launch_1_completed
+        + project_browser_autonomous_launch_2_completed
+    )
+    if project_browser_autonomous_max_two_launches_completed > 2:
+        project_browser_autonomous_max_two_launches_completed = 2
+    if (
+        project_browser_autonomous_max_two_launches_completed
+        > project_browser_autonomous_max_two_launches_attempted
+    ):
+        project_browser_autonomous_max_two_launches_completed = (
+            project_browser_autonomous_max_two_launches_attempted
+        )
+    project_browser_autonomous_max_two_launches_remaining = (
+        project_browser_autonomous_max_two_launches_allowed
+        - project_browser_autonomous_max_two_launches_attempted
+    )
+    if project_browser_autonomous_max_two_launches_remaining < 0:
+        project_browser_autonomous_max_two_launches_remaining = 0
+    project_browser_autonomous_max_two_launch_total_step_budget = _as_non_negative_int(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launch_total_step_budget"
+        ),
+        default=6,
+    )
+    if project_browser_autonomous_max_two_launch_total_step_budget != 6:
+        project_browser_autonomous_max_two_launch_total_step_budget = 6
+    project_browser_autonomous_max_two_launch_failure_budget = _as_non_negative_int(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launch_failure_budget"
+        ),
+        default=1,
+    )
+    if project_browser_autonomous_max_two_launch_failure_budget != 1:
+        project_browser_autonomous_max_two_launch_failure_budget = 1
+    project_browser_autonomous_max_two_launch_next_action = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_max_two_launch_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_max_two_launch_next_action not in {
+        "stop_max_two_launch_complete",
+        "stop_second_launch_not_allowed",
+        "stop_after_second_launch_attempt",
+        "pause_required",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_max_two_launch_next_action = "insufficient_truth"
+    if project_browser_autonomous_max_two_launches_attempted >= 2:
+        project_browser_autonomous_max_two_launches_remaining = 0
+        if project_browser_autonomous_max_two_launch_next_action not in {
+            "stop_max_two_launch_complete",
+            "stop_after_second_launch_attempt",
+        }:
+            project_browser_autonomous_max_two_launch_next_action = (
+                "stop_max_two_launch_complete"
+            )
+    project_browser_autonomous_launch_2_pause_status = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_pause_status"
+        ),
+        default="not_applicable",
+    )
+    if project_browser_autonomous_launch_2_pause_status not in {
+        "none",
+        "pause_required",
+        "not_applicable",
+    }:
+        project_browser_autonomous_launch_2_pause_status = "not_applicable"
+    project_browser_autonomous_launch_2_pause_reason = _normalize_text(
+        project_browser_autonomous_max_two_launch_execution_state.get(
+            "project_browser_autonomous_launch_2_pause_reason"
+        ),
+        default="not_applicable",
+    )
+    project_browser_autonomous_launch_2_missing_reusable_invocation_surface = (
+        _normalize_string_list(
+            project_browser_autonomous_max_two_launch_execution_state.get(
+                "project_browser_autonomous_launch_2_missing_reusable_invocation_surface"
+            )
+        )
+    )
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -58742,6 +60198,84 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_launch_2_next_action": (
                     project_browser_autonomous_launch_2_next_action
                 ),
+                "project_browser_autonomous_max_two_launch_execution_status": (
+                    project_browser_autonomous_max_two_launch_execution_status
+                ),
+                "project_browser_autonomous_max_two_launch_execution_permission": (
+                    project_browser_autonomous_max_two_launch_execution_permission
+                ),
+                "project_browser_autonomous_max_two_launch_execution_reason": (
+                    project_browser_autonomous_max_two_launch_execution_reason
+                ),
+                "project_browser_autonomous_max_two_launch_execution_receipt_status": (
+                    project_browser_autonomous_max_two_launch_execution_receipt_status
+                ),
+                "project_browser_autonomous_max_two_launch_execution_mode": (
+                    project_browser_autonomous_max_two_launch_execution_mode
+                ),
+                "project_browser_autonomous_max_two_launch_execution_block_reason": (
+                    project_browser_autonomous_max_two_launch_execution_block_reason
+                ),
+                "project_browser_autonomous_launch_2_attempt_status": (
+                    project_browser_autonomous_launch_2_attempt_status
+                ),
+                "project_browser_autonomous_launch_2_attempt_reason": (
+                    project_browser_autonomous_launch_2_attempt_reason
+                ),
+                "project_browser_autonomous_launch_2_execution_mode": (
+                    project_browser_autonomous_launch_2_execution_mode
+                ),
+                "project_browser_autonomous_launch_2_execution_ref": (
+                    project_browser_autonomous_launch_2_execution_ref
+                ),
+                "project_browser_autonomous_launch_2_execution_receipt_status": (
+                    project_browser_autonomous_launch_2_execution_receipt_status
+                ),
+                "project_browser_autonomous_launch_2_execution_receipt_kind": (
+                    project_browser_autonomous_launch_2_execution_receipt_kind
+                ),
+                "project_browser_autonomous_launch_2_result_status": (
+                    project_browser_autonomous_launch_2_result_status
+                ),
+                "project_browser_autonomous_launch_2_result_reason": (
+                    project_browser_autonomous_launch_2_result_reason
+                ),
+                "project_browser_autonomous_launch_2_attempted": (
+                    project_browser_autonomous_launch_2_attempted
+                ),
+                "project_browser_autonomous_launch_2_completed": (
+                    project_browser_autonomous_launch_2_completed
+                ),
+                "project_browser_autonomous_max_two_launches_allowed": (
+                    project_browser_autonomous_max_two_launches_allowed
+                ),
+                "project_browser_autonomous_max_two_launches_attempted": (
+                    project_browser_autonomous_max_two_launches_attempted
+                ),
+                "project_browser_autonomous_max_two_launches_completed": (
+                    project_browser_autonomous_max_two_launches_completed
+                ),
+                "project_browser_autonomous_max_two_launches_remaining": (
+                    project_browser_autonomous_max_two_launches_remaining
+                ),
+                "project_browser_autonomous_max_two_launch_total_step_budget": (
+                    project_browser_autonomous_max_two_launch_total_step_budget
+                ),
+                "project_browser_autonomous_max_two_launch_failure_budget": (
+                    project_browser_autonomous_max_two_launch_failure_budget
+                ),
+                "project_browser_autonomous_max_two_launch_next_action": (
+                    project_browser_autonomous_max_two_launch_next_action
+                ),
+                "project_browser_autonomous_launch_2_pause_status": (
+                    project_browser_autonomous_launch_2_pause_status
+                ),
+                "project_browser_autonomous_launch_2_pause_reason": (
+                    project_browser_autonomous_launch_2_pause_reason
+                ),
+                "project_browser_autonomous_launch_2_missing_reusable_invocation_surface": (
+                    project_browser_autonomous_launch_2_missing_reusable_invocation_surface
+                ),
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -59293,6 +60827,84 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_launch_2_next_action"
             if project_browser_autonomous_launch_2_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launch_execution_status"
+            if project_browser_autonomous_max_two_launch_execution_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launch_execution_permission"
+            if project_browser_autonomous_max_two_launch_execution_permission
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launch_execution_reason"
+            if project_browser_autonomous_max_two_launch_execution_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launch_execution_receipt_status"
+            if project_browser_autonomous_max_two_launch_execution_receipt_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launch_execution_mode"
+            if project_browser_autonomous_max_two_launch_execution_mode
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launch_execution_block_reason"
+            if project_browser_autonomous_max_two_launch_execution_block_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_attempt_status"
+            if project_browser_autonomous_launch_2_attempt_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_attempt_reason"
+            if project_browser_autonomous_launch_2_attempt_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_execution_mode"
+            if project_browser_autonomous_launch_2_execution_mode
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_execution_ref"
+            if project_browser_autonomous_launch_2_execution_ref
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_execution_receipt_status"
+            if project_browser_autonomous_launch_2_execution_receipt_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_execution_receipt_kind"
+            if project_browser_autonomous_launch_2_execution_receipt_kind
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_result_status"
+            if project_browser_autonomous_launch_2_result_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_result_reason"
+            if project_browser_autonomous_launch_2_result_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_attempted"
+            if project_browser_autonomous_launch_2_attempted
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_completed"
+            if project_browser_autonomous_launch_2_completed
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launches_allowed"
+            if project_browser_autonomous_max_two_launches_allowed
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launches_attempted"
+            if project_browser_autonomous_max_two_launches_attempted
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launches_completed"
+            if project_browser_autonomous_max_two_launches_completed
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launches_remaining"
+            if project_browser_autonomous_max_two_launches_remaining or project_browser_autonomous_max_two_launches_remaining == 0
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launch_total_step_budget"
+            if project_browser_autonomous_max_two_launch_total_step_budget
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launch_failure_budget"
+            if project_browser_autonomous_max_two_launch_failure_budget
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_max_two_launch_next_action"
+            if project_browser_autonomous_max_two_launch_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_pause_status"
+            if project_browser_autonomous_launch_2_pause_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_pause_reason"
+            if project_browser_autonomous_launch_2_pause_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_launch_2_missing_reusable_invocation_surface"
+            if project_browser_autonomous_launch_2_missing_reusable_invocation_surface
             else "",
             ]
     )
@@ -64476,6 +66088,84 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_launch_2_next_action": (
             project_browser_autonomous_launch_2_next_action
+        ),
+        "project_browser_autonomous_max_two_launch_execution_status": (
+            project_browser_autonomous_max_two_launch_execution_status
+        ),
+        "project_browser_autonomous_max_two_launch_execution_permission": (
+            project_browser_autonomous_max_two_launch_execution_permission
+        ),
+        "project_browser_autonomous_max_two_launch_execution_reason": (
+            project_browser_autonomous_max_two_launch_execution_reason
+        ),
+        "project_browser_autonomous_max_two_launch_execution_receipt_status": (
+            project_browser_autonomous_max_two_launch_execution_receipt_status
+        ),
+        "project_browser_autonomous_max_two_launch_execution_mode": (
+            project_browser_autonomous_max_two_launch_execution_mode
+        ),
+        "project_browser_autonomous_max_two_launch_execution_block_reason": (
+            project_browser_autonomous_max_two_launch_execution_block_reason
+        ),
+        "project_browser_autonomous_launch_2_attempt_status": (
+            project_browser_autonomous_launch_2_attempt_status
+        ),
+        "project_browser_autonomous_launch_2_attempt_reason": (
+            project_browser_autonomous_launch_2_attempt_reason
+        ),
+        "project_browser_autonomous_launch_2_execution_mode": (
+            project_browser_autonomous_launch_2_execution_mode
+        ),
+        "project_browser_autonomous_launch_2_execution_ref": (
+            project_browser_autonomous_launch_2_execution_ref
+        ),
+        "project_browser_autonomous_launch_2_execution_receipt_status": (
+            project_browser_autonomous_launch_2_execution_receipt_status
+        ),
+        "project_browser_autonomous_launch_2_execution_receipt_kind": (
+            project_browser_autonomous_launch_2_execution_receipt_kind
+        ),
+        "project_browser_autonomous_launch_2_result_status": (
+            project_browser_autonomous_launch_2_result_status
+        ),
+        "project_browser_autonomous_launch_2_result_reason": (
+            project_browser_autonomous_launch_2_result_reason
+        ),
+        "project_browser_autonomous_launch_2_attempted": (
+            project_browser_autonomous_launch_2_attempted
+        ),
+        "project_browser_autonomous_launch_2_completed": (
+            project_browser_autonomous_launch_2_completed
+        ),
+        "project_browser_autonomous_max_two_launches_allowed": (
+            project_browser_autonomous_max_two_launches_allowed
+        ),
+        "project_browser_autonomous_max_two_launches_attempted": (
+            project_browser_autonomous_max_two_launches_attempted
+        ),
+        "project_browser_autonomous_max_two_launches_completed": (
+            project_browser_autonomous_max_two_launches_completed
+        ),
+        "project_browser_autonomous_max_two_launches_remaining": (
+            project_browser_autonomous_max_two_launches_remaining
+        ),
+        "project_browser_autonomous_max_two_launch_total_step_budget": (
+            project_browser_autonomous_max_two_launch_total_step_budget
+        ),
+        "project_browser_autonomous_max_two_launch_failure_budget": (
+            project_browser_autonomous_max_two_launch_failure_budget
+        ),
+        "project_browser_autonomous_max_two_launch_next_action": (
+            project_browser_autonomous_max_two_launch_next_action
+        ),
+        "project_browser_autonomous_launch_2_pause_status": (
+            project_browser_autonomous_launch_2_pause_status
+        ),
+        "project_browser_autonomous_launch_2_pause_reason": (
+            project_browser_autonomous_launch_2_pause_reason
+        ),
+        "project_browser_autonomous_launch_2_missing_reusable_invocation_surface": (
+            project_browser_autonomous_launch_2_missing_reusable_invocation_surface
         ),
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
