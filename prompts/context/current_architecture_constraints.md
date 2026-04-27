@@ -841,3 +841,31 @@ Prompt153 constraints:
 - Prompt153 must not call ChatGPT or automate browser UI.
 - Prompt153 must not generate next/fix prompts or start autonomous loops.
 - Prompt153 must not perform rollback/GitHub/CI/merge behavior.
+---
+
+## Prompt153 implementation response validator constraints
+
+Prompt153 established metadata-only ChatGPT-Implementer response validation.
+
+Prompt153 invariants:
+
+- Prompt153 only reads expected local response/patch paths.
+- Prompt153 must not write response files.
+- Prompt153 must not generate patch content.
+- Prompt153 must not apply patches.
+- Prompt153 must not run `git apply`.
+- Prompt153 must not call ChatGPT or automate browser UI.
+- Prompt153 must not start loops, rollback, commit, create GitHub branches, create PRs, check CI, or merge.
+- Patch-like responses without touched-file truth must remain blocked or insufficient_truth.
+- Forbidden/out-of-allowed-scope touched files must block.
+- Unsafe operation flags must block.
+- `full_file_replacement` must remain conservative and must not bypass later apply gates.
+
+Prompt154 constraints:
+
+- Prompt154 may add a safe patch apply gate.
+- Prompt154 must only operate on Prompt153 metadata-only patch candidates.
+- Prompt154 must require clean or explicitly acceptable worktree state.
+- Prompt154 must re-check allowed/forbidden files before any apply posture.
+- Prompt154 must prefer dry-run validation before real apply.
+- Prompt154 must not add unbounded retry, daemon, scheduler, queue drain, GitHub branch/PR/CI/merge behavior.
