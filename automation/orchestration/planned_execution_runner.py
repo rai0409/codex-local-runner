@@ -43837,6 +43837,474 @@ def _build_project_browser_autonomous_max_two_launch_execution_state(
     )
 
 
+def _build_project_browser_autonomous_chatgpt_contract_state(
+    *,
+    run_status: str,
+    processed_units: int,
+    runner_next_action: str,
+    max_two_launch_execution_status: str,
+    max_two_launches_attempted: int,
+    max_two_launches_completed: int,
+    max_two_launch_execution_permission: str,
+    one_bounded_candidate_risk_flags: list[str] | None,
+    final_human_review_required: bool,
+    prior_compact_state: Mapping[str, Any] | None,
+    codex_result_validation_targets_status: str,
+    codex_execution_suggested_validation_targets: list[str] | None,
+) -> dict[str, Any]:
+    prior = dict(prior_compact_state or {})
+
+    def _first_text(keys: list[str]) -> tuple[str, str]:
+        for key in keys:
+            if key in prior:
+                value = _normalize_text(prior.get(key), default="")
+                if value:
+                    return value, key
+        return "", ""
+
+    def _first_list(keys: list[str]) -> tuple[list[str], str]:
+        for key in keys:
+            if key in prior:
+                value = _normalize_string_list(prior.get(key))
+                return value, key
+        return [], ""
+
+    def _first_int(keys: list[str]) -> tuple[int, str]:
+        for key in keys:
+            if key in prior:
+                value = _as_non_negative_int(prior.get(key), default=0)
+                return value, key
+        return 0, ""
+
+    normalized_run_status = _normalize_text(run_status, default="insufficient_truth")
+    normalized_runner_next_action = _normalize_text(runner_next_action, default="insufficient_truth")
+    normalized_max_two_launch_execution_status = _normalize_text(
+        max_two_launch_execution_status,
+        default="insufficient_truth",
+    )
+    _ = _normalize_text(max_two_launch_execution_permission, default="insufficient_truth")
+    normalized_max_two_launches_attempted = _as_non_negative_int(
+        max_two_launches_attempted,
+        default=0,
+    )
+    normalized_max_two_launches_completed = _as_non_negative_int(
+        max_two_launches_completed,
+        default=0,
+    )
+    if normalized_max_two_launches_attempted > 2:
+        normalized_max_two_launches_attempted = 2
+    if normalized_max_two_launches_completed > normalized_max_two_launches_attempted:
+        normalized_max_two_launches_completed = normalized_max_two_launches_attempted
+    normalized_processed_units = _as_non_negative_int(processed_units, default=0)
+
+    prompt_number_value, _ = _first_text(
+        [
+            "next_prompt_number",
+            "prompt_number",
+            "project_browser_next_prompt_number",
+            "project_browser_prompt_number",
+        ]
+    )
+    prompt_title_value, _ = _first_text(
+        [
+            "next_prompt_title",
+            "prompt_title",
+            "project_browser_next_prompt_title",
+            "project_browser_prompt_title",
+        ]
+    )
+    prompt_number_or_title = prompt_number_value or prompt_title_value
+
+    changed_files, changed_files_key = _first_list(
+        [
+            "runner_result_changed_files",
+            "result_changed_files",
+            "changed_files",
+            "modified_files",
+        ]
+    )
+    modified_files, modified_files_key = _first_list(
+        [
+            "modified_files",
+            "runner_result_modified_files",
+            "result_modified_files",
+            "changed_files",
+        ]
+    )
+    additions, additions_key = _first_int(
+        [
+            "runner_result_additions",
+            "result_additions",
+            "additions",
+        ]
+    )
+    deletions, deletions_key = _first_int(
+        [
+            "runner_result_deletions",
+            "result_deletions",
+            "deletions",
+        ]
+    )
+    accounting_status, accounting_status_key = _first_text(
+        [
+            "runner_result_accounting_status",
+            "result_accounting_status",
+            "accounting_status",
+            "project_browser_result_accounting_status",
+        ]
+    )
+    accounting_reason, accounting_reason_key = _first_text(
+        [
+            "runner_result_accounting_reason",
+            "result_accounting_reason",
+            "accounting_reason",
+            "project_browser_result_accounting_reason",
+        ]
+    )
+    validation_status, validation_status_key = _first_text(
+        [
+            "runner_result_validation_status",
+            "result_validation_status",
+            "validation_status",
+        ]
+    )
+    validation_commands, validation_commands_key = _first_list(
+        [
+            "runner_result_validation_commands",
+            "result_validation_commands",
+            "validation_commands",
+        ]
+    )
+    normalized_codex_validation_targets_status = _normalize_text(
+        codex_result_validation_targets_status,
+        default="insufficient_truth",
+    )
+    if not validation_status:
+        if normalized_codex_validation_targets_status == "available":
+            validation_status = "partial"
+        elif normalized_codex_validation_targets_status == "unavailable":
+            validation_status = "not_run"
+    if not validation_commands:
+        validation_commands = _normalize_string_list(
+            codex_execution_suggested_validation_targets or []
+        )
+
+    risk_flags = _normalize_string_list(one_bounded_candidate_risk_flags or [])
+    allowed_decisions = [
+        "proceed",
+        "fix_required",
+        "stop",
+        "human_review_required",
+        "rollback_required",
+        "commit_allowed",
+        "commit_blocked",
+        "implementation_required",
+        "implementation_blocked",
+    ]
+    required_json_fields = [
+        "schema_version",
+        "decision",
+        "confidence",
+        "summary",
+        "reasons",
+        "commit_allowed",
+        "rollback_required",
+        "human_review_required",
+        "next_prompt_required",
+        "fix_prompt_required",
+        "stop_required",
+        "next_action",
+        "decision_actor",
+        "decision_actor_role",
+        "implementation_actor",
+        "implementation_actor_role",
+        "actor_separation_required",
+        "same_actor_requires_human_review",
+        "implementation_mode",
+        "implementation_output_kind",
+        "implementation_allowed",
+        "implementation_requires_human_apply",
+        "required_checks",
+        "changed_files_reviewed",
+        "risk_flags",
+        "missing_evidence",
+        "implementation_constraints",
+        "implementation_forbidden_actions",
+        "validation_summary",
+        "accounting_summary",
+        "prompt_summary",
+        "safety_summary",
+        "actor_summary",
+        "implementation_summary",
+    ]
+    optional_json_fields = [
+        "next_prompt_number",
+        "next_prompt_title",
+        "next_prompt_objective",
+        "fix_prompt_title",
+        "fix_prompt_objective",
+        "rollback_target",
+        "human_review_reason",
+        "commit_message",
+        "tags_to_create",
+        "implementation_instructions",
+        "implementation_patch_expected_path",
+        "implementation_packet_expected_path",
+    ]
+
+    required_inputs = [
+        "prompt_number_or_title",
+        "run_status",
+        "processed_units",
+        "runner_next_action",
+        "changed_files",
+        "additions",
+        "deletions",
+        "accounting_status",
+        "accounting_reason",
+        "validation_commands",
+        "validation_status",
+        "modified_files",
+        "safety_risk_flags",
+        "max_two_launch_execution_status",
+        "max_two_launches_attempted",
+        "max_two_launches_completed",
+        "decision_actor_defaults",
+        "implementation_actor_defaults",
+        "actor_separation_requirements",
+        "allowed_decision_actors",
+        "allowed_implementation_actors",
+        "allowed_implementation_modes",
+        "allowed_implementation_output_kinds",
+    ]
+    available_inputs: list[str] = []
+    if prompt_number_or_title:
+        available_inputs.append("prompt_number_or_title")
+    if normalized_run_status and normalized_run_status != "insufficient_truth":
+        available_inputs.append("run_status")
+    if normalized_processed_units >= 0:
+        available_inputs.append("processed_units")
+    if normalized_runner_next_action and normalized_runner_next_action != "insufficient_truth":
+        available_inputs.append("runner_next_action")
+    if changed_files_key:
+        available_inputs.append("changed_files")
+    if additions_key:
+        available_inputs.append("additions")
+    if deletions_key:
+        available_inputs.append("deletions")
+    if accounting_status and accounting_status != "insufficient_truth":
+        available_inputs.append("accounting_status")
+    if accounting_reason and accounting_reason != "insufficient_truth":
+        available_inputs.append("accounting_reason")
+    if validation_commands_key or validation_commands:
+        available_inputs.append("validation_commands")
+    if validation_status and validation_status != "insufficient_truth":
+        available_inputs.append("validation_status")
+    if modified_files_key:
+        available_inputs.append("modified_files")
+    if risk_flags is not None:
+        available_inputs.append("safety_risk_flags")
+    if (
+        normalized_max_two_launch_execution_status
+        and normalized_max_two_launch_execution_status != "insufficient_truth"
+    ):
+        available_inputs.append("max_two_launch_execution_status")
+    available_inputs.append("max_two_launches_attempted")
+    available_inputs.append("max_two_launches_completed")
+    available_inputs.extend(
+        [
+            "decision_actor_defaults",
+            "implementation_actor_defaults",
+            "actor_separation_requirements",
+            "allowed_decision_actors",
+            "allowed_implementation_actors",
+            "allowed_implementation_modes",
+            "allowed_implementation_output_kinds",
+        ]
+    )
+    available_inputs = _serialize_required_signals(available_inputs)
+    missing_inputs = [
+        input_name for input_name in required_inputs if input_name not in set(available_inputs)
+    ]
+
+    no_result_context = bool(
+        normalized_max_two_launch_execution_status in {"", "insufficient_truth"}
+        and normalized_run_status in {"", "insufficient_truth"}
+    )
+    accounting_unavailable = bool(
+        not accounting_status
+        or accounting_status in {"insufficient_truth", "unavailable"}
+        or not accounting_status_key
+    )
+
+    decision_packet_status = "prepared"
+    decision_packet_next_action = "produce_manual_decision_packet"
+    decision_packet_transport = "subscription_ui_manual_paste"
+    decision_packet_target = "chatgpt_subscription_ui"
+    if bool(final_human_review_required):
+        decision_packet_status = "blocked_human_review"
+        decision_packet_next_action = "human_review_required"
+        decision_packet_transport = "local_file_handoff"
+        decision_packet_target = "human_operator"
+    elif no_result_context:
+        decision_packet_status = "blocked_no_result_context"
+        decision_packet_next_action = "insufficient_truth"
+        decision_packet_transport = "unavailable"
+        decision_packet_target = "unavailable"
+    elif accounting_unavailable:
+        decision_packet_status = "blocked_no_accounting"
+        decision_packet_next_action = "insufficient_truth"
+        decision_packet_transport = "api_not_configured"
+        decision_packet_target = "unavailable"
+    elif missing_inputs:
+        decision_packet_status = "blocked_missing_inputs"
+        decision_packet_next_action = "insufficient_truth"
+        decision_packet_transport = "local_file_handoff"
+        decision_packet_target = "local_decision_json"
+
+    decision_schema_status = "prepared"
+    decision_schema_validation_status = "prepared"
+    decision_schema_next_action = "produce_manual_decision_packet"
+    if decision_packet_status == "blocked_human_review":
+        decision_schema_next_action = "human_review_required"
+    elif decision_packet_status != "prepared":
+        decision_schema_validation_status = "blocked"
+        decision_schema_next_action = "insufficient_truth"
+
+    decision_intake_status = "waiting_for_manual_chatgpt_json"
+    decision_intake_next_action = "wait_for_chatgpt_decision_json"
+    if decision_packet_status == "blocked_human_review":
+        decision_intake_status = "blocked"
+        decision_intake_next_action = "human_review_required"
+    elif decision_packet_status != "prepared":
+        decision_intake_status = "blocked"
+        decision_intake_next_action = "insufficient_truth"
+
+    decision_actor = "chatgpt_5_5_judge"
+    implementation_actor = "none"
+    actor_separation_status = "separated"
+    actor_separation_reason = "decision_and_implementation_actor_context_separated"
+    if decision_actor == "none":
+        actor_separation_status = "blocked"
+        actor_separation_reason = "decision_actor_missing"
+    elif decision_actor == implementation_actor and implementation_actor != "none":
+        actor_separation_status = "same_actor_human_review_required"
+        actor_separation_reason = "same_actor_requires_human_review"
+
+    return {
+        "project_browser_autonomous_chatgpt_decision_packet_status": decision_packet_status,
+        "project_browser_autonomous_chatgpt_decision_packet_kind": "codex_result_review",
+        "project_browser_autonomous_chatgpt_decision_packet_version": (
+            "chatgpt_decision_packet_v1"
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_transport": (
+            decision_packet_transport
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_target": decision_packet_target,
+        "project_browser_autonomous_chatgpt_decision_packet_required_inputs": (
+            required_inputs
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_available_inputs": (
+            available_inputs
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_missing_inputs": (
+            missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_next_action": (
+            decision_packet_next_action
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_status": decision_schema_status,
+        "project_browser_autonomous_chatgpt_decision_schema_version": (
+            "chatgpt_runner_decision_v1"
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_allowed_decisions": (
+            allowed_decisions
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_required_fields": (
+            required_json_fields
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_optional_fields": (
+            optional_json_fields
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_validation_status": (
+            decision_schema_validation_status
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_next_action": (
+            decision_schema_next_action
+        ),
+        "project_browser_autonomous_chatgpt_decision_intake_status": decision_intake_status,
+        "project_browser_autonomous_chatgpt_decision_intake_transport": "local_file_handoff",
+        "project_browser_autonomous_chatgpt_decision_intake_expected_path": (
+            "/tmp/codex-local-runner-decision/chatgpt_decision.json"
+        ),
+        "project_browser_autonomous_chatgpt_decision_intake_required_before_loop": True,
+        "project_browser_autonomous_chatgpt_decision_intake_next_action": (
+            decision_intake_next_action
+        ),
+        "project_browser_autonomous_actor_separation_schema_status": "prepared",
+        "project_browser_autonomous_actor_separation_schema_version": (
+            "actor_separation_schema_v1"
+        ),
+        "project_browser_autonomous_decision_actor": decision_actor,
+        "project_browser_autonomous_decision_actor_role": "judge",
+        "project_browser_autonomous_decision_actor_transport": (
+            "chatgpt_subscription_ui_manual_paste"
+        ),
+        "project_browser_autonomous_decision_actor_expected_output_kind": (
+            "strict_decision_json"
+        ),
+        "project_browser_autonomous_implementation_actor": implementation_actor,
+        "project_browser_autonomous_implementation_actor_role": "none",
+        "project_browser_autonomous_implementation_actor_transport": "unavailable",
+        "project_browser_autonomous_implementation_actor_expected_output_kind": "none",
+        "project_browser_autonomous_actor_separation_required": True,
+        "project_browser_autonomous_same_actor_requires_human_review": True,
+        "project_browser_autonomous_actor_separation_status": actor_separation_status,
+        "project_browser_autonomous_actor_separation_reason": actor_separation_reason,
+        "project_browser_autonomous_actor_separation_next_action": (
+            "wait_for_chatgpt_decision_json"
+            if actor_separation_status == "separated"
+            else "human_review_required"
+        ),
+        "project_browser_autonomous_implementation_actor_schema_status": "prepared",
+        "project_browser_autonomous_implementation_actor_schema_version": (
+            "implementation_actor_schema_v1"
+        ),
+        "project_browser_autonomous_implementation_actor_allowed_actors": [
+            "codex",
+            "chatgpt_5_5_implementer",
+            "local_model",
+            "human_operator",
+            "none",
+        ],
+        "project_browser_autonomous_implementation_actor_allowed_modes": [
+            "codex_live_transport",
+            "chatgpt_subscription_ui_manual_patch",
+            "chatgpt_subscription_ui_unified_diff",
+            "local_model_patch",
+            "human_manual_edit",
+            "none",
+        ],
+        "project_browser_autonomous_implementation_actor_allowed_output_kinds": [
+            "none",
+            "instructions_only",
+            "unified_diff",
+            "full_file_replacement",
+            "patch_plan",
+            "manual_steps",
+        ],
+        "project_browser_autonomous_implementation_actor_default_actor": "codex",
+        "project_browser_autonomous_implementation_actor_selected_actor": "none",
+        "project_browser_autonomous_implementation_actor_selected_mode": "none",
+        "project_browser_autonomous_implementation_actor_output_kind": "none",
+        "project_browser_autonomous_implementation_actor_allowed": False,
+        "project_browser_autonomous_implementation_actor_requires_human_apply": True,
+        "project_browser_autonomous_implementation_actor_next_action": (
+            "wait_for_chatgpt_decision_json"
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -58627,6 +59095,573 @@ def _build_approved_restart_execution_contract_surface(
             )
         )
     )
+    project_browser_autonomous_chatgpt_contract_state = (
+        _build_project_browser_autonomous_chatgpt_contract_state(
+            run_status=execution_status,
+            processed_units=_as_non_negative_int(
+                project_pr_queue_state.get("queue_item_count"),
+                default=0,
+            ),
+            runner_next_action=project_browser_autonomous_max_two_launch_next_action,
+            max_two_launch_execution_status=(
+                project_browser_autonomous_max_two_launch_execution_status
+            ),
+            max_two_launches_attempted=project_browser_autonomous_max_two_launches_attempted,
+            max_two_launches_completed=project_browser_autonomous_max_two_launches_completed,
+            max_two_launch_execution_permission=(
+                project_browser_autonomous_max_two_launch_execution_permission
+            ),
+            one_bounded_candidate_risk_flags=(
+                project_browser_autonomous_one_bounded_launch_candidate_risk_flags
+            ),
+            final_human_review_required=bool(final_human_review_required),
+            prior_compact_state=prior_approved_restart_execution,
+            codex_result_validation_targets_status=(
+                project_browser_autonomous_codex_result_validation_targets_status
+            ),
+            codex_execution_suggested_validation_targets=(
+                project_browser_autonomous_codex_execution_suggested_validation_targets
+            ),
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_packet_status = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_packet_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_decision_packet_status not in {
+        "prepared",
+        "blocked_missing_inputs",
+        "blocked_no_result_context",
+        "blocked_no_accounting",
+        "blocked_human_review",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_decision_packet_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_decision_packet_kind = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_packet_kind"
+        ),
+        default="codex_result_review",
+    )
+    if project_browser_autonomous_chatgpt_decision_packet_kind not in {
+        "codex_result_review",
+        "fix_prompt_review",
+        "next_prompt_review",
+        "commit_review",
+        "rollback_review",
+        "implementation_actor_review",
+        "chatgpt_patch_review",
+    }:
+        project_browser_autonomous_chatgpt_decision_packet_kind = "codex_result_review"
+    project_browser_autonomous_chatgpt_decision_packet_version = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_packet_version"
+        ),
+        default="chatgpt_decision_packet_v1",
+    )
+    project_browser_autonomous_chatgpt_decision_packet_transport = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_packet_transport"
+        ),
+        default="unavailable",
+    )
+    if project_browser_autonomous_chatgpt_decision_packet_transport not in {
+        "subscription_ui_manual_paste",
+        "local_file_handoff",
+        "api_not_configured",
+        "unavailable",
+    }:
+        project_browser_autonomous_chatgpt_decision_packet_transport = "unavailable"
+    project_browser_autonomous_chatgpt_decision_packet_target = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_packet_target"
+        ),
+        default="unavailable",
+    )
+    if project_browser_autonomous_chatgpt_decision_packet_target not in {
+        "chatgpt_subscription_ui",
+        "local_decision_json",
+        "human_operator",
+        "unavailable",
+    }:
+        project_browser_autonomous_chatgpt_decision_packet_target = "unavailable"
+    project_browser_autonomous_chatgpt_decision_packet_required_inputs = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_chatgpt_decision_packet_required_inputs"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_packet_available_inputs = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_chatgpt_decision_packet_available_inputs"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_packet_available_inputs = [
+        input_name
+        for input_name in project_browser_autonomous_chatgpt_decision_packet_available_inputs
+        if input_name in set(project_browser_autonomous_chatgpt_decision_packet_required_inputs)
+    ]
+    project_browser_autonomous_chatgpt_decision_packet_missing_inputs = [
+        input_name
+        for input_name in project_browser_autonomous_chatgpt_decision_packet_required_inputs
+        if input_name
+        not in set(project_browser_autonomous_chatgpt_decision_packet_available_inputs)
+    ]
+    project_browser_autonomous_chatgpt_decision_packet_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_packet_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_decision_packet_next_action not in {
+        "produce_manual_decision_packet",
+        "wait_for_chatgpt_decision_json",
+        "validate_decision_json_later",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_decision_packet_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_decision_schema_status = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_schema_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_decision_schema_status not in {
+        "prepared",
+        "blocked",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_decision_schema_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_decision_schema_version = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_schema_version"
+        ),
+        default="chatgpt_runner_decision_v1",
+    )
+    if (
+        project_browser_autonomous_chatgpt_decision_schema_version
+        != "chatgpt_runner_decision_v1"
+    ):
+        project_browser_autonomous_chatgpt_decision_schema_version = (
+            "chatgpt_runner_decision_v1"
+        )
+    project_browser_autonomous_chatgpt_decision_schema_allowed_decisions = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_chatgpt_decision_schema_allowed_decisions"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_schema_required_fields = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_chatgpt_decision_schema_required_fields"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_schema_optional_fields = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_chatgpt_decision_schema_optional_fields"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_schema_validation_status = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_chatgpt_decision_schema_validation_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    if project_browser_autonomous_chatgpt_decision_schema_validation_status not in {
+        "prepared",
+        "blocked",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_decision_schema_validation_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_decision_schema_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_schema_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_decision_schema_next_action not in {
+        "produce_manual_decision_packet",
+        "wait_for_chatgpt_decision_json",
+        "validate_decision_json_later",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_decision_schema_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_decision_intake_status = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_intake_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_decision_intake_status not in {
+        "waiting_for_manual_chatgpt_json",
+        "decision_json_available",
+        "decision_json_missing",
+        "decision_json_invalid",
+        "blocked",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_decision_intake_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_decision_intake_transport = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_intake_transport"
+        ),
+        default="local_file_handoff",
+    )
+    if project_browser_autonomous_chatgpt_decision_intake_transport not in {
+        "subscription_ui_manual_paste",
+        "local_file_handoff",
+        "api_not_configured",
+        "unavailable",
+    }:
+        project_browser_autonomous_chatgpt_decision_intake_transport = (
+            "local_file_handoff"
+        )
+    project_browser_autonomous_chatgpt_decision_intake_expected_path = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_intake_expected_path"
+        ),
+        default="/tmp/codex-local-runner-decision/chatgpt_decision.json",
+    )
+    project_browser_autonomous_chatgpt_decision_intake_required_before_loop = bool(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_intake_required_before_loop",
+            True,
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_intake_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_chatgpt_decision_intake_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_decision_intake_next_action not in {
+        "produce_manual_decision_packet",
+        "wait_for_chatgpt_decision_json",
+        "validate_decision_json_later",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_decision_intake_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_actor_separation_schema_status = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_actor_separation_schema_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_actor_separation_schema_status not in {
+        "prepared",
+        "blocked",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_actor_separation_schema_status = "insufficient_truth"
+    project_browser_autonomous_actor_separation_schema_version = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_actor_separation_schema_version"
+        ),
+        default="actor_separation_schema_v1",
+    )
+    project_browser_autonomous_decision_actor = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_decision_actor"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_decision_actor not in {
+        "chatgpt_5_5_judge",
+        "human_operator",
+        "local_policy",
+        "none",
+    }:
+        project_browser_autonomous_decision_actor = "none"
+    project_browser_autonomous_decision_actor_role = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_decision_actor_role"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_decision_actor_role not in {
+        "judge",
+        "reviewer",
+        "policy_checker",
+        "human_supervisor",
+        "none",
+    }:
+        project_browser_autonomous_decision_actor_role = "none"
+    project_browser_autonomous_decision_actor_transport = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_decision_actor_transport"
+        ),
+        default="unavailable",
+    )
+    if project_browser_autonomous_decision_actor_transport not in {
+        "chatgpt_subscription_ui_manual_paste",
+        "local_file_handoff",
+        "internal_policy",
+        "unavailable",
+    }:
+        project_browser_autonomous_decision_actor_transport = "unavailable"
+    project_browser_autonomous_decision_actor_expected_output_kind = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_decision_actor_expected_output_kind"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_decision_actor_expected_output_kind not in {
+        "strict_decision_json",
+        "human_review_notes",
+        "policy_result",
+        "none",
+    }:
+        project_browser_autonomous_decision_actor_expected_output_kind = "none"
+    project_browser_autonomous_implementation_actor = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_implementation_actor not in {
+        "codex",
+        "chatgpt_5_5_implementer",
+        "local_model",
+        "human_operator",
+        "none",
+    }:
+        project_browser_autonomous_implementation_actor = "none"
+    project_browser_autonomous_implementation_actor_role = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_role"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_implementation_actor_role not in {
+        "implementer",
+        "patch_author",
+        "codex_executor",
+        "human_editor",
+        "none",
+    }:
+        project_browser_autonomous_implementation_actor_role = "none"
+    project_browser_autonomous_implementation_actor_transport = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_transport"
+        ),
+        default="unavailable",
+    )
+    if project_browser_autonomous_implementation_actor_transport not in {
+        "codex_live_transport",
+        "chatgpt_subscription_ui_manual_paste",
+        "local_model_transport",
+        "human_manual_edit",
+        "unavailable",
+    }:
+        project_browser_autonomous_implementation_actor_transport = "unavailable"
+    project_browser_autonomous_implementation_actor_expected_output_kind = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_implementation_actor_expected_output_kind"
+            ),
+            default="none",
+        )
+    )
+    if project_browser_autonomous_implementation_actor_expected_output_kind not in {
+        "none",
+        "instructions_only",
+        "patch_plan",
+        "unified_diff",
+        "full_file_replacement",
+        "manual_steps",
+    }:
+        project_browser_autonomous_implementation_actor_expected_output_kind = "none"
+    project_browser_autonomous_actor_separation_required = bool(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_actor_separation_required",
+            True,
+        )
+    )
+    project_browser_autonomous_same_actor_requires_human_review = bool(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_same_actor_requires_human_review",
+            True,
+        )
+    )
+    project_browser_autonomous_actor_separation_status = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_actor_separation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_actor_separation_status not in {
+        "separated",
+        "same_actor_human_review_required",
+        "blocked",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_actor_separation_status = "insufficient_truth"
+    project_browser_autonomous_actor_separation_reason = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_actor_separation_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_actor_separation_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_actor_separation_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_actor_separation_next_action not in {
+        "wait_for_chatgpt_decision_json",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_actor_separation_next_action = "insufficient_truth"
+    project_browser_autonomous_implementation_actor_schema_status = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_schema_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_implementation_actor_schema_status not in {
+        "prepared",
+        "blocked",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_implementation_actor_schema_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_implementation_actor_schema_version = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_schema_version"
+        ),
+        default="implementation_actor_schema_v1",
+    )
+    project_browser_autonomous_implementation_actor_allowed_actors = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_implementation_actor_allowed_actors"
+            )
+        )
+    )
+    project_browser_autonomous_implementation_actor_allowed_modes = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_implementation_actor_allowed_modes"
+            )
+        )
+    )
+    project_browser_autonomous_implementation_actor_allowed_output_kinds = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_contract_state.get(
+                "project_browser_autonomous_implementation_actor_allowed_output_kinds"
+            )
+        )
+    )
+    project_browser_autonomous_implementation_actor_default_actor = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_default_actor"
+        ),
+        default="codex",
+    )
+    if project_browser_autonomous_implementation_actor_default_actor not in {
+        "codex",
+        "chatgpt_5_5_implementer",
+        "local_model",
+        "human_operator",
+        "none",
+    }:
+        project_browser_autonomous_implementation_actor_default_actor = "codex"
+    project_browser_autonomous_implementation_actor_selected_actor = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_selected_actor"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_implementation_actor_selected_actor not in {
+        "codex",
+        "chatgpt_5_5_implementer",
+        "local_model",
+        "human_operator",
+        "none",
+    }:
+        project_browser_autonomous_implementation_actor_selected_actor = "none"
+    project_browser_autonomous_implementation_actor_selected_mode = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_selected_mode"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_implementation_actor_selected_mode not in {
+        "codex_live_transport",
+        "chatgpt_subscription_ui_manual_patch",
+        "chatgpt_subscription_ui_unified_diff",
+        "local_model_patch",
+        "human_manual_edit",
+        "none",
+    }:
+        project_browser_autonomous_implementation_actor_selected_mode = "none"
+    project_browser_autonomous_implementation_actor_output_kind = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_output_kind"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_implementation_actor_output_kind not in {
+        "none",
+        "instructions_only",
+        "unified_diff",
+        "full_file_replacement",
+        "patch_plan",
+        "manual_steps",
+    }:
+        project_browser_autonomous_implementation_actor_output_kind = "none"
+    project_browser_autonomous_implementation_actor_allowed = bool(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_allowed",
+            False,
+        )
+    )
+    project_browser_autonomous_implementation_actor_requires_human_apply = bool(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_requires_human_apply",
+            True,
+        )
+    )
+    project_browser_autonomous_implementation_actor_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_contract_state.get(
+            "project_browser_autonomous_implementation_actor_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_implementation_actor_next_action not in {
+        "wait_for_chatgpt_decision_json",
+        "human_review_required",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_implementation_actor_next_action = (
+            "insufficient_truth"
+        )
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -60276,6 +61311,150 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_launch_2_missing_reusable_invocation_surface": (
                     project_browser_autonomous_launch_2_missing_reusable_invocation_surface
                 ),
+                "project_browser_autonomous_chatgpt_decision_packet_status": (
+                    project_browser_autonomous_chatgpt_decision_packet_status
+                ),
+                "project_browser_autonomous_chatgpt_decision_packet_kind": (
+                    project_browser_autonomous_chatgpt_decision_packet_kind
+                ),
+                "project_browser_autonomous_chatgpt_decision_packet_version": (
+                    project_browser_autonomous_chatgpt_decision_packet_version
+                ),
+                "project_browser_autonomous_chatgpt_decision_packet_transport": (
+                    project_browser_autonomous_chatgpt_decision_packet_transport
+                ),
+                "project_browser_autonomous_chatgpt_decision_packet_target": (
+                    project_browser_autonomous_chatgpt_decision_packet_target
+                ),
+                "project_browser_autonomous_chatgpt_decision_packet_required_inputs": (
+                    project_browser_autonomous_chatgpt_decision_packet_required_inputs
+                ),
+                "project_browser_autonomous_chatgpt_decision_packet_available_inputs": (
+                    project_browser_autonomous_chatgpt_decision_packet_available_inputs
+                ),
+                "project_browser_autonomous_chatgpt_decision_packet_missing_inputs": (
+                    project_browser_autonomous_chatgpt_decision_packet_missing_inputs
+                ),
+                "project_browser_autonomous_chatgpt_decision_packet_next_action": (
+                    project_browser_autonomous_chatgpt_decision_packet_next_action
+                ),
+                "project_browser_autonomous_chatgpt_decision_schema_status": (
+                    project_browser_autonomous_chatgpt_decision_schema_status
+                ),
+                "project_browser_autonomous_chatgpt_decision_schema_version": (
+                    project_browser_autonomous_chatgpt_decision_schema_version
+                ),
+                "project_browser_autonomous_chatgpt_decision_schema_allowed_decisions": (
+                    project_browser_autonomous_chatgpt_decision_schema_allowed_decisions
+                ),
+                "project_browser_autonomous_chatgpt_decision_schema_required_fields": (
+                    project_browser_autonomous_chatgpt_decision_schema_required_fields
+                ),
+                "project_browser_autonomous_chatgpt_decision_schema_optional_fields": (
+                    project_browser_autonomous_chatgpt_decision_schema_optional_fields
+                ),
+                "project_browser_autonomous_chatgpt_decision_schema_validation_status": (
+                    project_browser_autonomous_chatgpt_decision_schema_validation_status
+                ),
+                "project_browser_autonomous_chatgpt_decision_schema_next_action": (
+                    project_browser_autonomous_chatgpt_decision_schema_next_action
+                ),
+                "project_browser_autonomous_chatgpt_decision_intake_status": (
+                    project_browser_autonomous_chatgpt_decision_intake_status
+                ),
+                "project_browser_autonomous_chatgpt_decision_intake_transport": (
+                    project_browser_autonomous_chatgpt_decision_intake_transport
+                ),
+                "project_browser_autonomous_chatgpt_decision_intake_expected_path": (
+                    project_browser_autonomous_chatgpt_decision_intake_expected_path
+                ),
+                "project_browser_autonomous_chatgpt_decision_intake_required_before_loop": (
+                    project_browser_autonomous_chatgpt_decision_intake_required_before_loop
+                ),
+                "project_browser_autonomous_chatgpt_decision_intake_next_action": (
+                    project_browser_autonomous_chatgpt_decision_intake_next_action
+                ),
+                "project_browser_autonomous_actor_separation_schema_status": (
+                    project_browser_autonomous_actor_separation_schema_status
+                ),
+                "project_browser_autonomous_actor_separation_schema_version": (
+                    project_browser_autonomous_actor_separation_schema_version
+                ),
+                "project_browser_autonomous_decision_actor": (
+                    project_browser_autonomous_decision_actor
+                ),
+                "project_browser_autonomous_decision_actor_role": (
+                    project_browser_autonomous_decision_actor_role
+                ),
+                "project_browser_autonomous_decision_actor_transport": (
+                    project_browser_autonomous_decision_actor_transport
+                ),
+                "project_browser_autonomous_decision_actor_expected_output_kind": (
+                    project_browser_autonomous_decision_actor_expected_output_kind
+                ),
+                "project_browser_autonomous_implementation_actor": (
+                    project_browser_autonomous_implementation_actor
+                ),
+                "project_browser_autonomous_implementation_actor_role": (
+                    project_browser_autonomous_implementation_actor_role
+                ),
+                "project_browser_autonomous_implementation_actor_transport": (
+                    project_browser_autonomous_implementation_actor_transport
+                ),
+                "project_browser_autonomous_implementation_actor_expected_output_kind": (
+                    project_browser_autonomous_implementation_actor_expected_output_kind
+                ),
+                "project_browser_autonomous_actor_separation_required": (
+                    project_browser_autonomous_actor_separation_required
+                ),
+                "project_browser_autonomous_same_actor_requires_human_review": (
+                    project_browser_autonomous_same_actor_requires_human_review
+                ),
+                "project_browser_autonomous_actor_separation_status": (
+                    project_browser_autonomous_actor_separation_status
+                ),
+                "project_browser_autonomous_actor_separation_reason": (
+                    project_browser_autonomous_actor_separation_reason
+                ),
+                "project_browser_autonomous_actor_separation_next_action": (
+                    project_browser_autonomous_actor_separation_next_action
+                ),
+                "project_browser_autonomous_implementation_actor_schema_status": (
+                    project_browser_autonomous_implementation_actor_schema_status
+                ),
+                "project_browser_autonomous_implementation_actor_schema_version": (
+                    project_browser_autonomous_implementation_actor_schema_version
+                ),
+                "project_browser_autonomous_implementation_actor_allowed_actors": (
+                    project_browser_autonomous_implementation_actor_allowed_actors
+                ),
+                "project_browser_autonomous_implementation_actor_allowed_modes": (
+                    project_browser_autonomous_implementation_actor_allowed_modes
+                ),
+                "project_browser_autonomous_implementation_actor_allowed_output_kinds": (
+                    project_browser_autonomous_implementation_actor_allowed_output_kinds
+                ),
+                "project_browser_autonomous_implementation_actor_default_actor": (
+                    project_browser_autonomous_implementation_actor_default_actor
+                ),
+                "project_browser_autonomous_implementation_actor_selected_actor": (
+                    project_browser_autonomous_implementation_actor_selected_actor
+                ),
+                "project_browser_autonomous_implementation_actor_selected_mode": (
+                    project_browser_autonomous_implementation_actor_selected_mode
+                ),
+                "project_browser_autonomous_implementation_actor_output_kind": (
+                    project_browser_autonomous_implementation_actor_output_kind
+                ),
+                "project_browser_autonomous_implementation_actor_allowed": (
+                    project_browser_autonomous_implementation_actor_allowed
+                ),
+                "project_browser_autonomous_implementation_actor_requires_human_apply": (
+                    project_browser_autonomous_implementation_actor_requires_human_apply
+                ),
+                "project_browser_autonomous_implementation_actor_next_action": (
+                    project_browser_autonomous_implementation_actor_next_action
+                ),
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -60905,6 +62084,66 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_launch_2_missing_reusable_invocation_surface"
             if project_browser_autonomous_launch_2_missing_reusable_invocation_surface
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_packet_status"
+            if project_browser_autonomous_chatgpt_decision_packet_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_packet_kind"
+            if project_browser_autonomous_chatgpt_decision_packet_kind
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_packet_transport"
+            if project_browser_autonomous_chatgpt_decision_packet_transport
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_packet_target"
+            if project_browser_autonomous_chatgpt_decision_packet_target
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_packet_next_action"
+            if project_browser_autonomous_chatgpt_decision_packet_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_schema_status"
+            if project_browser_autonomous_chatgpt_decision_schema_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_schema_validation_status"
+            if project_browser_autonomous_chatgpt_decision_schema_validation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_schema_next_action"
+            if project_browser_autonomous_chatgpt_decision_schema_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_intake_status"
+            if project_browser_autonomous_chatgpt_decision_intake_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_intake_next_action"
+            if project_browser_autonomous_chatgpt_decision_intake_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_actor_separation_schema_status"
+            if project_browser_autonomous_actor_separation_schema_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_decision_actor"
+            if project_browser_autonomous_decision_actor
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_implementation_actor"
+            if project_browser_autonomous_implementation_actor
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_actor_separation_status"
+            if project_browser_autonomous_actor_separation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_actor_separation_next_action"
+            if project_browser_autonomous_actor_separation_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_implementation_actor_schema_status"
+            if project_browser_autonomous_implementation_actor_schema_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_implementation_actor_selected_actor"
+            if project_browser_autonomous_implementation_actor_selected_actor
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_implementation_actor_selected_mode"
+            if project_browser_autonomous_implementation_actor_selected_mode
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_implementation_actor_output_kind"
+            if project_browser_autonomous_implementation_actor_output_kind
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_implementation_actor_next_action"
+            if project_browser_autonomous_implementation_actor_next_action
             else "",
             ]
     )
@@ -66166,6 +67405,150 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_launch_2_missing_reusable_invocation_surface": (
             project_browser_autonomous_launch_2_missing_reusable_invocation_surface
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_status": (
+            project_browser_autonomous_chatgpt_decision_packet_status
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_kind": (
+            project_browser_autonomous_chatgpt_decision_packet_kind
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_version": (
+            project_browser_autonomous_chatgpt_decision_packet_version
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_transport": (
+            project_browser_autonomous_chatgpt_decision_packet_transport
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_target": (
+            project_browser_autonomous_chatgpt_decision_packet_target
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_required_inputs": (
+            project_browser_autonomous_chatgpt_decision_packet_required_inputs
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_available_inputs": (
+            project_browser_autonomous_chatgpt_decision_packet_available_inputs
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_missing_inputs": (
+            project_browser_autonomous_chatgpt_decision_packet_missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_decision_packet_next_action": (
+            project_browser_autonomous_chatgpt_decision_packet_next_action
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_status": (
+            project_browser_autonomous_chatgpt_decision_schema_status
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_version": (
+            project_browser_autonomous_chatgpt_decision_schema_version
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_allowed_decisions": (
+            project_browser_autonomous_chatgpt_decision_schema_allowed_decisions
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_required_fields": (
+            project_browser_autonomous_chatgpt_decision_schema_required_fields
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_optional_fields": (
+            project_browser_autonomous_chatgpt_decision_schema_optional_fields
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_validation_status": (
+            project_browser_autonomous_chatgpt_decision_schema_validation_status
+        ),
+        "project_browser_autonomous_chatgpt_decision_schema_next_action": (
+            project_browser_autonomous_chatgpt_decision_schema_next_action
+        ),
+        "project_browser_autonomous_chatgpt_decision_intake_status": (
+            project_browser_autonomous_chatgpt_decision_intake_status
+        ),
+        "project_browser_autonomous_chatgpt_decision_intake_transport": (
+            project_browser_autonomous_chatgpt_decision_intake_transport
+        ),
+        "project_browser_autonomous_chatgpt_decision_intake_expected_path": (
+            project_browser_autonomous_chatgpt_decision_intake_expected_path
+        ),
+        "project_browser_autonomous_chatgpt_decision_intake_required_before_loop": (
+            project_browser_autonomous_chatgpt_decision_intake_required_before_loop
+        ),
+        "project_browser_autonomous_chatgpt_decision_intake_next_action": (
+            project_browser_autonomous_chatgpt_decision_intake_next_action
+        ),
+        "project_browser_autonomous_actor_separation_schema_status": (
+            project_browser_autonomous_actor_separation_schema_status
+        ),
+        "project_browser_autonomous_actor_separation_schema_version": (
+            project_browser_autonomous_actor_separation_schema_version
+        ),
+        "project_browser_autonomous_decision_actor": (
+            project_browser_autonomous_decision_actor
+        ),
+        "project_browser_autonomous_decision_actor_role": (
+            project_browser_autonomous_decision_actor_role
+        ),
+        "project_browser_autonomous_decision_actor_transport": (
+            project_browser_autonomous_decision_actor_transport
+        ),
+        "project_browser_autonomous_decision_actor_expected_output_kind": (
+            project_browser_autonomous_decision_actor_expected_output_kind
+        ),
+        "project_browser_autonomous_implementation_actor": (
+            project_browser_autonomous_implementation_actor
+        ),
+        "project_browser_autonomous_implementation_actor_role": (
+            project_browser_autonomous_implementation_actor_role
+        ),
+        "project_browser_autonomous_implementation_actor_transport": (
+            project_browser_autonomous_implementation_actor_transport
+        ),
+        "project_browser_autonomous_implementation_actor_expected_output_kind": (
+            project_browser_autonomous_implementation_actor_expected_output_kind
+        ),
+        "project_browser_autonomous_actor_separation_required": (
+            project_browser_autonomous_actor_separation_required
+        ),
+        "project_browser_autonomous_same_actor_requires_human_review": (
+            project_browser_autonomous_same_actor_requires_human_review
+        ),
+        "project_browser_autonomous_actor_separation_status": (
+            project_browser_autonomous_actor_separation_status
+        ),
+        "project_browser_autonomous_actor_separation_reason": (
+            project_browser_autonomous_actor_separation_reason
+        ),
+        "project_browser_autonomous_actor_separation_next_action": (
+            project_browser_autonomous_actor_separation_next_action
+        ),
+        "project_browser_autonomous_implementation_actor_schema_status": (
+            project_browser_autonomous_implementation_actor_schema_status
+        ),
+        "project_browser_autonomous_implementation_actor_schema_version": (
+            project_browser_autonomous_implementation_actor_schema_version
+        ),
+        "project_browser_autonomous_implementation_actor_allowed_actors": (
+            project_browser_autonomous_implementation_actor_allowed_actors
+        ),
+        "project_browser_autonomous_implementation_actor_allowed_modes": (
+            project_browser_autonomous_implementation_actor_allowed_modes
+        ),
+        "project_browser_autonomous_implementation_actor_allowed_output_kinds": (
+            project_browser_autonomous_implementation_actor_allowed_output_kinds
+        ),
+        "project_browser_autonomous_implementation_actor_default_actor": (
+            project_browser_autonomous_implementation_actor_default_actor
+        ),
+        "project_browser_autonomous_implementation_actor_selected_actor": (
+            project_browser_autonomous_implementation_actor_selected_actor
+        ),
+        "project_browser_autonomous_implementation_actor_selected_mode": (
+            project_browser_autonomous_implementation_actor_selected_mode
+        ),
+        "project_browser_autonomous_implementation_actor_output_kind": (
+            project_browser_autonomous_implementation_actor_output_kind
+        ),
+        "project_browser_autonomous_implementation_actor_allowed": (
+            project_browser_autonomous_implementation_actor_allowed
+        ),
+        "project_browser_autonomous_implementation_actor_requires_human_apply": (
+            project_browser_autonomous_implementation_actor_requires_human_apply
+        ),
+        "project_browser_autonomous_implementation_actor_next_action": (
+            project_browser_autonomous_implementation_actor_next_action
         ),
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
