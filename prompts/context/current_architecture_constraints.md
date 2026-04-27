@@ -774,3 +774,34 @@ Prompt151 must not:
 - modify Prompt148 max-two semantics
 - modify Prompt149 accounting
 - modify Prompt150 actor separation semantics
+---
+
+## Prompt151 decision validator constraints
+
+Prompt151 established local ChatGPT-Judge decision JSON validation/intake metadata.
+
+Expected local file:
+
+- `/tmp/codex-local-runner-decision/chatgpt_decision.json`
+
+Prompt151 invariants:
+
+- Missing file is waiting/manual handoff, not run failure.
+- Invalid JSON must block without crashing.
+- Missing required fields must block without crashing.
+- Invalid allowed values must block without crashing.
+- Actor separation failure must block.
+- Same actor condition requires human review and must block commit.
+- `commit_allowed=true` from JSON is not trusted directly.
+- Effective commit permission requires validation/accounting/safety/actor gates.
+- `rollback_required=true` blocks consumption.
+- `human_review_required=true` blocks consumption.
+
+Prompt152 constraints:
+
+- Prompt152 may generate ChatGPT-Implementer packet metadata only.
+- Prompt152 must not call ChatGPT.
+- Prompt152 must not automate browser UI.
+- Prompt152 must not validate or apply ChatGPT implementation output.
+- Prompt152 must preserve Prompt150 actor separation and Prompt151 decision validator semantics.
+- Prompt152 must not generate next/fix prompts, start loops, rollback, commit, create GitHub branch/PR/CI/merge behavior, or modify Prompt148/149/150/151 semantics.

@@ -581,3 +581,41 @@ Next:
 - Prompt151: implement local decision JSON validator for `/tmp/codex-local-runner-decision/chatgpt_decision.json`.
 
 Prompt151 must not call ChatGPT, automate browser UI, generate/apply patches, generate next/fix prompts, start loops, rollback, or create GitHub branch/PR/CI/merge behavior.
+---
+
+## Current checkpoint update after Prompt151
+
+Current checkpoint:
+
+- `checkpoint-prompt151-decision-validator-ready`
+
+Prompt151 completed:
+
+- Added ChatGPT-Judge decision JSON validator.
+- Added parsed decision summary fields.
+- Added decision consumption readiness fields.
+- Missing `/tmp/codex-local-runner-decision/chatgpt_decision.json` is treated as waiting/manual handoff, not as run failure.
+- Invalid JSON, missing required fields, invalid allowed values, actor separation failure, rollback_required, human_review_required, and unsafe commit_allowed are blocked safely.
+- Effective commit permission is exposed only after validation/accounting/safety/actor gates pass.
+- No ChatGPT API call, browser automation, patch generation/application, implementation packet generation, next/fix prompt generation, autonomous loop, rollback, GitHub branch/PR/CI/merge behavior was added.
+- Prompt148, Prompt149, and Prompt150 semantics remain unchanged.
+
+Prompt151 commit/tag:
+
+- commit: `95cd45e Prompt151: add ChatGPT decision JSON validator`
+- tag: `checkpoint-prompt151-decision-validator-ready`
+
+Next:
+
+- Prompt152: ChatGPT-Implementer packet generator.
+
+Prompt152 purpose:
+
+- Generate a bounded implementation packet for ChatGPT-Implementer.
+- Include objective, allowed files, forbidden files, constraints, expected output kind, and review requirements.
+- Do not call ChatGPT API.
+- Do not automate browser UI.
+- Do not validate or apply patches.
+- Do not generate next/fix prompts.
+- Do not start an autonomous loop.
+- Do not create GitHub branch/PR/CI/merge behavior.

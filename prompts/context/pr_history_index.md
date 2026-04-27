@@ -294,3 +294,57 @@ Prompt150 constraints preserved:
 Next:
 
 - Prompt151: local validator/intake for `/tmp/codex-local-runner-decision/chatgpt_decision.json`.
+---
+
+## Prompt151 — ChatGPT-Judge decision JSON validator
+
+Status:
+
+- completed
+- commit: `95cd45e Prompt151: add ChatGPT decision JSON validator`
+- tag: `checkpoint-prompt151-decision-validator-ready`
+
+Primary file:
+
+- `automation/orchestration/planned_execution_runner.py`
+
+Summary:
+
+Prompt151 added local ChatGPT-Judge decision JSON validator/intake metadata for:
+
+- `/tmp/codex-local-runner-decision/chatgpt_decision.json`
+
+Added field groups:
+
+- `project_browser_autonomous_chatgpt_decision_validator_*`
+- `project_browser_autonomous_chatgpt_decision_json_*`
+- `project_browser_autonomous_chatgpt_decision_consumption_*`
+
+Key behavior:
+
+- Missing file maps to waiting/manual handoff.
+- Invalid JSON blocks without crash.
+- Missing required fields block without crash.
+- Invalid allowed values block without crash.
+- Actor separation validation is represented.
+- Same actor requires human review and blocks commit.
+- Effective commit permission is gated by validation/accounting/safety/actor status.
+- rollback_required and human_review_required block consumption.
+
+Safety boundaries preserved:
+
+- No ChatGPT API call.
+- No browser automation.
+- No ChatGPT-Judge invocation.
+- No ChatGPT-Implementer invocation.
+- No implementation packet generation.
+- No patch generation/application.
+- No next/fix Prompt generator.
+- No autonomous loop.
+- No rollback execution.
+- No GitHub branch/PR/CI/merge behavior.
+- Prompt148, Prompt149, Prompt150, and Prompt151 semantics unchanged.
+
+Next:
+
+- Prompt152: ChatGPT-Implementer packet generator.
