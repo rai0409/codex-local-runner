@@ -45314,6 +45314,544 @@ def _build_project_browser_autonomous_chatgpt_implementation_packet_state(
     }
 
 
+def _build_project_browser_autonomous_chatgpt_implementation_response_state(
+    *,
+    implementation_packet_status: str,
+    implementation_handoff_status: str,
+    expected_output_kind: str,
+    expected_response_path: str,
+    expected_patch_path: str,
+    allowed_files: list[str] | None,
+    forbidden_files: list[str] | None,
+    human_review_required: bool,
+    rollback_required: bool,
+) -> dict[str, Any]:
+    patch_like_response_types = {
+        "patch_plan",
+        "unified_diff",
+        "full_file_replacement",
+        "mixed",
+    }
+    allowed_output_kinds = {
+        "patch_plan",
+        "unified_diff",
+        "full_file_replacement",
+        "manual_steps",
+        "instructions_only",
+        "none",
+    }
+    runtime_posture = [
+        "metadata_only_response_validation",
+        "local_file_read_only",
+        "no_chatgpt_api_call",
+        "no_browser_automation",
+        "no_patch_write",
+        "no_patch_apply",
+        "no_repo_file_modification_from_response",
+    ]
+
+    normalized_packet_status = _normalize_text(
+        implementation_packet_status,
+        default="insufficient_truth",
+    )
+    normalized_handoff_status = _normalize_text(
+        implementation_handoff_status,
+        default="insufficient_truth",
+    )
+    normalized_expected_output_kind = _normalize_text(
+        expected_output_kind,
+        default="none",
+    )
+    if normalized_expected_output_kind not in allowed_output_kinds:
+        normalized_expected_output_kind = "none"
+    normalized_expected_response_path = _normalize_text(
+        expected_response_path,
+        default="/tmp/codex-local-runner-decision/chatgpt_implementation_response.md",
+    )
+    normalized_expected_patch_path = _normalize_text(
+        expected_patch_path,
+        default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+    )
+    normalized_allowed_files = _normalize_string_list(allowed_files or [])
+    normalized_forbidden_files = _normalize_string_list(forbidden_files or [])
+
+    required_inputs = [
+        "implementation_packet_status",
+        "implementation_handoff_status",
+        "expected_response_path",
+        "expected_patch_path",
+        "expected_output_kind",
+    ]
+    available_inputs: list[str] = []
+    if normalized_packet_status:
+        available_inputs.append("implementation_packet_status")
+    if normalized_handoff_status:
+        available_inputs.append("implementation_handoff_status")
+    if normalized_expected_response_path:
+        available_inputs.append("expected_response_path")
+    if normalized_expected_patch_path:
+        available_inputs.append("expected_patch_path")
+    if normalized_expected_output_kind and normalized_expected_output_kind != "none":
+        available_inputs.append("expected_output_kind")
+    base_missing_inputs = [
+        input_name for input_name in required_inputs if input_name not in set(available_inputs)
+    ]
+
+    def _normalize_repo_path(path_text: str) -> str:
+        value = _normalize_text(path_text, default="")
+        if not value:
+            return ""
+        value = value.replace("\\", "/")
+        if value.startswith("a/") or value.startswith("b/"):
+            value = value[2:]
+        value = value.strip().strip("`").strip("\"")
+        if value == "/dev/null":
+            return ""
+        return value
+
+    def _path_matches_scope(candidate: str, scope_items: list[str]) -> bool:
+        normalized_candidate = _normalize_repo_path(candidate)
+        if not normalized_candidate:
+            return False
+        for scope_item in scope_items:
+            normalized_scope = _normalize_repo_path(scope_item)
+            if not normalized_scope:
+                continue
+            if normalized_candidate == normalized_scope:
+                return True
+            if normalized_candidate.startswith(normalized_scope.rstrip("/") + "/"):
+                return True
+        return False
+
+    def _extract_touched_files(text: str) -> list[str]:
+        touched: list[str] = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            normalized_path = ""
+            if line.startswith("diff --git "):
+                parts = line.split()
+                if len(parts) >= 4:
+                    normalized_path = _normalize_repo_path(parts[3])
+            elif line.startswith("+++ "):
+                normalized_path = _normalize_repo_path(line[4:].strip())
+            elif line.startswith("*** Update File: "):
+                normalized_path = _normalize_repo_path(
+                    line[len("*** Update File: ") :]
+                )
+            elif line.startswith("*** Add File: "):
+                normalized_path = _normalize_repo_path(line[len("*** Add File: ") :])
+            elif line.startswith("*** Delete File: "):
+                normalized_path = _normalize_repo_path(
+                    line[len("*** Delete File: ") :]
+                )
+            if normalized_path:
+                touched.append(normalized_path)
+        return _serialize_required_signals(touched)
+
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    next_action = "insufficient_truth"
+    response_present = False
+    patch_present = False
+    response_type = "unknown"
+    output_kind = "none"
+    touched_files: list[str] = []
+    forbidden_touched_files: list[str] = []
+    unsafe_operation_flags: list[str] = []
+    missing_inputs = _serialize_required_signals(base_missing_inputs)
+    invalid_reasons: list[str] = []
+    response_text = ""
+    patch_text = ""
+
+    if rollback_required:
+        status = "blocked_rollback_required"
+        source_status = "rollback_required"
+        block_reason = "rollback_required"
+        next_action = "rollback_required"
+    elif human_review_required:
+        status = "blocked_human_review_required"
+        source_status = "human_review_required"
+        block_reason = "human_review_required"
+        next_action = "human_review_required"
+    elif normalized_packet_status == "insufficient_truth" or normalized_handoff_status == "insufficient_truth":
+        status = "insufficient_truth"
+        source_status = "insufficient_truth"
+        block_reason = "insufficient_truth"
+        next_action = "insufficient_truth"
+    elif (
+        normalized_packet_status != "prepared_for_manual_handoff"
+        or normalized_handoff_status != "prepared_for_manual_handoff"
+    ):
+        status = "blocked_missing_inputs"
+        source_status = "prompt152_packet_handoff_not_prepared"
+        block_reason = "prompt152_packet_handoff_not_prepared"
+        next_action = "manual_fix_implementation_response"
+        missing_inputs = _serialize_required_signals(
+            [*missing_inputs, "prepared_prompt152_packet_handoff"]
+        )
+    elif missing_inputs:
+        status = "blocked_missing_inputs"
+        source_status = "missing_required_source_fields"
+        block_reason = "missing_required_source_fields"
+        next_action = "manual_fix_implementation_response"
+    else:
+        response_path = Path(normalized_expected_response_path)
+        patch_path = Path(normalized_expected_patch_path)
+        response_present = bool(response_path.exists())
+        patch_present = bool(patch_path.exists())
+
+        if not response_present and not patch_present:
+            status = "waiting_for_manual_response"
+            source_status = "response_missing"
+            block_reason = "waiting_for_manual_response"
+            next_action = "wait_for_chatgpt_implementation_response"
+            response_type = "missing"
+        else:
+            unreadable_response = False
+            unreadable_patch = False
+            if response_present:
+                try:
+                    response_text = response_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    unreadable_response = True
+            if patch_present:
+                try:
+                    patch_text = patch_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    unreadable_patch = True
+
+            if unreadable_response or unreadable_patch:
+                status = "blocked_unreadable_response"
+                source_status = "response_unreadable"
+                block_reason = (
+                    "response_unreadable"
+                    if unreadable_response
+                    else "patch_unreadable"
+                )
+                next_action = "manual_fix_implementation_response"
+                response_type = "unreadable"
+            else:
+                combined_text = "\n".join(
+                    [text for text in [response_text, patch_text] if text]
+                )
+                combined_lower = combined_text.lower()
+                response_text_lower = response_text.lower()
+                patch_text_lower = patch_text.lower()
+
+                has_unified_diff = bool(
+                    "```diff" in response_text_lower
+                    or "diff --git " in combined_lower
+                    or "\n--- a/" in combined_text
+                    or "\n+++ b/" in combined_text
+                    or "*** update file: " in combined_lower
+                    or "*** add file: " in combined_lower
+                    or "*** delete file: " in combined_lower
+                    or "@@" in combined_text
+                )
+                has_full_file_replacement = bool(
+                    "full_file_replacement" in combined_lower
+                    or "full file replacement" in combined_lower
+                )
+                has_patch_plan = bool(
+                    "patch_plan" in combined_lower or "patch plan" in combined_lower
+                )
+                has_manual_steps = bool(
+                    "manual_steps" in combined_lower or "manual steps" in combined_lower
+                )
+                has_instructions_only = bool(
+                    "instructions_only" in combined_lower
+                    or "instructions only" in combined_lower
+                )
+
+                if has_unified_diff and has_full_file_replacement:
+                    response_type = "mixed"
+                elif has_unified_diff:
+                    response_type = "unified_diff"
+                elif has_full_file_replacement:
+                    response_type = "full_file_replacement"
+                elif has_patch_plan:
+                    response_type = "patch_plan"
+                elif has_manual_steps:
+                    response_type = "manual_steps"
+                elif has_instructions_only:
+                    response_type = "instructions_only"
+                elif combined_text.strip():
+                    response_type = "unknown"
+                else:
+                    response_type = "invalid"
+
+                output_kind = (
+                    response_type
+                    if response_type in allowed_output_kinds
+                    else "none"
+                )
+                touched_files = _extract_touched_files(combined_text)
+                forbidden_touched_files = _serialize_required_signals(
+                    [
+                        path
+                        for path in touched_files
+                        if _path_matches_scope(path, normalized_forbidden_files)
+                    ]
+                )
+
+                if "rm -rf" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_rm_rf")
+                if "sudo " in combined_lower or "\nsudo\n" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_sudo")
+                if "chmod 777" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_chmod_777")
+                if "curl | sh" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_curl_pipe_sh")
+                if "wget | sh" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_wget_pipe_sh")
+                if "git push" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_git_push")
+                if "git reset --hard" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_git_reset_hard")
+                if "git clean -fd" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_git_clean_fd")
+                if "gh pr merge" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_gh_pr_merge")
+                if "merge_pull_request" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_merge_pull_request")
+                if "create_pull_request" in combined_lower:
+                    unsafe_operation_flags.append("dangerous_create_pull_request")
+                sensitive_terms = ["secret", "token", "cookie", "credential"]
+                mutation_terms = [
+                    "set ",
+                    "update ",
+                    "replace ",
+                    "change ",
+                    "write ",
+                    "export ",
+                    "password",
+                ]
+                if any(term in combined_lower for term in sensitive_terms) and any(
+                    term in combined_lower for term in mutation_terms
+                ):
+                    unsafe_operation_flags.append("credential_change_detected")
+                unsafe_operation_flags = _serialize_required_signals(
+                    unsafe_operation_flags
+                )
+
+                outside_allowed_files = _serialize_required_signals(
+                    [
+                        path
+                        for path in touched_files
+                        if normalized_allowed_files
+                        and not _path_matches_scope(path, normalized_allowed_files)
+                    ]
+                )
+
+                if response_type in {"invalid", "unknown", "mixed"}:
+                    status = "blocked_invalid_response"
+                    source_status = "response_readable"
+                    block_reason = (
+                        "response_type_unknown"
+                        if response_type == "unknown"
+                        else "response_invalid"
+                    )
+                    next_action = "manual_fix_implementation_response"
+                    invalid_reasons.append(f"response_type:{response_type}")
+                elif (
+                    normalized_expected_output_kind != "none"
+                    and output_kind != normalized_expected_output_kind
+                ):
+                    status = "blocked_output_kind_mismatch"
+                    source_status = "response_readable"
+                    block_reason = "output_kind_mismatch"
+                    next_action = "manual_fix_implementation_response"
+                    invalid_reasons.append(
+                        f"expected_output_kind:{normalized_expected_output_kind}"
+                    )
+                    invalid_reasons.append(f"actual_output_kind:{output_kind}")
+                elif response_type in patch_like_response_types and not touched_files:
+                    status = "insufficient_truth"
+                    source_status = "response_readable"
+                    block_reason = "patch_like_response_missing_touched_files"
+                    next_action = "insufficient_truth"
+                    missing_inputs = _serialize_required_signals(
+                        [*missing_inputs, "touched_files"]
+                    )
+                elif response_type in patch_like_response_types and not normalized_allowed_files:
+                    status = "insufficient_truth"
+                    source_status = "response_readable"
+                    block_reason = "allowed_files_missing_for_patch_like_response"
+                    next_action = "insufficient_truth"
+                    missing_inputs = _serialize_required_signals(
+                        [*missing_inputs, "allowed_files"]
+                    )
+                elif forbidden_touched_files or outside_allowed_files:
+                    status = "blocked_forbidden_files"
+                    source_status = "response_readable"
+                    block_reason = "forbidden_or_out_of_scope_files_touched"
+                    next_action = "manual_fix_implementation_response"
+                    if forbidden_touched_files:
+                        invalid_reasons.append("forbidden_files_touched")
+                    if outside_allowed_files:
+                        invalid_reasons.append("outside_allowed_files_touched")
+                elif unsafe_operation_flags:
+                    status = "blocked_unsafe_operations"
+                    source_status = "response_readable"
+                    block_reason = "unsafe_operations_detected"
+                    next_action = "manual_fix_implementation_response"
+                    invalid_reasons.append("unsafe_operations_detected")
+                else:
+                    status = "valid_metadata_only"
+                    source_status = "response_readable"
+                    block_reason = "none"
+                    next_action = "prepare_safe_patch_apply_gate_later"
+
+                invalid_reasons = _serialize_required_signals(invalid_reasons)
+
+    patch_candidate_status = "waiting"
+    patch_candidate_source_status = source_status
+    patch_candidate_block_reason = block_reason
+    patch_candidate_next_action = next_action
+    if status == "insufficient_truth":
+        patch_candidate_status = "insufficient_truth"
+        patch_candidate_next_action = "insufficient_truth"
+    elif status == "waiting_for_manual_response":
+        patch_candidate_status = "waiting"
+        patch_candidate_next_action = "wait_for_chatgpt_implementation_response"
+    elif status == "valid_metadata_only":
+        if response_type in {"unified_diff", "full_file_replacement"}:
+            patch_candidate_status = "candidate_ready_for_later_gate"
+            patch_candidate_block_reason = "none"
+            patch_candidate_next_action = "prepare_safe_patch_apply_gate_later"
+        elif response_type in {"patch_plan", "manual_steps", "instructions_only"}:
+            patch_candidate_status = "waiting"
+            patch_candidate_block_reason = "response_not_patch_ready"
+            patch_candidate_next_action = "wait_for_chatgpt_implementation_response"
+        else:
+            patch_candidate_status = "blocked"
+            patch_candidate_block_reason = "response_not_patch_ready"
+            patch_candidate_next_action = "manual_fix_implementation_response"
+    else:
+        patch_candidate_status = "blocked"
+
+    return {
+        "project_browser_autonomous_chatgpt_implementation_response_status": status,
+        "project_browser_autonomous_chatgpt_implementation_response_source_status": (
+            source_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_block_reason": (
+            block_reason
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_expected_response_path": (
+            normalized_expected_response_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_expected_patch_path": (
+            normalized_expected_patch_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_response_present": (
+            bool(response_present)
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_patch_present": (
+            bool(patch_present)
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_response_type": (
+            response_type
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_output_kind": (
+            output_kind
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_allowed_files": (
+            normalized_allowed_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_forbidden_files": (
+            normalized_forbidden_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_touched_files": (
+            touched_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_forbidden_touched_files": (
+            forbidden_touched_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_unsafe_operation_flags": (
+            unsafe_operation_flags
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_missing_inputs": (
+            missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_invalid_reasons": (
+            invalid_reasons
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_next_action": (
+            next_action
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_status": (
+            status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_source_status": (
+            source_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_block_reason": (
+            block_reason
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_missing_inputs": (
+            missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_invalid_reasons": (
+            invalid_reasons
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_next_action": (
+            next_action
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_status": (
+            patch_candidate_status
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_source_status": (
+            patch_candidate_source_status
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_block_reason": (
+            patch_candidate_block_reason
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_expected_patch_path": (
+            normalized_expected_patch_path
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_response_type": (
+            response_type
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_output_kind": output_kind,
+        "project_browser_autonomous_chatgpt_patch_candidate_touched_files": (
+            touched_files
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_forbidden_touched_files": (
+            forbidden_touched_files
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_unsafe_operation_flags": (
+            unsafe_operation_flags
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_missing_inputs": (
+            missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_invalid_reasons": (
+            invalid_reasons
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_next_action": (
+            patch_candidate_next_action
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_runtime_posture": (
+            [
+                "metadata_only_patch_candidate",
+                "no_patch_write",
+                "no_patch_apply",
+                "no_git_apply",
+            ]
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -61409,6 +61947,401 @@ def _build_approved_restart_execution_contract_surface(
             )
         )
     )
+    project_browser_autonomous_chatgpt_implementation_response_state = (
+        _build_project_browser_autonomous_chatgpt_implementation_response_state(
+            implementation_packet_status=(
+                project_browser_autonomous_chatgpt_implementation_packet_status
+            ),
+            implementation_handoff_status=(
+                project_browser_autonomous_chatgpt_implementation_handoff_status
+            ),
+            expected_output_kind=(
+                project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind
+            ),
+            expected_response_path=(
+                project_browser_autonomous_chatgpt_implementation_packet_expected_response_path
+            ),
+            expected_patch_path=(
+                project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path
+            ),
+            allowed_files=(
+                project_browser_autonomous_chatgpt_implementation_packet_allowed_files
+            ),
+            forbidden_files=(
+                project_browser_autonomous_chatgpt_implementation_packet_forbidden_files
+            ),
+            human_review_required=(
+                project_browser_autonomous_chatgpt_decision_consumption_human_review_required
+            ),
+            rollback_required=(
+                project_browser_autonomous_chatgpt_decision_consumption_rollback_required
+            ),
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_status = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_implementation_response_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_implementation_response_status not in {
+        "valid_metadata_only",
+        "waiting_for_manual_response",
+        "blocked_unreadable_response",
+        "blocked_invalid_response",
+        "blocked_forbidden_files",
+        "blocked_unsafe_operations",
+        "blocked_missing_inputs",
+        "blocked_output_kind_mismatch",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_implementation_response_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_implementation_response_source_status = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_source_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_block_reason = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_block_reason"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_expected_response_path = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_expected_response_path"
+            ),
+            default="/tmp/codex-local-runner-decision/chatgpt_implementation_response.md",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_expected_patch_path = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_expected_patch_path"
+            ),
+            default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_response_present = bool(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_implementation_response_response_present",
+            False,
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_patch_present = bool(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_implementation_response_patch_present",
+            False,
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_response_type = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_implementation_response_response_type"
+        ),
+        default="unknown",
+    )
+    if project_browser_autonomous_chatgpt_implementation_response_response_type not in {
+        "missing",
+        "unreadable",
+        "patch_plan",
+        "unified_diff",
+        "full_file_replacement",
+        "manual_steps",
+        "instructions_only",
+        "mixed",
+        "unknown",
+        "invalid",
+    }:
+        project_browser_autonomous_chatgpt_implementation_response_response_type = "unknown"
+    project_browser_autonomous_chatgpt_implementation_response_output_kind = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_implementation_response_output_kind"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_chatgpt_implementation_response_output_kind not in {
+        "patch_plan",
+        "unified_diff",
+        "full_file_replacement",
+        "manual_steps",
+        "instructions_only",
+        "none",
+    }:
+        project_browser_autonomous_chatgpt_implementation_response_output_kind = "none"
+    project_browser_autonomous_chatgpt_implementation_response_allowed_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_allowed_files"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_forbidden_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_forbidden_files"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_touched_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_touched_files"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_forbidden_touched_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_forbidden_touched_files"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_unsafe_operation_flags = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_unsafe_operation_flags"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_missing_inputs = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_missing_inputs"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_invalid_reasons = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_invalid_reasons"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_implementation_response_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_implementation_response_next_action not in {
+        "wait_for_chatgpt_implementation_response",
+        "manual_fix_implementation_response",
+        "human_review_required",
+        "rollback_required",
+        "prepare_safe_patch_apply_gate_later",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_implementation_response_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_implementation_response_runtime_posture = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_runtime_posture"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_validation_status = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_validation_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    if project_browser_autonomous_chatgpt_implementation_response_validation_status not in {
+        "valid_metadata_only",
+        "waiting_for_manual_response",
+        "blocked_unreadable_response",
+        "blocked_invalid_response",
+        "blocked_forbidden_files",
+        "blocked_unsafe_operations",
+        "blocked_missing_inputs",
+        "blocked_output_kind_mismatch",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_implementation_response_validation_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_implementation_response_validation_source_status = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_validation_source_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_validation_block_reason = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_validation_block_reason"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_validation_missing_inputs = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_validation_missing_inputs"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_validation_invalid_reasons = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_validation_invalid_reasons"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_response_validation_next_action = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_validation_next_action"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    if project_browser_autonomous_chatgpt_implementation_response_validation_next_action not in {
+        "wait_for_chatgpt_implementation_response",
+        "manual_fix_implementation_response",
+        "human_review_required",
+        "rollback_required",
+        "prepare_safe_patch_apply_gate_later",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_implementation_response_validation_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_implementation_response_validation_runtime_posture = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_implementation_response_validation_runtime_posture"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_status = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_patch_candidate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_patch_candidate_status not in {
+        "candidate_ready_for_later_gate",
+        "blocked",
+        "waiting",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_patch_candidate_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_patch_candidate_source_status = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_patch_candidate_source_status"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_block_reason = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_patch_candidate_block_reason"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_expected_patch_path = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_patch_candidate_expected_patch_path"
+        ),
+        default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_response_type = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_patch_candidate_response_type"
+        ),
+        default="unknown",
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_output_kind = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_patch_candidate_output_kind"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_chatgpt_patch_candidate_output_kind not in {
+        "patch_plan",
+        "unified_diff",
+        "full_file_replacement",
+        "manual_steps",
+        "instructions_only",
+        "none",
+    }:
+        project_browser_autonomous_chatgpt_patch_candidate_output_kind = "none"
+    project_browser_autonomous_chatgpt_patch_candidate_touched_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_patch_candidate_touched_files"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_forbidden_touched_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_patch_candidate_forbidden_touched_files"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_unsafe_operation_flags = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_patch_candidate_unsafe_operation_flags"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_missing_inputs = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_patch_candidate_missing_inputs"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_invalid_reasons = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_patch_candidate_invalid_reasons"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_patch_candidate_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_response_state.get(
+            "project_browser_autonomous_chatgpt_patch_candidate_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_patch_candidate_next_action not in {
+        "wait_for_chatgpt_implementation_response",
+        "manual_fix_implementation_response",
+        "human_review_required",
+        "rollback_required",
+        "prepare_safe_patch_apply_gate_later",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_patch_candidate_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_patch_candidate_runtime_posture = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_response_state.get(
+                "project_browser_autonomous_chatgpt_patch_candidate_runtime_posture"
+            )
+        )
+    )
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -63409,6 +64342,120 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_chatgpt_implementation_handoff_next_action": (
                     project_browser_autonomous_chatgpt_implementation_handoff_next_action
                 ),
+                "project_browser_autonomous_chatgpt_implementation_response_status": (
+                    project_browser_autonomous_chatgpt_implementation_response_status
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_source_status": (
+                    project_browser_autonomous_chatgpt_implementation_response_source_status
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_block_reason": (
+                    project_browser_autonomous_chatgpt_implementation_response_block_reason
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_expected_response_path": (
+                    project_browser_autonomous_chatgpt_implementation_response_expected_response_path
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_expected_patch_path": (
+                    project_browser_autonomous_chatgpt_implementation_response_expected_patch_path
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_response_present": (
+                    project_browser_autonomous_chatgpt_implementation_response_response_present
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_patch_present": (
+                    project_browser_autonomous_chatgpt_implementation_response_patch_present
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_response_type": (
+                    project_browser_autonomous_chatgpt_implementation_response_response_type
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_output_kind": (
+                    project_browser_autonomous_chatgpt_implementation_response_output_kind
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_allowed_files": (
+                    project_browser_autonomous_chatgpt_implementation_response_allowed_files
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_forbidden_files": (
+                    project_browser_autonomous_chatgpt_implementation_response_forbidden_files
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_touched_files": (
+                    project_browser_autonomous_chatgpt_implementation_response_touched_files
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_forbidden_touched_files": (
+                    project_browser_autonomous_chatgpt_implementation_response_forbidden_touched_files
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_unsafe_operation_flags": (
+                    project_browser_autonomous_chatgpt_implementation_response_unsafe_operation_flags
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_missing_inputs": (
+                    project_browser_autonomous_chatgpt_implementation_response_missing_inputs
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_invalid_reasons": (
+                    project_browser_autonomous_chatgpt_implementation_response_invalid_reasons
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_next_action": (
+                    project_browser_autonomous_chatgpt_implementation_response_next_action
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_runtime_posture": (
+                    project_browser_autonomous_chatgpt_implementation_response_runtime_posture
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_validation_status": (
+                    project_browser_autonomous_chatgpt_implementation_response_validation_status
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_validation_source_status": (
+                    project_browser_autonomous_chatgpt_implementation_response_validation_source_status
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_validation_block_reason": (
+                    project_browser_autonomous_chatgpt_implementation_response_validation_block_reason
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_validation_missing_inputs": (
+                    project_browser_autonomous_chatgpt_implementation_response_validation_missing_inputs
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_validation_invalid_reasons": (
+                    project_browser_autonomous_chatgpt_implementation_response_validation_invalid_reasons
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_validation_next_action": (
+                    project_browser_autonomous_chatgpt_implementation_response_validation_next_action
+                ),
+                "project_browser_autonomous_chatgpt_implementation_response_validation_runtime_posture": (
+                    project_browser_autonomous_chatgpt_implementation_response_validation_runtime_posture
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_status": (
+                    project_browser_autonomous_chatgpt_patch_candidate_status
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_source_status": (
+                    project_browser_autonomous_chatgpt_patch_candidate_source_status
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_block_reason": (
+                    project_browser_autonomous_chatgpt_patch_candidate_block_reason
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_expected_patch_path": (
+                    project_browser_autonomous_chatgpt_patch_candidate_expected_patch_path
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_response_type": (
+                    project_browser_autonomous_chatgpt_patch_candidate_response_type
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_output_kind": (
+                    project_browser_autonomous_chatgpt_patch_candidate_output_kind
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_touched_files": (
+                    project_browser_autonomous_chatgpt_patch_candidate_touched_files
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_forbidden_touched_files": (
+                    project_browser_autonomous_chatgpt_patch_candidate_forbidden_touched_files
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_unsafe_operation_flags": (
+                    project_browser_autonomous_chatgpt_patch_candidate_unsafe_operation_flags
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_missing_inputs": (
+                    project_browser_autonomous_chatgpt_patch_candidate_missing_inputs
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_invalid_reasons": (
+                    project_browser_autonomous_chatgpt_patch_candidate_invalid_reasons
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_next_action": (
+                    project_browser_autonomous_chatgpt_patch_candidate_next_action
+                ),
+                "project_browser_autonomous_chatgpt_patch_candidate_runtime_posture": (
+                    project_browser_autonomous_chatgpt_patch_candidate_runtime_posture
+                ),
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -64158,6 +65205,27 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_handoff_next_action"
             if project_browser_autonomous_chatgpt_implementation_handoff_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_response_status"
+            if project_browser_autonomous_chatgpt_implementation_response_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_response_validation_status"
+            if project_browser_autonomous_chatgpt_implementation_response_validation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_response_response_type"
+            if project_browser_autonomous_chatgpt_implementation_response_response_type
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_response_output_kind"
+            if project_browser_autonomous_chatgpt_implementation_response_output_kind
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_response_next_action"
+            if project_browser_autonomous_chatgpt_implementation_response_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_patch_candidate_status"
+            if project_browser_autonomous_chatgpt_patch_candidate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_patch_candidate_next_action"
+            if project_browser_autonomous_chatgpt_patch_candidate_next_action
             else "",
             ]
     )
@@ -69782,6 +70850,120 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_chatgpt_implementation_handoff_runtime_posture": (
             project_browser_autonomous_chatgpt_implementation_handoff_runtime_posture
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_status": (
+            project_browser_autonomous_chatgpt_implementation_response_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_source_status": (
+            project_browser_autonomous_chatgpt_implementation_response_source_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_block_reason": (
+            project_browser_autonomous_chatgpt_implementation_response_block_reason
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_expected_response_path": (
+            project_browser_autonomous_chatgpt_implementation_response_expected_response_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_expected_patch_path": (
+            project_browser_autonomous_chatgpt_implementation_response_expected_patch_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_response_present": (
+            project_browser_autonomous_chatgpt_implementation_response_response_present
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_patch_present": (
+            project_browser_autonomous_chatgpt_implementation_response_patch_present
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_response_type": (
+            project_browser_autonomous_chatgpt_implementation_response_response_type
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_output_kind": (
+            project_browser_autonomous_chatgpt_implementation_response_output_kind
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_allowed_files": (
+            project_browser_autonomous_chatgpt_implementation_response_allowed_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_forbidden_files": (
+            project_browser_autonomous_chatgpt_implementation_response_forbidden_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_touched_files": (
+            project_browser_autonomous_chatgpt_implementation_response_touched_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_forbidden_touched_files": (
+            project_browser_autonomous_chatgpt_implementation_response_forbidden_touched_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_unsafe_operation_flags": (
+            project_browser_autonomous_chatgpt_implementation_response_unsafe_operation_flags
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_missing_inputs": (
+            project_browser_autonomous_chatgpt_implementation_response_missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_invalid_reasons": (
+            project_browser_autonomous_chatgpt_implementation_response_invalid_reasons
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_next_action": (
+            project_browser_autonomous_chatgpt_implementation_response_next_action
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_runtime_posture": (
+            project_browser_autonomous_chatgpt_implementation_response_runtime_posture
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_status": (
+            project_browser_autonomous_chatgpt_implementation_response_validation_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_source_status": (
+            project_browser_autonomous_chatgpt_implementation_response_validation_source_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_block_reason": (
+            project_browser_autonomous_chatgpt_implementation_response_validation_block_reason
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_missing_inputs": (
+            project_browser_autonomous_chatgpt_implementation_response_validation_missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_invalid_reasons": (
+            project_browser_autonomous_chatgpt_implementation_response_validation_invalid_reasons
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_next_action": (
+            project_browser_autonomous_chatgpt_implementation_response_validation_next_action
+        ),
+        "project_browser_autonomous_chatgpt_implementation_response_validation_runtime_posture": (
+            project_browser_autonomous_chatgpt_implementation_response_validation_runtime_posture
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_status": (
+            project_browser_autonomous_chatgpt_patch_candidate_status
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_source_status": (
+            project_browser_autonomous_chatgpt_patch_candidate_source_status
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_block_reason": (
+            project_browser_autonomous_chatgpt_patch_candidate_block_reason
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_expected_patch_path": (
+            project_browser_autonomous_chatgpt_patch_candidate_expected_patch_path
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_response_type": (
+            project_browser_autonomous_chatgpt_patch_candidate_response_type
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_output_kind": (
+            project_browser_autonomous_chatgpt_patch_candidate_output_kind
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_touched_files": (
+            project_browser_autonomous_chatgpt_patch_candidate_touched_files
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_forbidden_touched_files": (
+            project_browser_autonomous_chatgpt_patch_candidate_forbidden_touched_files
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_unsafe_operation_flags": (
+            project_browser_autonomous_chatgpt_patch_candidate_unsafe_operation_flags
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_missing_inputs": (
+            project_browser_autonomous_chatgpt_patch_candidate_missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_invalid_reasons": (
+            project_browser_autonomous_chatgpt_patch_candidate_invalid_reasons
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_next_action": (
+            project_browser_autonomous_chatgpt_patch_candidate_next_action
+        ),
+        "project_browser_autonomous_chatgpt_patch_candidate_runtime_posture": (
+            project_browser_autonomous_chatgpt_patch_candidate_runtime_posture
         ),
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
