@@ -732,3 +732,45 @@ Hard constraints for Prompt148:
 - Prompt148 must not add daemon, scheduler, sleep loop, queue drain, retry loop, new browser executor, new Codex executor, GitHub mutation, PR creation, or PR merge.
 - Prompt148 must not change Prompt149 result JSON accounting.
 - If a safe reusable second-launch invocation surface is not available, Prompt148 must block with insufficient_truth and must not invent a new invocation path.
+
+
+---
+
+## Prompt150 actor separation constraints
+
+Prompt150 established actor separation as a first-class schema/contract layer.
+
+Required invariants:
+
+- `decision_actor` and `implementation_actor` are separate concepts.
+- `ChatGPT-Judge` reviews outputs and returns strict decision JSON.
+- `ChatGPT-Implementer` may later produce patch plans, unified diffs, full file replacements, or manual steps.
+- A ChatGPT-Implementer must not approve its own output for commit.
+- A ChatGPT-Judge must not apply patches.
+- Codex must not approve its own commit.
+- `same_actor_requires_human_review=true` must remain represented.
+- If the same actor or same conversation is used for decision and implementation:
+  - `human_review_required=true`
+  - `commit_allowed=false`
+
+Prompt151 local JSON intake constraints:
+
+- Expected file: `/tmp/codex-local-runner-decision/chatgpt_decision.json`
+- Missing file must be waiting/manual handoff, not run failure.
+- Invalid JSON, missing required fields, invalid values, actor separation failure, rollback_required, human_review_required, and unsafe commit_allowed must block consumption.
+
+Prompt151 must not:
+
+- call ChatGPT API
+- automate or scrape ChatGPT UI
+- invoke ChatGPT-Judge or ChatGPT-Implementer
+- generate implementation packets
+- generate or apply patches
+- generate next/fix prompts
+- start autonomous loops
+- rollback
+- commit
+- create GitHub branch/PR/CI/merge behavior
+- modify Prompt148 max-two semantics
+- modify Prompt149 accounting
+- modify Prompt150 actor separation semantics

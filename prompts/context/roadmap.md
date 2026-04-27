@@ -1,10 +1,10 @@
-# codex-local-runner Roadmap — Prompt144後の完全自律開発フロー化
+# codex-local-runner Roadmap — Prompt150後のChatGPT-Judge decision validator準備
 
 最終更新:
-- Prompt144完了後
-- checkpoint-prompt144-candidate-safety-ready 作成済み
-- 現在地点: one_bounded_launch の candidate safety validation まで完了
-- 次: Prompt145
+- Prompt150完了後
+- checkpoint-prompt150-actor-separation-ready 作成済み
+- 現在地点: ChatGPT-Judge / ChatGPT-Implementer actor separation schema まで完了
+- 次: Prompt151 local decision JSON validator
 
 ---
 
@@ -116,7 +116,7 @@ max-two rolling execution
 Prompt150
 ChatGPT decision JSON schema
 Prompt151
-runner → ChatGPT internal call
+ChatGPT-Judge decision JSON validator / local file intake
 Prompt152
 decision → next prompt generator
 Prompt153
@@ -317,7 +317,7 @@ fix / proceed / stop / human_review の分岐が可能
 9. Prompt151 — runner → ChatGPT internal call
 目的
 
-runnerからChatGPTへ内部問い合わせできるようにする。
+ChatGPT-Judgeが返した strict decision JSON をローカルファイルから検証できるようにする。
 
 処理
 Codex result JSONを読む
@@ -325,11 +325,11 @@ git diff JSONを読む
 validation結果を読む
 current stateを読む
 ChatGPT decision schemaへ詰める
-ChatGPTへ問い合わせる
+ChatGPT APIへは問い合わせない。subscription UIで得たJSONをローカルファイルから読む
 decision JSONを保存する
 成功条件
-runnerがChatGPT判断をJSONとして受け取れる
-ユーザーが毎回Codex結果をChatGPTへ貼らなくてよくなる
+runnerが /tmp/codex-local-runner-decision/chatgpt_decision.json を検証できる
+当面はユーザーがChatGPT-Judgeの返答JSONを保存し、runnerがそれを検証する
 10. Prompt152 — decision → next prompt generator
 目的
 
@@ -548,3 +548,36 @@ Prompt148 must:
 - not add unbounded loop / daemon / scheduler / queue drain
 - not mutate GitHub
 - not change Prompt149 accounting
+
+
+---
+
+## Current checkpoint update after Prompt150
+
+Current checkpoint:
+
+- `checkpoint-prompt150-actor-separation-ready`
+
+Completed after Prompt144:
+
+- Prompt145: one bounded existing invocation attempt bridge.
+- Prompt146: completion evidence evaluator.
+- Prompt149: runner result JSON accounting correction.
+- Prompt147: launch_1 / launch_2 state separation.
+- Prompt148: bounded max-two rolling launch execution.
+- Prompt150: ChatGPT-Judge / ChatGPT-Implementer actor separation schema.
+
+Prompt150 established:
+
+- `decision_actor` and `implementation_actor` are separate concepts.
+- `ChatGPT-Judge` is the review/decision actor.
+- `ChatGPT-Implementer` is a future implementation-handoff actor only.
+- `same_actor_requires_human_review=true` is represented.
+- ChatGPT-Implementer is not active by default.
+- No ChatGPT API call, browser automation, patch generation/application, next/fix generator, autonomous loop, rollback, GitHub branch/PR/CI/merge, or CI polling was added.
+
+Next:
+
+- Prompt151: implement local decision JSON validator for `/tmp/codex-local-runner-decision/chatgpt_decision.json`.
+
+Prompt151 must not call ChatGPT, automate browser UI, generate/apply patches, generate next/fix prompts, start loops, rollback, or create GitHub branch/PR/CI/merge behavior.

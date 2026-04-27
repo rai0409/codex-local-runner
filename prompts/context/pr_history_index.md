@@ -271,3 +271,26 @@ Complete always-on autonomous development remains not yet implemented.
 - No second launch execution was added.
 - No max-two rolling execution was added.
 - Next step: Prompt148 max-two bounded rolling execution.
+
+
+---
+
+## Prompt144-Prompt150 local runner progress
+
+- Prompt144: one_bounded_launch candidate safety validation; no invocation.
+- Prompt145: one bounded existing invocation attempt bridge; attempted=1 only after real selected mapped invocation.
+- Prompt146: completion evidence evaluator; completed=1 only with explicit confirmed evidence.
+- Prompt149: runner result JSON accounting correction from git diff/status.
+- Prompt147: launch_1 / launch_2 state separation; launch_2 remains candidate-only.
+- Prompt148: bounded max-two rolling launch execution; no third launch and no unbounded loop.
+- Prompt150: ChatGPT decision packet/schema/intake, decision actor, implementation actor, actor separation fields, and `same_actor_requires_human_review`.
+
+Prompt150 constraints preserved:
+
+- ChatGPT-Judge and ChatGPT-Implementer are separate concepts.
+- ChatGPT-Implementer is allowed future actor only and is not active by default.
+- No ChatGPT API call, browser automation, patch generation/application, next/fix generator, autonomous loop, rollback, GitHub branch/PR/merge, or CI polling was added.
+
+Next:
+
+- Prompt151: local validator/intake for `/tmp/codex-local-runner-decision/chatgpt_decision.json`.
