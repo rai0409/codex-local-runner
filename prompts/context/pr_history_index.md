@@ -348,3 +348,53 @@ Safety boundaries preserved:
 Next:
 
 - Prompt152: ChatGPT-Implementer packet generator.
+---
+
+## Prompt152 — ChatGPT-Implementer packet generator
+
+Status:
+
+- completed
+- tag: `checkpoint-prompt152-implementer-packet-ready`
+
+Primary file:
+
+- `automation/orchestration/planned_execution_runner.py`
+
+Summary:
+
+Prompt152 added metadata-only ChatGPT-Implementer packet and handoff state.
+
+Added field groups:
+
+- `project_browser_autonomous_chatgpt_implementation_packet_*`
+- `project_browser_autonomous_chatgpt_implementation_handoff_*`
+
+Expected future artifact paths:
+
+- `/tmp/codex-local-runner-decision/chatgpt_implementation_packet.md`
+- `/tmp/codex-local-runner-decision/chatgpt_implementation_response.md`
+- `/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff`
+
+Key behavior:
+
+- Manual handoff can be prepared only when Prompt151 decision consumption is usable.
+- Manual handoff requires `implementation_actor=chatgpt_5_5_implementer`.
+- Human review, rollback, same-actor review, missing actor, non-ChatGPT implementer route, missing inputs, or insufficient truth block packet preparation.
+- Prompt152 is metadata-only and does not write packet files.
+
+Safety boundaries preserved:
+
+- No ChatGPT API call.
+- No browser automation.
+- No implementation response validation.
+- No patch generation/application.
+- No next/fix Prompt generator.
+- No autonomous loop.
+- No rollback execution.
+- No GitHub branch/PR/CI/merge behavior.
+- Prompt148, Prompt149, Prompt150, and Prompt151 semantics unchanged.
+
+Next:
+
+- Prompt153: ChatGPT implementation response validator.

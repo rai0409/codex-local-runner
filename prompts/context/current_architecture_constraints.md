@@ -805,3 +805,39 @@ Prompt152 constraints:
 - Prompt152 must not validate or apply ChatGPT implementation output.
 - Prompt152 must preserve Prompt150 actor separation and Prompt151 decision validator semantics.
 - Prompt152 must not generate next/fix prompts, start loops, rollback, commit, create GitHub branch/PR/CI/merge behavior, or modify Prompt148/149/150/151 semantics.
+---
+
+## Prompt152 ChatGPT-Implementer packet constraints
+
+Prompt152 established metadata-only ChatGPT-Implementer packet/handoff preparation.
+
+Prompt152 invariants:
+
+- Packet generation is metadata-only.
+- Prompt152 must not write implementation packet files.
+- Prompt152 must not call ChatGPT.
+- Prompt152 must not automate browser UI.
+- Prompt152 must not read or validate implementation responses.
+- Prompt152 must not generate patches.
+- Prompt152 must not apply patches.
+- Prompt152 must not generate next/fix prompts.
+- Prompt152 must not start loops.
+- Prompt152 must not rollback, commit, create GitHub branches, create PRs, check CI, or merge.
+- Prompt152 must preserve Prompt150 actor separation.
+- Prompt152 must preserve Prompt151 decision validator semantics.
+
+Prompt152 expected future artifact paths:
+
+- `/tmp/codex-local-runner-decision/chatgpt_implementation_packet.md`
+- `/tmp/codex-local-runner-decision/chatgpt_implementation_response.md`
+- `/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff`
+
+Prompt153 constraints:
+
+- Prompt153 may validate ChatGPT-Implementer response metadata only.
+- Prompt153 may inspect only the expected implementation response/patch paths.
+- Prompt153 must not apply patches.
+- Prompt153 must not modify files based on the response.
+- Prompt153 must not call ChatGPT or automate browser UI.
+- Prompt153 must not generate next/fix prompts or start autonomous loops.
+- Prompt153 must not perform rollback/GitHub/CI/merge behavior.
