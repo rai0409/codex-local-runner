@@ -3299,6 +3299,13 @@ def _as_non_negative_int(value: Any, *, default: int = 0) -> int:
     return max(0, maybe)
 
 
+def _as_int(value: Any, *, default: int = 0) -> int:
+    maybe = _as_optional_int(value)
+    if maybe is None:
+        return default
+    return maybe
+
+
 def _merge_retry_context_inputs(
     *,
     persisted: Mapping[str, Any] | None,
@@ -47173,6 +47180,517 @@ def _build_project_browser_autonomous_safe_patch_real_apply_state(
     }
 
 
+def _build_project_browser_autonomous_post_apply_validation_state(
+    *,
+    expected_patch_path: str,
+    safe_patch_gate_status: str,
+    dry_run_status: str,
+    dry_run_completed: bool,
+    dry_run_passed: bool,
+    dry_run_failed: bool,
+    dry_run_exit_code: int,
+    apply_status: str,
+    apply_attempted: bool,
+    apply_completed: bool,
+    apply_performed: bool,
+    apply_passed: bool,
+    apply_failed: bool,
+    apply_exit_code: int,
+    touched_files: list[str] | None,
+    changed_files_after_apply: list[str] | None,
+    unexpected_changed_files_after_apply: list[str] | None,
+    forbidden_changed_files_after_apply: list[str] | None,
+    worktree_status_after_apply: str,
+    worktree_dirty_after_apply: bool,
+    human_review_required: bool,
+    rollback_required: bool,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "ready_to_validate",
+        "validation_passed",
+        "validation_failed",
+        "blocked_no_apply_performed",
+        "blocked_apply_failed",
+        "blocked_missing_post_apply_truth",
+        "blocked_forbidden_changes",
+        "blocked_unexpected_changes",
+        "blocked_changed_file_mismatch",
+        "blocked_metadata_inconsistency",
+        "blocked_command_unavailable",
+        "blocked_timeout",
+        "human_review_required",
+        "rollback_required",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "wait_for_apply_success",
+        "run_post_apply_validation",
+        "proceed_after_validation",
+        "manual_fix_patch_candidate",
+        "human_review_required",
+        "rollback_required",
+        "insufficient_truth",
+    }
+    runtime_posture = [
+        "bounded_post_apply_validation",
+        "single_pass_validation",
+        "argv_list_execution_only",
+        "no_shell_true",
+        "py_compile_only_required",
+        "no_broad_tests_default",
+        "no_git_mutation",
+        "no_rollback_execution",
+        "metadata_only_rollback_posture",
+    ]
+
+    normalized_expected_patch_path = _normalize_text(expected_patch_path, default="")
+    normalized_safe_patch_gate_status = _normalize_text(
+        safe_patch_gate_status,
+        default="insufficient_truth",
+    )
+    normalized_dry_run_status = _normalize_text(dry_run_status, default="insufficient_truth")
+    normalized_apply_status = _normalize_text(apply_status, default="insufficient_truth")
+    normalized_touched_files = _normalize_string_list(touched_files or [])
+    normalized_changed_files = _normalize_string_list(changed_files_after_apply or [])
+    normalized_unexpected_changed_files = _normalize_string_list(
+        unexpected_changed_files_after_apply or []
+    )
+    normalized_forbidden_changed_files = _normalize_string_list(
+        forbidden_changed_files_after_apply or []
+    )
+    normalized_worktree_status_after_apply = _normalize_text(
+        worktree_status_after_apply,
+        default="insufficient_truth",
+    )
+    normalized_worktree_dirty_after_apply = bool(worktree_dirty_after_apply)
+    if normalized_worktree_status_after_apply in {"clean", "dirty"}:
+        normalized_worktree_dirty_after_apply = (
+            normalized_worktree_status_after_apply == "dirty"
+        )
+
+    validation_commands = [
+        "python -m py_compile automation/orchestration/planned_execution_runner.py",
+        "python -m py_compile scripts/run_planned_execution.py",
+    ]
+    command_args = [
+        ["-m", "py_compile", "automation/orchestration/planned_execution_runner.py"],
+        ["-m", "py_compile", "scripts/run_planned_execution.py"],
+    ]
+
+    required_inputs = [
+        "expected_patch_path",
+        "safe_patch_gate_status",
+        "dry_run_status",
+        "apply_status",
+        "touched_files",
+        "changed_files_after_apply",
+        "worktree_status_after_apply",
+    ]
+    available_inputs: list[str] = []
+    if normalized_expected_patch_path:
+        available_inputs.append("expected_patch_path")
+    if normalized_safe_patch_gate_status:
+        available_inputs.append("safe_patch_gate_status")
+    if normalized_dry_run_status:
+        available_inputs.append("dry_run_status")
+    if normalized_apply_status:
+        available_inputs.append("apply_status")
+    if normalized_touched_files:
+        available_inputs.append("touched_files")
+    if normalized_changed_files:
+        available_inputs.append("changed_files_after_apply")
+    if normalized_worktree_status_after_apply in {"clean", "dirty"}:
+        available_inputs.append("worktree_status_after_apply")
+    missing_inputs = _serialize_required_signals(
+        [name for name in required_inputs if name not in set(available_inputs)]
+    )
+
+    changed_file_consistency_passed = bool(
+        normalized_changed_files
+        and set(normalized_changed_files).issubset(set(normalized_touched_files))
+        and not normalized_unexpected_changed_files
+        and not normalized_forbidden_changed_files
+    )
+    changed_file_consistency_failed = bool(
+        not changed_file_consistency_passed
+        and (
+            normalized_forbidden_changed_files
+            or normalized_unexpected_changed_files
+            or not normalized_changed_files
+            or (
+                normalized_changed_files
+                and normalized_touched_files
+                and not set(normalized_changed_files).issubset(set(normalized_touched_files))
+            )
+        )
+    )
+    metadata_consistency_passed = bool(
+        bool(apply_attempted)
+        and bool(apply_completed)
+        and bool(apply_performed)
+        and bool(apply_passed)
+        and not bool(apply_failed)
+        and bool(dry_run_completed)
+        and bool(dry_run_passed)
+        and not bool(dry_run_failed)
+        and int(_as_int(dry_run_exit_code, default=-1)) == 0
+        and normalized_safe_patch_gate_status not in {"", "insufficient_truth"}
+    )
+    metadata_consistency_failed = not metadata_consistency_passed
+
+    post_apply_truth_missing = bool(
+        normalized_worktree_status_after_apply == "insufficient_truth"
+    )
+    diff_stat_available = bool(normalized_changed_files)
+    diff_stat_excerpt = (
+        ", ".join(normalized_changed_files[:8]) if normalized_changed_files else ""
+    )
+
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    next_action = "insufficient_truth"
+
+    validation_attempted = False
+    validation_completed = False
+    validation_passed = False
+    validation_failed = False
+    py_compile_attempted = False
+    py_compile_completed = False
+    py_compile_exit_code = -1
+    py_compile_stdout_excerpt = ""
+    py_compile_stderr_excerpt = ""
+    targeted_tests_attempted = False
+    targeted_tests_completed = False
+    targeted_tests_exit_code = -1
+    targeted_tests_stdout_excerpt = ""
+    targeted_tests_stderr_excerpt = ""
+
+    effective_human_review_required = bool(human_review_required)
+    effective_rollback_required = bool(rollback_required)
+
+    def _excerpt(text: str, *, max_chars: int = 600, max_lines: int = 12) -> str:
+        normalized = _normalize_text(text, default="")
+        if not normalized:
+            return ""
+        lines = normalized.splitlines()[:max_lines]
+        compact = "\n".join(lines)
+        if len(compact) > max_chars:
+            compact = compact[:max_chars]
+        return compact
+
+    if rollback_required:
+        status = "rollback_required"
+        source_status = "preexisting_rollback_required"
+        block_reason = "rollback_required"
+        next_action = "rollback_required"
+        validation_failed = True
+    elif human_review_required:
+        status = "human_review_required"
+        source_status = "preexisting_human_review_required"
+        block_reason = "human_review_required"
+        next_action = "human_review_required"
+        validation_failed = True
+    elif not apply_attempted or not apply_completed or not apply_performed:
+        status = "blocked_no_apply_performed"
+        source_status = "apply_not_performed"
+        block_reason = "apply_not_performed"
+        next_action = "wait_for_apply_success"
+        validation_failed = True
+    elif apply_failed:
+        status = "blocked_apply_failed"
+        source_status = "apply_failed"
+        block_reason = "apply_failed"
+        next_action = "manual_fix_patch_candidate"
+        validation_failed = True
+        effective_human_review_required = True
+        effective_rollback_required = True
+    elif not apply_passed:
+        if normalized_apply_status == "insufficient_truth":
+            status = "insufficient_truth"
+            source_status = "apply_truth_unavailable"
+            block_reason = "insufficient_truth"
+            next_action = "insufficient_truth"
+            validation_failed = False
+        else:
+            status = "blocked_apply_failed"
+            source_status = "apply_not_passed"
+            block_reason = "apply_not_passed"
+            next_action = "manual_fix_patch_candidate"
+            validation_failed = True
+            effective_human_review_required = True
+            effective_rollback_required = True
+    elif post_apply_truth_missing:
+        status = "blocked_missing_post_apply_truth"
+        source_status = "post_apply_truth_unavailable"
+        block_reason = "post_apply_truth_unavailable"
+        next_action = "human_review_required"
+        validation_failed = True
+        effective_human_review_required = True
+        effective_rollback_required = True
+    elif normalized_forbidden_changed_files:
+        status = "blocked_forbidden_changes"
+        source_status = "forbidden_changes_detected"
+        block_reason = "forbidden_changes_detected"
+        next_action = "human_review_required"
+        validation_failed = True
+        effective_human_review_required = True
+        effective_rollback_required = True
+    elif normalized_unexpected_changed_files:
+        status = "blocked_unexpected_changes"
+        source_status = "unexpected_changes_detected"
+        block_reason = "unexpected_changes_detected"
+        next_action = "human_review_required"
+        validation_failed = True
+        effective_human_review_required = True
+        effective_rollback_required = True
+    elif changed_file_consistency_failed:
+        status = "blocked_changed_file_mismatch"
+        source_status = "changed_file_consistency_failed"
+        block_reason = "changed_file_consistency_failed"
+        next_action = "human_review_required"
+        validation_failed = True
+        effective_human_review_required = True
+        effective_rollback_required = True
+    elif metadata_consistency_failed:
+        status = "blocked_metadata_inconsistency"
+        source_status = "metadata_consistency_failed"
+        block_reason = "metadata_consistency_failed"
+        next_action = "human_review_required"
+        validation_failed = True
+        effective_human_review_required = True
+        effective_rollback_required = True
+    else:
+        status = "ready_to_validate"
+        source_status = "post_apply_validation_ready"
+        block_reason = "none"
+        next_action = "run_post_apply_validation"
+
+        python_exec = _normalize_text(sys.executable, default="")
+        if not python_exec:
+            python_exec = _normalize_text(shutil.which("python"), default="")
+        if not python_exec:
+            python_exec = _normalize_text(shutil.which("python3"), default="")
+
+        if not python_exec:
+            status = "blocked_command_unavailable"
+            source_status = "python_command_unavailable"
+            block_reason = "python_command_unavailable"
+            next_action = "manual_fix_patch_candidate"
+            validation_failed = True
+            effective_human_review_required = True
+            effective_rollback_required = True
+        else:
+            validation_attempted = True
+            py_compile_attempted = True
+            py_stdout_parts: list[str] = []
+            py_stderr_parts: list[str] = []
+            for command_text, command_args_item in zip(validation_commands, command_args):
+                try:
+                    command_result = subprocess.run(
+                        [python_exec, *command_args_item],
+                        capture_output=True,
+                        text=True,
+                        timeout=5.0,
+                        cwd=str(Path(__file__).resolve().parents[2]),
+                    )
+                except subprocess.TimeoutExpired as timeout_error:
+                    py_compile_completed = True
+                    validation_completed = True
+                    py_compile_exit_code = 124
+                    py_stdout_parts.append(
+                        _excerpt(
+                            timeout_error.stdout
+                            if isinstance(timeout_error.stdout, str)
+                            else ""
+                        )
+                    )
+                    py_stderr_parts.append(
+                        _excerpt(
+                            timeout_error.stderr
+                            if isinstance(timeout_error.stderr, str)
+                            else ""
+                        )
+                    )
+                    status = "blocked_timeout"
+                    source_status = "post_apply_validation_timeout"
+                    block_reason = f"timeout:{command_text}"
+                    next_action = "human_review_required"
+                    validation_passed = False
+                    validation_failed = True
+                    effective_human_review_required = True
+                    effective_rollback_required = True
+                    break
+                except OSError as command_error:
+                    py_compile_completed = False
+                    validation_completed = False
+                    py_compile_exit_code = -1
+                    py_stdout_parts.append("")
+                    py_stderr_parts.append(_excerpt(str(command_error)))
+                    status = "blocked_command_unavailable"
+                    source_status = "post_apply_validation_command_unavailable"
+                    block_reason = f"command_unavailable:{command_text}"
+                    next_action = "manual_fix_patch_candidate"
+                    validation_passed = False
+                    validation_failed = True
+                    effective_human_review_required = True
+                    effective_rollback_required = True
+                    break
+
+                py_compile_exit_code = int(command_result.returncode)
+                py_stdout_parts.append(_excerpt(command_result.stdout))
+                py_stderr_parts.append(_excerpt(command_result.stderr))
+                if command_result.returncode != 0:
+                    py_compile_completed = True
+                    validation_completed = True
+                    status = "validation_failed"
+                    source_status = "required_py_compile_failed"
+                    block_reason = f"py_compile_failed:{command_text}"
+                    next_action = "human_review_required"
+                    validation_passed = False
+                    validation_failed = True
+                    effective_human_review_required = True
+                    effective_rollback_required = True
+                    break
+            else:
+                py_compile_completed = True
+                validation_completed = True
+                validation_passed = True
+                validation_failed = False
+                status = "validation_passed"
+                source_status = "required_py_compile_passed"
+                block_reason = "none"
+                next_action = "proceed_after_validation"
+
+            py_compile_stdout_excerpt = _excerpt("\n".join(py_stdout_parts))
+            py_compile_stderr_excerpt = _excerpt("\n".join(py_stderr_parts))
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    if (
+        status.startswith("blocked_")
+        or status in {"validation_failed", "human_review_required", "rollback_required"}
+    ):
+        validation_passed = False
+        validation_failed = True
+    elif status == "insufficient_truth":
+        validation_passed = False
+        validation_failed = False
+
+    rollback_status = "insufficient_truth"
+    rollback_source_status = source_status
+    rollback_block_reason = block_reason
+    rollback_reason = ""
+    rollback_next_action = "insufficient_truth"
+    if effective_rollback_required:
+        rollback_status = "rollback_required"
+        rollback_reason = block_reason or "rollback_required"
+        rollback_next_action = "rollback_required"
+    elif effective_human_review_required:
+        rollback_status = "human_review_required"
+        rollback_reason = block_reason or "human_review_required"
+        rollback_next_action = "human_review_required"
+    elif status == "validation_passed":
+        rollback_status = "rollback_not_required"
+        rollback_reason = "none"
+        rollback_next_action = "proceed_after_validation"
+    elif status == "insufficient_truth":
+        rollback_status = "insufficient_truth"
+        rollback_reason = "insufficient_truth"
+        rollback_next_action = "insufficient_truth"
+    else:
+        rollback_status = "human_review_required"
+        rollback_reason = block_reason or "human_review_required"
+        rollback_next_action = "human_review_required"
+        effective_human_review_required = True
+
+    def _validation_group(prefix: str) -> dict[str, Any]:
+        return {
+            f"{prefix}_status": status,
+            f"{prefix}_source_status": source_status,
+            f"{prefix}_block_reason": block_reason,
+            f"{prefix}_expected_patch_path": normalized_expected_patch_path,
+            f"{prefix}_apply_status": normalized_apply_status,
+            f"{prefix}_apply_attempted": bool(apply_attempted),
+            f"{prefix}_apply_completed": bool(apply_completed),
+            f"{prefix}_apply_performed": bool(apply_performed),
+            f"{prefix}_apply_passed": bool(apply_passed),
+            f"{prefix}_apply_failed": bool(apply_failed),
+            f"{prefix}_apply_exit_code": int(_as_int(apply_exit_code, default=-1)),
+            f"{prefix}_touched_files": normalized_touched_files,
+            f"{prefix}_changed_files_after_apply": normalized_changed_files,
+            f"{prefix}_unexpected_changed_files_after_apply": normalized_unexpected_changed_files,
+            f"{prefix}_forbidden_changed_files_after_apply": normalized_forbidden_changed_files,
+            f"{prefix}_worktree_status_after_apply": normalized_worktree_status_after_apply,
+            f"{prefix}_worktree_dirty_after_apply": bool(normalized_worktree_dirty_after_apply),
+            f"{prefix}_validation_commands": _normalize_string_list(validation_commands),
+            f"{prefix}_validation_attempted": bool(validation_attempted),
+            f"{prefix}_validation_completed": bool(validation_completed),
+            f"{prefix}_validation_passed": bool(validation_passed),
+            f"{prefix}_validation_failed": bool(validation_failed),
+            f"{prefix}_py_compile_attempted": bool(py_compile_attempted),
+            f"{prefix}_py_compile_completed": bool(py_compile_completed),
+            f"{prefix}_py_compile_exit_code": int(py_compile_exit_code),
+            f"{prefix}_py_compile_stdout_excerpt": py_compile_stdout_excerpt,
+            f"{prefix}_py_compile_stderr_excerpt": py_compile_stderr_excerpt,
+            f"{prefix}_targeted_tests_attempted": bool(targeted_tests_attempted),
+            f"{prefix}_targeted_tests_completed": bool(targeted_tests_completed),
+            f"{prefix}_targeted_tests_exit_code": int(targeted_tests_exit_code),
+            f"{prefix}_targeted_tests_stdout_excerpt": targeted_tests_stdout_excerpt,
+            f"{prefix}_targeted_tests_stderr_excerpt": targeted_tests_stderr_excerpt,
+            f"{prefix}_diff_stat_available": bool(diff_stat_available),
+            f"{prefix}_diff_stat_excerpt": diff_stat_excerpt,
+            f"{prefix}_changed_file_consistency_passed": bool(changed_file_consistency_passed),
+            f"{prefix}_changed_file_consistency_failed": bool(changed_file_consistency_failed),
+            f"{prefix}_metadata_consistency_passed": bool(metadata_consistency_passed),
+            f"{prefix}_metadata_consistency_failed": bool(metadata_consistency_failed),
+            f"{prefix}_human_review_required": bool(effective_human_review_required),
+            f"{prefix}_rollback_required": bool(effective_rollback_required),
+            f"{prefix}_next_action": next_action,
+            f"{prefix}_runtime_posture": runtime_posture,
+            f"{prefix}_missing_inputs": missing_inputs,
+        }
+
+    return {
+        **_validation_group("project_browser_autonomous_post_apply_validation_check"),
+        **_validation_group("project_browser_autonomous_post_apply_validation_execution"),
+        **_validation_group("project_browser_autonomous_post_apply_validation_result"),
+        "project_browser_autonomous_post_apply_validation_status": status,
+        "project_browser_autonomous_post_apply_validation_next_action": next_action,
+        "project_browser_autonomous_rollback_posture_status": rollback_status,
+        "project_browser_autonomous_rollback_posture_source_status": (
+            rollback_source_status
+        ),
+        "project_browser_autonomous_rollback_posture_block_reason": (
+            rollback_block_reason
+        ),
+        "project_browser_autonomous_rollback_posture_rollback_required": (
+            bool(effective_rollback_required)
+        ),
+        "project_browser_autonomous_rollback_posture_rollback_reason": rollback_reason,
+        "project_browser_autonomous_rollback_posture_rollback_execution_allowed": False,
+        "project_browser_autonomous_rollback_posture_rollback_executed": False,
+        "project_browser_autonomous_rollback_posture_rollback_command": "",
+        "project_browser_autonomous_rollback_posture_rollback_attempted": False,
+        "project_browser_autonomous_rollback_posture_rollback_completed": False,
+        "project_browser_autonomous_rollback_posture_rollback_exit_code": -1,
+        "project_browser_autonomous_rollback_posture_human_review_required": (
+            bool(effective_human_review_required)
+        ),
+        "project_browser_autonomous_rollback_posture_next_action": rollback_next_action,
+        "project_browser_autonomous_rollback_posture_runtime_posture": [
+            "rollback_posture_metadata_only",
+            "rollback_execution_disallowed",
+            "no_git_reset_clean_checkout_restore",
+            "human_review_gate_before_rollback",
+        ],
+        "project_browser_autonomous_rollback_posture_missing_inputs": missing_inputs,
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -65005,6 +65523,498 @@ def _build_approved_restart_execution_contract_surface(
             safe_patch_real_apply_result,
         ),
     }
+    project_browser_autonomous_post_apply_validation_state = (
+        _build_project_browser_autonomous_post_apply_validation_state(
+            expected_patch_path=_normalize_text(
+                safe_patch_real_apply_result.get("expected_patch_path"),
+                default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+            ),
+            safe_patch_gate_status=project_browser_autonomous_safe_patch_apply_gate_status,
+            dry_run_status=project_browser_autonomous_patch_dry_run_result_status,
+            dry_run_completed=project_browser_autonomous_patch_dry_run_result_dry_run_completed,
+            dry_run_passed=project_browser_autonomous_patch_dry_run_result_dry_run_passed,
+            dry_run_failed=project_browser_autonomous_patch_dry_run_result_dry_run_failed,
+            dry_run_exit_code=project_browser_autonomous_patch_dry_run_result_dry_run_exit_code,
+            apply_status=project_browser_autonomous_safe_patch_real_apply_result_status,
+            apply_attempted=bool(safe_patch_real_apply_result.get("apply_attempted", False)),
+            apply_completed=bool(safe_patch_real_apply_result.get("apply_completed", False)),
+            apply_performed=bool(safe_patch_real_apply_result.get("apply_performed", False)),
+            apply_passed=bool(safe_patch_real_apply_result.get("apply_passed", False)),
+            apply_failed=bool(safe_patch_real_apply_result.get("apply_failed", False)),
+            apply_exit_code=_as_int(safe_patch_real_apply_result.get("apply_exit_code"), default=-1),
+            touched_files=_normalize_string_list(safe_patch_real_apply_result.get("touched_files")),
+            changed_files_after_apply=_normalize_string_list(
+                safe_patch_real_apply_result.get("changed_files_after_apply")
+            ),
+            unexpected_changed_files_after_apply=_normalize_string_list(
+                safe_patch_real_apply_result.get("unexpected_changed_files_after_apply")
+            ),
+            forbidden_changed_files_after_apply=_normalize_string_list(
+                safe_patch_real_apply_result.get("forbidden_changed_files_after_apply")
+            ),
+            worktree_status_after_apply=_normalize_text(
+                safe_patch_real_apply_result.get("worktree_status_after_apply"),
+                default="insufficient_truth",
+            ),
+            worktree_dirty_after_apply=bool(
+                safe_patch_real_apply_result.get("worktree_dirty_after_apply", False)
+            ),
+            human_review_required=bool(
+                safe_patch_real_apply_result.get("human_review_required", False)
+            ),
+            rollback_required=bool(
+                safe_patch_real_apply_result.get("rollback_required", False)
+            ),
+        )
+    )
+    post_apply_validation_allowed_statuses = {
+        "ready_to_validate",
+        "validation_passed",
+        "validation_failed",
+        "blocked_no_apply_performed",
+        "blocked_apply_failed",
+        "blocked_missing_post_apply_truth",
+        "blocked_forbidden_changes",
+        "blocked_unexpected_changes",
+        "blocked_changed_file_mismatch",
+        "blocked_metadata_inconsistency",
+        "blocked_command_unavailable",
+        "blocked_timeout",
+        "human_review_required",
+        "rollback_required",
+        "insufficient_truth",
+    }
+    post_apply_validation_allowed_next_actions = {
+        "wait_for_apply_success",
+        "run_post_apply_validation",
+        "proceed_after_validation",
+        "manual_fix_patch_candidate",
+        "human_review_required",
+        "rollback_required",
+        "insufficient_truth",
+    }
+    post_apply_validation_field_names = (
+        "status",
+        "source_status",
+        "block_reason",
+        "expected_patch_path",
+        "apply_status",
+        "apply_attempted",
+        "apply_completed",
+        "apply_performed",
+        "apply_passed",
+        "apply_failed",
+        "apply_exit_code",
+        "touched_files",
+        "changed_files_after_apply",
+        "unexpected_changed_files_after_apply",
+        "forbidden_changed_files_after_apply",
+        "worktree_status_after_apply",
+        "worktree_dirty_after_apply",
+        "validation_commands",
+        "validation_attempted",
+        "validation_completed",
+        "validation_passed",
+        "validation_failed",
+        "py_compile_attempted",
+        "py_compile_completed",
+        "py_compile_exit_code",
+        "py_compile_stdout_excerpt",
+        "py_compile_stderr_excerpt",
+        "targeted_tests_attempted",
+        "targeted_tests_completed",
+        "targeted_tests_exit_code",
+        "targeted_tests_stdout_excerpt",
+        "targeted_tests_stderr_excerpt",
+        "diff_stat_available",
+        "diff_stat_excerpt",
+        "changed_file_consistency_passed",
+        "changed_file_consistency_failed",
+        "metadata_consistency_passed",
+        "metadata_consistency_failed",
+        "human_review_required",
+        "rollback_required",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    rollback_posture_field_names = (
+        "status",
+        "source_status",
+        "block_reason",
+        "rollback_required",
+        "rollback_reason",
+        "rollback_execution_allowed",
+        "rollback_executed",
+        "rollback_command",
+        "rollback_attempted",
+        "rollback_completed",
+        "rollback_exit_code",
+        "human_review_required",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+
+    def _normalize_post_apply_validation_group(prefix: str) -> dict[str, Any]:
+        status = _normalize_text(
+            project_browser_autonomous_post_apply_validation_state.get(f"{prefix}_status"),
+            default="insufficient_truth",
+        )
+        if status not in post_apply_validation_allowed_statuses:
+            status = "insufficient_truth"
+        next_action = _normalize_text(
+            project_browser_autonomous_post_apply_validation_state.get(
+                f"{prefix}_next_action"
+            ),
+            default="insufficient_truth",
+        )
+        if next_action not in post_apply_validation_allowed_next_actions:
+            next_action = "insufficient_truth"
+        return {
+            "status": status,
+            "source_status": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_source_status"
+                ),
+                default="insufficient_truth",
+            ),
+            "block_reason": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_block_reason"
+                ),
+                default="insufficient_truth",
+            ),
+            "expected_patch_path": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_expected_patch_path"
+                ),
+                default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+            ),
+            "apply_status": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_apply_status"
+                ),
+                default="insufficient_truth",
+            ),
+            "apply_attempted": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_apply_attempted",
+                    False,
+                )
+            ),
+            "apply_completed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_apply_completed",
+                    False,
+                )
+            ),
+            "apply_performed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_apply_performed",
+                    False,
+                )
+            ),
+            "apply_passed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_apply_passed",
+                    False,
+                )
+            ),
+            "apply_failed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_apply_failed",
+                    False,
+                )
+            ),
+            "apply_exit_code": int(
+                _as_int(
+                    project_browser_autonomous_post_apply_validation_state.get(
+                        f"{prefix}_apply_exit_code"
+                    ),
+                    default=-1,
+                )
+            ),
+            "touched_files": _normalize_string_list(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_touched_files"
+                )
+            ),
+            "changed_files_after_apply": _normalize_string_list(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_changed_files_after_apply"
+                )
+            ),
+            "unexpected_changed_files_after_apply": _normalize_string_list(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_unexpected_changed_files_after_apply"
+                )
+            ),
+            "forbidden_changed_files_after_apply": _normalize_string_list(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_forbidden_changed_files_after_apply"
+                )
+            ),
+            "worktree_status_after_apply": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_worktree_status_after_apply"
+                ),
+                default="insufficient_truth",
+            ),
+            "worktree_dirty_after_apply": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_worktree_dirty_after_apply",
+                    False,
+                )
+            ),
+            "validation_commands": _normalize_string_list(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_validation_commands"
+                )
+            ),
+            "validation_attempted": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_validation_attempted",
+                    False,
+                )
+            ),
+            "validation_completed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_validation_completed",
+                    False,
+                )
+            ),
+            "validation_passed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_validation_passed",
+                    False,
+                )
+            ),
+            "validation_failed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_validation_failed",
+                    False,
+                )
+            ),
+            "py_compile_attempted": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_py_compile_attempted",
+                    False,
+                )
+            ),
+            "py_compile_completed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_py_compile_completed",
+                    False,
+                )
+            ),
+            "py_compile_exit_code": int(
+                _as_int(
+                    project_browser_autonomous_post_apply_validation_state.get(
+                        f"{prefix}_py_compile_exit_code"
+                    ),
+                    default=-1,
+                )
+            ),
+            "py_compile_stdout_excerpt": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_py_compile_stdout_excerpt"
+                ),
+                default="",
+            ),
+            "py_compile_stderr_excerpt": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_py_compile_stderr_excerpt"
+                ),
+                default="",
+            ),
+            "targeted_tests_attempted": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_targeted_tests_attempted",
+                    False,
+                )
+            ),
+            "targeted_tests_completed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_targeted_tests_completed",
+                    False,
+                )
+            ),
+            "targeted_tests_exit_code": int(
+                _as_int(
+                    project_browser_autonomous_post_apply_validation_state.get(
+                        f"{prefix}_targeted_tests_exit_code"
+                    ),
+                    default=-1,
+                )
+            ),
+            "targeted_tests_stdout_excerpt": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_targeted_tests_stdout_excerpt"
+                ),
+                default="",
+            ),
+            "targeted_tests_stderr_excerpt": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_targeted_tests_stderr_excerpt"
+                ),
+                default="",
+            ),
+            "diff_stat_available": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_diff_stat_available",
+                    False,
+                )
+            ),
+            "diff_stat_excerpt": _normalize_text(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_diff_stat_excerpt"
+                ),
+                default="",
+            ),
+            "changed_file_consistency_passed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_changed_file_consistency_passed",
+                    False,
+                )
+            ),
+            "changed_file_consistency_failed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_changed_file_consistency_failed",
+                    False,
+                )
+            ),
+            "metadata_consistency_passed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_metadata_consistency_passed",
+                    False,
+                )
+            ),
+            "metadata_consistency_failed": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_metadata_consistency_failed",
+                    False,
+                )
+            ),
+            "human_review_required": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_human_review_required",
+                    False,
+                )
+            ),
+            "rollback_required": bool(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_rollback_required",
+                    False,
+                )
+            ),
+            "next_action": next_action,
+            "runtime_posture": _normalize_string_list(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_runtime_posture"
+                )
+            ),
+            "missing_inputs": _normalize_string_list(
+                project_browser_autonomous_post_apply_validation_state.get(
+                    f"{prefix}_missing_inputs"
+                )
+            ),
+        }
+
+    def _prefix_post_apply_validation_group(
+        prefix: str,
+        group: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            f"{prefix}_{field_name}": group.get(field_name)
+            for field_name in post_apply_validation_field_names
+        }
+
+    post_apply_validation_check = _normalize_post_apply_validation_group(
+        "project_browser_autonomous_post_apply_validation_check"
+    )
+    post_apply_validation_execution = _normalize_post_apply_validation_group(
+        "project_browser_autonomous_post_apply_validation_execution"
+    )
+    post_apply_validation_result = _normalize_post_apply_validation_group(
+        "project_browser_autonomous_post_apply_validation_result"
+    )
+
+    project_browser_autonomous_post_apply_validation_status = _normalize_text(
+        project_browser_autonomous_post_apply_validation_state.get(
+            "project_browser_autonomous_post_apply_validation_status"
+        ),
+        default=_normalize_text(
+            post_apply_validation_result.get("status"),
+            default="insufficient_truth",
+        ),
+    )
+    if project_browser_autonomous_post_apply_validation_status not in (
+        post_apply_validation_allowed_statuses
+    ):
+        project_browser_autonomous_post_apply_validation_status = "insufficient_truth"
+    project_browser_autonomous_post_apply_validation_next_action = _normalize_text(
+        project_browser_autonomous_post_apply_validation_state.get(
+            "project_browser_autonomous_post_apply_validation_next_action"
+        ),
+        default=_normalize_text(
+            post_apply_validation_result.get("next_action"),
+            default="insufficient_truth",
+        ),
+    )
+    if project_browser_autonomous_post_apply_validation_next_action not in (
+        post_apply_validation_allowed_next_actions
+    ):
+        project_browser_autonomous_post_apply_validation_next_action = (
+            "insufficient_truth"
+        )
+
+    project_browser_autonomous_rollback_posture_status = _normalize_text(
+        project_browser_autonomous_post_apply_validation_state.get(
+            "project_browser_autonomous_rollback_posture_status"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_rollback_posture_next_action = _normalize_text(
+        project_browser_autonomous_post_apply_validation_state.get(
+            "project_browser_autonomous_rollback_posture_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_post_apply_validation_state_normalized = {
+        **_prefix_post_apply_validation_group(
+            "project_browser_autonomous_post_apply_validation_check",
+            post_apply_validation_check,
+        ),
+        **_prefix_post_apply_validation_group(
+            "project_browser_autonomous_post_apply_validation_execution",
+            post_apply_validation_execution,
+        ),
+        **_prefix_post_apply_validation_group(
+            "project_browser_autonomous_post_apply_validation_result",
+            post_apply_validation_result,
+        ),
+        "project_browser_autonomous_post_apply_validation_status": (
+            project_browser_autonomous_post_apply_validation_status
+        ),
+        "project_browser_autonomous_post_apply_validation_next_action": (
+            project_browser_autonomous_post_apply_validation_next_action
+        ),
+    }
+    project_browser_autonomous_rollback_posture_state_normalized = {
+        f"project_browser_autonomous_rollback_posture_{field_name}": (
+            project_browser_autonomous_post_apply_validation_state.get(
+                f"project_browser_autonomous_rollback_posture_{field_name}"
+            )
+        )
+        for field_name in rollback_posture_field_names
+    }
+    project_browser_autonomous_rollback_posture_state_normalized[
+        "project_browser_autonomous_rollback_posture_status"
+    ] = project_browser_autonomous_rollback_posture_status
+    project_browser_autonomous_rollback_posture_state_normalized[
+        "project_browser_autonomous_rollback_posture_next_action"
+    ] = project_browser_autonomous_rollback_posture_next_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -67486,6 +68496,8 @@ def _build_approved_restart_execution_contract_surface(
                     project_browser_autonomous_patch_dry_run_result_missing_inputs
                 ),
                 **project_browser_autonomous_safe_patch_real_apply_state_normalized,
+                **project_browser_autonomous_post_apply_validation_state_normalized,
+                **project_browser_autonomous_rollback_posture_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -68307,6 +69319,18 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_safe_patch_real_apply_result_next_action"
             if project_browser_autonomous_safe_patch_real_apply_result_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_post_apply_validation_status"
+            if project_browser_autonomous_post_apply_validation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_post_apply_validation_next_action"
+            if project_browser_autonomous_post_apply_validation_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_rollback_posture_status"
+            if project_browser_autonomous_rollback_posture_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_rollback_posture_next_action"
+            if project_browser_autonomous_rollback_posture_next_action
             else "",
             ]
     )
@@ -74413,6 +75437,8 @@ def _build_approved_restart_execution_contract_surface(
             project_browser_autonomous_patch_dry_run_result_missing_inputs
         ),
         **project_browser_autonomous_safe_patch_real_apply_state_normalized,
+        **project_browser_autonomous_post_apply_validation_state_normalized,
+        **project_browser_autonomous_rollback_posture_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(
