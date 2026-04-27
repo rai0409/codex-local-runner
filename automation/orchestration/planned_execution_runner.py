@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any
 from typing import Callable
@@ -4361,11 +4362,17 @@ def _augment_run_state_with_readiness(
     }
 
 
-def _run_git(repo_path: str, args: list[str]) -> subprocess.CompletedProcess[str]:
+def _run_git(
+    repo_path: str,
+    args: list[str],
+    *,
+    timeout_seconds: float | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", repo_path, *args],
         text=True,
         capture_output=True,
+        timeout=timeout_seconds,
     )
 
 
@@ -46316,6 +46323,328 @@ def _build_project_browser_autonomous_safe_patch_apply_gate_state(
     }
 
 
+def _build_project_browser_autonomous_patch_dry_run_state(
+    *,
+    patch_candidate_status: str,
+    safe_patch_gate_status: str,
+    safe_patch_gate_block_reason: str,
+    expected_patch_path: str,
+    touched_files: list[str] | None,
+    forbidden_touched_files: list[str] | None,
+    unsafe_operation_flags: list[str] | None,
+    worktree_status: str,
+    worktree_dirty: bool,
+    human_review_required: bool,
+    rollback_required: bool,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "ready_to_dry_run",
+        "dry_run_passed",
+        "dry_run_failed",
+        "blocked_no_ready_gate",
+        "blocked_missing_patch_path",
+        "blocked_dirty_worktree",
+        "blocked_forbidden_files",
+        "blocked_unsafe_operations",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "blocked_command_unavailable",
+        "blocked_timeout",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "wait_for_ready_patch_candidate",
+        "run_bounded_dry_run_check",
+        "proceed_to_safe_apply_gate_later",
+        "manual_fix_patch_candidate",
+        "human_review_required",
+        "rollback_required",
+        "insufficient_truth",
+    }
+    runtime_posture = [
+        "bounded_patch_dry_run_only",
+        "single_command_max",
+        "git_apply_check_only",
+        "worktree_truth_compared_pre_post_when_available",
+        "no_real_git_apply",
+        "no_patch_application",
+        "no_patch_file_write",
+        "no_repo_file_modification_intended",
+        "no_git_add_commit_push",
+        "no_git_reset_clean",
+        "no_github_mutation",
+        "no_autonomous_loop",
+    ]
+
+    normalized_patch_candidate_status = _normalize_text(
+        patch_candidate_status,
+        default="insufficient_truth",
+    )
+    normalized_safe_patch_gate_status = _normalize_text(
+        safe_patch_gate_status,
+        default="insufficient_truth",
+    )
+    normalized_safe_patch_gate_block_reason = _normalize_text(
+        safe_patch_gate_block_reason,
+        default="insufficient_truth",
+    )
+    normalized_expected_patch_path = _normalize_text(expected_patch_path, default="")
+    normalized_touched_files = _normalize_string_list(touched_files or [])
+    normalized_forbidden_touched_files = _normalize_string_list(
+        forbidden_touched_files or []
+    )
+    normalized_unsafe_operation_flags = _normalize_string_list(
+        unsafe_operation_flags or []
+    )
+    normalized_worktree_status = _normalize_text(worktree_status, default="insufficient_truth")
+    normalized_worktree_dirty = bool(worktree_dirty)
+    if normalized_worktree_status in {"clean", "dirty"}:
+        normalized_worktree_dirty = normalized_worktree_status == "dirty"
+    elif normalized_worktree_status == "insufficient_truth":
+        pass
+    elif normalized_worktree_status:
+        normalized_worktree_status = "insufficient_truth"
+
+    required_inputs = [
+        "patch_candidate_status",
+        "safe_patch_gate_status",
+        "expected_patch_path",
+        "worktree_status",
+        "worktree_dirty",
+    ]
+    available_inputs: list[str] = []
+    if normalized_patch_candidate_status:
+        available_inputs.append("patch_candidate_status")
+    if normalized_safe_patch_gate_status:
+        available_inputs.append("safe_patch_gate_status")
+    if normalized_expected_patch_path:
+        available_inputs.append("expected_patch_path")
+    if normalized_worktree_status in {"clean", "dirty"}:
+        available_inputs.extend(["worktree_status", "worktree_dirty"])
+    missing_inputs = _serialize_required_signals(
+        [
+            input_name
+            for input_name in required_inputs
+            if input_name not in set(available_inputs)
+        ]
+    )
+
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    next_action = "insufficient_truth"
+    dry_run_command = (
+        f"git apply --check {normalized_expected_patch_path}"
+        if normalized_expected_patch_path
+        else "git apply --check <missing_patch_path>"
+    )
+    dry_run_attempted = False
+    dry_run_completed = False
+    dry_run_exit_code = -1
+    dry_run_stdout_excerpt = ""
+    dry_run_stderr_excerpt = ""
+    dry_run_passed = False
+    dry_run_failed = False
+    dry_run_timeout_seconds = 5.0
+    pre_worktree_signature = (
+        f"{normalized_worktree_status}:{int(bool(normalized_worktree_dirty))}"
+        if normalized_worktree_status in {"clean", "dirty"}
+        else ""
+    )
+
+    def _excerpt(text: str, *, max_chars: int = 600, max_lines: int = 12) -> str:
+        normalized = _normalize_text(text, default="")
+        if not normalized:
+            return ""
+        lines = normalized.splitlines()[:max_lines]
+        compact = "\n".join(lines)
+        if len(compact) > max_chars:
+            compact = compact[:max_chars]
+        return compact
+
+    if rollback_required:
+        status = "blocked_rollback_required"
+        source_status = "rollback_required"
+        block_reason = "rollback_required"
+        next_action = "rollback_required"
+    elif human_review_required:
+        status = "blocked_human_review_required"
+        source_status = "human_review_required"
+        block_reason = "human_review_required"
+        next_action = "human_review_required"
+    elif normalized_safe_patch_gate_status == "insufficient_truth":
+        status = "insufficient_truth"
+        source_status = "safe_patch_gate_insufficient_truth"
+        block_reason = "insufficient_truth"
+        next_action = "insufficient_truth"
+    elif normalized_safe_patch_gate_status != "ready_for_dry_run_later":
+        status = "blocked_no_ready_gate"
+        source_status = "safe_patch_gate_not_ready"
+        block_reason = (
+            normalized_safe_patch_gate_block_reason
+            or "safe_patch_gate_not_ready_for_dry_run"
+        )
+        next_action = "wait_for_ready_patch_candidate"
+    elif not normalized_expected_patch_path:
+        status = "blocked_missing_patch_path"
+        source_status = "safe_patch_gate_ready"
+        block_reason = "missing_expected_patch_path"
+        next_action = "manual_fix_patch_candidate"
+    elif normalized_worktree_status == "insufficient_truth":
+        status = "insufficient_truth"
+        source_status = "worktree_truth_unavailable"
+        block_reason = "worktree_truth_unavailable"
+        next_action = "insufficient_truth"
+    elif normalized_worktree_dirty:
+        status = "blocked_dirty_worktree"
+        source_status = "worktree_dirty"
+        block_reason = "dirty_worktree"
+        next_action = "manual_fix_patch_candidate"
+    elif normalized_forbidden_touched_files:
+        status = "blocked_forbidden_files"
+        source_status = "forbidden_files_detected"
+        block_reason = "forbidden_touched_files"
+        next_action = "manual_fix_patch_candidate"
+    elif normalized_unsafe_operation_flags:
+        status = "blocked_unsafe_operations"
+        source_status = "unsafe_operations_detected"
+        block_reason = "unsafe_operations_detected"
+        next_action = "manual_fix_patch_candidate"
+    elif not shutil.which("git"):
+        status = "blocked_command_unavailable"
+        source_status = "command_unavailable"
+        block_reason = "git_unavailable"
+        next_action = "manual_fix_patch_candidate"
+    elif not execution_repo_path.strip():
+        status = "insufficient_truth"
+        source_status = "execution_repo_path_missing"
+        block_reason = "execution_repo_path_missing"
+        next_action = "insufficient_truth"
+        missing_inputs = _serialize_required_signals([*missing_inputs, "execution_repo_path"])
+    else:
+        repo_path = execution_repo_path.strip()
+        status = "ready_to_dry_run"
+        source_status = "safe_patch_gate_ready"
+        block_reason = "none"
+        next_action = "run_bounded_dry_run_check"
+        dry_run_attempted = True
+        try:
+            command_result = _run_git(
+                repo_path,
+                ["apply", "--check", normalized_expected_patch_path],
+                timeout_seconds=dry_run_timeout_seconds,
+            )
+            dry_run_completed = True
+            dry_run_exit_code = int(command_result.returncode)
+            dry_run_stdout_excerpt = _excerpt(command_result.stdout)
+            dry_run_stderr_excerpt = _excerpt(command_result.stderr)
+            if dry_run_exit_code == 0:
+                status = "dry_run_passed"
+                source_status = "dry_run_execution_completed"
+                block_reason = "none"
+                next_action = "proceed_to_safe_apply_gate_later"
+                dry_run_passed = True
+                dry_run_failed = False
+            else:
+                status = "dry_run_failed"
+                source_status = "dry_run_execution_completed"
+                block_reason = "dry_run_exit_nonzero"
+                next_action = "manual_fix_patch_candidate"
+                dry_run_passed = False
+                dry_run_failed = True
+            combined_output_lower = (
+                f"{dry_run_stdout_excerpt}\n{dry_run_stderr_excerpt}"
+            ).lower()
+            if "applied patch" in combined_output_lower or "applying patch" in combined_output_lower:
+                status = "blocked_human_review_required"
+                source_status = "dry_run_mutation_signal"
+                block_reason = "dry_run_mutation_signal_detected"
+                next_action = "human_review_required"
+                dry_run_passed = False
+                dry_run_failed = True
+            post_worktree_signature = (
+                f"{normalized_worktree_status}:{int(bool(normalized_worktree_dirty))}"
+                if normalized_worktree_status in {"clean", "dirty"}
+                else ""
+            )
+            if pre_worktree_signature and post_worktree_signature and (
+                pre_worktree_signature != post_worktree_signature
+            ):
+                status = "blocked_human_review_required"
+                source_status = "dry_run_worktree_changed"
+                block_reason = "dry_run_worktree_changed"
+                next_action = "human_review_required"
+                dry_run_passed = False
+                dry_run_failed = True
+        except subprocess.TimeoutExpired as timeout_error:
+            dry_run_completed = True
+            dry_run_exit_code = 124
+            dry_run_stdout_excerpt = _excerpt(
+                timeout_error.stdout
+                if isinstance(timeout_error.stdout, str)
+                else ""
+            )
+            dry_run_stderr_excerpt = _excerpt(
+                timeout_error.stderr
+                if isinstance(timeout_error.stderr, str)
+                else ""
+            )
+            status = "blocked_timeout"
+            source_status = "dry_run_execution_timeout"
+            block_reason = "dry_run_timeout"
+            next_action = "manual_fix_patch_candidate"
+            dry_run_passed = False
+            dry_run_failed = True
+        except OSError as command_error:
+            dry_run_completed = False
+            dry_run_exit_code = -1
+            dry_run_stdout_excerpt = ""
+            dry_run_stderr_excerpt = _excerpt(str(command_error))
+            status = "blocked_command_unavailable"
+            source_status = "dry_run_execution_error"
+            block_reason = "git_command_unavailable"
+            next_action = "manual_fix_patch_candidate"
+            dry_run_passed = False
+            dry_run_failed = True
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    def _group(prefix: str) -> dict[str, Any]:
+        return {
+            f"{prefix}_status": status,
+            f"{prefix}_source_status": source_status,
+            f"{prefix}_block_reason": block_reason,
+            f"{prefix}_expected_patch_path": normalized_expected_patch_path,
+            f"{prefix}_patch_candidate_status": normalized_patch_candidate_status,
+            f"{prefix}_safe_patch_gate_status": normalized_safe_patch_gate_status,
+            f"{prefix}_touched_files": normalized_touched_files,
+            f"{prefix}_forbidden_touched_files": normalized_forbidden_touched_files,
+            f"{prefix}_worktree_status": normalized_worktree_status,
+            f"{prefix}_worktree_dirty": bool(normalized_worktree_dirty),
+            f"{prefix}_dry_run_command": dry_run_command,
+            f"{prefix}_dry_run_attempted": bool(dry_run_attempted),
+            f"{prefix}_dry_run_completed": bool(dry_run_completed),
+            f"{prefix}_dry_run_exit_code": int(dry_run_exit_code),
+            f"{prefix}_dry_run_stdout_excerpt": dry_run_stdout_excerpt,
+            f"{prefix}_dry_run_stderr_excerpt": dry_run_stderr_excerpt,
+            f"{prefix}_dry_run_passed": bool(dry_run_passed),
+            f"{prefix}_dry_run_failed": bool(dry_run_failed),
+            f"{prefix}_next_action": next_action,
+            f"{prefix}_runtime_posture": runtime_posture,
+            f"{prefix}_missing_inputs": missing_inputs,
+        }
+
+    return {
+        **_group("project_browser_autonomous_patch_dry_run_check"),
+        **_group("project_browser_autonomous_patch_dry_run_execution"),
+        **_group("project_browser_autonomous_patch_dry_run_result"),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -49008,6 +49337,7 @@ def _build_approved_restart_execution_summary_surface(
 def _build_approved_restart_execution_contract_surface(
     *,
     run_id: str,
+    execution_repo_path: str,
     objective_contract_payload: Mapping[str, Any] | None,
     approval_email_delivery_payload: Mapping[str, Any] | None,
     fleet_safety_control_payload: Mapping[str, Any] | None,
@@ -63305,6 +63635,432 @@ def _build_approved_restart_execution_contract_surface(
             )
         )
     )
+    project_browser_autonomous_patch_dry_run_state = (
+        _build_project_browser_autonomous_patch_dry_run_state(
+            patch_candidate_status=project_browser_autonomous_chatgpt_patch_candidate_status,
+            safe_patch_gate_status=project_browser_autonomous_safe_patch_apply_gate_status,
+            safe_patch_gate_block_reason=(
+                project_browser_autonomous_safe_patch_apply_gate_block_reason
+            ),
+            expected_patch_path=(
+                project_browser_autonomous_safe_patch_apply_gate_expected_patch_path
+            ),
+            touched_files=project_browser_autonomous_safe_patch_apply_gate_touched_files,
+            forbidden_touched_files=(
+                project_browser_autonomous_safe_patch_apply_gate_forbidden_touched_files
+            ),
+            unsafe_operation_flags=(
+                project_browser_autonomous_chatgpt_patch_candidate_unsafe_operation_flags
+            ),
+            worktree_status=project_browser_autonomous_safe_patch_apply_gate_worktree_status,
+            worktree_dirty=project_browser_autonomous_safe_patch_apply_gate_worktree_dirty,
+            human_review_required=(
+                project_browser_autonomous_chatgpt_decision_consumption_human_review_required
+            ),
+            rollback_required=(
+                project_browser_autonomous_chatgpt_decision_consumption_rollback_required
+            ),
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    patch_dry_run_allowed_statuses = {
+        "ready_to_dry_run",
+        "dry_run_passed",
+        "dry_run_failed",
+        "blocked_no_ready_gate",
+        "blocked_missing_patch_path",
+        "blocked_dirty_worktree",
+        "blocked_forbidden_files",
+        "blocked_unsafe_operations",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "blocked_command_unavailable",
+        "blocked_timeout",
+        "insufficient_truth",
+    }
+    patch_dry_run_allowed_next_actions = {
+        "wait_for_ready_patch_candidate",
+        "run_bounded_dry_run_check",
+        "proceed_to_safe_apply_gate_later",
+        "manual_fix_patch_candidate",
+        "human_review_required",
+        "rollback_required",
+        "insufficient_truth",
+    }
+
+    def _normalize_patch_dry_run_group(prefix: str) -> dict[str, Any]:
+        status = _normalize_text(
+            project_browser_autonomous_patch_dry_run_state.get(f"{prefix}_status"),
+            default="insufficient_truth",
+        )
+        if status not in patch_dry_run_allowed_statuses:
+            status = "insufficient_truth"
+        next_action = _normalize_text(
+            project_browser_autonomous_patch_dry_run_state.get(f"{prefix}_next_action"),
+            default="insufficient_truth",
+        )
+        if next_action not in patch_dry_run_allowed_next_actions:
+            next_action = "insufficient_truth"
+        return {
+            "status": status,
+            "source_status": _normalize_text(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_source_status"
+                ),
+                default="insufficient_truth",
+            ),
+            "block_reason": _normalize_text(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_block_reason"
+                ),
+                default="insufficient_truth",
+            ),
+            "expected_patch_path": _normalize_text(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_expected_patch_path"
+                ),
+                default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+            ),
+            "patch_candidate_status": _normalize_text(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_patch_candidate_status"
+                ),
+                default="insufficient_truth",
+            ),
+            "safe_patch_gate_status": _normalize_text(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_safe_patch_gate_status"
+                ),
+                default="insufficient_truth",
+            ),
+            "touched_files": _normalize_string_list(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_touched_files"
+                )
+            ),
+            "forbidden_touched_files": _normalize_string_list(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_forbidden_touched_files"
+                )
+            ),
+            "worktree_status": _normalize_text(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_worktree_status"
+                ),
+                default="insufficient_truth",
+            ),
+            "worktree_dirty": bool(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_worktree_dirty",
+                    False,
+                )
+            ),
+            "dry_run_command": _normalize_text(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_dry_run_command"
+                ),
+                default="git apply --check <missing_patch_path>",
+            ),
+            "dry_run_attempted": bool(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_dry_run_attempted",
+                    False,
+                )
+            ),
+            "dry_run_completed": bool(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_dry_run_completed",
+                    False,
+                )
+            ),
+            "dry_run_exit_code": int(
+                _as_int(
+                    project_browser_autonomous_patch_dry_run_state.get(
+                        f"{prefix}_dry_run_exit_code"
+                    ),
+                    default=-1,
+                )
+            ),
+            "dry_run_stdout_excerpt": _normalize_text(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_dry_run_stdout_excerpt"
+                ),
+                default="",
+            ),
+            "dry_run_stderr_excerpt": _normalize_text(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_dry_run_stderr_excerpt"
+                ),
+                default="",
+            ),
+            "dry_run_passed": bool(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_dry_run_passed",
+                    False,
+                )
+            ),
+            "dry_run_failed": bool(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_dry_run_failed",
+                    False,
+                )
+            ),
+            "next_action": next_action,
+            "runtime_posture": _normalize_string_list(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_runtime_posture"
+                )
+            ),
+            "missing_inputs": _normalize_string_list(
+                project_browser_autonomous_patch_dry_run_state.get(
+                    f"{prefix}_missing_inputs"
+                )
+            ),
+        }
+
+    patch_dry_run_check = _normalize_patch_dry_run_group(
+        "project_browser_autonomous_patch_dry_run_check"
+    )
+    patch_dry_run_execution = _normalize_patch_dry_run_group(
+        "project_browser_autonomous_patch_dry_run_execution"
+    )
+    patch_dry_run_result = _normalize_patch_dry_run_group(
+        "project_browser_autonomous_patch_dry_run_result"
+    )
+
+    project_browser_autonomous_patch_dry_run_check_status = _normalize_text(
+        patch_dry_run_check.get("status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_check_source_status = _normalize_text(
+        patch_dry_run_check.get("source_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_check_block_reason = _normalize_text(
+        patch_dry_run_check.get("block_reason"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_check_expected_patch_path = _normalize_text(
+        patch_dry_run_check.get("expected_patch_path"),
+        default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+    )
+    project_browser_autonomous_patch_dry_run_check_patch_candidate_status = _normalize_text(
+        patch_dry_run_check.get("patch_candidate_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_check_safe_patch_gate_status = _normalize_text(
+        patch_dry_run_check.get("safe_patch_gate_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_check_touched_files = _normalize_string_list(
+        patch_dry_run_check.get("touched_files")
+    )
+    project_browser_autonomous_patch_dry_run_check_forbidden_touched_files = (
+        _normalize_string_list(patch_dry_run_check.get("forbidden_touched_files"))
+    )
+    project_browser_autonomous_patch_dry_run_check_worktree_status = _normalize_text(
+        patch_dry_run_check.get("worktree_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_check_worktree_dirty = bool(
+        patch_dry_run_check.get("worktree_dirty", False)
+    )
+    project_browser_autonomous_patch_dry_run_check_dry_run_command = _normalize_text(
+        patch_dry_run_check.get("dry_run_command"),
+        default="git apply --check <missing_patch_path>",
+    )
+    project_browser_autonomous_patch_dry_run_check_dry_run_attempted = bool(
+        patch_dry_run_check.get("dry_run_attempted", False)
+    )
+    project_browser_autonomous_patch_dry_run_check_dry_run_completed = bool(
+        patch_dry_run_check.get("dry_run_completed", False)
+    )
+    project_browser_autonomous_patch_dry_run_check_dry_run_exit_code = _as_int(
+        patch_dry_run_check.get("dry_run_exit_code"),
+        default=-1,
+    )
+    project_browser_autonomous_patch_dry_run_check_dry_run_stdout_excerpt = _normalize_text(
+        patch_dry_run_check.get("dry_run_stdout_excerpt"),
+        default="",
+    )
+    project_browser_autonomous_patch_dry_run_check_dry_run_stderr_excerpt = _normalize_text(
+        patch_dry_run_check.get("dry_run_stderr_excerpt"),
+        default="",
+    )
+    project_browser_autonomous_patch_dry_run_check_dry_run_passed = bool(
+        patch_dry_run_check.get("dry_run_passed", False)
+    )
+    project_browser_autonomous_patch_dry_run_check_dry_run_failed = bool(
+        patch_dry_run_check.get("dry_run_failed", False)
+    )
+    project_browser_autonomous_patch_dry_run_check_next_action = _normalize_text(
+        patch_dry_run_check.get("next_action"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_check_runtime_posture = _normalize_string_list(
+        patch_dry_run_check.get("runtime_posture")
+    )
+    project_browser_autonomous_patch_dry_run_check_missing_inputs = _normalize_string_list(
+        patch_dry_run_check.get("missing_inputs")
+    )
+
+    project_browser_autonomous_patch_dry_run_execution_status = _normalize_text(
+        patch_dry_run_execution.get("status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_execution_source_status = _normalize_text(
+        patch_dry_run_execution.get("source_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_execution_block_reason = _normalize_text(
+        patch_dry_run_execution.get("block_reason"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_execution_expected_patch_path = _normalize_text(
+        patch_dry_run_execution.get("expected_patch_path"),
+        default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+    )
+    project_browser_autonomous_patch_dry_run_execution_patch_candidate_status = _normalize_text(
+        patch_dry_run_execution.get("patch_candidate_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_execution_safe_patch_gate_status = (
+        _normalize_text(
+            patch_dry_run_execution.get("safe_patch_gate_status"),
+            default="insufficient_truth",
+        )
+    )
+    project_browser_autonomous_patch_dry_run_execution_touched_files = _normalize_string_list(
+        patch_dry_run_execution.get("touched_files")
+    )
+    project_browser_autonomous_patch_dry_run_execution_forbidden_touched_files = (
+        _normalize_string_list(patch_dry_run_execution.get("forbidden_touched_files"))
+    )
+    project_browser_autonomous_patch_dry_run_execution_worktree_status = _normalize_text(
+        patch_dry_run_execution.get("worktree_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_execution_worktree_dirty = bool(
+        patch_dry_run_execution.get("worktree_dirty", False)
+    )
+    project_browser_autonomous_patch_dry_run_execution_dry_run_command = _normalize_text(
+        patch_dry_run_execution.get("dry_run_command"),
+        default="git apply --check <missing_patch_path>",
+    )
+    project_browser_autonomous_patch_dry_run_execution_dry_run_attempted = bool(
+        patch_dry_run_execution.get("dry_run_attempted", False)
+    )
+    project_browser_autonomous_patch_dry_run_execution_dry_run_completed = bool(
+        patch_dry_run_execution.get("dry_run_completed", False)
+    )
+    project_browser_autonomous_patch_dry_run_execution_dry_run_exit_code = _as_int(
+        patch_dry_run_execution.get("dry_run_exit_code"),
+        default=-1,
+    )
+    project_browser_autonomous_patch_dry_run_execution_dry_run_stdout_excerpt = (
+        _normalize_text(
+            patch_dry_run_execution.get("dry_run_stdout_excerpt"),
+            default="",
+        )
+    )
+    project_browser_autonomous_patch_dry_run_execution_dry_run_stderr_excerpt = (
+        _normalize_text(
+            patch_dry_run_execution.get("dry_run_stderr_excerpt"),
+            default="",
+        )
+    )
+    project_browser_autonomous_patch_dry_run_execution_dry_run_passed = bool(
+        patch_dry_run_execution.get("dry_run_passed", False)
+    )
+    project_browser_autonomous_patch_dry_run_execution_dry_run_failed = bool(
+        patch_dry_run_execution.get("dry_run_failed", False)
+    )
+    project_browser_autonomous_patch_dry_run_execution_next_action = _normalize_text(
+        patch_dry_run_execution.get("next_action"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_execution_runtime_posture = (
+        _normalize_string_list(patch_dry_run_execution.get("runtime_posture"))
+    )
+    project_browser_autonomous_patch_dry_run_execution_missing_inputs = (
+        _normalize_string_list(patch_dry_run_execution.get("missing_inputs"))
+    )
+
+    project_browser_autonomous_patch_dry_run_result_status = _normalize_text(
+        patch_dry_run_result.get("status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_result_source_status = _normalize_text(
+        patch_dry_run_result.get("source_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_result_block_reason = _normalize_text(
+        patch_dry_run_result.get("block_reason"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_result_expected_patch_path = _normalize_text(
+        patch_dry_run_result.get("expected_patch_path"),
+        default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+    )
+    project_browser_autonomous_patch_dry_run_result_patch_candidate_status = _normalize_text(
+        patch_dry_run_result.get("patch_candidate_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_result_safe_patch_gate_status = _normalize_text(
+        patch_dry_run_result.get("safe_patch_gate_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_result_touched_files = _normalize_string_list(
+        patch_dry_run_result.get("touched_files")
+    )
+    project_browser_autonomous_patch_dry_run_result_forbidden_touched_files = (
+        _normalize_string_list(patch_dry_run_result.get("forbidden_touched_files"))
+    )
+    project_browser_autonomous_patch_dry_run_result_worktree_status = _normalize_text(
+        patch_dry_run_result.get("worktree_status"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_result_worktree_dirty = bool(
+        patch_dry_run_result.get("worktree_dirty", False)
+    )
+    project_browser_autonomous_patch_dry_run_result_dry_run_command = _normalize_text(
+        patch_dry_run_result.get("dry_run_command"),
+        default="git apply --check <missing_patch_path>",
+    )
+    project_browser_autonomous_patch_dry_run_result_dry_run_attempted = bool(
+        patch_dry_run_result.get("dry_run_attempted", False)
+    )
+    project_browser_autonomous_patch_dry_run_result_dry_run_completed = bool(
+        patch_dry_run_result.get("dry_run_completed", False)
+    )
+    project_browser_autonomous_patch_dry_run_result_dry_run_exit_code = _as_int(
+        patch_dry_run_result.get("dry_run_exit_code"),
+        default=-1,
+    )
+    project_browser_autonomous_patch_dry_run_result_dry_run_stdout_excerpt = _normalize_text(
+        patch_dry_run_result.get("dry_run_stdout_excerpt"),
+        default="",
+    )
+    project_browser_autonomous_patch_dry_run_result_dry_run_stderr_excerpt = _normalize_text(
+        patch_dry_run_result.get("dry_run_stderr_excerpt"),
+        default="",
+    )
+    project_browser_autonomous_patch_dry_run_result_dry_run_passed = bool(
+        patch_dry_run_result.get("dry_run_passed", False)
+    )
+    project_browser_autonomous_patch_dry_run_result_dry_run_failed = bool(
+        patch_dry_run_result.get("dry_run_failed", False)
+    )
+    project_browser_autonomous_patch_dry_run_result_next_action = _normalize_text(
+        patch_dry_run_result.get("next_action"),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_patch_dry_run_result_runtime_posture = _normalize_string_list(
+        patch_dry_run_result.get("runtime_posture")
+    )
+    project_browser_autonomous_patch_dry_run_result_missing_inputs = _normalize_string_list(
+        patch_dry_run_result.get("missing_inputs")
+    )
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -65596,6 +66352,195 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_safe_patch_apply_validation_runtime_posture": (
                     project_browser_autonomous_safe_patch_apply_validation_runtime_posture
                 ),
+                "project_browser_autonomous_patch_dry_run_check_status": (
+                    project_browser_autonomous_patch_dry_run_check_status
+                ),
+                "project_browser_autonomous_patch_dry_run_check_source_status": (
+                    project_browser_autonomous_patch_dry_run_check_source_status
+                ),
+                "project_browser_autonomous_patch_dry_run_check_block_reason": (
+                    project_browser_autonomous_patch_dry_run_check_block_reason
+                ),
+                "project_browser_autonomous_patch_dry_run_check_expected_patch_path": (
+                    project_browser_autonomous_patch_dry_run_check_expected_patch_path
+                ),
+                "project_browser_autonomous_patch_dry_run_check_patch_candidate_status": (
+                    project_browser_autonomous_patch_dry_run_check_patch_candidate_status
+                ),
+                "project_browser_autonomous_patch_dry_run_check_safe_patch_gate_status": (
+                    project_browser_autonomous_patch_dry_run_check_safe_patch_gate_status
+                ),
+                "project_browser_autonomous_patch_dry_run_check_touched_files": (
+                    project_browser_autonomous_patch_dry_run_check_touched_files
+                ),
+                "project_browser_autonomous_patch_dry_run_check_forbidden_touched_files": (
+                    project_browser_autonomous_patch_dry_run_check_forbidden_touched_files
+                ),
+                "project_browser_autonomous_patch_dry_run_check_worktree_status": (
+                    project_browser_autonomous_patch_dry_run_check_worktree_status
+                ),
+                "project_browser_autonomous_patch_dry_run_check_worktree_dirty": (
+                    project_browser_autonomous_patch_dry_run_check_worktree_dirty
+                ),
+                "project_browser_autonomous_patch_dry_run_check_dry_run_command": (
+                    project_browser_autonomous_patch_dry_run_check_dry_run_command
+                ),
+                "project_browser_autonomous_patch_dry_run_check_dry_run_attempted": (
+                    project_browser_autonomous_patch_dry_run_check_dry_run_attempted
+                ),
+                "project_browser_autonomous_patch_dry_run_check_dry_run_completed": (
+                    project_browser_autonomous_patch_dry_run_check_dry_run_completed
+                ),
+                "project_browser_autonomous_patch_dry_run_check_dry_run_exit_code": (
+                    project_browser_autonomous_patch_dry_run_check_dry_run_exit_code
+                ),
+                "project_browser_autonomous_patch_dry_run_check_dry_run_stdout_excerpt": (
+                    project_browser_autonomous_patch_dry_run_check_dry_run_stdout_excerpt
+                ),
+                "project_browser_autonomous_patch_dry_run_check_dry_run_stderr_excerpt": (
+                    project_browser_autonomous_patch_dry_run_check_dry_run_stderr_excerpt
+                ),
+                "project_browser_autonomous_patch_dry_run_check_dry_run_passed": (
+                    project_browser_autonomous_patch_dry_run_check_dry_run_passed
+                ),
+                "project_browser_autonomous_patch_dry_run_check_dry_run_failed": (
+                    project_browser_autonomous_patch_dry_run_check_dry_run_failed
+                ),
+                "project_browser_autonomous_patch_dry_run_check_next_action": (
+                    project_browser_autonomous_patch_dry_run_check_next_action
+                ),
+                "project_browser_autonomous_patch_dry_run_check_runtime_posture": (
+                    project_browser_autonomous_patch_dry_run_check_runtime_posture
+                ),
+                "project_browser_autonomous_patch_dry_run_check_missing_inputs": (
+                    project_browser_autonomous_patch_dry_run_check_missing_inputs
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_status": (
+                    project_browser_autonomous_patch_dry_run_execution_status
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_source_status": (
+                    project_browser_autonomous_patch_dry_run_execution_source_status
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_block_reason": (
+                    project_browser_autonomous_patch_dry_run_execution_block_reason
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_expected_patch_path": (
+                    project_browser_autonomous_patch_dry_run_execution_expected_patch_path
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_patch_candidate_status": (
+                    project_browser_autonomous_patch_dry_run_execution_patch_candidate_status
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_safe_patch_gate_status": (
+                    project_browser_autonomous_patch_dry_run_execution_safe_patch_gate_status
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_touched_files": (
+                    project_browser_autonomous_patch_dry_run_execution_touched_files
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_forbidden_touched_files": (
+                    project_browser_autonomous_patch_dry_run_execution_forbidden_touched_files
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_worktree_status": (
+                    project_browser_autonomous_patch_dry_run_execution_worktree_status
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_worktree_dirty": (
+                    project_browser_autonomous_patch_dry_run_execution_worktree_dirty
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_dry_run_command": (
+                    project_browser_autonomous_patch_dry_run_execution_dry_run_command
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_dry_run_attempted": (
+                    project_browser_autonomous_patch_dry_run_execution_dry_run_attempted
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_dry_run_completed": (
+                    project_browser_autonomous_patch_dry_run_execution_dry_run_completed
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_dry_run_exit_code": (
+                    project_browser_autonomous_patch_dry_run_execution_dry_run_exit_code
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_dry_run_stdout_excerpt": (
+                    project_browser_autonomous_patch_dry_run_execution_dry_run_stdout_excerpt
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_dry_run_stderr_excerpt": (
+                    project_browser_autonomous_patch_dry_run_execution_dry_run_stderr_excerpt
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_dry_run_passed": (
+                    project_browser_autonomous_patch_dry_run_execution_dry_run_passed
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_dry_run_failed": (
+                    project_browser_autonomous_patch_dry_run_execution_dry_run_failed
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_next_action": (
+                    project_browser_autonomous_patch_dry_run_execution_next_action
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_runtime_posture": (
+                    project_browser_autonomous_patch_dry_run_execution_runtime_posture
+                ),
+                "project_browser_autonomous_patch_dry_run_execution_missing_inputs": (
+                    project_browser_autonomous_patch_dry_run_execution_missing_inputs
+                ),
+                "project_browser_autonomous_patch_dry_run_result_status": (
+                    project_browser_autonomous_patch_dry_run_result_status
+                ),
+                "project_browser_autonomous_patch_dry_run_result_source_status": (
+                    project_browser_autonomous_patch_dry_run_result_source_status
+                ),
+                "project_browser_autonomous_patch_dry_run_result_block_reason": (
+                    project_browser_autonomous_patch_dry_run_result_block_reason
+                ),
+                "project_browser_autonomous_patch_dry_run_result_expected_patch_path": (
+                    project_browser_autonomous_patch_dry_run_result_expected_patch_path
+                ),
+                "project_browser_autonomous_patch_dry_run_result_patch_candidate_status": (
+                    project_browser_autonomous_patch_dry_run_result_patch_candidate_status
+                ),
+                "project_browser_autonomous_patch_dry_run_result_safe_patch_gate_status": (
+                    project_browser_autonomous_patch_dry_run_result_safe_patch_gate_status
+                ),
+                "project_browser_autonomous_patch_dry_run_result_touched_files": (
+                    project_browser_autonomous_patch_dry_run_result_touched_files
+                ),
+                "project_browser_autonomous_patch_dry_run_result_forbidden_touched_files": (
+                    project_browser_autonomous_patch_dry_run_result_forbidden_touched_files
+                ),
+                "project_browser_autonomous_patch_dry_run_result_worktree_status": (
+                    project_browser_autonomous_patch_dry_run_result_worktree_status
+                ),
+                "project_browser_autonomous_patch_dry_run_result_worktree_dirty": (
+                    project_browser_autonomous_patch_dry_run_result_worktree_dirty
+                ),
+                "project_browser_autonomous_patch_dry_run_result_dry_run_command": (
+                    project_browser_autonomous_patch_dry_run_result_dry_run_command
+                ),
+                "project_browser_autonomous_patch_dry_run_result_dry_run_attempted": (
+                    project_browser_autonomous_patch_dry_run_result_dry_run_attempted
+                ),
+                "project_browser_autonomous_patch_dry_run_result_dry_run_completed": (
+                    project_browser_autonomous_patch_dry_run_result_dry_run_completed
+                ),
+                "project_browser_autonomous_patch_dry_run_result_dry_run_exit_code": (
+                    project_browser_autonomous_patch_dry_run_result_dry_run_exit_code
+                ),
+                "project_browser_autonomous_patch_dry_run_result_dry_run_stdout_excerpt": (
+                    project_browser_autonomous_patch_dry_run_result_dry_run_stdout_excerpt
+                ),
+                "project_browser_autonomous_patch_dry_run_result_dry_run_stderr_excerpt": (
+                    project_browser_autonomous_patch_dry_run_result_dry_run_stderr_excerpt
+                ),
+                "project_browser_autonomous_patch_dry_run_result_dry_run_passed": (
+                    project_browser_autonomous_patch_dry_run_result_dry_run_passed
+                ),
+                "project_browser_autonomous_patch_dry_run_result_dry_run_failed": (
+                    project_browser_autonomous_patch_dry_run_result_dry_run_failed
+                ),
+                "project_browser_autonomous_patch_dry_run_result_next_action": (
+                    project_browser_autonomous_patch_dry_run_result_next_action
+                ),
+                "project_browser_autonomous_patch_dry_run_result_runtime_posture": (
+                    project_browser_autonomous_patch_dry_run_result_runtime_posture
+                ),
+                "project_browser_autonomous_patch_dry_run_result_missing_inputs": (
+                    project_browser_autonomous_patch_dry_run_result_missing_inputs
+                ),
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -66381,6 +67326,24 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_safe_patch_apply_validation_next_action"
             if project_browser_autonomous_safe_patch_apply_validation_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_patch_dry_run_check_status"
+            if project_browser_autonomous_patch_dry_run_check_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_patch_dry_run_check_next_action"
+            if project_browser_autonomous_patch_dry_run_check_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_patch_dry_run_execution_status"
+            if project_browser_autonomous_patch_dry_run_execution_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_patch_dry_run_execution_next_action"
+            if project_browser_autonomous_patch_dry_run_execution_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_patch_dry_run_result_status"
+            if project_browser_autonomous_patch_dry_run_result_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_patch_dry_run_result_next_action"
+            if project_browser_autonomous_patch_dry_run_result_next_action
             else "",
             ]
     )
@@ -72297,6 +73260,195 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_safe_patch_apply_validation_runtime_posture": (
             project_browser_autonomous_safe_patch_apply_validation_runtime_posture
         ),
+        "project_browser_autonomous_patch_dry_run_check_status": (
+            project_browser_autonomous_patch_dry_run_check_status
+        ),
+        "project_browser_autonomous_patch_dry_run_check_source_status": (
+            project_browser_autonomous_patch_dry_run_check_source_status
+        ),
+        "project_browser_autonomous_patch_dry_run_check_block_reason": (
+            project_browser_autonomous_patch_dry_run_check_block_reason
+        ),
+        "project_browser_autonomous_patch_dry_run_check_expected_patch_path": (
+            project_browser_autonomous_patch_dry_run_check_expected_patch_path
+        ),
+        "project_browser_autonomous_patch_dry_run_check_patch_candidate_status": (
+            project_browser_autonomous_patch_dry_run_check_patch_candidate_status
+        ),
+        "project_browser_autonomous_patch_dry_run_check_safe_patch_gate_status": (
+            project_browser_autonomous_patch_dry_run_check_safe_patch_gate_status
+        ),
+        "project_browser_autonomous_patch_dry_run_check_touched_files": (
+            project_browser_autonomous_patch_dry_run_check_touched_files
+        ),
+        "project_browser_autonomous_patch_dry_run_check_forbidden_touched_files": (
+            project_browser_autonomous_patch_dry_run_check_forbidden_touched_files
+        ),
+        "project_browser_autonomous_patch_dry_run_check_worktree_status": (
+            project_browser_autonomous_patch_dry_run_check_worktree_status
+        ),
+        "project_browser_autonomous_patch_dry_run_check_worktree_dirty": (
+            project_browser_autonomous_patch_dry_run_check_worktree_dirty
+        ),
+        "project_browser_autonomous_patch_dry_run_check_dry_run_command": (
+            project_browser_autonomous_patch_dry_run_check_dry_run_command
+        ),
+        "project_browser_autonomous_patch_dry_run_check_dry_run_attempted": (
+            project_browser_autonomous_patch_dry_run_check_dry_run_attempted
+        ),
+        "project_browser_autonomous_patch_dry_run_check_dry_run_completed": (
+            project_browser_autonomous_patch_dry_run_check_dry_run_completed
+        ),
+        "project_browser_autonomous_patch_dry_run_check_dry_run_exit_code": (
+            project_browser_autonomous_patch_dry_run_check_dry_run_exit_code
+        ),
+        "project_browser_autonomous_patch_dry_run_check_dry_run_stdout_excerpt": (
+            project_browser_autonomous_patch_dry_run_check_dry_run_stdout_excerpt
+        ),
+        "project_browser_autonomous_patch_dry_run_check_dry_run_stderr_excerpt": (
+            project_browser_autonomous_patch_dry_run_check_dry_run_stderr_excerpt
+        ),
+        "project_browser_autonomous_patch_dry_run_check_dry_run_passed": (
+            project_browser_autonomous_patch_dry_run_check_dry_run_passed
+        ),
+        "project_browser_autonomous_patch_dry_run_check_dry_run_failed": (
+            project_browser_autonomous_patch_dry_run_check_dry_run_failed
+        ),
+        "project_browser_autonomous_patch_dry_run_check_next_action": (
+            project_browser_autonomous_patch_dry_run_check_next_action
+        ),
+        "project_browser_autonomous_patch_dry_run_check_runtime_posture": (
+            project_browser_autonomous_patch_dry_run_check_runtime_posture
+        ),
+        "project_browser_autonomous_patch_dry_run_check_missing_inputs": (
+            project_browser_autonomous_patch_dry_run_check_missing_inputs
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_status": (
+            project_browser_autonomous_patch_dry_run_execution_status
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_source_status": (
+            project_browser_autonomous_patch_dry_run_execution_source_status
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_block_reason": (
+            project_browser_autonomous_patch_dry_run_execution_block_reason
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_expected_patch_path": (
+            project_browser_autonomous_patch_dry_run_execution_expected_patch_path
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_patch_candidate_status": (
+            project_browser_autonomous_patch_dry_run_execution_patch_candidate_status
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_safe_patch_gate_status": (
+            project_browser_autonomous_patch_dry_run_execution_safe_patch_gate_status
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_touched_files": (
+            project_browser_autonomous_patch_dry_run_execution_touched_files
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_forbidden_touched_files": (
+            project_browser_autonomous_patch_dry_run_execution_forbidden_touched_files
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_worktree_status": (
+            project_browser_autonomous_patch_dry_run_execution_worktree_status
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_worktree_dirty": (
+            project_browser_autonomous_patch_dry_run_execution_worktree_dirty
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_dry_run_command": (
+            project_browser_autonomous_patch_dry_run_execution_dry_run_command
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_dry_run_attempted": (
+            project_browser_autonomous_patch_dry_run_execution_dry_run_attempted
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_dry_run_completed": (
+            project_browser_autonomous_patch_dry_run_execution_dry_run_completed
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_dry_run_exit_code": (
+            project_browser_autonomous_patch_dry_run_execution_dry_run_exit_code
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_dry_run_stdout_excerpt": (
+            project_browser_autonomous_patch_dry_run_execution_dry_run_stdout_excerpt
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_dry_run_stderr_excerpt": (
+            project_browser_autonomous_patch_dry_run_execution_dry_run_stderr_excerpt
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_dry_run_passed": (
+            project_browser_autonomous_patch_dry_run_execution_dry_run_passed
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_dry_run_failed": (
+            project_browser_autonomous_patch_dry_run_execution_dry_run_failed
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_next_action": (
+            project_browser_autonomous_patch_dry_run_execution_next_action
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_runtime_posture": (
+            project_browser_autonomous_patch_dry_run_execution_runtime_posture
+        ),
+        "project_browser_autonomous_patch_dry_run_execution_missing_inputs": (
+            project_browser_autonomous_patch_dry_run_execution_missing_inputs
+        ),
+        "project_browser_autonomous_patch_dry_run_result_status": (
+            project_browser_autonomous_patch_dry_run_result_status
+        ),
+        "project_browser_autonomous_patch_dry_run_result_source_status": (
+            project_browser_autonomous_patch_dry_run_result_source_status
+        ),
+        "project_browser_autonomous_patch_dry_run_result_block_reason": (
+            project_browser_autonomous_patch_dry_run_result_block_reason
+        ),
+        "project_browser_autonomous_patch_dry_run_result_expected_patch_path": (
+            project_browser_autonomous_patch_dry_run_result_expected_patch_path
+        ),
+        "project_browser_autonomous_patch_dry_run_result_patch_candidate_status": (
+            project_browser_autonomous_patch_dry_run_result_patch_candidate_status
+        ),
+        "project_browser_autonomous_patch_dry_run_result_safe_patch_gate_status": (
+            project_browser_autonomous_patch_dry_run_result_safe_patch_gate_status
+        ),
+        "project_browser_autonomous_patch_dry_run_result_touched_files": (
+            project_browser_autonomous_patch_dry_run_result_touched_files
+        ),
+        "project_browser_autonomous_patch_dry_run_result_forbidden_touched_files": (
+            project_browser_autonomous_patch_dry_run_result_forbidden_touched_files
+        ),
+        "project_browser_autonomous_patch_dry_run_result_worktree_status": (
+            project_browser_autonomous_patch_dry_run_result_worktree_status
+        ),
+        "project_browser_autonomous_patch_dry_run_result_worktree_dirty": (
+            project_browser_autonomous_patch_dry_run_result_worktree_dirty
+        ),
+        "project_browser_autonomous_patch_dry_run_result_dry_run_command": (
+            project_browser_autonomous_patch_dry_run_result_dry_run_command
+        ),
+        "project_browser_autonomous_patch_dry_run_result_dry_run_attempted": (
+            project_browser_autonomous_patch_dry_run_result_dry_run_attempted
+        ),
+        "project_browser_autonomous_patch_dry_run_result_dry_run_completed": (
+            project_browser_autonomous_patch_dry_run_result_dry_run_completed
+        ),
+        "project_browser_autonomous_patch_dry_run_result_dry_run_exit_code": (
+            project_browser_autonomous_patch_dry_run_result_dry_run_exit_code
+        ),
+        "project_browser_autonomous_patch_dry_run_result_dry_run_stdout_excerpt": (
+            project_browser_autonomous_patch_dry_run_result_dry_run_stdout_excerpt
+        ),
+        "project_browser_autonomous_patch_dry_run_result_dry_run_stderr_excerpt": (
+            project_browser_autonomous_patch_dry_run_result_dry_run_stderr_excerpt
+        ),
+        "project_browser_autonomous_patch_dry_run_result_dry_run_passed": (
+            project_browser_autonomous_patch_dry_run_result_dry_run_passed
+        ),
+        "project_browser_autonomous_patch_dry_run_result_dry_run_failed": (
+            project_browser_autonomous_patch_dry_run_result_dry_run_failed
+        ),
+        "project_browser_autonomous_patch_dry_run_result_next_action": (
+            project_browser_autonomous_patch_dry_run_result_next_action
+        ),
+        "project_browser_autonomous_patch_dry_run_result_runtime_posture": (
+            project_browser_autonomous_patch_dry_run_result_runtime_posture
+        ),
+        "project_browser_autonomous_patch_dry_run_result_missing_inputs": (
+            project_browser_autonomous_patch_dry_run_result_missing_inputs
+        ),
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(
@@ -76038,6 +77190,7 @@ class PlannedExecutionRunner:
         approved_restart_execution_contract_payload = (
             _build_approved_restart_execution_contract_surface(
                 run_id=resolved_job_id,
+                execution_repo_path=resolved_execution_repo_path,
                 objective_contract_payload=objective_contract_payload,
                 approval_email_delivery_payload=approval_email_delivery_contract_payload,
                 fleet_safety_control_payload=fleet_safety_control_contract_payload,
