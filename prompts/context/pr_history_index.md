@@ -694,3 +694,82 @@ Next:
   Prompt158 should add dedicated unit tests for the Prompt157 status matrix and contract-surface exposure.
   Prompt158 must not add rollback execution, commit behavior, GitHub PR/CI/merge behavior, next/fix generator, or autonomous loop.
 <!-- PROMPT157_POST_APPLY_VALIDATION_END -->
+
+<!-- PROMPT158_PROMPT157_TESTS_START -->
+## Prompt158 — Prompt157 status matrix and contract exposure tests
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt158-prompt157-tests-ready
+
+Purpose:
+  Prompt158 adds focused regression coverage for Prompt157 post-apply validation and rollback posture metadata.
+
+What was added:
+  - `test_prompt157_post_apply_validation_status_matrix`
+  - `test_prompt157_validation_passed_and_field_presence`
+  - `test_prompt157_contract_surface_exposure_in_payload`
+  - Helper:
+    - `_build_prompt157_state(...)`
+
+Strategy:
+  - Direct private-builder tests cover Prompt157 status matrix behavior precisely.
+  - Contract-surface test uses `PlannedExecutionRunner.run(...)` and `approved_restart_execution_contract.json` to verify real payload exposure.
+  - This locks both Prompt157 semantics and wiring.
+
+Status matrix coverage:
+  - `blocked_no_apply_performed`
+  - `blocked_apply_failed`
+  - `blocked_missing_post_apply_truth`
+  - `blocked_forbidden_changes`
+  - `blocked_unexpected_changes`
+  - `blocked_changed_file_mismatch`
+  - `blocked_metadata_inconsistency`
+  - `validation_passed`
+
+Rollback metadata-only coverage:
+  - `rollback_execution_allowed=false`
+  - `rollback_executed=false`
+  - `rollback_attempted=false`
+  - `rollback_completed=false`
+  - `rollback_command` remains empty in passed-path coverage.
+  - No rollback execution behavior was added.
+
+Contract exposure coverage:
+  - Prompt157 check/execution/result status fields are present in the final approved restart payload.
+  - Rollback posture status and execution-disabled fields are present.
+  - Prompt157 status and next_action summary keys are present.
+  - Prompt157 fields are exposed in:
+    - `project_planning_summary_compact`
+    - supporting compact truth refs
+    - `approved_restart_execution_contract.json`
+
+Production changes:
+  - Minimal production fix only:
+    - Added missing `import sys` in `automation/orchestration/planned_execution_runner.py` for Prompt157 `sys.executable` usage.
+  - No new runtime features were added.
+
+Validation:
+  - Baseline focused tests passed:
+    - `test_manifest_paths_and_status_fields_are_preserved`
+    - `test_manifest_generation_and_required_fields`
+  - New Prompt158 tests passed:
+    - `test_prompt157_post_apply_validation_status_matrix`
+    - `test_prompt157_validation_passed_and_field_presence`
+    - `test_prompt157_contract_surface_exposure_in_payload`
+  - Compile checks passed:
+    - `python -m py_compile automation/orchestration/planned_execution_runner.py`
+    - `python -m py_compile scripts/run_planned_execution.py`
+
+Known unrelated failures:
+  - `python -m unittest tests.test_planned_execution_runner` still has 3 unrelated existing high-level posture failures:
+    - `test_runner_allows_one_low_risk_approval_skip_and_executes_once`
+    - `test_runner_continuation_budget_exhausts_after_repeated_auto_continuations`
+    - `test_runner_final_human_review_required_for_high_risk_posture`
+
+Next:
+  Prompt159 should add an isolated regression test for Prompt157 `insufficient_truth` semantics where no definitive blocker exists and `validation_failed` must remain false.
+  Prompt159 should also triage the 3 unrelated full-suite posture failures separately without changing Prompt157 semantics.
+<!-- PROMPT158_PROMPT157_TESTS_END -->
