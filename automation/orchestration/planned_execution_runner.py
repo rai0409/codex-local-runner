@@ -44486,6 +44486,13 @@ def _build_project_browser_autonomous_chatgpt_decision_validation_state(
     safety_summary_status = "insufficient_truth"
     actor_summary_status = "insufficient_truth"
     implementation_summary_status = "insufficient_truth"
+    decision_summary = ""
+    implementation_allowed = False
+    implementation_requires_human_apply = True
+    implementation_constraints: list[str] = []
+    implementation_forbidden_actions: list[str] = []
+    implementation_allowed_files: list[str] = []
+    implementation_forbidden_files: list[str] = []
 
     missing_required_fields: list[str] = []
     invalid_allowed_value_fields: list[str] = []
@@ -44643,6 +44650,7 @@ def _build_project_browser_autonomous_chatgpt_decision_validation_state(
             decision_payload.get("implementation_output_kind"),
             default="none",
         )
+        decision_summary = _normalize_text(decision_payload.get("summary"), default="")
         decision_commit_allowed = bool(decision_payload.get("commit_allowed", False))
         decision_rollback_required = bool(
             decision_payload.get("rollback_required", False)
@@ -44661,6 +44669,16 @@ def _build_project_browser_autonomous_chatgpt_decision_validation_state(
                 "actor_separation_required",
                 actor_separation_required,
             )
+        )
+        implementation_allowed = bool(decision_payload.get("implementation_allowed", False))
+        implementation_requires_human_apply = bool(
+            decision_payload.get("implementation_requires_human_apply", True)
+        )
+        implementation_constraints = _normalize_string_list(
+            decision_payload.get("implementation_constraints")
+        )
+        implementation_forbidden_actions = _normalize_string_list(
+            decision_payload.get("implementation_forbidden_actions")
         )
         required_checks_count = len(
             _normalize_string_list(decision_payload.get("required_checks"))
@@ -44694,8 +44712,19 @@ def _build_project_browser_autonomous_chatgpt_decision_validation_state(
             dict(decision_payload.get("actor_summary") or {}).get("status"),
             default="insufficient_truth",
         )
+        implementation_summary_payload = dict(
+            decision_payload.get("implementation_summary") or {}
+        )
+        implementation_allowed_files = _normalize_string_list(
+            implementation_summary_payload.get("allowed_files")
+            or decision_payload.get("allowed_files")
+        )
+        implementation_forbidden_files = _normalize_string_list(
+            implementation_summary_payload.get("forbidden_files")
+            or decision_payload.get("forbidden_files")
+        )
         implementation_summary_status = _normalize_text(
-            dict(decision_payload.get("implementation_summary") or {}).get("status"),
+            implementation_summary_payload.get("status"),
             default="insufficient_truth",
         )
 
@@ -44912,6 +44941,25 @@ def _build_project_browser_autonomous_chatgpt_decision_validation_state(
         "project_browser_autonomous_chatgpt_decision_json_implementation_summary_status": (
             implementation_summary_status
         ),
+        "project_browser_autonomous_chatgpt_decision_json_summary": decision_summary,
+        "project_browser_autonomous_chatgpt_decision_json_implementation_allowed": (
+            implementation_allowed
+        ),
+        "project_browser_autonomous_chatgpt_decision_json_implementation_requires_human_apply": (
+            implementation_requires_human_apply
+        ),
+        "project_browser_autonomous_chatgpt_decision_json_implementation_constraints": (
+            implementation_constraints
+        ),
+        "project_browser_autonomous_chatgpt_decision_json_implementation_forbidden_actions": (
+            implementation_forbidden_actions
+        ),
+        "project_browser_autonomous_chatgpt_decision_json_implementation_allowed_files": (
+            implementation_allowed_files
+        ),
+        "project_browser_autonomous_chatgpt_decision_json_implementation_forbidden_files": (
+            implementation_forbidden_files
+        ),
         "project_browser_autonomous_chatgpt_decision_consumption_status": (
             consumption_status
         ),
@@ -44938,6 +44986,328 @@ def _build_project_browser_autonomous_chatgpt_decision_validation_state(
                 "local_file_intake_only",
                 "validator_classification_only",
                 "no_chatgpt_runtime_invocation",
+                "no_patch_generation_or_apply",
+            ]
+        ),
+    }
+
+
+def _build_project_browser_autonomous_chatgpt_implementation_packet_state(
+    *,
+    decision_consumption_status: str,
+    decision_consumption_ready: bool,
+    decision_consumption_block_reason: str,
+    source_decision: str,
+    objective_summary: str,
+    implementation_actor: str,
+    implementation_mode: str,
+    implementation_output_kind: str,
+    implementation_allowed: bool,
+    rollback_required: bool,
+    human_review_required: bool,
+    same_actor_requires_human_review: bool,
+    actor_separation_status: str,
+    allowed_files: list[str] | None,
+    forbidden_files: list[str] | None,
+    required_constraints: list[str] | None,
+    forbidden_actions: list[str] | None,
+) -> dict[str, Any]:
+    allowed_output_kinds = {
+        "patch_plan",
+        "unified_diff",
+        "full_file_replacement",
+        "manual_steps",
+        "instructions_only",
+        "none",
+    }
+    normalized_consumption_status = _normalize_text(
+        decision_consumption_status,
+        default="insufficient_truth",
+    )
+    normalized_consumption_block_reason = _normalize_text(
+        decision_consumption_block_reason,
+        default="insufficient_truth",
+    )
+    normalized_source_decision = _normalize_text(source_decision, default="none")
+    normalized_objective_summary = _normalize_text(objective_summary, default="")
+    normalized_implementation_actor = _normalize_text(implementation_actor, default="none")
+    normalized_implementation_mode = _normalize_text(implementation_mode, default="none")
+    normalized_implementation_output_kind = _normalize_text(
+        implementation_output_kind,
+        default="none",
+    )
+    if normalized_implementation_output_kind not in allowed_output_kinds:
+        normalized_implementation_output_kind = "none"
+
+    normalized_allowed_files = _normalize_string_list(allowed_files or [])
+    normalized_forbidden_files = _normalize_string_list(forbidden_files or [])
+    normalized_required_constraints = _normalize_string_list(required_constraints or [])
+    normalized_forbidden_actions = _normalize_string_list(forbidden_actions or [])
+    normalized_actor_separation_status = _normalize_text(
+        actor_separation_status,
+        default="insufficient_truth",
+    )
+
+    mandatory_constraints = [
+        "ChatGPT-Implementer must not approve its own output.",
+        "ChatGPT-Judge or human_operator must review before commit.",
+        "No ChatGPT API call.",
+        "No browser UI automation.",
+        "No patch generation or patch application.",
+    ]
+    mandatory_forbidden_actions = [
+        "Do not approve own output.",
+        "Do not commit without ChatGPT-Judge or human_operator review.",
+        "Do not call ChatGPT API.",
+        "Do not automate browser UI.",
+        "Do not apply patches.",
+    ]
+    normalized_required_constraints = _serialize_required_signals(
+        normalized_required_constraints + mandatory_constraints
+    )
+    normalized_forbidden_actions = _serialize_required_signals(
+        normalized_forbidden_actions + mandatory_forbidden_actions
+    )
+
+    expected_packet_path = "/tmp/codex-local-runner-decision/chatgpt_implementation_packet.md"
+    expected_response_path = "/tmp/codex-local-runner-decision/chatgpt_implementation_response.md"
+    expected_patch_path = "/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff"
+
+    decision_requests_implementation = bool(
+        implementation_allowed
+        or normalized_source_decision
+        in {
+            "implementation_required",
+            "fix_required",
+        }
+    )
+
+    required_inputs = [
+        "objective_summary",
+        "source_decision_status",
+        "source_decision",
+        "implementation_actor",
+        "implementation_mode",
+        "implementation_output_kind",
+        "allowed_files",
+        "forbidden_files",
+        "required_constraints",
+        "forbidden_actions",
+        "expected_response_path",
+        "expected_patch_path",
+    ]
+    available_inputs: list[str] = [
+        "source_decision_status",
+        "source_decision",
+        "implementation_actor",
+        "implementation_mode",
+        "implementation_output_kind",
+        "required_constraints",
+        "forbidden_actions",
+        "expected_response_path",
+        "expected_patch_path",
+    ]
+    if normalized_objective_summary:
+        available_inputs.append("objective_summary")
+    if normalized_allowed_files:
+        available_inputs.append("allowed_files")
+    if normalized_forbidden_files:
+        available_inputs.append("forbidden_files")
+    missing_inputs = [
+        input_name for input_name in required_inputs if input_name not in set(available_inputs)
+    ]
+
+    packet_status = "blocked_waiting_for_valid_decision"
+    packet_next_action = "wait_for_valid_chatgpt_decision_json"
+    packet_block_reason = "decision_not_ready"
+    handoff_status = "blocked_waiting_for_valid_decision"
+    handoff_transport = "local_file_handoff"
+    handoff_next_action = "wait_for_valid_chatgpt_decision_json"
+    handoff_target = "local_decision_json"
+
+    if rollback_required:
+        packet_status = "blocked_rollback_required"
+        packet_block_reason = "rollback_required"
+        packet_next_action = "rollback_required"
+        handoff_status = "blocked_rollback_required"
+        handoff_transport = "unavailable"
+        handoff_next_action = "rollback_required"
+        handoff_target = "unavailable"
+    elif human_review_required:
+        packet_status = "blocked_human_review_required"
+        packet_block_reason = "human_review_required"
+        packet_next_action = "human_review_required"
+        handoff_status = "blocked_human_review_required"
+        handoff_transport = "local_file_handoff"
+        handoff_next_action = "human_review_required"
+        handoff_target = "human_operator"
+    elif same_actor_requires_human_review or normalized_actor_separation_status == "same_actor_human_review_required":
+        packet_status = "blocked_same_actor_review_required"
+        packet_block_reason = "same_actor_requires_human_review"
+        packet_next_action = "human_review_required"
+        handoff_status = "blocked_same_actor_review_required"
+        handoff_transport = "local_file_handoff"
+        handoff_next_action = "human_review_required"
+        handoff_target = "human_operator"
+    elif not decision_consumption_ready:
+        if normalized_consumption_status in {"waiting_for_manual_chatgpt_json", "blocked"}:
+            if normalized_consumption_block_reason == "insufficient_truth":
+                packet_status = "insufficient_truth"
+                packet_block_reason = "insufficient_truth"
+                packet_next_action = "insufficient_truth"
+                handoff_status = "insufficient_truth"
+                handoff_transport = "unavailable"
+                handoff_next_action = "insufficient_truth"
+                handoff_target = "unavailable"
+            else:
+                packet_status = "blocked_waiting_for_valid_decision"
+                packet_block_reason = "waiting_for_valid_decision"
+                packet_next_action = "wait_for_valid_chatgpt_decision_json"
+                handoff_status = "blocked_waiting_for_valid_decision"
+                handoff_transport = "local_file_handoff"
+                handoff_next_action = "wait_for_valid_chatgpt_decision_json"
+                handoff_target = "local_decision_json"
+        else:
+            packet_status = "insufficient_truth"
+            packet_block_reason = "insufficient_truth"
+            packet_next_action = "insufficient_truth"
+            handoff_status = "insufficient_truth"
+            handoff_transport = "unavailable"
+            handoff_next_action = "insufficient_truth"
+            handoff_target = "unavailable"
+    elif normalized_implementation_actor == "none":
+        packet_status = "blocked_no_implementation_actor"
+        packet_block_reason = "implementation_actor_missing"
+        packet_next_action = "manual_set_implementation_actor"
+        handoff_status = "blocked_no_implementation_actor"
+        handoff_transport = "unavailable"
+        handoff_next_action = "manual_set_implementation_actor"
+        handoff_target = "unavailable"
+    elif normalized_implementation_actor != "chatgpt_5_5_implementer":
+        packet_status = "blocked_actor_not_chatgpt_implementer"
+        packet_block_reason = "implementation_actor_not_chatgpt_implementer"
+        packet_next_action = "route_to_selected_implementation_actor"
+        handoff_status = "blocked_actor_not_chatgpt_implementer"
+        handoff_transport = "unavailable"
+        handoff_next_action = "route_to_selected_implementation_actor"
+        handoff_target = "unavailable"
+    elif not decision_requests_implementation:
+        packet_status = "blocked_missing_inputs"
+        packet_block_reason = "implementation_not_requested"
+        packet_next_action = "manual_fix_required"
+        handoff_status = "blocked_missing_inputs"
+        handoff_transport = "local_file_handoff"
+        handoff_next_action = "manual_fix_required"
+        handoff_target = "local_decision_json"
+    elif missing_inputs:
+        packet_status = "blocked_missing_inputs"
+        packet_block_reason = "packet_missing_inputs"
+        packet_next_action = "manual_fix_required"
+        handoff_status = "blocked_missing_inputs"
+        handoff_transport = "local_file_handoff"
+        handoff_next_action = "manual_fix_required"
+        handoff_target = "local_decision_json"
+    else:
+        packet_status = "prepared_for_manual_handoff"
+        packet_block_reason = "none"
+        packet_next_action = "prepare_manual_handoff_packet"
+        handoff_status = "prepared_for_manual_handoff"
+        handoff_transport = "subscription_ui_manual_paste"
+        handoff_next_action = "manual_paste_packet_into_chatgpt_implementer_ui"
+        handoff_target = "chatgpt_subscription_ui"
+
+    return {
+        "project_browser_autonomous_chatgpt_implementation_packet_status": packet_status,
+        "project_browser_autonomous_chatgpt_implementation_packet_block_reason": (
+            packet_block_reason
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_objective_summary": (
+            normalized_objective_summary
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_source_decision_status": (
+            normalized_consumption_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_source_decision": (
+            normalized_source_decision
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_implementation_actor": (
+            normalized_implementation_actor
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_implementation_mode": (
+            normalized_implementation_mode
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind": (
+            normalized_implementation_output_kind
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_allowed_files": (
+            normalized_allowed_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_forbidden_files": (
+            normalized_forbidden_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_required_constraints": (
+            normalized_required_constraints
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_forbidden_actions": (
+            normalized_forbidden_actions
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_expected_path": (
+            expected_packet_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_expected_response_path": (
+            expected_response_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path": (
+            expected_patch_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_required_inputs": (
+            required_inputs
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_available_inputs": (
+            _serialize_required_signals(available_inputs)
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_missing_inputs": (
+            missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_next_action": (
+            packet_next_action
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_self_approval_policy": (
+            "implementer_must_not_approve_own_output"
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_review_before_commit_policy": (
+            "chatgpt_judge_or_human_operator_must_review"
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_status": handoff_status,
+        "project_browser_autonomous_chatgpt_implementation_handoff_transport": (
+            handoff_transport
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_target": handoff_target,
+        "project_browser_autonomous_chatgpt_implementation_handoff_output_kind": (
+            normalized_implementation_output_kind
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_expected_packet_path": (
+            expected_packet_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_expected_response_path": (
+            expected_response_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_expected_patch_path": (
+            expected_patch_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_requires_review_before_commit": (
+            True
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_next_action": (
+            handoff_next_action
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_runtime_posture": (
+            [
+                "metadata_only_packet_planning",
+                "manual_handoff_only",
+                "no_chatgpt_api_call",
+                "no_browser_automation",
+                "no_response_validation",
                 "no_patch_generation_or_apply",
             ]
         ),
@@ -60601,6 +60971,52 @@ def _build_approved_restart_execution_contract_surface(
             default="insufficient_truth",
         )
     )
+    project_browser_autonomous_chatgpt_decision_json_summary = _normalize_text(
+        project_browser_autonomous_chatgpt_decision_validation_state.get(
+            "project_browser_autonomous_chatgpt_decision_json_summary"
+        ),
+        default="",
+    )
+    project_browser_autonomous_chatgpt_decision_json_implementation_allowed = bool(
+        project_browser_autonomous_chatgpt_decision_validation_state.get(
+            "project_browser_autonomous_chatgpt_decision_json_implementation_allowed",
+            False,
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_json_implementation_requires_human_apply = bool(
+        project_browser_autonomous_chatgpt_decision_validation_state.get(
+            "project_browser_autonomous_chatgpt_decision_json_implementation_requires_human_apply",
+            True,
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_json_implementation_constraints = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_decision_validation_state.get(
+                "project_browser_autonomous_chatgpt_decision_json_implementation_constraints"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_json_implementation_forbidden_actions = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_decision_validation_state.get(
+                "project_browser_autonomous_chatgpt_decision_json_implementation_forbidden_actions"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_json_implementation_allowed_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_decision_validation_state.get(
+                "project_browser_autonomous_chatgpt_decision_json_implementation_allowed_files"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_decision_json_implementation_forbidden_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_decision_validation_state.get(
+                "project_browser_autonomous_chatgpt_decision_json_implementation_forbidden_files"
+            )
+        )
+    )
 
     project_browser_autonomous_chatgpt_decision_consumption_status = _normalize_text(
         project_browser_autonomous_chatgpt_decision_validation_state.get(
@@ -60654,6 +61070,342 @@ def _build_approved_restart_execution_contract_surface(
         _normalize_string_list(
             project_browser_autonomous_chatgpt_decision_validation_state.get(
                 "project_browser_autonomous_chatgpt_decision_consumption_runtime_posture"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_state = (
+        _build_project_browser_autonomous_chatgpt_implementation_packet_state(
+            decision_consumption_status=(
+                project_browser_autonomous_chatgpt_decision_consumption_status
+            ),
+            decision_consumption_ready=(
+                project_browser_autonomous_chatgpt_decision_consumption_ready
+            ),
+            decision_consumption_block_reason=(
+                project_browser_autonomous_chatgpt_decision_consumption_block_reason
+            ),
+            source_decision=project_browser_autonomous_chatgpt_decision_json_decision,
+            objective_summary=project_browser_autonomous_chatgpt_decision_json_summary,
+            implementation_actor=(
+                project_browser_autonomous_chatgpt_decision_json_implementation_actor
+            ),
+            implementation_mode=(
+                project_browser_autonomous_chatgpt_decision_json_implementation_mode
+            ),
+            implementation_output_kind=(
+                project_browser_autonomous_chatgpt_decision_json_implementation_output_kind
+            ),
+            implementation_allowed=(
+                project_browser_autonomous_chatgpt_decision_json_implementation_allowed
+            ),
+            rollback_required=(
+                project_browser_autonomous_chatgpt_decision_consumption_rollback_required
+            ),
+            human_review_required=(
+                project_browser_autonomous_chatgpt_decision_consumption_human_review_required
+            ),
+            same_actor_requires_human_review=(
+                project_browser_autonomous_chatgpt_decision_json_status == "valid"
+                and
+                project_browser_autonomous_chatgpt_decision_json_same_actor_requires_human_review
+            ),
+            actor_separation_status=(
+                project_browser_autonomous_chatgpt_decision_validator_actor_separation_status
+            ),
+            allowed_files=(
+                project_browser_autonomous_chatgpt_decision_json_implementation_allowed_files
+            ),
+            forbidden_files=(
+                project_browser_autonomous_chatgpt_decision_json_implementation_forbidden_files
+            ),
+            required_constraints=(
+                project_browser_autonomous_chatgpt_decision_json_implementation_constraints
+            ),
+            forbidden_actions=(
+                project_browser_autonomous_chatgpt_decision_json_implementation_forbidden_actions
+            ),
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_status = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_packet_state.get(
+            "project_browser_autonomous_chatgpt_implementation_packet_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_implementation_packet_status not in {
+        "prepared_for_manual_handoff",
+        "blocked_waiting_for_valid_decision",
+        "blocked_no_implementation_actor",
+        "blocked_actor_not_chatgpt_implementer",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "blocked_same_actor_review_required",
+        "blocked_missing_inputs",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_implementation_packet_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_implementation_packet_block_reason = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_block_reason"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_objective_summary = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_objective_summary"
+            ),
+            default="",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_source_decision_status = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_source_decision_status"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_source_decision = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_source_decision"
+            ),
+            default="none",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_implementation_actor = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_implementation_actor"
+            ),
+            default="none",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_implementation_mode = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_implementation_mode"
+            ),
+            default="none",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind"
+            ),
+            default="none",
+        )
+    )
+    if (
+        project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind
+        not in {
+            "patch_plan",
+            "unified_diff",
+            "full_file_replacement",
+            "manual_steps",
+            "instructions_only",
+            "none",
+        }
+    ):
+        project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind = (
+            "none"
+        )
+    project_browser_autonomous_chatgpt_implementation_packet_allowed_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_allowed_files"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_forbidden_files = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_forbidden_files"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_required_constraints = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_required_constraints"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_forbidden_actions = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_forbidden_actions"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_expected_path = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_packet_state.get(
+            "project_browser_autonomous_chatgpt_implementation_packet_expected_path"
+        ),
+        default="/tmp/codex-local-runner-decision/chatgpt_implementation_packet.md",
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_expected_response_path = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_expected_response_path"
+            ),
+            default="/tmp/codex-local-runner-decision/chatgpt_implementation_response.md",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path"
+            ),
+            default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_required_inputs = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_required_inputs"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_available_inputs = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_available_inputs"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_missing_inputs = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_missing_inputs"
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_packet_state.get(
+            "project_browser_autonomous_chatgpt_implementation_packet_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_self_approval_policy = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_self_approval_policy"
+            ),
+            default="implementer_must_not_approve_own_output",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_packet_review_before_commit_policy = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_packet_review_before_commit_policy"
+            ),
+            default="chatgpt_judge_or_human_operator_must_review",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_handoff_status = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_packet_state.get(
+            "project_browser_autonomous_chatgpt_implementation_handoff_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_chatgpt_implementation_handoff_status not in {
+        "prepared_for_manual_handoff",
+        "blocked_waiting_for_valid_decision",
+        "blocked_no_implementation_actor",
+        "blocked_actor_not_chatgpt_implementer",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "blocked_same_actor_review_required",
+        "blocked_missing_inputs",
+        "insufficient_truth",
+    }:
+        project_browser_autonomous_chatgpt_implementation_handoff_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_implementation_handoff_transport = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_packet_state.get(
+            "project_browser_autonomous_chatgpt_implementation_handoff_transport"
+        ),
+        default="unavailable",
+    )
+    if project_browser_autonomous_chatgpt_implementation_handoff_transport not in {
+        "subscription_ui_manual_paste",
+        "local_file_handoff",
+        "unavailable",
+    }:
+        project_browser_autonomous_chatgpt_implementation_handoff_transport = (
+            "unavailable"
+        )
+    project_browser_autonomous_chatgpt_implementation_handoff_target = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_packet_state.get(
+            "project_browser_autonomous_chatgpt_implementation_handoff_target"
+        ),
+        default="unavailable",
+    )
+    project_browser_autonomous_chatgpt_implementation_handoff_output_kind = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_packet_state.get(
+            "project_browser_autonomous_chatgpt_implementation_handoff_output_kind"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_chatgpt_implementation_handoff_output_kind not in {
+        "patch_plan",
+        "unified_diff",
+        "full_file_replacement",
+        "manual_steps",
+        "instructions_only",
+        "none",
+    }:
+        project_browser_autonomous_chatgpt_implementation_handoff_output_kind = "none"
+    project_browser_autonomous_chatgpt_implementation_handoff_expected_packet_path = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_handoff_expected_packet_path"
+            ),
+            default="/tmp/codex-local-runner-decision/chatgpt_implementation_packet.md",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_handoff_expected_response_path = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_handoff_expected_response_path"
+            ),
+            default="/tmp/codex-local-runner-decision/chatgpt_implementation_response.md",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_handoff_expected_patch_path = (
+        _normalize_text(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_handoff_expected_patch_path"
+            ),
+            default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_handoff_requires_review_before_commit = (
+        bool(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_handoff_requires_review_before_commit",
+                True,
+            )
+        )
+    )
+    project_browser_autonomous_chatgpt_implementation_handoff_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_implementation_packet_state.get(
+            "project_browser_autonomous_chatgpt_implementation_handoff_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_chatgpt_implementation_handoff_runtime_posture = (
+        _normalize_string_list(
+            project_browser_autonomous_chatgpt_implementation_packet_state.get(
+                "project_browser_autonomous_chatgpt_implementation_handoff_runtime_posture"
             )
         )
     )
@@ -62576,6 +63328,87 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_chatgpt_decision_consumption_runtime_posture": (
                     project_browser_autonomous_chatgpt_decision_consumption_runtime_posture
                 ),
+                "project_browser_autonomous_chatgpt_implementation_packet_status": (
+                    project_browser_autonomous_chatgpt_implementation_packet_status
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_block_reason": (
+                    project_browser_autonomous_chatgpt_implementation_packet_block_reason
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_objective_summary": (
+                    project_browser_autonomous_chatgpt_implementation_packet_objective_summary
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_source_decision_status": (
+                    project_browser_autonomous_chatgpt_implementation_packet_source_decision_status
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_source_decision": (
+                    project_browser_autonomous_chatgpt_implementation_packet_source_decision
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_implementation_actor": (
+                    project_browser_autonomous_chatgpt_implementation_packet_implementation_actor
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_implementation_mode": (
+                    project_browser_autonomous_chatgpt_implementation_packet_implementation_mode
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind": (
+                    project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_allowed_files": (
+                    project_browser_autonomous_chatgpt_implementation_packet_allowed_files
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_forbidden_files": (
+                    project_browser_autonomous_chatgpt_implementation_packet_forbidden_files
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_required_constraints": (
+                    project_browser_autonomous_chatgpt_implementation_packet_required_constraints
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_forbidden_actions": (
+                    project_browser_autonomous_chatgpt_implementation_packet_forbidden_actions
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_expected_path": (
+                    project_browser_autonomous_chatgpt_implementation_packet_expected_path
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_expected_response_path": (
+                    project_browser_autonomous_chatgpt_implementation_packet_expected_response_path
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path": (
+                    project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_required_inputs": (
+                    project_browser_autonomous_chatgpt_implementation_packet_required_inputs
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_available_inputs": (
+                    project_browser_autonomous_chatgpt_implementation_packet_available_inputs
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_missing_inputs": (
+                    project_browser_autonomous_chatgpt_implementation_packet_missing_inputs
+                ),
+                "project_browser_autonomous_chatgpt_implementation_packet_next_action": (
+                    project_browser_autonomous_chatgpt_implementation_packet_next_action
+                ),
+                "project_browser_autonomous_chatgpt_implementation_handoff_status": (
+                    project_browser_autonomous_chatgpt_implementation_handoff_status
+                ),
+                "project_browser_autonomous_chatgpt_implementation_handoff_transport": (
+                    project_browser_autonomous_chatgpt_implementation_handoff_transport
+                ),
+                "project_browser_autonomous_chatgpt_implementation_handoff_output_kind": (
+                    project_browser_autonomous_chatgpt_implementation_handoff_output_kind
+                ),
+                "project_browser_autonomous_chatgpt_implementation_handoff_expected_packet_path": (
+                    project_browser_autonomous_chatgpt_implementation_handoff_expected_packet_path
+                ),
+                "project_browser_autonomous_chatgpt_implementation_handoff_expected_response_path": (
+                    project_browser_autonomous_chatgpt_implementation_handoff_expected_response_path
+                ),
+                "project_browser_autonomous_chatgpt_implementation_handoff_expected_patch_path": (
+                    project_browser_autonomous_chatgpt_implementation_handoff_expected_patch_path
+                ),
+                "project_browser_autonomous_chatgpt_implementation_handoff_requires_review_before_commit": (
+                    project_browser_autonomous_chatgpt_implementation_handoff_requires_review_before_commit
+                ),
+                "project_browser_autonomous_chatgpt_implementation_handoff_next_action": (
+                    project_browser_autonomous_chatgpt_implementation_handoff_next_action
+                ),
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -63292,6 +64125,39 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chatgpt_decision_consumption_next_action"
             if project_browser_autonomous_chatgpt_decision_consumption_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_packet_status"
+            if project_browser_autonomous_chatgpt_implementation_packet_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_packet_source_decision_status"
+            if project_browser_autonomous_chatgpt_implementation_packet_source_decision_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_packet_source_decision"
+            if project_browser_autonomous_chatgpt_implementation_packet_source_decision
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_packet_implementation_actor"
+            if project_browser_autonomous_chatgpt_implementation_packet_implementation_actor
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_packet_next_action"
+            if project_browser_autonomous_chatgpt_implementation_packet_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_packet_expected_path"
+            if project_browser_autonomous_chatgpt_implementation_packet_expected_path
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_packet_expected_response_path"
+            if project_browser_autonomous_chatgpt_implementation_packet_expected_response_path
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path"
+            if project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_handoff_status"
+            if project_browser_autonomous_chatgpt_implementation_handoff_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_handoff_transport"
+            if project_browser_autonomous_chatgpt_implementation_handoff_transport
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_implementation_handoff_next_action"
+            if project_browser_autonomous_chatgpt_implementation_handoff_next_action
             else "",
             ]
     )
@@ -68823,6 +69689,99 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_chatgpt_decision_consumption_runtime_posture": (
             project_browser_autonomous_chatgpt_decision_consumption_runtime_posture
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_status": (
+            project_browser_autonomous_chatgpt_implementation_packet_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_block_reason": (
+            project_browser_autonomous_chatgpt_implementation_packet_block_reason
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_objective_summary": (
+            project_browser_autonomous_chatgpt_implementation_packet_objective_summary
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_source_decision_status": (
+            project_browser_autonomous_chatgpt_implementation_packet_source_decision_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_source_decision": (
+            project_browser_autonomous_chatgpt_implementation_packet_source_decision
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_implementation_actor": (
+            project_browser_autonomous_chatgpt_implementation_packet_implementation_actor
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_implementation_mode": (
+            project_browser_autonomous_chatgpt_implementation_packet_implementation_mode
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind": (
+            project_browser_autonomous_chatgpt_implementation_packet_implementation_output_kind
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_allowed_files": (
+            project_browser_autonomous_chatgpt_implementation_packet_allowed_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_forbidden_files": (
+            project_browser_autonomous_chatgpt_implementation_packet_forbidden_files
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_required_constraints": (
+            project_browser_autonomous_chatgpt_implementation_packet_required_constraints
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_forbidden_actions": (
+            project_browser_autonomous_chatgpt_implementation_packet_forbidden_actions
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_expected_path": (
+            project_browser_autonomous_chatgpt_implementation_packet_expected_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_expected_response_path": (
+            project_browser_autonomous_chatgpt_implementation_packet_expected_response_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path": (
+            project_browser_autonomous_chatgpt_implementation_packet_expected_patch_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_required_inputs": (
+            project_browser_autonomous_chatgpt_implementation_packet_required_inputs
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_available_inputs": (
+            project_browser_autonomous_chatgpt_implementation_packet_available_inputs
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_missing_inputs": (
+            project_browser_autonomous_chatgpt_implementation_packet_missing_inputs
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_next_action": (
+            project_browser_autonomous_chatgpt_implementation_packet_next_action
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_self_approval_policy": (
+            project_browser_autonomous_chatgpt_implementation_packet_self_approval_policy
+        ),
+        "project_browser_autonomous_chatgpt_implementation_packet_review_before_commit_policy": (
+            project_browser_autonomous_chatgpt_implementation_packet_review_before_commit_policy
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_status": (
+            project_browser_autonomous_chatgpt_implementation_handoff_status
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_transport": (
+            project_browser_autonomous_chatgpt_implementation_handoff_transport
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_target": (
+            project_browser_autonomous_chatgpt_implementation_handoff_target
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_output_kind": (
+            project_browser_autonomous_chatgpt_implementation_handoff_output_kind
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_expected_packet_path": (
+            project_browser_autonomous_chatgpt_implementation_handoff_expected_packet_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_expected_response_path": (
+            project_browser_autonomous_chatgpt_implementation_handoff_expected_response_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_expected_patch_path": (
+            project_browser_autonomous_chatgpt_implementation_handoff_expected_patch_path
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_requires_review_before_commit": (
+            project_browser_autonomous_chatgpt_implementation_handoff_requires_review_before_commit
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_next_action": (
+            project_browser_autonomous_chatgpt_implementation_handoff_next_action
+        ),
+        "project_browser_autonomous_chatgpt_implementation_handoff_runtime_posture": (
+            project_browser_autonomous_chatgpt_implementation_handoff_runtime_posture
         ),
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
