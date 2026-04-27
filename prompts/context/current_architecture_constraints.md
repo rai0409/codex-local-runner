@@ -1046,3 +1046,57 @@ Next:
   Prompt157 should validate applied changes with bounded py_compile, changed-file consistency, metadata consistency, and rollback/human-review posture.
   Prompt157 must not execute rollback or commit.
 <!-- PROMPT156_SAFE_REAL_APPLY_GATE_END -->
+
+<!-- PROMPT157_POST_APPLY_VALIDATION_START -->
+## Prompt157 — post-apply validation and rollback posture
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt157-post-apply-validation-ready
+
+Purpose:
+  Prompt157 adds post-apply validation and rollback posture metadata after Prompt156 real apply.
+
+What was added:
+  - `project_browser_autonomous_post_apply_validation_check_*`
+  - `project_browser_autonomous_post_apply_validation_execution_*`
+  - `project_browser_autonomous_post_apply_validation_result_*`
+  - `project_browser_autonomous_rollback_posture_*`
+  - authoritative summary keys:
+    - `project_browser_autonomous_post_apply_validation_status`
+    - `project_browser_autonomous_post_apply_validation_next_action`
+
+Behavior:
+  - Validation runs only after Prompt156 apply truth is successful.
+  - Blocks on no apply performed, apply failure, missing post-apply truth, forbidden/unexpected changes, changed-file mismatch, metadata inconsistency, command unavailable, or timeout.
+  - Required validation commands are bounded argv-list py_compile checks:
+    - `python -m py_compile automation/orchestration/planned_execution_runner.py`
+    - `python -m py_compile scripts/run_planned_execution.py`
+  - Changed-file consistency requires non-empty changed files, subset-of-expected touched files, and no forbidden/unexpected changes.
+  - Metadata consistency checks include Prompt155 dry-run truth and Prompt156 apply truth.
+
+Rollback posture:
+  - `rollback_required` may be set as metadata.
+  - Rollback execution is disabled.
+  - `rollback_execution_allowed=false`
+  - `rollback_executed=false`
+  - `rollback_attempted=false`
+  - `rollback_completed=false`
+  - No rollback commands are executed.
+
+Exposure:
+  - Prompt157 fields are exposed in compact planning summary.
+  - Prompt157 fields are exposed in supporting truth refs.
+  - Prompt157 fields are exposed in the final approved restart execution payload.
+
+Validation:
+  - Focused planned_execution_runner unittest checks passed.
+  - `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+  - `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Next:
+  Prompt158 should add dedicated unit tests for the Prompt157 status matrix and contract-surface exposure.
+  Prompt158 must not add rollback execution, commit behavior, GitHub PR/CI/merge behavior, next/fix generator, or autonomous loop.
+<!-- PROMPT157_POST_APPLY_VALIDATION_END -->
