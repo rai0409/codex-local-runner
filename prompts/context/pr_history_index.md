@@ -497,3 +497,78 @@ Safety boundaries preserved:
 Next:
 
 - Prompt155: bounded `git apply --check` dry-run executor.
+
+<!-- PROMPT155_BOUNDED_PATCH_DRY_RUN_START -->
+## Prompt155 — bounded patch dry-run executor
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt155-bounded-patch-dry-run-ready
+
+Purpose:
+  Prompt155 adds the first bounded non-mutating patch execution check after Prompt154.
+  It runs only `git apply --check <expected_patch_path>` when the Prompt154 safe patch gate is ready.
+
+What was added:
+  - `project_browser_autonomous_patch_dry_run_check_*`
+  - `project_browser_autonomous_patch_dry_run_execution_*`
+  - `project_browser_autonomous_patch_dry_run_result_*`
+
+Behavior:
+  - Dry-run is attempted only when the Prompt154 gate is ready for dry-run.
+  - The expected patch path is consistently:
+    `/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff`
+  - The dry-run command is bounded and executed as an argv list:
+    `["apply", "--check", normalized_expected_patch_path]`
+  - The command is attempted at most once.
+  - Timeout is bounded.
+  - stdout/stderr are stored only as compact excerpts.
+
+Blocked conditions:
+  - no ready Prompt154 gate
+  - missing expected patch path
+  - dirty worktree
+  - forbidden touched files
+  - unsafe operations
+  - human review required
+  - rollback required
+  - command unavailable
+  - timeout
+  - insufficient truth
+  - dry-run mutation signal
+
+Result semantics:
+  - `dry_run_attempted=true` only when the command is actually invoked.
+  - `dry_run_completed=true` only when the command returns or times out.
+  - `dry_run_passed=true` only when exit code is 0.
+  - `dry_run_failed=true` on non-zero exit, timeout, or execution error.
+  - dry-run mutation signal is detected and blocked.
+
+Safety posture:
+  - No real `git apply` is performed.
+  - `apply_performed` remains false.
+  - No patch writing or patch generation is added.
+  - No `git reset`, `git clean`, `git add`, `git commit`, or staging behavior is added.
+  - No rollback execution is added.
+  - No ChatGPT API or browser automation is added.
+  - No next/fix prompt generator or autonomous loop is added.
+  - No GitHub branch, PR, CI, or merge behavior is added.
+  - Prompt148–154 semantics are preserved.
+
+Validation:
+  - `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+  - `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Next:
+  Prompt156 should add a bounded safe real patch apply gate/executor.
+  It may run `git apply <expected_patch_path>` only after Prompt155 dry-run passed.
+  Prompt156 must add stricter patch path checks:
+    - exact path match
+    - exists
+    - regular file
+    - not symlink
+    - resolved path equals canonical expected path
+  Prompt156 must not stage, commit, rollback, create GitHub PR/CI/merge behavior, or start an autonomous loop.
+<!-- PROMPT155_BOUNDED_PATCH_DRY_RUN_END -->
