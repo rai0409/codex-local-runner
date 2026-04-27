@@ -803,3 +803,71 @@ Next:
     - resolved path equals canonical expected path
   Prompt156 must not stage, commit, rollback, create GitHub PR/CI/merge behavior, or start an autonomous loop.
 <!-- PROMPT155_BOUNDED_PATCH_DRY_RUN_END -->
+
+<!-- PROMPT156_SAFE_REAL_APPLY_GATE_START -->
+## Prompt156 — bounded safe real patch apply gate
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt156-safe-real-apply-gate-ready
+
+Purpose:
+  Prompt156 adds the first bounded real patch apply gate/executor.
+  It may run `git apply <expected_patch_path>` only after Prompt155 dry-run passed.
+
+What was added:
+  - `project_browser_autonomous_safe_patch_real_apply_gate_*`
+  - `project_browser_autonomous_safe_patch_real_apply_execution_*`
+  - `project_browser_autonomous_safe_patch_real_apply_result_*`
+
+Gate requirements:
+  - Prompt155 dry-run completed.
+  - Prompt155 dry-run passed.
+  - Prompt155 dry-run failed is false.
+  - Prompt155 dry-run exit code is 0.
+  - Prompt154 safe patch gate is ready.
+  - Expected patch path is exactly:
+    `/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff`
+  - Expected patch path exists.
+  - Expected patch path is a regular file.
+  - Expected patch path is not a symlink.
+  - Resolved path matches the canonical expected path.
+  - Worktree is clean before apply.
+  - No forbidden touched files.
+  - No unsafe operations.
+  - No active human-review or rollback posture.
+
+Execution:
+  - Runs at most one bounded real apply command:
+    `git apply <expected_patch_path>`
+  - Uses argv list execution:
+    `["apply", normalized_expected_patch_path]`
+  - Uses `timeout_seconds=5.0`.
+  - Does not retry.
+
+Result semantics:
+  - `apply_attempted=true` only when the command is actually invoked.
+  - `apply_completed=true` only when the command returns or times out.
+  - `apply_performed=true` only when exit code is 0 and post-apply truth confirms expected changes.
+  - `apply_passed=true` only when changed files are non-empty, within expected touched files, and no forbidden/unexpected changes exist.
+  - Exit code 0 alone is not sufficient for success.
+  - Dirty worktree after successful apply is expected when changed files match expected touched files.
+
+Safety posture:
+  - No staging.
+  - No commit.
+  - No rollback execution.
+  - No git reset, git clean, checkout, or restore.
+  - No GitHub branch, PR, CI, or merge behavior.
+  - No next/fix generator.
+  - No autonomous loop.
+  - Prompt156 py_compile validates implementation only.
+  - Post-apply target validation is deferred to Prompt157.
+
+Next:
+  Prompt157 should add post-apply validation and rollback posture refinement.
+  Prompt157 should validate applied changes with bounded py_compile, changed-file consistency, metadata consistency, and rollback/human-review posture.
+  Prompt157 must not execute rollback or commit.
+<!-- PROMPT156_SAFE_REAL_APPLY_GATE_END -->
