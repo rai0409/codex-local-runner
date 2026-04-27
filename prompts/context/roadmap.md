@@ -691,3 +691,40 @@ Prompt154 purpose:
 - Confirm worktree safety, candidate status, allowed/forbidden files, and dry-run applicability.
 - Do not perform unbounded patch application.
 - Do not create GitHub branch/PR/CI/merge behavior.
+---
+
+## Current checkpoint update after Prompt154
+
+Current checkpoint:
+
+- `checkpoint-prompt154-safe-patch-apply-gate-ready`
+
+Prompt154 completed:
+
+- Added safe patch dry-run readiness gate metadata.
+- Added `project_browser_autonomous_safe_patch_apply_gate_*`.
+- Added `project_browser_autonomous_safe_patch_apply_candidate_*`.
+- Added `project_browser_autonomous_safe_patch_apply_validation_*`.
+- Prompt154 classifies Prompt153 patch candidates before any apply execution.
+- `ready_for_dry_run_later` means a later bounded dry-run check may be attempted.
+- `apply_allowed=false` and `apply_performed=false` remain enforced.
+- Dirty worktree blocks.
+- Unknown worktree truth becomes insufficient_truth.
+- Forbidden touched files block.
+- Unsafe operation flags block.
+- `full_file_replacement` is blocked by default.
+- No patch writing, patch generation, patch application, `git apply`, rollback, commit, GitHub branch/PR/CI/merge, next/fix generator, or autonomous loop behavior was added.
+
+Next:
+
+- Prompt155: bounded `git apply --check` dry-run executor.
+
+Prompt155 purpose:
+
+- Execute only a bounded dry-run patch check for candidates that passed Prompt154.
+- Use `git apply --check` only when Prompt154 says `ready_for_dry_run_later`.
+- Do not run real `git apply`.
+- Do not modify repo files.
+- Do not commit.
+- Do not rollback.
+- Do not create GitHub branch/PR/CI/merge behavior.

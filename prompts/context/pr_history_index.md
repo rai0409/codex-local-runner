@@ -446,3 +446,54 @@ Safety boundaries preserved:
 Next:
 
 - Prompt154: safe patch apply gate.
+---
+
+## Prompt154 — safe patch dry-run readiness gate
+
+Status:
+
+- completed
+- tag: `checkpoint-prompt154-safe-patch-apply-gate-ready`
+
+Primary file:
+
+- `automation/orchestration/planned_execution_runner.py`
+
+Summary:
+
+Prompt154 added metadata-only safe patch dry-run readiness gate for Prompt153 patch candidates.
+
+Added field groups:
+
+- `project_browser_autonomous_safe_patch_apply_gate_*`
+- `project_browser_autonomous_safe_patch_apply_candidate_*`
+- `project_browser_autonomous_safe_patch_apply_validation_*`
+
+Key behavior:
+
+- No candidate blocks.
+- Waiting/manual response blocks.
+- Invalid candidate blocks.
+- Forbidden touched files block.
+- Unsafe operation flags block.
+- Dirty worktree blocks.
+- Unknown worktree truth becomes insufficient_truth.
+- `full_file_replacement` blocks by default.
+- Safe candidates may become `ready_for_dry_run_later`.
+
+Safety boundaries preserved:
+
+- `apply_allowed=false`.
+- `apply_performed=false`.
+- No patch writing/generation/application.
+- No `git apply`.
+- No `git apply --check`.
+- No next/fix Prompt generator.
+- No autonomous loop.
+- No rollback execution.
+- No GitHub branch/PR/CI/merge behavior.
+- Prompt148, Prompt149, Prompt150, Prompt151, Prompt152, and Prompt153 semantics unchanged.
+
+Next:
+
+- Prompt155: bounded `git apply --check` dry-run executor.

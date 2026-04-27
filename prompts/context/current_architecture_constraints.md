@@ -869,3 +869,37 @@ Prompt154 constraints:
 - Prompt154 must re-check allowed/forbidden files before any apply posture.
 - Prompt154 must prefer dry-run validation before real apply.
 - Prompt154 must not add unbounded retry, daemon, scheduler, queue drain, GitHub branch/PR/CI/merge behavior.
+---
+
+## Prompt154 safe patch dry-run readiness constraints
+
+Prompt154 established metadata-only safe patch apply readiness.
+
+Prompt154 invariants:
+
+- `apply_allowed=false`.
+- `apply_performed=false`.
+- `ready_for_dry_run_later` does not mean patch application.
+- Prompt154 must not run `git apply`.
+- Prompt154 must not run `git apply --check`.
+- Prompt154 must not write patch files.
+- Prompt154 must not modify repo files.
+- Dirty worktree blocks.
+- Unknown worktree truth blocks with insufficient_truth.
+- Forbidden touched files block.
+- Unsafe operation flags block.
+- `full_file_replacement` is blocked by default and requires later explicit human-review handling.
+- Prompt148 through Prompt153 semantics remain unchanged.
+
+Prompt155 constraints:
+
+- Prompt155 may run only bounded `git apply --check`.
+- Prompt155 must run dry-run check only when Prompt154 gate status is `ready_for_dry_run_later`.
+- Prompt155 must use only the exact expected patch path already surfaced by Prompt153/154.
+- Prompt155 must not run real `git apply`.
+- Prompt155 must not modify repo files.
+- Prompt155 must not stage files.
+- Prompt155 must not commit.
+- Prompt155 must not rollback.
+- Prompt155 must not create GitHub branch/PR/CI/merge behavior.
+- Prompt155 must not start an autonomous loop.
