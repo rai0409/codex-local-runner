@@ -1392,3 +1392,93 @@ Next:
 
   Prompt163 must still not invoke Codex/ChatGPT, apply patches, rollback, commit, use GitHub, or start a loop.
 <!-- PROMPT162_NEXT_PROMPT_READINESS_END -->
+
+<!-- PROMPT163_NEXT_PROMPT_GENERATION_START -->
+## Prompt163 — next-prompt body generation and handoff file
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt163-next-prompt-generation-ready
+
+Purpose:
+  Prompt163 generates a bounded next-prompt body for a future Codex/ChatGPT run when Prompt162 readiness allows it.
+
+What was added:
+  - `_build_project_browser_autonomous_next_prompt_generation_state(...)`
+  - `project_browser_autonomous_next_prompt_generation_*`
+  - normalization/wiring near Prompt162
+  - compact planning summary exposure
+  - supporting truth refs exposure
+  - final approved restart payload exposure
+
+Generation gate:
+  Prompt body generation is allowed only when Prompt162 readiness is ready:
+  - `project_browser_autonomous_next_prompt_readiness_status == "ready_to_generate_next_prompt"`
+  - `generation_allowed=true`
+  - `ready_to_generate=true`
+  - `validation_passed=true`
+  - `validation_failed=false`
+  - `rollback_required=false`
+  - `human_review_required=false`
+  - no active `insufficient_truth`
+  - bounded next work is available
+  - bounded next scope is available
+  - safe next target files are available
+
+Generated prompt body:
+  The generated next prompt includes:
+  - repository path: `/home/rai/codex-local-runner`
+  - checkpoint: `checkpoint-prompt162-docs-synced-before-prompt163`
+  - next work kind/scope/targets
+  - exact implementation goal
+  - strict non-goals
+  - safety constraints
+  - validation commands
+  - expected report format
+  - smallest safe additive change instruction
+
+Handoff file:
+  Fixed handoff path:
+  - `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+
+  Handoff path rules:
+  - exact path only
+  - parent directory must exist
+  - path must not be a symlink
+  - write only prompt body text
+  - do not write patches or source code files
+  - no alternate paths
+  - no directory scan
+
+Handoff failure behavior:
+  If prompt body generation succeeds but handoff write/path validation fails:
+  - keep `status=prompt_generated`
+  - keep `prompt_generated=true`
+  - keep `prompt_body`
+  - set handoff failure flags
+  - set `next_action=manual_next_prompt_required`
+
+Safety:
+  Prompt163 does not invoke Codex/ChatGPT, use browser automation, generate implementation patches, apply patches, execute rollback, stage/commit/push, use GitHub/PR/CI/merge, or start an autonomous loop.
+
+Validation:
+  - `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+  - `python -m py_compile scripts/run_planned_execution.py` passed.
+  - Focused Prompt160 checks passed.
+
+Known remaining risk:
+  Prompt163 has no dedicated unit tests yet.
+
+Current autonomous prompt-flow state:
+  - failure path: Prompt160 readiness -> Prompt161 `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  - success path: Prompt162 readiness -> Prompt163 `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+
+Next:
+  Prompt164 should add a prompt selection controller that selects either:
+  - fix prompt: `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  - next prompt: `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+
+  Prompt164 must still not invoke Codex/ChatGPT, apply patches, rollback, commit, use GitHub, or start a loop.
+<!-- PROMPT163_NEXT_PROMPT_GENERATION_END -->
