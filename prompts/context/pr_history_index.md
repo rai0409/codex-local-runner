@@ -1218,3 +1218,94 @@ Next:
   Prompt167 should add a bounded write-enabled Codex invocation mode.
   It must still enforce max_invocations=1, no retry, no loop, no commit, no GitHub, no rollback execution, and should capture git diff/status after Codex returns.
 <!-- PROMPT166_READONLY_CODEX_INVOCATION_END -->
+
+<!-- PROMPT167_WRITE_CODEX_INVOCATION_START -->
+## Prompt167 — write-enabled bounded Codex invocation
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt167-write-enabled-codex-invocation-ready
+
+Purpose:
+  Prompt167 adds a write-enabled, one-invocation Codex execution path that can let Codex edit the repo once under strict gates.
+
+What was added:
+  - `_build_project_browser_autonomous_codex_write_invocation_state(...)`
+  - `project_browser_autonomous_codex_write_invocation_readiness_*`
+  - `project_browser_autonomous_codex_write_invocation_execution_*`
+  - `project_browser_autonomous_codex_write_invocation_result_*`
+  - compact planning summary exposure
+  - supporting truth refs exposure
+  - final approved restart payload exposure
+
+Command:
+  - argv-only, no shell:
+    `codex exec - --cd <repo> --sandbox workspace-write`
+  - selected prompt file content is passed as stdin.
+  - no fallback to read-only.
+  - if workspace-write support is unavailable, block with `blocked_codex_command_unavailable`.
+
+Invocation gates:
+  - Prompt165 readiness must be `ready_to_invoke_codex`.
+  - selected prompt must be valid and safe.
+  - selected prompt path must be one of:
+    - `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+    - `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+  - selected prompt file must exist, be non-symlink, non-empty, and not too large.
+  - worktree must be clean before invocation.
+  - `rollback_required=false`
+  - `human_review_required=false`
+  - no active `insufficient_truth`
+  - `max_invocations=1`
+  - no prior write invocation attempt/completion.
+
+Fixed output paths:
+  - stdout: `/tmp/codex-local-runner-decision/codex_write_invocation_stdout.txt`
+  - stderr: `/tmp/codex-local-runner-decision/codex_write_invocation_stderr.txt`
+  - result: `/tmp/codex-local-runner-decision/codex_write_invocation_result.json`
+  - diff name-only: `/tmp/codex-local-runner-decision/codex_write_git_diff_name_only.txt`
+  - diff numstat: `/tmp/codex-local-runner-decision/codex_write_git_diff_numstat.txt`
+
+Post-invocation accounting:
+  After command return, timeout, or terminal error handling, Prompt167 captures:
+  - `git status --short`
+  - `git diff --name-only`
+  - `git diff --numstat`
+
+Result classifications:
+  - `completed_with_changes`
+  - `completed_no_changes`
+  - `completed_failure`
+  - `completed_timeout`
+  - `blocked`
+  - `failed_execution_error`
+  - `insufficient_truth`
+
+Safety:
+  Prompt167 does not classify patch candidates, create patch files, run git apply, run git apply --check, execute rollback, stage, commit, push, use GitHub/PR/CI/merge, run runtime tests, or start retry/autonomous loops.
+
+Smoke result:
+  Prompt167 fields are exposed, but the smoke run did not invoke Codex because upstream Prompt157 was `blocked_no_apply_performed`, setting `human_review_required=true`.
+  This blocked Prompt161/163 prompt generation, Prompt164 prompt selection, Prompt165 invocation readiness, and Prompt167 write invocation.
+
+Current blocker:
+  - `project_browser_autonomous_post_apply_validation_status=blocked_no_apply_performed`
+  - `project_browser_autonomous_post_apply_validation_*_human_review_required=true`
+  - `project_browser_autonomous_prompt_selection_selected_prompt_kind=none`
+  - `project_browser_autonomous_codex_write_invocation_readiness_status=blocked_human_review_required`
+
+Validation:
+  - `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+  - `python -m py_compile scripts/run_planned_execution.py` passed.
+  - focused Prompt160 checks passed.
+
+Known remaining risk:
+  Prompt167 has no dedicated unit tests yet.
+  Runtime behavior depends on local Codex CLI workspace-write behavior.
+
+Next:
+  Prompt168 should add an explicit smoke/manual selected prompt override so the write-enabled invocation path can be exercised without requiring the full Prompt154-157 apply/validation chain.
+  The override must be disabled by default, explicit, max-one-invocation, clean-worktree-only, no rollback, no stage, no commit, no GitHub, and no loop.
+<!-- PROMPT167_WRITE_CODEX_INVOCATION_END -->
