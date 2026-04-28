@@ -1068,3 +1068,66 @@ Next:
   - continuation-budget insufficient-truth propagation into autonomy budget status
   Prompt160 must not change Prompt157 semantics and must not add rollback execution, commit behavior, GitHub behavior, next/fix generator, or autonomous loop.
 <!-- PROMPT159_INSUFFICIENT_TRUTH_TRIAGE_END -->
+
+<!-- PROMPT160_FIX_PROMPT_READINESS_START -->
+## Prompt160 — fix-prompt generator readiness metadata
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt160-fix-prompt-readiness-ready
+
+Purpose:
+  Prompt160 adds metadata-only readiness classification for future fix-prompt generation.
+  It decides whether a failure is safe and actionable enough for Prompt161 to generate a repair prompt.
+
+What was added:
+  - `_build_project_browser_autonomous_fix_prompt_readiness_state(...)`
+  - `project_browser_autonomous_fix_prompt_readiness_*`
+  - normalization/wiring
+  - compact summary exposure
+  - supporting truth refs exposure
+  - final approved restart payload exposure
+
+Behavior:
+  - `validation_passed=true` blocks fix generation as no fix is needed.
+  - ambiguous `insufficient_truth` blocks fix generation and waits for more truth.
+  - `rollback_required=true` blocks fix generation.
+  - `human_review_required=true` blocks fix generation.
+  - forbidden or unexpected changed files block fix generation.
+  - metadata inconsistency blocks fix generation.
+  - actionable failures such as py_compile failure, dry-run failure, apply failure, changed-file mismatch, or validation failure with useful detail can become `ready_to_generate_fix_prompt`.
+  - safe `fix_target_files` are derived only from existing changed/touched-file truth and exclude forbidden/unexpected files.
+
+Safety:
+  - No fix prompt body is generated.
+  - No fix prompt file is created.
+  - `prompt_generation_attempted=false`
+  - `prompt_generated=false`
+  - `prompt_path=""`
+  - No rollback execution.
+  - No git reset/clean/checkout/restore/add/commit/push.
+  - No GitHub/PR/CI/merge behavior.
+  - No autonomous loop behavior.
+
+Tests:
+  - Prompt160 readiness tests passed:
+    - validation passed blocks generation
+    - insufficient truth blocks generation
+    - rollback required blocks generation
+    - human review required blocks generation
+    - actionable py_compile failure is ready
+    - metadata inconsistency blocks generation
+    - contract-surface exposure
+  - Prompt157/158/159 regression tests passed.
+  - Baseline manifest/status tests passed.
+  - py_compile checks passed.
+
+Known out of scope:
+  The 3 legacy high-level posture tests remain out of Prompt160 scope and were not modified.
+
+Next:
+  Prompt161 should generate a bounded fix-prompt body and optional fixed handoff file only when Prompt160 readiness is `ready_to_generate_fix_prompt` and generation is allowed.
+  Prompt161 must still not invoke Codex/ChatGPT, apply patches, rollback, commit, push, use GitHub, or start a loop.
+<!-- PROMPT160_FIX_PROMPT_READINESS_END -->
