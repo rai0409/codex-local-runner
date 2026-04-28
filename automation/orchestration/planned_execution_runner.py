@@ -5,6 +5,7 @@ from datetime import datetime
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -50075,6 +50076,242 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
     }
 
 
+def _build_project_browser_autonomous_smoke_prompt_override_state(
+    *,
+    repository_path: str,
+    override_env_value: str,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "smoke_override_selected",
+        "blocked_override_not_requested",
+        "blocked_override_not_allowed",
+        "blocked_prompt_path_missing",
+        "blocked_prompt_path_unexpected",
+        "blocked_prompt_path_symlink",
+        "blocked_prompt_empty",
+        "blocked_prompt_too_large",
+        "blocked_dirty_worktree_before",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "run_write_codex_invocation_later",
+        "wait_for_manual_smoke_prompt",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    next_prompt_path = "/tmp/codex-local-runner-decision/generated_next_prompt.txt"
+    fix_prompt_path = "/tmp/codex-local-runner-decision/generated_fix_prompt.txt"
+    allowed_paths = [next_prompt_path, fix_prompt_path]
+    max_prompt_size_bytes = 20000
+    runtime_posture = [
+        "smoke_override_explicit_only",
+        "disabled_by_default",
+        "manual_prompt_selection_only",
+        "no_prompt_generation",
+        "no_patch_apply",
+        "no_git_cleanup",
+        "no_rollback",
+        "no_commit",
+        "no_github_mutation",
+    ]
+
+    normalized_repository_path = _normalize_text(repository_path, default="")
+    normalized_override_value = _normalize_text(override_env_value, default="")
+    override_requested = normalized_override_value == "1"
+    override_allowed = False
+    override_used = False
+    override_prompt_kind = "none"
+    override_prompt_path = ""
+    override_prompt_path_is_exact = False
+    override_prompt_path_exists = False
+    override_prompt_path_is_symlink = False
+    override_prompt_file_non_empty = False
+    override_prompt_file_size_bytes = 0
+    override_prompt_file_too_large = False
+    selected_prompt_kind = "none"
+    selected_prompt_path = ""
+    selected_prompt_ready = False
+    worktree_clean_before = False
+    worktree_status_before = ""
+    human_review_bypass_for_smoke = False
+    max_invocations = 1
+    status = "blocked_override_not_requested"
+    source_status = "override_not_requested"
+    block_reason = "override_not_requested"
+    next_action = "wait_for_manual_smoke_prompt"
+    missing_inputs: list[str] = []
+
+    if not override_requested:
+        pass
+    elif not normalized_repository_path:
+        status = "blocked_override_not_allowed"
+        source_status = "repository_path_missing"
+        block_reason = "repository_path_missing"
+        next_action = "insufficient_truth"
+        missing_inputs.append("repository_path")
+    else:
+        try:
+            status_cp = _run_git(
+                normalized_repository_path,
+                ["status", "--short"],
+                timeout_seconds=10.0,
+            )
+            worktree_status_before = _normalize_text(status_cp.stdout, default="")
+            worktree_clean_before = bool(
+                status_cp.returncode == 0 and not worktree_status_before
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            status = "insufficient_truth"
+            source_status = "worktree_truth_unavailable"
+            block_reason = "worktree_truth_unavailable"
+            next_action = "insufficient_truth"
+            missing_inputs.append("worktree_status_before")
+            worktree_clean_before = False
+
+        if status == "blocked_override_not_requested":
+            if not worktree_clean_before:
+                status = "blocked_dirty_worktree_before"
+                source_status = "worktree_not_clean_before"
+                block_reason = "dirty_worktree_before"
+                next_action = "manual_review_required"
+            else:
+                safe_candidates: list[tuple[str, str, int]] = []
+                candidate_issues: list[str] = []
+                for candidate_path in allowed_paths:
+                    candidate_obj = Path(candidate_path)
+                    candidate_is_exact = candidate_path in {next_prompt_path, fix_prompt_path}
+                    candidate_exists = candidate_obj.exists()
+                    candidate_is_symlink = bool(candidate_exists and candidate_obj.is_symlink())
+                    candidate_size = 0
+                    if candidate_exists and not candidate_is_symlink:
+                        try:
+                            candidate_size = max(0, int(candidate_obj.stat().st_size))
+                        except OSError:
+                            candidate_size = 0
+                    candidate_non_empty = candidate_size > 0
+                    candidate_too_large = candidate_size > max_prompt_size_bytes
+                    candidate_kind = "next" if candidate_path == next_prompt_path else "fix"
+
+                    if not candidate_is_exact:
+                        candidate_issues.append("blocked_prompt_path_unexpected")
+                        continue
+                    if not candidate_exists:
+                        candidate_issues.append("blocked_prompt_path_missing")
+                        continue
+                    if candidate_is_symlink:
+                        candidate_issues.append("blocked_prompt_path_symlink")
+                        continue
+                    if not candidate_non_empty:
+                        candidate_issues.append("blocked_prompt_empty")
+                        continue
+                    if candidate_too_large:
+                        candidate_issues.append("blocked_prompt_too_large")
+                        continue
+                    safe_candidates.append((candidate_kind, candidate_path, candidate_size))
+
+                if safe_candidates:
+                    chosen_kind, chosen_path, chosen_size = safe_candidates[0]
+                    override_allowed = True
+                    override_used = True
+                    human_review_bypass_for_smoke = True
+                    override_prompt_kind = chosen_kind
+                    override_prompt_path = chosen_path
+                    override_prompt_path_is_exact = True
+                    override_prompt_path_exists = True
+                    override_prompt_path_is_symlink = False
+                    override_prompt_file_non_empty = True
+                    override_prompt_file_size_bytes = chosen_size
+                    override_prompt_file_too_large = False
+                    selected_prompt_kind = chosen_kind
+                    selected_prompt_path = chosen_path
+                    selected_prompt_ready = True
+                    status = "smoke_override_selected"
+                    source_status = "explicit_smoke_override_selected"
+                    block_reason = "none"
+                    next_action = "run_write_codex_invocation_later"
+                else:
+                    status = candidate_issues[0] if candidate_issues else "blocked_prompt_path_missing"
+                    source_status = "no_safe_manual_prompt"
+                    block_reason = (
+                        "manual_prompt_missing_or_unsafe"
+                        if status != "blocked_prompt_path_missing"
+                        else "manual_prompt_missing"
+                    )
+                    next_action = "wait_for_manual_smoke_prompt"
+                    if status == "blocked_prompt_path_missing":
+                        missing_inputs.append("generated_next_or_fix_prompt_file")
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_smoke_prompt_override_status": status,
+        "project_browser_autonomous_smoke_prompt_override_source_status": source_status,
+        "project_browser_autonomous_smoke_prompt_override_block_reason": block_reason,
+        "project_browser_autonomous_smoke_prompt_override_override_requested": bool(
+            override_requested
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_allowed": bool(
+            override_allowed
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_used": bool(
+            override_used
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_prompt_kind": (
+            override_prompt_kind
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_prompt_path": (
+            override_prompt_path
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_prompt_path_is_exact": bool(
+            override_prompt_path_is_exact
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_prompt_path_exists": bool(
+            override_prompt_path_exists
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_prompt_path_is_symlink": bool(
+            override_prompt_path_is_symlink
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_prompt_file_non_empty": bool(
+            override_prompt_file_non_empty
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_prompt_file_size_bytes": int(
+            override_prompt_file_size_bytes
+        ),
+        "project_browser_autonomous_smoke_prompt_override_override_prompt_file_too_large": bool(
+            override_prompt_file_too_large
+        ),
+        "project_browser_autonomous_smoke_prompt_override_selected_prompt_kind": (
+            selected_prompt_kind
+        ),
+        "project_browser_autonomous_smoke_prompt_override_selected_prompt_path": (
+            selected_prompt_path
+        ),
+        "project_browser_autonomous_smoke_prompt_override_selected_prompt_ready": bool(
+            selected_prompt_ready
+        ),
+        "project_browser_autonomous_smoke_prompt_override_worktree_clean_before": bool(
+            worktree_clean_before
+        ),
+        "project_browser_autonomous_smoke_prompt_override_worktree_status_before": (
+            worktree_status_before
+        ),
+        "project_browser_autonomous_smoke_prompt_override_human_review_bypass_for_smoke": bool(
+            human_review_bypass_for_smoke
+        ),
+        "project_browser_autonomous_smoke_prompt_override_max_invocations": int(
+            max_invocations
+        ),
+        "project_browser_autonomous_smoke_prompt_override_next_action": next_action,
+        "project_browser_autonomous_smoke_prompt_override_runtime_posture": runtime_posture,
+        "project_browser_autonomous_smoke_prompt_override_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+    }
+
+
 def _build_project_browser_autonomous_codex_write_invocation_state(
     *,
     repository_path: str,
@@ -70673,94 +70910,339 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_codex_invocation_result_state_normalized[
         "project_browser_autonomous_codex_invocation_result_next_action"
     ] = project_browser_autonomous_codex_invocation_result_next_action
+    smoke_prompt_override_env_value = _normalize_text(
+        os.environ.get("PROJECT_BROWSER_AUTONOMOUS_SMOKE_PROMPT_OVERRIDE"),
+        default="",
+    )
+    project_browser_autonomous_smoke_prompt_override_state = (
+        _build_project_browser_autonomous_smoke_prompt_override_state(
+            repository_path=str(execution_repo_path),
+            override_env_value=smoke_prompt_override_env_value,
+        )
+    )
+    smoke_prompt_override_allowed_statuses = {
+        "smoke_override_selected",
+        "blocked_override_not_requested",
+        "blocked_override_not_allowed",
+        "blocked_prompt_path_missing",
+        "blocked_prompt_path_unexpected",
+        "blocked_prompt_path_symlink",
+        "blocked_prompt_empty",
+        "blocked_prompt_too_large",
+        "blocked_dirty_worktree_before",
+        "insufficient_truth",
+    }
+    smoke_prompt_override_allowed_next_actions = {
+        "run_write_codex_invocation_later",
+        "wait_for_manual_smoke_prompt",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    smoke_prompt_override_allowed_prompt_kinds = {"fix", "next", "none"}
+    smoke_prompt_override_field_names = (
+        "status",
+        "source_status",
+        "block_reason",
+        "override_requested",
+        "override_allowed",
+        "override_used",
+        "override_prompt_kind",
+        "override_prompt_path",
+        "override_prompt_path_is_exact",
+        "override_prompt_path_exists",
+        "override_prompt_path_is_symlink",
+        "override_prompt_file_non_empty",
+        "override_prompt_file_size_bytes",
+        "override_prompt_file_too_large",
+        "selected_prompt_kind",
+        "selected_prompt_path",
+        "selected_prompt_ready",
+        "worktree_clean_before",
+        "worktree_status_before",
+        "human_review_bypass_for_smoke",
+        "max_invocations",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_smoke_prompt_override_status = _normalize_text(
+        project_browser_autonomous_smoke_prompt_override_state.get(
+            "project_browser_autonomous_smoke_prompt_override_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_smoke_prompt_override_status not in (
+        smoke_prompt_override_allowed_statuses
+    ):
+        project_browser_autonomous_smoke_prompt_override_status = "insufficient_truth"
+    project_browser_autonomous_smoke_prompt_override_next_action = _normalize_text(
+        project_browser_autonomous_smoke_prompt_override_state.get(
+            "project_browser_autonomous_smoke_prompt_override_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_smoke_prompt_override_next_action not in (
+        smoke_prompt_override_allowed_next_actions
+    ):
+        project_browser_autonomous_smoke_prompt_override_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_smoke_prompt_override_state_normalized: dict[str, Any] = {}
+    for field_name in smoke_prompt_override_field_names:
+        key = f"project_browser_autonomous_smoke_prompt_override_{field_name}"
+        value = project_browser_autonomous_smoke_prompt_override_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_smoke_prompt_override_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_smoke_prompt_override_next_action
+        elif field_name in {"override_prompt_kind", "selected_prompt_kind"}:
+            normalized_prompt_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_prompt_kind
+                if normalized_prompt_kind in smoke_prompt_override_allowed_prompt_kinds
+                else "none"
+            )
+        elif field_name in {
+            "override_requested",
+            "override_allowed",
+            "override_used",
+            "override_prompt_path_is_exact",
+            "override_prompt_path_exists",
+            "override_prompt_path_is_symlink",
+            "override_prompt_file_non_empty",
+            "override_prompt_file_too_large",
+            "selected_prompt_ready",
+            "worktree_clean_before",
+            "human_review_bypass_for_smoke",
+        }:
+            value = bool(value)
+        elif field_name in {"override_prompt_file_size_bytes", "max_invocations"}:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name in {"runtime_posture", "missing_inputs"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_smoke_prompt_override_state_normalized[key] = value
+    project_browser_autonomous_smoke_prompt_override_state_normalized[
+        "project_browser_autonomous_smoke_prompt_override_status"
+    ] = project_browser_autonomous_smoke_prompt_override_status
+    project_browser_autonomous_smoke_prompt_override_state_normalized[
+        "project_browser_autonomous_smoke_prompt_override_next_action"
+    ] = project_browser_autonomous_smoke_prompt_override_next_action
+
+    smoke_override_selected_for_write = bool(
+        project_browser_autonomous_smoke_prompt_override_status
+        == "smoke_override_selected"
+        and project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+            "project_browser_autonomous_smoke_prompt_override_override_allowed",
+            False,
+        )
+        and project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+            "project_browser_autonomous_smoke_prompt_override_override_used",
+            False,
+        )
+        and project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+            "project_browser_autonomous_smoke_prompt_override_selected_prompt_ready",
+            False,
+        )
+        and project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+            "project_browser_autonomous_smoke_prompt_override_worktree_clean_before",
+            False,
+        )
+    )
+    codex_write_effective_readiness_status = (
+        "ready_to_invoke_codex"
+        if smoke_override_selected_for_write
+        else project_browser_autonomous_codex_invocation_readiness_status
+    )
+    codex_write_effective_readiness_allowed = (
+        True
+        if smoke_override_selected_for_write
+        else bool(
+            project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                "project_browser_autonomous_codex_invocation_readiness_invocation_allowed",
+                False,
+            )
+        )
+    )
+    codex_write_effective_selected_prompt_kind = _normalize_text(
+        (
+            project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                "project_browser_autonomous_smoke_prompt_override_selected_prompt_kind"
+            )
+            if smoke_override_selected_for_write
+            else project_browser_autonomous_prompt_selection_state_normalized.get(
+                "project_browser_autonomous_prompt_selection_selected_prompt_kind"
+            )
+        ),
+        default="none",
+    )
+    codex_write_effective_selected_prompt_path = _normalize_text(
+        (
+            project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                "project_browser_autonomous_smoke_prompt_override_selected_prompt_path"
+            )
+            if smoke_override_selected_for_write
+            else project_browser_autonomous_prompt_selection_state_normalized.get(
+                "project_browser_autonomous_prompt_selection_selected_prompt_path"
+            )
+        ),
+        default="",
+    )
+    codex_write_effective_selected_prompt_source = _normalize_text(
+        (
+            "project_browser_autonomous_smoke_prompt_override"
+            if smoke_override_selected_for_write
+            else project_browser_autonomous_prompt_selection_state_normalized.get(
+                "project_browser_autonomous_prompt_selection_selected_prompt_source"
+            )
+        ),
+        default="",
+    )
+    codex_write_effective_selected_prompt_ready = bool(
+        (
+            project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                "project_browser_autonomous_smoke_prompt_override_selected_prompt_ready",
+                False,
+            )
+            if smoke_override_selected_for_write
+            else project_browser_autonomous_prompt_selection_state_normalized.get(
+                "project_browser_autonomous_prompt_selection_selected_prompt_ready",
+                False,
+            )
+        )
+    )
+    codex_write_effective_selected_prompt_path_is_exact = bool(
+        (
+            project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                "project_browser_autonomous_smoke_prompt_override_override_prompt_path_is_exact",
+                False,
+            )
+            if smoke_override_selected_for_write
+            else project_browser_autonomous_prompt_selection_state_normalized.get(
+                "project_browser_autonomous_prompt_selection_selected_prompt_path_is_exact",
+                False,
+            )
+        )
+    )
+    codex_write_effective_selected_prompt_path_exists = bool(
+        (
+            project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                "project_browser_autonomous_smoke_prompt_override_override_prompt_path_exists",
+                False,
+            )
+            if smoke_override_selected_for_write
+            else project_browser_autonomous_prompt_selection_state_normalized.get(
+                "project_browser_autonomous_prompt_selection_selected_prompt_path_exists",
+                False,
+            )
+        )
+    )
+    codex_write_effective_selected_prompt_path_is_symlink = bool(
+        (
+            project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                "project_browser_autonomous_smoke_prompt_override_override_prompt_path_is_symlink",
+                False,
+            )
+            if smoke_override_selected_for_write
+            else project_browser_autonomous_prompt_selection_state_normalized.get(
+                "project_browser_autonomous_prompt_selection_selected_prompt_path_is_symlink",
+                False,
+            )
+        )
+    )
+    codex_write_effective_selected_prompt_file_non_empty = bool(
+        (
+            project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                "project_browser_autonomous_smoke_prompt_override_override_prompt_file_non_empty",
+                False,
+            )
+            if smoke_override_selected_for_write
+            else project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                "project_browser_autonomous_codex_invocation_readiness_selected_prompt_file_non_empty",
+                False,
+            )
+        )
+    )
+    codex_write_effective_selected_prompt_file_too_large = bool(
+        (
+            project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                "project_browser_autonomous_smoke_prompt_override_override_prompt_file_too_large",
+                False,
+            )
+            if smoke_override_selected_for_write
+            else project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                "project_browser_autonomous_codex_invocation_readiness_selected_prompt_file_too_large",
+                False,
+            )
+        )
+    )
+    codex_write_effective_human_review_required = (
+        False
+        if (
+            smoke_override_selected_for_write
+            and bool(
+                project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                    "project_browser_autonomous_smoke_prompt_override_human_review_bypass_for_smoke",
+                    False,
+                )
+            )
+        )
+        else bool(
+            project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                "project_browser_autonomous_codex_invocation_readiness_human_review_required",
+                False,
+            )
+        )
+    )
+    codex_write_effective_insufficient_truth = (
+        False
+        if smoke_override_selected_for_write
+        else bool(
+            project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                "project_browser_autonomous_codex_invocation_readiness_insufficient_truth",
+                False,
+            )
+        )
+    )
+    codex_write_effective_max_invocations = (
+        _as_non_negative_int(
+            project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                "project_browser_autonomous_smoke_prompt_override_max_invocations"
+            ),
+            default=1,
+        )
+        if smoke_override_selected_for_write
+        else _as_non_negative_int(
+            project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                "project_browser_autonomous_codex_invocation_readiness_max_invocations"
+            ),
+            default=1,
+        )
+    )
     project_browser_autonomous_codex_write_invocation_state = (
         _build_project_browser_autonomous_codex_write_invocation_state(
             repository_path=str(execution_repo_path),
-            codex_invocation_readiness_status=project_browser_autonomous_codex_invocation_readiness_status,
-            codex_invocation_readiness_allowed=bool(
-                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
-                    "project_browser_autonomous_codex_invocation_readiness_invocation_allowed",
-                    False,
-                )
-            ),
-            selected_prompt_kind=_normalize_text(
-                project_browser_autonomous_prompt_selection_state_normalized.get(
-                    "project_browser_autonomous_prompt_selection_selected_prompt_kind"
-                ),
-                default="none",
-            ),
-            selected_prompt_path=_normalize_text(
-                project_browser_autonomous_prompt_selection_state_normalized.get(
-                    "project_browser_autonomous_prompt_selection_selected_prompt_path"
-                ),
-                default="",
-            ),
-            selected_prompt_source=_normalize_text(
-                project_browser_autonomous_prompt_selection_state_normalized.get(
-                    "project_browser_autonomous_prompt_selection_selected_prompt_source"
-                ),
-                default="",
-            ),
-            selected_prompt_ready=bool(
-                project_browser_autonomous_prompt_selection_state_normalized.get(
-                    "project_browser_autonomous_prompt_selection_selected_prompt_ready",
-                    False,
-                )
-            ),
-            selected_prompt_path_is_exact=bool(
-                project_browser_autonomous_prompt_selection_state_normalized.get(
-                    "project_browser_autonomous_prompt_selection_selected_prompt_path_is_exact",
-                    False,
-                )
-            ),
-            selected_prompt_path_exists=bool(
-                project_browser_autonomous_prompt_selection_state_normalized.get(
-                    "project_browser_autonomous_prompt_selection_selected_prompt_path_exists",
-                    False,
-                )
-            ),
-            selected_prompt_path_is_symlink=bool(
-                project_browser_autonomous_prompt_selection_state_normalized.get(
-                    "project_browser_autonomous_prompt_selection_selected_prompt_path_is_symlink",
-                    False,
-                )
-            ),
-            selected_prompt_file_non_empty=bool(
-                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
-                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_file_non_empty",
-                    False,
-                )
-            ),
-            selected_prompt_file_too_large=bool(
-                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
-                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_file_too_large",
-                    False,
-                )
-            ),
+            codex_invocation_readiness_status=codex_write_effective_readiness_status,
+            codex_invocation_readiness_allowed=codex_write_effective_readiness_allowed,
+            selected_prompt_kind=codex_write_effective_selected_prompt_kind,
+            selected_prompt_path=codex_write_effective_selected_prompt_path,
+            selected_prompt_source=codex_write_effective_selected_prompt_source,
+            selected_prompt_ready=codex_write_effective_selected_prompt_ready,
+            selected_prompt_path_is_exact=codex_write_effective_selected_prompt_path_is_exact,
+            selected_prompt_path_exists=codex_write_effective_selected_prompt_path_exists,
+            selected_prompt_path_is_symlink=codex_write_effective_selected_prompt_path_is_symlink,
+            selected_prompt_file_non_empty=codex_write_effective_selected_prompt_file_non_empty,
+            selected_prompt_file_too_large=codex_write_effective_selected_prompt_file_too_large,
             rollback_required=bool(
                 project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
                     "project_browser_autonomous_codex_invocation_readiness_rollback_required",
                     False,
                 )
             ),
-            human_review_required=bool(
-                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
-                    "project_browser_autonomous_codex_invocation_readiness_human_review_required",
-                    False,
-                )
-            ),
-            insufficient_truth=bool(
-                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
-                    "project_browser_autonomous_codex_invocation_readiness_insufficient_truth",
-                    False,
-                )
-            ),
-            max_invocations=_as_non_negative_int(
-                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
-                    "project_browser_autonomous_codex_invocation_readiness_max_invocations"
-                ),
-                default=1,
-            ),
+            human_review_required=codex_write_effective_human_review_required,
+            insufficient_truth=codex_write_effective_insufficient_truth,
+            max_invocations=codex_write_effective_max_invocations,
             prior_write_invocation_attempted=bool(
                 prior_approved_restart_execution.get(
                     "project_browser_autonomous_codex_write_invocation_execution_invocation_attempted",
@@ -73562,6 +74044,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_next_prompt_readiness_state_normalized,
                 **project_browser_autonomous_next_prompt_generation_state_normalized,
                 **project_browser_autonomous_prompt_selection_state_normalized,
+                **project_browser_autonomous_smoke_prompt_override_state_normalized,
                 **project_browser_autonomous_codex_invocation_readiness_state_normalized,
                 **project_browser_autonomous_codex_invocation_execution_state_normalized,
                 **project_browser_autonomous_codex_invocation_result_state_normalized,
@@ -74431,6 +74914,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_prompt_selection_next_action"
             if project_browser_autonomous_prompt_selection_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_smoke_prompt_override_status"
+            if project_browser_autonomous_smoke_prompt_override_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_smoke_prompt_override_next_action"
+            if project_browser_autonomous_smoke_prompt_override_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_codex_invocation_readiness_status"
             if project_browser_autonomous_codex_invocation_readiness_status
@@ -80580,6 +81069,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_next_prompt_readiness_state_normalized,
         **project_browser_autonomous_next_prompt_generation_state_normalized,
         **project_browser_autonomous_prompt_selection_state_normalized,
+        **project_browser_autonomous_smoke_prompt_override_state_normalized,
         **project_browser_autonomous_codex_invocation_readiness_state_normalized,
         **project_browser_autonomous_codex_invocation_execution_state_normalized,
         **project_browser_autonomous_codex_invocation_result_state_normalized,
