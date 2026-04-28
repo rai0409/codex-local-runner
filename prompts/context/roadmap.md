@@ -1540,3 +1540,75 @@ Next:
   Prompt168 should add an explicit smoke/manual selected prompt override so the write-enabled invocation path can be exercised without requiring the full Prompt154-157 apply/validation chain.
   The override must be disabled by default, explicit, max-one-invocation, clean-worktree-only, no rollback, no stage, no commit, no GitHub, and no loop.
 <!-- PROMPT167_WRITE_CODEX_INVOCATION_END -->
+
+<!-- PROMPT168_SMOKE_PROMPT_OVERRIDE_START -->
+## Prompt168 — smoke/manual selected prompt override
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt168-smoke-override-ready
+
+Purpose:
+  Prompt168 adds an explicit smoke/manual selected prompt override so Prompt167 write-enabled Codex invocation can be exercised without requiring the full Prompt154-157 apply/validation chain.
+
+What was added:
+  - `_build_project_browser_autonomous_smoke_prompt_override_state(...)`
+  - `project_browser_autonomous_smoke_prompt_override_*`
+  - smoke override wiring into Prompt167 write invocation through smoke/effective selection values
+  - compact planning summary exposure
+  - supporting truth refs exposure
+  - final approved restart payload exposure
+
+Activation:
+  Disabled by default.
+  Enabled only when:
+  - `PROJECT_BROWSER_AUTONOMOUS_SMOKE_PROMPT_OVERRIDE=1`
+
+Allowed smoke prompt paths:
+  - `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+  - `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+
+Selection behavior:
+  - prefers generated_next_prompt.txt when both fixed prompt files are safe
+  - otherwise selects the one safe fixed prompt file
+  - emits selected_prompt_* and override_prompt_* metadata
+
+Safety gates:
+  - exact fixed path only
+  - file exists
+  - non-symlink
+  - non-empty
+  - size <= 20000 bytes
+  - clean worktree required
+  - max_invocations=1
+
+Smoke bypass:
+  Prompt168 may bypass upstream `human_review_required` only for explicit smoke invocation.
+  It exposes:
+  - `human_review_bypass_for_smoke=true`
+  - `override_used=true`
+
+Safety:
+  Prompt168 does not generate prompt files, classify Codex output, create patch candidate metadata, apply patches, rollback, stage, commit, push, use GitHub/PR/CI/merge, or start retry/autonomous loops.
+
+Validation:
+  - `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+  - `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Known remaining risk:
+  The smoke override intentionally bypasses human-review posture only when the explicit env var is set.
+  Operational safety depends on not leaving `PROJECT_BROWSER_AUTONOMOUS_SMOKE_PROMPT_OVERRIDE=1` enabled outside controlled smoke runs.
+
+Next:
+  Prompt169 should run/assimilate the controlled smoke write invocation result:
+  - verify smoke override selection
+  - verify Prompt167 write invocation result
+  - classify changed files / no changes / failure / timeout
+  - do not apply patches
+  - do not rollback
+  - do not commit
+  - do not use GitHub
+  - do not start a loop
+<!-- PROMPT168_SMOKE_PROMPT_OVERRIDE_END -->
