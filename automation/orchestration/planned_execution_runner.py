@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 from typing import Any
 from typing import Callable
 from typing import Mapping
@@ -51649,6 +51650,285 @@ def _build_project_browser_autonomous_post_write_validation_routing_state(
     }
 
 
+def _build_project_browser_autonomous_post_write_validation_execution_state(
+    *,
+    repository_path: str,
+    source_routing_status: str,
+    source_validation_allowed: bool,
+    source_validation_block_reason: str,
+    validation_target_files: list[str] | None,
+    py_compile_candidate_files: list[str] | None,
+    targeted_test_candidate_files: list[str] | None,
+    human_review_required: bool,
+    source_next_action: str,
+) -> dict[str, Any]:
+    timeout_seconds = 5.0
+    runtime_posture = [
+        "bounded_post_write_py_compile_only",
+        "no_unittest_execution",
+        "argv_list_execution_only",
+        "no_shell_true",
+        "no_patch_apply",
+        "no_rollback",
+        "no_git_stage_or_commit",
+        "no_github_mutation",
+        "no_autonomous_loop",
+    ]
+
+    normalized_repository_path = _normalize_text(repository_path, default="")
+    normalized_source_routing_status = _normalize_text(
+        source_routing_status,
+        default="validation_routing_blocked",
+    )
+    normalized_source_validation_allowed = bool(source_validation_allowed)
+    normalized_source_validation_block_reason = _normalize_text(
+        source_validation_block_reason,
+        default="",
+    )
+    normalized_validation_target_files = _normalize_string_list(validation_target_files or [])
+    normalized_py_compile_candidate_files = sorted(
+        set(_normalize_string_list(py_compile_candidate_files or []))
+    )
+    normalized_targeted_test_candidate_files = _normalize_string_list(
+        targeted_test_candidate_files or []
+    )
+    normalized_human_review_required = bool(human_review_required)
+    normalized_source_next_action = _normalize_text(source_next_action, default="")
+
+    status = "blocked_routing_not_allowed"
+    validation_executed = False
+    validation_passed = False
+    validation_failed = False
+    validation_block_reason = (
+        normalized_source_validation_block_reason or "blocked_routing_not_allowed"
+    )
+    next_action = "stop_before_post_write_validation"
+    effective_human_review_required = bool(normalized_human_review_required)
+
+    py_compile_attempted_files: list[str] = []
+    py_compile_passed_files: list[str] = []
+    py_compile_failed_files: list[str] = []
+    py_compile_results: list[dict[str, Any]] = []
+
+    def _excerpt(text: str, *, max_chars: int = 600, max_lines: int = 12) -> str:
+        normalized = _normalize_text(text, default="")
+        if not normalized:
+            return ""
+        lines = normalized.splitlines()[:max_lines]
+        compact = "\n".join(lines)
+        if len(compact) > max_chars:
+            compact = compact[:max_chars]
+        return compact
+
+    repo_root = Path(normalized_repository_path) if normalized_repository_path else None
+    python_exec = _normalize_text(sys.executable, default="")
+    if not python_exec:
+        python_exec = _normalize_text(shutil.which("python"), default="")
+    if not python_exec:
+        python_exec = _normalize_text(shutil.which("python3"), default="")
+
+    def _is_safe_candidate(path_text: str) -> bool:
+        normalized_path = _normalize_text(path_text, default="")
+        if not normalized_path or not normalized_path.endswith(".py"):
+            return False
+        if Path(normalized_path).is_absolute():
+            return False
+        if normalized_path.startswith("../") or "/../" in normalized_path.replace("\\", "/"):
+            return False
+        if repo_root is None:
+            return False
+        candidate_path = Path(normalized_path)
+        repo_relative_path = repo_root / candidate_path
+        if repo_relative_path.is_symlink():
+            return False
+        resolved_path = repo_relative_path.resolve()
+        try:
+            resolved_path.relative_to(repo_root.resolve())
+        except ValueError:
+            return False
+        if not resolved_path.exists() or not resolved_path.is_file() or resolved_path.is_symlink():
+            return False
+        return True
+
+    if not normalized_source_validation_allowed or normalized_human_review_required:
+        status = "blocked_routing_not_allowed"
+        validation_block_reason = (
+            "blocked_human_review_required"
+            if normalized_human_review_required
+            else normalized_source_validation_block_reason
+            or "blocked_routing_not_allowed"
+        )
+        effective_human_review_required = bool(normalized_human_review_required)
+        next_action = "stop_before_post_write_validation"
+    elif not normalized_py_compile_candidate_files:
+        status = "blocked_no_py_compile_candidates"
+        validation_executed = False
+        validation_passed = False
+        validation_failed = False
+        validation_block_reason = "blocked_no_py_compile_candidates"
+        effective_human_review_required = True
+        next_action = "manual_review_required"
+    elif repo_root is None or not repo_root.exists() or not repo_root.is_dir():
+        status = "blocked_unsafe_py_compile_candidate"
+        validation_executed = False
+        validation_passed = False
+        validation_failed = False
+        validation_block_reason = "blocked_unsafe_py_compile_candidate"
+        effective_human_review_required = True
+        next_action = "manual_review_required"
+    elif not python_exec:
+        status = "blocked_unsafe_py_compile_candidate"
+        validation_executed = False
+        validation_passed = False
+        validation_failed = False
+        validation_block_reason = "blocked_unsafe_py_compile_candidate"
+        effective_human_review_required = True
+        next_action = "manual_review_required"
+    elif not all(_is_safe_candidate(path) for path in normalized_py_compile_candidate_files):
+        status = "blocked_unsafe_py_compile_candidate"
+        validation_executed = False
+        validation_passed = False
+        validation_failed = False
+        validation_block_reason = "blocked_unsafe_py_compile_candidate"
+        effective_human_review_required = True
+        next_action = "manual_review_required"
+    else:
+        validation_executed = True
+        any_timeout = False
+        any_failure = False
+        for candidate in normalized_py_compile_candidate_files:
+            command = [python_exec, "-m", "py_compile", candidate]
+            py_compile_attempted_files.append(candidate)
+            started_at = time.monotonic()
+            result_entry = {
+                "file": candidate,
+                "command": _serialize_required_signals(command),
+                "exit_code": -1,
+                "timeout": False,
+                "duration_seconds": 0.0,
+                "stdout_excerpt": "",
+                "stderr_excerpt": "",
+            }
+            try:
+                completed = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_seconds,
+                    cwd=str(repo_root),
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as timeout_error:
+                any_timeout = True
+                any_failure = True
+                elapsed = max(0.0, time.monotonic() - started_at)
+                result_entry["timeout"] = True
+                result_entry["exit_code"] = 124
+                result_entry["duration_seconds"] = round(elapsed, 6)
+                result_entry["stdout_excerpt"] = _excerpt(
+                    timeout_error.stdout if isinstance(timeout_error.stdout, str) else ""
+                )
+                result_entry["stderr_excerpt"] = _excerpt(
+                    timeout_error.stderr if isinstance(timeout_error.stderr, str) else ""
+                )
+                py_compile_failed_files.append(candidate)
+                py_compile_results.append(result_entry)
+                break
+            except OSError as command_error:
+                any_failure = True
+                elapsed = max(0.0, time.monotonic() - started_at)
+                result_entry["timeout"] = False
+                result_entry["exit_code"] = -1
+                result_entry["duration_seconds"] = round(elapsed, 6)
+                result_entry["stdout_excerpt"] = ""
+                result_entry["stderr_excerpt"] = _excerpt(str(command_error))
+                py_compile_failed_files.append(candidate)
+                py_compile_results.append(result_entry)
+                continue
+
+            elapsed = max(0.0, time.monotonic() - started_at)
+            exit_code = int(completed.returncode)
+            result_entry["exit_code"] = exit_code
+            result_entry["duration_seconds"] = round(elapsed, 6)
+            result_entry["stdout_excerpt"] = _excerpt(completed.stdout)
+            result_entry["stderr_excerpt"] = _excerpt(completed.stderr)
+            if exit_code == 0:
+                py_compile_passed_files.append(candidate)
+            else:
+                any_failure = True
+                py_compile_failed_files.append(candidate)
+            py_compile_results.append(result_entry)
+
+        if any_timeout:
+            status = "validation_timeout"
+            validation_passed = False
+            validation_failed = True
+            validation_block_reason = "py_compile_timeout"
+            effective_human_review_required = True
+            next_action = "manual_review_required"
+        elif any_failure:
+            status = "validation_failed"
+            validation_passed = False
+            validation_failed = True
+            validation_block_reason = "py_compile_failed"
+            effective_human_review_required = True
+            next_action = "generate_fix_prompt"
+        else:
+            status = "validation_passed"
+            validation_passed = True
+            validation_failed = False
+            validation_block_reason = ""
+            effective_human_review_required = False
+            next_action = "continue_one_step_cycle"
+
+    return {
+        "project_browser_autonomous_post_write_validation_execution_status": status,
+        "project_browser_autonomous_post_write_validation_execution_validation_executed": bool(
+            validation_executed
+        ),
+        "project_browser_autonomous_post_write_validation_execution_validation_passed": bool(
+            validation_passed
+        ),
+        "project_browser_autonomous_post_write_validation_execution_validation_failed": bool(
+            validation_failed
+        ),
+        "project_browser_autonomous_post_write_validation_execution_validation_block_reason": (
+            validation_block_reason
+        ),
+        "project_browser_autonomous_post_write_validation_execution_source_routing_status": (
+            normalized_source_routing_status
+        ),
+        "project_browser_autonomous_post_write_validation_execution_source_validation_allowed": bool(
+            normalized_source_validation_allowed
+        ),
+        "project_browser_autonomous_post_write_validation_execution_validation_target_files": (
+            normalized_validation_target_files
+        ),
+        "project_browser_autonomous_post_write_validation_execution_py_compile_candidate_files": (
+            normalized_py_compile_candidate_files
+        ),
+        "project_browser_autonomous_post_write_validation_execution_py_compile_attempted_files": (
+            _serialize_required_signals(py_compile_attempted_files)
+        ),
+        "project_browser_autonomous_post_write_validation_execution_py_compile_passed_files": (
+            _serialize_required_signals(py_compile_passed_files)
+        ),
+        "project_browser_autonomous_post_write_validation_execution_py_compile_failed_files": (
+            _serialize_required_signals(py_compile_failed_files)
+        ),
+        "project_browser_autonomous_post_write_validation_execution_py_compile_results": (
+            py_compile_results
+        ),
+        "project_browser_autonomous_post_write_validation_execution_timeout_seconds": float(
+            timeout_seconds
+        ),
+        "project_browser_autonomous_post_write_validation_execution_human_review_required": bool(
+            effective_human_review_required
+        ),
+        "project_browser_autonomous_post_write_validation_execution_next_action": next_action,
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -72532,6 +72812,173 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_post_write_validation_routing_state_normalized[
         "project_browser_autonomous_post_write_validation_routing_next_action"
     ] = project_browser_autonomous_post_write_validation_routing_next_action
+    project_browser_autonomous_post_write_validation_execution_state = (
+        _build_project_browser_autonomous_post_write_validation_execution_state(
+            repository_path=str(execution_repo_path),
+            source_routing_status=project_browser_autonomous_post_write_validation_routing_status,
+            source_validation_allowed=bool(
+                project_browser_autonomous_post_write_validation_routing_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_routing_validation_allowed",
+                    False,
+                )
+            ),
+            source_validation_block_reason=_normalize_text(
+                project_browser_autonomous_post_write_validation_routing_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_routing_validation_block_reason",
+                    "",
+                ),
+                default="",
+            ),
+            validation_target_files=_normalize_string_list(
+                project_browser_autonomous_post_write_validation_routing_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_routing_validation_target_files",
+                    [],
+                )
+            ),
+            py_compile_candidate_files=_normalize_string_list(
+                project_browser_autonomous_post_write_validation_routing_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_routing_py_compile_candidate_files",
+                    [],
+                )
+            ),
+            targeted_test_candidate_files=_normalize_string_list(
+                project_browser_autonomous_post_write_validation_routing_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_routing_targeted_test_candidate_files",
+                    [],
+                )
+            ),
+            human_review_required=bool(
+                project_browser_autonomous_post_write_validation_routing_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_routing_human_review_required",
+                    False,
+                )
+            ),
+            source_next_action=project_browser_autonomous_post_write_validation_routing_next_action,
+        )
+    )
+    post_write_validation_execution_allowed_statuses = {
+        "blocked_routing_not_allowed",
+        "blocked_no_py_compile_candidates",
+        "blocked_unsafe_py_compile_candidate",
+        "validation_passed",
+        "validation_failed",
+        "validation_timeout",
+    }
+    post_write_validation_execution_allowed_next_actions = {
+        "stop_before_post_write_validation",
+        "manual_review_required",
+        "continue_one_step_cycle",
+        "generate_fix_prompt",
+    }
+    post_write_validation_execution_field_names = (
+        "status",
+        "validation_executed",
+        "validation_passed",
+        "validation_failed",
+        "validation_block_reason",
+        "source_routing_status",
+        "source_validation_allowed",
+        "validation_target_files",
+        "py_compile_candidate_files",
+        "py_compile_attempted_files",
+        "py_compile_passed_files",
+        "py_compile_failed_files",
+        "py_compile_results",
+        "timeout_seconds",
+        "human_review_required",
+        "next_action",
+    )
+    project_browser_autonomous_post_write_validation_execution_status = _normalize_text(
+        project_browser_autonomous_post_write_validation_execution_state.get(
+            "project_browser_autonomous_post_write_validation_execution_status"
+        ),
+        default="blocked_routing_not_allowed",
+    )
+    if project_browser_autonomous_post_write_validation_execution_status not in (
+        post_write_validation_execution_allowed_statuses
+    ):
+        project_browser_autonomous_post_write_validation_execution_status = (
+            "blocked_routing_not_allowed"
+        )
+    project_browser_autonomous_post_write_validation_execution_next_action = _normalize_text(
+        project_browser_autonomous_post_write_validation_execution_state.get(
+            "project_browser_autonomous_post_write_validation_execution_next_action"
+        ),
+        default="stop_before_post_write_validation",
+    )
+    if project_browser_autonomous_post_write_validation_execution_next_action not in (
+        post_write_validation_execution_allowed_next_actions
+    ):
+        project_browser_autonomous_post_write_validation_execution_next_action = (
+            "stop_before_post_write_validation"
+        )
+    project_browser_autonomous_post_write_validation_execution_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in post_write_validation_execution_field_names:
+        key = f"project_browser_autonomous_post_write_validation_execution_{field_name}"
+        value = project_browser_autonomous_post_write_validation_execution_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_post_write_validation_execution_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_post_write_validation_execution_next_action
+        elif field_name in {
+            "validation_executed",
+            "validation_passed",
+            "validation_failed",
+            "source_validation_allowed",
+            "human_review_required",
+        }:
+            value = bool(value)
+        elif field_name in {"timeout_seconds"}:
+            value = float(value) if isinstance(value, (int, float)) else 0.0
+        elif field_name in {
+            "validation_target_files",
+            "py_compile_candidate_files",
+            "py_compile_attempted_files",
+            "py_compile_passed_files",
+            "py_compile_failed_files",
+        }:
+            value = _normalize_string_list(value)
+        elif field_name == "py_compile_results":
+            normalized_results: list[dict[str, Any]] = []
+            if isinstance(value, list):
+                for row in value:
+                    if not isinstance(row, Mapping):
+                        continue
+                    normalized_results.append(
+                        {
+                            "file": _normalize_text(row.get("file"), default=""),
+                            "command": _normalize_string_list(row.get("command")),
+                            "exit_code": int(_as_int(row.get("exit_code"), default=-1)),
+                            "timeout": bool(row.get("timeout", False)),
+                            "duration_seconds": (
+                                float(row.get("duration_seconds"))
+                                if isinstance(row.get("duration_seconds"), (int, float))
+                                else 0.0
+                            ),
+                            "stdout_excerpt": _normalize_text(
+                                row.get("stdout_excerpt"),
+                                default="",
+                            ),
+                            "stderr_excerpt": _normalize_text(
+                                row.get("stderr_excerpt"),
+                                default="",
+                            ),
+                        }
+                    )
+            value = normalized_results
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_post_write_validation_execution_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_post_write_validation_execution_state_normalized[
+        "project_browser_autonomous_post_write_validation_execution_status"
+    ] = project_browser_autonomous_post_write_validation_execution_status
+    project_browser_autonomous_post_write_validation_execution_state_normalized[
+        "project_browser_autonomous_post_write_validation_execution_next_action"
+    ] = project_browser_autonomous_post_write_validation_execution_next_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -75029,6 +75476,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_codex_write_invocation_result_state_normalized,
                 **project_browser_autonomous_codex_write_result_assimilation_state_normalized,
                 **project_browser_autonomous_post_write_validation_routing_state_normalized,
+                **project_browser_autonomous_post_write_validation_execution_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -75946,6 +76394,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_post_write_validation_routing_next_action"
             if project_browser_autonomous_post_write_validation_routing_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_post_write_validation_execution_status"
+            if project_browser_autonomous_post_write_validation_execution_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_post_write_validation_execution_next_action"
+            if project_browser_autonomous_post_write_validation_execution_next_action
             else "",
             ]
     )
@@ -82068,6 +82522,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_codex_write_invocation_result_state_normalized,
         **project_browser_autonomous_codex_write_result_assimilation_state_normalized,
         **project_browser_autonomous_post_write_validation_routing_state_normalized,
+        **project_browser_autonomous_post_write_validation_execution_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(

@@ -1648,3 +1648,22 @@ Next:
 
 Prompt171 should execute only bounded py_compile validation. It must not run unittest,
 rollback, commit, stage, GitHub operations, retries, loops, or create new executors.
+
+
+<!-- prompt171-update -->
+## Roadmap update after Prompt171
+
+Completed:
+- Prompt169: Codex workspace-write result assimilation and changed-file safety
+  classification.
+- Prompt170: metadata-only post-write validation routing and validation candidate
+  derivation.
+- Prompt171: bounded post-write py_compile validation execution.
+
+Next:
+- Prompt172: metadata-only one-step autonomous cycle state.
+- Prompt173: tests for Prompt168-172.
+
+Prompt172 should summarize one bounded autonomous cycle using existing states only.
+It must not add new execution paths, retries, loops, rollback, commit, GitHub
+operations, or tests.

@@ -1827,3 +1827,24 @@ Blocked cases:
 - human review, forbidden files, unexpected files, too many files, timeout, failure,
   not-completed, insufficient-truth, no changed files, or unsafe assimilation must not
   route into validation execution.
+
+
+<!-- prompt171-update -->
+## Prompt171 architecture constraint update
+
+Prompt171 adds bounded post-write py_compile validation execution from Prompt170
+routing. It must execute only py_compile candidates that Prompt170 has routed as
+safe.
+
+Authoritative execution gate:
+- Prompt171 may execute only when Prompt170 `validation_allowed=true`,
+  `py_compile_candidate_files` is non-empty, and human review is not required.
+- Prompt171 must reject unsafe candidate paths before execution.
+- Prompt171 must not run unittest, rollback, staging, commit, GitHub operations,
+  retries, loops, schedulers, daemons, queue drainers, or new executors.
+
+Prompt171 result semantics:
+- `validation_passed` may continue toward the one-step autonomous cycle summary.
+- `validation_failed` should route toward fix-prompt generation.
+- `validation_timeout`, unsafe candidates, missing candidates, or blocked routing
+  should stop safely and require manual review or safe stop metadata.

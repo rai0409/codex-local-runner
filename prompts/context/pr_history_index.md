@@ -1457,3 +1457,42 @@ Scope notes:
 - No validation/test execution was added to runtime state.
 - No docs/tests were edited by Prompt170 implementation.
 - No tests were run.
+
+
+<!-- prompt171-update -->
+## Prompt171 — bounded post-write py_compile validation execution
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_post_write_validation_execution_state(...)`
+  in `automation/orchestration/planned_execution_runner.py`.
+- Added bounded post-write py_compile execution under:
+  `project_browser_autonomous_post_write_validation_execution_*`.
+- Execution runs only when Prompt170 routing allows validation, py_compile candidates
+  are non-empty, and human review is not required.
+- Candidate safety checks enforce repo-relative `.py` files only, no absolute paths,
+  no parent traversal, resolved path inside repo, existing regular file, and non-symlink.
+- py_compile execution uses runner Python convention:
+  `sys.executable`, then `python`, then `python3`.
+- Per-file results record command, exit code, timeout flag, duration, stdout/stderr
+  excerpts.
+- Implemented status semantics:
+  - `blocked_routing_not_allowed`
+  - `blocked_no_py_compile_candidates`
+  - `blocked_unsafe_py_compile_candidate`
+  - `validation_passed`
+  - `validation_failed`
+  - `validation_timeout`
+- Timeout handling preserves prior per-file results, marks timed-out file as failed,
+  records `timeout=true`, and sets `validation_failed=true`.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt171 implementation.
+- No tests were run.
+- Runtime state does not run unittest, rollback, commit, GitHub operations, retries,
+  loops, schedulers, daemons, queue drainers, or new executors.
