@@ -49393,6 +49393,254 @@ def _build_project_browser_autonomous_prompt_selection_state(
     }
 
 
+def _build_project_browser_autonomous_codex_invocation_readiness_state(
+    *,
+    prompt_selection_status: str,
+    selected_prompt_kind: str,
+    selected_prompt_path: str,
+    selected_prompt_source: str,
+    selected_prompt_ready: bool,
+    selected_prompt_body_available: bool,
+    rollback_required: bool,
+    human_review_required: bool,
+    insufficient_truth: bool,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "ready_to_invoke_codex",
+        "blocked_no_selected_prompt",
+        "blocked_invalid_prompt_kind",
+        "blocked_selected_prompt_not_ready",
+        "blocked_prompt_path_missing",
+        "blocked_prompt_path_unexpected",
+        "blocked_prompt_path_symlink",
+        "blocked_prompt_empty",
+        "blocked_prompt_too_large",
+        "blocked_rollback_required",
+        "blocked_human_review_required",
+        "blocked_insufficient_truth",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "invoke_codex_later",
+        "wait_for_prompt_selection",
+        "wait_for_prompt_generation",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "manual_codex_invocation_required",
+        "insufficient_truth",
+    }
+    allowed_paths = {
+        "/tmp/codex-local-runner-decision/generated_fix_prompt.txt",
+        "/tmp/codex-local-runner-decision/generated_next_prompt.txt",
+    }
+    runtime_posture = [
+        "codex_invocation_readiness_only",
+        "metadata_only_gate",
+        "no_codex_invocation",
+        "no_external_model_invocation",
+        "no_prompt_generation",
+        "no_patch_apply",
+        "no_git_mutation",
+        "no_autonomous_loop",
+    ]
+    max_prompt_size_bytes = 20000
+    max_invocations = 1
+
+    normalized_selection_status = _normalize_text(
+        prompt_selection_status,
+        default="insufficient_truth",
+    )
+    normalized_prompt_kind = _normalize_text(selected_prompt_kind, default="none")
+    normalized_prompt_path = _normalize_text(selected_prompt_path, default="")
+    normalized_prompt_source = _normalize_text(selected_prompt_source, default="")
+
+    selected_prompt_path_is_exact = normalized_prompt_path in allowed_paths
+    path_obj = Path(normalized_prompt_path) if normalized_prompt_path else None
+    selected_prompt_path_exists = bool(path_obj and path_obj.exists())
+    selected_prompt_path_is_symlink = bool(path_obj and path_obj.is_symlink())
+
+    selected_prompt_file_size_bytes = 0
+    if selected_prompt_path_exists and path_obj and not selected_prompt_path_is_symlink:
+        try:
+            selected_prompt_file_size_bytes = max(0, int(path_obj.stat().st_size))
+        except OSError:
+            selected_prompt_file_size_bytes = 0
+
+    selected_prompt_file_non_empty = selected_prompt_file_size_bytes > 0
+    selected_prompt_file_too_large = selected_prompt_file_size_bytes > max_prompt_size_bytes
+
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    invocation_allowed = False
+    invocation_blocked = True
+    invocation_attempted = False
+    invocation_completed = False
+    next_action = "insufficient_truth"
+    missing_inputs: list[str] = []
+
+    if rollback_required:
+        status = "blocked_rollback_required"
+        source_status = "rollback_required"
+        block_reason = "rollback_required"
+        next_action = "rollback_required"
+    elif human_review_required:
+        status = "blocked_human_review_required"
+        source_status = "human_review_required"
+        block_reason = "human_review_required"
+        next_action = "manual_review_required"
+    elif insufficient_truth:
+        status = "blocked_insufficient_truth"
+        source_status = "insufficient_truth_active"
+        block_reason = "insufficient_truth"
+        next_action = "wait_for_more_truth"
+        missing_inputs.append("codex_invocation_readiness_truth")
+    elif normalized_selection_status not in {"selected_fix_prompt", "selected_next_prompt"}:
+        status = "blocked_no_selected_prompt"
+        source_status = "prompt_selection_not_ready"
+        block_reason = "no_selected_prompt"
+        next_action = (
+            "wait_for_prompt_generation"
+            if normalized_selection_status
+            in {
+                "blocked_handoff_write_failed",
+                "blocked_prompt_path_missing",
+                "blocked_prompt_path_unexpected",
+                "blocked_prompt_path_symlink",
+                "blocked_prompt_body_missing",
+                "blocked_no_ready_prompt",
+            }
+            else "wait_for_prompt_selection"
+        )
+    elif normalized_prompt_kind not in {"fix", "next"}:
+        status = "blocked_invalid_prompt_kind"
+        source_status = "invalid_selected_prompt_kind"
+        block_reason = "invalid_selected_prompt_kind"
+        next_action = "wait_for_prompt_selection"
+    elif not selected_prompt_ready:
+        status = "blocked_selected_prompt_not_ready"
+        source_status = "selected_prompt_not_ready"
+        block_reason = "selected_prompt_not_ready"
+        next_action = "wait_for_prompt_generation"
+    elif not selected_prompt_path_is_exact:
+        status = "blocked_prompt_path_unexpected"
+        source_status = "selected_prompt_path_not_allowed"
+        block_reason = "selected_prompt_path_unexpected"
+        next_action = "manual_codex_invocation_required"
+    elif selected_prompt_path_is_symlink:
+        status = "blocked_prompt_path_symlink"
+        source_status = "selected_prompt_path_symlink"
+        block_reason = "selected_prompt_path_symlink"
+        next_action = "manual_codex_invocation_required"
+    elif not selected_prompt_path_exists:
+        status = "blocked_prompt_path_missing"
+        source_status = "selected_prompt_path_missing"
+        block_reason = "selected_prompt_path_missing"
+        next_action = "wait_for_prompt_generation"
+    elif not selected_prompt_file_non_empty:
+        status = "blocked_prompt_empty"
+        source_status = "selected_prompt_file_empty"
+        block_reason = "selected_prompt_empty"
+        next_action = "wait_for_prompt_generation"
+    elif selected_prompt_file_too_large:
+        status = "blocked_prompt_too_large"
+        source_status = "selected_prompt_file_too_large"
+        block_reason = "selected_prompt_too_large"
+        next_action = "manual_codex_invocation_required"
+    elif not selected_prompt_body_available:
+        status = "blocked_selected_prompt_not_ready"
+        source_status = "selected_prompt_body_unavailable"
+        block_reason = "selected_prompt_body_unavailable"
+        next_action = "wait_for_prompt_generation"
+    else:
+        status = "ready_to_invoke_codex"
+        source_status = "selected_prompt_ready_for_bounded_invocation"
+        block_reason = "none"
+        invocation_allowed = True
+        invocation_blocked = False
+        next_action = "invoke_codex_later"
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_codex_invocation_readiness_status": status,
+        "project_browser_autonomous_codex_invocation_readiness_source_status": (
+            source_status
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_block_reason": (
+            block_reason
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_kind": (
+            normalized_prompt_kind
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_path": (
+            normalized_prompt_path
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_source": (
+            normalized_prompt_source
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_ready": bool(
+            selected_prompt_ready
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_path_is_exact": bool(
+            selected_prompt_path_is_exact
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_path_exists": bool(
+            selected_prompt_path_exists
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_path_is_symlink": bool(
+            selected_prompt_path_is_symlink
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_file_size_bytes": int(
+            selected_prompt_file_size_bytes
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_file_non_empty": bool(
+            selected_prompt_file_non_empty
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_file_too_large": bool(
+            selected_prompt_file_too_large
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_selected_prompt_body_available": bool(
+            selected_prompt_body_available
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_invocation_allowed": bool(
+            invocation_allowed
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_invocation_blocked": bool(
+            invocation_blocked
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_invocation_attempted": bool(
+            invocation_attempted
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_invocation_completed": bool(
+            invocation_completed
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_max_invocations": int(
+            max_invocations
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_rollback_required": bool(
+            rollback_required
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_human_review_required": bool(
+            human_review_required
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_insufficient_truth": bool(
+            insufficient_truth
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_next_action": next_action,
+        "project_browser_autonomous_codex_invocation_readiness_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_codex_invocation_readiness_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -68745,6 +68993,189 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_prompt_selection_state_normalized[
         "project_browser_autonomous_prompt_selection_next_action"
     ] = project_browser_autonomous_prompt_selection_next_action
+    codex_invocation_readiness_insufficient_truth_active = bool(
+        project_browser_autonomous_prompt_selection_state_normalized.get(
+            "project_browser_autonomous_prompt_selection_insufficient_truth",
+            False,
+        )
+    ) or bool(
+        project_browser_autonomous_prompt_selection_status
+        in {"insufficient_truth", "blocked_insufficient_truth"}
+    )
+    project_browser_autonomous_codex_invocation_readiness_state = (
+        _build_project_browser_autonomous_codex_invocation_readiness_state(
+            prompt_selection_status=project_browser_autonomous_prompt_selection_status,
+            selected_prompt_kind=_normalize_text(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_selected_prompt_kind"
+                ),
+                default="none",
+            ),
+            selected_prompt_path=_normalize_text(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_selected_prompt_path"
+                ),
+                default="",
+            ),
+            selected_prompt_source=_normalize_text(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_selected_prompt_source"
+                ),
+                default="",
+            ),
+            selected_prompt_ready=bool(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_selected_prompt_ready",
+                    False,
+                )
+            ),
+            selected_prompt_body_available=bool(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_selected_prompt_body_available",
+                    False,
+                )
+            ),
+            rollback_required=bool(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_rollback_required",
+                    False,
+                )
+            ),
+            human_review_required=bool(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_human_review_required",
+                    False,
+                )
+            ),
+            insufficient_truth=codex_invocation_readiness_insufficient_truth_active,
+        )
+    )
+    codex_invocation_readiness_allowed_statuses = {
+        "ready_to_invoke_codex",
+        "blocked_no_selected_prompt",
+        "blocked_invalid_prompt_kind",
+        "blocked_selected_prompt_not_ready",
+        "blocked_prompt_path_missing",
+        "blocked_prompt_path_unexpected",
+        "blocked_prompt_path_symlink",
+        "blocked_prompt_empty",
+        "blocked_prompt_too_large",
+        "blocked_rollback_required",
+        "blocked_human_review_required",
+        "blocked_insufficient_truth",
+        "insufficient_truth",
+    }
+    codex_invocation_readiness_allowed_next_actions = {
+        "invoke_codex_later",
+        "wait_for_prompt_selection",
+        "wait_for_prompt_generation",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "manual_codex_invocation_required",
+        "insufficient_truth",
+    }
+    codex_invocation_readiness_allowed_prompt_kinds = {"fix", "next", "none"}
+    codex_invocation_readiness_field_names = (
+        "status",
+        "source_status",
+        "block_reason",
+        "selected_prompt_kind",
+        "selected_prompt_path",
+        "selected_prompt_source",
+        "selected_prompt_ready",
+        "selected_prompt_path_is_exact",
+        "selected_prompt_path_exists",
+        "selected_prompt_path_is_symlink",
+        "selected_prompt_file_size_bytes",
+        "selected_prompt_file_non_empty",
+        "selected_prompt_file_too_large",
+        "selected_prompt_body_available",
+        "invocation_allowed",
+        "invocation_blocked",
+        "invocation_attempted",
+        "invocation_completed",
+        "max_invocations",
+        "rollback_required",
+        "human_review_required",
+        "insufficient_truth",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_codex_invocation_readiness_status = _normalize_text(
+        project_browser_autonomous_codex_invocation_readiness_state.get(
+            "project_browser_autonomous_codex_invocation_readiness_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_invocation_readiness_status not in (
+        codex_invocation_readiness_allowed_statuses
+    ):
+        project_browser_autonomous_codex_invocation_readiness_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_codex_invocation_readiness_next_action = _normalize_text(
+        project_browser_autonomous_codex_invocation_readiness_state.get(
+            "project_browser_autonomous_codex_invocation_readiness_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_invocation_readiness_next_action not in (
+        codex_invocation_readiness_allowed_next_actions
+    ):
+        project_browser_autonomous_codex_invocation_readiness_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_codex_invocation_readiness_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in codex_invocation_readiness_field_names:
+        key = f"project_browser_autonomous_codex_invocation_readiness_{field_name}"
+        value = project_browser_autonomous_codex_invocation_readiness_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_invocation_readiness_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_invocation_readiness_next_action
+        elif field_name == "selected_prompt_kind":
+            normalized_prompt_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_prompt_kind
+                if normalized_prompt_kind in codex_invocation_readiness_allowed_prompt_kinds
+                else "none"
+            )
+        elif field_name in {
+            "selected_prompt_ready",
+            "selected_prompt_path_is_exact",
+            "selected_prompt_path_exists",
+            "selected_prompt_path_is_symlink",
+            "selected_prompt_file_non_empty",
+            "selected_prompt_file_too_large",
+            "selected_prompt_body_available",
+            "invocation_allowed",
+            "invocation_blocked",
+            "invocation_attempted",
+            "invocation_completed",
+            "rollback_required",
+            "human_review_required",
+            "insufficient_truth",
+        }:
+            value = bool(value)
+        elif field_name in {"selected_prompt_file_size_bytes", "max_invocations"}:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name in {"runtime_posture", "missing_inputs"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_invocation_readiness_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_status"
+    ] = project_browser_autonomous_codex_invocation_readiness_status
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_next_action"
+    ] = project_browser_autonomous_codex_invocation_readiness_next_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -71233,6 +71664,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_next_prompt_readiness_state_normalized,
                 **project_browser_autonomous_next_prompt_generation_state_normalized,
                 **project_browser_autonomous_prompt_selection_state_normalized,
+                **project_browser_autonomous_codex_invocation_readiness_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -72096,6 +72528,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_prompt_selection_next_action"
             if project_browser_autonomous_prompt_selection_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_invocation_readiness_status"
+            if project_browser_autonomous_codex_invocation_readiness_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_invocation_readiness_next_action"
+            if project_browser_autonomous_codex_invocation_readiness_next_action
             else "",
             ]
     )
@@ -78209,6 +78647,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_next_prompt_readiness_state_normalized,
         **project_browser_autonomous_next_prompt_generation_state_normalized,
         **project_browser_autonomous_prompt_selection_state_normalized,
+        **project_browser_autonomous_codex_invocation_readiness_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(
