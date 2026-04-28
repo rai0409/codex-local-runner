@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 from typing import Any
 from typing import Callable
 from typing import Mapping

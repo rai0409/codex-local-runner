@@ -579,6 +579,9 @@ from automation.orchestration.planned_execution_runner import _build_project_hum
 from automation.orchestration.planned_execution_runner import _build_project_multi_objective_state
 from automation.orchestration.planned_execution_runner import _build_long_running_stability_state
 from automation.orchestration.planned_execution_runner import _build_objective_done_compiler_state
+from automation.orchestration.planned_execution_runner import (
+    _build_project_browser_autonomous_post_apply_validation_state,
+)
 from automation.orchestration.planned_execution_runner import _build_project_autonomy_budget_state
 from automation.orchestration.planned_execution_runner import _build_project_merge_branch_lifecycle_state
 from automation.orchestration.planned_execution_runner import _build_project_quality_gate_state
@@ -16840,6 +16843,405 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         self.assertEqual(handoff_a["next_action"], "same_prompt_retry")
         self.assertEqual(handoff_b["next_action"], "escalate_to_human")
         self.assertEqual(len(handoff_files), 1)
+
+    def _build_prompt157_state(self, **overrides: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "expected_patch_path": "/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+            "safe_patch_gate_status": "ready_for_dry_run_later",
+            "dry_run_status": "dry_run_passed",
+            "dry_run_completed": True,
+            "dry_run_passed": True,
+            "dry_run_failed": False,
+            "dry_run_exit_code": 0,
+            "apply_status": "apply_passed",
+            "apply_attempted": True,
+            "apply_completed": True,
+            "apply_performed": True,
+            "apply_passed": True,
+            "apply_failed": False,
+            "apply_exit_code": 0,
+            "touched_files": ["automation/orchestration/planned_execution_runner.py"],
+            "changed_files_after_apply": ["automation/orchestration/planned_execution_runner.py"],
+            "unexpected_changed_files_after_apply": [],
+            "forbidden_changed_files_after_apply": [],
+            "worktree_status_after_apply": "dirty",
+            "worktree_dirty_after_apply": True,
+            "human_review_required": False,
+            "rollback_required": False,
+        }
+        payload.update(overrides)
+        return _build_project_browser_autonomous_post_apply_validation_state(**payload)
+
+    def test_prompt157_post_apply_validation_status_matrix(self) -> None:
+        cases = [
+            (
+                "blocked_no_apply_performed",
+                {
+                    "apply_performed": False,
+                    "apply_passed": False,
+                },
+                True,
+                False,
+            ),
+            (
+                "blocked_apply_failed",
+                {
+                    "apply_failed": True,
+                    "apply_passed": False,
+                },
+                True,
+                True,
+            ),
+            (
+                "blocked_missing_post_apply_truth",
+                {
+                    "worktree_status_after_apply": "insufficient_truth",
+                    "worktree_dirty_after_apply": False,
+                },
+                True,
+                True,
+            ),
+            (
+                "blocked_forbidden_changes",
+                {
+                    "forbidden_changed_files_after_apply": [
+                        "automation/orchestration/forbidden.py"
+                    ],
+                },
+                True,
+                True,
+            ),
+            (
+                "blocked_unexpected_changes",
+                {
+                    "unexpected_changed_files_after_apply": ["scripts/unexpected.py"],
+                },
+                True,
+                True,
+            ),
+            (
+                "blocked_changed_file_mismatch",
+                {
+                    "changed_files_after_apply": ["scripts/run_planned_execution.py"],
+                    "unexpected_changed_files_after_apply": [],
+                    "forbidden_changed_files_after_apply": [],
+                },
+                True,
+                True,
+            ),
+            (
+                "blocked_metadata_inconsistency",
+                {
+                    "dry_run_passed": False,
+                    "dry_run_failed": True,
+                    "dry_run_exit_code": 1,
+                },
+                True,
+                True,
+            ),
+        ]
+
+        for (
+            expected_status,
+            overrides,
+            expected_human_review_required,
+            expected_rollback_required,
+        ) in cases:
+            with self.subTest(status=expected_status):
+                payload = self._build_prompt157_state(**overrides)
+                self.assertEqual(
+                    payload["project_browser_autonomous_post_apply_validation_status"],
+                    expected_status,
+                )
+                self.assertEqual(
+                    payload["project_browser_autonomous_post_apply_validation_check_status"],
+                    expected_status,
+                )
+                self.assertEqual(
+                    payload["project_browser_autonomous_post_apply_validation_execution_status"],
+                    expected_status,
+                )
+                self.assertEqual(
+                    payload["project_browser_autonomous_post_apply_validation_result_status"],
+                    expected_status,
+                )
+                self.assertFalse(
+                    payload[
+                        "project_browser_autonomous_post_apply_validation_result_validation_attempted"
+                    ]
+                )
+                self.assertFalse(
+                    payload[
+                        "project_browser_autonomous_post_apply_validation_result_validation_completed"
+                    ]
+                )
+                self.assertFalse(
+                    payload[
+                        "project_browser_autonomous_post_apply_validation_result_validation_passed"
+                    ]
+                )
+                self.assertTrue(
+                    payload[
+                        "project_browser_autonomous_post_apply_validation_result_validation_failed"
+                    ]
+                )
+                self.assertEqual(
+                    payload[
+                        "project_browser_autonomous_post_apply_validation_result_human_review_required"
+                    ],
+                    expected_human_review_required,
+                )
+                self.assertEqual(
+                    payload[
+                        "project_browser_autonomous_post_apply_validation_result_rollback_required"
+                    ],
+                    expected_rollback_required,
+                )
+                self.assertFalse(
+                    payload[
+                        "project_browser_autonomous_rollback_posture_rollback_execution_allowed"
+                    ]
+                )
+                self.assertFalse(
+                    payload["project_browser_autonomous_rollback_posture_rollback_executed"]
+                )
+                self.assertFalse(
+                    payload["project_browser_autonomous_rollback_posture_rollback_attempted"]
+                )
+                self.assertFalse(
+                    payload["project_browser_autonomous_rollback_posture_rollback_completed"]
+                )
+
+    def test_prompt157_insufficient_truth_keeps_validation_failed_false_without_definitive_blocker(
+        self,
+    ) -> None:
+        with patch(
+            "automation.orchestration.planned_execution_runner.subprocess.run"
+        ) as run_mock:
+            payload = self._build_prompt157_state(
+                apply_status="insufficient_truth",
+                apply_passed=False,
+                apply_failed=False,
+            )
+
+        self.assertEqual(
+            payload["project_browser_autonomous_post_apply_validation_status"],
+            "insufficient_truth",
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_post_apply_validation_result_validation_attempted"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_post_apply_validation_result_validation_completed"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_post_apply_validation_result_validation_passed"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_post_apply_validation_result_validation_failed"]
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_post_apply_validation_result_source_status"],
+            "apply_truth_unavailable",
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_post_apply_validation_result_block_reason"],
+            "insufficient_truth",
+        )
+        missing_inputs = payload[
+            "project_browser_autonomous_post_apply_validation_result_missing_inputs"
+        ]
+        self.assertTrue(
+            bool(missing_inputs)
+            or payload[
+                "project_browser_autonomous_post_apply_validation_result_source_status"
+            ]
+            == "apply_truth_unavailable"
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_rollback_posture_rollback_execution_allowed"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_rollback_posture_rollback_executed"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_rollback_posture_rollback_attempted"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_rollback_posture_rollback_completed"]
+        )
+        run_mock.assert_not_called()
+
+    def test_prompt157_validation_passed_and_field_presence(self) -> None:
+        successful_run = subprocess.CompletedProcess(
+            args=["python", "-m", "py_compile"],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        with patch(
+            "automation.orchestration.planned_execution_runner.subprocess.run",
+            side_effect=[successful_run, successful_run],
+        ) as run_mock:
+            payload = self._build_prompt157_state()
+
+        self.assertEqual(
+            payload["project_browser_autonomous_post_apply_validation_status"],
+            "validation_passed",
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_post_apply_validation_next_action"],
+            "proceed_after_validation",
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_post_apply_validation_result_validation_attempted"]
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_post_apply_validation_result_validation_completed"]
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_post_apply_validation_result_validation_passed"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_post_apply_validation_result_validation_failed"]
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_post_apply_validation_result_py_compile_attempted"]
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_post_apply_validation_result_py_compile_completed"]
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_post_apply_validation_result_py_compile_exit_code"],
+            0,
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_post_apply_validation_result_targeted_tests_attempted"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_post_apply_validation_result_human_review_required"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_post_apply_validation_result_rollback_required"]
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_rollback_posture_status"],
+            "rollback_not_required",
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_rollback_posture_rollback_required"]
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_rollback_posture_rollback_command"],
+            "",
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_rollback_posture_rollback_execution_allowed"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_rollback_posture_rollback_executed"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_rollback_posture_rollback_attempted"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_rollback_posture_rollback_completed"]
+        )
+        self.assertEqual(run_mock.call_count, 2)
+
+        required_fields = [
+            "project_browser_autonomous_post_apply_validation_check_status",
+            "project_browser_autonomous_post_apply_validation_execution_status",
+            "project_browser_autonomous_post_apply_validation_result_status",
+            "project_browser_autonomous_rollback_posture_status",
+            "project_browser_autonomous_post_apply_validation_status",
+            "project_browser_autonomous_post_apply_validation_next_action",
+            "project_browser_autonomous_rollback_posture_rollback_execution_allowed",
+            "project_browser_autonomous_rollback_posture_rollback_executed",
+            "project_browser_autonomous_rollback_posture_rollback_attempted",
+            "project_browser_autonomous_rollback_posture_rollback_completed",
+        ]
+        for field_name in required_fields:
+            with self.subTest(field_name=field_name):
+                self.assertIn(field_name, payload)
+
+    def test_prompt157_contract_surface_exposure_in_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            runner = PlannedExecutionRunner(adapter=CodexExecutorAdapter(transport=_RecordingDryRunTransport()))
+            manifest = runner.run(
+                artifacts_input_dir=artifacts_dir,
+                output_dir=out_dir,
+                dry_run=True,
+                stop_on_failure=True,
+            )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertIn(
+            "project_browser_autonomous_post_apply_validation_check_status",
+            payload,
+        )
+        self.assertIn(
+            "project_browser_autonomous_post_apply_validation_execution_status",
+            payload,
+        )
+        self.assertIn(
+            "project_browser_autonomous_post_apply_validation_result_status",
+            payload,
+        )
+        self.assertIn("project_browser_autonomous_rollback_posture_status", payload)
+        self.assertIn("project_browser_autonomous_post_apply_validation_status", payload)
+        self.assertIn(
+            "project_browser_autonomous_post_apply_validation_next_action",
+            payload,
+        )
+        self.assertIn(
+            "project_browser_autonomous_rollback_posture_rollback_execution_allowed",
+            payload,
+        )
+        self.assertIn(
+            "project_browser_autonomous_rollback_posture_rollback_executed",
+            payload,
+        )
+        self.assertIn(
+            "project_browser_autonomous_rollback_posture_rollback_attempted",
+            payload,
+        )
+        self.assertIn(
+            "project_browser_autonomous_rollback_posture_rollback_completed",
+            payload,
+        )
+
+        compact_summary = dict(payload.get("project_planning_summary_compact") or {})
+        self.assertIn(
+            "project_browser_autonomous_post_apply_validation_status",
+            compact_summary,
+        )
+        self.assertIn(
+            "project_browser_autonomous_post_apply_validation_check_status",
+            compact_summary,
+        )
+        self.assertIn(
+            "project_browser_autonomous_rollback_posture_status",
+            compact_summary,
+        )
+
+        supporting_refs = [str(item) for item in payload.get("supporting_compact_truth_refs", [])]
+        self.assertIn(
+            "approved_restart_execution_contract.project_browser_autonomous_post_apply_validation_status",
+            supporting_refs,
+        )
+        self.assertIn(
+            "approved_restart_execution_contract.project_browser_autonomous_rollback_posture_status",
+            supporting_refs,
+        )
 
 
 if __name__ == "__main__":
