@@ -49062,6 +49062,337 @@ def _build_project_browser_autonomous_next_prompt_generation_state(
     }
 
 
+def _build_project_browser_autonomous_prompt_selection_state(
+    *,
+    validation_passed: bool,
+    validation_failed: bool,
+    rollback_required: bool,
+    human_review_required: bool,
+    insufficient_truth: bool,
+    fix_required_path_active: bool,
+    fix_prompt_status: str,
+    fix_prompt_generated: bool,
+    fix_prompt_body: str,
+    fix_prompt_handoff_path: str,
+    fix_prompt_handoff_write_completed: bool,
+    fix_prompt_handoff_write_failed: bool,
+    next_prompt_status: str,
+    next_prompt_generated: bool,
+    next_prompt_body: str,
+    next_prompt_handoff_path: str,
+    next_prompt_handoff_write_completed: bool,
+    next_prompt_handoff_write_failed: bool,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "selected_fix_prompt",
+        "selected_next_prompt",
+        "blocked_no_ready_prompt",
+        "blocked_conflicting_prompts",
+        "blocked_handoff_write_failed",
+        "blocked_prompt_path_missing",
+        "blocked_prompt_path_unexpected",
+        "blocked_prompt_path_symlink",
+        "blocked_prompt_body_missing",
+        "blocked_insufficient_truth",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "insufficient_truth",
+    }
+    allowed_prompt_kinds = {"fix", "next", "none"}
+    allowed_next_actions = {
+        "check_codex_invocation_readiness_later",
+        "wait_for_fix_prompt_generation",
+        "wait_for_next_prompt_generation",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "manual_prompt_selection_required",
+        "insufficient_truth",
+    }
+    fix_allowed_path = "/tmp/codex-local-runner-decision/generated_fix_prompt.txt"
+    next_allowed_path = "/tmp/codex-local-runner-decision/generated_next_prompt.txt"
+    runtime_posture = [
+        "prompt_selection_controller",
+        "metadata_only_selection",
+        "no_prompt_generation",
+        "no_prompt_execution",
+        "no_external_model_invocation",
+        "no_patch_apply",
+        "no_git_mutation",
+        "no_autonomous_loop",
+    ]
+
+    normalized_fix_prompt_status = _normalize_text(
+        fix_prompt_status,
+        default="insufficient_truth",
+    )
+    normalized_next_prompt_status = _normalize_text(
+        next_prompt_status,
+        default="insufficient_truth",
+    )
+    normalized_fix_path = _normalize_text(fix_prompt_handoff_path, default="")
+    normalized_next_path = _normalize_text(next_prompt_handoff_path, default="")
+    normalized_fix_body = _normalize_text(fix_prompt_body, default="")
+    normalized_next_body = _normalize_text(next_prompt_body, default="")
+
+    fix_path_obj = Path(normalized_fix_path) if normalized_fix_path else None
+    next_path_obj = Path(normalized_next_path) if normalized_next_path else None
+    fix_path_is_exact = normalized_fix_path == fix_allowed_path
+    next_path_is_exact = normalized_next_path == next_allowed_path
+    fix_path_exists = bool(fix_path_obj and fix_path_obj.exists())
+    next_path_exists = bool(next_path_obj and next_path_obj.exists())
+    fix_path_is_symlink = bool(fix_path_obj and fix_path_obj.is_symlink())
+    next_path_is_symlink = bool(next_path_obj and next_path_obj.is_symlink())
+    fix_body_available = bool(normalized_fix_body)
+    next_body_available = bool(normalized_next_body)
+
+    fix_candidate_valid = (
+        (bool(validation_failed) or bool(fix_required_path_active))
+        and normalized_fix_prompt_status == "prompt_generated"
+        and bool(fix_prompt_generated)
+        and fix_path_is_exact
+        and bool(fix_prompt_handoff_write_completed)
+        and not bool(fix_prompt_handoff_write_failed)
+        and fix_body_available
+        and fix_path_exists
+        and not fix_path_is_symlink
+    )
+    next_candidate_valid = (
+        bool(validation_passed)
+        and not bool(validation_failed)
+        and normalized_next_prompt_status == "prompt_generated"
+        and bool(next_prompt_generated)
+        and next_path_is_exact
+        and bool(next_prompt_handoff_write_completed)
+        and not bool(next_prompt_handoff_write_failed)
+        and next_body_available
+        and next_path_exists
+        and not next_path_is_symlink
+    )
+
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    selected_prompt_kind = "none"
+    selected_prompt_path = ""
+    selected_prompt_source = ""
+    selected_prompt_ready = False
+    selected_prompt_body_available = False
+    selected_prompt_handoff_write_completed = False
+    selected_prompt_handoff_write_failed = False
+    selected_prompt_path_is_exact = False
+    selected_prompt_path_exists = False
+    selected_prompt_path_is_symlink = False
+    next_action = "insufficient_truth"
+    missing_inputs: list[str] = []
+
+    if rollback_required:
+        status = "blocked_rollback_required"
+        source_status = "rollback_required"
+        block_reason = "rollback_required"
+        next_action = "rollback_required"
+    elif human_review_required:
+        status = "blocked_human_review_required"
+        source_status = "human_review_required"
+        block_reason = "human_review_required"
+        next_action = "manual_review_required"
+    elif insufficient_truth:
+        status = "blocked_insufficient_truth"
+        source_status = "insufficient_truth_active"
+        block_reason = "insufficient_truth"
+        next_action = "wait_for_more_truth"
+        missing_inputs.append("prompt_selection_truth")
+    elif fix_candidate_valid and next_candidate_valid:
+        status = "blocked_conflicting_prompts"
+        source_status = "multiple_candidates_ready"
+        block_reason = "conflicting_ready_prompts"
+        next_action = "manual_prompt_selection_required"
+    elif fix_candidate_valid:
+        status = "selected_fix_prompt"
+        source_status = "fix_prompt_selected"
+        block_reason = "none"
+        selected_prompt_kind = "fix"
+        selected_prompt_path = normalized_fix_path
+        selected_prompt_source = "project_browser_autonomous_fix_prompt_generation"
+        selected_prompt_ready = True
+        selected_prompt_body_available = fix_body_available
+        selected_prompt_handoff_write_completed = bool(fix_prompt_handoff_write_completed)
+        selected_prompt_handoff_write_failed = bool(fix_prompt_handoff_write_failed)
+        selected_prompt_path_is_exact = fix_path_is_exact
+        selected_prompt_path_exists = fix_path_exists
+        selected_prompt_path_is_symlink = fix_path_is_symlink
+        next_action = "check_codex_invocation_readiness_later"
+    elif next_candidate_valid:
+        status = "selected_next_prompt"
+        source_status = "next_prompt_selected"
+        block_reason = "none"
+        selected_prompt_kind = "next"
+        selected_prompt_path = normalized_next_path
+        selected_prompt_source = "project_browser_autonomous_next_prompt_generation"
+        selected_prompt_ready = True
+        selected_prompt_body_available = next_body_available
+        selected_prompt_handoff_write_completed = bool(next_prompt_handoff_write_completed)
+        selected_prompt_handoff_write_failed = bool(next_prompt_handoff_write_failed)
+        selected_prompt_path_is_exact = next_path_is_exact
+        selected_prompt_path_exists = next_path_exists
+        selected_prompt_path_is_symlink = next_path_is_symlink
+        next_action = "check_codex_invocation_readiness_later"
+    else:
+        status = "blocked_no_ready_prompt"
+        source_status = "no_valid_prompt_candidate"
+        block_reason = "no_ready_prompt_candidate"
+        if validation_failed or fix_required_path_active:
+            next_action = "wait_for_fix_prompt_generation"
+        elif validation_passed and not validation_failed:
+            next_action = "wait_for_next_prompt_generation"
+        else:
+            next_action = "wait_for_more_truth"
+
+        if validation_failed or fix_required_path_active:
+            if normalized_fix_prompt_status != "prompt_generated":
+                missing_inputs.append("fix_prompt_status_prompt_generated")
+            if not fix_path_is_exact:
+                status = "blocked_prompt_path_unexpected"
+                source_status = "fix_prompt_path_not_exact"
+                block_reason = "selected_prompt_path_unexpected"
+            elif bool(fix_prompt_handoff_write_failed):
+                status = "blocked_handoff_write_failed"
+                source_status = "fix_handoff_write_failed"
+                block_reason = "selected_handoff_write_failed"
+            elif not bool(fix_prompt_handoff_write_completed):
+                missing_inputs.append("fix_handoff_write_completed")
+            elif fix_path_is_symlink:
+                status = "blocked_prompt_path_symlink"
+                source_status = "fix_prompt_path_symlink"
+                block_reason = "selected_prompt_path_symlink"
+            elif not fix_path_exists:
+                status = "blocked_prompt_path_missing"
+                source_status = "fix_prompt_path_missing"
+                block_reason = "selected_prompt_path_missing"
+            elif not fix_body_available:
+                status = "blocked_prompt_body_missing"
+                source_status = "fix_prompt_body_missing"
+                block_reason = "selected_prompt_body_missing"
+        elif validation_passed and not validation_failed:
+            if normalized_next_prompt_status != "prompt_generated":
+                missing_inputs.append("next_prompt_status_prompt_generated")
+            if not next_path_is_exact:
+                status = "blocked_prompt_path_unexpected"
+                source_status = "next_prompt_path_not_exact"
+                block_reason = "selected_prompt_path_unexpected"
+            elif bool(next_prompt_handoff_write_failed):
+                status = "blocked_handoff_write_failed"
+                source_status = "next_handoff_write_failed"
+                block_reason = "selected_handoff_write_failed"
+            elif not bool(next_prompt_handoff_write_completed):
+                missing_inputs.append("next_handoff_write_completed")
+            elif next_path_is_symlink:
+                status = "blocked_prompt_path_symlink"
+                source_status = "next_prompt_path_symlink"
+                block_reason = "selected_prompt_path_symlink"
+            elif not next_path_exists:
+                status = "blocked_prompt_path_missing"
+                source_status = "next_prompt_path_missing"
+                block_reason = "selected_prompt_path_missing"
+            elif not next_body_available:
+                status = "blocked_prompt_body_missing"
+                source_status = "next_prompt_body_missing"
+                block_reason = "selected_prompt_body_missing"
+
+    if selected_prompt_kind not in allowed_prompt_kinds:
+        selected_prompt_kind = "none"
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_prompt_selection_status": status,
+        "project_browser_autonomous_prompt_selection_source_status": source_status,
+        "project_browser_autonomous_prompt_selection_block_reason": block_reason,
+        "project_browser_autonomous_prompt_selection_selected_prompt_kind": (
+            selected_prompt_kind
+        ),
+        "project_browser_autonomous_prompt_selection_selected_prompt_path": (
+            selected_prompt_path
+        ),
+        "project_browser_autonomous_prompt_selection_selected_prompt_source": (
+            selected_prompt_source
+        ),
+        "project_browser_autonomous_prompt_selection_selected_prompt_ready": bool(
+            selected_prompt_ready
+        ),
+        "project_browser_autonomous_prompt_selection_selected_prompt_body_available": bool(
+            selected_prompt_body_available
+        ),
+        "project_browser_autonomous_prompt_selection_selected_prompt_handoff_write_completed": bool(
+            selected_prompt_handoff_write_completed
+        ),
+        "project_browser_autonomous_prompt_selection_selected_prompt_handoff_write_failed": bool(
+            selected_prompt_handoff_write_failed
+        ),
+        "project_browser_autonomous_prompt_selection_selected_prompt_path_is_exact": bool(
+            selected_prompt_path_is_exact
+        ),
+        "project_browser_autonomous_prompt_selection_selected_prompt_path_exists": bool(
+            selected_prompt_path_exists
+        ),
+        "project_browser_autonomous_prompt_selection_selected_prompt_path_is_symlink": bool(
+            selected_prompt_path_is_symlink
+        ),
+        "project_browser_autonomous_prompt_selection_fix_prompt_status": (
+            normalized_fix_prompt_status
+        ),
+        "project_browser_autonomous_prompt_selection_fix_prompt_generated": bool(
+            fix_prompt_generated
+        ),
+        "project_browser_autonomous_prompt_selection_fix_prompt_handoff_path": (
+            normalized_fix_path
+        ),
+        "project_browser_autonomous_prompt_selection_fix_prompt_handoff_write_completed": bool(
+            fix_prompt_handoff_write_completed
+        ),
+        "project_browser_autonomous_prompt_selection_fix_prompt_handoff_write_failed": bool(
+            fix_prompt_handoff_write_failed
+        ),
+        "project_browser_autonomous_prompt_selection_next_prompt_status": (
+            normalized_next_prompt_status
+        ),
+        "project_browser_autonomous_prompt_selection_next_prompt_generated": bool(
+            next_prompt_generated
+        ),
+        "project_browser_autonomous_prompt_selection_next_prompt_handoff_path": (
+            normalized_next_path
+        ),
+        "project_browser_autonomous_prompt_selection_next_prompt_handoff_write_completed": bool(
+            next_prompt_handoff_write_completed
+        ),
+        "project_browser_autonomous_prompt_selection_next_prompt_handoff_write_failed": bool(
+            next_prompt_handoff_write_failed
+        ),
+        "project_browser_autonomous_prompt_selection_validation_passed": bool(
+            validation_passed
+        ),
+        "project_browser_autonomous_prompt_selection_validation_failed": bool(
+            validation_failed
+        ),
+        "project_browser_autonomous_prompt_selection_rollback_required": bool(
+            rollback_required
+        ),
+        "project_browser_autonomous_prompt_selection_human_review_required": bool(
+            human_review_required
+        ),
+        "project_browser_autonomous_prompt_selection_insufficient_truth": bool(
+            insufficient_truth
+        ),
+        "project_browser_autonomous_prompt_selection_next_action": next_action,
+        "project_browser_autonomous_prompt_selection_runtime_posture": runtime_posture,
+        "project_browser_autonomous_prompt_selection_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -68188,6 +68519,232 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_next_prompt_generation_state_normalized[
         "project_browser_autonomous_next_prompt_generation_next_action"
     ] = project_browser_autonomous_next_prompt_generation_next_action
+    prompt_selection_insufficient_truth_active = bool(
+        project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+            "project_browser_autonomous_next_prompt_readiness_insufficient_truth",
+            False,
+        )
+    ) or bool(
+        project_browser_autonomous_fix_prompt_readiness_status
+        in {"insufficient_truth", "blocked_insufficient_truth"}
+    ) or bool(
+        project_browser_autonomous_fix_prompt_generation_status
+        in {"insufficient_truth", "blocked_insufficient_truth"}
+    ) or bool(
+        project_browser_autonomous_next_prompt_generation_status
+        in {"insufficient_truth", "blocked_insufficient_truth"}
+    ) or bool(
+        project_browser_autonomous_post_apply_validation_status == "insufficient_truth"
+    )
+    prompt_selection_fix_required_path_active = bool(
+        post_apply_validation_result.get("validation_failed", False)
+    ) or bool(
+        project_browser_autonomous_next_prompt_readiness_status
+        in {"blocked_validation_failed", "blocked_fix_required"}
+    ) or bool(
+        project_browser_autonomous_fix_prompt_readiness_status
+        in {"ready_to_generate_fix_prompt", "ready_for_manual_fix"}
+    )
+    project_browser_autonomous_prompt_selection_state = (
+        _build_project_browser_autonomous_prompt_selection_state(
+            validation_passed=bool(post_apply_validation_result.get("validation_passed", False)),
+            validation_failed=bool(post_apply_validation_result.get("validation_failed", False)),
+            rollback_required=bool(post_apply_validation_result.get("rollback_required", False)),
+            human_review_required=bool(
+                post_apply_validation_result.get("human_review_required", False)
+            ),
+            insufficient_truth=prompt_selection_insufficient_truth_active,
+            fix_required_path_active=prompt_selection_fix_required_path_active,
+            fix_prompt_status=project_browser_autonomous_fix_prompt_generation_status,
+            fix_prompt_generated=bool(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_prompt_generated",
+                    False,
+                )
+            ),
+            fix_prompt_body=_normalize_text(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_prompt_body"
+                ),
+                default="",
+            ),
+            fix_prompt_handoff_path=_normalize_text(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_prompt_handoff_path"
+                ),
+                default="",
+            ),
+            fix_prompt_handoff_write_completed=bool(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_prompt_handoff_write_completed",
+                    False,
+                )
+            ),
+            fix_prompt_handoff_write_failed=bool(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_prompt_handoff_write_failed",
+                    False,
+                )
+            ),
+            next_prompt_status=project_browser_autonomous_next_prompt_generation_status,
+            next_prompt_generated=bool(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_prompt_generated",
+                    False,
+                )
+            ),
+            next_prompt_body=_normalize_text(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_prompt_body"
+                ),
+                default="",
+            ),
+            next_prompt_handoff_path=_normalize_text(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_prompt_handoff_path"
+                ),
+                default="",
+            ),
+            next_prompt_handoff_write_completed=bool(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_prompt_handoff_write_completed",
+                    False,
+                )
+            ),
+            next_prompt_handoff_write_failed=bool(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_prompt_handoff_write_failed",
+                    False,
+                )
+            ),
+        )
+    )
+    prompt_selection_allowed_statuses = {
+        "selected_fix_prompt",
+        "selected_next_prompt",
+        "blocked_no_ready_prompt",
+        "blocked_conflicting_prompts",
+        "blocked_handoff_write_failed",
+        "blocked_prompt_path_missing",
+        "blocked_prompt_path_unexpected",
+        "blocked_prompt_path_symlink",
+        "blocked_prompt_body_missing",
+        "blocked_insufficient_truth",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "insufficient_truth",
+    }
+    prompt_selection_allowed_prompt_kinds = {"fix", "next", "none"}
+    prompt_selection_allowed_next_actions = {
+        "check_codex_invocation_readiness_later",
+        "wait_for_fix_prompt_generation",
+        "wait_for_next_prompt_generation",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "manual_prompt_selection_required",
+        "insufficient_truth",
+    }
+    prompt_selection_field_names = (
+        "status",
+        "source_status",
+        "block_reason",
+        "selected_prompt_kind",
+        "selected_prompt_path",
+        "selected_prompt_source",
+        "selected_prompt_ready",
+        "selected_prompt_body_available",
+        "selected_prompt_handoff_write_completed",
+        "selected_prompt_handoff_write_failed",
+        "selected_prompt_path_is_exact",
+        "selected_prompt_path_exists",
+        "selected_prompt_path_is_symlink",
+        "fix_prompt_status",
+        "fix_prompt_generated",
+        "fix_prompt_handoff_path",
+        "fix_prompt_handoff_write_completed",
+        "fix_prompt_handoff_write_failed",
+        "next_prompt_status",
+        "next_prompt_generated",
+        "next_prompt_handoff_path",
+        "next_prompt_handoff_write_completed",
+        "next_prompt_handoff_write_failed",
+        "validation_passed",
+        "validation_failed",
+        "rollback_required",
+        "human_review_required",
+        "insufficient_truth",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_prompt_selection_status = _normalize_text(
+        project_browser_autonomous_prompt_selection_state.get(
+            "project_browser_autonomous_prompt_selection_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_prompt_selection_status not in (
+        prompt_selection_allowed_statuses
+    ):
+        project_browser_autonomous_prompt_selection_status = "insufficient_truth"
+    project_browser_autonomous_prompt_selection_next_action = _normalize_text(
+        project_browser_autonomous_prompt_selection_state.get(
+            "project_browser_autonomous_prompt_selection_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_prompt_selection_next_action not in (
+        prompt_selection_allowed_next_actions
+    ):
+        project_browser_autonomous_prompt_selection_next_action = "insufficient_truth"
+    project_browser_autonomous_prompt_selection_state_normalized: dict[str, Any] = {}
+    for field_name in prompt_selection_field_names:
+        key = f"project_browser_autonomous_prompt_selection_{field_name}"
+        value = project_browser_autonomous_prompt_selection_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_prompt_selection_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_prompt_selection_next_action
+        elif field_name == "selected_prompt_kind":
+            normalized_prompt_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_prompt_kind
+                if normalized_prompt_kind in prompt_selection_allowed_prompt_kinds
+                else "none"
+            )
+        elif field_name in {
+            "selected_prompt_ready",
+            "selected_prompt_body_available",
+            "selected_prompt_handoff_write_completed",
+            "selected_prompt_handoff_write_failed",
+            "selected_prompt_path_is_exact",
+            "selected_prompt_path_exists",
+            "selected_prompt_path_is_symlink",
+            "fix_prompt_generated",
+            "fix_prompt_handoff_write_completed",
+            "fix_prompt_handoff_write_failed",
+            "next_prompt_generated",
+            "next_prompt_handoff_write_completed",
+            "next_prompt_handoff_write_failed",
+            "validation_passed",
+            "validation_failed",
+            "rollback_required",
+            "human_review_required",
+            "insufficient_truth",
+        }:
+            value = bool(value)
+        elif field_name in {"runtime_posture", "missing_inputs"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_prompt_selection_state_normalized[key] = value
+    project_browser_autonomous_prompt_selection_state_normalized[
+        "project_browser_autonomous_prompt_selection_status"
+    ] = project_browser_autonomous_prompt_selection_status
+    project_browser_autonomous_prompt_selection_state_normalized[
+        "project_browser_autonomous_prompt_selection_next_action"
+    ] = project_browser_autonomous_prompt_selection_next_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -70675,6 +71232,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_fix_prompt_generation_state_normalized,
                 **project_browser_autonomous_next_prompt_readiness_state_normalized,
                 **project_browser_autonomous_next_prompt_generation_state_normalized,
+                **project_browser_autonomous_prompt_selection_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -71532,6 +72090,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_next_prompt_generation_next_action"
             if project_browser_autonomous_next_prompt_generation_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_prompt_selection_status"
+            if project_browser_autonomous_prompt_selection_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_prompt_selection_next_action"
+            if project_browser_autonomous_prompt_selection_next_action
             else "",
             ]
     )
@@ -77644,6 +78208,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_fix_prompt_generation_state_normalized,
         **project_browser_autonomous_next_prompt_readiness_state_normalized,
         **project_browser_autonomous_next_prompt_generation_state_normalized,
+        **project_browser_autonomous_prompt_selection_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(
