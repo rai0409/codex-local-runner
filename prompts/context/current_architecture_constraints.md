@@ -1848,3 +1848,24 @@ Prompt171 result semantics:
 - `validation_failed` should route toward fix-prompt generation.
 - `validation_timeout`, unsafe candidates, missing candidates, or blocked routing
   should stop safely and require manual review or safe stop metadata.
+
+
+<!-- prompt172-update -->
+## Prompt172 architecture constraint update
+
+Prompt172 adds a metadata-only one-step autonomous cycle state. It summarizes one
+bounded autonomous cycle from existing Prompt164-171 state only.
+
+Authoritative cycle rule:
+- Prompt172 must not run commands or add execution behavior.
+- Prompt172 must not retry, loop, rollback, stage, commit, create GitHub operations,
+  or create new executors.
+- Prompt172 may classify the current one-step cycle as passed, failed, blocked, or
+  insufficient-truth based on existing source states only.
+
+Known conservative behavior:
+- Prompt172 currently aggregates human-review signals from multiple source states.
+  This is safe but can over-block if stale or unrelated upstream manual-review flags
+  remain present.
+- The next hardening step should prefer definitive downstream Prompt171 validation
+  truth when available and restrict human-review blocking to the active path.

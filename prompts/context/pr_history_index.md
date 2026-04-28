@@ -1496,3 +1496,56 @@ Scope notes:
 - No tests were run.
 - Runtime state does not run unittest, rollback, commit, GitHub operations, retries,
   loops, schedulers, daemons, queue drainers, or new executors.
+
+
+<!-- prompt172-update -->
+## Prompt172 — metadata-only one-step autonomous cycle state
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_one_step_cycle_state(...)`
+  in `automation/orchestration/planned_execution_runner.py`.
+- Added one-step cycle summary output under:
+  `project_browser_autonomous_one_step_cycle_*`.
+- Implemented deterministic cycle classification:
+  - `blocked_human_review_required`
+  - `blocked_before_codex_write`
+  - `blocked_codex_write_not_completed`
+  - `blocked_assimilation_not_safe`
+  - `blocked_validation_routing`
+  - `cycle_passed`
+  - `cycle_failed_validation`
+  - `blocked_insufficient_cycle_truth`
+- Added cycle fields:
+  - `cycle_attempted`
+  - `cycle_completed`
+  - `cycle_passed`
+  - `cycle_failed`
+  - `cycle_blocked`
+  - `cycle_block_reason`
+- Added next action mapping:
+  - blocked states -> `manual_review_required`, `next_prompt_kind=none`
+  - pass -> `continue_one_step_cycle`, `next_prompt_kind=next`
+  - validation fail -> `generate_fix_prompt`, `next_prompt_kind=fix`
+- Added source trace fields for selection, readiness, write invocation, assimilation,
+  validation routing, and validation execution.
+- Exposed normalized Prompt172 state in compact planning summary, supporting truth refs,
+  and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- Prompt172 is metadata-only.
+- No docs/tests were edited by Prompt172 implementation.
+- No tests were run.
+- Runtime state does not add commands, retry loops, rollback, commit, GitHub operations,
+  schedulers, daemons, queue drainers, or new executors.
+
+Known follow-up:
+- Human-review detection is conservative and may over-block when upstream states
+  over-report manual review.
+- Prompt173 should harden active-path human-review handling and downstream truth
+  precedence without adding new execution behavior.

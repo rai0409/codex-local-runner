@@ -51929,6 +51929,279 @@ def _build_project_browser_autonomous_post_write_validation_execution_state(
     }
 
 
+def _build_project_browser_autonomous_one_step_cycle_state(
+    *,
+    source_selection_status: str,
+    selected_prompt_kind: str,
+    selected_prompt_ready: bool,
+    source_invocation_readiness_status: str,
+    codex_invocation_allowed: bool,
+    source_write_invocation_status: str,
+    write_invocation_attempted: bool,
+    codex_write_completed: bool,
+    write_invocation_result_status: str,
+    smoke_override_status: str,
+    smoke_override_used: bool,
+    source_assimilation_status: str,
+    assimilation_result_class: str,
+    assimilation_safe_for_validation_routing: bool,
+    source_validation_routing_status: str,
+    validation_allowed: bool,
+    source_validation_routing_block_reason: str,
+    source_validation_execution_status: str,
+    validation_executed: bool,
+    validation_passed: bool,
+    validation_failed: bool,
+    source_validation_execution_block_reason: str,
+    selection_human_review_required: bool,
+    invocation_human_review_required: bool,
+    write_human_review_required: bool,
+    assimilation_human_review_required: bool,
+    routing_human_review_required: bool,
+    validation_execution_human_review_required: bool,
+) -> dict[str, Any]:
+    normalized_source_selection_status = _normalize_text(
+        source_selection_status,
+        default="insufficient_truth",
+    )
+    normalized_selected_prompt_kind = _normalize_text(selected_prompt_kind, default="none")
+    if normalized_selected_prompt_kind not in {"fix", "next", "none"}:
+        normalized_selected_prompt_kind = "none"
+    normalized_source_invocation_readiness_status = _normalize_text(
+        source_invocation_readiness_status,
+        default="insufficient_truth",
+    )
+    normalized_source_write_invocation_status = _normalize_text(
+        source_write_invocation_status,
+        default="insufficient_truth",
+    )
+    normalized_write_invocation_result_status = _normalize_text(
+        write_invocation_result_status,
+        default="insufficient_truth",
+    )
+    normalized_smoke_override_status = _normalize_text(
+        smoke_override_status,
+        default="insufficient_truth",
+    )
+    normalized_source_assimilation_status = _normalize_text(
+        source_assimilation_status,
+        default="insufficient_truth",
+    )
+    normalized_assimilation_result_class = _normalize_text(
+        assimilation_result_class,
+        default="insufficient_truth",
+    )
+    normalized_source_validation_routing_status = _normalize_text(
+        source_validation_routing_status,
+        default="insufficient_truth",
+    )
+    normalized_source_validation_execution_status = _normalize_text(
+        source_validation_execution_status,
+        default="insufficient_truth",
+    )
+    normalized_source_validation_routing_block_reason = _normalize_text(
+        source_validation_routing_block_reason,
+        default="",
+    )
+    normalized_source_validation_execution_block_reason = _normalize_text(
+        source_validation_execution_block_reason,
+        default="",
+    )
+    any_source_human_review = bool(
+        selection_human_review_required
+        or invocation_human_review_required
+        or write_human_review_required
+        or assimilation_human_review_required
+        or routing_human_review_required
+        or validation_execution_human_review_required
+        or normalized_source_selection_status == "blocked_human_review_required"
+        or normalized_source_invocation_readiness_status == "blocked_human_review_required"
+        or normalized_source_write_invocation_status == "blocked_human_review_required"
+        or normalized_smoke_override_status == "manual_review_required"
+        or normalized_source_assimilation_status == "manual_review_required"
+        or normalized_source_validation_routing_status == "blocked_human_review_required"
+        or normalized_source_validation_execution_status == "blocked_human_review_required"
+    )
+
+    write_completed_successfully = bool(
+        normalized_source_write_invocation_status == "codex_write_invocation_completed"
+        and bool(codex_write_completed)
+        and normalized_write_invocation_result_status
+        in {"completed_with_changes", "completed_no_changes"}
+    )
+    blocked_before_write = bool(
+        (
+            normalized_source_selection_status
+            not in {"selected_fix_prompt", "selected_next_prompt"}
+            or not bool(selected_prompt_ready)
+            or normalized_source_invocation_readiness_status != "ready_to_invoke_codex"
+            or not bool(codex_invocation_allowed)
+        )
+        and not bool(write_invocation_attempted)
+        and not bool(validation_executed)
+    )
+
+    status = "blocked_insufficient_cycle_truth"
+    cycle_attempted = False
+    cycle_completed = False
+    cycle_passed = False
+    cycle_failed = False
+    cycle_blocked = True
+    cycle_block_reason = "blocked_insufficient_cycle_truth"
+    human_review_required = True
+    next_safe_action = "manual_review_required"
+    next_prompt_kind = "none"
+
+    if any_source_human_review:
+        status = "blocked_human_review_required"
+        cycle_attempted = bool(write_invocation_attempted or validation_executed)
+        cycle_completed = False
+        cycle_passed = False
+        cycle_failed = False
+        cycle_blocked = True
+        cycle_block_reason = "blocked_human_review_required"
+        human_review_required = True
+        next_safe_action = "manual_review_required"
+        next_prompt_kind = "none"
+    elif blocked_before_write:
+        status = "blocked_before_codex_write"
+        cycle_attempted = False
+        cycle_completed = False
+        cycle_passed = False
+        cycle_failed = False
+        cycle_blocked = True
+        cycle_block_reason = "blocked_before_codex_write"
+        human_review_required = True
+        next_safe_action = "manual_review_required"
+        next_prompt_kind = "none"
+    elif not write_completed_successfully:
+        status = "blocked_codex_write_not_completed"
+        cycle_attempted = True
+        cycle_completed = False
+        cycle_passed = False
+        cycle_failed = False
+        cycle_blocked = True
+        cycle_block_reason = "blocked_codex_write_not_completed"
+        human_review_required = True
+        next_safe_action = "manual_review_required"
+        next_prompt_kind = "none"
+    elif not bool(assimilation_safe_for_validation_routing):
+        status = "blocked_assimilation_not_safe"
+        cycle_attempted = True
+        cycle_completed = False
+        cycle_passed = False
+        cycle_failed = False
+        cycle_blocked = True
+        cycle_block_reason = "blocked_assimilation_not_safe"
+        human_review_required = True
+        next_safe_action = "manual_review_required"
+        next_prompt_kind = "none"
+    elif not bool(validation_allowed):
+        status = "blocked_validation_routing"
+        cycle_attempted = True
+        cycle_completed = False
+        cycle_passed = False
+        cycle_failed = False
+        cycle_blocked = True
+        cycle_block_reason = (
+            normalized_source_validation_routing_block_reason
+            or "blocked_validation_routing"
+        )
+        human_review_required = True
+        next_safe_action = "manual_review_required"
+        next_prompt_kind = "none"
+    elif bool(validation_passed):
+        status = "cycle_passed"
+        cycle_attempted = True
+        cycle_completed = True
+        cycle_passed = True
+        cycle_failed = False
+        cycle_blocked = False
+        cycle_block_reason = ""
+        human_review_required = False
+        next_safe_action = "continue_one_step_cycle"
+        next_prompt_kind = "next"
+    elif bool(validation_failed):
+        status = "cycle_failed_validation"
+        cycle_attempted = True
+        cycle_completed = True
+        cycle_passed = False
+        cycle_failed = True
+        cycle_blocked = False
+        cycle_block_reason = "validation_failed"
+        human_review_required = False
+        next_safe_action = "generate_fix_prompt"
+        next_prompt_kind = "fix"
+    else:
+        status = "blocked_insufficient_cycle_truth"
+        cycle_attempted = False
+        cycle_completed = False
+        cycle_passed = False
+        cycle_failed = False
+        cycle_blocked = True
+        cycle_block_reason = "blocked_insufficient_cycle_truth"
+        human_review_required = True
+        next_safe_action = "manual_review_required"
+        next_prompt_kind = "none"
+
+    return {
+        "project_browser_autonomous_one_step_cycle_status": status,
+        "project_browser_autonomous_one_step_cycle_cycle_attempted": bool(cycle_attempted),
+        "project_browser_autonomous_one_step_cycle_cycle_completed": bool(cycle_completed),
+        "project_browser_autonomous_one_step_cycle_cycle_passed": bool(cycle_passed),
+        "project_browser_autonomous_one_step_cycle_cycle_failed": bool(cycle_failed),
+        "project_browser_autonomous_one_step_cycle_cycle_blocked": bool(cycle_blocked),
+        "project_browser_autonomous_one_step_cycle_cycle_block_reason": cycle_block_reason,
+        "project_browser_autonomous_one_step_cycle_selected_prompt_kind": (
+            normalized_selected_prompt_kind
+        ),
+        "project_browser_autonomous_one_step_cycle_codex_invocation_allowed": bool(
+            codex_invocation_allowed
+        ),
+        "project_browser_autonomous_one_step_cycle_codex_write_completed": bool(
+            codex_write_completed
+        ),
+        "project_browser_autonomous_one_step_cycle_assimilation_safe_for_validation_routing": bool(
+            assimilation_safe_for_validation_routing
+        ),
+        "project_browser_autonomous_one_step_cycle_validation_allowed": bool(
+            validation_allowed
+        ),
+        "project_browser_autonomous_one_step_cycle_validation_executed": bool(
+            validation_executed
+        ),
+        "project_browser_autonomous_one_step_cycle_validation_passed": bool(
+            validation_passed
+        ),
+        "project_browser_autonomous_one_step_cycle_validation_failed": bool(
+            validation_failed
+        ),
+        "project_browser_autonomous_one_step_cycle_human_review_required": bool(
+            human_review_required
+        ),
+        "project_browser_autonomous_one_step_cycle_next_safe_action": next_safe_action,
+        "project_browser_autonomous_one_step_cycle_next_prompt_kind": next_prompt_kind,
+        "project_browser_autonomous_one_step_cycle_source_selection_status": (
+            normalized_source_selection_status
+        ),
+        "project_browser_autonomous_one_step_cycle_source_invocation_readiness_status": (
+            normalized_source_invocation_readiness_status
+        ),
+        "project_browser_autonomous_one_step_cycle_source_write_invocation_status": (
+            normalized_source_write_invocation_status
+        ),
+        "project_browser_autonomous_one_step_cycle_source_assimilation_status": (
+            normalized_source_assimilation_status
+        ),
+        "project_browser_autonomous_one_step_cycle_source_validation_routing_status": (
+            normalized_source_validation_routing_status
+        ),
+        "project_browser_autonomous_one_step_cycle_source_validation_execution_status": (
+            normalized_source_validation_execution_status
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -72979,6 +73252,244 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_post_write_validation_execution_state_normalized[
         "project_browser_autonomous_post_write_validation_execution_next_action"
     ] = project_browser_autonomous_post_write_validation_execution_next_action
+    project_browser_autonomous_one_step_cycle_state = (
+        _build_project_browser_autonomous_one_step_cycle_state(
+            source_selection_status=project_browser_autonomous_prompt_selection_status,
+            selected_prompt_kind=_normalize_text(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_selected_prompt_kind"
+                ),
+                default="none",
+            ),
+            selected_prompt_ready=bool(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_selected_prompt_ready",
+                    False,
+                )
+            ),
+            source_invocation_readiness_status=project_browser_autonomous_codex_invocation_readiness_status,
+            codex_invocation_allowed=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_invocation_allowed",
+                    False,
+                )
+            ),
+            source_write_invocation_status=project_browser_autonomous_codex_write_invocation_execution_status,
+            write_invocation_attempted=bool(
+                project_browser_autonomous_codex_write_invocation_execution_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_execution_invocation_attempted",
+                    False,
+                )
+            ),
+            codex_write_completed=bool(
+                project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_result_completed",
+                    False,
+                )
+            ),
+            write_invocation_result_status=project_browser_autonomous_codex_write_invocation_result_status,
+            smoke_override_status=project_browser_autonomous_smoke_prompt_override_status,
+            smoke_override_used=bool(
+                project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                    "project_browser_autonomous_smoke_prompt_override_override_used",
+                    False,
+                )
+            ),
+            source_assimilation_status=project_browser_autonomous_codex_write_result_assimilation_status,
+            assimilation_result_class=_normalize_text(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_result_class"
+                ),
+                default="insufficient_truth",
+            ),
+            assimilation_safe_for_validation_routing=bool(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_safe_for_validation_routing",
+                    False,
+                )
+            ),
+            source_validation_routing_status=project_browser_autonomous_post_write_validation_routing_status,
+            validation_allowed=bool(
+                project_browser_autonomous_post_write_validation_routing_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_routing_validation_allowed",
+                    False,
+                )
+            ),
+            source_validation_routing_block_reason=_normalize_text(
+                project_browser_autonomous_post_write_validation_routing_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_routing_validation_block_reason"
+                ),
+                default="",
+            ),
+            source_validation_execution_status=project_browser_autonomous_post_write_validation_execution_status,
+            validation_executed=bool(
+                project_browser_autonomous_post_write_validation_execution_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_execution_validation_executed",
+                    False,
+                )
+            ),
+            validation_passed=bool(
+                project_browser_autonomous_post_write_validation_execution_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_execution_validation_passed",
+                    False,
+                )
+            ),
+            validation_failed=bool(
+                project_browser_autonomous_post_write_validation_execution_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_execution_validation_failed",
+                    False,
+                )
+            ),
+            source_validation_execution_block_reason=_normalize_text(
+                project_browser_autonomous_post_write_validation_execution_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_execution_validation_block_reason"
+                ),
+                default="",
+            ),
+            selection_human_review_required=bool(
+                project_browser_autonomous_prompt_selection_state_normalized.get(
+                    "project_browser_autonomous_prompt_selection_human_review_required",
+                    False,
+                )
+            ),
+            invocation_human_review_required=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_human_review_required",
+                    False,
+                )
+            ),
+            write_human_review_required=bool(
+                project_browser_autonomous_codex_write_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_readiness_human_review_required",
+                    False,
+                )
+            ),
+            assimilation_human_review_required=bool(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_manual_review_required",
+                    False,
+                )
+            ),
+            routing_human_review_required=bool(
+                project_browser_autonomous_post_write_validation_routing_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_routing_human_review_required",
+                    False,
+                )
+            ),
+            validation_execution_human_review_required=bool(
+                project_browser_autonomous_post_write_validation_execution_state_normalized.get(
+                    "project_browser_autonomous_post_write_validation_execution_human_review_required",
+                    False,
+                )
+            ),
+        )
+    )
+    one_step_cycle_allowed_statuses = {
+        "blocked_human_review_required",
+        "blocked_before_codex_write",
+        "blocked_codex_write_not_completed",
+        "blocked_assimilation_not_safe",
+        "blocked_validation_routing",
+        "cycle_passed",
+        "cycle_failed_validation",
+        "blocked_insufficient_cycle_truth",
+    }
+    one_step_cycle_allowed_next_safe_actions = {
+        "manual_review_required",
+        "continue_one_step_cycle",
+        "generate_fix_prompt",
+    }
+    one_step_cycle_allowed_next_prompt_kinds = {"fix", "next", "none"}
+    one_step_cycle_field_names = (
+        "status",
+        "cycle_attempted",
+        "cycle_completed",
+        "cycle_passed",
+        "cycle_failed",
+        "cycle_blocked",
+        "cycle_block_reason",
+        "selected_prompt_kind",
+        "codex_invocation_allowed",
+        "codex_write_completed",
+        "assimilation_safe_for_validation_routing",
+        "validation_allowed",
+        "validation_executed",
+        "validation_passed",
+        "validation_failed",
+        "human_review_required",
+        "next_safe_action",
+        "next_prompt_kind",
+        "source_selection_status",
+        "source_invocation_readiness_status",
+        "source_write_invocation_status",
+        "source_assimilation_status",
+        "source_validation_routing_status",
+        "source_validation_execution_status",
+    )
+    project_browser_autonomous_one_step_cycle_status = _normalize_text(
+        project_browser_autonomous_one_step_cycle_state.get(
+            "project_browser_autonomous_one_step_cycle_status"
+        ),
+        default="blocked_insufficient_cycle_truth",
+    )
+    if project_browser_autonomous_one_step_cycle_status not in (
+        one_step_cycle_allowed_statuses
+    ):
+        project_browser_autonomous_one_step_cycle_status = (
+            "blocked_insufficient_cycle_truth"
+        )
+    project_browser_autonomous_one_step_cycle_next_safe_action = _normalize_text(
+        project_browser_autonomous_one_step_cycle_state.get(
+            "project_browser_autonomous_one_step_cycle_next_safe_action"
+        ),
+        default="manual_review_required",
+    )
+    if project_browser_autonomous_one_step_cycle_next_safe_action not in (
+        one_step_cycle_allowed_next_safe_actions
+    ):
+        project_browser_autonomous_one_step_cycle_next_safe_action = (
+            "manual_review_required"
+        )
+    project_browser_autonomous_one_step_cycle_state_normalized: dict[str, Any] = {}
+    for field_name in one_step_cycle_field_names:
+        key = f"project_browser_autonomous_one_step_cycle_{field_name}"
+        value = project_browser_autonomous_one_step_cycle_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_one_step_cycle_status
+        elif field_name == "next_safe_action":
+            value = project_browser_autonomous_one_step_cycle_next_safe_action
+        elif field_name in {"next_prompt_kind", "selected_prompt_kind"}:
+            normalized_prompt_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_prompt_kind
+                if normalized_prompt_kind in one_step_cycle_allowed_next_prompt_kinds
+                else "none"
+            )
+        elif field_name in {
+            "cycle_attempted",
+            "cycle_completed",
+            "cycle_passed",
+            "cycle_failed",
+            "cycle_blocked",
+            "codex_invocation_allowed",
+            "codex_write_completed",
+            "assimilation_safe_for_validation_routing",
+            "validation_allowed",
+            "validation_executed",
+            "validation_passed",
+            "validation_failed",
+            "human_review_required",
+        }:
+            value = bool(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_one_step_cycle_state_normalized[key] = value
+    project_browser_autonomous_one_step_cycle_state_normalized[
+        "project_browser_autonomous_one_step_cycle_status"
+    ] = project_browser_autonomous_one_step_cycle_status
+    project_browser_autonomous_one_step_cycle_state_normalized[
+        "project_browser_autonomous_one_step_cycle_next_safe_action"
+    ] = project_browser_autonomous_one_step_cycle_next_safe_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -75477,6 +75988,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_codex_write_result_assimilation_state_normalized,
                 **project_browser_autonomous_post_write_validation_routing_state_normalized,
                 **project_browser_autonomous_post_write_validation_execution_state_normalized,
+                **project_browser_autonomous_one_step_cycle_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -76400,6 +76912,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_post_write_validation_execution_next_action"
             if project_browser_autonomous_post_write_validation_execution_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_step_cycle_status"
+            if project_browser_autonomous_one_step_cycle_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_one_step_cycle_next_safe_action"
+            if project_browser_autonomous_one_step_cycle_next_safe_action
             else "",
             ]
     )
@@ -82523,6 +83041,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_codex_write_result_assimilation_state_normalized,
         **project_browser_autonomous_post_write_validation_routing_state_normalized,
         **project_browser_autonomous_post_write_validation_execution_state_normalized,
+        **project_browser_autonomous_one_step_cycle_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(

@@ -1667,3 +1667,22 @@ Next:
 Prompt172 should summarize one bounded autonomous cycle using existing states only.
 It must not add new execution paths, retries, loops, rollback, commit, GitHub
 operations, or tests.
+
+
+<!-- prompt172-update -->
+## Roadmap update after Prompt172
+
+Completed:
+- Prompt169: Codex workspace-write result assimilation and changed-file safety
+  classification.
+- Prompt170: metadata-only post-write validation routing and validation candidate
+  derivation.
+- Prompt171: bounded post-write py_compile validation execution.
+- Prompt172: metadata-only one-step autonomous cycle summary.
+
+Next:
+- Prompt173: harden one-step cycle active-path truth and downstream validation
+  precedence.
+
+Prompt173 should not add tests, new executors, rollback, commit, GitHub operations,
+retry loops, or additional runtime command execution.
