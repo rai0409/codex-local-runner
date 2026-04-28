@@ -49641,6 +49641,440 @@ def _build_project_browser_autonomous_codex_invocation_readiness_state(
     }
 
 
+def _build_project_browser_autonomous_codex_invocation_execution_state(
+    *,
+    repository_path: str,
+    readiness_status: str,
+    invocation_allowed: bool,
+    selected_prompt_kind: str,
+    selected_prompt_path: str,
+    selected_prompt_source: str,
+    selected_prompt_ready: bool,
+    selected_prompt_path_is_exact: bool,
+    selected_prompt_path_exists: bool,
+    selected_prompt_path_is_symlink: bool,
+    selected_prompt_file_non_empty: bool,
+    selected_prompt_file_too_large: bool,
+    rollback_required: bool,
+    human_review_required: bool,
+    insufficient_truth: bool,
+    max_invocations: int,
+    prior_invocation_attempted: bool,
+    prior_invocation_completed: bool,
+) -> dict[str, Any]:
+    allowed_execution_statuses = {
+        "codex_invocation_completed",
+        "blocked_not_ready",
+        "blocked_invocation_not_allowed",
+        "blocked_missing_prompt",
+        "blocked_prompt_path_unexpected",
+        "blocked_prompt_path_symlink",
+        "blocked_prompt_empty",
+        "blocked_prompt_too_large",
+        "blocked_rollback_required",
+        "blocked_human_review_required",
+        "blocked_insufficient_truth",
+        "blocked_codex_command_unavailable",
+        "blocked_timeout",
+        "failed_execution_error",
+        "insufficient_truth",
+    }
+    allowed_result_statuses = {
+        "completed_success",
+        "completed_failure",
+        "completed_timeout",
+        "blocked",
+        "failed_execution_error",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "invoke_codex_later",
+        "wait_for_prompt_selection",
+        "wait_for_prompt_generation",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "manual_codex_invocation_required",
+        "insufficient_truth",
+    }
+    runtime_posture = [
+        "one_bounded_codex_invocation",
+        "at_most_one_invocation",
+        "no_retry",
+        "no_loop",
+        "no_patch_candidate_classification",
+        "no_patch_generation",
+        "no_patch_apply",
+        "no_git_mutation",
+        "stdout_stderr_compact_excerpts_only",
+    ]
+    allowed_paths = {
+        "/tmp/codex-local-runner-decision/generated_fix_prompt.txt",
+        "/tmp/codex-local-runner-decision/generated_next_prompt.txt",
+    }
+    stdout_path = "/tmp/codex-local-runner-decision/codex_invocation_stdout.txt"
+    stderr_path = "/tmp/codex-local-runner-decision/codex_invocation_stderr.txt"
+    result_path = "/tmp/codex-local-runner-decision/codex_invocation_result.json"
+    timeout_seconds = 120.0
+    excerpt_limit = 800
+
+    normalized_repository_path = _normalize_text(repository_path, default="")
+    normalized_readiness_status = _normalize_text(readiness_status, default="insufficient_truth")
+    normalized_prompt_kind = _normalize_text(selected_prompt_kind, default="none")
+    normalized_prompt_path = _normalize_text(selected_prompt_path, default="")
+    normalized_prompt_source = _normalize_text(selected_prompt_source, default="")
+    normalized_max_invocations = (
+        1 if _as_non_negative_int(max_invocations, default=1) != 1 else 1
+    )
+
+    invocation_command: list[str] = []
+    invocation_attempted = bool(prior_invocation_attempted)
+    invocation_completed = bool(prior_invocation_completed)
+    invocation_exit_code = -1
+    invocation_timeout = False
+    invocation_stdout_excerpt = ""
+    invocation_stderr_excerpt = ""
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    next_action = "insufficient_truth"
+    missing_inputs: list[str] = []
+
+    result_status = "insufficient_truth"
+    result_source_status = "insufficient_truth"
+    result_kind = "none"
+    result_completed = False
+    result_failed = False
+    result_timeout = False
+    result_next_action = "insufficient_truth"
+
+    def _write_text_file(path_text: str, content: str) -> None:
+        path_obj = Path(path_text)
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+        path_obj.write_text(content, encoding="utf-8")
+
+    def _write_result_payload() -> None:
+        payload = {
+            "status": result_status,
+            "source_status": result_source_status,
+            "result_kind": result_kind,
+            "result_path": result_path,
+            "stdout_path": stdout_path,
+            "stderr_path": stderr_path,
+            "exit_code": invocation_exit_code,
+            "completed": bool(result_completed),
+            "failed": bool(result_failed),
+            "timeout": bool(result_timeout),
+            "next_action": result_next_action,
+            "missing_inputs": _serialize_required_signals(missing_inputs),
+        }
+        try:
+            result_obj = Path(result_path)
+            result_obj.parent.mkdir(parents=True, exist_ok=True)
+            result_obj.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
+    if rollback_required:
+        status = "blocked_rollback_required"
+        source_status = "rollback_required"
+        block_reason = "rollback_required"
+        next_action = "rollback_required"
+    elif human_review_required:
+        status = "blocked_human_review_required"
+        source_status = "human_review_required"
+        block_reason = "human_review_required"
+        next_action = "manual_review_required"
+    elif insufficient_truth:
+        status = "blocked_insufficient_truth"
+        source_status = "insufficient_truth_active"
+        block_reason = "insufficient_truth"
+        next_action = "wait_for_more_truth"
+        missing_inputs.append("codex_invocation_readiness_truth")
+    elif normalized_readiness_status != "ready_to_invoke_codex":
+        status = "blocked_not_ready"
+        source_status = "readiness_not_ready"
+        block_reason = f"readiness_status:{normalized_readiness_status or 'unknown'}"
+        next_action = "wait_for_prompt_selection"
+    elif not invocation_allowed:
+        status = "blocked_invocation_not_allowed"
+        source_status = "readiness_invocation_not_allowed"
+        block_reason = "invocation_allowed_false"
+        next_action = "wait_for_prompt_generation"
+    elif invocation_attempted or invocation_completed:
+        status = "blocked_invocation_not_allowed"
+        source_status = "max_invocations_reached"
+        block_reason = "prior_invocation_already_attempted"
+        next_action = "wait_for_more_truth"
+    elif normalized_max_invocations != 1:
+        status = "blocked_invocation_not_allowed"
+        source_status = "max_invocations_invalid"
+        block_reason = "max_invocations_not_one"
+        next_action = "wait_for_more_truth"
+    elif normalized_prompt_kind not in {"fix", "next"}:
+        status = "blocked_not_ready"
+        source_status = "selected_prompt_kind_invalid"
+        block_reason = "selected_prompt_kind_invalid"
+        next_action = "wait_for_prompt_selection"
+    elif not selected_prompt_ready:
+        status = "blocked_not_ready"
+        source_status = "selected_prompt_not_ready"
+        block_reason = "selected_prompt_not_ready"
+        next_action = "wait_for_prompt_generation"
+    elif normalized_prompt_path not in allowed_paths or not selected_prompt_path_is_exact:
+        status = "blocked_prompt_path_unexpected"
+        source_status = "selected_prompt_path_unexpected"
+        block_reason = "selected_prompt_path_unexpected"
+        next_action = "manual_codex_invocation_required"
+    elif selected_prompt_path_is_symlink:
+        status = "blocked_prompt_path_symlink"
+        source_status = "selected_prompt_path_symlink"
+        block_reason = "selected_prompt_path_symlink"
+        next_action = "manual_codex_invocation_required"
+    elif not selected_prompt_path_exists:
+        status = "blocked_missing_prompt"
+        source_status = "selected_prompt_path_missing"
+        block_reason = "selected_prompt_path_missing"
+        next_action = "wait_for_prompt_generation"
+    elif not selected_prompt_file_non_empty:
+        status = "blocked_prompt_empty"
+        source_status = "selected_prompt_empty"
+        block_reason = "selected_prompt_empty"
+        next_action = "wait_for_prompt_generation"
+    elif selected_prompt_file_too_large:
+        status = "blocked_prompt_too_large"
+        source_status = "selected_prompt_too_large"
+        block_reason = "selected_prompt_too_large"
+        next_action = "manual_codex_invocation_required"
+    else:
+        codex_command = shutil.which("codex")
+        if not codex_command:
+            status = "blocked_codex_command_unavailable"
+            source_status = "codex_command_unavailable"
+            block_reason = "codex_command_unavailable"
+            next_action = "manual_codex_invocation_required"
+        else:
+            invocation_command = [
+                codex_command,
+                "exec",
+                "-",
+                "--cd",
+                normalized_repository_path,
+                "--sandbox",
+                "read-only",
+            ]
+            prompt_text = ""
+            try:
+                prompt_text = Path(normalized_prompt_path).read_text(encoding="utf-8")
+            except OSError as exc:
+                status = "failed_execution_error"
+                source_status = "prompt_read_error"
+                block_reason = f"prompt_read_error:{type(exc).__name__}"
+                next_action = "manual_codex_invocation_required"
+                result_status = "failed_execution_error"
+                result_source_status = source_status
+                result_kind = "execution_error"
+                result_failed = True
+            else:
+                invocation_attempted = True
+                try:
+                    completed = subprocess.run(
+                        invocation_command,
+                        input=prompt_text,
+                        text=True,
+                        capture_output=True,
+                        timeout=timeout_seconds,
+                        check=False,
+                    )
+                    invocation_completed = True
+                    invocation_exit_code = int(completed.returncode)
+                    stdout_text = _normalize_text(completed.stdout, default="")
+                    stderr_text = _normalize_text(completed.stderr, default="")
+                    invocation_stdout_excerpt = stdout_text[:excerpt_limit]
+                    invocation_stderr_excerpt = stderr_text[:excerpt_limit]
+                    try:
+                        _write_text_file(stdout_path, stdout_text)
+                        _write_text_file(stderr_path, stderr_text)
+                    except OSError:
+                        pass
+                    status = "codex_invocation_completed"
+                    source_status = "codex_exec_completed"
+                    block_reason = "none" if invocation_exit_code == 0 else "codex_exit_nonzero"
+                    next_action = "wait_for_more_truth"
+                    result_kind = "codex_exec"
+                    result_completed = True
+                    result_timeout = False
+                    if invocation_exit_code == 0:
+                        result_status = "completed_success"
+                        result_source_status = "codex_exec_completed_success"
+                        result_failed = False
+                        result_next_action = "wait_for_more_truth"
+                    else:
+                        result_status = "completed_failure"
+                        result_source_status = "codex_exec_completed_failure"
+                        result_failed = True
+                        result_next_action = "manual_codex_invocation_required"
+                except subprocess.TimeoutExpired as exc:
+                    invocation_completed = True
+                    invocation_timeout = True
+                    invocation_exit_code = -1
+                    timeout_stdout = _normalize_text(exc.stdout, default="")
+                    timeout_stderr = _normalize_text(exc.stderr, default="")
+                    invocation_stdout_excerpt = timeout_stdout[:excerpt_limit]
+                    invocation_stderr_excerpt = timeout_stderr[:excerpt_limit]
+                    try:
+                        _write_text_file(stdout_path, timeout_stdout)
+                        _write_text_file(stderr_path, timeout_stderr)
+                    except OSError:
+                        pass
+                    status = "blocked_timeout"
+                    source_status = "codex_exec_timeout"
+                    block_reason = "codex_invocation_timeout"
+                    next_action = "manual_codex_invocation_required"
+                    result_status = "completed_timeout"
+                    result_source_status = "codex_exec_timeout"
+                    result_kind = "codex_exec_timeout"
+                    result_completed = True
+                    result_failed = True
+                    result_timeout = True
+                    result_next_action = "manual_codex_invocation_required"
+                except OSError as exc:
+                    invocation_completed = True
+                    invocation_exit_code = -1
+                    status = "failed_execution_error"
+                    source_status = "codex_exec_os_error"
+                    block_reason = f"execution_error:{type(exc).__name__}"
+                    next_action = "manual_codex_invocation_required"
+                    result_status = "failed_execution_error"
+                    result_source_status = "codex_exec_os_error"
+                    result_kind = "execution_error"
+                    result_completed = True
+                    result_failed = True
+                    result_timeout = False
+                    result_next_action = "manual_codex_invocation_required"
+
+    if result_status == "insufficient_truth":
+        if status in {
+            "codex_invocation_completed",
+            "blocked_timeout",
+            "failed_execution_error",
+        }:
+            result_status = "failed_execution_error"
+            result_source_status = source_status
+            result_kind = "execution_error"
+            result_failed = True
+            result_next_action = "manual_codex_invocation_required"
+        elif status.startswith("blocked_"):
+            result_status = "blocked"
+            result_source_status = source_status
+            result_kind = "blocked"
+            result_failed = False
+            result_timeout = False
+            result_next_action = next_action
+
+    if status not in allowed_execution_statuses:
+        status = "insufficient_truth"
+    if result_status not in allowed_result_statuses:
+        result_status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+    if result_next_action not in allowed_next_actions:
+        result_next_action = "insufficient_truth"
+
+    _write_result_payload()
+
+    return {
+        "project_browser_autonomous_codex_invocation_execution_status": status,
+        "project_browser_autonomous_codex_invocation_execution_source_status": (
+            source_status
+        ),
+        "project_browser_autonomous_codex_invocation_execution_block_reason": (
+            block_reason
+        ),
+        "project_browser_autonomous_codex_invocation_execution_selected_prompt_kind": (
+            normalized_prompt_kind
+        ),
+        "project_browser_autonomous_codex_invocation_execution_selected_prompt_path": (
+            normalized_prompt_path
+        ),
+        "project_browser_autonomous_codex_invocation_execution_selected_prompt_source": (
+            normalized_prompt_source
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_allowed": bool(
+            invocation_allowed
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_attempted": bool(
+            invocation_attempted
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_completed": bool(
+            invocation_completed
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_exit_code": int(
+            invocation_exit_code
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_timeout": bool(
+            invocation_timeout
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_command": (
+            invocation_command
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_stdout_path": (
+            stdout_path
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_stderr_path": (
+            stderr_path
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_stdout_excerpt": (
+            invocation_stdout_excerpt
+        ),
+        "project_browser_autonomous_codex_invocation_execution_invocation_stderr_excerpt": (
+            invocation_stderr_excerpt
+        ),
+        "project_browser_autonomous_codex_invocation_execution_max_invocations": int(
+            normalized_max_invocations
+        ),
+        "project_browser_autonomous_codex_invocation_execution_next_action": next_action,
+        "project_browser_autonomous_codex_invocation_execution_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_codex_invocation_execution_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+        "project_browser_autonomous_codex_invocation_result_status": result_status,
+        "project_browser_autonomous_codex_invocation_result_source_status": (
+            result_source_status
+        ),
+        "project_browser_autonomous_codex_invocation_result_result_kind": result_kind,
+        "project_browser_autonomous_codex_invocation_result_result_path": result_path,
+        "project_browser_autonomous_codex_invocation_result_stdout_path": stdout_path,
+        "project_browser_autonomous_codex_invocation_result_stderr_path": stderr_path,
+        "project_browser_autonomous_codex_invocation_result_exit_code": int(
+            invocation_exit_code
+        ),
+        "project_browser_autonomous_codex_invocation_result_completed": bool(
+            result_completed
+        ),
+        "project_browser_autonomous_codex_invocation_result_failed": bool(
+            result_failed
+        ),
+        "project_browser_autonomous_codex_invocation_result_timeout": bool(
+            result_timeout
+        ),
+        "project_browser_autonomous_codex_invocation_result_next_action": (
+            result_next_action
+        ),
+        "project_browser_autonomous_codex_invocation_result_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_codex_invocation_result_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -69176,6 +69610,286 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_codex_invocation_readiness_state_normalized[
         "project_browser_autonomous_codex_invocation_readiness_next_action"
     ] = project_browser_autonomous_codex_invocation_readiness_next_action
+    project_browser_autonomous_codex_invocation_execution_state = (
+        _build_project_browser_autonomous_codex_invocation_execution_state(
+            repository_path=str(execution_repo_path),
+            readiness_status=project_browser_autonomous_codex_invocation_readiness_status,
+            invocation_allowed=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_invocation_allowed",
+                    False,
+                )
+            ),
+            selected_prompt_kind=_normalize_text(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_kind"
+                ),
+                default="none",
+            ),
+            selected_prompt_path=_normalize_text(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_path"
+                ),
+                default="",
+            ),
+            selected_prompt_source=_normalize_text(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_source"
+                ),
+                default="",
+            ),
+            selected_prompt_ready=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_ready",
+                    False,
+                )
+            ),
+            selected_prompt_path_is_exact=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_path_is_exact",
+                    False,
+                )
+            ),
+            selected_prompt_path_exists=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_path_exists",
+                    False,
+                )
+            ),
+            selected_prompt_path_is_symlink=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_path_is_symlink",
+                    False,
+                )
+            ),
+            selected_prompt_file_non_empty=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_file_non_empty",
+                    False,
+                )
+            ),
+            selected_prompt_file_too_large=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_selected_prompt_file_too_large",
+                    False,
+                )
+            ),
+            rollback_required=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_rollback_required",
+                    False,
+                )
+            ),
+            human_review_required=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_human_review_required",
+                    False,
+                )
+            ),
+            insufficient_truth=bool(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_insufficient_truth",
+                    False,
+                )
+            ),
+            max_invocations=_as_non_negative_int(
+                project_browser_autonomous_codex_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_invocation_readiness_max_invocations"
+                ),
+                default=1,
+            ),
+            prior_invocation_attempted=bool(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_codex_invocation_execution_invocation_attempted",
+                    False,
+                )
+            ),
+            prior_invocation_completed=bool(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_codex_invocation_execution_invocation_completed",
+                    False,
+                )
+            ),
+        )
+    )
+    codex_invocation_execution_allowed_statuses = {
+        "codex_invocation_completed",
+        "blocked_not_ready",
+        "blocked_invocation_not_allowed",
+        "blocked_missing_prompt",
+        "blocked_prompt_path_unexpected",
+        "blocked_prompt_path_symlink",
+        "blocked_prompt_empty",
+        "blocked_prompt_too_large",
+        "blocked_rollback_required",
+        "blocked_human_review_required",
+        "blocked_insufficient_truth",
+        "blocked_codex_command_unavailable",
+        "blocked_timeout",
+        "failed_execution_error",
+        "insufficient_truth",
+    }
+    codex_invocation_result_allowed_statuses = {
+        "completed_success",
+        "completed_failure",
+        "completed_timeout",
+        "blocked",
+        "failed_execution_error",
+        "insufficient_truth",
+    }
+    codex_invocation_allowed_next_actions = {
+        "invoke_codex_later",
+        "wait_for_prompt_selection",
+        "wait_for_prompt_generation",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "manual_codex_invocation_required",
+        "insufficient_truth",
+    }
+    codex_invocation_execution_field_names = (
+        "status",
+        "source_status",
+        "block_reason",
+        "selected_prompt_kind",
+        "selected_prompt_path",
+        "selected_prompt_source",
+        "invocation_allowed",
+        "invocation_attempted",
+        "invocation_completed",
+        "invocation_exit_code",
+        "invocation_timeout",
+        "invocation_command",
+        "invocation_stdout_path",
+        "invocation_stderr_path",
+        "invocation_stdout_excerpt",
+        "invocation_stderr_excerpt",
+        "max_invocations",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    codex_invocation_result_field_names = (
+        "status",
+        "source_status",
+        "result_kind",
+        "result_path",
+        "stdout_path",
+        "stderr_path",
+        "exit_code",
+        "completed",
+        "failed",
+        "timeout",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_codex_invocation_execution_status = _normalize_text(
+        project_browser_autonomous_codex_invocation_execution_state.get(
+            "project_browser_autonomous_codex_invocation_execution_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_invocation_execution_status not in (
+        codex_invocation_execution_allowed_statuses
+    ):
+        project_browser_autonomous_codex_invocation_execution_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_codex_invocation_execution_next_action = _normalize_text(
+        project_browser_autonomous_codex_invocation_execution_state.get(
+            "project_browser_autonomous_codex_invocation_execution_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_invocation_execution_next_action not in (
+        codex_invocation_allowed_next_actions
+    ):
+        project_browser_autonomous_codex_invocation_execution_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_codex_invocation_execution_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in codex_invocation_execution_field_names:
+        key = f"project_browser_autonomous_codex_invocation_execution_{field_name}"
+        value = project_browser_autonomous_codex_invocation_execution_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_invocation_execution_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_invocation_execution_next_action
+        elif field_name in {
+            "invocation_allowed",
+            "invocation_attempted",
+            "invocation_completed",
+            "invocation_timeout",
+        }:
+            value = bool(value)
+        elif field_name in {"invocation_exit_code"}:
+            value = int(_as_int(value, default=-1))
+        elif field_name in {"max_invocations"}:
+            value = _as_non_negative_int(value, default=1)
+        elif field_name in {"invocation_command", "runtime_posture", "missing_inputs"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_invocation_execution_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_codex_invocation_execution_state_normalized[
+        "project_browser_autonomous_codex_invocation_execution_status"
+    ] = project_browser_autonomous_codex_invocation_execution_status
+    project_browser_autonomous_codex_invocation_execution_state_normalized[
+        "project_browser_autonomous_codex_invocation_execution_next_action"
+    ] = project_browser_autonomous_codex_invocation_execution_next_action
+
+    project_browser_autonomous_codex_invocation_result_status = _normalize_text(
+        project_browser_autonomous_codex_invocation_execution_state.get(
+            "project_browser_autonomous_codex_invocation_result_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_invocation_result_status not in (
+        codex_invocation_result_allowed_statuses
+    ):
+        project_browser_autonomous_codex_invocation_result_status = "insufficient_truth"
+    project_browser_autonomous_codex_invocation_result_next_action = _normalize_text(
+        project_browser_autonomous_codex_invocation_execution_state.get(
+            "project_browser_autonomous_codex_invocation_result_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_invocation_result_next_action not in (
+        codex_invocation_allowed_next_actions
+    ):
+        project_browser_autonomous_codex_invocation_result_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_codex_invocation_result_state_normalized: dict[str, Any] = {}
+    for field_name in codex_invocation_result_field_names:
+        key = f"project_browser_autonomous_codex_invocation_result_{field_name}"
+        value = project_browser_autonomous_codex_invocation_execution_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_invocation_result_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_invocation_result_next_action
+        elif field_name in {"completed", "failed", "timeout"}:
+            value = bool(value)
+        elif field_name in {"exit_code"}:
+            value = int(_as_int(value, default=-1))
+        elif field_name in {"runtime_posture", "missing_inputs"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_invocation_result_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_codex_invocation_result_state_normalized[
+        "project_browser_autonomous_codex_invocation_result_status"
+    ] = project_browser_autonomous_codex_invocation_result_status
+    project_browser_autonomous_codex_invocation_result_state_normalized[
+        "project_browser_autonomous_codex_invocation_result_next_action"
+    ] = project_browser_autonomous_codex_invocation_result_next_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -71665,6 +72379,8 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_next_prompt_generation_state_normalized,
                 **project_browser_autonomous_prompt_selection_state_normalized,
                 **project_browser_autonomous_codex_invocation_readiness_state_normalized,
+                **project_browser_autonomous_codex_invocation_execution_state_normalized,
+                **project_browser_autonomous_codex_invocation_result_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -72534,6 +73250,18 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_codex_invocation_readiness_next_action"
             if project_browser_autonomous_codex_invocation_readiness_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_invocation_execution_status"
+            if project_browser_autonomous_codex_invocation_execution_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_invocation_execution_next_action"
+            if project_browser_autonomous_codex_invocation_execution_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_invocation_result_status"
+            if project_browser_autonomous_codex_invocation_result_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_invocation_result_next_action"
+            if project_browser_autonomous_codex_invocation_result_next_action
             else "",
             ]
     )
@@ -78648,6 +79376,8 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_next_prompt_generation_state_normalized,
         **project_browser_autonomous_prompt_selection_state_normalized,
         **project_browser_autonomous_codex_invocation_readiness_state_normalized,
+        **project_browser_autonomous_codex_invocation_execution_state_normalized,
+        **project_browser_autonomous_codex_invocation_result_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(
