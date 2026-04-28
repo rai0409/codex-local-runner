@@ -1149,3 +1149,72 @@ Next:
   Prompt165 should add Codex invocation readiness metadata for the selected prompt.
   Prompt165 must still not invoke Codex/ChatGPT, apply patches, rollback, commit, use GitHub, or start a loop.
 <!-- PROMPT164_PROMPT_SELECTION_END -->
+
+<!-- PROMPT166_READONLY_CODEX_INVOCATION_START -->
+## Prompt166 — bounded read-only Codex invocation
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt166-readonly-codex-invocation-ready
+
+Purpose:
+  Prompt166 adds one bounded Codex invocation path for the Prompt165-selected prompt.
+
+What was added:
+  - `_build_project_browser_autonomous_codex_invocation_execution_state(...)`
+  - `project_browser_autonomous_codex_invocation_execution_*`
+  - `project_browser_autonomous_codex_invocation_result_*`
+  - normalization/wiring near Prompt165
+  - compact planning summary exposure
+  - supporting truth refs exposure
+  - final approved restart payload exposure
+
+Invocation gate:
+  Codex invocation proceeds only when Prompt165 readiness is ready:
+  - `project_browser_autonomous_codex_invocation_readiness_status == "ready_to_invoke_codex"`
+  - `invocation_allowed=true`
+  - `max_invocations=1`
+  - no prior invocation attempt/completion
+  - selected prompt path is exact, exists, non-symlink, non-empty, and not too large
+  - `rollback_required=false`
+  - `human_review_required=false`
+  - no active `insufficient_truth`
+
+Command:
+  - Uses argv-list, no shell:
+    `codex exec - --cd <repository_path> --sandbox read-only`
+  - Selected prompt file content is passed as stdin.
+  - At most one attempt.
+  - No retry loop.
+
+Fixed output paths:
+  - stdout: `/tmp/codex-local-runner-decision/codex_invocation_stdout.txt`
+  - stderr: `/tmp/codex-local-runner-decision/codex_invocation_stderr.txt`
+  - result: `/tmp/codex-local-runner-decision/codex_invocation_result.json`
+
+Semantics:
+  - `invocation_attempted=true` only when the command is actually entered.
+  - `invocation_completed=true` only after return, timeout, or terminal execution error handling.
+  - stdout/stderr are saved to fixed files.
+  - metadata stores only compact excerpts.
+
+Safety:
+  Prompt166 does not classify Codex output as a patch candidate.
+  Prompt166 does not apply patches, execute rollback, stage/commit/push, use GitHub/PR/CI/merge, or start a loop.
+
+Important limitation:
+  Prompt166 uses `--sandbox read-only`.
+  This means it captures Codex output but does not allow Codex to directly edit the repo.
+  For fastest practical autonomous implementation, the next step should add a separate write-enabled bounded Codex invocation path, guarded by Prompt165/166 safety gates.
+
+Validation:
+  - `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+  - `python -m py_compile scripts/run_planned_execution.py` passed.
+  - focused Prompt160 checks passed.
+
+Next:
+  Prompt167 should add a bounded write-enabled Codex invocation mode.
+  It must still enforce max_invocations=1, no retry, no loop, no commit, no GitHub, no rollback execution, and should capture git diff/status after Codex returns.
+<!-- PROMPT166_READONLY_CODEX_INVOCATION_END -->
