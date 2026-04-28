@@ -1004,3 +1004,67 @@ Next:
   Prompt159 should add an isolated regression test for Prompt157 `insufficient_truth` semantics where no definitive blocker exists and `validation_failed` must remain false.
   Prompt159 should also triage the 3 unrelated full-suite posture failures separately without changing Prompt157 semantics.
 <!-- PROMPT158_PROMPT157_TESTS_END -->
+
+<!-- PROMPT159_INSUFFICIENT_TRUTH_TRIAGE_START -->
+## Prompt159 — Prompt157 insufficient truth regression and posture failure triage
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt159-insufficient-truth-regression-ready
+
+Purpose:
+  Prompt159 locks Prompt157 ambiguous `insufficient_truth` semantics and triages the remaining full-suite high-level posture failures.
+
+What was added:
+  - `test_prompt157_insufficient_truth_keeps_validation_failed_false_without_definitive_blocker`
+
+Prompt157 insufficient truth semantics locked:
+  - `project_browser_autonomous_post_apply_validation_status == "insufficient_truth"`
+  - `validation_attempted=false`
+  - `validation_completed=false`
+  - `validation_passed=false`
+  - `validation_failed=false`
+  - `source_status == "apply_truth_unavailable"`
+  - `block_reason == "insufficient_truth"`
+  - `missing_inputs` is non-empty or explicitly explains unavailable truth.
+  - rollback execution flags remain false.
+  - `subprocess.run` is not called, so no validation commands are attempted.
+
+Regression coverage:
+  - Prompt158 Prompt157 tests still pass.
+  - Baseline manifest/status field tests still pass.
+  - Prompt159 added no new production behavior.
+
+Known remaining failures:
+  `python -m unittest tests.test_planned_execution_runner` still fails with 3 high-level posture tests:
+  - `test_runner_allows_one_low_risk_approval_skip_and_executes_once`
+    - expected `project_priority_posture="active"`, actual `"deferred"`
+    - repro shows `objective_completion_posture="objective_blocked"` and `objective_stop_criteria_status="stop"` causing deferred priority.
+  - `test_runner_continuation_budget_exhausts_after_repeated_auto_continuations`
+    - expected third `project_priority_posture="lower_priority"`, actual `"deferred"`
+    - repro shows `project_run_budget_posture="exhausted"` but `objective_completion_posture="objective_blocked"` still wins.
+  - `test_runner_final_human_review_required_for_high_risk_posture`
+    - expected `project_autonomy_budget_status="available"`, actual `"insufficient_truth"`
+    - repro shows `continuation_budget_status="insufficient_truth"` propagating into autonomy budget status.
+
+Conclusion:
+  - The remaining 3 failures are not caused by Prompt157/158/159 field exposure.
+  - They are legacy high-level posture precedence / expectation mismatches.
+  - Prompt157 ambiguous insufficient-truth behavior is now deterministic and protected.
+
+Validation:
+  - Prompt159 insufficient-truth regression test passed.
+  - Prompt158 Prompt157 regression tests passed.
+  - Baseline manifest/status field tests passed.
+  - `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+  - `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Next:
+  Prompt160 should reconcile the 3 legacy high-level posture failures:
+  - objective-blocked vs active/lower-priority precedence
+  - run-budget exhaustion vs objective-blocked precedence
+  - continuation-budget insufficient-truth propagation into autonomy budget status
+  Prompt160 must not change Prompt157 semantics and must not add rollback execution, commit behavior, GitHub behavior, next/fix generator, or autonomous loop.
+<!-- PROMPT159_INSUFFICIENT_TRUTH_TRIAGE_END -->
