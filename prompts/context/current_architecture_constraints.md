@@ -1306,3 +1306,89 @@ Next:
   Prompt161 should generate a bounded fix-prompt body and optional fixed handoff file only when Prompt160 readiness is `ready_to_generate_fix_prompt` and generation is allowed.
   Prompt161 must still not invoke Codex/ChatGPT, apply patches, rollback, commit, push, use GitHub, or start a loop.
 <!-- PROMPT160_FIX_PROMPT_READINESS_END -->
+
+<!-- PROMPT162_NEXT_PROMPT_READINESS_START -->
+## Prompt162 — next-prompt readiness metadata
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt162-next-prompt-readiness-ready
+
+Purpose:
+  Prompt162 adds readiness-only metadata for deciding whether a future Prompt163 may generate the next development prompt.
+
+What was added:
+  - `_build_project_browser_autonomous_next_prompt_readiness_state(...)`
+  - `project_browser_autonomous_next_prompt_readiness_*`
+  - normalization/wiring near Prompt161
+  - compact planning summary exposure
+  - supporting truth refs exposure
+  - final approved restart payload exposure
+
+Ready state:
+  `ready_to_generate_next_prompt` requires:
+  - `validation_passed=true`
+  - `validation_failed=false`
+  - `rollback_required=false`
+  - `human_review_required=false`
+  - no active `insufficient_truth`
+  - no active fix-required path
+  - bounded next work available
+  - bounded next scope
+  - safe next target files available
+
+Blocked states:
+  - validation not passed
+  - validation failed
+  - fix flow required
+  - insufficient truth
+  - rollback required
+  - human review required
+  - prompt generation already attempted
+  - missing/ambiguous next work
+  - explicit no remaining work
+
+Next work source policy:
+  Prompt162 determines next work only from bounded existing signals:
+  - `implementation_prompt_status`
+  - `implementation_prompt_payload`
+  - `project_pr_queue_status`
+  - `project_pr_queue_selected_slice_id`
+  - `objective_completion_posture`
+
+  If no deterministic bounded next work, target files, or scope is available:
+  - use `blocked_missing_next_work` or `blocked_no_remaining_work`
+  - populate `missing_inputs`
+
+Safety:
+  Prompt162 does not:
+  - generate next prompt body
+  - write `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+  - invoke Codex/ChatGPT/browser/external models
+  - apply patches
+  - execute rollback
+  - run git reset/clean/checkout/restore/add/commit/push/gh
+  - use GitHub/CI/merge
+  - start an autonomous loop
+  - edit tests or docs
+
+Validation:
+  - `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+  - `python -m py_compile scripts/run_planned_execution.py` passed.
+  - focused Prompt160 checks passed.
+
+Known remaining risk:
+  Prompt162 has no dedicated unit tests yet.
+
+Next:
+  Prompt163 should generate a bounded next-prompt body and optional fixed handoff file at:
+  - `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+
+  Prompt163 must be gated by:
+  - `project_browser_autonomous_next_prompt_readiness_status == "ready_to_generate_next_prompt"`
+  - `generation_allowed=true`
+
+  Prompt163 must still not invoke Codex/ChatGPT, apply patches, rollback, commit, use GitHub, or start a loop.
+<!-- PROMPT162_NEXT_PROMPT_READINESS_END -->
