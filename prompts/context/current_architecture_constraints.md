@@ -1787,3 +1787,21 @@ Next:
   - do not use GitHub
   - do not start a loop
 <!-- PROMPT168_SMOKE_PROMPT_OVERRIDE_END -->
+
+
+<!-- prompt169-update -->
+## Prompt169 architecture constraint update
+
+Prompt169 adds Codex write-result assimilation only. It must not run validation,
+rollback, commit, GitHub operations, retries, loops, or create new executors.
+
+Authoritative next-step gate:
+- Prompt169 `safe_for_validation_routing=true` is only a routing eligibility signal.
+- Validation must be introduced separately by a bounded post-write validation routing
+  state, metadata-only first.
+- Changed-file safety is mandatory: unexpected, forbidden, too-many, missing-truth,
+  timeout, failure, or not-completed outcomes must not auto-route to validation.
+
+Smoke-specific constraint:
+- When smoke override is used, only the expected smoke output file may be treated as
+  expected unless explicit upstream metadata allows otherwise.

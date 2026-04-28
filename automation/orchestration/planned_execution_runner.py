@@ -51095,6 +51095,374 @@ def _build_project_browser_autonomous_codex_write_invocation_state(
     }
 
 
+def _build_project_browser_autonomous_codex_write_result_assimilation_state(
+    *,
+    write_invocation_status: str,
+    write_invocation_result_status: str,
+    smoke_override_status: str,
+    smoke_override_used: bool,
+    selected_prompt_kind: str,
+    selected_prompt_path: str,
+    exit_code: int,
+    timeout: bool,
+    completed: bool,
+    failed: bool,
+    worktree_dirty_after: bool,
+    changed_files_after: list[str] | None,
+    changed_files_count_after: int,
+    diff_name_only_path: str,
+    diff_numstat_path: str,
+    fix_target_files: list[str] | None,
+    next_target_files: list[str] | None,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "assimilated_with_expected_changes",
+        "assimilated_with_no_changes",
+        "assimilated_with_unexpected_changes",
+        "assimilated_with_forbidden_changes",
+        "assimilated_too_many_changes",
+        "assimilated_completed_failure",
+        "assimilated_completed_timeout",
+        "blocked_no_write_invocation_result",
+        "blocked_write_invocation_not_completed",
+        "blocked_insufficient_truth",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    allowed_result_classes = {
+        "expected_changes",
+        "no_changes",
+        "unexpected_changes",
+        "forbidden_changes",
+        "too_many_changes",
+        "invocation_failure",
+        "invocation_timeout",
+        "blocked",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "route_to_safe_validation_later",
+        "manual_review_required",
+        "wait_for_write_invocation",
+        "wait_for_more_truth",
+        "rollback_required",
+        "insufficient_truth",
+    }
+    fixed_name_only_path = (
+        "/tmp/codex-local-runner-decision/codex_write_git_diff_name_only.txt"
+    )
+    fixed_numstat_path = "/tmp/codex-local-runner-decision/codex_write_git_diff_numstat.txt"
+    allowed_diff_paths = {fixed_name_only_path, fixed_numstat_path}
+    smoke_marker_path = "prompt167_workspace_write_smoke.txt"
+    max_changed_files_threshold = 8
+    runtime_posture = [
+        "metadata_only_codex_write_result_assimilation",
+        "bounded_changed_file_classification",
+        "fixed_diff_path_inputs_only",
+        "no_patch_apply",
+        "no_rollback_execution",
+        "no_git_stage_commit_push",
+        "no_github_mutation",
+        "no_autonomous_loop",
+    ]
+
+    normalized_write_invocation_status = _normalize_text(
+        write_invocation_status,
+        default="insufficient_truth",
+    )
+    normalized_write_invocation_result_status = _normalize_text(
+        write_invocation_result_status,
+        default="insufficient_truth",
+    )
+    normalized_smoke_override_status = _normalize_text(
+        smoke_override_status,
+        default="insufficient_truth",
+    )
+    normalized_selected_prompt_kind = _normalize_text(selected_prompt_kind, default="none")
+    if normalized_selected_prompt_kind not in {"fix", "next", "none"}:
+        normalized_selected_prompt_kind = "none"
+    normalized_selected_prompt_path = _normalize_text(selected_prompt_path, default="")
+    normalized_changed_files = _normalize_string_list(changed_files_after or [])
+    normalized_changed_files_count = _as_non_negative_int(changed_files_count_after, default=0)
+    normalized_fix_targets = _normalize_string_list(fix_target_files or [])
+    normalized_next_targets = _normalize_string_list(next_target_files or [])
+    normalized_diff_name_only_path = _normalize_text(diff_name_only_path, default="")
+    normalized_diff_numstat_path = _normalize_text(diff_numstat_path, default="")
+
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    result_class = "insufficient_truth"
+    safe_for_validation_routing = False
+    manual_review_required = False
+    rollback_required = False
+    next_action = "insufficient_truth"
+    missing_inputs: list[str] = []
+
+    expected_changed_files: list[str] = []
+    if normalized_selected_prompt_kind == "fix":
+        expected_changed_files = list(normalized_fix_targets)
+    elif normalized_selected_prompt_kind == "next":
+        expected_changed_files = list(normalized_next_targets)
+    else:
+        expected_changed_files = _serialize_required_signals(
+            [*normalized_fix_targets, *normalized_next_targets]
+        )
+    if bool(smoke_override_used):
+        expected_changed_files = _serialize_required_signals(
+            [*expected_changed_files, smoke_marker_path]
+        )
+    expected_changed_files = _serialize_required_signals(expected_changed_files)
+    allowed_changed_files = list(expected_changed_files)
+    allowed_changed_set = set(allowed_changed_files)
+
+    def _load_changed_files_from_diff_path(path_text: str) -> list[str]:
+        normalized_path = _normalize_text(path_text, default="")
+        if not normalized_path or normalized_path not in allowed_diff_paths:
+            return []
+        diff_path_obj = Path(normalized_path)
+        if not diff_path_obj.exists() or diff_path_obj.is_symlink():
+            return []
+        try:
+            content = diff_path_obj.read_text(encoding="utf-8")
+        except OSError:
+            return []
+        return _serialize_required_signals(content.splitlines())
+
+    if not normalized_changed_files:
+        changed_from_name_only = _load_changed_files_from_diff_path(
+            normalized_diff_name_only_path
+        )
+        changed_from_numstat = _load_changed_files_from_diff_path(
+            normalized_diff_numstat_path
+        )
+        if changed_from_name_only:
+            normalized_changed_files = changed_from_name_only
+        elif changed_from_numstat:
+            # numstat lines are `<add>\t<del>\t<path>`; keep only terminal path token.
+            parsed_from_numstat: list[str] = []
+            for line in changed_from_numstat:
+                parts = line.split("\t")
+                if len(parts) >= 3:
+                    parsed_from_numstat.append(parts[-1].strip())
+            normalized_changed_files = _serialize_required_signals(parsed_from_numstat)
+
+    if normalized_changed_files_count < len(normalized_changed_files):
+        normalized_changed_files_count = len(normalized_changed_files)
+
+    def _is_forbidden_changed_file(path_text: str) -> bool:
+        normalized_path = _normalize_text(path_text, default="").replace("\\", "/")
+        if not normalized_path:
+            return False
+        lowered = normalized_path.lower()
+        if normalized_path.startswith("/") or normalized_path.startswith("../"):
+            return True
+        if normalized_path.startswith(".git/"):
+            return True
+        if (
+            normalized_path.startswith("prompts/context/")
+            and normalized_path not in allowed_changed_set
+        ):
+            return True
+        if normalized_path.startswith("__pycache__/") or "/__pycache__/" in normalized_path:
+            return True
+        if lowered.endswith(".pyc"):
+            return True
+        if lowered == ".env" or lowered.startswith(".env.") or "/.env" in lowered:
+            return True
+        if lowered.endswith(".pem") or lowered.endswith(".key"):
+            return True
+        if normalized_path.startswith("tmp/") or normalized_path.startswith(".cache/"):
+            return True
+        return False
+
+    forbidden_changed_files = _serialize_required_signals(
+        [path for path in normalized_changed_files if _is_forbidden_changed_file(path)]
+    )
+    unexpected_changed_files = _serialize_required_signals(
+        [
+            path
+            for path in normalized_changed_files
+            if path not in allowed_changed_set and path not in set(forbidden_changed_files)
+        ]
+    )
+    too_many_changed_files = bool(
+        normalized_changed_files_count > max_changed_files_threshold
+    )
+
+    if normalized_write_invocation_result_status in {"", "insufficient_truth"}:
+        status = "blocked_insufficient_truth"
+        source_status = "write_result_insufficient_truth"
+        block_reason = "write_result_insufficient_truth"
+        result_class = "insufficient_truth"
+        next_action = "wait_for_more_truth"
+        missing_inputs.append("project_browser_autonomous_codex_write_invocation_result_status")
+    elif normalized_write_invocation_result_status == "blocked":
+        status = "blocked_no_write_invocation_result"
+        source_status = "write_result_blocked"
+        block_reason = "write_invocation_blocked"
+        result_class = "blocked"
+        next_action = "wait_for_write_invocation"
+    elif not bool(completed):
+        status = "blocked_write_invocation_not_completed"
+        source_status = "write_invocation_not_completed"
+        block_reason = "write_invocation_not_completed"
+        result_class = "blocked"
+        next_action = "wait_for_write_invocation"
+    elif normalized_write_invocation_result_status == "completed_timeout" or bool(timeout):
+        status = "assimilated_completed_timeout"
+        source_status = "write_invocation_timeout"
+        block_reason = "write_invocation_timeout"
+        result_class = "invocation_timeout"
+        manual_review_required = True
+        next_action = "manual_review_required"
+    elif normalized_write_invocation_result_status == "completed_failure" or bool(failed):
+        status = "assimilated_completed_failure"
+        source_status = "write_invocation_failed"
+        block_reason = "write_invocation_failed"
+        result_class = "invocation_failure"
+        manual_review_required = True
+        next_action = "manual_review_required"
+    elif normalized_write_invocation_result_status == "completed_no_changes":
+        status = "assimilated_with_no_changes"
+        source_status = "write_invocation_completed_no_changes"
+        block_reason = "no_repo_changes_detected"
+        result_class = "no_changes"
+        manual_review_required = True
+        next_action = "manual_review_required"
+    elif normalized_write_invocation_result_status == "completed_with_changes":
+        if not normalized_changed_files:
+            status = "blocked_insufficient_truth"
+            source_status = "changed_files_missing"
+            block_reason = "changed_files_missing"
+            result_class = "insufficient_truth"
+            next_action = "wait_for_more_truth"
+            missing_inputs.append("changed_files_after")
+        elif forbidden_changed_files:
+            status = "assimilated_with_forbidden_changes"
+            source_status = "forbidden_changed_files_detected"
+            block_reason = "forbidden_changed_files_detected"
+            result_class = "forbidden_changes"
+            manual_review_required = True
+            rollback_required = True
+            next_action = "manual_review_required"
+        elif too_many_changed_files:
+            status = "assimilated_too_many_changes"
+            source_status = "too_many_changed_files"
+            block_reason = "too_many_changed_files"
+            result_class = "too_many_changes"
+            manual_review_required = True
+            next_action = "manual_review_required"
+        elif unexpected_changed_files:
+            status = "assimilated_with_unexpected_changes"
+            source_status = "unexpected_changed_files_detected"
+            block_reason = "unexpected_changed_files_detected"
+            result_class = "unexpected_changes"
+            manual_review_required = True
+            next_action = "manual_review_required"
+        else:
+            status = "assimilated_with_expected_changes"
+            source_status = "expected_changed_files_detected"
+            block_reason = "none"
+            result_class = "expected_changes"
+            safe_for_validation_routing = True
+            next_action = "route_to_safe_validation_later"
+    else:
+        status = "blocked_no_write_invocation_result"
+        source_status = "write_result_status_unhandled"
+        block_reason = (
+            f"write_result_status_unhandled:{normalized_write_invocation_result_status}"
+        )
+        result_class = "blocked"
+        next_action = "wait_for_write_invocation"
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if result_class not in allowed_result_classes:
+        result_class = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_codex_write_result_assimilation_status": status,
+        "project_browser_autonomous_codex_write_result_assimilation_source_status": (
+            source_status
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_block_reason": (
+            block_reason
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_write_invocation_status": (
+            normalized_write_invocation_status
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_write_invocation_result_status": (
+            normalized_write_invocation_result_status
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_smoke_override_status": (
+            normalized_smoke_override_status
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_smoke_override_used": bool(
+            smoke_override_used
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_selected_prompt_kind": (
+            normalized_selected_prompt_kind
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_selected_prompt_path": (
+            normalized_selected_prompt_path
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_exit_code": int(
+            _as_int(exit_code, default=-1)
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_timeout": bool(timeout),
+        "project_browser_autonomous_codex_write_result_assimilation_completed": bool(
+            completed
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_failed": bool(failed),
+        "project_browser_autonomous_codex_write_result_assimilation_worktree_dirty_after": bool(
+            worktree_dirty_after
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_changed_files_after": (
+            normalized_changed_files
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_changed_files_count_after": int(
+            normalized_changed_files_count
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_expected_changed_files": (
+            expected_changed_files
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_unexpected_changed_files": (
+            unexpected_changed_files
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_forbidden_changed_files": (
+            forbidden_changed_files
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_allowed_changed_files": (
+            allowed_changed_files
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_too_many_changed_files": bool(
+            too_many_changed_files
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_result_class": (
+            result_class
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_safe_for_validation_routing": bool(
+            safe_for_validation_routing
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_manual_review_required": bool(
+            manual_review_required
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_rollback_required": bool(
+            rollback_required
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_next_action": next_action,
+        "project_browser_autonomous_codex_write_result_assimilation_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_codex_write_result_assimilation_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -71556,6 +71924,242 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_codex_write_invocation_result_state_normalized[
         "project_browser_autonomous_codex_write_invocation_result_next_action"
     ] = project_browser_autonomous_codex_write_invocation_result_next_action
+    project_browser_autonomous_codex_write_result_assimilation_state = (
+        _build_project_browser_autonomous_codex_write_result_assimilation_state(
+            write_invocation_status=project_browser_autonomous_codex_write_invocation_execution_status,
+            write_invocation_result_status=project_browser_autonomous_codex_write_invocation_result_status,
+            smoke_override_status=project_browser_autonomous_smoke_prompt_override_status,
+            smoke_override_used=bool(
+                project_browser_autonomous_smoke_prompt_override_state_normalized.get(
+                    "project_browser_autonomous_smoke_prompt_override_override_used",
+                    False,
+                )
+            ),
+            selected_prompt_kind=codex_write_effective_selected_prompt_kind,
+            selected_prompt_path=codex_write_effective_selected_prompt_path,
+            exit_code=int(
+                _as_int(
+                    project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                        "project_browser_autonomous_codex_write_invocation_result_exit_code",
+                        -1,
+                    ),
+                    default=-1,
+                )
+            ),
+            timeout=bool(
+                project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_result_timeout",
+                    False,
+                )
+            ),
+            completed=bool(
+                project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_result_completed",
+                    False,
+                )
+            ),
+            failed=bool(
+                project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_result_failed",
+                    False,
+                )
+            ),
+            worktree_dirty_after=bool(
+                project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_result_worktree_dirty_after",
+                    False,
+                )
+            ),
+            changed_files_after=_normalize_string_list(
+                project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_result_changed_files_after",
+                    []
+                )
+            ),
+            changed_files_count_after=_as_non_negative_int(
+                project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_result_changed_files_count_after",
+                    0,
+                ),
+                default=0,
+            ),
+            diff_name_only_path=_normalize_text(
+                project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_result_git_diff_name_only_path",
+                    "",
+                ),
+                default="",
+            ),
+            diff_numstat_path=_normalize_text(
+                project_browser_autonomous_codex_write_invocation_result_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_result_git_diff_numstat_path",
+                    "",
+                ),
+                default="",
+            ),
+            fix_target_files=_normalize_string_list(
+                project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_readiness_fix_target_files",
+                    [],
+                )
+            ),
+            next_target_files=_normalize_string_list(
+                project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_readiness_next_target_files",
+                    [],
+                )
+            ),
+        )
+    )
+    codex_write_result_assimilation_allowed_statuses = {
+        "assimilated_with_expected_changes",
+        "assimilated_with_no_changes",
+        "assimilated_with_unexpected_changes",
+        "assimilated_with_forbidden_changes",
+        "assimilated_too_many_changes",
+        "assimilated_completed_failure",
+        "assimilated_completed_timeout",
+        "blocked_no_write_invocation_result",
+        "blocked_write_invocation_not_completed",
+        "blocked_insufficient_truth",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    codex_write_result_assimilation_allowed_result_classes = {
+        "expected_changes",
+        "no_changes",
+        "unexpected_changes",
+        "forbidden_changes",
+        "too_many_changes",
+        "invocation_failure",
+        "invocation_timeout",
+        "blocked",
+        "insufficient_truth",
+    }
+    codex_write_result_assimilation_allowed_next_actions = {
+        "route_to_safe_validation_later",
+        "manual_review_required",
+        "wait_for_write_invocation",
+        "wait_for_more_truth",
+        "rollback_required",
+        "insufficient_truth",
+    }
+    codex_write_result_assimilation_field_names = (
+        "status",
+        "source_status",
+        "block_reason",
+        "write_invocation_status",
+        "write_invocation_result_status",
+        "smoke_override_status",
+        "smoke_override_used",
+        "selected_prompt_kind",
+        "selected_prompt_path",
+        "exit_code",
+        "timeout",
+        "completed",
+        "failed",
+        "worktree_dirty_after",
+        "changed_files_after",
+        "changed_files_count_after",
+        "expected_changed_files",
+        "unexpected_changed_files",
+        "forbidden_changed_files",
+        "allowed_changed_files",
+        "too_many_changed_files",
+        "result_class",
+        "safe_for_validation_routing",
+        "manual_review_required",
+        "rollback_required",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_codex_write_result_assimilation_status = _normalize_text(
+        project_browser_autonomous_codex_write_result_assimilation_state.get(
+            "project_browser_autonomous_codex_write_result_assimilation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_write_result_assimilation_status not in (
+        codex_write_result_assimilation_allowed_statuses
+    ):
+        project_browser_autonomous_codex_write_result_assimilation_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_codex_write_result_assimilation_next_action = _normalize_text(
+        project_browser_autonomous_codex_write_result_assimilation_state.get(
+            "project_browser_autonomous_codex_write_result_assimilation_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_write_result_assimilation_next_action not in (
+        codex_write_result_assimilation_allowed_next_actions
+    ):
+        project_browser_autonomous_codex_write_result_assimilation_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_codex_write_result_assimilation_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in codex_write_result_assimilation_field_names:
+        key = f"project_browser_autonomous_codex_write_result_assimilation_{field_name}"
+        value = project_browser_autonomous_codex_write_result_assimilation_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_write_result_assimilation_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_write_result_assimilation_next_action
+        elif field_name in {"selected_prompt_kind"}:
+            normalized_prompt_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_prompt_kind
+                if normalized_prompt_kind in {"fix", "next", "none"}
+                else "none"
+            )
+        elif field_name in {"result_class"}:
+            normalized_result_class = _normalize_text(value, default="insufficient_truth")
+            value = (
+                normalized_result_class
+                if normalized_result_class
+                in codex_write_result_assimilation_allowed_result_classes
+                else "insufficient_truth"
+            )
+        elif field_name in {
+            "smoke_override_used",
+            "timeout",
+            "completed",
+            "failed",
+            "worktree_dirty_after",
+            "too_many_changed_files",
+            "safe_for_validation_routing",
+            "manual_review_required",
+            "rollback_required",
+        }:
+            value = bool(value)
+        elif field_name in {"exit_code"}:
+            value = int(_as_int(value, default=-1))
+        elif field_name in {"changed_files_count_after"}:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name in {
+            "changed_files_after",
+            "expected_changed_files",
+            "unexpected_changed_files",
+            "forbidden_changed_files",
+            "allowed_changed_files",
+            "runtime_posture",
+            "missing_inputs",
+        }:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_write_result_assimilation_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_codex_write_result_assimilation_state_normalized[
+        "project_browser_autonomous_codex_write_result_assimilation_status"
+    ] = project_browser_autonomous_codex_write_result_assimilation_status
+    project_browser_autonomous_codex_write_result_assimilation_state_normalized[
+        "project_browser_autonomous_codex_write_result_assimilation_next_action"
+    ] = project_browser_autonomous_codex_write_result_assimilation_next_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -74051,6 +74655,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_codex_write_invocation_readiness_state_normalized,
                 **project_browser_autonomous_codex_write_invocation_execution_state_normalized,
                 **project_browser_autonomous_codex_write_invocation_result_state_normalized,
+                **project_browser_autonomous_codex_write_result_assimilation_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -74956,6 +75561,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_codex_write_invocation_result_next_action"
             if project_browser_autonomous_codex_write_invocation_result_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_write_result_assimilation_status"
+            if project_browser_autonomous_codex_write_result_assimilation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_write_result_assimilation_next_action"
+            if project_browser_autonomous_codex_write_result_assimilation_next_action
             else "",
             ]
     )
@@ -81076,6 +81687,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_codex_write_invocation_readiness_state_normalized,
         **project_browser_autonomous_codex_write_invocation_execution_state_normalized,
         **project_browser_autonomous_codex_write_invocation_result_state_normalized,
+        **project_browser_autonomous_codex_write_result_assimilation_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(

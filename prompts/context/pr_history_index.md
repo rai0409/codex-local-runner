@@ -1381,3 +1381,37 @@ Next:
   - do not use GitHub
   - do not start a loop
 <!-- PROMPT168_SMOKE_PROMPT_OVERRIDE_END -->
+
+
+<!-- prompt169-update -->
+## Prompt169 — Codex write result assimilation
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_codex_write_result_assimilation_state(...)`
+  in `automation/orchestration/planned_execution_runner.py`.
+- Added deterministic assimilation for Codex workspace-write results:
+  `completed_with_changes`, `completed_no_changes`, `completed_failure`,
+  `completed_timeout`, blocked/not-completed, and insufficient-truth cases.
+- Added changed-file classification:
+  `expected_changed_files`, `allowed_changed_files`, `unexpected_changed_files`,
+  `forbidden_changed_files`, and `too_many_changed_files`.
+- Added `safe_for_validation_routing`, true only for bounded expected-change cases.
+- Uses Prompt167 write-result metadata first, with fixed git diff fallbacks only:
+  `/tmp/codex-local-runner-decision/codex_write_git_diff_name_only.txt`
+  and `/tmp/codex-local-runner-decision/codex_write_git_diff_numstat.txt`.
+- Smoke override expects `prompt167_workspace_write_smoke.txt`; extra non-allowed
+  smoke changes force manual-review-safe classification.
+- Exposed normalized Prompt169 state in compact planning summary, supporting truth refs,
+  and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt169 implementation.
+- Remaining dependency: expected/allowed file truth still depends on upstream
+  prompt-target metadata quality; missing targets intentionally degrade to
+  blocked/insufficient/manual-review-safe outcomes.

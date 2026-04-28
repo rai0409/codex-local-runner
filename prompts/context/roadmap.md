@@ -1612,3 +1612,20 @@ Next:
   - do not use GitHub
   - do not start a loop
 <!-- PROMPT168_SMOKE_PROMPT_OVERRIDE_END -->
+
+
+<!-- prompt169-update -->
+## Roadmap update after Prompt169
+
+Completed:
+- Prompt169: Codex workspace-write result assimilation and changed-file safety
+  classification.
+
+Next:
+- Prompt170: metadata-only post-write validation routing from Prompt169 assimilation.
+- Prompt171: bounded post-write validation execution.
+- Prompt172: one-step autonomous cycle state.
+- Prompt173: tests for Prompt168-172.
+
+Prompt170 must not execute validation, rollback, commit, GitHub operations, retries,
+loops, or add new executors.
