@@ -1805,3 +1805,25 @@ Authoritative next-step gate:
 Smoke-specific constraint:
 - When smoke override is used, only the expected smoke output file may be treated as
   expected unless explicit upstream metadata allows otherwise.
+
+
+<!-- prompt170-update -->
+## Prompt170 architecture constraint update
+
+Prompt170 adds metadata-only post-write validation routing from Prompt169 assimilation.
+It must not execute validation commands, tests, rollback, staging, commit, GitHub
+operations, retries, loops, schedulers, daemons, queue drainers, or new executors.
+
+Authoritative routing rule:
+- Prompt170 may allow validation only when Prompt169 reports safe bounded expected
+  changes and changed-file safety checks are clean.
+- Prompt170 `validation_allowed=true` is the only entry point for Prompt171 bounded
+  post-write validation execution.
+- Prompt170 candidate lists are metadata only:
+  `validation_target_files`, `py_compile_candidate_files`, and
+  `targeted_test_candidate_files`.
+
+Blocked cases:
+- human review, forbidden files, unexpected files, too many files, timeout, failure,
+  not-completed, insufficient-truth, no changed files, or unsafe assimilation must not
+  route into validation execution.

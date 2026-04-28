@@ -51463,6 +51463,192 @@ def _build_project_browser_autonomous_codex_write_result_assimilation_state(
     }
 
 
+def _build_project_browser_autonomous_post_write_validation_routing_state(
+    *,
+    source_status: str,
+    source_result_class: str,
+    source_safe_for_validation_routing: bool,
+    changed_files: list[str] | None,
+    expected_changed_files: list[str] | None,
+    allowed_changed_files: list[str] | None,
+    unexpected_changed_files: list[str] | None,
+    forbidden_changed_files: list[str] | None,
+    too_many_changed_files: bool,
+    human_review_required: bool,
+) -> dict[str, Any]:
+    normalized_source_status = _normalize_text(source_status, default="insufficient_truth")
+    normalized_source_result_class = _normalize_text(
+        source_result_class,
+        default="insufficient_truth",
+    )
+    normalized_source_safe = bool(source_safe_for_validation_routing)
+    normalized_changed_files = _normalize_string_list(changed_files or [])
+    normalized_expected_changed_files = _normalize_string_list(expected_changed_files or [])
+    normalized_allowed_changed_files = _normalize_string_list(allowed_changed_files or [])
+    normalized_unexpected_changed_files = _normalize_string_list(unexpected_changed_files or [])
+    normalized_forbidden_changed_files = _normalize_string_list(forbidden_changed_files or [])
+    normalized_too_many_changed_files = bool(too_many_changed_files)
+    normalized_human_review_required = bool(human_review_required)
+
+    missing_expected_or_allowed_truth = bool(
+        not normalized_expected_changed_files or not normalized_allowed_changed_files
+    )
+    has_changed_files = bool(normalized_changed_files)
+    is_timeout = bool(
+        normalized_source_status == "assimilated_completed_timeout"
+        or normalized_source_result_class == "invocation_timeout"
+    )
+    is_failure = bool(
+        normalized_source_status == "assimilated_completed_failure"
+        or normalized_source_result_class == "invocation_failure"
+    )
+    is_not_completed = bool(
+        normalized_source_result_class == "blocked"
+        or normalized_source_status
+        in {
+            "blocked_no_write_invocation_result",
+            "blocked_write_invocation_not_completed",
+        }
+    )
+    is_insufficient_truth = bool(
+        normalized_source_status
+        in {"blocked_insufficient_truth", "insufficient_truth"}
+        or normalized_source_result_class == "insufficient_truth"
+        or missing_expected_or_allowed_truth
+    )
+
+    is_bounded_expected_changes = bool(
+        normalized_source_safe
+        and normalized_source_status == "assimilated_with_expected_changes"
+        and normalized_source_result_class == "expected_changes"
+    )
+
+    validation_allowed = bool(
+        is_bounded_expected_changes
+        and has_changed_files
+        and not normalized_unexpected_changed_files
+        and not normalized_forbidden_changed_files
+        and not normalized_too_many_changed_files
+        and not normalized_human_review_required
+    )
+
+    validation_block_reason = ""
+    if not validation_allowed:
+        if normalized_human_review_required:
+            validation_block_reason = "blocked_human_review_required"
+        elif normalized_forbidden_changed_files:
+            validation_block_reason = "blocked_forbidden_changed_files"
+        elif normalized_unexpected_changed_files:
+            validation_block_reason = "blocked_unexpected_changed_files"
+        elif normalized_too_many_changed_files:
+            validation_block_reason = "blocked_too_many_changed_files"
+        elif is_timeout:
+            validation_block_reason = "blocked_invocation_timeout"
+        elif is_failure:
+            validation_block_reason = "blocked_invocation_failure"
+        elif is_not_completed:
+            validation_block_reason = "blocked_not_completed"
+        elif is_insufficient_truth:
+            validation_block_reason = "blocked_insufficient_truth"
+        elif not has_changed_files:
+            validation_block_reason = "blocked_no_changed_files"
+        else:
+            validation_block_reason = "blocked_assimilation_not_safe"
+
+    validation_target_files: list[str] = []
+    py_compile_candidate_files: list[str] = []
+    targeted_test_candidate_files: list[str] = []
+    if validation_allowed:
+        allowed_set = set(normalized_allowed_changed_files)
+        expected_set = set(normalized_expected_changed_files)
+        validation_target_files = sorted(
+            set(
+                path
+                for path in normalized_changed_files
+                if path in allowed_set or path in expected_set
+            )
+        )
+        py_compile_candidate_files = sorted(
+            [path for path in validation_target_files if path.endswith(".py")]
+        )
+        if (
+            "automation/orchestration/planned_execution_runner.py"
+            in validation_target_files
+            and Path("tests/test_planned_execution_runner.py").exists()
+        ):
+            targeted_test_candidate_files = ["tests/test_planned_execution_runner.py"]
+
+    status = "validation_routing_allowed" if validation_allowed else "validation_routing_blocked"
+    next_action = "run_post_write_validation" if validation_allowed else "wait_for_more_truth"
+    if not validation_allowed:
+        if validation_block_reason in {
+            "blocked_human_review_required",
+            "blocked_forbidden_changed_files",
+            "blocked_unexpected_changed_files",
+            "blocked_too_many_changed_files",
+            "blocked_invocation_timeout",
+            "blocked_invocation_failure",
+            "blocked_no_changed_files",
+        }:
+            next_action = "manual_review_required"
+        elif validation_block_reason == "blocked_not_completed":
+            next_action = "wait_for_write_invocation"
+        elif validation_block_reason == "blocked_insufficient_truth":
+            next_action = "wait_for_more_truth"
+        elif validation_block_reason == "blocked_assimilation_not_safe":
+            next_action = "wait_for_more_truth"
+
+    return {
+        "project_browser_autonomous_post_write_validation_routing_status": status,
+        "project_browser_autonomous_post_write_validation_routing_validation_allowed": bool(
+            validation_allowed
+        ),
+        "project_browser_autonomous_post_write_validation_routing_validation_block_reason": (
+            validation_block_reason
+        ),
+        "project_browser_autonomous_post_write_validation_routing_source_status": (
+            normalized_source_status
+        ),
+        "project_browser_autonomous_post_write_validation_routing_source_result_class": (
+            normalized_source_result_class
+        ),
+        "project_browser_autonomous_post_write_validation_routing_source_safe_for_validation_routing": bool(
+            normalized_source_safe
+        ),
+        "project_browser_autonomous_post_write_validation_routing_changed_files": (
+            normalized_changed_files
+        ),
+        "project_browser_autonomous_post_write_validation_routing_expected_changed_files": (
+            normalized_expected_changed_files
+        ),
+        "project_browser_autonomous_post_write_validation_routing_allowed_changed_files": (
+            normalized_allowed_changed_files
+        ),
+        "project_browser_autonomous_post_write_validation_routing_validation_target_files": (
+            validation_target_files
+        ),
+        "project_browser_autonomous_post_write_validation_routing_py_compile_candidate_files": (
+            py_compile_candidate_files
+        ),
+        "project_browser_autonomous_post_write_validation_routing_targeted_test_candidate_files": (
+            targeted_test_candidate_files
+        ),
+        "project_browser_autonomous_post_write_validation_routing_unexpected_changed_files": (
+            normalized_unexpected_changed_files
+        ),
+        "project_browser_autonomous_post_write_validation_routing_forbidden_changed_files": (
+            normalized_forbidden_changed_files
+        ),
+        "project_browser_autonomous_post_write_validation_routing_too_many_changed_files": bool(
+            normalized_too_many_changed_files
+        ),
+        "project_browser_autonomous_post_write_validation_routing_human_review_required": bool(
+            False if validation_allowed else normalized_human_review_required
+        ),
+        "project_browser_autonomous_post_write_validation_routing_next_action": next_action,
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -72160,6 +72346,192 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_codex_write_result_assimilation_state_normalized[
         "project_browser_autonomous_codex_write_result_assimilation_next_action"
     ] = project_browser_autonomous_codex_write_result_assimilation_next_action
+    project_browser_autonomous_post_write_validation_routing_state = (
+        _build_project_browser_autonomous_post_write_validation_routing_state(
+            source_status=project_browser_autonomous_codex_write_result_assimilation_status,
+            source_result_class=_normalize_text(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_result_class"
+                ),
+                default="insufficient_truth",
+            ),
+            source_safe_for_validation_routing=bool(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_safe_for_validation_routing",
+                    False,
+                )
+            ),
+            changed_files=_normalize_string_list(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_changed_files_after"
+                )
+            ),
+            expected_changed_files=_normalize_string_list(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_expected_changed_files"
+                )
+            ),
+            allowed_changed_files=_normalize_string_list(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_allowed_changed_files"
+                )
+            ),
+            unexpected_changed_files=_normalize_string_list(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_unexpected_changed_files"
+                )
+            ),
+            forbidden_changed_files=_normalize_string_list(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_forbidden_changed_files"
+                )
+            ),
+            too_many_changed_files=bool(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_too_many_changed_files",
+                    False,
+                )
+            ),
+            human_review_required=bool(
+                project_browser_autonomous_codex_write_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_codex_write_result_assimilation_human_review_required",
+                    False,
+                )
+            ),
+        )
+    )
+    post_write_validation_routing_allowed_statuses = {
+        "validation_routing_allowed",
+        "validation_routing_blocked",
+    }
+    post_write_validation_routing_allowed_next_actions = {
+        "run_post_write_validation",
+        "manual_review_required",
+        "wait_for_write_invocation",
+        "wait_for_more_truth",
+        "rollback_required",
+        "insufficient_truth",
+    }
+    post_write_validation_routing_allowed_block_reasons = {
+        "",
+        "blocked_human_review_required",
+        "blocked_forbidden_changed_files",
+        "blocked_unexpected_changed_files",
+        "blocked_too_many_changed_files",
+        "blocked_invocation_timeout",
+        "blocked_invocation_failure",
+        "blocked_not_completed",
+        "blocked_insufficient_truth",
+        "blocked_no_changed_files",
+        "blocked_assimilation_not_safe",
+    }
+    post_write_validation_routing_allowed_result_classes = {
+        "expected_changes",
+        "no_changes",
+        "unexpected_changes",
+        "forbidden_changes",
+        "too_many_changes",
+        "invocation_failure",
+        "invocation_timeout",
+        "blocked",
+        "insufficient_truth",
+    }
+    post_write_validation_routing_field_names = (
+        "status",
+        "validation_allowed",
+        "validation_block_reason",
+        "source_status",
+        "source_result_class",
+        "source_safe_for_validation_routing",
+        "changed_files",
+        "expected_changed_files",
+        "allowed_changed_files",
+        "validation_target_files",
+        "py_compile_candidate_files",
+        "targeted_test_candidate_files",
+        "unexpected_changed_files",
+        "forbidden_changed_files",
+        "too_many_changed_files",
+        "human_review_required",
+        "next_action",
+    )
+    project_browser_autonomous_post_write_validation_routing_status = _normalize_text(
+        project_browser_autonomous_post_write_validation_routing_state.get(
+            "project_browser_autonomous_post_write_validation_routing_status"
+        ),
+        default="validation_routing_blocked",
+    )
+    if project_browser_autonomous_post_write_validation_routing_status not in (
+        post_write_validation_routing_allowed_statuses
+    ):
+        project_browser_autonomous_post_write_validation_routing_status = (
+            "validation_routing_blocked"
+        )
+    project_browser_autonomous_post_write_validation_routing_next_action = _normalize_text(
+        project_browser_autonomous_post_write_validation_routing_state.get(
+            "project_browser_autonomous_post_write_validation_routing_next_action"
+        ),
+        default="wait_for_more_truth",
+    )
+    if project_browser_autonomous_post_write_validation_routing_next_action not in (
+        post_write_validation_routing_allowed_next_actions
+    ):
+        project_browser_autonomous_post_write_validation_routing_next_action = (
+            "wait_for_more_truth"
+        )
+    project_browser_autonomous_post_write_validation_routing_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in post_write_validation_routing_field_names:
+        key = f"project_browser_autonomous_post_write_validation_routing_{field_name}"
+        value = project_browser_autonomous_post_write_validation_routing_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_post_write_validation_routing_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_post_write_validation_routing_next_action
+        elif field_name in {
+            "validation_allowed",
+            "source_safe_for_validation_routing",
+            "too_many_changed_files",
+            "human_review_required",
+        }:
+            value = bool(value)
+        elif field_name in {"source_result_class"}:
+            normalized_result_class = _normalize_text(value, default="insufficient_truth")
+            value = (
+                normalized_result_class
+                if normalized_result_class in post_write_validation_routing_allowed_result_classes
+                else "insufficient_truth"
+            )
+        elif field_name in {"validation_block_reason"}:
+            normalized_reason = _normalize_text(value, default="")
+            value = (
+                normalized_reason
+                if normalized_reason in post_write_validation_routing_allowed_block_reasons
+                else "blocked_assimilation_not_safe"
+            )
+        elif field_name in {
+            "changed_files",
+            "expected_changed_files",
+            "allowed_changed_files",
+            "validation_target_files",
+            "py_compile_candidate_files",
+            "targeted_test_candidate_files",
+            "unexpected_changed_files",
+            "forbidden_changed_files",
+        }:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_post_write_validation_routing_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_post_write_validation_routing_state_normalized[
+        "project_browser_autonomous_post_write_validation_routing_status"
+    ] = project_browser_autonomous_post_write_validation_routing_status
+    project_browser_autonomous_post_write_validation_routing_state_normalized[
+        "project_browser_autonomous_post_write_validation_routing_next_action"
+    ] = project_browser_autonomous_post_write_validation_routing_next_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -74656,6 +75028,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_codex_write_invocation_execution_state_normalized,
                 **project_browser_autonomous_codex_write_invocation_result_state_normalized,
                 **project_browser_autonomous_codex_write_result_assimilation_state_normalized,
+                **project_browser_autonomous_post_write_validation_routing_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -75567,6 +75940,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_codex_write_result_assimilation_next_action"
             if project_browser_autonomous_codex_write_result_assimilation_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_post_write_validation_routing_status"
+            if project_browser_autonomous_post_write_validation_routing_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_post_write_validation_routing_next_action"
+            if project_browser_autonomous_post_write_validation_routing_next_action
             else "",
             ]
     )
@@ -81688,6 +82067,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_codex_write_invocation_execution_state_normalized,
         **project_browser_autonomous_codex_write_invocation_result_state_normalized,
         **project_browser_autonomous_codex_write_result_assimilation_state_normalized,
+        **project_browser_autonomous_post_write_validation_routing_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(

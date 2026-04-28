@@ -1415,3 +1415,45 @@ Scope notes:
 - Remaining dependency: expected/allowed file truth still depends on upstream
   prompt-target metadata quality; missing targets intentionally degrade to
   blocked/insufficient/manual-review-safe outcomes.
+
+
+<!-- prompt170-update -->
+## Prompt170 — post-write validation routing metadata
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_post_write_validation_routing_state(...)`
+  in `automation/orchestration/planned_execution_runner.py`.
+- Added metadata-only routing output under
+  `project_browser_autonomous_post_write_validation_routing_*`.
+- `validation_allowed=true` only when Prompt169 assimilation reports safe bounded
+  expected changes, non-empty changed files, no unexpected/forbidden/too-many changes,
+  and no human review requirement.
+- Added deterministic `validation_block_reason` priority:
+  1. `blocked_human_review_required`
+  2. `blocked_forbidden_changed_files`
+  3. `blocked_unexpected_changed_files`
+  4. `blocked_too_many_changed_files`
+  5. `blocked_invocation_timeout`
+  6. `blocked_invocation_failure`
+  7. `blocked_not_completed`
+  8. `blocked_insufficient_truth`
+  9. `blocked_no_changed_files`
+  10. `blocked_assimilation_not_safe`
+- Added candidate derivation:
+  - `validation_target_files`
+  - `py_compile_candidate_files`
+  - `targeted_test_candidate_files`
+- Exposed normalized Prompt170 state in compact planning summary, supporting truth refs,
+  and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- Prompt170 is metadata-only.
+- No validation/test execution was added to runtime state.
+- No docs/tests were edited by Prompt170 implementation.
+- No tests were run.
