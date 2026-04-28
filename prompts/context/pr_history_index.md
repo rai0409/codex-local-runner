@@ -1076,3 +1076,76 @@ Next:
 
   Prompt164 must still not invoke Codex/ChatGPT, apply patches, rollback, commit, use GitHub, or start a loop.
 <!-- PROMPT163_NEXT_PROMPT_GENERATION_END -->
+
+<!-- PROMPT164_PROMPT_SELECTION_START -->
+## Prompt164 — prompt selection controller
+
+Status:
+  Completed.
+
+Checkpoint:
+  checkpoint-prompt164-prompt-selection-ready
+
+Purpose:
+  Prompt164 selects which generated prompt should be handed to a future Codex invocation readiness stage.
+
+What was added:
+  - `_build_project_browser_autonomous_prompt_selection_state(...)`
+  - `project_browser_autonomous_prompt_selection_*`
+  - normalization/wiring near Prompt163
+  - compact planning summary exposure
+  - supporting truth refs exposure
+  - final approved restart payload exposure
+
+Selection behavior:
+  - Selects fix prompt only when a failure/fix-required path is active and Prompt161 fix-prompt generation is valid.
+  - Selects next prompt only when validation passed path is active and Prompt163 next-prompt generation is valid.
+  - If both fix and next prompts are valid, blocks with `blocked_conflicting_prompts`.
+  - If neither prompt is valid, blocks with `blocked_no_ready_prompt`.
+
+Allowed selected paths:
+  - fix: `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  - next: `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+
+Selection safety checks:
+  - exact allowed handoff path
+  - handoff write completed
+  - no handoff write failure
+  - path exists
+  - path is not a symlink
+  - prompt body exists / non-empty
+  - no rollback-required posture
+  - no human-review-required posture
+  - no active insufficient-truth posture
+
+Hard blocks:
+  - `blocked_rollback_required`
+  - `blocked_human_review_required`
+  - `blocked_insufficient_truth`
+  - `blocked_handoff_write_failed`
+  - `blocked_prompt_path_missing`
+  - `blocked_prompt_path_unexpected`
+  - `blocked_prompt_path_symlink`
+  - `blocked_prompt_body_missing`
+  - `blocked_conflicting_prompts`
+  - `blocked_no_ready_prompt`
+
+Safety:
+  Prompt164 selects only. It does not generate prompt bodies, create handoff files, invoke Codex/ChatGPT, apply patches, execute rollback, stage/commit/push, use GitHub/PR/CI/merge, or start an autonomous loop.
+
+Validation:
+  - `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+  - `python -m py_compile scripts/run_planned_execution.py` passed.
+  - focused Prompt160 checks passed.
+
+Known remaining risk:
+  Prompt164 has no dedicated unit tests yet.
+
+Current autonomous prompt-flow state:
+  - failure path: Prompt160 readiness -> Prompt161 generated fix prompt -> Prompt164 selected fix prompt
+  - success path: Prompt162 readiness -> Prompt163 generated next prompt -> Prompt164 selected next prompt
+
+Next:
+  Prompt165 should add Codex invocation readiness metadata for the selected prompt.
+  Prompt165 must still not invoke Codex/ChatGPT, apply patches, rollback, commit, use GitHub, or start a loop.
+<!-- PROMPT164_PROMPT_SELECTION_END -->
