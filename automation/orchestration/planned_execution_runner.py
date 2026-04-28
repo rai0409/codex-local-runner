@@ -48421,6 +48421,304 @@ def _build_project_browser_autonomous_fix_prompt_generation_state(
     }
 
 
+def _build_project_browser_autonomous_next_prompt_readiness_state(
+    *,
+    validation_status: str,
+    validation_passed: bool,
+    validation_failed: bool,
+    post_apply_validation_status: str,
+    rollback_required: bool,
+    human_review_required: bool,
+    fix_prompt_readiness_status: str,
+    fix_prompt_generation_status: str,
+    prior_next_prompt_generation_attempted: bool,
+    implementation_prompt_status: str,
+    implementation_prompt_available: bool,
+    implementation_prompt_slice_id: str,
+    implementation_prompt_bounded_scope_class: str,
+    implementation_prompt_preferred_files: list[str] | None,
+    project_pr_queue_status: str,
+    project_pr_queue_selected_slice_id: str,
+    objective_completion_posture: str,
+    validation_missing_inputs: list[str] | None,
+    fix_readiness_missing_inputs: list[str] | None,
+    fix_generation_missing_inputs: list[str] | None,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "ready_to_generate_next_prompt",
+        "blocked_validation_not_passed",
+        "blocked_validation_failed",
+        "blocked_fix_required",
+        "blocked_insufficient_truth",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "blocked_missing_next_work",
+        "blocked_no_remaining_work",
+        "blocked_prompt_generation_already_attempted",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "generate_next_prompt_later",
+        "wait_for_validation_pass",
+        "run_fix_prompt_flow",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "no_remaining_work",
+        "insufficient_truth",
+    }
+    runtime_posture = [
+        "metadata_only_next_prompt_readiness",
+        "no_next_prompt_generation",
+        "no_handoff_write",
+        "no_external_model_invocation",
+        "no_patch_apply",
+        "no_git_mutation",
+        "no_autonomous_loop",
+    ]
+
+    normalized_validation_status = _normalize_text(
+        validation_status,
+        default="insufficient_truth",
+    )
+    normalized_post_apply_validation_status = _normalize_text(
+        post_apply_validation_status,
+        default="insufficient_truth",
+    )
+    normalized_fix_readiness_status = _normalize_text(
+        fix_prompt_readiness_status,
+        default="insufficient_truth",
+    )
+    normalized_fix_generation_status = _normalize_text(
+        fix_prompt_generation_status,
+        default="insufficient_truth",
+    )
+    normalized_implementation_prompt_status = _normalize_text(
+        implementation_prompt_status,
+        default="insufficient_truth",
+    )
+    normalized_implementation_slice_id = _normalize_text(
+        implementation_prompt_slice_id,
+        default="",
+    )
+    normalized_scope_class = _normalize_text(
+        implementation_prompt_bounded_scope_class,
+        default="unknown",
+    )
+    normalized_queue_status = _normalize_text(
+        project_pr_queue_status,
+        default="insufficient_truth",
+    )
+    normalized_queue_slice_id = _normalize_text(
+        project_pr_queue_selected_slice_id,
+        default="",
+    )
+    normalized_objective_completion_posture = _normalize_text(
+        objective_completion_posture,
+        default="objective_insufficient_truth",
+    )
+    normalized_target_files = _normalize_string_list(
+        implementation_prompt_preferred_files or []
+    )
+    validation_missing = _normalize_string_list(validation_missing_inputs or [])
+    fix_readiness_missing = _normalize_string_list(fix_readiness_missing_inputs or [])
+    fix_generation_missing = _normalize_string_list(fix_generation_missing_inputs or [])
+    missing_inputs = _serialize_required_signals(
+        [*validation_missing, *fix_readiness_missing, *fix_generation_missing]
+    )
+
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    next_work_available = False
+    next_work_kind = "none"
+    next_scope = "none"
+    next_action = "insufficient_truth"
+    ready_to_generate = False
+    generation_allowed = False
+    prompt_generation_attempted = False
+    prompt_generated = False
+    prompt_path = ""
+    insufficient_truth = False
+
+    fix_required_active = bool(
+        normalized_fix_readiness_status
+        in {
+            "ready_to_generate_fix_prompt",
+            "blocked_missing_failure_truth",
+            "blocked_no_actionable_failure",
+            "blocked_forbidden_changes",
+            "blocked_unexpected_changes",
+            "blocked_metadata_inconsistency",
+        }
+        or normalized_fix_generation_status
+        in {
+            "prompt_generated",
+            "blocked_missing_target_files",
+            "blocked_missing_failure_detail",
+            "blocked_handoff_path_invalid",
+            "blocked_handoff_write_failed",
+        }
+    )
+
+    if rollback_required:
+        status = "blocked_rollback_required"
+        source_status = "rollback_required"
+        block_reason = "rollback_required"
+        next_action = "rollback_required"
+    elif human_review_required:
+        status = "blocked_human_review_required"
+        source_status = "human_review_required"
+        block_reason = "human_review_required"
+        next_action = "manual_review_required"
+    elif normalized_validation_status == "insufficient_truth" or normalized_post_apply_validation_status == "insufficient_truth":
+        status = "blocked_insufficient_truth"
+        source_status = "validation_truth_unavailable"
+        block_reason = "insufficient_truth"
+        next_action = "wait_for_more_truth"
+        insufficient_truth = True
+        if not missing_inputs:
+            missing_inputs = ["post_apply_validation_truth"]
+    elif fix_required_active:
+        status = "blocked_fix_required"
+        source_status = "fix_prompt_flow_required"
+        block_reason = "fix_required"
+        next_action = "run_fix_prompt_flow"
+    elif validation_failed:
+        status = "blocked_validation_failed"
+        source_status = "validation_failed"
+        block_reason = "validation_failed"
+        next_action = "run_fix_prompt_flow"
+    elif not validation_passed:
+        status = "blocked_validation_not_passed"
+        source_status = "validation_not_passed"
+        block_reason = "validation_not_passed"
+        next_action = "wait_for_validation_pass"
+    elif prior_next_prompt_generation_attempted:
+        status = "blocked_prompt_generation_already_attempted"
+        source_status = "prior_generation_attempt_detected"
+        block_reason = "prompt_generation_already_attempted"
+        next_action = "wait_for_more_truth"
+    else:
+        if (
+            normalized_objective_completion_posture == "objective_completed"
+            or normalized_queue_status == "empty"
+        ):
+            status = "blocked_no_remaining_work"
+            source_status = "no_remaining_work_detected"
+            block_reason = "no_remaining_work"
+            next_action = "no_remaining_work"
+        elif (
+            normalized_implementation_prompt_status == "available"
+            and bool(implementation_prompt_available)
+            and normalized_queue_status == "prepared"
+        ):
+            next_work_available = True
+            next_work_kind = "queued_slice_next_prompt"
+            next_scope = (
+                normalized_scope_class
+                if normalized_scope_class not in {"", "unknown", "insufficient_truth"}
+                else "single_slice"
+            )
+        else:
+            status = "blocked_missing_next_work"
+            source_status = "next_work_not_determinable"
+            block_reason = "next_work_missing"
+            next_action = "wait_for_more_truth"
+            if not missing_inputs:
+                missing_inputs = ["next_work_truth"]
+
+        scope_bounded = bool(next_scope and next_scope not in {"none", "unknown", "unbounded"})
+        if next_work_available and not normalized_target_files:
+            status = "blocked_missing_next_work"
+            source_status = "next_target_files_missing"
+            block_reason = "next_target_files_missing"
+            next_action = "wait_for_more_truth"
+            if "next_target_files" not in missing_inputs:
+                missing_inputs = _serialize_required_signals([*missing_inputs, "next_target_files"])
+        elif next_work_available and not scope_bounded:
+            status = "blocked_missing_next_work"
+            source_status = "next_scope_unbounded"
+            block_reason = "next_scope_unbounded"
+            next_action = "wait_for_more_truth"
+            if "next_scope" not in missing_inputs:
+                missing_inputs = _serialize_required_signals([*missing_inputs, "next_scope"])
+        elif next_work_available:
+            status = "ready_to_generate_next_prompt"
+            source_status = "validation_and_scope_ready"
+            block_reason = "none"
+            next_action = "generate_next_prompt_later"
+            ready_to_generate = True
+            generation_allowed = True
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_next_prompt_readiness_status": status,
+        "project_browser_autonomous_next_prompt_readiness_source_status": source_status,
+        "project_browser_autonomous_next_prompt_readiness_block_reason": block_reason,
+        "project_browser_autonomous_next_prompt_readiness_validation_status": (
+            normalized_validation_status
+        ),
+        "project_browser_autonomous_next_prompt_readiness_validation_passed": bool(
+            validation_passed
+        ),
+        "project_browser_autonomous_next_prompt_readiness_validation_failed": bool(
+            validation_failed
+        ),
+        "project_browser_autonomous_next_prompt_readiness_post_apply_validation_status": (
+            normalized_post_apply_validation_status
+        ),
+        "project_browser_autonomous_next_prompt_readiness_rollback_required": bool(
+            rollback_required
+        ),
+        "project_browser_autonomous_next_prompt_readiness_human_review_required": bool(
+            human_review_required
+        ),
+        "project_browser_autonomous_next_prompt_readiness_insufficient_truth": bool(
+            insufficient_truth
+        ),
+        "project_browser_autonomous_next_prompt_readiness_fix_prompt_readiness_status": (
+            normalized_fix_readiness_status
+        ),
+        "project_browser_autonomous_next_prompt_readiness_fix_prompt_generation_status": (
+            normalized_fix_generation_status
+        ),
+        "project_browser_autonomous_next_prompt_readiness_next_work_available": bool(
+            next_work_available
+        ),
+        "project_browser_autonomous_next_prompt_readiness_next_work_kind": next_work_kind,
+        "project_browser_autonomous_next_prompt_readiness_next_scope": next_scope,
+        "project_browser_autonomous_next_prompt_readiness_next_target_files": (
+            normalized_target_files
+        ),
+        "project_browser_autonomous_next_prompt_readiness_ready_to_generate": bool(
+            ready_to_generate
+        ),
+        "project_browser_autonomous_next_prompt_readiness_generation_allowed": bool(
+            generation_allowed
+        ),
+        "project_browser_autonomous_next_prompt_readiness_generation_blocked": bool(
+            not generation_allowed
+        ),
+        "project_browser_autonomous_next_prompt_readiness_prompt_generation_attempted": bool(
+            prompt_generation_attempted
+        ),
+        "project_browser_autonomous_next_prompt_readiness_prompt_generated": bool(
+            prompt_generated
+        ),
+        "project_browser_autonomous_next_prompt_readiness_prompt_path": prompt_path,
+        "project_browser_autonomous_next_prompt_readiness_next_action": next_action,
+        "project_browser_autonomous_next_prompt_readiness_runtime_posture": runtime_posture,
+        "project_browser_autonomous_next_prompt_readiness_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -67185,6 +67483,164 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_fix_prompt_generation_state_normalized[
         "project_browser_autonomous_fix_prompt_generation_next_action"
     ] = project_browser_autonomous_fix_prompt_generation_next_action
+    project_browser_autonomous_next_prompt_readiness_state = (
+        _build_project_browser_autonomous_next_prompt_readiness_state(
+            validation_status=_normalize_text(
+                post_apply_validation_result.get("status"),
+                default=project_browser_autonomous_post_apply_validation_status,
+            ),
+            validation_passed=bool(post_apply_validation_result.get("validation_passed", False)),
+            validation_failed=bool(post_apply_validation_result.get("validation_failed", False)),
+            post_apply_validation_status=project_browser_autonomous_post_apply_validation_status,
+            rollback_required=bool(post_apply_validation_result.get("rollback_required", False)),
+            human_review_required=bool(post_apply_validation_result.get("human_review_required", False)),
+            fix_prompt_readiness_status=project_browser_autonomous_fix_prompt_readiness_status,
+            fix_prompt_generation_status=project_browser_autonomous_fix_prompt_generation_status,
+            prior_next_prompt_generation_attempted=bool(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_next_prompt_readiness_prompt_generation_attempted",
+                    False,
+                )
+            ),
+            implementation_prompt_status=implementation_prompt_status,
+            implementation_prompt_available=bool(
+                implementation_prompt_payload.get("prompt_available", False)
+            ),
+            implementation_prompt_slice_id=_normalize_text(
+                implementation_prompt_payload.get("slice_id"),
+                default="",
+            ),
+            implementation_prompt_bounded_scope_class=_normalize_text(
+                implementation_prompt_payload.get("bounded_scope_class"),
+                default="unknown",
+            ),
+            implementation_prompt_preferred_files=_normalize_string_list(
+                implementation_prompt_payload.get("preferred_files")
+            ),
+            project_pr_queue_status=project_pr_queue_status,
+            project_pr_queue_selected_slice_id=_normalize_text(
+                project_pr_queue_state.get("queue_selected_slice_id"),
+                default="",
+            ),
+            objective_completion_posture=objective_completion_posture,
+            validation_missing_inputs=_normalize_string_list(
+                post_apply_validation_result.get("missing_inputs")
+            ),
+            fix_readiness_missing_inputs=_normalize_string_list(
+                project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_readiness_missing_inputs"
+                )
+            ),
+            fix_generation_missing_inputs=_normalize_string_list(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_missing_inputs"
+                )
+            ),
+        )
+    )
+    next_prompt_readiness_allowed_statuses = {
+        "ready_to_generate_next_prompt",
+        "blocked_validation_not_passed",
+        "blocked_validation_failed",
+        "blocked_fix_required",
+        "blocked_insufficient_truth",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "blocked_missing_next_work",
+        "blocked_no_remaining_work",
+        "blocked_prompt_generation_already_attempted",
+        "insufficient_truth",
+    }
+    next_prompt_readiness_allowed_next_actions = {
+        "generate_next_prompt_later",
+        "wait_for_validation_pass",
+        "run_fix_prompt_flow",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "no_remaining_work",
+        "insufficient_truth",
+    }
+    next_prompt_readiness_field_names = (
+        "status",
+        "source_status",
+        "block_reason",
+        "validation_status",
+        "validation_passed",
+        "validation_failed",
+        "post_apply_validation_status",
+        "rollback_required",
+        "human_review_required",
+        "insufficient_truth",
+        "fix_prompt_readiness_status",
+        "fix_prompt_generation_status",
+        "next_work_available",
+        "next_work_kind",
+        "next_scope",
+        "next_target_files",
+        "ready_to_generate",
+        "generation_allowed",
+        "generation_blocked",
+        "prompt_generation_attempted",
+        "prompt_generated",
+        "prompt_path",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_next_prompt_readiness_status = _normalize_text(
+        project_browser_autonomous_next_prompt_readiness_state.get(
+            "project_browser_autonomous_next_prompt_readiness_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_next_prompt_readiness_status not in (
+        next_prompt_readiness_allowed_statuses
+    ):
+        project_browser_autonomous_next_prompt_readiness_status = "insufficient_truth"
+    project_browser_autonomous_next_prompt_readiness_next_action = _normalize_text(
+        project_browser_autonomous_next_prompt_readiness_state.get(
+            "project_browser_autonomous_next_prompt_readiness_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_next_prompt_readiness_next_action not in (
+        next_prompt_readiness_allowed_next_actions
+    ):
+        project_browser_autonomous_next_prompt_readiness_next_action = "insufficient_truth"
+    project_browser_autonomous_next_prompt_readiness_state_normalized: dict[str, Any] = {}
+    for field_name in next_prompt_readiness_field_names:
+        key = f"project_browser_autonomous_next_prompt_readiness_{field_name}"
+        value = project_browser_autonomous_next_prompt_readiness_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_next_prompt_readiness_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_next_prompt_readiness_next_action
+        elif field_name in {
+            "validation_passed",
+            "validation_failed",
+            "rollback_required",
+            "human_review_required",
+            "insufficient_truth",
+            "next_work_available",
+            "ready_to_generate",
+            "generation_allowed",
+            "generation_blocked",
+            "prompt_generation_attempted",
+            "prompt_generated",
+        }:
+            value = bool(value)
+        elif field_name in {"next_target_files", "runtime_posture", "missing_inputs"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_next_prompt_readiness_state_normalized[key] = value
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_status"
+    ] = project_browser_autonomous_next_prompt_readiness_status
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_next_action"
+    ] = project_browser_autonomous_next_prompt_readiness_next_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -69670,6 +70126,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_rollback_posture_state_normalized,
                 **project_browser_autonomous_fix_prompt_readiness_state_normalized,
                 **project_browser_autonomous_fix_prompt_generation_state_normalized,
+                **project_browser_autonomous_next_prompt_readiness_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -70515,6 +70972,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_fix_prompt_generation_next_action"
             if project_browser_autonomous_fix_prompt_generation_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_next_prompt_readiness_status"
+            if project_browser_autonomous_next_prompt_readiness_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_next_prompt_readiness_next_action"
+            if project_browser_autonomous_next_prompt_readiness_next_action
             else "",
             ]
     )
@@ -76625,6 +77088,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_rollback_posture_state_normalized,
         **project_browser_autonomous_fix_prompt_readiness_state_normalized,
         **project_browser_autonomous_fix_prompt_generation_state_normalized,
+        **project_browser_autonomous_next_prompt_readiness_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(
