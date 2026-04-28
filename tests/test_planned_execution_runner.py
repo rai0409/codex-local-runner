@@ -582,6 +582,9 @@ from automation.orchestration.planned_execution_runner import _build_objective_d
 from automation.orchestration.planned_execution_runner import (
     _build_project_browser_autonomous_post_apply_validation_state,
 )
+from automation.orchestration.planned_execution_runner import (
+    _build_project_browser_autonomous_fix_prompt_readiness_state,
+)
 from automation.orchestration.planned_execution_runner import _build_project_autonomy_budget_state
 from automation.orchestration.planned_execution_runner import _build_project_merge_branch_lifecycle_state
 from automation.orchestration.planned_execution_runner import _build_project_quality_gate_state
@@ -16872,6 +16875,37 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         payload.update(overrides)
         return _build_project_browser_autonomous_post_apply_validation_state(**payload)
 
+    def _build_prompt160_state(self, **overrides: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "expected_patch_path": "/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+            "dry_run_status": "dry_run_passed",
+            "dry_run_passed": True,
+            "dry_run_failed": False,
+            "dry_run_stderr_excerpt": "",
+            "apply_status": "apply_passed",
+            "apply_passed": True,
+            "apply_failed": False,
+            "apply_stderr_excerpt": "",
+            "validation_status": "validation_failed",
+            "validation_passed": False,
+            "validation_failed": True,
+            "validation_missing_inputs": [],
+            "py_compile_exit_code": 1,
+            "py_compile_stderr_excerpt": (
+                'File "automation/orchestration/planned_execution_runner.py", line 1'
+            ),
+            "touched_files": ["automation/orchestration/planned_execution_runner.py"],
+            "changed_files_after_apply": ["automation/orchestration/planned_execution_runner.py"],
+            "unexpected_changed_files_after_apply": [],
+            "forbidden_changed_files_after_apply": [],
+            "metadata_consistency_passed": True,
+            "metadata_consistency_failed": False,
+            "human_review_required": False,
+            "rollback_required": False,
+        }
+        payload.update(overrides)
+        return _build_project_browser_autonomous_fix_prompt_readiness_state(**payload)
+
     def test_prompt157_post_apply_validation_status_matrix(self) -> None:
         cases = [
             (
@@ -17240,6 +17274,216 @@ class PlannedExecutionRunnerTests(unittest.TestCase):
         )
         self.assertIn(
             "approved_restart_execution_contract.project_browser_autonomous_rollback_posture_status",
+            supporting_refs,
+        )
+
+    def test_prompt160_validation_passed_blocks_fix_generation(self) -> None:
+        payload = self._build_prompt160_state(
+            validation_status="validation_passed",
+            validation_passed=True,
+            validation_failed=False,
+            py_compile_exit_code=0,
+            py_compile_stderr_excerpt="",
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_status"],
+            "blocked_validation_passed",
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_failure_kind"],
+            "none",
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_fix_prompt_readiness_generation_allowed"]
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_fix_prompt_readiness_generation_blocked"]
+        )
+        self.assertFalse(
+            payload[
+                "project_browser_autonomous_fix_prompt_readiness_prompt_generation_attempted"
+            ]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_fix_prompt_readiness_prompt_generated"]
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_prompt_path"],
+            "",
+        )
+
+    def test_prompt160_insufficient_truth_blocks_fix_generation(self) -> None:
+        payload = self._build_prompt160_state(
+            validation_status="insufficient_truth",
+            validation_passed=False,
+            validation_failed=False,
+            validation_missing_inputs=["post_apply_validation_result"],
+            py_compile_exit_code=-1,
+            py_compile_stderr_excerpt="",
+        )
+        self.assertIn(
+            payload["project_browser_autonomous_fix_prompt_readiness_status"],
+            {"blocked_insufficient_truth", "insufficient_truth"},
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_failure_kind"],
+            "missing_truth",
+        )
+        self.assertFalse(
+            payload[
+                "project_browser_autonomous_fix_prompt_readiness_prompt_generation_attempted"
+            ]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_fix_prompt_readiness_prompt_generated"]
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_prompt_path"],
+            "",
+        )
+
+    def test_prompt160_rollback_required_blocks_fix_generation(self) -> None:
+        payload = self._build_prompt160_state(rollback_required=True)
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_status"],
+            "blocked_rollback_required",
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_failure_kind"],
+            "rollback_required",
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_fix_prompt_readiness_generation_allowed"]
+        )
+
+    def test_prompt160_human_review_required_blocks_fix_generation(self) -> None:
+        payload = self._build_prompt160_state(human_review_required=True)
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_status"],
+            "blocked_human_review_required",
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_failure_kind"],
+            "human_review_required",
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_fix_prompt_readiness_generation_allowed"]
+        )
+
+    def test_prompt160_actionable_py_compile_failure_is_ready(self) -> None:
+        payload = self._build_prompt160_state()
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_status"],
+            "ready_to_generate_fix_prompt",
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_failure_kind"],
+            "py_compile_failed",
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_fix_prompt_readiness_actionable_failure"]
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_fix_prompt_readiness_ready_to_generate"]
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_fix_prompt_readiness_generation_allowed"]
+        )
+        self.assertFalse(
+            payload[
+                "project_browser_autonomous_fix_prompt_readiness_prompt_generation_attempted"
+            ]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_fix_prompt_readiness_prompt_generated"]
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_prompt_path"],
+            "",
+        )
+        self.assertIn(
+            "automation/orchestration/planned_execution_runner.py",
+            payload["project_browser_autonomous_fix_prompt_readiness_fix_target_files"],
+        )
+
+    def test_prompt160_metadata_inconsistency_blocks_generation(self) -> None:
+        payload = self._build_prompt160_state(
+            metadata_consistency_passed=False,
+            metadata_consistency_failed=True,
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_status"],
+            "blocked_metadata_inconsistency",
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_failure_kind"],
+            "metadata_inconsistency",
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_fix_prompt_readiness_generation_allowed"]
+        )
+        self.assertTrue(
+            payload["project_browser_autonomous_fix_prompt_readiness_generation_blocked"]
+        )
+
+    def test_prompt160_contract_surface_exposure_in_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            artifacts_dir = self._write_planning_artifacts(root)
+            out_dir = root / "artifacts" / "executions"
+            runner = PlannedExecutionRunner(adapter=CodexExecutorAdapter(transport=_RecordingDryRunTransport()))
+            manifest = runner.run(
+                artifacts_input_dir=artifacts_dir,
+                output_dir=out_dir,
+                dry_run=True,
+                stop_on_failure=True,
+            )
+            run_root = out_dir / manifest["job_id"]
+            payload = json.loads(
+                (run_root / "approved_restart_execution_contract.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertIn("project_browser_autonomous_fix_prompt_readiness_status", payload)
+        self.assertIn("project_browser_autonomous_fix_prompt_readiness_next_action", payload)
+        self.assertIn(
+            "project_browser_autonomous_fix_prompt_readiness_prompt_generation_attempted",
+            payload,
+        )
+        self.assertIn(
+            "project_browser_autonomous_fix_prompt_readiness_prompt_generated",
+            payload,
+        )
+        self.assertIn("project_browser_autonomous_fix_prompt_readiness_prompt_path", payload)
+        self.assertFalse(
+            payload["project_browser_autonomous_fix_prompt_readiness_prompt_generation_attempted"]
+        )
+        self.assertFalse(
+            payload["project_browser_autonomous_fix_prompt_readiness_prompt_generated"]
+        )
+        self.assertEqual(
+            payload["project_browser_autonomous_fix_prompt_readiness_prompt_path"],
+            "",
+        )
+
+        compact_summary = dict(payload.get("project_planning_summary_compact") or {})
+        self.assertIn(
+            "project_browser_autonomous_fix_prompt_readiness_status",
+            compact_summary,
+        )
+        self.assertIn(
+            "project_browser_autonomous_fix_prompt_readiness_next_action",
+            compact_summary,
+        )
+
+        supporting_refs = [str(item) for item in payload.get("supporting_compact_truth_refs", [])]
+        self.assertIn(
+            "approved_restart_execution_contract.project_browser_autonomous_fix_prompt_readiness_status",
+            supporting_refs,
+        )
+        self.assertIn(
+            "approved_restart_execution_contract.project_browser_autonomous_fix_prompt_readiness_next_action",
             supporting_refs,
         )
 

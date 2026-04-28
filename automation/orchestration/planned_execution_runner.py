@@ -47692,6 +47692,347 @@ def _build_project_browser_autonomous_post_apply_validation_state(
     }
 
 
+def _build_project_browser_autonomous_fix_prompt_readiness_state(
+    *,
+    expected_patch_path: str,
+    dry_run_status: str,
+    dry_run_passed: bool,
+    dry_run_failed: bool,
+    dry_run_stderr_excerpt: str,
+    apply_status: str,
+    apply_passed: bool,
+    apply_failed: bool,
+    apply_stderr_excerpt: str,
+    validation_status: str,
+    validation_passed: bool,
+    validation_failed: bool,
+    validation_missing_inputs: list[str] | None,
+    py_compile_exit_code: int,
+    py_compile_stderr_excerpt: str,
+    touched_files: list[str] | None,
+    changed_files_after_apply: list[str] | None,
+    unexpected_changed_files_after_apply: list[str] | None,
+    forbidden_changed_files_after_apply: list[str] | None,
+    metadata_consistency_passed: bool,
+    metadata_consistency_failed: bool,
+    human_review_required: bool,
+    rollback_required: bool,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "ready_to_generate_fix_prompt",
+        "blocked_validation_passed",
+        "blocked_insufficient_truth",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "blocked_missing_failure_truth",
+        "blocked_no_actionable_failure",
+        "blocked_forbidden_changes",
+        "blocked_unexpected_changes",
+        "blocked_metadata_inconsistency",
+        "ready_for_manual_fix",
+        "insufficient_truth",
+    }
+    allowed_failure_kinds = {
+        "validation_failed",
+        "py_compile_failed",
+        "dry_run_failed",
+        "apply_failed",
+        "changed_file_mismatch",
+        "forbidden_changes",
+        "unexpected_changes",
+        "metadata_inconsistency",
+        "missing_truth",
+        "human_review_required",
+        "rollback_required",
+        "no_actionable_failure",
+        "none",
+    }
+    allowed_next_actions = {
+        "generate_fix_prompt_later",
+        "wait_for_validation_failure",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "manual_fix_required",
+        "no_fix_needed",
+        "insufficient_truth",
+    }
+    runtime_posture = [
+        "metadata_only_fix_prompt_readiness",
+        "no_fix_prompt_generation",
+        "no_prompt_file_write",
+        "no_model_invocation",
+        "no_browser_automation",
+        "no_rollback_execution",
+        "no_git_mutation",
+    ]
+
+    normalized_expected_patch_path = _normalize_text(expected_patch_path, default="")
+    normalized_dry_run_status = _normalize_text(dry_run_status, default="insufficient_truth")
+    normalized_apply_status = _normalize_text(apply_status, default="insufficient_truth")
+    normalized_validation_status = _normalize_text(
+        validation_status,
+        default="insufficient_truth",
+    )
+    normalized_validation_missing_inputs = _normalize_string_list(validation_missing_inputs or [])
+    normalized_py_compile_stderr = _normalize_text(py_compile_stderr_excerpt, default="")
+    normalized_dry_run_stderr = _normalize_text(dry_run_stderr_excerpt, default="")
+    normalized_apply_stderr = _normalize_text(apply_stderr_excerpt, default="")
+    normalized_touched_files = _normalize_string_list(touched_files or [])
+    normalized_changed_files = _normalize_string_list(changed_files_after_apply or [])
+    normalized_unexpected_changed_files = _normalize_string_list(
+        unexpected_changed_files_after_apply or []
+    )
+    normalized_forbidden_changed_files = _normalize_string_list(
+        forbidden_changed_files_after_apply or []
+    )
+    normalized_py_compile_exit_code = int(_as_int(py_compile_exit_code, default=-1))
+    metadata_passed = bool(metadata_consistency_passed)
+    metadata_failed = bool(metadata_consistency_failed)
+
+    target_file_candidates: list[str] = []
+    for file_path in [*normalized_changed_files, *normalized_touched_files]:
+        if file_path and file_path not in target_file_candidates:
+            target_file_candidates.append(file_path)
+    fix_target_files = [
+        file_path
+        for file_path in target_file_candidates
+        if file_path not in normalized_forbidden_changed_files
+        and file_path not in normalized_unexpected_changed_files
+    ]
+
+    status = "insufficient_truth"
+    source_status = "insufficient_truth"
+    block_reason = "insufficient_truth"
+    failure_kind = "missing_truth"
+    failure_source = "unknown"
+    actionable_failure = False
+    ready_to_generate = False
+    generation_allowed = False
+    generation_blocked = True
+    next_action = "insufficient_truth"
+    prompt_generation_attempted = False
+    prompt_generated = False
+    prompt_path = ""
+    missing_inputs = list(normalized_validation_missing_inputs)
+
+    if rollback_required:
+        status = "blocked_rollback_required"
+        source_status = "rollback_posture_required"
+        block_reason = "rollback_required"
+        failure_kind = "rollback_required"
+        failure_source = "prompt157_post_apply_validation"
+        next_action = "rollback_required"
+    elif human_review_required:
+        status = "blocked_human_review_required"
+        source_status = "human_review_posture_required"
+        block_reason = "human_review_required"
+        failure_kind = "human_review_required"
+        failure_source = "prompt157_post_apply_validation"
+        next_action = "manual_review_required"
+    elif normalized_forbidden_changed_files:
+        status = "blocked_forbidden_changes"
+        source_status = "forbidden_changes_detected"
+        block_reason = "forbidden_changes_detected"
+        failure_kind = "forbidden_changes"
+        failure_source = "prompt157_changed_file_consistency"
+        next_action = "manual_review_required"
+    elif normalized_unexpected_changed_files:
+        status = "blocked_unexpected_changes"
+        source_status = "unexpected_changes_detected"
+        block_reason = "unexpected_changes_detected"
+        failure_kind = "unexpected_changes"
+        failure_source = "prompt157_changed_file_consistency"
+        next_action = "manual_review_required"
+    elif metadata_failed:
+        status = "blocked_metadata_inconsistency"
+        source_status = "metadata_inconsistency_detected"
+        block_reason = "metadata_consistency_failed"
+        failure_kind = "metadata_inconsistency"
+        failure_source = "prompt157_metadata_consistency"
+        next_action = "wait_for_more_truth"
+    elif validation_passed:
+        status = "blocked_validation_passed"
+        source_status = "validation_passed"
+        block_reason = "validation_passed"
+        failure_kind = "none"
+        failure_source = "prompt157_post_apply_validation"
+        next_action = "no_fix_needed"
+    elif (
+        normalized_validation_status == "insufficient_truth"
+        or (not validation_failed and not validation_passed)
+    ):
+        status = "blocked_insufficient_truth"
+        source_status = "validation_truth_unavailable"
+        block_reason = "insufficient_truth"
+        failure_kind = "missing_truth"
+        failure_source = "prompt157_post_apply_validation"
+        next_action = "wait_for_more_truth"
+        if not missing_inputs:
+            missing_inputs.append("post_apply_validation_result")
+    elif validation_failed:
+        source_status = "validation_failed"
+        block_reason = "validation_failed"
+        failure_kind = "validation_failed"
+        failure_source = "prompt157_post_apply_validation"
+
+        actionable_details_available = False
+        if normalized_py_compile_exit_code not in {-1, 0}:
+            failure_kind = "py_compile_failed"
+            failure_source = "prompt157_py_compile"
+            actionable_details_available = bool(normalized_py_compile_stderr)
+        elif normalized_validation_status == "blocked_changed_file_mismatch":
+            failure_kind = "changed_file_mismatch"
+            failure_source = "prompt157_changed_file_consistency"
+            actionable_details_available = bool(
+                normalized_changed_files or normalized_touched_files
+            )
+        elif apply_failed or normalized_apply_status in {
+            "apply_failed",
+            "blocked_post_apply_mutation_mismatch",
+            "blocked_no_dry_run_pass",
+        }:
+            failure_kind = "apply_failed"
+            failure_source = "prompt156_real_apply"
+            actionable_details_available = bool(normalized_apply_stderr)
+        elif dry_run_failed or normalized_dry_run_status == "dry_run_failed":
+            failure_kind = "dry_run_failed"
+            failure_source = "prompt155_dry_run"
+            actionable_details_available = bool(normalized_dry_run_stderr)
+
+        actionable_failure = bool(
+            actionable_details_available or bool(fix_target_files)
+        )
+        if actionable_failure and fix_target_files:
+            status = "ready_to_generate_fix_prompt"
+            ready_to_generate = True
+            generation_allowed = True
+            generation_blocked = False
+            next_action = "generate_fix_prompt_later"
+        elif actionable_failure and not fix_target_files:
+            status = "blocked_missing_failure_truth"
+            source_status = "fix_target_files_unavailable"
+            block_reason = "fix_target_files_unavailable"
+            failure_kind = "missing_truth"
+            failure_source = "prompt157_changed_file_consistency"
+            actionable_failure = False
+            next_action = "wait_for_more_truth"
+            missing_inputs.append("fix_target_files")
+        else:
+            status = "blocked_no_actionable_failure"
+            source_status = "failure_not_actionable"
+            block_reason = "no_actionable_failure"
+            failure_kind = "no_actionable_failure"
+            next_action = "manual_fix_required"
+    else:
+        status = "insufficient_truth"
+        source_status = "readiness_unresolved"
+        block_reason = "insufficient_truth"
+        failure_kind = "missing_truth"
+        failure_source = "unknown"
+        next_action = "insufficient_truth"
+        if not missing_inputs:
+            missing_inputs.append("validation_failure_classification")
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if failure_kind not in allowed_failure_kinds:
+        failure_kind = "missing_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    if status != "ready_to_generate_fix_prompt":
+        actionable_failure = False
+        ready_to_generate = False
+        generation_allowed = False
+        generation_blocked = True
+
+    return {
+        "project_browser_autonomous_fix_prompt_readiness_status": status,
+        "project_browser_autonomous_fix_prompt_readiness_source_status": source_status,
+        "project_browser_autonomous_fix_prompt_readiness_block_reason": block_reason,
+        "project_browser_autonomous_fix_prompt_readiness_failure_kind": failure_kind,
+        "project_browser_autonomous_fix_prompt_readiness_failure_source": failure_source,
+        "project_browser_autonomous_fix_prompt_readiness_actionable_failure": bool(
+            actionable_failure
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_ready_to_generate": bool(
+            ready_to_generate
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_generation_allowed": bool(
+            generation_allowed
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_generation_blocked": bool(
+            generation_blocked
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_prompt_generation_attempted": bool(
+            prompt_generation_attempted
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_prompt_generated": bool(
+            prompt_generated
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_prompt_path": prompt_path,
+        "project_browser_autonomous_fix_prompt_readiness_fix_target_files": fix_target_files,
+        "project_browser_autonomous_fix_prompt_readiness_changed_files_after_apply": (
+            normalized_changed_files
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_unexpected_changed_files_after_apply": (
+            normalized_unexpected_changed_files
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_forbidden_changed_files_after_apply": (
+            normalized_forbidden_changed_files
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_validation_status": (
+            normalized_validation_status
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_validation_passed": bool(
+            validation_passed
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_validation_failed": bool(
+            validation_failed
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_validation_missing_inputs": (
+            normalized_validation_missing_inputs
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_py_compile_exit_code": int(
+            normalized_py_compile_exit_code
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_py_compile_stderr_excerpt": (
+            normalized_py_compile_stderr
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_apply_status": (
+            normalized_apply_status
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_apply_passed": bool(apply_passed),
+        "project_browser_autonomous_fix_prompt_readiness_apply_failed": bool(apply_failed),
+        "project_browser_autonomous_fix_prompt_readiness_dry_run_status": (
+            normalized_dry_run_status
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_dry_run_passed": bool(dry_run_passed),
+        "project_browser_autonomous_fix_prompt_readiness_dry_run_failed": bool(dry_run_failed),
+        "project_browser_autonomous_fix_prompt_readiness_metadata_consistency_passed": bool(
+            metadata_passed
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_metadata_consistency_failed": bool(
+            metadata_failed
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_human_review_required": bool(
+            human_review_required
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_rollback_required": bool(
+            rollback_required
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_next_action": next_action,
+        "project_browser_autonomous_fix_prompt_readiness_runtime_posture": runtime_posture,
+        "project_browser_autonomous_fix_prompt_readiness_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_expected_patch_path": (
+            normalized_expected_patch_path
+        ),
+    }
+
+
 def _build_project_browser_launch_runtime_state(
     *,
     browser_task_status: str,
@@ -66016,6 +66357,220 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_rollback_posture_state_normalized[
         "project_browser_autonomous_rollback_posture_next_action"
     ] = project_browser_autonomous_rollback_posture_next_action
+    project_browser_autonomous_fix_prompt_readiness_state = (
+        _build_project_browser_autonomous_fix_prompt_readiness_state(
+            expected_patch_path=_normalize_text(
+                post_apply_validation_result.get("expected_patch_path"),
+                default="/tmp/codex-local-runner-decision/chatgpt_implementation_patch.diff",
+            ),
+            dry_run_status=project_browser_autonomous_patch_dry_run_result_status,
+            dry_run_passed=project_browser_autonomous_patch_dry_run_result_dry_run_passed,
+            dry_run_failed=project_browser_autonomous_patch_dry_run_result_dry_run_failed,
+            dry_run_stderr_excerpt=(
+                project_browser_autonomous_patch_dry_run_result_dry_run_stderr_excerpt
+            ),
+            apply_status=project_browser_autonomous_safe_patch_real_apply_result_status,
+            apply_passed=bool(safe_patch_real_apply_result.get("apply_passed", False)),
+            apply_failed=bool(safe_patch_real_apply_result.get("apply_failed", False)),
+            apply_stderr_excerpt=_normalize_text(
+                safe_patch_real_apply_result.get("apply_stderr_excerpt"),
+                default="",
+            ),
+            validation_status=project_browser_autonomous_post_apply_validation_status,
+            validation_passed=bool(post_apply_validation_result.get("validation_passed", False)),
+            validation_failed=bool(post_apply_validation_result.get("validation_failed", False)),
+            validation_missing_inputs=_normalize_string_list(
+                post_apply_validation_result.get("missing_inputs")
+            ),
+            py_compile_exit_code=_as_int(
+                post_apply_validation_result.get("py_compile_exit_code"),
+                default=-1,
+            ),
+            py_compile_stderr_excerpt=_normalize_text(
+                post_apply_validation_result.get("py_compile_stderr_excerpt"),
+                default="",
+            ),
+            touched_files=_normalize_string_list(post_apply_validation_result.get("touched_files")),
+            changed_files_after_apply=_normalize_string_list(
+                post_apply_validation_result.get("changed_files_after_apply")
+            ),
+            unexpected_changed_files_after_apply=_normalize_string_list(
+                post_apply_validation_result.get("unexpected_changed_files_after_apply")
+            ),
+            forbidden_changed_files_after_apply=_normalize_string_list(
+                post_apply_validation_result.get("forbidden_changed_files_after_apply")
+            ),
+            metadata_consistency_passed=bool(
+                post_apply_validation_result.get("metadata_consistency_passed", False)
+            ),
+            metadata_consistency_failed=bool(
+                post_apply_validation_result.get("metadata_consistency_failed", False)
+            ),
+            human_review_required=bool(
+                post_apply_validation_result.get("human_review_required", False)
+            ),
+            rollback_required=bool(
+                post_apply_validation_result.get("rollback_required", False)
+            ),
+        )
+    )
+    fix_prompt_readiness_allowed_statuses = {
+        "ready_to_generate_fix_prompt",
+        "blocked_validation_passed",
+        "blocked_insufficient_truth",
+        "blocked_human_review_required",
+        "blocked_rollback_required",
+        "blocked_missing_failure_truth",
+        "blocked_no_actionable_failure",
+        "blocked_forbidden_changes",
+        "blocked_unexpected_changes",
+        "blocked_metadata_inconsistency",
+        "ready_for_manual_fix",
+        "insufficient_truth",
+    }
+    fix_prompt_readiness_allowed_failure_kinds = {
+        "validation_failed",
+        "py_compile_failed",
+        "dry_run_failed",
+        "apply_failed",
+        "changed_file_mismatch",
+        "forbidden_changes",
+        "unexpected_changes",
+        "metadata_inconsistency",
+        "missing_truth",
+        "human_review_required",
+        "rollback_required",
+        "no_actionable_failure",
+        "none",
+    }
+    fix_prompt_readiness_allowed_next_actions = {
+        "generate_fix_prompt_later",
+        "wait_for_validation_failure",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "rollback_required",
+        "manual_fix_required",
+        "no_fix_needed",
+        "insufficient_truth",
+    }
+    fix_prompt_readiness_field_names = (
+        "status",
+        "source_status",
+        "block_reason",
+        "failure_kind",
+        "failure_source",
+        "actionable_failure",
+        "ready_to_generate",
+        "generation_allowed",
+        "generation_blocked",
+        "prompt_generation_attempted",
+        "prompt_generated",
+        "prompt_path",
+        "fix_target_files",
+        "changed_files_after_apply",
+        "unexpected_changed_files_after_apply",
+        "forbidden_changed_files_after_apply",
+        "validation_status",
+        "validation_passed",
+        "validation_failed",
+        "validation_missing_inputs",
+        "py_compile_exit_code",
+        "py_compile_stderr_excerpt",
+        "apply_status",
+        "apply_passed",
+        "apply_failed",
+        "dry_run_status",
+        "dry_run_passed",
+        "dry_run_failed",
+        "metadata_consistency_passed",
+        "metadata_consistency_failed",
+        "human_review_required",
+        "rollback_required",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+        "expected_patch_path",
+    )
+
+    project_browser_autonomous_fix_prompt_readiness_status = _normalize_text(
+        project_browser_autonomous_fix_prompt_readiness_state.get(
+            "project_browser_autonomous_fix_prompt_readiness_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_fix_prompt_readiness_status not in (
+        fix_prompt_readiness_allowed_statuses
+    ):
+        project_browser_autonomous_fix_prompt_readiness_status = "insufficient_truth"
+    project_browser_autonomous_fix_prompt_readiness_next_action = _normalize_text(
+        project_browser_autonomous_fix_prompt_readiness_state.get(
+            "project_browser_autonomous_fix_prompt_readiness_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_fix_prompt_readiness_next_action not in (
+        fix_prompt_readiness_allowed_next_actions
+    ):
+        project_browser_autonomous_fix_prompt_readiness_next_action = (
+            "insufficient_truth"
+        )
+
+    project_browser_autonomous_fix_prompt_readiness_state_normalized: dict[str, Any] = {}
+    for field_name in fix_prompt_readiness_field_names:
+        key = f"project_browser_autonomous_fix_prompt_readiness_{field_name}"
+        value = project_browser_autonomous_fix_prompt_readiness_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_fix_prompt_readiness_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_fix_prompt_readiness_next_action
+        elif field_name == "failure_kind":
+            normalized_failure_kind = _normalize_text(value, default="missing_truth")
+            value = (
+                normalized_failure_kind
+                if normalized_failure_kind in fix_prompt_readiness_allowed_failure_kinds
+                else "missing_truth"
+            )
+        elif field_name in {
+            "actionable_failure",
+            "ready_to_generate",
+            "generation_allowed",
+            "generation_blocked",
+            "prompt_generation_attempted",
+            "prompt_generated",
+            "validation_passed",
+            "validation_failed",
+            "apply_passed",
+            "apply_failed",
+            "dry_run_passed",
+            "dry_run_failed",
+            "metadata_consistency_passed",
+            "metadata_consistency_failed",
+            "human_review_required",
+            "rollback_required",
+        }:
+            value = bool(value)
+        elif field_name == "py_compile_exit_code":
+            value = int(_as_int(value, default=-1))
+        elif field_name in {
+            "fix_target_files",
+            "changed_files_after_apply",
+            "unexpected_changed_files_after_apply",
+            "forbidden_changed_files_after_apply",
+            "validation_missing_inputs",
+            "runtime_posture",
+            "missing_inputs",
+        }:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_fix_prompt_readiness_state_normalized[key] = value
+
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_status"
+    ] = project_browser_autonomous_fix_prompt_readiness_status
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_next_action"
+    ] = project_browser_autonomous_fix_prompt_readiness_next_action
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(
@@ -68499,6 +69054,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_safe_patch_real_apply_state_normalized,
                 **project_browser_autonomous_post_apply_validation_state_normalized,
                 **project_browser_autonomous_rollback_posture_state_normalized,
+                **project_browser_autonomous_fix_prompt_readiness_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -69332,6 +69888,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_rollback_posture_next_action"
             if project_browser_autonomous_rollback_posture_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_fix_prompt_readiness_status"
+            if project_browser_autonomous_fix_prompt_readiness_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_fix_prompt_readiness_next_action"
+            if project_browser_autonomous_fix_prompt_readiness_next_action
             else "",
             ]
     )
@@ -75440,6 +76002,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_safe_patch_real_apply_state_normalized,
         **project_browser_autonomous_post_apply_validation_state_normalized,
         **project_browser_autonomous_rollback_posture_state_normalized,
+        **project_browser_autonomous_fix_prompt_readiness_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(
