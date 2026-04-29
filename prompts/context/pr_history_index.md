@@ -4489,3 +4489,94 @@ Known follow-up:
   completed / blocked / manual-stop outcomes, verify non-selected-step no-op, and
   emit safety-confidence metadata for whether a later prompt may raise
   `max_continuation_steps` above 1.
+
+
+<!-- prompt222-update -->
+## Prompt222 — bounded N-step result assimilation and stop-policy hardening
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_n_step_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_n_step_result_assimilation_*`.
+- Consumes Prompt221 bounded N-step coordinator:
+  `project_browser_autonomous_bounded_n_step_coordinator_*`.
+- Enforces Prompt221 authoritative-source checks:
+  - `prompt222_result_ready_for_assimilation=true`
+  - `prompt222_result_assimilation_source=="prompt221_bounded_n_step_coordinator"`
+  - `prompt222_result_next_stage=="bounded_n_step_result_assimilation"`
+  - selected step / manual-stop / blocked truth
+  - source status / result-class truth
+- Implements strict one-step accounting verification:
+  - `max_continuation_steps==1`
+  - allowed / attempted / completed step bounds
+  - no unbounded / retry / continue-loop flags
+- Step accounting violations route to:
+  - `bounded_n_step_result_blocked_step_accounting_violation`
+  - manual review + stop
+- Enforces `non_selected_steps_noop=true` for successful non-stop selected step outcomes.
+- Non-selected step violations route to:
+  - `bounded_n_step_result_blocked_non_selected_step_activity`
+  - manual review + stop
+- Classifies bounded N-step result with:
+  - `completed_fresh_surface_detected`
+  - `completed_existing_truth_detected`
+  - `guarded_existing_truth_detected`
+  - `existing_path_blocked_detected`
+  - `terminal_result_detected`
+  - `terminal_result_source`
+- Implements required result classes for:
+  - completed fresh surface
+  - completed existing truth guarded
+  - completed existing truth
+  - blocked existing path
+  - manual stop
+  - failed
+  - blocked
+  - insufficient truth
+- Adds stop-policy hardening:
+  - `stop_policy_passed`
+  - `stop_policy_block_reason`
+  - stop-policy failure routes to manual review
+- Adds raise-to-2 decision metadata:
+  - `n_step_runtime_safety_confidence`
+  - `n_step_raise_to_2_candidate`
+  - `n_step_raise_block_reason`
+  - `should_prepare_raise_to_2_preflight`
+  - `should_prepare_end_to_end_flow_check`
+  - `next_bounded_control_target_*`
+  - `controller_feedback_*`
+- Preserves continuation boundaries:
+  - no downstream execution
+  - no prompt generation
+  - no Codex invocation
+  - no rollback / commit execution
+  - no git mutation
+  - no push
+  - no retry / loop start
+- Exposed Prompt222 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt222 implementation.
+- No tests were run.
+- Prompt222 classification relies on existing status-token conventions from
+  Prompt221 and related surfaces. If upstream status vocabulary changes, edge
+  outcomes may conservatively degrade to blocked / insufficient truth.
+
+Known follow-up:
+- Prompt223 should add a metadata-only raise-to-2 preflight decision gate that
+  consumes `project_browser_autonomous_bounded_n_step_result_assimilation_*` and
+  allows N=2 only when Prompt222 proves:
+  - completed fresh surface
+  - high runtime safety confidence
+  - valid one-step accounting
+  - non-selected step no-op
+  - stop-policy passed.

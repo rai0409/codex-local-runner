@@ -2969,3 +2969,34 @@ Authoritative bounded N-step rule:
 - Prompt221 must always emit Prompt222 result handoff metadata.
 - Prompt222 must classify Prompt221 output and decide whether any later prompt may
   safely raise the continuation bound beyond 1.
+
+
+<!-- prompt222-update -->
+## Prompt222 architecture constraint update
+
+Prompt222 adds bounded N-step result assimilation and stop-policy hardening.
+
+Authoritative bounded N-step result rule:
+- Prompt222 may classify bounded N-step result only from Prompt221 result handoff.
+- Prompt222 must not infer result from Prompt220 preflight, Prompt219 assimilation,
+  or older states alone.
+- Prompt222 must verify:
+  - one-step accounting
+  - non-selected step no-op
+  - terminal result evidence
+  - stop-policy pass/fail
+- Prompt222 must not raise `max_continuation_steps` above 1.
+- Prompt222 may only emit metadata indicating whether a future prompt may prepare
+  raise-to-2 preflight.
+- N=2 may be considered only when Prompt222 reports:
+  - `result_class=="completed_fresh_surface"`
+  - `n_step_runtime_safety_confidence=="high"`
+  - `n_step_raise_to_2_candidate=true`
+  - `one_step_accounting_valid=true`
+  - `non_selected_steps_noop_confirmed=true`
+  - `stop_policy_passed=true`
+- Existing-truth-only and guarded-existing-truth outcomes must not directly raise
+  N to 2.
+- Prompt222 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
