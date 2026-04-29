@@ -1952,3 +1952,25 @@ Authoritative safety rule:
 Current limitation:
 - Prompt161/163 generation states do not yet consume re-evaluated readiness in the
   same run. Prompt177 should add that wiring without introducing new executors.
+
+
+<!-- prompt177-update -->
+## Prompt177 architecture constraint update
+
+Prompt177 wires re-evaluated cycle-handoff readiness into existing Prompt161/163
+generation states in the same run.
+
+Authoritative safety rule:
+- Same-run generation refresh may occur only through existing Prompt161/163 generation
+  builders.
+- Existing generation safety checks remain authoritative.
+- Prompt177 must not create a new generator, writer, executor, retry loop, rollback,
+  commit, GitHub operation, scheduler, daemon, or queue drainer.
+- Prompt177 does not reorder the full pipeline; refresh is scoped to fix/next
+  generation states.
+
+Current limitation:
+- Generated fix/next prompt outputs are not yet routed back into Prompt164 selection,
+  Prompt165 invocation readiness, or Prompt167 workspace-write invocation.
+- Prompt178 should add re-entry readiness metadata for that path without invoking
+  Codex yet.

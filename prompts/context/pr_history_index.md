@@ -1724,3 +1724,49 @@ Known follow-up:
 - Readiness can now be re-evaluated in-run, but downstream Prompt161/163 generation
   states are still built earlier in the pipeline. Prompt177 should wire generation
   states to consume re-evaluated readiness in the same run.
+
+
+<!-- prompt177-update -->
+## Prompt177 — same-run generation-state wiring from re-evaluated readiness
+
+Status: completed.
+
+Changed:
+- Wired Prompt176 re-evaluated fix/next readiness into existing Prompt161/163
+  generation inputs.
+- Extended both fix/next generation builders with cycle-handoff generation-input
+  fields.
+- Added same-run post-handoff generation-input wiring and conditional generation-state
+  refresh.
+- Fix generation can consume `cycle_handoff_fix_ready` readiness and refresh the
+  existing fix generation builder once, with existing generation safety checks still
+  authoritative.
+- Next generation can consume `cycle_handoff_next_ready` readiness and refresh the
+  existing next generation builder once, with existing generation safety checks still
+  authoritative.
+- Added deterministic generation-input block reasons:
+  - `blocked_human_review_required`
+  - `blocked_generation_not_allowed`
+  - `blocked_readiness_not_ready`
+  - `blocked_re_evaluation_not_allowed`
+  - `blocked_mismatched_cycle_handoff_generation_kind`
+  - `blocked_missing_generation_input_truth`
+  - `blocked_existing_generation_safety_gate`
+- New generation input fields remain exposed through normalized generation maps,
+  compact planning summary, supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt177 implementation.
+- No tests were run.
+- No Codex invocation, rollback, commit, GitHub operation, retry loop, scheduler,
+  daemon, queue drainer, or new executor was added.
+- Same-run refresh is intentionally scoped to fix/next generation states only.
+
+Known follow-up:
+- Prompt178 should create generated prompt output re-entry readiness so Prompt161/163
+  generation outputs can feed Prompt164 selection and Prompt165/167 Codex invocation
+  readiness in a later bounded step.
