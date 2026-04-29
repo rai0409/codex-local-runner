@@ -47725,6 +47725,7 @@ def _build_project_browser_autonomous_fix_prompt_readiness_state(
 ) -> dict[str, Any]:
     allowed_statuses = {
         "ready_to_generate_fix_prompt",
+        "cycle_handoff_fix_ready",
         "blocked_validation_passed",
         "blocked_insufficient_truth",
         "blocked_human_review_required",
@@ -47754,6 +47755,7 @@ def _build_project_browser_autonomous_fix_prompt_readiness_state(
     }
     allowed_next_actions = {
         "generate_fix_prompt_later",
+        "generate_fix_prompt",
         "wait_for_validation_failure",
         "wait_for_more_truth",
         "manual_review_required",
@@ -47814,6 +47816,14 @@ def _build_project_browser_autonomous_fix_prompt_readiness_state(
             cycle_handoff_block_reason = "mismatched_cycle_handoff_prompt_kind"
         elif normalized_cycle_handoff_reason != "validation_failed":
             cycle_handoff_block_reason = "mismatched_cycle_handoff_reason"
+    cycle_handoff_re_evaluation_attempted = False
+    cycle_handoff_re_evaluation_allowed = False
+    cycle_handoff_re_evaluation_block_reason = ""
+    cycle_handoff_re_evaluated_status = ""
+    cycle_handoff_re_evaluated_ready_to_generate = False
+    cycle_handoff_re_evaluated_generation_allowed = False
+    cycle_handoff_re_evaluation_safety_gates_passed = False
+    cycle_handoff_re_evaluation_source = ""
 
     target_file_candidates: list[str] = []
     for file_path in [*normalized_changed_files, *normalized_touched_files]:
@@ -47971,6 +47981,76 @@ def _build_project_browser_autonomous_fix_prompt_readiness_state(
         ready_to_generate = False
         generation_allowed = False
         generation_blocked = True
+    if cycle_handoff_acknowledged:
+        cycle_handoff_re_evaluation_attempted = True
+        cycle_handoff_re_evaluation_source = "cycle_failed_validation"
+        cycle_handoff_re_evaluation_safety_gates_passed = bool(
+            status == "ready_to_generate_fix_prompt"
+            and ready_to_generate
+            and generation_allowed
+            and validation_failed
+            and not validation_passed
+            and not rollback_required
+            and not human_review_required
+            and not metadata_failed
+            and not normalized_forbidden_changed_files
+            and not normalized_unexpected_changed_files
+            and bool(fix_target_files)
+        )
+        if cycle_handoff_re_evaluation_safety_gates_passed:
+            cycle_handoff_re_evaluation_allowed = True
+            status = "cycle_handoff_fix_ready"
+            next_action = "generate_fix_prompt"
+            ready_to_generate = True
+            generation_allowed = True
+            generation_blocked = False
+            cycle_handoff_re_evaluated_status = status
+            cycle_handoff_re_evaluated_ready_to_generate = True
+            cycle_handoff_re_evaluated_generation_allowed = True
+        elif human_review_required:
+            cycle_handoff_re_evaluation_block_reason = "blocked_human_review_required"
+        elif normalized_validation_status == "insufficient_truth" or (
+            not validation_failed and not validation_passed
+        ):
+            cycle_handoff_re_evaluation_block_reason = "blocked_missing_truth"
+        elif status in {
+            "blocked_rollback_required",
+            "blocked_forbidden_changes",
+            "blocked_unexpected_changes",
+            "blocked_metadata_inconsistency",
+            "blocked_validation_passed",
+            "blocked_missing_failure_truth",
+            "blocked_no_actionable_failure",
+            "insufficient_truth",
+            "blocked_insufficient_truth",
+        }:
+            cycle_handoff_re_evaluation_block_reason = (
+                "blocked_existing_readiness_safety_gate"
+            )
+        else:
+            cycle_handoff_re_evaluation_block_reason = (
+                "blocked_insufficient_re_evaluation_truth"
+            )
+    else:
+        if cycle_handoff_consumed:
+            cycle_handoff_re_evaluation_attempted = True
+        if cycle_handoff_consumed and normalized_cycle_handoff_prompt_kind != "fix":
+            cycle_handoff_re_evaluation_block_reason = (
+                "blocked_mismatched_cycle_handoff_prompt_kind"
+            )
+        elif cycle_handoff_consumed and normalized_cycle_handoff_reason != "validation_failed":
+            cycle_handoff_re_evaluation_block_reason = (
+                "blocked_mismatched_cycle_handoff_reason"
+            )
+        elif cycle_handoff_consumed or not cycle_handoff_acknowledged:
+            cycle_handoff_re_evaluation_block_reason = "blocked_handoff_not_acknowledged"
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if failure_kind not in allowed_failure_kinds:
+        failure_kind = "missing_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
 
     return {
         "project_browser_autonomous_fix_prompt_readiness_status": status,
@@ -48072,6 +48152,30 @@ def _build_project_browser_autonomous_fix_prompt_readiness_state(
         ),
         "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_readiness_source": (
             cycle_handoff_readiness_source
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_attempted": bool(
+            cycle_handoff_re_evaluation_attempted
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_allowed": bool(
+            cycle_handoff_re_evaluation_allowed
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_block_reason": (
+            cycle_handoff_re_evaluation_block_reason
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluated_status": (
+            cycle_handoff_re_evaluated_status
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluated_ready_to_generate": bool(
+            cycle_handoff_re_evaluated_ready_to_generate
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluated_generation_allowed": bool(
+            cycle_handoff_re_evaluated_generation_allowed
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_safety_gates_passed": bool(
+            cycle_handoff_re_evaluation_safety_gates_passed
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_source": (
+            cycle_handoff_re_evaluation_source
         ),
     }
 
@@ -48232,7 +48336,10 @@ def _build_project_browser_autonomous_fix_prompt_generation_state(
         next_action = "wait_for_more_truth"
         if not missing_inputs:
             missing_inputs.append("fix_prompt_readiness_truth")
-    elif normalized_readiness_status != "ready_to_generate_fix_prompt":
+    elif normalized_readiness_status not in {
+        "ready_to_generate_fix_prompt",
+        "cycle_handoff_fix_ready",
+    }:
         status = "blocked_not_ready"
         source_status = "readiness_not_ready"
         block_reason = f"readiness_status:{normalized_readiness_status or 'unknown'}"
@@ -48492,6 +48599,7 @@ def _build_project_browser_autonomous_next_prompt_readiness_state(
 ) -> dict[str, Any]:
     allowed_statuses = {
         "ready_to_generate_next_prompt",
+        "cycle_handoff_next_ready",
         "blocked_validation_not_passed",
         "blocked_validation_failed",
         "blocked_fix_required",
@@ -48505,6 +48613,7 @@ def _build_project_browser_autonomous_next_prompt_readiness_state(
     }
     allowed_next_actions = {
         "generate_next_prompt_later",
+        "generate_next_prompt",
         "wait_for_validation_pass",
         "run_fix_prompt_flow",
         "wait_for_more_truth",
@@ -48584,6 +48693,14 @@ def _build_project_browser_autonomous_next_prompt_readiness_state(
             cycle_handoff_block_reason = "mismatched_cycle_handoff_prompt_kind"
         elif normalized_cycle_handoff_reason != "cycle_passed":
             cycle_handoff_block_reason = "mismatched_cycle_handoff_reason"
+    cycle_handoff_re_evaluation_attempted = False
+    cycle_handoff_re_evaluation_allowed = False
+    cycle_handoff_re_evaluation_block_reason = ""
+    cycle_handoff_re_evaluated_status = ""
+    cycle_handoff_re_evaluated_ready_to_generate = False
+    cycle_handoff_re_evaluated_generation_allowed = False
+    cycle_handoff_re_evaluation_safety_gates_passed = False
+    cycle_handoff_re_evaluation_source = ""
     validation_missing = _normalize_string_list(validation_missing_inputs or [])
     fix_readiness_missing = _normalize_string_list(fix_readiness_missing_inputs or [])
     fix_generation_missing = _normalize_string_list(fix_generation_missing_inputs or [])
@@ -48719,6 +48836,72 @@ def _build_project_browser_autonomous_next_prompt_readiness_state(
         status = "insufficient_truth"
     if next_action not in allowed_next_actions:
         next_action = "insufficient_truth"
+    if cycle_handoff_acknowledged:
+        cycle_handoff_re_evaluation_attempted = True
+        cycle_handoff_re_evaluation_source = "cycle_passed"
+        cycle_handoff_re_evaluation_safety_gates_passed = bool(
+            status == "ready_to_generate_next_prompt"
+            and ready_to_generate
+            and generation_allowed
+            and validation_passed
+            and not validation_failed
+            and not rollback_required
+            and not human_review_required
+            and not insufficient_truth
+            and next_work_available
+            and bool(normalized_target_files)
+            and bool(next_scope and next_scope not in {"none", "unknown", "unbounded"})
+        )
+        if cycle_handoff_re_evaluation_safety_gates_passed:
+            cycle_handoff_re_evaluation_allowed = True
+            status = "cycle_handoff_next_ready"
+            next_action = "generate_next_prompt"
+            ready_to_generate = True
+            generation_allowed = True
+            cycle_handoff_re_evaluated_status = status
+            cycle_handoff_re_evaluated_ready_to_generate = True
+            cycle_handoff_re_evaluated_generation_allowed = True
+        elif human_review_required:
+            cycle_handoff_re_evaluation_block_reason = "blocked_human_review_required"
+        elif normalized_validation_status == "insufficient_truth" or normalized_post_apply_validation_status == "insufficient_truth":
+            cycle_handoff_re_evaluation_block_reason = "blocked_missing_truth"
+        elif status in {
+            "blocked_rollback_required",
+            "blocked_human_review_required",
+            "blocked_validation_not_passed",
+            "blocked_validation_failed",
+            "blocked_fix_required",
+            "blocked_insufficient_truth",
+            "blocked_missing_next_work",
+            "blocked_no_remaining_work",
+            "blocked_prompt_generation_already_attempted",
+            "insufficient_truth",
+        }:
+            cycle_handoff_re_evaluation_block_reason = (
+                "blocked_existing_readiness_safety_gate"
+            )
+        else:
+            cycle_handoff_re_evaluation_block_reason = (
+                "blocked_insufficient_re_evaluation_truth"
+            )
+    else:
+        if cycle_handoff_consumed:
+            cycle_handoff_re_evaluation_attempted = True
+        if cycle_handoff_consumed and normalized_cycle_handoff_prompt_kind != "next":
+            cycle_handoff_re_evaluation_block_reason = (
+                "blocked_mismatched_cycle_handoff_prompt_kind"
+            )
+        elif cycle_handoff_consumed and normalized_cycle_handoff_reason != "cycle_passed":
+            cycle_handoff_re_evaluation_block_reason = (
+                "blocked_mismatched_cycle_handoff_reason"
+            )
+        elif cycle_handoff_consumed or not cycle_handoff_acknowledged:
+            cycle_handoff_re_evaluation_block_reason = "blocked_handoff_not_acknowledged"
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
 
     return {
         "project_browser_autonomous_next_prompt_readiness_status": status,
@@ -48797,6 +48980,30 @@ def _build_project_browser_autonomous_next_prompt_readiness_state(
         ),
         "project_browser_autonomous_next_prompt_readiness_cycle_handoff_readiness_source": (
             cycle_handoff_readiness_source
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_attempted": bool(
+            cycle_handoff_re_evaluation_attempted
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_allowed": bool(
+            cycle_handoff_re_evaluation_allowed
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_block_reason": (
+            cycle_handoff_re_evaluation_block_reason
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluated_status": (
+            cycle_handoff_re_evaluated_status
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluated_ready_to_generate": bool(
+            cycle_handoff_re_evaluated_ready_to_generate
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluated_generation_allowed": bool(
+            cycle_handoff_re_evaluated_generation_allowed
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_safety_gates_passed": bool(
+            cycle_handoff_re_evaluation_safety_gates_passed
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_source": (
+            cycle_handoff_re_evaluation_source
         ),
     }
 
@@ -48937,7 +49144,10 @@ def _build_project_browser_autonomous_next_prompt_generation_state(
         source_status = "fix_flow_required"
         block_reason = "fix_required"
         next_action = "run_fix_prompt_flow"
-    elif normalized_readiness_status != "ready_to_generate_next_prompt":
+    elif normalized_readiness_status not in {
+        "ready_to_generate_next_prompt",
+        "cycle_handoff_next_ready",
+    }:
         status = "blocked_not_ready"
         source_status = "readiness_not_ready"
         block_reason = f"readiness_status:{normalized_readiness_status or 'unknown'}"
@@ -70948,6 +71158,7 @@ def _build_approved_restart_execution_contract_surface(
     )
     fix_prompt_readiness_allowed_statuses = {
         "ready_to_generate_fix_prompt",
+        "cycle_handoff_fix_ready",
         "blocked_validation_passed",
         "blocked_insufficient_truth",
         "blocked_human_review_required",
@@ -70977,6 +71188,7 @@ def _build_approved_restart_execution_contract_surface(
     }
     fix_prompt_readiness_allowed_next_actions = {
         "generate_fix_prompt_later",
+        "generate_fix_prompt",
         "wait_for_validation_failure",
         "wait_for_more_truth",
         "manual_review_required",
@@ -71028,6 +71240,14 @@ def _build_approved_restart_execution_contract_surface(
         "cycle_handoff_reason",
         "cycle_handoff_block_reason",
         "cycle_handoff_readiness_source",
+        "cycle_handoff_re_evaluation_attempted",
+        "cycle_handoff_re_evaluation_allowed",
+        "cycle_handoff_re_evaluation_block_reason",
+        "cycle_handoff_re_evaluated_status",
+        "cycle_handoff_re_evaluated_ready_to_generate",
+        "cycle_handoff_re_evaluated_generation_allowed",
+        "cycle_handoff_re_evaluation_safety_gates_passed",
+        "cycle_handoff_re_evaluation_source",
     )
 
     project_browser_autonomous_fix_prompt_readiness_status = _normalize_text(
@@ -71087,6 +71307,11 @@ def _build_approved_restart_execution_contract_surface(
             "rollback_required",
             "cycle_handoff_consumed",
             "cycle_handoff_acknowledged",
+            "cycle_handoff_re_evaluation_attempted",
+            "cycle_handoff_re_evaluation_allowed",
+            "cycle_handoff_re_evaluated_ready_to_generate",
+            "cycle_handoff_re_evaluated_generation_allowed",
+            "cycle_handoff_re_evaluation_safety_gates_passed",
         }:
             value = bool(value)
         elif field_name == "py_compile_exit_code":
@@ -71412,6 +71637,7 @@ def _build_approved_restart_execution_contract_surface(
     )
     next_prompt_readiness_allowed_statuses = {
         "ready_to_generate_next_prompt",
+        "cycle_handoff_next_ready",
         "blocked_validation_not_passed",
         "blocked_validation_failed",
         "blocked_fix_required",
@@ -71425,6 +71651,7 @@ def _build_approved_restart_execution_contract_surface(
     }
     next_prompt_readiness_allowed_next_actions = {
         "generate_next_prompt_later",
+        "generate_next_prompt",
         "wait_for_validation_pass",
         "run_fix_prompt_flow",
         "wait_for_more_truth",
@@ -71465,6 +71692,14 @@ def _build_approved_restart_execution_contract_surface(
         "cycle_handoff_reason",
         "cycle_handoff_block_reason",
         "cycle_handoff_readiness_source",
+        "cycle_handoff_re_evaluation_attempted",
+        "cycle_handoff_re_evaluation_allowed",
+        "cycle_handoff_re_evaluation_block_reason",
+        "cycle_handoff_re_evaluated_status",
+        "cycle_handoff_re_evaluated_ready_to_generate",
+        "cycle_handoff_re_evaluated_generation_allowed",
+        "cycle_handoff_re_evaluation_safety_gates_passed",
+        "cycle_handoff_re_evaluation_source",
     )
     project_browser_autonomous_next_prompt_readiness_status = _normalize_text(
         project_browser_autonomous_next_prompt_readiness_state.get(
@@ -71508,6 +71743,11 @@ def _build_approved_restart_execution_contract_surface(
             "prompt_generated",
             "cycle_handoff_consumed",
             "cycle_handoff_acknowledged",
+            "cycle_handoff_re_evaluation_attempted",
+            "cycle_handoff_re_evaluation_allowed",
+            "cycle_handoff_re_evaluated_ready_to_generate",
+            "cycle_handoff_re_evaluated_generation_allowed",
+            "cycle_handoff_re_evaluation_safety_gates_passed",
         }:
             value = bool(value)
         elif field_name in {"next_target_files", "runtime_posture", "missing_inputs"}:
@@ -74166,6 +74406,310 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_next_prompt_readiness_state_normalized[
         "project_browser_autonomous_next_prompt_readiness_cycle_handoff_readiness_source"
     ] = next_cycle_handoff_readiness_source
+
+    # Prompt176: in-run safety-gated readiness re-evaluation from current cycle handoff.
+    fix_cycle_re_eval_attempted = bool(cycle_handoff_available)
+    fix_cycle_re_eval_allowed = False
+    fix_cycle_re_eval_block_reason = ""
+    fix_cycle_re_eval_status = ""
+    fix_cycle_re_eval_ready_to_generate = False
+    fix_cycle_re_eval_generation_allowed = False
+    fix_cycle_re_eval_safety_gates_passed = False
+    fix_cycle_re_eval_source = "cycle_failed_validation" if fix_cycle_handoff_acknowledged else ""
+    fix_missing_truth_active = bool(
+        project_browser_autonomous_fix_prompt_readiness_status
+        in {"blocked_insufficient_truth", "insufficient_truth"}
+    ) or bool(
+        _normalize_string_list(
+            project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_fix_prompt_readiness_missing_inputs"
+            )
+        )
+    )
+    fix_existing_safety_gate_blocked = bool(
+        project_browser_autonomous_fix_prompt_readiness_status
+        in {
+            "blocked_rollback_required",
+            "blocked_forbidden_changes",
+            "blocked_unexpected_changes",
+            "blocked_metadata_inconsistency",
+            "blocked_validation_passed",
+            "blocked_missing_failure_truth",
+            "blocked_no_actionable_failure",
+            "blocked_human_review_required",
+        }
+    )
+    fix_cycle_re_eval_safety_gates_passed = bool(
+        fix_cycle_handoff_acknowledged
+        and project_browser_autonomous_fix_prompt_readiness_status
+        in {"ready_to_generate_fix_prompt", "cycle_handoff_fix_ready"}
+        and bool(
+            project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_fix_prompt_readiness_ready_to_generate",
+                False,
+            )
+        )
+        and bool(
+            project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_fix_prompt_readiness_generation_allowed",
+                False,
+            )
+        )
+        and not bool(
+            project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_fix_prompt_readiness_human_review_required",
+                False,
+            )
+        )
+        and not bool(
+            project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_fix_prompt_readiness_rollback_required",
+                False,
+            )
+        )
+        and not _normalize_string_list(
+            project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_fix_prompt_readiness_forbidden_changed_files_after_apply"
+            )
+        )
+        and not _normalize_string_list(
+            project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_fix_prompt_readiness_unexpected_changed_files_after_apply"
+            )
+        )
+        and not bool(
+            project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_fix_prompt_readiness_metadata_consistency_failed",
+                False,
+            )
+        )
+        and bool(
+            _normalize_string_list(
+                project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_readiness_fix_target_files"
+                )
+            )
+        )
+    )
+    if fix_cycle_handoff_acknowledged and fix_cycle_re_eval_safety_gates_passed:
+        fix_cycle_re_eval_allowed = True
+        project_browser_autonomous_fix_prompt_readiness_status = "cycle_handoff_fix_ready"
+        project_browser_autonomous_fix_prompt_readiness_next_action = "generate_fix_prompt"
+        project_browser_autonomous_fix_prompt_readiness_state_normalized[
+            "project_browser_autonomous_fix_prompt_readiness_status"
+        ] = project_browser_autonomous_fix_prompt_readiness_status
+        project_browser_autonomous_fix_prompt_readiness_state_normalized[
+            "project_browser_autonomous_fix_prompt_readiness_next_action"
+        ] = project_browser_autonomous_fix_prompt_readiness_next_action
+        project_browser_autonomous_fix_prompt_readiness_state_normalized[
+            "project_browser_autonomous_fix_prompt_readiness_ready_to_generate"
+        ] = True
+        project_browser_autonomous_fix_prompt_readiness_state_normalized[
+            "project_browser_autonomous_fix_prompt_readiness_generation_allowed"
+        ] = True
+        project_browser_autonomous_fix_prompt_readiness_state_normalized[
+            "project_browser_autonomous_fix_prompt_readiness_generation_blocked"
+        ] = False
+        fix_cycle_re_eval_status = "cycle_handoff_fix_ready"
+        fix_cycle_re_eval_ready_to_generate = True
+        fix_cycle_re_eval_generation_allowed = True
+    else:
+        if bool(
+            project_browser_autonomous_fix_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_fix_prompt_readiness_human_review_required",
+                False,
+            )
+        ):
+            fix_cycle_re_eval_block_reason = "blocked_human_review_required"
+        elif fix_missing_truth_active:
+            fix_cycle_re_eval_block_reason = "blocked_missing_truth"
+        elif fix_existing_safety_gate_blocked:
+            fix_cycle_re_eval_block_reason = "blocked_existing_readiness_safety_gate"
+        elif not fix_cycle_handoff_consumed:
+            fix_cycle_re_eval_block_reason = "blocked_handoff_not_acknowledged"
+        elif cycle_handoff_prompt_kind != "fix":
+            fix_cycle_re_eval_block_reason = "blocked_mismatched_cycle_handoff_prompt_kind"
+        elif cycle_handoff_reason != "validation_failed":
+            fix_cycle_re_eval_block_reason = "blocked_mismatched_cycle_handoff_reason"
+        else:
+            fix_cycle_re_eval_block_reason = "blocked_insufficient_re_evaluation_truth"
+
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_attempted"
+    ] = bool(fix_cycle_re_eval_attempted)
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_allowed"
+    ] = bool(fix_cycle_re_eval_allowed)
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_block_reason"
+    ] = fix_cycle_re_eval_block_reason
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluated_status"
+    ] = fix_cycle_re_eval_status
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluated_ready_to_generate"
+    ] = bool(fix_cycle_re_eval_ready_to_generate)
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluated_generation_allowed"
+    ] = bool(fix_cycle_re_eval_generation_allowed)
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_safety_gates_passed"
+    ] = bool(fix_cycle_re_eval_safety_gates_passed)
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_re_evaluation_source"
+    ] = fix_cycle_re_eval_source
+
+    next_cycle_re_eval_attempted = bool(cycle_handoff_available)
+    next_cycle_re_eval_allowed = False
+    next_cycle_re_eval_block_reason = ""
+    next_cycle_re_eval_status = ""
+    next_cycle_re_eval_ready_to_generate = False
+    next_cycle_re_eval_generation_allowed = False
+    next_cycle_re_eval_safety_gates_passed = False
+    next_cycle_re_eval_source = "cycle_passed" if next_cycle_handoff_acknowledged else ""
+    next_missing_truth_active = bool(
+        project_browser_autonomous_next_prompt_readiness_status
+        in {"blocked_insufficient_truth", "insufficient_truth"}
+    ) or bool(
+        _normalize_string_list(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_missing_inputs"
+            )
+        )
+    )
+    next_existing_safety_gate_blocked = bool(
+        project_browser_autonomous_next_prompt_readiness_status
+        in {
+            "blocked_rollback_required",
+            "blocked_human_review_required",
+            "blocked_validation_not_passed",
+            "blocked_validation_failed",
+            "blocked_fix_required",
+            "blocked_missing_next_work",
+            "blocked_no_remaining_work",
+            "blocked_prompt_generation_already_attempted",
+        }
+    )
+    next_cycle_re_eval_safety_gates_passed = bool(
+        next_cycle_handoff_acknowledged
+        and project_browser_autonomous_next_prompt_readiness_status
+        in {"ready_to_generate_next_prompt", "cycle_handoff_next_ready"}
+        and bool(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_ready_to_generate",
+                False,
+            )
+        )
+        and bool(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_generation_allowed",
+                False,
+            )
+        )
+        and not bool(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_human_review_required",
+                False,
+            )
+        )
+        and not bool(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_rollback_required",
+                False,
+            )
+        )
+        and bool(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_validation_passed",
+                False,
+            )
+        )
+        and not bool(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_validation_failed",
+                False,
+            )
+        )
+        and not bool(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_insufficient_truth",
+                False,
+            )
+        )
+        and bool(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_next_work_available",
+                False,
+            )
+        )
+    )
+    if next_cycle_handoff_acknowledged and next_cycle_re_eval_safety_gates_passed:
+        next_cycle_re_eval_allowed = True
+        project_browser_autonomous_next_prompt_readiness_status = "cycle_handoff_next_ready"
+        project_browser_autonomous_next_prompt_readiness_next_action = "generate_next_prompt"
+        project_browser_autonomous_next_prompt_readiness_state_normalized[
+            "project_browser_autonomous_next_prompt_readiness_status"
+        ] = project_browser_autonomous_next_prompt_readiness_status
+        project_browser_autonomous_next_prompt_readiness_state_normalized[
+            "project_browser_autonomous_next_prompt_readiness_next_action"
+        ] = project_browser_autonomous_next_prompt_readiness_next_action
+        project_browser_autonomous_next_prompt_readiness_state_normalized[
+            "project_browser_autonomous_next_prompt_readiness_ready_to_generate"
+        ] = True
+        project_browser_autonomous_next_prompt_readiness_state_normalized[
+            "project_browser_autonomous_next_prompt_readiness_generation_allowed"
+        ] = True
+        project_browser_autonomous_next_prompt_readiness_state_normalized[
+            "project_browser_autonomous_next_prompt_readiness_generation_blocked"
+        ] = False
+        next_cycle_re_eval_status = "cycle_handoff_next_ready"
+        next_cycle_re_eval_ready_to_generate = True
+        next_cycle_re_eval_generation_allowed = True
+    else:
+        if bool(
+            project_browser_autonomous_next_prompt_readiness_state_normalized.get(
+                "project_browser_autonomous_next_prompt_readiness_human_review_required",
+                False,
+            )
+        ):
+            next_cycle_re_eval_block_reason = "blocked_human_review_required"
+        elif next_missing_truth_active:
+            next_cycle_re_eval_block_reason = "blocked_missing_truth"
+        elif next_existing_safety_gate_blocked:
+            next_cycle_re_eval_block_reason = "blocked_existing_readiness_safety_gate"
+        elif not next_cycle_handoff_consumed:
+            next_cycle_re_eval_block_reason = "blocked_handoff_not_acknowledged"
+        elif cycle_handoff_prompt_kind != "next":
+            next_cycle_re_eval_block_reason = "blocked_mismatched_cycle_handoff_prompt_kind"
+        elif cycle_handoff_reason != "cycle_passed":
+            next_cycle_re_eval_block_reason = "blocked_mismatched_cycle_handoff_reason"
+        else:
+            next_cycle_re_eval_block_reason = "blocked_insufficient_re_evaluation_truth"
+
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_attempted"
+    ] = bool(next_cycle_re_eval_attempted)
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_allowed"
+    ] = bool(next_cycle_re_eval_allowed)
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_block_reason"
+    ] = next_cycle_re_eval_block_reason
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluated_status"
+    ] = next_cycle_re_eval_status
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluated_ready_to_generate"
+    ] = bool(next_cycle_re_eval_ready_to_generate)
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluated_generation_allowed"
+    ] = bool(next_cycle_re_eval_generation_allowed)
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_safety_gates_passed"
+    ] = bool(next_cycle_re_eval_safety_gates_passed)
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_re_evaluation_source"
+    ] = next_cycle_re_eval_source
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(

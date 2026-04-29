@@ -1678,3 +1678,49 @@ Known follow-up:
 - Prompt175 consumes and acknowledges handoff metadata, but readiness status is still
   governed by existing safety logic. Prompt176 should add safety-gated in-run
   readiness re-evaluation from acknowledged handoff.
+
+
+<!-- prompt176-update -->
+## Prompt176 — safety-gated in-run readiness re-evaluation from cycle handoff
+
+Status: completed.
+
+Changed:
+- Added safety-gated cycle-handoff re-evaluation fields to both fix and next
+  prompt readiness builders.
+- Added in-run re-evaluation pass after the Prompt174 handoff bridge so current-run
+  handoff metadata is consumed without reordering the pipeline.
+- Fix readiness can become `cycle_handoff_fix_ready` when:
+  - fix handoff is acknowledged
+  - existing readiness safety gates pass
+  - no human-review / rollback / missing-truth safety blocker applies
+- Next readiness can become `cycle_handoff_next_ready` when:
+  - next handoff is acknowledged
+  - existing readiness safety gates pass
+  - no human-review / rollback / missing-truth safety blocker applies
+- Added deterministic re-evaluation block reasons:
+  - `blocked_human_review_required`
+  - `blocked_missing_truth`
+  - `blocked_existing_readiness_safety_gate`
+  - `blocked_handoff_not_acknowledged`
+  - `blocked_mismatched_cycle_handoff_prompt_kind`
+  - `blocked_mismatched_cycle_handoff_reason`
+  - `blocked_insufficient_re_evaluation_truth`
+- Updated readiness fields continue to flow into compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt176 implementation.
+- No tests were run.
+- No prompt files were generated.
+- No Codex invocation, rollback, commit, GitHub operation, retry loop, scheduler,
+  daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Readiness can now be re-evaluated in-run, but downstream Prompt161/163 generation
+  states are still built earlier in the pipeline. Prompt177 should wire generation
+  states to consume re-evaluated readiness in the same run.

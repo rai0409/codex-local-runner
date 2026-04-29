@@ -1929,3 +1929,26 @@ Current limitation:
 - Readiness status is not yet re-evaluated from acknowledged handoff in the same run.
 - Prompt176 should add a small safety-gated precedence layer for in-run readiness
   re-evaluation.
+
+
+<!-- prompt176-update -->
+## Prompt176 architecture constraint update
+
+Prompt176 adds safety-gated in-run readiness re-evaluation from acknowledged cycle
+handoff.
+
+Authoritative safety rule:
+- `cycle_handoff_acknowledged=true` can re-drive readiness only when existing safety
+  gates are clean.
+- Re-evaluation must not bypass human review, rollback safety, missing truth,
+  unsafe status, or existing readiness blockers.
+- Fix readiness may become `cycle_handoff_fix_ready` only for acknowledged fix
+  handoff from validation failure.
+- Next readiness may become `cycle_handoff_next_ready` only for acknowledged next
+  handoff from cycle pass.
+- Prompt176 must not generate prompt files, invoke Codex, rollback, commit, create
+  GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt161/163 generation states do not yet consume re-evaluated readiness in the
+  same run. Prompt177 should add that wiring without introducing new executors.
