@@ -5185,3 +5185,44 @@ Known follow-up:
   - Downstream consumers should use selected fields for immediate action and root-cause fields for diagnosis/remediation.
 - Next:
   - Prompt228-fix10 should add a compact consumer policy contract defining precedence between selected_reason_family and root_cause_reason_family for downstream routing.
+
+## Prompt228-fix10 - Add N2 reason consumer policy contract
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Purpose:
+  - Add a consumer policy surface for N=2 reason taxonomy readout.
+  - Separate:
+    - selected_reason_family for immediate action routing
+    - root_cause_reason_family for remediation/diagnostics
+    - Prompt229 readiness from explicit Prompt228 readiness booleans only
+- Added:
+  - _build_project_browser_autonomous_bounded_n2_reason_consumer_policy_state(...)
+  - Output prefix:
+    - project_browser_autonomous_bounded_n2_reason_consumer_policy_*
+- Result:
+  - policy status=bounded_n2_reason_consumer_policy_manual_stop
+  - selected_reason_policy=route_immediate_by_selected_reason_family
+  - root_cause_reason_policy=route_remediation_by_root_cause_reason_family
+  - readiness_policy=prompt229_readiness_requires_explicit_prompt228_ready_boolean
+  - prompt229_allowed_by_policy=false
+  - prompt229_block_reason=selected_manual_stop_or_prompt228_not_ready
+  - should_prepare_prompt229=false
+  - should_prepare_manual_review=true
+  - should_preserve_manual_stop=true
+  - selected_reason_family=manual_stop
+  - root_cause_reason_family=fresh_surface_missing
+  - Prompt228 Prompt229 readiness remains false:
+    - prompt229_e2e_flow_check_ready=false
+    - prompt229_fresh_runtime_evidence_ready=false
+- Safety:
+  - N=2 authority/allow/readiness gates unchanged.
+  - Prompt229 readiness remains controlled only by existing Prompt228 readiness booleans.
+  - No tests added.
+  - No docs edited during Codex run.
+  - No Prompt229 added.
+  - No executor, rollback, commit/tag execution, push, GitHub, retry, or unbounded-loop behavior added.
+- Remaining risk:
+  - Some downstream consumers may still ignore the new policy surface and route by legacy reason tokens only.
+- Next:
+  - Prompt228-fix11 should add a downstream-consumer conformance gate that flags legacy-token-only routing when project_browser_autonomous_bounded_n2_reason_consumer_policy_* is available.

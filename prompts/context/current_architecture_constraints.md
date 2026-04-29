@@ -3247,3 +3247,27 @@ Architecture constraints:
 - Do not infer Prompt229 readiness from reason_family alone.
 - Prompt229 readiness must remain controlled by explicit Prompt228 readiness booleans.
 - Existing no-loop, no-retry, no-push, no-GitHub, no-new-executor, and accounting-safety boundaries remain mandatory.
+
+## Prompt228-fix10 constraint update
+
+Prompt228-fix10 added an explicit N=2 reason consumer policy surface.
+
+Current policy behavior:
+- selected_reason_family is for immediate action routing.
+- root_cause_reason_family is for remediation and diagnostics.
+- Prompt229 readiness must be controlled only by explicit Prompt228 readiness booleans.
+- reason_family alone must never make Prompt229 ready.
+
+Current dry-run policy:
+- selected_reason_family=manual_stop
+- root_cause_reason_family=fresh_surface_missing
+- prompt229_allowed_by_policy=false
+- should_prepare_prompt229=false
+- should_prepare_manual_review=true
+- should_preserve_manual_stop=true
+
+Architecture constraints:
+- Downstream consumers should use project_browser_autonomous_bounded_n2_reason_consumer_policy_* before legacy raw reason tokens.
+- Legacy raw reason tokens remain diagnostic/backward-compatible only.
+- Do not infer execution readiness from selected_reason_family or root_cause_reason_family alone.
+- Existing no-loop, no-retry, no-push, no-GitHub, no-new-executor, and accounting-safety boundaries remain mandatory.
