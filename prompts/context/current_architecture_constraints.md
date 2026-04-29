@@ -2215,3 +2215,23 @@ Current limitation:
   depends on existing Prompt160/161 readiness/generation refresh logic consuming
   those fields.
 - Prompt189 should add that explicit consumer-side hardening.
+
+
+<!-- prompt189-update -->
+## Prompt189 architecture constraint update
+
+Prompt189 makes post-rollback fix handoff an explicit positive input to the existing
+fix readiness/generation refresh path.
+
+Authoritative rule:
+- Post-rollback fix handoff is a positive input only, not a safety bypass.
+- Existing fix readiness/generation gates remain authoritative.
+- Prompt189 must not create a new fix generator, invoke Codex, execute rollback,
+  commit, create GitHub operations, retry, loop, or create new executors.
+- Rollback-derived fix generation input must never mark commit readiness.
+
+Current limitation:
+- Prompt189 refreshes fix generation inputs, but downstream generated-prompt
+  re-entry readiness/routing may already have been computed earlier in the pipeline.
+- Prompt190 should add deterministic downstream propagation from refreshed fix
+  generation outputs to the existing generated-prompt re-entry path.

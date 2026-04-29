@@ -2359,3 +2359,57 @@ Known follow-up:
 - Prompt189 should explicitly consume `post_rollback_fix_handoff_allowed` as a
   positive non-bypass generation input in the existing same-run fix
   readiness/generation refresh decision branch.
+
+
+<!-- prompt189-update -->
+## Prompt189 — post-rollback fix handoff consumption in fix generation refresh
+
+Status: completed.
+
+Changed:
+- Added an explicit Prompt189 consumption hook after Prompt188 normalization.
+- Consumes post-rollback fix handoff as a positive non-bypass input for the existing
+  Prompt161 fix generation builder path.
+- Added fix readiness handoff consumption fields under:
+  `project_browser_autonomous_fix_prompt_readiness_*`
+  - `post_rollback_fix_handoff_consumed`
+  - `post_rollback_fix_handoff_acknowledged`
+  - `post_rollback_fix_handoff_effective`
+  - `post_rollback_fix_handoff_effective_reason`
+  - `post_rollback_fix_handoff_re_evaluation_allowed`
+  - `post_rollback_fix_handoff_re_evaluation_block_reason`
+- Added fix generation input consumption fields under:
+  `project_browser_autonomous_fix_prompt_generation_*`
+  - `post_rollback_fix_generation_input_available`
+  - `post_rollback_fix_generation_input_consumed`
+  - `post_rollback_fix_generation_input_effective`
+  - `post_rollback_fix_generation_input_source`
+  - `post_rollback_fix_generation_input_reason`
+  - `post_rollback_fix_generation_input_block_reason`
+  - `post_rollback_fix_generation_refresh_applied`
+- Implemented deterministic blocked reasons:
+  - `blocked_post_rollback_handoff_not_allowed`
+  - `blocked_mismatched_prompt_kind`
+  - `blocked_fix_readiness_refresh_not_allowed`
+  - `blocked_fix_generation_refresh_not_allowed`
+  - `blocked_human_review_required`
+  - `blocked_codex_invocation_requested_unexpectedly`
+  - `blocked_rollback_requested_unexpectedly`
+  - `blocked_commit_requested_unexpectedly`
+  - `blocked_insufficient_post_rollback_fix_truth`
+- Existing fix readiness/generation gates remain authoritative.
+- No forced ready/generate bypass was added.
+- No Codex invocation, rollback execution, commit/stage behavior, tests, docs, or
+  new executor were added.
+- Exposed Prompt189 metadata through existing normalized fix readiness/generation
+  maps, compact planning summary, supporting truth refs, and final approved restart
+  payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Known follow-up:
+- Prompt190 should propagate Prompt189 refreshed fix-generation results into the
+  existing generated-prompt re-entry readiness/routing path in the same run, without
+  invoking Codex.
