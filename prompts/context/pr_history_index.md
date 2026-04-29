@@ -3620,3 +3620,67 @@ Known follow-up:
   `project_browser_autonomous_control_dispatch_refresh_*`, classify refresh result,
   emit controller feedback, and derive exactly one bounded next control target or
   manual stop without executing downstream actions.
+
+
+<!-- prompt210-update -->
+## Prompt210 — control dispatch refresh result assimilation / final controller feedback
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_control_dispatch_refresh_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_control_dispatch_refresh_result_assimilation_*`.
+- Consumes Prompt209 control dispatch refresh:
+  `project_browser_autonomous_control_dispatch_refresh_*`.
+- Selects Prompt209 as authoritative only when:
+  - `control_dispatch_refresh_result_ready_for_assimilation=true`
+  - source is `prompt209_control_dispatch_refresh`
+  - next stage is `control_dispatch_refresh_result_assimilation`
+  - required selected kind/action is present, or manual-stop/blocked context is present
+- Classifies refresh results:
+  - reentry result assimilation completed
+  - rollback result assimilation completed
+  - commit/tag result assimilation completed
+  - manual stop
+  - failed
+  - blocked
+  - insufficient truth
+- Maps safe completed selected assimilation refresh results to:
+  - `next_bounded_control_target_kind="multi_cycle_controller"`
+  - `next_action="prepare_next_multi_cycle_decision"`
+- Enforces `non_selected_refresh_paths_noop=true` on successful non-stop outcomes.
+- Emits controller feedback payloads and next bounded control target payloads.
+- Preserves continuation policy:
+  - `should_continue_local_loop=false`
+  - `should_prepare_next_controller_decision=true` only for safe completed assimilation-refresh handback.
+- Preserves metadata-only boundaries:
+  - no Codex invocation
+  - no rollback execution
+  - no commit/tag execution
+  - no validation execution
+  - no prompt generation
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt210 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt210 implementation.
+- No tests were run.
+- Prompt210 intentionally trusts delegated assimilation status presence as the authoritative completion signal.
+- Empty or unexpected upstream assimilation status routes to blocked / insufficient-truth manual-stop posture.
+
+Known follow-up:
+- Prompt211 should consume
+  `project_browser_autonomous_control_dispatch_refresh_result_assimilation_*`
+  and derive a final runtime continuation guard for handback to the multi-cycle
+  controller, without executing any downstream action.

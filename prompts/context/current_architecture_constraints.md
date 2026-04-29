@@ -2666,3 +2666,25 @@ Current limitation:
 - Prompt209 emits refresh result metadata, but does not yet classify it into final
   controller feedback / next bounded control target.
 - Prompt210 should add that metadata-only classification.
+
+
+<!-- prompt210-update -->
+## Prompt210 architecture constraint update
+
+Prompt210 adds control dispatch refresh result assimilation and final controller feedback.
+
+Authoritative feedback rule:
+- Prompt210 may derive final controller feedback only from Prompt209 control dispatch refresh result.
+- Prompt210 must not infer final feedback from Prompt208 dispatch, Prompt207 control decision, or older assimilation maps alone.
+- Safe completed selected assimilation refresh results may target the multi-cycle controller via:
+  `prepare_next_multi_cycle_decision`.
+- Prompt210 must not start the next loop step.
+- `should_continue_local_loop` remains false.
+- Prompt210 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+
+Current limitation:
+- Prompt210 emits a next bounded control target for the multi-cycle controller, but
+  does not decide whether the runtime may continue.
+- Prompt211 should add the final runtime continuation guard.
