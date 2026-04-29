@@ -2192,3 +2192,26 @@ Current limitation:
 - Prompt187 can allow post-rollback fix continuation, but it does not yet feed that
   decision into existing fix prompt readiness/generation flow.
 - Prompt188 should add that handoff/readiness wiring without invoking Codex.
+
+
+<!-- prompt188-update -->
+## Prompt188 architecture constraint update
+
+Prompt188 connects post-rollback fix continuation into existing fix prompt
+readiness/generation metadata.
+
+Authoritative post-rollback fix handoff rule:
+- Prompt188 must consume Prompt187 post-rollback continuation gate as authoritative.
+- Post-rollback fix handoff may be a positive input to existing fix readiness /
+  generation only when all Prompt187 safety and budget gates pass.
+- Existing fix readiness/generation gates remain authoritative.
+- Prompt188 must not bypass readiness, create a new fix generator, invoke Codex,
+  execute rollback, commit, create GitHub operations, retry, loop, or create new
+  executors.
+- Rollback-derived fix handoff must never mark commit readiness.
+
+Current limitation:
+- Prompt188 adds additive metadata fields, but same-run fix generation outcome still
+  depends on existing Prompt160/161 readiness/generation refresh logic consuming
+  those fields.
+- Prompt189 should add that explicit consumer-side hardening.

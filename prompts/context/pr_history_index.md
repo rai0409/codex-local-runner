@@ -2304,3 +2304,58 @@ Known follow-up:
 - Prompt188 should consume `project_browser_autonomous_post_rollback_continuation_gate_*`
   and connect allowed post-rollback fix continuation to the existing fix prompt
   readiness/generation flow without invoking Codex.
+
+
+<!-- prompt188-update -->
+## Prompt188 — post-rollback fix handoff to fix readiness/generation flow
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_post_rollback_fix_handoff_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_post_rollback_fix_handoff_*`.
+- Consumes Prompt187 post-rollback continuation gate:
+  `project_browser_autonomous_post_rollback_continuation_gate_*`.
+- Uses Prompt187 as authoritative source for post-rollback fix continuation.
+- Adds additive post-rollback handoff fields to existing fix prompt readiness map:
+  - `post_rollback_fix_handoff_available`
+  - `post_rollback_fix_handoff_allowed`
+  - `post_rollback_fix_handoff_reason`
+  - `post_rollback_fix_handoff_source`
+  - `post_rollback_fix_handoff_block_reason`
+- Adds additive post-rollback refresh fields to existing fix prompt generation map:
+  - `post_rollback_fix_generation_refresh_allowed`
+  - `post_rollback_fix_generation_refresh_source`
+  - `post_rollback_fix_generation_reason`
+  - `post_rollback_fix_generation_block_reason`
+- Handoff allow rule requires Prompt187 allowed-fix posture and explicit safety
+  booleans:
+  - no Codex invocation
+  - no rollback execution
+  - no next prompt
+  - no commit
+  - budgets available
+  - no human review
+- Existing fix readiness/generation gates are not bypassed or replaced.
+- Commit boundary is preserved:
+  `should_commit=false`.
+- Exposed Prompt188 bridge state and refreshed fix readiness/generation metadata
+  through compact planning summary, supporting truth refs, and final approved
+  restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt188 implementation.
+- No tests were run.
+- No Codex invocation, rollback execution, commit, GitHub operation, retry loop,
+  scheduler, daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt188 adds additive metadata wiring only.
+- Prompt189 should explicitly consume `post_rollback_fix_handoff_allowed` as a
+  positive non-bypass generation input in the existing same-run fix
+  readiness/generation refresh decision branch.
