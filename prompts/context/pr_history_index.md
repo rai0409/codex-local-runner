@@ -3684,3 +3684,73 @@ Known follow-up:
   `project_browser_autonomous_control_dispatch_refresh_result_assimilation_*`
   and derive a final runtime continuation guard for handback to the multi-cycle
   controller, without executing any downstream action.
+
+
+<!-- prompt211-update -->
+## Prompt211 — final runtime continuation guard
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_final_runtime_continuation_guard_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_final_runtime_continuation_guard_*`.
+- Consumes Prompt210 final controller feedback:
+  `project_browser_autonomous_control_dispatch_refresh_result_assimilation_*`.
+- Enforces Prompt210 authoritative-source gating:
+  - source marker checks
+  - next-target checks
+  - controller-feedback prerequisites
+- Adds multi-cycle handback candidate with required checks:
+  - completed assimilation result class
+  - multi-cycle target/action match
+  - controller feedback ready
+  - no stop/manual-review/forbidden execution flags
+  - non-selected refresh no-op confirmed
+  - cycle budget remaining > 0
+- Consumes Prompt197 budget metadata:
+  - remaining cycles
+  - remaining Codex invocations
+  - remaining rollback attempts
+  - remaining commits
+- Uses safe integer normalization and defaults missing budget truth to `0`.
+- Adds hard-stop gates for:
+  - unsafe state
+  - dirty state
+  - conflict state
+  - forbidden execution flags
+  - cycle budget exhaustion
+- Implements deterministic statuses:
+  - `final_runtime_continuation_guard_multi_cycle_handback_ready`
+  - `final_runtime_continuation_guard_manual_stop`
+  - `final_runtime_continuation_guard_blocked`
+  - `final_runtime_continuation_guard_blocked_conflict`
+  - `final_runtime_continuation_guard_blocked_insufficient_truth`
+- Preserves unbounded-loop prevention:
+  - `should_start_unbounded_loop=false`
+  - `should_continue_local_loop=false`
+- Does not start or coordinate execution.
+- Exposed Prompt211 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt211 implementation.
+- No tests were run.
+- Only changed file was:
+  `automation/orchestration/planned_execution_runner.py`.
+
+Known risk:
+- Safety / dirty / conflict inference is metadata-driven. If upstream status naming
+  changes, Prompt211 may conservatively block continuation.
+
+Known follow-up:
+- Prompt212 should consume
+  `project_browser_autonomous_final_runtime_continuation_guard_*` and produce an
+  exactly-one bounded continuation coordination contract for multi-cycle handback
+  or manual stop, without executing the next step.

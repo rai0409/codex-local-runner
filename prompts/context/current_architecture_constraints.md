@@ -2688,3 +2688,35 @@ Current limitation:
 - Prompt210 emits a next bounded control target for the multi-cycle controller, but
   does not decide whether the runtime may continue.
 - Prompt211 should add the final runtime continuation guard.
+
+
+<!-- prompt211-update -->
+## Prompt211 architecture constraint update
+
+Prompt211 adds the final runtime continuation guard.
+
+Authoritative continuation rule:
+- Prompt211 may allow multi-cycle handback only from Prompt210 final controller feedback.
+- Prompt211 must not infer continuation from Prompt197, Prompt209, or older controller
+  states alone.
+- Prompt211 must not start the next step.
+- Prompt211 must keep:
+  - `should_continue_local_loop=false`
+  - `should_start_unbounded_loop=false`
+- Prompt211 must block continuation on:
+  - manual review
+  - stop
+  - unsafe state
+  - dirty state
+  - conflict state
+  - forbidden execution flags
+  - missing/empty budget truth
+  - cycle budget exhaustion
+- Prompt211 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, call GitHub, retry, loop, or create new
+  executors.
+
+Current limitation:
+- Prompt211 decides whether handback to the multi-cycle controller is safe, but it
+  does not coordinate the next bounded step.
+- Prompt212 should build the one-bounded continuation coordinator.
