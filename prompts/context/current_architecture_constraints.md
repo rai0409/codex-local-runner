@@ -2789,3 +2789,26 @@ Authoritative direct-retrigger rule:
   - existing truth surface classification
   - stale truth only
   - blocked / manual-stop / failed
+
+
+<!-- prompt215-update -->
+## Prompt215 architecture constraint update
+
+Prompt215 adds direct re-trigger result assimilation.
+
+Authoritative result-assimilation rule:
+- Prompt215 may classify direct re-trigger results only from Prompt214 handoff metadata.
+- Prompt215 must not infer direct re-trigger result from Prompt213 preflight or
+  Prompt212 continuation contract alone.
+- Prompt215 must distinguish:
+  - fresh attempted bounded path
+  - existing truth surface classification
+  - stale truth only
+  - existing bounded path not callable
+  - blocked / failed / manual stop
+- Prompt215 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+- Prompt215 must not start another loop step.
+- Prompt216 should select exactly one next safe follow-up contract from Prompt215
+  classification.

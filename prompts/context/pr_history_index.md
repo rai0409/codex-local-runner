@@ -3955,3 +3955,80 @@ Known follow-up:
   `project_browser_autonomous_direct_retrigger_coordinator_*`, classify completed /
   manual-stop / blocked outcomes, distinguish fresh attempt vs existing truth vs stale
   truth, and feed bounded controller feedback for the next safe decision stage.
+
+
+<!-- prompt215-update -->
+## Prompt215 — direct re-trigger result assimilation
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_direct_retrigger_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_direct_retrigger_result_assimilation_*`.
+- Consumes Prompt214 direct re-trigger coordinator:
+  `project_browser_autonomous_direct_retrigger_coordinator_*`.
+- Enforces Prompt214 authoritative-source checks:
+  - `prompt215_result_ready_for_assimilation=true`
+  - `prompt215_result_assimilation_source=="prompt214_direct_retrigger_coordinator"`
+  - `prompt215_result_next_stage=="direct_retrigger_result_assimilation"`
+  - selected retrigger kind / status presence constraints
+- Classifies direct re-trigger result into:
+  - completed fresh attempt
+  - completed existing truth surface
+  - blocked stale truth only
+  - blocked existing path not callable
+  - blocked non-selected retrigger activity
+  - manual stop
+  - failed
+  - blocked
+  - insufficient truth
+- Adds detection fields:
+  - `fresh_attempt_detected`
+  - `existing_truth_surface_detected`
+  - `stale_truth_only_detected`
+  - `callable_existing_path_detected`
+  - `existing_path_not_callable_detected`
+  - `terminal_result_detected`
+  - `terminal_result_source`
+- Enforces non-selected retrigger no-op for successful non-stop outcomes.
+- Emits deterministic controller feedback payloads for:
+  - completed fresh attempt
+  - completed existing truth
+  - manual stop / blocked / failed
+- Adds next bounded control target metadata:
+  - `next_bounded_control_target_*`
+  - `should_prepare_result_assimilation_chain`
+- Preserves continuation policy:
+  - `should_continue_local_loop=false`
+  - `should_start_unbounded_loop=false`
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no rollback execution
+  - no commit/tag execution
+  - no validation execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt215 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt215 implementation.
+- No tests were run.
+- Terminal-status inference remains status-family based across existing bounded-path maps.
+  If future status labels drift, Prompt215 may conservatively classify as blocked.
+
+Known follow-up:
+- Prompt216 should consume
+  `project_browser_autonomous_direct_retrigger_result_assimilation_*` and select
+  exactly one next safe follow-up contract or manual stop, without executing
+  downstream actions.
