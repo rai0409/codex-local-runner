@@ -5042,3 +5042,44 @@ Known follow-up:
   - Prompt226 still reports bounded_n2_result_blocked_step_accounting_violation.
 - Next:
   - Prompt228-fix7 should propagate Prompt224 precise block reasons into Prompt225/Prompt226 manual-stop/blocked surfaces without relaxing authority, safety, or accounting gates.
+
+## Prompt228-fix7 - Propagate Prompt224 N2 block reason into Prompt225/226
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Purpose:
+  - Preserve Prompt224's precise N=2 preflight block reason through Prompt225 and Prompt226.
+  - Avoid misclassifying zero-step no-attempt manual-stop paths as step-accounting violations.
+- Result:
+  - Prompt224:
+    - status=bounded_n2_execution_preflight_manual_stop
+    - n2_preflight_block_reason=blocked_prompt222_not_fresh_surface
+  - Prompt225:
+    - before: n2_execution_block_reason=blocked_prompt224_not_authoritative
+    - after: n2_execution_block_reason=blocked_prompt222_not_fresh_surface
+    - actual_steps_allowed/attempted/completed=0/0/0
+  - Prompt226:
+    - before: bounded_n2_result_blocked_step_accounting_violation
+    - after: bounded_n2_result_manual_stop
+    - result_class=manual_stop
+    - result_block_reason=blocked_prompt222_not_fresh_surface
+  - Prompt227/228 remain safe manual-stop:
+    - bounded_n2_post_result_decision_manual_stop
+    - selected_post_n2_preflight_manual_stop
+- Safety:
+  - Real accounting violations remain protected:
+    - attempted > 2
+    - completed > attempted
+    - step2 attempted without step1 completed
+    - allow_unbounded_loop=true
+    - allow_retry=true
+    - max_continuation_steps > 2
+  - No Prompt229 added.
+  - No tests added.
+  - No docs edited during Codex run.
+  - No executor, rollback, commit/tag execution, push, GitHub, retry, or unbounded-loop behavior added.
+- Remaining risk:
+  - Specific blocked_prompt222_* reason tokens now propagate downstream.
+  - Downstream consumers should handle specific reason tokens and generic fallbacks consistently.
+- Next:
+  - Prompt228-fix8 should normalize blocked-reason taxonomy across Prompt224→228 using stable machine-readable dual fields such as primary_reason and reason_family.

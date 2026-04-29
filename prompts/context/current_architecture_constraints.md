@@ -3186,3 +3186,23 @@ Architecture constraint:
 - Do not force N=2 readiness when Prompt222 lacks fresh successful one-step evidence.
 - Do not weaken Prompt226 step-accounting validation.
 - Downstream stages may improve block-reason propagation, but must not relax authority, no-loop, no-retry, no-push, or no-executor boundaries.
+
+## Prompt228-fix7 constraint update
+
+Prompt228-fix7 confirmed that zero-step N=2 no-attempt paths must not be classified as step-accounting violations when N=2 was never authorized.
+
+Current behavior:
+- Prompt224 exposes the precise upstream block reason:
+  - blocked_prompt222_not_fresh_surface
+- Prompt225 preserves that reason:
+  - n2_execution_block_reason=blocked_prompt222_not_fresh_surface
+- Prompt226 classifies zero-step no-attempt/manual-stop coherently:
+  - status=bounded_n2_result_manual_stop
+  - result_class=manual_stop
+  - result_block_reason=blocked_prompt222_not_fresh_surface
+
+Architecture constraints:
+- Do not weaken real step-accounting violations.
+- Do not force N=2 readiness when Prompt222 lacks fresh successful one-step evidence.
+- Downstream stages should preserve specific upstream block reasons while also exposing stable reason families.
+- No-loop, no-retry, no-push, no-GitHub, and no-new-executor boundaries remain mandatory.
