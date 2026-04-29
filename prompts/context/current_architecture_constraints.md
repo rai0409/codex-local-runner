@@ -2720,3 +2720,28 @@ Current limitation:
 - Prompt211 decides whether handback to the multi-cycle controller is safe, but it
   does not coordinate the next bounded step.
 - Prompt212 should build the one-bounded continuation coordinator.
+
+
+<!-- prompt212-update -->
+## Prompt212 architecture constraint update
+
+Prompt212 adds a one-bounded local continuation coordinator.
+
+Authoritative continuation coordinator rule:
+- Prompt212 may coordinate continuation only from Prompt211 final runtime continuation guard.
+- Prompt212 must not infer continuation from Prompt210 or Prompt197 alone.
+- Prompt212 may set `should_continue_local_loop=true` only as a one-bounded handback contract.
+- `should_continue_local_loop=true` must mean:
+  - max next steps = 1
+  - no unbounded loop
+  - no daemon
+  - no scheduler
+  - no queue drain
+  - no retry loop
+  - no recursive self-invocation
+- Prompt212 must not call or re-run the multi-cycle controller.
+- Prompt212 must not invoke Codex, execute rollback, execute commit/tag, validate,
+  generate prompts, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+- Prompt213 must verify stale/fresh state and execution ordering before any direct
+  re-trigger coordinator is allowed.

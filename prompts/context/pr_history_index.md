@@ -3754,3 +3754,69 @@ Known follow-up:
   `project_browser_autonomous_final_runtime_continuation_guard_*` and produce an
   exactly-one bounded continuation coordination contract for multi-cycle handback
   or manual stop, without executing the next step.
+
+
+<!-- prompt212-update -->
+## Prompt212 — one-bounded local continuation coordinator
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_one_bounded_continuation_coordinator_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_one_bounded_continuation_coordinator_*`.
+- Consumes Prompt211 final runtime continuation guard:
+  `project_browser_autonomous_final_runtime_continuation_guard_*`.
+- Also consumes context from:
+  - Prompt210 control dispatch refresh result assimilation
+  - multi-cycle controller
+  - terminal lane decision
+  - lane contract guard
+  - guarded lane dispatch
+- Adds one-bounded handback contract to the existing multi-cycle controller.
+- Emits:
+  - `one_bounded_step_contract`
+  - `max_next_steps=1`
+  - `allow_unbounded_loop=false`
+  - remaining budget fields
+  - stale/fresh ordering requirements
+  - next action
+- Implements statuses:
+  - `one_bounded_continuation_coordinator_handback_ready`
+  - `one_bounded_continuation_coordinator_manual_stop`
+  - `one_bounded_continuation_coordinator_blocked`
+  - `one_bounded_continuation_coordinator_blocked_insufficient_truth`
+- Preserves manual-stop priority.
+- Blocks on unsafe / dirty / conflict states, cycle budget exhaustion, unexpected
+  execution flags, continuation conflicts, or target mismatch.
+- Preserves unbounded-loop prevention:
+  - `should_start_unbounded_loop=false`
+  - no step execution
+  - no Codex / rollback / commit / push / loop execution
+- Adds Prompt213 handoff metadata:
+  - `stale_state_check_required_next`
+  - `fresh_execution_ordering_required_next`
+- Exposed Prompt212 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt212 implementation.
+- No tests were run.
+- Only changed file was:
+  `automation/orchestration/planned_execution_runner.py`.
+
+Known risk:
+- Coordinator correctness depends on upstream status-string conventions. If those
+  enums change, Prompt212 will conservatively block rather than continue.
+
+Known follow-up:
+- Prompt213 should consume
+  `project_browser_autonomous_one_bounded_continuation_coordinator_*` and build a
+  strict pre-dispatch stale-state / fresh-ordering verification gate for exactly one
+  bounded multi-cycle handback execution contract.
