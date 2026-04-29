@@ -2445,3 +2445,23 @@ Current limitation:
   downstream readiness/generation flows.
 - Prompt200 should add metadata-only downstream refresh dispatch for exactly one
   guarded lane.
+
+
+<!-- prompt200-update -->
+## Prompt200 architecture constraint update
+
+Prompt200 adds guarded lane downstream refresh dispatch.
+
+Authoritative dispatch rule:
+- Prompt200 may dispatch only one validated lane from Prompt199.
+- Prompt200 must not execute the lane.
+- Prompt200 must not generate prompts, invoke Codex, validate code, execute rollback,
+  mutate git, push, create GitHub operations, retry, loop, or create new executors.
+- Multiple downstream refreshes must block to manual review.
+- GitHub lane remains disabled until explicit GitHub readiness is implemented.
+
+Current limitation:
+- Prompt200 connects the selected guarded lane to existing downstream metadata, but
+  does not execute the selected lane action.
+- Prompt201 should execute exactly one selected bounded lane action and keep all
+  non-selected lanes as no-op.

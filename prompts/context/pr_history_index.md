@@ -3000,3 +3000,61 @@ Known follow-up:
 - Prompt200 should consume `project_browser_autonomous_lane_contract_guard_*` and
   dispatch exactly one metadata-only downstream refresh to the existing next/fix/
   rollback/commit readiness flow without executing the selected lane action.
+
+
+<!-- prompt200-update -->
+## Prompt200 — guarded lane contract downstream refresh dispatch
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_guarded_lane_dispatch_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_guarded_lane_dispatch_*`.
+- Consumes Prompt199 lane contract guard:
+  `project_browser_autonomous_lane_contract_guard_*`.
+- Dispatches exactly one supported lane:
+  - `next_prompt_lane`
+  - `fix_prompt_lane`
+  - `rollback_readiness_lane`
+  - `commit_readiness_lane`
+  - `manual_stop_lane`
+- Adds explicit refresh conflict block:
+  - `guarded_lane_dispatch_blocked_refresh_conflict`
+  - `dispatch_block_reason="blocked_multiple_downstream_refreshes"`
+- Adds additive `controller_lane_refresh_*` metadata to existing normalized maps:
+  - next readiness/generation
+  - fix readiness/generation
+  - rollback readiness
+  - commit/tag readiness
+- Uses refresh source:
+  `prompt200_guarded_lane_dispatch`.
+- Implements manual-stop handling:
+  `guarded_lane_dispatch_manual_stop`.
+- Blocks unsupported GitHub lane:
+  `guarded_lane_dispatch_blocked_github_not_enabled`.
+- Preserves metadata-only execution boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no validation execution
+  - no rollback execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+- Exposed Prompt200 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt200 implementation.
+- No tests were run.
+- Runtime-path behavioral checks across all prompt-state combinations are not yet
+  covered.
+
+Known follow-up:
+- Prompt201 should consume `project_browser_autonomous_guarded_lane_dispatch_*` and
+  execute exactly one bounded downstream action selected by Prompt200, while keeping
+  non-selected lanes no-op.
