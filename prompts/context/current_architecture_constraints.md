@@ -2041,3 +2041,27 @@ Current limitation:
 - Prompt180 executes bounded re-entry but does not yet feed the re-entry result back
   into the Prompt169-style assimilation and Prompt170-style validation routing path.
 - Prompt181 should add that re-entry result assimilation/routing metadata.
+
+
+<!-- prompt181-update -->
+## Prompt181 architecture constraint update
+
+Prompt181 assimilates Prompt180 re-entry invocation results back toward the
+post-write safety pipeline.
+
+Authoritative source rule:
+- Prompt180 re-entry result is authoritative when
+  `reentry_result_ready_for_assimilation=true`.
+- Do not merge Prompt180 re-entry and normal Prompt167 write outputs.
+- Do not fall back to stale normal Prompt167 output when re-entry routing was active
+  but re-entry assimilation is blocked/not-ready.
+- Ambiguous active write sources must block safely.
+
+Safety rule:
+- Prompt181 must not invoke Codex, execute validation, rollback, commit, create
+  GitHub operations, retry, loop, or create new executors.
+- Prompt181 may emit Prompt170-compatible routing inputs only.
+
+Current limitation:
+- Prompt181 does not yet refresh validation routing, bounded py_compile validation,
+  or cycle classification. Prompt182 should do that without invoking Codex.

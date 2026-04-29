@@ -1919,3 +1919,61 @@ Known follow-up:
 - Prompt181 should consume `project_browser_autonomous_codex_reentry_invocation_*`
   as the primary post-reentry source and route the result back toward the existing
   assimilation / validation safety path.
+
+
+<!-- prompt181-update -->
+## Prompt181 — re-entry result assimilation and Prompt170-compatible routing inputs
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_reentry_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_reentry_result_assimilation_*`.
+- Implemented deterministic source precedence:
+  - selects Prompt180 re-entry source when `reentry_result_ready_for_assimilation=true`
+  - blocks ambiguous active write sources
+  - blocks stale normal Prompt167 fallback when re-entry routing is active but not ready
+  - falls back to normal write only when re-entry routing is inactive and normal source is valid
+- Added authoritative source fields:
+  - `authoritative_source_kind`
+  - `authoritative_source_selected`
+  - `authoritative_source_block_reason`
+  - re-entry / normal write availability and selection booleans
+- Reused Prompt169-style changed-file classification:
+  - `expected_changed_files`
+  - `allowed_changed_files`
+  - `unexpected_changed_files`
+  - `forbidden_changed_files`
+  - `too_many_changed_files`
+- Preserved Prompt169-style forbidden path classes:
+  `.git/*`, out-of-repo paths, context docs unless expected, cache/pyc/env/secret-like paths.
+- Revalidated authoritative source paths for prompt/stdout/stderr/result/diff paths.
+- Added validation routing preparation fields:
+  - `safe_for_validation_routing`
+  - `validation_routing_candidate`
+  - `validation_routing_block_reason`
+- Added Prompt170-compatible fields:
+  - `prompt170_compat_source_status`
+  - `prompt170_compat_result_class`
+  - `prompt170_compat_changed_files`
+  - `prompt170_compat_safe_for_validation_routing`
+  - `prompt170_compat_human_review_required`
+- Exposed Prompt181 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt181 implementation.
+- No tests were run.
+- No Codex invocation, validation execution, rollback, commit, GitHub operation,
+  retry loop, scheduler, daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt181 emits Prompt170-compatible fields under its own prefix but does not replace
+  the already-built Prompt170/171/172/173 states in the same run.
+- Prompt182 should consume Prompt181 outputs and refresh post-reentry validation /
+  cycle classification.
