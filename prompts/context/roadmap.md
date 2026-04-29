@@ -3416,3 +3416,69 @@ Prompt213 must remain metadata-only:
 - no retry
 - no loop
 - no new executor
+
+
+<!-- prompt213-update -->
+## Roadmap update after Prompt213
+
+Completed:
+- Prompt169: Codex workspace-write result assimilation and changed-file safety classification.
+- Prompt170: metadata-only post-write validation routing.
+- Prompt171: bounded post-write py_compile validation.
+- Prompt172: one-step autonomous cycle summary.
+- Prompt173: active-path human-review precedence.
+- Prompt174: cycle handoff controller.
+- Prompt175: cycle handoff consumption in fix/next readiness.
+- Prompt176: readiness re-evaluation from acknowledged handoff.
+- Prompt177: same-run generation-state wiring.
+- Prompt178: generated prompt re-entry readiness.
+- Prompt179: generated prompt re-entry routing.
+- Prompt180: bounded re-entry Codex invocation.
+- Prompt181: re-entry result assimilation.
+- Prompt182: post-reentry validation and cycle refresh.
+- Prompt183: bounded continuation controller.
+- Prompt184: rollback readiness.
+- Prompt185: bounded rollback execution.
+- Prompt186: rollback result assimilation.
+- Prompt187: post-rollback continuation gate.
+- Prompt188: post-rollback fix handoff.
+- Prompt189: post-rollback fix handoff consumption.
+- Prompt190: post-rollback fix re-entry propagation.
+- Prompt191: post-rollback fix re-entry checkpoint.
+- Prompt192: bounded post-rollback fix Codex re-entry execution.
+- Prompt193: post-rollback fix re-entry result assimilation.
+- Prompt194: successful-cycle commit/tag readiness.
+- Prompt195: bounded commit/tag execution.
+- Prompt196: commit/tag result assimilation.
+- Prompt197: bounded multi-cycle autonomous controller.
+- Prompt198: terminal single-lane decision gate.
+- Prompt199: lane contract validator / guard.
+- Prompt200: guarded lane downstream refresh dispatch.
+- Prompt201: selected lane bounded execution.
+- Prompt202: selected lane result assimilation.
+- Prompt203: bounded local loop contract.
+- Prompt204: single bounded next-step launch contract.
+- Prompt205: next-step launch execution integration.
+- Prompt206: next-step launch result assimilation.
+- Prompt207: bounded local control decision reconciliation.
+- Prompt208: bounded control contract dispatch to assimilation path.
+- Prompt209: bounded downstream assimilation refresh.
+- Prompt210: control dispatch refresh result assimilation / final controller feedback.
+- Prompt211: final runtime continuation guard.
+- Prompt212: one-bounded local continuation coordinator.
+- Prompt213: stale/fresh ordering gate and Prompt214 preflight.
+
+Next fastest path:
+- Prompt214: direct re-trigger coordinator through existing bounded paths.
+- Prompt215: direct re-trigger result assimilation.
+- Prompt216: bounded multi-step coordinator.
+- Prompt217: multi-step stop policy / guard hardening.
+- Prompt218-219: end-to-end local development flow check.
+
+Prompt214 may execute exactly one existing bounded path, but must remain bounded:
+- no new executor
+- no push
+- no GitHub operation
+- no retry
+- no unbounded loop
+- no daemon / scheduler / queue drain

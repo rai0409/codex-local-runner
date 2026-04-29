@@ -2745,3 +2745,25 @@ Authoritative continuation coordinator rule:
   create new executors.
 - Prompt213 must verify stale/fresh state and execution ordering before any direct
   re-trigger coordinator is allowed.
+
+
+<!-- prompt213-update -->
+## Prompt213 architecture constraint update
+
+Prompt213 adds stale/fresh ordering verification and Prompt214 preflight metadata.
+
+Authoritative preflight rule:
+- Prompt213 may prepare Prompt214 direct retrigger only from Prompt212 one-bounded
+  continuation coordinator output.
+- Prompt213 must not infer retrigger readiness from Prompt211 or Prompt197 alone.
+- Prompt213 emits only preflight metadata; it must not perform direct retrigger.
+- Prompt213 must not invoke Codex, execute rollback, execute commit/tag, validate,
+  generate prompts, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+- Prompt214 must not blindly trust Prompt213; it must revalidate:
+  - `prompt214_retrigger_ready=true`
+  - `prompt214_retrigger_source="prompt213_stale_fresh_ordering_gate"`
+  - `prompt214_retrigger_contract`
+  - exactly one selected retrigger kind
+  - no stale-block/manual-stop/blocked/conflict condition
+  - required existing bounded path availability.

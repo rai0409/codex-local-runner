@@ -3820,3 +3820,60 @@ Known follow-up:
   `project_browser_autonomous_one_bounded_continuation_coordinator_*` and build a
   strict pre-dispatch stale-state / fresh-ordering verification gate for exactly one
   bounded multi-cycle handback execution contract.
+
+
+<!-- prompt213-update -->
+## Prompt213 — stale/fresh ordering gate and Prompt214 preflight
+
+Status: completed.
+
+Changed:
+- Integrated `_build_project_browser_autonomous_stale_fresh_ordering_gate_state(...)`
+  as an active runtime state producer.
+- Added / exposed normalized metadata under:
+  `project_browser_autonomous_stale_fresh_ordering_gate_*`.
+- Consumes Prompt212 one-bounded continuation coordinator:
+  `project_browser_autonomous_one_bounded_continuation_coordinator_*`.
+- Adds one-bounded contract validation.
+- Activates stale-state verification outputs and block/stop posture fields.
+- Activates fresh-execution ordering allow/block fields.
+- Exposes deterministic selected retrigger metadata through normalized state and
+  summary surfaces.
+- Adds Prompt214 preflight handoff fields:
+  - `prompt214_retrigger_ready`
+  - `prompt214_retrigger_source`
+  - `prompt214_retrigger_contract`
+- Preserves metadata-only boundaries:
+  - no Codex invocation
+  - no rollback execution
+  - no commit/tag execution
+  - no validation execution
+  - no prompt generation
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt213 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt213 implementation.
+- No tests were run.
+- Prompt213 builder logic existed before this patch; this change wires, normalizes,
+  and exposes it as an active state.
+
+Known risk:
+- Behavioral risk is mainly semantic alignment of the pre-existing builder rules with
+  Prompt213 stale/fresh ordering expectations.
+- Prompt214 must revalidate Prompt213 preflight contract before any direct retrigger.
+
+Known follow-up:
+- Prompt214 should consume `project_browser_autonomous_stale_fresh_ordering_gate_*`
+  and execute exactly one bounded direct re-trigger through an existing bounded path,
+  with no unbounded continuation and with Prompt215 result handoff metadata.
