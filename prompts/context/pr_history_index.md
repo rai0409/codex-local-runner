@@ -5136,3 +5136,52 @@ Known follow-up:
   - Future stages should prefer reason_family for routing and keep primary_reason for diagnostics.
 - Next:
   - Prompt228-fix9 should migrate downstream decision/readout surfaces to consume reason_family first and add a compatibility shim report for legacy token consumers.
+
+## Prompt228-fix9 - Add N2 reason taxonomy readout surface
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Purpose:
+  - Add a consolidated downstream readout surface for Prompt224→228 reason taxonomy.
+  - Allow downstream routing by reason_family while preserving primary_reason and legacy raw reason tokens.
+- Added:
+  - _build_project_browser_autonomous_bounded_n2_reason_taxonomy_readout_state(...)
+  - Output prefix:
+    - project_browser_autonomous_bounded_n2_reason_taxonomy_readout_*
+- Key outputs:
+  - selected_reason_family
+  - selected_primary_reason
+  - selected_upstream_reason_source
+  - selected_reason_stage
+  - root_cause_reason_family
+  - root_cause_primary_reason
+  - root_cause_upstream_reason_source
+  - legacy_reason_token
+  - legacy_reason_family_compatible
+  - routing_recommendation
+  - compatibility_warnings
+  - should_prepare_prompt229
+- Result:
+  - selected_reason_family=manual_stop
+  - selected_primary_reason=blocked_manual_review_required
+  - selected_reason_stage=prompt228_selected_post_n2_preflight
+  - root_cause_reason_family=fresh_surface_missing
+  - root_cause_primary_reason=blocked_prompt222_not_fresh_surface
+  - legacy_reason_family_compatible=true
+  - routing_recommendation=route_by_reason_family_manual_stop
+  - should_prepare_prompt229=false
+  - Prompt228 Prompt229 readiness remains false:
+    - prompt229_e2e_flow_check_ready=false
+    - prompt229_fresh_runtime_evidence_ready=false
+- Safety:
+  - N=2 authority/allow/readiness gates unchanged.
+  - Prompt229 readiness remains controlled only by existing Prompt228 readiness booleans.
+  - No tests added.
+  - No docs edited during Codex run.
+  - No Prompt229 added.
+  - No executor, rollback, commit/tag execution, push, GitHub, retry, or unbounded-loop behavior added.
+- Remaining risk:
+  - selected_reason_family can be manual_stop while root_cause_reason_family is fresh_surface_missing.
+  - Downstream consumers should use selected fields for immediate action and root-cause fields for diagnosis/remediation.
+- Next:
+  - Prompt228-fix10 should add a compact consumer policy contract defining precedence between selected_reason_family and root_cause_reason_family for downstream routing.

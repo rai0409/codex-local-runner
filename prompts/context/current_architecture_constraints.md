@@ -3225,3 +3225,25 @@ Architecture constraints:
 - primary_reason must remain available for diagnostics.
 - Existing raw block reason fields must remain backward-compatible.
 - Do not relax N=2 authority, readiness, accounting, no-loop, no-retry, no-push, no-GitHub, or no-new-executor boundaries.
+
+## Prompt228-fix9 constraint update
+
+Prompt228-fix9 added a consolidated N=2 reason taxonomy readout surface.
+
+Current readout behavior:
+- Terminal selected stage:
+  - selected_reason_stage=prompt228_selected_post_n2_preflight
+  - selected_reason_family=manual_stop
+  - selected_primary_reason=blocked_manual_review_required
+- Root cause:
+  - root_cause_reason_family=fresh_surface_missing
+  - root_cause_primary_reason=blocked_prompt222_not_fresh_surface
+  - root_cause_upstream_reason_source=prompt222_bounded_n_step_result_assimilation
+- Prompt229 readiness remains false.
+
+Architecture constraints:
+- Use selected_reason_family for immediate downstream action routing.
+- Use root_cause_reason_family/root_cause_primary_reason for diagnosis and remediation routing.
+- Do not infer Prompt229 readiness from reason_family alone.
+- Prompt229 readiness must remain controlled by explicit Prompt228 readiness booleans.
+- Existing no-loop, no-retry, no-push, no-GitHub, no-new-executor, and accounting-safety boundaries remain mandatory.
