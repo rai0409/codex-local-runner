@@ -2767,3 +2767,25 @@ Authoritative preflight rule:
   - exactly one selected retrigger kind
   - no stale-block/manual-stop/blocked/conflict condition
   - required existing bounded path availability.
+
+
+<!-- prompt214-update -->
+## Prompt214 architecture constraint update
+
+Prompt214 adds exactly-one bounded direct re-trigger coordination.
+
+Authoritative direct-retrigger rule:
+- Prompt214 may proceed only from Prompt213 stale/fresh ordering gate preflight.
+- Prompt214 must revalidate Prompt213 preflight contract before any selected retrigger classification.
+- Prompt214 must select exactly one retrigger kind or manual stop / blocked.
+- Prompt214 must not create new executors.
+- Prompt214 must not retry, loop, push, call GitHub, start daemons, start schedulers,
+  drain queues, or create background workers.
+- Prompt214 must emit Prompt215 handoff metadata for all completed / manual-stop /
+  blocked outcomes.
+- Prompt214 classification is currently based on existing bounded-path truth surfaces.
+- Prompt215 must distinguish:
+  - fresh attempted bounded path
+  - existing truth surface classification
+  - stale truth only
+  - blocked / manual-stop / failed

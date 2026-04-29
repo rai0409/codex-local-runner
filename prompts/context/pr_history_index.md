@@ -3877,3 +3877,81 @@ Known follow-up:
 - Prompt214 should consume `project_browser_autonomous_stale_fresh_ordering_gate_*`
   and execute exactly one bounded direct re-trigger through an existing bounded path,
   with no unbounded continuation and with Prompt215 result handoff metadata.
+
+
+<!-- prompt214-update -->
+## Prompt214 — exactly-one bounded direct re-trigger coordinator
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_direct_retrigger_coordinator_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_direct_retrigger_coordinator_*`.
+- Consumes Prompt213 stale/fresh ordering gate:
+  `project_browser_autonomous_stale_fresh_ordering_gate_*`.
+- Revalidates Prompt213 direct retrigger preflight contract:
+  - `contract_kind=="direct_retrigger_preflight"`
+  - `source=="prompt213_stale_fresh_ordering_gate"`
+  - selected kind/action match Prompt213
+  - `max_retrigger_attempts==1`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+  - existing bounded path required
+  - result handoff required
+  - `next_action=="prepare_direct_retrigger"`
+- Implements exactly-one bounded direct retrigger handling for:
+  - `codex_retrigger`
+  - `rollback_retrigger`
+  - `commit_retrigger`
+  - `fix_prompt_retrigger`
+  - `next_prompt_retrigger`
+  - `manual_stop`
+  - `blocked`
+- Adds deterministic blocked routing for:
+  - conflict
+  - unknown kind
+  - not allowed
+  - existing bounded path block
+  - insufficient truth
+- Delegates classification to existing normalized bounded-path truth surfaces:
+  - Codex re-entry invocation maps
+  - rollback execution / result assimilation maps
+  - commit/tag execution / result assimilation maps
+  - fix/next prompt generation maps
+- Adds per-kind executed flags and non-selected retrigger no-op handling.
+- Adds Prompt215 handoff:
+  - `prompt215_result_ready_for_assimilation=true`
+  - `prompt215_result_assimilation_source="prompt214_direct_retrigger_coordinator"`
+  - `prompt215_result_next_stage="direct_retrigger_result_assimilation"`
+- Preserves bounded execution boundaries:
+  - no new executor
+  - no retry loop
+  - no unbounded loop
+  - no push
+  - no GitHub operation
+- Exposed Prompt214 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt214 implementation.
+- No tests were run.
+- Prompt214 is currently metadata-coordination oriented and uses existing bounded-path truth surfaces.
+- Fresh runtime invocation vs existing truth reuse must be classified by Prompt215.
+
+Known risk:
+- Terminal-result detection for delegated existing bounded paths is metadata-driven and heuristic by status families.
+- If future status strings change, classification may conservatively block with
+  `blocked_existing_bounded_path`.
+
+Known follow-up:
+- Prompt215 should consume
+  `project_browser_autonomous_direct_retrigger_coordinator_*`, classify completed /
+  manual-stop / blocked outcomes, distinguish fresh attempt vs existing truth vs stale
+  truth, and feed bounded controller feedback for the next safe decision stage.
