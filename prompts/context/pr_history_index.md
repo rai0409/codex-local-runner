@@ -4648,3 +4648,94 @@ Known follow-up:
   `project_browser_autonomous_raise_to_2_preflight_decision_*`, validate the
   Prompt223 contract, and build a metadata-only N=2 execution preflight consumer
   with strict per-step stop-policy / result-assimilation / budget guards.
+
+
+<!-- prompt224-update -->
+## Prompt224 — bounded N=2 execution preflight consumer
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_n2_execution_preflight_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_n2_execution_preflight_*`.
+- Consumes Prompt223 raise-to-2 preflight decision:
+  `project_browser_autonomous_raise_to_2_preflight_decision_*`.
+- Enforces Prompt223-authoritative source rule:
+  - status present
+  - `raise_to_2_decision_allowed=true`
+  - `prompt224_n2_execution_ready=true`
+  - `prompt224_n2_execution_source=="prompt223_raise_to_2_preflight_decision"`
+  - dict-like contract present
+  - `max_continuation_steps_next==2`
+  - `raise_to_2_candidate=true`
+  - `fresh_surface_confirmed=true`
+  - `runtime_safety_confidence=="high"`
+- Revalidates Prompt224 N=2 contract:
+  - `contract_kind=="bounded_n2_execution_preflight"`
+  - `source=="prompt223_raise_to_2_preflight_decision"`
+  - `max_continuation_steps==2`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+  - `requires_per_step_stop_policy=true`
+  - `requires_per_step_result_assimilation=true`
+  - `requires_budget_guard=true`
+  - `requires_fresh_surface_evidence=true`
+  - `next_action=="prepare_bounded_n2_execution"`
+- Adds step-level guard metadata and allow checks:
+  - step1 / step2 required flags
+  - step2 post-step1 dependency flags
+  - `step1_preflight_allowed`
+  - `step2_preflight_allowed`
+  - `per_step_stop_policy_guard_ready`
+  - `per_step_budget_guard_ready`
+  - `per_step_result_assimilation_guard_ready`
+  - `per_step_fresh_surface_guard_ready`
+- Enforces N=2 preflight allow rule with safety / budget / flag conditions and
+  deterministic blocked-reason priority.
+- Emits Prompt225 N=2 execution coordinator preflight:
+  - `prompt225_n2_execution_ready=true`
+  - `prompt225_n2_execution_source="prompt224_bounded_n2_execution_preflight"`
+  - `prompt225_n2_execution_contract`
+- Prompt225 contract includes:
+  - `contract_kind=="bounded_n2_execution_coordinator_preflight"`
+  - `max_continuation_steps=2`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+  - step1 / step2 per-step requirements
+  - budget snapshot
+  - `next_action=="prepare_bounded_n2_execution_coordinator"`
+- Preserves metadata-only boundaries:
+  - no step1 / step2 execution
+  - no N=2 execution start
+  - no Codex invocation
+  - no rollback / commit / tag execution
+  - no push
+  - no retry
+  - no loop
+- Exposed Prompt224 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt224 implementation.
+- No tests were run.
+- Only modified file was:
+  `automation/orchestration/planned_execution_runner.py`.
+
+Known risk:
+- Budget sufficiency semantics use `>=2` when available, otherwise `>0` from
+  normalized fallback sources. If upstream budget fields become inconsistent across
+  maps, Prompt224 safely downgrades to blocked / insufficient truth.
+
+Known follow-up:
+- Prompt225 should consume
+  `project_browser_autonomous_bounded_n2_execution_preflight_*`, revalidate the
+  Prompt225 contract, and coordinate at most two bounded steps with strict
+  step1-then-step2 sequencing. Step2 must run only after step1 completes safely and
+  post-step1 stop / budget / result-assimilation / fresh-evidence guards pass.

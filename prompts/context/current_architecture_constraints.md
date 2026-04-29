@@ -3027,3 +3027,32 @@ Authoritative raise-to-2 rule:
   loop, or create new executors.
 - Prompt224 must revalidate Prompt223's N=2 contract and enforce per-step guards
   before any future execution coordinator may run.
+
+
+<!-- prompt224-update -->
+## Prompt224 architecture constraint update
+
+Prompt224 adds bounded N=2 execution preflight consumer metadata.
+
+Authoritative N=2 preflight rule:
+- Prompt224 may prepare N=2 execution only from Prompt223 raise-to-2 preflight
+  decision output.
+- Prompt224 must not infer N=2 execution readiness from Prompt222, Prompt221, or
+  older state alone.
+- Prompt224 must revalidate the Prompt223 N=2 contract before preparing Prompt225.
+- Prompt224 must preserve:
+  - `max_continuation_steps=2`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+  - per-step stop-policy guard required
+  - per-step budget guard required
+  - per-step result-assimilation guard required
+  - per-step fresh-surface evidence required
+- Prompt224 must not execute step1 or step2.
+- Prompt224 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+- Prompt225 must revalidate Prompt224's execution coordinator preflight before any
+  step coordination.
+- Prompt225 must attempt step2 only after step1 completes safely and post-step1
+  stop / budget / result-assimilation / fresh-evidence checks pass.
