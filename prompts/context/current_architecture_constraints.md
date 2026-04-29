@@ -2424,3 +2424,24 @@ Current limitation:
 - Prompt198 emits `lane_contract_payload`, but does not validate its schema beyond
   construction and does not refresh downstream flow inputs.
 - Prompt199 should add lane contract validation/guard metadata only.
+
+
+<!-- prompt199-update -->
+## Prompt199 architecture constraint update
+
+Prompt199 adds lane contract validation before downstream refresh.
+
+Authoritative lane contract rule:
+- Prompt199 is the guard for Prompt198 selected lane contracts.
+- Only validated, non-conflicting, non-stop, non-GitHub lane contracts may be passed
+  to downstream refresh.
+- Manual-stop, malformed, conflicting, GitHub-disabled, or unsafe contracts must not
+  trigger downstream execution.
+- Prompt199 must not generate prompts, invoke Codex, validate code, execute rollback,
+  mutate git, push, create GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt199 validates the lane contract but does not yet dispatch it to existing
+  downstream readiness/generation flows.
+- Prompt200 should add metadata-only downstream refresh dispatch for exactly one
+  guarded lane.

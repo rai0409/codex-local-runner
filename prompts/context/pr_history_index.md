@@ -2942,3 +2942,61 @@ Known follow-up:
 - Prompt199 should consume `project_browser_autonomous_terminal_lane_decision_*`
   and validate the selected lane contract schema/action before any downstream
   refresh or execution prompt.
+
+
+<!-- prompt199-update -->
+## Prompt199 — lane contract validator / guard
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_lane_contract_guard_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_lane_contract_guard_*`.
+- Consumes Prompt198 terminal lane decision:
+  `project_browser_autonomous_terminal_lane_decision_*`.
+- Validates lane contract payload shape:
+  - dict-like payload
+  - required keys: `lane`, `source`, `next_action`
+- Validates lane / payload / kind / action consistency:
+  - payload lane matches selected lane
+  - contract kind matches selected lane
+  - contract action matches payload next_action
+- Adds lane-specific action and payload checks for:
+  - `next_prompt_lane`
+  - `fix_prompt_lane`
+  - `rollback_readiness_lane`
+  - `commit_readiness_lane`
+  - `manual_stop_lane`
+- Blocks or converts GitHub lane to manual stop with:
+  `github_lane_not_enabled`.
+- Enforces manual-stop precedence when `manual_review_required` or `should_stop` is true.
+- Forces non-execution posture:
+  - `should_invoke_codex=false`
+  - `should_execute_rollback=false`
+  - `should_execute_commit=false`
+  - `should_push=false`
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no validation execution
+  - no rollback execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+- Exposed Prompt199 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt199 implementation.
+- No tests were run.
+- Runtime behavior across all lane/state combinations is not covered yet.
+
+Known follow-up:
+- Prompt200 should consume `project_browser_autonomous_lane_contract_guard_*` and
+  dispatch exactly one metadata-only downstream refresh to the existing next/fix/
+  rollback/commit readiness flow without executing the selected lane action.
