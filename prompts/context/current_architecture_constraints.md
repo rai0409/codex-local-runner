@@ -2300,3 +2300,25 @@ Current limitation:
   result.
 - Prompt193 should add that post-rollback-fix re-entry result assimilation and
   safety refresh without invoking Codex again.
+
+
+<!-- prompt193-update -->
+## Prompt193 architecture constraint update
+
+Prompt193 routes Prompt192 post-rollback fix re-entry execution results back into
+the safety/validation/cycle pipeline.
+
+Authoritative Prompt193 result rule:
+- Prompt193 is the authoritative source for commit-readiness consideration after
+  post-rollback fix re-entry execution.
+- Commit readiness may only consume Prompt193 when:
+  `commit_candidate=true`, `cycle_passed=true`, `validation_passed=true`, and all
+  changed-file safety conditions are clean.
+- Rollback success, fix prompt generation success, Codex invocation completion, or
+  changed-files existence alone must never be treated as commit-ready evidence.
+- Prompt193 must not invoke Codex, execute rollback, commit, tag, create GitHub
+  operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt193 emits `commit_candidate`, but does not decide or execute commit/tag.
+- Prompt194 should add commit/tag readiness metadata only.

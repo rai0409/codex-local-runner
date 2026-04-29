@@ -2576,3 +2576,73 @@ Known follow-up:
   and route the result back through source selection, changed-file safety
   classification, validation routing, bounded py_compile validation, and cycle
   classification.
+
+
+<!-- prompt193-update -->
+## Prompt193 — post-rollback fix re-entry result assimilation and validation-cycle refresh
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_post_rollback_fix_reentry_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_post_rollback_fix_reentry_result_assimilation_*`.
+- Consumes Prompt192 post-rollback fix re-entry execution:
+  `project_browser_autonomous_post_rollback_fix_reentry_execution_*`.
+- Selects Prompt192 as authoritative only when:
+  - `post_rollback_fix_reentry_result_ready_for_assimilation=true`
+  - assimilation source is `prompt192_post_rollback_fix_reentry_execution`
+  - attempted invocation truth exists
+  - prompt kind is `fix`
+  - prompt path is exactly `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+- Does not fall back to stale Prompt180 / Prompt167 outputs when Prompt192 is
+  present but blocked/not ready.
+- Adds Prompt169-style changed-file classification:
+  - `expected_changed_files`
+  - `allowed_changed_files`
+  - `unexpected_changed_files`
+  - `forbidden_changed_files`
+  - `too_many_changed_files`
+- Adds validation routing fields:
+  - `safe_for_validation_routing`
+  - `validation_routing_candidate`
+  - `validation_routing_block_reason`
+  - `validation_target_files`
+  - `py_compile_candidate_files`
+- Reuses existing bounded py_compile validation helper:
+  `_build_project_browser_autonomous_post_write_validation_execution_state(...)`.
+- Adds validation result fields:
+  - `validation_executed`
+  - `validation_passed`
+  - `validation_failed`
+  - `validation_timeout`
+  - `py_compile_results`
+- Adds cycle classification fields:
+  - `cycle_status`
+  - `cycle_passed`
+  - `cycle_failed`
+  - `cycle_blocked`
+  - `cycle_block_reason`
+- Adds candidate outputs:
+  - `commit_candidate`
+  - `fix_candidate`
+  - `rollback_candidate`
+  - `rollback_reason`
+- `commit_candidate=true` only when validation passed and all safety conditions are clean:
+  no unexpected/forbidden/too-many changes, no human review, and no rollback flags.
+- Exposed Prompt193 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt193 implementation.
+- No tests were run.
+- No Codex invocation, rollback execution, commit/stage/tag, GitHub operation,
+  retry loop, scheduler, daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt194 should consume `project_browser_autonomous_post_rollback_fix_reentry_result_assimilation_*`
+  and add a metadata-only commit/tag readiness gate.
