@@ -1686,3 +1686,26 @@ Next:
 
 Prompt173 should not add tests, new executors, rollback, commit, GitHub operations,
 retry loops, or additional runtime command execution.
+
+
+<!-- prompt173-update -->
+## Roadmap update after Prompt173
+
+Completed:
+- Prompt169: Codex workspace-write result assimilation and changed-file safety
+  classification.
+- Prompt170: metadata-only post-write validation routing and candidate derivation.
+- Prompt171: bounded post-write py_compile validation execution.
+- Prompt172: metadata-only one-step autonomous cycle summary.
+- Prompt173: active-path human-review and downstream validation precedence hardening.
+
+Next fastest path:
+- Prompt174: metadata-only cycle handoff controller.
+  Connect Prompt173 `next_safe_action` / `next_prompt_kind` to the existing fix/next
+  prompt generation flow without adding new executors.
+- Prompt175: bounded next-cycle / fix re-entry readiness.
+- Prompt176: bounded re-entry invocation wiring.
+- Prompt177+: rollback readiness and rollback execution.
+
+Prompt174 must not add tests, rollback execution, commit, GitHub operations, retry
+loops, daemons, schedulers, queue drainers, or new executors.

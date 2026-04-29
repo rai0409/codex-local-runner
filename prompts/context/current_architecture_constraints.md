@@ -1869,3 +1869,24 @@ Known conservative behavior:
   remain present.
 - The next hardening step should prefer definitive downstream Prompt171 validation
   truth when available and restrict human-review blocking to the active path.
+
+
+<!-- prompt173-update -->
+## Prompt173 architecture constraint update
+
+Prompt173 hardens one-step cycle classification only.
+
+Authoritative precedence:
+- Definitive Prompt171 validation results from the active path take precedence over
+  stale or unrelated upstream human-review flags.
+- `validation_passed` may classify the one-step cycle as passed when it belongs to
+  the active downstream validation path.
+- `validation_failed` may classify the cycle as failed and route toward fix-prompt
+  generation.
+- `validation_timeout` blocks safely with manual review.
+- Missing Prompt167-only fields must not override definitive Prompt169/170/171
+  downstream truth.
+
+Current limitation:
+- Prompt173 classifies the next safe action but does not yet hand it off to the
+  existing fix/next prompt generation flow.

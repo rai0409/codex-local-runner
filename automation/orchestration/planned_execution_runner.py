@@ -52007,28 +52007,60 @@ def _build_project_browser_autonomous_one_step_cycle_state(
         source_validation_execution_block_reason,
         default="",
     )
-    any_source_human_review = bool(
-        selection_human_review_required
-        or invocation_human_review_required
-        or write_human_review_required
-        or assimilation_human_review_required
-        or routing_human_review_required
-        or validation_execution_human_review_required
-        or normalized_source_selection_status == "blocked_human_review_required"
-        or normalized_source_invocation_readiness_status == "blocked_human_review_required"
-        or normalized_source_write_invocation_status == "blocked_human_review_required"
-        or normalized_smoke_override_status == "manual_review_required"
-        or normalized_source_assimilation_status == "manual_review_required"
-        or normalized_source_validation_routing_status == "blocked_human_review_required"
-        or normalized_source_validation_execution_status == "blocked_human_review_required"
-    )
-
-    write_completed_successfully = bool(
-        normalized_source_write_invocation_status == "codex_write_invocation_completed"
-        and bool(codex_write_completed)
-        and normalized_write_invocation_result_status
+    prompt167_write_completed_explicit = bool(
+        normalized_write_invocation_result_status
         in {"completed_with_changes", "completed_no_changes"}
     )
+    prompt169_write_completed_explicit = bool(
+        normalized_source_assimilation_status
+        in {"assimilated_with_expected_changes", "assimilated_with_no_changes"}
+        or normalized_assimilation_result_class in {"expected_changes", "no_changes"}
+    )
+    write_completed_successfully = bool(
+        prompt167_write_completed_explicit or prompt169_write_completed_explicit
+    )
+    codex_write_completion_source = "none"
+    if prompt167_write_completed_explicit:
+        codex_write_completion_source = "prompt167_write_result"
+    elif prompt169_write_completed_explicit:
+        codex_write_completion_source = "prompt169_assimilation"
+
+    downstream_validation_definitive = bool(
+        bool(validation_passed)
+        or bool(validation_failed)
+        or normalized_source_validation_execution_status == "validation_timeout"
+    )
+    downstream_truth_precedence_applied = bool(downstream_validation_definitive)
+    active_path_human_review_required = bool(
+        (
+            validation_execution_human_review_required
+            or normalized_source_validation_execution_status
+            in {
+                "blocked_routing_not_allowed",
+                "blocked_no_py_compile_candidates",
+                "blocked_unsafe_py_compile_candidate",
+            }
+        )
+        if downstream_validation_definitive
+        else (
+            selection_human_review_required
+            or invocation_human_review_required
+            or write_human_review_required
+            or assimilation_human_review_required
+            or routing_human_review_required
+            or validation_execution_human_review_required
+            or normalized_source_selection_status == "blocked_human_review_required"
+            or normalized_source_invocation_readiness_status
+            == "blocked_human_review_required"
+            or normalized_source_write_invocation_status == "blocked_human_review_required"
+            or normalized_smoke_override_status == "manual_review_required"
+            or normalized_source_assimilation_status == "manual_review_required"
+            or normalized_source_validation_routing_status == "blocked_human_review_required"
+            or normalized_source_validation_execution_status
+            == "blocked_human_review_required"
+        )
+    )
+
     blocked_before_write = bool(
         (
             normalized_source_selection_status
@@ -52052,7 +52084,51 @@ def _build_project_browser_autonomous_one_step_cycle_state(
     next_safe_action = "manual_review_required"
     next_prompt_kind = "none"
 
-    if any_source_human_review:
+    if normalized_source_validation_execution_status == "validation_timeout":
+        status = "blocked_validation_timeout"
+        cycle_attempted = True
+        cycle_completed = True
+        cycle_passed = False
+        cycle_failed = True
+        cycle_blocked = True
+        cycle_block_reason = "blocked_validation_timeout"
+        human_review_required = True
+        next_safe_action = "manual_review_required"
+        next_prompt_kind = "none"
+    elif bool(validation_passed):
+        status = "cycle_passed"
+        cycle_attempted = True
+        cycle_completed = True
+        cycle_passed = True
+        cycle_failed = False
+        cycle_blocked = False
+        cycle_block_reason = ""
+        human_review_required = bool(active_path_human_review_required)
+        next_safe_action = "continue_one_step_cycle"
+        next_prompt_kind = "next"
+    elif bool(validation_failed):
+        status = "cycle_failed_validation"
+        cycle_attempted = True
+        cycle_completed = True
+        cycle_passed = False
+        cycle_failed = True
+        cycle_blocked = False
+        cycle_block_reason = "validation_failed"
+        human_review_required = bool(
+            active_path_human_review_required
+            and normalized_source_validation_execution_status
+            in {
+                "blocked_routing_not_allowed",
+                "blocked_no_py_compile_candidates",
+                "blocked_unsafe_py_compile_candidate",
+                "validation_timeout",
+            }
+        )
+        next_safe_action = (
+            "manual_review_required" if human_review_required else "generate_fix_prompt"
+        )
+        next_prompt_kind = "none" if human_review_required else "fix"
+    elif active_path_human_review_required:
         status = "blocked_human_review_required"
         cycle_attempted = bool(write_invocation_attempted or validation_executed)
         cycle_completed = False
@@ -52074,7 +52150,7 @@ def _build_project_browser_autonomous_one_step_cycle_state(
         human_review_required = True
         next_safe_action = "manual_review_required"
         next_prompt_kind = "none"
-    elif not write_completed_successfully:
+    elif not write_completed_successfully and not downstream_validation_definitive:
         status = "blocked_codex_write_not_completed"
         cycle_attempted = True
         cycle_completed = False
@@ -52085,7 +52161,10 @@ def _build_project_browser_autonomous_one_step_cycle_state(
         human_review_required = True
         next_safe_action = "manual_review_required"
         next_prompt_kind = "none"
-    elif not bool(assimilation_safe_for_validation_routing):
+    elif (
+        not bool(assimilation_safe_for_validation_routing)
+        and not downstream_validation_definitive
+    ):
         status = "blocked_assimilation_not_safe"
         cycle_attempted = True
         cycle_completed = False
@@ -52096,7 +52175,7 @@ def _build_project_browser_autonomous_one_step_cycle_state(
         human_review_required = True
         next_safe_action = "manual_review_required"
         next_prompt_kind = "none"
-    elif not bool(validation_allowed):
+    elif not bool(validation_allowed) and not downstream_validation_definitive:
         status = "blocked_validation_routing"
         cycle_attempted = True
         cycle_completed = False
@@ -52110,28 +52189,6 @@ def _build_project_browser_autonomous_one_step_cycle_state(
         human_review_required = True
         next_safe_action = "manual_review_required"
         next_prompt_kind = "none"
-    elif bool(validation_passed):
-        status = "cycle_passed"
-        cycle_attempted = True
-        cycle_completed = True
-        cycle_passed = True
-        cycle_failed = False
-        cycle_blocked = False
-        cycle_block_reason = ""
-        human_review_required = False
-        next_safe_action = "continue_one_step_cycle"
-        next_prompt_kind = "next"
-    elif bool(validation_failed):
-        status = "cycle_failed_validation"
-        cycle_attempted = True
-        cycle_completed = True
-        cycle_passed = False
-        cycle_failed = True
-        cycle_blocked = False
-        cycle_block_reason = "validation_failed"
-        human_review_required = False
-        next_safe_action = "generate_fix_prompt"
-        next_prompt_kind = "fix"
     else:
         status = "blocked_insufficient_cycle_truth"
         cycle_attempted = False
@@ -52159,7 +52216,7 @@ def _build_project_browser_autonomous_one_step_cycle_state(
             codex_invocation_allowed
         ),
         "project_browser_autonomous_one_step_cycle_codex_write_completed": bool(
-            codex_write_completed
+            write_completed_successfully
         ),
         "project_browser_autonomous_one_step_cycle_assimilation_safe_for_validation_routing": bool(
             assimilation_safe_for_validation_routing
@@ -52198,6 +52255,18 @@ def _build_project_browser_autonomous_one_step_cycle_state(
         ),
         "project_browser_autonomous_one_step_cycle_source_validation_execution_status": (
             normalized_source_validation_execution_status
+        ),
+        "project_browser_autonomous_one_step_cycle_active_path_human_review_required": bool(
+            active_path_human_review_required
+        ),
+        "project_browser_autonomous_one_step_cycle_downstream_validation_definitive": bool(
+            downstream_validation_definitive
+        ),
+        "project_browser_autonomous_one_step_cycle_downstream_truth_precedence_applied": bool(
+            downstream_truth_precedence_applied
+        ),
+        "project_browser_autonomous_one_step_cycle_codex_write_completion_source": (
+            codex_write_completion_source
         ),
     }
 
@@ -73385,6 +73454,7 @@ def _build_approved_restart_execution_contract_surface(
         )
     )
     one_step_cycle_allowed_statuses = {
+        "blocked_validation_timeout",
         "blocked_human_review_required",
         "blocked_before_codex_write",
         "blocked_codex_write_not_completed",
@@ -73425,6 +73495,10 @@ def _build_approved_restart_execution_contract_surface(
         "source_assimilation_status",
         "source_validation_routing_status",
         "source_validation_execution_status",
+        "active_path_human_review_required",
+        "downstream_validation_definitive",
+        "downstream_truth_precedence_applied",
+        "codex_write_completion_source",
     )
     project_browser_autonomous_one_step_cycle_status = _normalize_text(
         project_browser_autonomous_one_step_cycle_state.get(
@@ -73479,6 +73553,9 @@ def _build_approved_restart_execution_contract_surface(
             "validation_passed",
             "validation_failed",
             "human_review_required",
+            "active_path_human_review_required",
+            "downstream_validation_definitive",
+            "downstream_truth_precedence_applied",
         }:
             value = bool(value)
         else:

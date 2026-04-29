@@ -1549,3 +1549,37 @@ Known follow-up:
   over-report manual review.
 - Prompt173 should harden active-path human-review handling and downstream truth
   precedence without adding new execution behavior.
+
+
+<!-- prompt173-update -->
+## Prompt173 — one-step cycle active-path/downstream precedence hardening
+
+Status: completed.
+
+Changed:
+- Hardened `_build_project_browser_autonomous_one_step_cycle_state(...)`.
+- Added downstream-first deterministic precedence for definitive Prompt171 validation
+  results.
+- Added/updated one-step-cycle fields:
+  - `project_browser_autonomous_one_step_cycle_active_path_human_review_required`
+  - `project_browser_autonomous_one_step_cycle_downstream_validation_definitive`
+  - `project_browser_autonomous_one_step_cycle_downstream_truth_precedence_applied`
+  - `project_browser_autonomous_one_step_cycle_codex_write_completion_source`
+- Added one-step status support:
+  - `blocked_validation_timeout`
+- Active-path human-review handling now prevents stale or unrelated upstream review
+  flags from overriding definitive Prompt171 `validation_passed`.
+- Downstream truth precedence prevents upstream write/assimilation/routing blocks from
+  overriding definitive Prompt171 validation outcomes.
+- Codex write completion now uses explicit Prompt167/Prompt169 completion truth:
+  `completed_with_changes` / `completed_no_changes`.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt173 implementation.
+- No tests were run.
+- No new executor behavior, runtime commands, retry loop, rollback, commit, GitHub
+  operation, scheduler, daemon, or queue drainer was added.
