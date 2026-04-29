@@ -2945,3 +2945,27 @@ Authoritative bounded continuation rule:
   create new executors.
 - Prompt221 must consume Prompt220's Prompt221 preflight contract as the sole
   continuation input and must not raise continuation steps above 1.
+
+
+<!-- prompt221-update -->
+## Prompt221 architecture constraint update
+
+Prompt221 adds bounded N-step coordinator metadata with `max_continuation_steps=1`.
+
+Authoritative bounded N-step rule:
+- Prompt221 may coordinate bounded continuation only from Prompt220 bounded
+  continuation decision preflight.
+- Prompt221 must not infer N-step readiness from Prompt219, Prompt218, or older
+  states alone.
+- Prompt221 must keep:
+  - `max_continuation_steps=1`
+  - `actual_steps_attempted<=1`
+  - `actual_steps_completed<=1`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+- Prompt221 must coordinate only existing bounded surfaces.
+- Prompt221 must not create new executors, retry, loop, push, call GitHub, run
+  tests, edit docs, or start daemon / scheduler / queue / background workers.
+- Prompt221 must always emit Prompt222 result handoff metadata.
+- Prompt222 must classify Prompt221 output and decide whether any later prompt may
+  safely raise the continuation bound beyond 1.

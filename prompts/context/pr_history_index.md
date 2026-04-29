@@ -4403,3 +4403,89 @@ Known follow-up:
   as the only preflight contract input, enforce `max_continuation_steps=1`,
   preserve `allow_unbounded_loop=false`, and keep the guarded continuation policy
   for existing-truth-revalidated paths.
+
+
+<!-- prompt221-update -->
+## Prompt221 — bounded N-step coordinator with max_continuation_steps=1
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_n_step_coordinator_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_n_step_coordinator_*`.
+- Consumes Prompt220 bounded continuation decision:
+  `project_browser_autonomous_bounded_continuation_decision_*`.
+- Enforces Prompt220-authoritative gating:
+  - `prompt221_n_step_ready`
+  - source / contract checks
+  - selected continuation kind/action
+  - allowed flag
+  - exactly-one continuation target
+  - no continuation conflict
+- Revalidates Prompt221 contract:
+  - `contract_kind=="bounded_n_step_preflight"`
+  - `source=="prompt220_bounded_continuation_decision"`
+  - `selected_continuation_kind=="bounded_n_step_coordinator"`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+  - `max_continuation_steps==1`
+  - stop / budget / result-assimilation guards required
+  - `next_action=="prepare_bounded_n_step_coordinator"`
+- Implements exactly-one bounded step target derivation for:
+  - bounded next-step decision
+  - result assimilation chain
+  - manual stop
+  - blocked
+- Implements existing truth guarded continuation:
+  - preserves `n_step_continuation_confidence="guarded"`
+  - enforces `max_continuation_steps=1`
+  - requires terminal result evidence and source
+  - sets `existing_truth_guarded_revalidation_applied=true` only when guarded
+    conditions hold
+- Coordinates exactly one existing bounded surface using existing metadata surfaces only:
+  - bounded-next-step path:
+    multi-cycle -> terminal lane -> lane guard -> guarded dispatch ->
+    next-step-launch-contract readiness evidence
+  - result-assimilation path:
+    existing assimilation status surfaces
+- Adds strict step accounting:
+  - `max_continuation_steps=1`
+  - `actual_steps_allowed=1` only when allowed, else `0`
+  - `actual_steps_attempted<=1`
+  - `actual_steps_completed<=1`
+- Enforces non-selected step no-op guarantees and blocks multi-execution cases.
+- Adds Prompt222 handoff:
+  - `prompt222_result_ready_for_assimilation=true`
+  - `prompt222_result_assimilation_source="prompt221_bounded_n_step_coordinator"`
+  - `prompt222_result_next_stage="bounded_n_step_result_assimilation"`
+- Preserves execution boundaries:
+  - no new executor
+  - no retry
+  - no loop / unbounded loop
+  - no push
+  - no GitHub operation
+  - no tests / docs changes
+  - no daemon / scheduler / queue / background worker
+- Exposed Prompt221 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt221 implementation.
+- No tests were run.
+- Prompt221 intentionally uses conservative status-based readiness detection for
+  existing surfaces. If upstream status vocabulary evolves, it may block as
+  existing-path or insufficient-truth until mappings are extended.
+
+Known follow-up:
+- Prompt222 should consume
+  `project_browser_autonomous_bounded_n_step_coordinator_*`, classify one-step
+  completed / blocked / manual-stop outcomes, verify non-selected-step no-op, and
+  emit safety-confidence metadata for whether a later prompt may raise
+  `max_continuation_steps` above 1.
