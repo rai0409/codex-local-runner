@@ -3265,3 +3265,55 @@ Known follow-up:
   `project_browser_autonomous_bounded_local_loop_contract_*` and produce exactly one
   bounded, non-executing next-step launch contract for downstream executor
   consumption.
+
+
+<!-- prompt204-update -->
+## Prompt204 — single bounded next-step launch contract
+
+Status: completed.
+
+Changed:
+- Wired and exposed `_build_project_browser_autonomous_next_step_launch_contract_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_next_step_launch_contract_*`.
+- Consumes Prompt203 bounded local loop contract:
+  `project_browser_autonomous_bounded_local_loop_contract_*`.
+- Derives metadata-only launch candidates:
+  - `generated_prompt_reentry_launch`
+  - `rollback_execution_launch`
+  - `commit_execution_launch`
+  - `manual_stop`
+- Enforces exactly one launch contract.
+- Adds conflict/manual-stop/insufficient-truth handling.
+- Emits strict payloads for:
+  - generated prompt re-entry launch with prompt kind/path, source, `max_invocations=1`
+  - rollback execution launch with `max_rollback_attempts=1`
+  - commit execution launch with `max_commit_attempts=1`
+  - manual stop with stop reason
+- Preserves execution boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no rollback execution
+  - no validation execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt204 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt204 implementation.
+- No tests were run.
+- Prompt204 prepares a launch contract only; execution is deferred to Prompt205.
+
+Known follow-up:
+- Prompt205 should consume `project_browser_autonomous_next_step_launch_contract_*`
+  and execute exactly one bounded launch action through existing execution paths,
+  with strict non-selected-launch no-op guarantees and result handoff metadata.

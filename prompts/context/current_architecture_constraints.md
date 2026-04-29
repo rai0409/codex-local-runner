@@ -2530,3 +2530,27 @@ Current limitation:
   single next-step launch contract.
 - Prompt204 should create exactly one non-executing launch contract or manual-stop
   contract.
+
+
+<!-- prompt204-update -->
+## Prompt204 architecture constraint update
+
+Prompt204 adds a single bounded next-step launch contract.
+
+Authoritative launch-contract rule:
+- Prompt204 may derive launch readiness only from Prompt203 bounded local loop
+  contract metadata.
+- Prompt204 must select exactly one launch contract or manual stop.
+- Prompt204 must not execute the launch contract.
+- Prompt204 must not create new executors.
+- Generated prompt re-entry launch is not direct Codex invocation; it must pass
+  through existing generated-prompt re-entry readiness/routing/execution gates.
+- Rollback execution launch must use the existing bounded rollback execution path.
+- Commit execution launch must use the existing bounded commit/tag execution path.
+- Prompt204 must not invoke Codex, execute rollback, commit/tag, validate, generate
+  prompts, push, create GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt204 emits the launch contract but does not execute it.
+- Prompt205 should execute exactly one selected launch via existing bounded paths and
+  emit result handoff metadata for Prompt206.
