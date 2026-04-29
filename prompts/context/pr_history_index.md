@@ -4739,3 +4739,73 @@ Known follow-up:
   Prompt225 contract, and coordinate at most two bounded steps with strict
   step1-then-step2 sequencing. Step2 must run only after step1 completes safely and
   post-step1 stop / budget / result-assimilation / fresh-evidence guards pass.
+
+
+<!-- prompt225-update -->
+## Prompt225 — bounded N=2 execution coordinator
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_n2_execution_coordinator_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_n2_execution_coordinator_*`.
+- Consumes Prompt224 bounded N=2 execution preflight:
+  `project_browser_autonomous_bounded_n2_execution_preflight_*`.
+- Enforces Prompt224-authoritative preflight consumption.
+- Revalidates Prompt225 N=2 execution coordinator contract:
+  - `contract_kind=="bounded_n2_execution_coordinator_preflight"`
+  - `source=="prompt224_bounded_n2_execution_preflight"`
+  - `max_continuation_steps==2`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+  - per-step stop / budget / result-assimilation / fresh-evidence requirements
+- Implements step1 guarded coordination using existing bounded surfaces only.
+- Implements post-step1 guard checks before step2:
+  - stop policy
+  - budget guard
+  - result-assimilation readiness
+  - fresh / terminal evidence
+- Implements step2 guarded coordination only after step1-safe completion and
+  post-step1 guards pass.
+- Enforces N=2 step accounting:
+  - max two steps
+  - step2 depends on step1 completion
+  - actual step counts are bounded
+- Enforces non-selected step no-op safety.
+- Adds Prompt226 handoff:
+  - `prompt226_result_ready_for_assimilation=true`
+  - `prompt226_result_assimilation_source="prompt225_bounded_n2_execution_coordinator"`
+  - `prompt226_result_next_stage="bounded_n2_execution_result_assimilation"`
+- Preserves execution boundaries:
+  - no new executor
+  - no retry
+  - no unbounded loop
+  - no push
+  - no GitHub call
+  - no docs/tests changes
+  - no test execution logic
+- Exposed Prompt225 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt225 implementation.
+- No tests were run.
+- Prompt225 coordinates via existing bounded surfaces and existing status signals.
+- Fresh runtime execution is not proven until Prompt226 classifies step evidence.
+
+Known risk:
+- If multiple existing surfaces report overlapping terminal signals in one cycle,
+  Prompt225 may conservatively route to conflict / blocked paths.
+
+Known follow-up:
+- Prompt226 should consume
+  `project_browser_autonomous_bounded_n2_execution_coordinator_*`, validate 0..2
+  step accounting, verify non-selected step no-op, classify fresh runtime evidence,
+  and emit next bounded-control safety metadata only.

@@ -3056,3 +3056,32 @@ Authoritative N=2 preflight rule:
   step coordination.
 - Prompt225 must attempt step2 only after step1 completes safely and post-step1
   stop / budget / result-assimilation / fresh-evidence checks pass.
+
+
+<!-- prompt225-update -->
+## Prompt225 architecture constraint update
+
+Prompt225 adds bounded N=2 execution coordinator metadata.
+
+Authoritative N=2 execution rule:
+- Prompt225 may coordinate N=2 only from Prompt224 bounded N=2 execution preflight.
+- Prompt225 must not infer N=2 execution readiness from Prompt223, Prompt222, or
+  older state alone.
+- Prompt225 must preserve:
+  - `max_continuation_steps=2`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+  - no new executor
+  - no push / GitHub operation
+  - no daemon / scheduler / queue drain
+- Prompt225 must coordinate step1 before step2.
+- Prompt225 must not attempt step2 unless step1 completes safely and post-step1
+  stop / budget / result-assimilation / fresh-evidence guards pass.
+- Prompt225 must always emit Prompt226 result handoff metadata.
+- Prompt226 must classify whether Prompt225 produced:
+  - two fresh runtime steps
+  - one fresh runtime step
+  - existing truth only
+  - blocked step1
+  - blocked step2
+  - manual stop / failed / insufficient truth.
