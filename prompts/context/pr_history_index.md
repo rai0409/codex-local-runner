@@ -2413,3 +2413,65 @@ Known follow-up:
 - Prompt190 should propagate Prompt189 refreshed fix-generation results into the
   existing generated-prompt re-entry readiness/routing path in the same run, without
   invoking Codex.
+
+
+<!-- prompt190-update -->
+## Prompt190 — post-rollback fix re-entry propagation
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_post_rollback_fix_reentry_propagation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_post_rollback_fix_reentry_propagation_*`.
+- Consumes Prompt189 refreshed fix generation state as the authoritative
+  post-rollback source.
+- Revalidates generated fix prompt path with strict rules:
+  - exact path `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  - exists
+  - regular file
+  - not symlink
+  - non-empty
+  - `<= 20000` bytes
+- Updates downstream normalized maps in-run:
+  - `project_browser_autonomous_generated_prompt_reentry_readiness_*`
+  - `project_browser_autonomous_generated_prompt_reentry_routing_*`
+  - prompt-selection re-entry refresh metadata
+  - codex-readiness re-entry refresh metadata
+  - codex-write-readiness re-entry refresh metadata
+- Adds post-rollback provenance fields:
+  - `post_rollback_fix_propagation_allowed`
+  - `post_rollback_fix_propagation_applied`
+  - `post_rollback_fix_propagation_source`
+  - `post_rollback_fix_propagation_block_reason`
+- Adds Prompt180-style preparation metadata under:
+  `project_browser_autonomous_codex_reentry_invocation_*`
+  including:
+  - `post_rollback_fix_reentry_preparation_allowed`
+  - `post_rollback_fix_reentry_preparation_source`
+- Preserves execution boundaries:
+  - no Codex invocation
+  - no rollback execution
+  - no commit/stage behavior
+  - `should_invoke_codex=false`
+  - `should_execute_rollback=false`
+  - `should_commit=false`
+- Exposed Prompt190 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt190 implementation.
+- No tests were run.
+- No Codex invocation, rollback execution, commit, GitHub operation, retry loop,
+  scheduler, daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt190 refreshes downstream normalized metadata, but earlier transient decisions
+  outside those normalized maps may still depend on pipeline ordering.
+- Prompt191 should add a final downstream recompute checkpoint that re-derives the
+  minimal post-rollback fix re-entry readiness fields from Prompt190 refreshed
+  metadata without invoking Codex.

@@ -2235,3 +2235,26 @@ Current limitation:
   re-entry readiness/routing may already have been computed earlier in the pipeline.
 - Prompt190 should add deterministic downstream propagation from refreshed fix
   generation outputs to the existing generated-prompt re-entry path.
+
+
+<!-- prompt190-update -->
+## Prompt190 architecture constraint update
+
+Prompt190 propagates post-rollback fix generation into generated-prompt re-entry
+readiness/routing metadata.
+
+Authoritative post-rollback re-entry propagation rule:
+- Prompt190 may update generated-prompt re-entry readiness/routing metadata from
+  post-rollback fix generation only when Prompt189 fix generation input is effective
+  and generated fix prompt path is safe.
+- Prompt190 must not call or re-run Codex invocation execution.
+- Prompt190 must not execute rollback, commit, create GitHub operations, retry, loop,
+  or create new executors.
+- Rollback-derived generated fix prompts must never mark commit readiness.
+- Downstream execution must rely on a later final readiness checkpoint.
+
+Current limitation:
+- Prompt190 updates normalized metadata, but does not finalize the execution decision
+  for post-rollback fix Codex re-entry.
+- Prompt191 should add final downstream recompute/readiness checkpoint without
+  executing Codex.
