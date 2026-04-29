@@ -3443,3 +3443,66 @@ Known follow-up:
   `project_browser_autonomous_next_step_launch_result_assimilation_*` and emit exactly
   one safe next control contract: continue to the appropriate result assimilation
   path, manual stop, or blocked/manual-review.
+
+
+<!-- prompt207-update -->
+## Prompt207 — bounded local control decision reconciliation
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_local_control_decision_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_local_control_decision_*`.
+- Consumes Prompt206 next-step launch result assimilation:
+  `project_browser_autonomous_next_step_launch_result_assimilation_*`.
+- Derives control candidates strictly from Prompt206 normalized fields:
+  - `reentry_result_assimilation`
+  - `rollback_result_assimilation`
+  - `commit_result_assimilation`
+  - `manual_stop`
+  - `blocked`
+- Adds terminal delegated-status gating for reentry / rollback / commit status
+  families.
+- Blocks non-terminal or insufficient delegated status truth with:
+  `blocked_delegated_status_not_terminal`.
+- Enforces exactly-one non-stop control contract.
+- Adds conflict path:
+  `bounded_local_control_decision_blocked_conflict`
+  with `conflicting_control_contracts`.
+- Enforces manual-stop and blocked precedence before non-stop dispatch readiness.
+- Emits deterministic control contract payloads for:
+  - reentry result assimilation
+  - rollback result assimilation
+  - commit result assimilation
+  - manual stop
+  - blocked
+- Preserves metadata-only boundaries:
+  - no dispatch execution
+  - no prompt generation
+  - no Codex invocation
+  - no validation execution
+  - no rollback execution
+  - no commit/tag execution
+  - no push
+  - no GitHub operation
+- Exposed Prompt207 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt207 implementation.
+- No tests were run.
+- Terminal delegated-status allowlists are explicit and conservative; future delegated
+  status additions may require allowlist updates.
+
+Known follow-up:
+- Prompt208 should consume
+  `project_browser_autonomous_bounded_local_control_decision_*` and dispatch exactly
+  one bounded control contract to the corresponding existing assimilation path, without
+  executing unrelated paths.

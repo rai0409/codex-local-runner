@@ -2599,3 +2599,26 @@ Current limitation:
   control contract.
 - Prompt207 should reconcile Prompt206 feedback into exactly one next control
   contract without executing it.
+
+
+<!-- prompt207-update -->
+## Prompt207 architecture constraint update
+
+Prompt207 adds bounded local control decision reconciliation.
+
+Authoritative control-decision rule:
+- Prompt207 may derive the next control contract only from Prompt206 launch-result
+  feedback.
+- Prompt207 must not infer control readiness from Prompt205 launch execution or
+  Prompt204 launch contract alone.
+- Prompt207 must select exactly one non-stop control contract or stop/block.
+- Terminal delegated status truth is required before non-stop assimilation routing.
+- Prompt207 must not dispatch assimilation, generate prompts, invoke Codex, validate,
+  execute rollback, execute commit/tag, push, create GitHub operations, retry, loop,
+  or create new executors.
+
+Current limitation:
+- Prompt207 emits the selected control contract but does not dispatch it to the
+  corresponding existing assimilation path.
+- Prompt208 should add metadata-only dispatch to exactly one existing assimilation
+  path.
