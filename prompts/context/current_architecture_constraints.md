@@ -2405,3 +2405,22 @@ Current limitation:
 - Prompt197 chooses high-level intent, but does not enforce a single downstream lane
   contract.
 - Prompt198 should add terminal lane selection with strict mutual exclusivity.
+
+
+<!-- prompt198-update -->
+## Prompt198 architecture constraint update
+
+Prompt198 adds the terminal single-lane decision gate.
+
+Authoritative lane decision rule:
+- Prompt198 converts Prompt197 controller intent into exactly one selected lane.
+- Conflicting non-stop lanes must block to manual review.
+- GitHub lane is disabled until explicit GitHub readiness is implemented.
+- Prompt198 must not execute selected lane, generate prompts, invoke Codex, validate,
+  execute rollback, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+
+Current limitation:
+- Prompt198 emits `lane_contract_payload`, but does not validate its schema beyond
+  construction and does not refresh downstream flow inputs.
+- Prompt199 should add lane contract validation/guard metadata only.

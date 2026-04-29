@@ -2882,3 +2882,63 @@ Known follow-up:
 - Prompt198 should consume `project_browser_autonomous_multi_cycle_controller_*`
   and select exactly one bounded downstream lane with strict mutual exclusivity and
   explicit lane contract payloads.
+
+
+<!-- prompt198-update -->
+## Prompt198 — terminal single-lane decision gate
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_terminal_lane_decision_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_terminal_lane_decision_*`.
+- Consumes Prompt197 multi-cycle controller:
+  `project_browser_autonomous_multi_cycle_controller_*`.
+- Derives candidate lanes:
+  - `next_prompt_lane`
+  - `fix_prompt_lane`
+  - `rollback_readiness_lane`
+  - `commit_readiness_lane`
+  - `github_readiness_lane`
+  - `manual_stop_lane`
+- Enforces mutual exclusivity for non-stop lanes.
+- Blocks conflicting non-stop lane candidates with:
+  - `terminal_lane_decision_blocked_conflict`
+  - `lane_conflict_detected=true`
+  - sorted `conflicting_lanes`
+  - forced `manual_stop_lane`
+- Adds insufficient-truth fallback:
+  - `terminal_lane_decision_blocked_insufficient_truth`
+- Emits deterministic `lane_contract_payload` for selected lanes:
+  - next
+  - fix
+  - rollback
+  - commit
+  - manual-stop
+- Blocks GitHub lane when selected without enablement:
+  - `terminal_lane_decision_blocked_github_not_enabled`
+  - manual-stop contract behavior
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no validation execution
+  - no rollback execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+- Exposed Prompt198 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt198 implementation.
+- No tests were run.
+
+Known follow-up:
+- Prompt199 should consume `project_browser_autonomous_terminal_lane_decision_*`
+  and validate the selected lane contract schema/action before any downstream
+  refresh or execution prompt.
