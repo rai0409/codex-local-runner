@@ -2465,3 +2465,26 @@ Current limitation:
   does not execute the selected lane action.
 - Prompt201 should execute exactly one selected bounded lane action and keep all
   non-selected lanes as no-op.
+
+
+<!-- prompt201-update -->
+## Prompt201 architecture constraint update
+
+Prompt201 adds exactly-one selected lane action execution.
+
+Authoritative selected-lane execution rule:
+- Prompt201 may execute only the single lane selected and dispatched by Prompt200.
+- Non-selected lanes must remain no-op.
+- Prompt201 must not invoke Codex, execute rollback, run validation, mutate git,
+  push, call GitHub, retry, loop, or create new executors.
+- Prompt201 may only execute:
+  - existing next/fix prompt generation readiness outcome paths
+  - rollback readiness refresh
+  - commit/tag readiness refresh
+  - manual stop no-op
+- Prompt201 must always emit Prompt202 assimilation handoff metadata.
+
+Current limitation:
+- Prompt201 executes the selected lane action, but does not yet classify the result
+  as controller feedback.
+- Prompt202 should add selected action result assimilation and feedback routing.

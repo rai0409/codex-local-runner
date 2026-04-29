@@ -3058,3 +3058,65 @@ Known follow-up:
 - Prompt201 should consume `project_browser_autonomous_guarded_lane_dispatch_*` and
   execute exactly one bounded downstream action selected by Prompt200, while keeping
   non-selected lanes no-op.
+
+
+<!-- prompt201-update -->
+## Prompt201 — selected lane bounded execution
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_selected_lane_execution_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_selected_lane_execution_*`.
+- Consumes Prompt200 guarded lane dispatch:
+  `project_browser_autonomous_guarded_lane_dispatch_*`.
+- Executes exactly one selected lane action from:
+  - `next_prompt_lane`
+  - `fix_prompt_lane`
+  - `rollback_readiness_lane`
+  - `commit_readiness_lane`
+  - `manual_stop_lane`
+- Enforces exactly one refresh flag among:
+  - `next_prompt_refresh_allowed`
+  - `fix_prompt_refresh_allowed`
+  - `rollback_readiness_refresh_allowed`
+  - `commit_readiness_refresh_allowed`
+- Blocks multiple selected lanes with:
+  `selected_lane_execution_blocked_multiple_lanes`.
+- Implements selected lane behavior:
+  - next prompt lane: uses existing normalized next-generation result and marks
+    completion only when generation safety outcome is ready.
+  - fix prompt lane: same pattern for fix generation.
+  - rollback readiness lane: refreshes readiness only; no rollback execution.
+  - commit readiness lane: refreshes readiness only; no git mutation.
+  - manual stop lane: no execution, stop/manual-review posture.
+- Maintains non-selected lanes as no-op.
+- Preserves execution boundaries:
+  - no Codex invocation
+  - no rollback execution
+  - no validation execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Adds Prompt202 handoff:
+  - `selected_action_result_ready_for_assimilation=true`
+  - `selected_action_result_assimilation_source="prompt201_selected_lane_execution"`
+  - `selected_action_result_next_stage="selected_lane_result_assimilation"`
+- Exposed Prompt201 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt201 implementation.
+- No tests were run.
+- Runtime behavior depends on upstream state combinations not exercised in this step.
+
+Known follow-up:
+- Prompt202 should consume `project_browser_autonomous_selected_lane_execution_*`,
+  classify selected-lane result outcomes, and route controller feedback to the next
+  bounded control decision without executing additional lanes.
