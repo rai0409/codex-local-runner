@@ -2322,3 +2322,23 @@ Authoritative Prompt193 result rule:
 Current limitation:
 - Prompt193 emits `commit_candidate`, but does not decide or execute commit/tag.
 - Prompt194 should add commit/tag readiness metadata only.
+
+
+<!-- prompt194-update -->
+## Prompt194 architecture constraint update
+
+Prompt194 adds metadata-only commit/tag readiness.
+
+Authoritative commit readiness rule:
+- Prompt194 may consider commit/tag readiness only from Prompt193 validated successful
+  cycle truth.
+- Rollback success, fix prompt generation success, Codex invocation completion, or
+  changed files alone must never be treated as commit-ready evidence.
+- Commit files must be derived only from Prompt193 safe allowed changed files.
+- Prompt194 must not run `git add`, `git commit`, `git tag`, `git push`, invoke Codex,
+  execute rollback, create GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt194 emits commit/tag readiness metadata but does not execute git mutation.
+- Prompt195 should perform bounded commit/tag execution with pre-execution
+  revalidation, no broad staging, no push, and no GitHub mutation.
