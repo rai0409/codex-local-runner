@@ -2812,3 +2812,26 @@ Authoritative result-assimilation rule:
 - Prompt215 must not start another loop step.
 - Prompt216 should select exactly one next safe follow-up contract from Prompt215
   classification.
+
+
+<!-- prompt216-update -->
+## Prompt216 architecture constraint update
+
+Prompt216 adds direct re-trigger follow-up guard metadata.
+
+Authoritative follow-up rule:
+- Prompt216 may select follow-up only from Prompt215 direct re-trigger result
+  assimilation.
+- Prompt216 must not infer follow-up directly from Prompt214 coordinator or
+  Prompt213 preflight.
+- Prompt216 must select exactly one follow-up target or stop/block.
+- Stale truth, not-callable bounded paths, failed, blocked, insufficient-truth, and
+  manual-stop outcomes must not proceed to bounded multi-step continuation.
+- Completed existing truth may proceed only with metadata preserving that fresh
+  runtime attempt was not proven.
+- Prompt216 must not execute the follow-up contract.
+- Prompt216 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+- Prompt217 must revalidate Prompt216 multistep contract before any bounded
+  multi-step handoff.

@@ -4032,3 +4032,70 @@ Known follow-up:
   `project_browser_autonomous_direct_retrigger_result_assimilation_*` and select
   exactly one next safe follow-up contract or manual stop, without executing
   downstream actions.
+
+
+<!-- prompt216-update -->
+## Prompt216 — direct re-trigger follow-up guard
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_direct_retrigger_followup_guard_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_direct_retrigger_followup_guard_*`.
+- Consumes Prompt215 direct re-trigger result assimilation:
+  `project_browser_autonomous_direct_retrigger_result_assimilation_*`.
+- Enforces Prompt215 authoritative-source gating using Prompt215 status, result class,
+  and source markers.
+- Derives exactly one follow-up target from Prompt215 truth only:
+  - result assimilation chain
+  - bounded multi-step candidate
+  - manual stop
+  - blocked
+- Implements fresh / existing / stale / not-callable policy:
+  - completed fresh attempt may proceed to bounded multi-step preflight
+  - completed existing truth may proceed while preserving that fresh runtime attempt
+    was not proven
+  - stale truth and not-callable paths are blocked from multi-step continuation
+- Enforces exactly-one follow-up target handling:
+  - `exactly_one_followup_target`
+  - `followup_conflict_detected`
+  - `conflicting_followup_targets`
+- Preserves manual-stop / blocked priority before non-stop follow-up selection.
+- Emits Prompt217 bounded multi-step preflight fields:
+  - `prompt217_multistep_ready`
+  - `prompt217_multistep_source`
+  - `prompt217_multistep_contract`
+- Generated Prompt217 contract remains bounded:
+  - `max_next_steps=1`
+  - `allow_unbounded_loop=false`
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no rollback execution
+  - no commit/tag execution
+  - no validation execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt216 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt216 implementation.
+- No tests were run.
+- Prompt216 resolves overlapping non-stop candidate semantics with bounded-multistep
+  precedence to keep exactly-one target behavior stable.
+
+Known follow-up:
+- Prompt217 should consume
+  `project_browser_autonomous_direct_retrigger_followup_guard_*`, validate
+  `prompt217_multistep_contract`, and enforce stop / budget / preflight guards for
+  the bounded multi-step coordinator handoff without executing downstream actions.
