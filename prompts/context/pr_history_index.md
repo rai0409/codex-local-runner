@@ -2475,3 +2475,46 @@ Known follow-up:
 - Prompt191 should add a final downstream recompute checkpoint that re-derives the
   minimal post-rollback fix re-entry readiness fields from Prompt190 refreshed
   metadata without invoking Codex.
+
+
+<!-- prompt191-update -->
+## Prompt191 — post-rollback fix re-entry final checkpoint
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_post_rollback_fix_reentry_checkpoint_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_post_rollback_fix_reentry_checkpoint_*`.
+- Consumes Prompt190 propagation state and refreshed normalized re-entry maps:
+  - generated-prompt re-entry readiness
+  - generated-prompt re-entry routing
+  - prompt-selection re-entry refresh
+  - Codex invocation readiness refresh
+  - Codex write invocation readiness refresh
+  - Codex re-entry post-rollback preparation metadata
+- Implements final allow/block readiness evaluation for post-rollback fix re-entry.
+- Revalidates final generated fix prompt path:
+  `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  with exact path, exists, regular file, non-symlink, non-empty, and bounded-size checks.
+- Preserves execution boundaries:
+  - `should_invoke_codex=false`
+  - `should_execute_rollback=false`
+  - `should_commit=false`
+- Exposes Prompt191 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt191 implementation.
+- No tests were run.
+- No Codex invocation, rollback execution, commit, GitHub operation, retry loop,
+  scheduler, daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt192 should consume `project_browser_autonomous_post_rollback_fix_reentry_checkpoint_*`
+  and execute exactly one bounded post-rollback fix Codex re-entry attempt only when
+  the checkpoint is ready.

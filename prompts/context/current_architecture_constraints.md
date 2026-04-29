@@ -2258,3 +2258,22 @@ Current limitation:
   for post-rollback fix Codex re-entry.
 - Prompt191 should add final downstream recompute/readiness checkpoint without
   executing Codex.
+
+
+<!-- prompt191-update -->
+## Prompt191 architecture constraint update
+
+Prompt191 adds the final checkpoint for post-rollback fix re-entry readiness.
+
+Authoritative checkpoint rule:
+- Prompt191 is the final source for whether post-rollback generated fix prompt is
+  ready for bounded Codex re-entry execution.
+- Prompt191 must not invoke Codex, execute rollback, commit, create GitHub operations,
+  retry, loop, or create new executors.
+- Prompt191 must keep rollback-derived re-entry separate from commit readiness.
+- Prompt192 must consume Prompt191 checkpoint fields and reuse existing bounded
+  workspace-write invocation machinery instead of creating a new Codex executor.
+
+Current limitation:
+- Prompt191 only confirms readiness. It does not execute the post-rollback fix
+  Codex re-entry. Prompt192 should perform exactly one guarded execution attempt.
