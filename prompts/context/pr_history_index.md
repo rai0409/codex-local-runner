@@ -2706,3 +2706,62 @@ Known follow-up:
 - Prompt195 should consume `project_browser_autonomous_commit_tag_readiness_*` and
   execute bounded commit/tag only when readiness allows it, with pre-execution
   revalidation, tag collision check, and diff-check guard.
+
+
+<!-- prompt195-update -->
+## Prompt195 — bounded commit/tag execution
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_commit_tag_execution_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_commit_tag_execution_*`.
+- Consumes Prompt194 commit/tag readiness:
+  `project_browser_autonomous_commit_tag_readiness_*`.
+- Executes git mutation only when Prompt194 readiness allows it.
+- Revalidates commit files before mutation:
+  - repo-relative
+  - no parent traversal
+  - not `.git/*`
+  - not symlink or directory
+  - exists
+  - not env/cache/pyc/secret-like
+  - present in current `git status --short` changed set
+  - exactly matches Prompt194 `git_add_allowed_files`
+  - blocks if staged paths outside commit scope are detected
+- Executes only bounded explicit-file git commands:
+  - `git add -- <explicit file list>`
+  - `git commit -m <commit_message>`
+  - `git tag -a <tag_name> -m <commit_message>`
+- Explicitly avoids broad staging and remote mutation:
+  - no `git add .`
+  - no `git add -A`
+  - no `git commit --all`
+  - no `git push`
+  - no GitHub mutation
+- Runs bounded `git diff --check` before mutation and blocks on failure.
+- Runs bounded tag collision check before commit and blocks on collision.
+- Captures command results, exit code, timeout, commit hash, and pre/post git status.
+- Preserves boundaries:
+  - no Codex invocation
+  - no rollback execution
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt195 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt195 implementation.
+- No tests were run.
+- Prompt195 can perform real git mutation at runtime only when gates pass.
+
+Known follow-up:
+- Prompt196 should consume `project_browser_autonomous_commit_tag_execution_*` and
+  add metadata-only commit/tag execution result assimilation, including completed,
+  partial, failed, timeout, post-commit handoff, and manual-review routing.

@@ -2342,3 +2342,23 @@ Current limitation:
 - Prompt194 emits commit/tag readiness metadata but does not execute git mutation.
 - Prompt195 should perform bounded commit/tag execution with pre-execution
   revalidation, no broad staging, no push, and no GitHub mutation.
+
+
+<!-- prompt195-update -->
+## Prompt195 architecture constraint update
+
+Prompt195 adds bounded commit/tag execution.
+
+Authoritative commit/tag execution rule:
+- Prompt195 may mutate git only when Prompt194 readiness explicitly allows commit/tag.
+- Prompt195 must stage only Prompt194 `git_add_allowed_files`.
+- Prompt195 must not use broad staging, commit-all, push, GitHub mutations, rollback,
+  Codex invocation, retry, loop, or new executors.
+- Prompt195 must run pre-mutation safety checks, `git diff --check`, and tag collision
+  check.
+- Prompt195 must record command/result metadata and route failures to manual review.
+
+Current limitation:
+- Prompt195 executes commit/tag and records execution metadata, but does not yet
+  assimilate the outcome for post-commit handoff or next-cycle control.
+- Prompt196 should add metadata-only commit/tag execution result assimilation.
