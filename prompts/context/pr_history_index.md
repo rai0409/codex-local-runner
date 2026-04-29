@@ -3190,3 +3190,78 @@ Known follow-up:
 - Prompt203 should consume
   `project_browser_autonomous_selected_lane_result_assimilation_*` and reconcile
   controller feedback into a bounded local loop contract without executing any action.
+
+
+<!-- prompt203-update -->
+## Prompt203 — bounded local loop contract
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_local_loop_contract_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_local_loop_contract_*`.
+- Consumes Prompt202 selected lane result assimilation:
+  `project_browser_autonomous_selected_lane_result_assimilation_*`.
+- Converts controller feedback into bounded local loop contracts:
+  - `generated_prompt_reentry_ready`
+  - `rollback_execution_ready`
+  - `commit_execution_ready`
+  - `manual_stop`
+  - `blocked`
+  - `insufficient_truth`
+- Reconciles Prompt197 budget metadata:
+  - `cycle_budget_remaining`
+  - `codex_budget_remaining`
+  - `rollback_budget_remaining`
+  - `commit_budget_remaining`
+- Uses safe budget defaults of `0` when budget truth is absent.
+- Blocks non-manual-stop contracts when budget truth is unknown or unsafe.
+- Adds generated prompt re-entry contract handling:
+  - requires ready flag
+  - prompt kind must be `fix` or `next`
+  - generated prompt path must match the fixed expected prompt path
+- Adds rollback execution contract handling:
+  - requires rollback readiness
+  - requires rollback budget remaining > 0
+- Adds commit execution contract handling:
+  - requires commit readiness
+  - requires commit budget remaining > 0
+- Adds stop/safety policy:
+  - blocks unsafe execution flags
+  - blocks manual-review/stop signals
+  - blocks non-selected-lane no-op violations
+  - blocks conflict/unsafe/dirty signals
+- Emits:
+  - `contract_kind`
+  - `contract_action`
+  - `contract_payload`
+  - `next_step_kind`
+  - `next_step_action`
+  - `next_step_payload`
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no validation execution
+  - no rollback execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt203 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt203 implementation.
+- No tests were run.
+- Runtime permutation coverage across cross-prompt states remains unexecuted.
+
+Known follow-up:
+- Prompt204 should consume
+  `project_browser_autonomous_bounded_local_loop_contract_*` and produce exactly one
+  bounded, non-executing next-step launch contract for downstream executor
+  consumption.

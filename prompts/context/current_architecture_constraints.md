@@ -2508,3 +2508,25 @@ Current limitation:
   yet define the bounded local loop contract that decides whether the next step may
   proceed.
 - Prompt203 should add that local loop contract metadata only.
+
+
+<!-- prompt203-update -->
+## Prompt203 architecture constraint update
+
+Prompt203 adds bounded local loop contract metadata.
+
+Authoritative local loop contract rule:
+- Prompt203 may derive local loop contract only from Prompt202 selected-lane feedback.
+- Prompt203 must not execute the contract action.
+- Non-manual-stop contracts require sufficient budget truth and clean safety signals.
+- Generated prompt re-entry contracts require fixed prompt path truth.
+- Rollback execution contracts require rollback readiness and rollback budget.
+- Commit execution contracts require commit readiness and commit budget.
+- Prompt203 must not generate prompts, invoke Codex, validate, execute rollback,
+  mutate git, push, create GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt203 emits local loop contract metadata but does not yet produce a strict
+  single next-step launch contract.
+- Prompt204 should create exactly one non-executing launch contract or manual-stop
+  contract.
