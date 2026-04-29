@@ -3117,3 +3117,29 @@ Authoritative N=2 result rule:
   execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
   create new executors.
 - Prompt227 must consume Prompt226 as the sole next-stage decision input.
+
+
+<!-- prompt227-update -->
+## Prompt227 architecture constraint update
+
+Prompt227 adds bounded N=2 post-result decision metadata.
+
+Authoritative post-result decision rule:
+- Prompt227 may choose the next post-N=2 contract only from Prompt226 bounded N=2
+  execution result assimilation.
+- Prompt227 must not infer next contract readiness from Prompt225, Prompt224, or
+  older state alone.
+- Prompt227 must choose exactly one next contract:
+  - end-to-end flow check
+  - fresh runtime evidence gate
+  - manual stop
+  - blocked
+- If `fresh_runtime_execution_confirmed=false`, Prompt227 must prefer fresh runtime
+  evidence gate over E2E flow check.
+- If `fresh_runtime_execution_confirmed=true`, Prompt227 may prepare E2E flow check.
+- Prompt227 must not raise beyond N=2.
+- Prompt227 must not execute E2E checks, fresh runtime checks, prompt generation,
+  Codex invocation, validation, rollback, commit/tag, git mutation, push, GitHub
+  operations, retry, loop, or create new executors.
+- Prompt228 must consume only the selected Prompt227 contract and must not execute
+  both E2E and fresh-runtime-evidence paths.

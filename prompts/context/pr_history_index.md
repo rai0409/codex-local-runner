@@ -4895,3 +4895,69 @@ Known follow-up:
   - manual stop
   - blocked
 - Prompt227 must remain metadata-only and must not raise beyond N=2.
+
+
+<!-- prompt227-update -->
+## Prompt227 — bounded N=2 post-result decision gate
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_n2_post_result_decision_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_n2_post_result_decision_*`.
+- Consumes Prompt226 bounded N=2 execution result assimilation:
+  `project_browser_autonomous_bounded_n2_execution_result_assimilation_*`.
+- Enforces Prompt226 authoritative-source gating using:
+  - status / result class
+  - controller feedback source
+  - next-target presence
+  - blocked / manual / failed / insufficient exceptions
+- Derives next-contract candidates from Prompt226 only:
+  - `e2e_flow_check_candidate`
+  - `fresh_runtime_evidence_gate_candidate`
+  - `manual_stop_candidate`
+  - `blocked_candidate`
+- Implements step2-blocked hard/soft handling.
+- Implements fresh-runtime vs E2E decision policy:
+  - manual / blocked paths first
+  - fresh-runtime evidence gate when `fresh_runtime_execution_confirmed=false`
+  - E2E flow check when `fresh_runtime_execution_confirmed=true`
+- Enforces no further raise beyond N=2:
+  - `bounded_n2_post_result_decision_blocked_further_raise_not_allowed`
+- Enforces exactly-one next-contract selection:
+  - `bounded_n2_post_result_decision_blocked_conflict`
+  - `next_contract_conflict_detected`
+  - `conflicting_next_contracts`
+- Emits Prompt228 preflight contracts:
+  - `prompt228_e2e_flow_check_contract`
+  - `prompt228_fresh_runtime_evidence_gate_contract`
+- Adds readiness/source flags and selected contract payload/action metadata.
+- Preserves metadata-only boundaries:
+  - no E2E execution
+  - no fresh evidence check execution
+  - no prompt generation
+  - no Codex invocation
+  - no rollback / commit / tag execution
+  - no push / GitHub
+  - no retry / loop
+  - no raise beyond N=2
+- Exposed Prompt227 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt227 implementation.
+- No tests were run.
+- Prompt227 decision quality depends on Prompt226 signal quality. Ambiguous
+  upstream blocked semantics conservatively route to manual / blocked.
+
+Known follow-up:
+- Prompt228 should consume the selected Prompt227 contract, validate its fields and
+  safety boundaries, select exactly one subpath, and emit metadata-only preflight
+  for the next stage.
