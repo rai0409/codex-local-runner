@@ -3143,3 +3143,23 @@ Authoritative post-result decision rule:
   operations, retry, loop, or create new executors.
 - Prompt228 must consume only the selected Prompt227 contract and must not execute
   both E2E and fresh-runtime-evidence paths.
+
+
+<!-- prompt228-update -->
+## Prompt228 architecture constraint update
+
+Prompt228 adds selected post-N=2 preflight consumer metadata.
+
+Authoritative selected preflight rule:
+- Prompt228 may prepare the next stage only from Prompt227 selected contract output.
+- Prompt228 must not infer readiness from Prompt226, Prompt225, or older state alone.
+- Prompt228 must select exactly one:
+  - E2E flow check preflight
+  - fresh runtime evidence preflight
+  - manual stop
+  - blocked
+- Prompt228 must not execute E2E checks, fresh runtime evidence checks, prompt
+  generation, Codex invocation, validation, rollback, commit/tag, git mutation,
+  push, GitHub operations, retry, loop, or raise beyond N=2.
+- Prompt229 must consume only the selected Prompt228 contract and validate local-only
+  / no-push / no-GitHub / no-retry / no-loop constraints before any runnable stage.

@@ -4961,3 +4961,47 @@ Known follow-up:
 - Prompt228 should consume the selected Prompt227 contract, validate its fields and
   safety boundaries, select exactly one subpath, and emit metadata-only preflight
   for the next stage.
+
+
+<!-- prompt228-update -->
+## Prompt228 — selected post-N=2 preflight consumer
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_selected_post_n2_preflight_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_selected_post_n2_preflight_*`.
+- Consumes Prompt227 bounded N=2 post-result decision:
+  `project_browser_autonomous_bounded_n2_post_result_decision_*`.
+- Enforces Prompt227 authoritative-source gating.
+- Derives exactly-one selected preflight:
+  - E2E flow check
+  - fresh runtime evidence check
+  - manual stop
+  - blocked
+- Validates selected Prompt228 contracts:
+  - `e2e_local_development_flow_check_preflight`
+  - `fresh_runtime_evidence_gate_preflight`
+- Emits Prompt229 selected preflight contracts:
+  - `prompt229_e2e_flow_check_contract`
+  - `prompt229_fresh_runtime_evidence_contract`
+- Preserves metadata-only boundaries:
+  - no E2E execution
+  - no fresh evidence execution
+  - no Codex / validation / rollback / commit / push / GitHub
+  - no retry / loop
+  - no raise beyond N=2
+- Exposed Prompt228 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Known follow-up:
+- Prompt229 should consume `project_browser_autonomous_selected_post_n2_preflight_*`,
+  validate selected Prompt229 contract completeness, and enforce local-only /
+  no-push / no-GitHub / no-retry / no-loop constraints before any runnable stage.
