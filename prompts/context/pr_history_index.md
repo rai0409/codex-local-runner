@@ -1977,3 +1977,65 @@ Known follow-up:
   the already-built Prompt170/171/172/173 states in the same run.
 - Prompt182 should consume Prompt181 outputs and refresh post-reentry validation /
   cycle classification.
+
+
+<!-- prompt182-update -->
+## Prompt182 — post-reentry validation and cycle refresh
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_post_reentry_safety_refresh_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_post_reentry_safety_refresh_*`.
+- Consumed Prompt181 as the authoritative post-reentry source.
+- Added post-reentry validation routing fields:
+  - `post_reentry_validation_routing_allowed`
+  - `post_reentry_validation_routing_block_reason`
+  - `post_reentry_validation_target_files`
+  - `post_reentry_py_compile_candidate_files`
+- Reused existing Prompt171-style bounded py_compile path by calling
+  `_build_project_browser_autonomous_post_write_validation_execution_state(...)`.
+- Added post-reentry validation result fields:
+  - `post_reentry_validation_executed`
+  - `post_reentry_validation_passed`
+  - `post_reentry_validation_failed`
+  - `post_reentry_validation_timeout`
+  - `post_reentry_py_compile_results`
+- Added post-reentry cycle classification fields:
+  - `post_reentry_cycle_status`
+  - `post_reentry_cycle_passed`
+  - `post_reentry_cycle_failed`
+  - `post_reentry_cycle_blocked`
+  - `post_reentry_cycle_block_reason`
+- Added continuation / rollback candidate fields:
+  - `continuation_candidate`
+  - `continuation_prompt_kind`
+  - `continuation_next_action`
+  - `rollback_candidate`
+  - `rollback_reason`
+  - `manual_review_required`
+  - `human_review_required`
+  - `next_action`
+- Unsafe post-reentry changed files now hard-block with rollback candidate metadata:
+  - `blocked_post_reentry_unsafe_changes`
+  - `rollback_candidate=true`
+  - `rollback_reason=unsafe_post_reentry_changes`
+- Exposed Prompt182 normalized state through compact planning summary, supporting
+  truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt182 implementation.
+- No tests were run.
+- No Codex invocation, continuation execution, rollback execution, commit, GitHub
+  operation, retry loop, scheduler, daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt182 emits dedicated post-reentry safety refresh fields but does not overwrite
+  legacy Prompt170/171/172 state objects.
+- Prompt183 should consume `project_browser_autonomous_post_reentry_safety_refresh_*`
+  as the authoritative source for bounded continuation control.

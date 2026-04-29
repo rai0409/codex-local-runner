@@ -2065,3 +2065,25 @@ Safety rule:
 Current limitation:
 - Prompt181 does not yet refresh validation routing, bounded py_compile validation,
   or cycle classification. Prompt182 should do that without invoking Codex.
+
+
+<!-- prompt182-update -->
+## Prompt182 architecture constraint update
+
+Prompt182 refreshes post-reentry validation and cycle classification from Prompt181
+re-entry assimilation.
+
+Authoritative post-reentry rule:
+- Prompt182 post-reentry safety refresh fields are authoritative for re-entry-aware
+  continuation decisions.
+- Downstream continuation logic must prefer:
+  `project_browser_autonomous_post_reentry_safety_refresh_*`
+  over legacy non-reentry Prompt170/171/172/173 states when Prompt182 has produced
+  definitive post-reentry status.
+- Prompt182 may emit continuation and rollback candidate metadata only.
+- Prompt182 must not invoke Codex, start another cycle, rollback, commit, create
+  GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt182 does not decide cycle budgets, fix budgets, stop reasons, or continuation
+  permission. Prompt183 should add bounded continuation control.

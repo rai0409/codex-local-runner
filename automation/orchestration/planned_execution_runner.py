@@ -51251,6 +51251,474 @@ def _build_project_browser_autonomous_reentry_result_assimilation_state(
     }
 
 
+def _build_project_browser_autonomous_post_reentry_safety_refresh_state(
+    *,
+    repository_path: str,
+    source_assimilation_status: str,
+    source_authoritative_kind: str,
+    source_authoritative_selected: bool,
+    source_authoritative_block_reason: str,
+    source_result_class: str,
+    source_status: str,
+    source_prompt_kind: str,
+    source_prompt_path: str,
+    source_changed_files: list[str] | None,
+    source_changed_files_count: int,
+    expected_changed_files: list[str] | None,
+    allowed_changed_files: list[str] | None,
+    unexpected_changed_files: list[str] | None,
+    forbidden_changed_files: list[str] | None,
+    too_many_changed_files: bool,
+    safe_for_validation_routing: bool,
+    validation_routing_candidate: bool,
+    validation_routing_block_reason: str,
+    prompt170_compat_source_status: str,
+    prompt170_compat_result_class: str,
+    prompt170_compat_changed_files: list[str] | None,
+    prompt170_compat_safe_for_validation_routing: bool,
+    prompt170_compat_human_review_required: bool,
+    source_human_review_required: bool,
+    source_next_action: str,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "post_reentry_safety_refresh_validation_passed",
+        "post_reentry_safety_refresh_validation_failed",
+        "post_reentry_safety_refresh_validation_timeout",
+        "post_reentry_safety_refresh_invocation_failure",
+        "post_reentry_safety_refresh_invocation_timeout",
+        "blocked_no_post_reentry_py_compile_candidates",
+        "blocked_post_reentry_validation_routing",
+        "blocked_post_reentry_unsafe_changes",
+        "blocked_insufficient_post_reentry_truth",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "prepare_bounded_continuation",
+        "generate_fix_prompt",
+        "manual_review_required",
+        "wait_for_more_truth",
+        "insufficient_truth",
+    }
+    runtime_posture = [
+        "prompt182_post_reentry_safety_refresh",
+        "prompt181_precedence_consumption",
+        "bounded_py_compile_only",
+        "no_codex_invocation",
+        "no_loop_start",
+        "no_rollback_execution",
+        "metadata_continuation_only",
+    ]
+
+    normalized_repository_path = _normalize_text(repository_path, default="")
+    normalized_source_assimilation_status = _normalize_text(
+        source_assimilation_status,
+        default="insufficient_truth",
+    )
+    normalized_source_authoritative_kind = _normalize_text(
+        source_authoritative_kind,
+        default="none",
+    )
+    if normalized_source_authoritative_kind not in {"reentry", "normal_write", "none"}:
+        normalized_source_authoritative_kind = "none"
+    normalized_source_authoritative_selected = bool(source_authoritative_selected)
+    normalized_source_authoritative_block_reason = _normalize_text(
+        source_authoritative_block_reason,
+        default="",
+    )
+    normalized_source_result_class = _normalize_text(source_result_class, default="blocked")
+    normalized_source_status = _normalize_text(source_status, default="insufficient_truth")
+    normalized_source_prompt_kind = _normalize_text(source_prompt_kind, default="none")
+    if normalized_source_prompt_kind not in {"fix", "next", "none"}:
+        normalized_source_prompt_kind = "none"
+    normalized_source_prompt_path = _normalize_text(source_prompt_path, default="")
+    normalized_source_changed_files = _normalize_string_list(source_changed_files or [])
+    normalized_source_changed_files_count = _as_non_negative_int(
+        source_changed_files_count,
+        default=len(normalized_source_changed_files),
+    )
+    normalized_expected_changed_files = _normalize_string_list(expected_changed_files or [])
+    normalized_allowed_changed_files = _normalize_string_list(allowed_changed_files or [])
+    normalized_unexpected_changed_files = _normalize_string_list(
+        unexpected_changed_files or []
+    )
+    normalized_forbidden_changed_files = _normalize_string_list(
+        forbidden_changed_files or []
+    )
+    normalized_too_many_changed_files = bool(too_many_changed_files)
+    normalized_safe_for_validation_routing = bool(safe_for_validation_routing)
+    normalized_validation_routing_candidate = bool(validation_routing_candidate)
+    normalized_validation_routing_block_reason = _normalize_text(
+        validation_routing_block_reason,
+        default="",
+    )
+    normalized_prompt170_compat_source_status = _normalize_text(
+        prompt170_compat_source_status,
+        default="insufficient_truth",
+    )
+    normalized_prompt170_compat_result_class = _normalize_text(
+        prompt170_compat_result_class,
+        default="insufficient_truth",
+    )
+    normalized_prompt170_compat_changed_files = _normalize_string_list(
+        prompt170_compat_changed_files or []
+    )
+    normalized_prompt170_compat_safe_for_validation_routing = bool(
+        prompt170_compat_safe_for_validation_routing
+    )
+    normalized_prompt170_compat_human_review_required = bool(
+        prompt170_compat_human_review_required
+    )
+    normalized_source_human_review_required = bool(source_human_review_required)
+    normalized_source_next_action = _normalize_text(source_next_action, default="")
+
+    post_reentry_validation_routing_allowed = False
+    post_reentry_validation_routing_block_reason = "blocked_post_reentry_validation_routing"
+    post_reentry_validation_target_files: list[str] = []
+    post_reentry_py_compile_candidate_files: list[str] = []
+    post_reentry_validation_executed = False
+    post_reentry_validation_passed = False
+    post_reentry_validation_failed = False
+    post_reentry_validation_timeout = False
+    post_reentry_py_compile_results: list[dict[str, Any]] = []
+    post_reentry_cycle_status = "post_reentry_cycle_blocked"
+    post_reentry_cycle_passed = False
+    post_reentry_cycle_failed = False
+    post_reentry_cycle_blocked = True
+    post_reentry_cycle_block_reason = "blocked_insufficient_post_reentry_truth"
+    continuation_candidate = False
+    continuation_prompt_kind = "none"
+    continuation_next_action = "manual_review_required"
+    rollback_candidate = False
+    rollback_reason = ""
+    human_review_required = True
+    manual_review_required = True
+    status = "blocked_insufficient_post_reentry_truth"
+    next_action = "manual_review_required"
+    missing_inputs: list[str] = []
+
+    unsafe_changes = bool(
+        normalized_forbidden_changed_files
+        or normalized_unexpected_changed_files
+        or normalized_too_many_changed_files
+    )
+    routing_precedence_allowed = bool(
+        normalized_source_authoritative_kind == "reentry"
+        and normalized_source_authoritative_selected
+        and normalized_validation_routing_candidate
+        and normalized_safe_for_validation_routing
+        and not normalized_source_human_review_required
+    )
+
+    if unsafe_changes:
+        status = "blocked_post_reentry_unsafe_changes"
+        post_reentry_cycle_status = "post_reentry_cycle_blocked_unsafe_changes"
+        post_reentry_cycle_blocked = True
+        post_reentry_cycle_block_reason = "unsafe_post_reentry_changes"
+        rollback_candidate = True
+        rollback_reason = "unsafe_post_reentry_changes"
+        human_review_required = True
+        manual_review_required = True
+        next_action = "manual_review_required"
+        post_reentry_validation_routing_block_reason = "blocked_post_reentry_unsafe_changes"
+    elif normalized_source_result_class == "completed_timeout":
+        status = "post_reentry_safety_refresh_invocation_timeout"
+        post_reentry_cycle_status = "post_reentry_cycle_blocked_invocation_timeout"
+        post_reentry_cycle_blocked = True
+        post_reentry_cycle_block_reason = "post_reentry_invocation_timeout"
+        rollback_candidate = True
+        rollback_reason = "post_reentry_invocation_timeout"
+        human_review_required = True
+        manual_review_required = True
+        next_action = "manual_review_required"
+        post_reentry_validation_routing_block_reason = "blocked_reentry_invocation_timeout"
+    elif normalized_source_result_class == "completed_failure":
+        status = "post_reentry_safety_refresh_invocation_failure"
+        post_reentry_cycle_status = "post_reentry_cycle_failed_invocation"
+        post_reentry_cycle_failed = True
+        post_reentry_cycle_blocked = False
+        post_reentry_cycle_block_reason = "post_reentry_invocation_failure"
+        continuation_candidate = True
+        continuation_prompt_kind = "fix"
+        continuation_next_action = "generate_fix_prompt"
+        rollback_candidate = True
+        rollback_reason = "post_reentry_invocation_failure"
+        human_review_required = False
+        manual_review_required = False
+        next_action = "generate_fix_prompt"
+        post_reentry_validation_routing_block_reason = "blocked_reentry_invocation_failure"
+    elif not routing_precedence_allowed:
+        status = "blocked_post_reentry_validation_routing"
+        post_reentry_cycle_status = "post_reentry_cycle_blocked_validation_routing"
+        post_reentry_cycle_blocked = True
+        post_reentry_cycle_block_reason = (
+            normalized_validation_routing_block_reason
+            or "blocked_post_reentry_validation_routing"
+        )
+        human_review_required = bool(
+            normalized_source_human_review_required
+            or normalized_prompt170_compat_human_review_required
+        )
+        manual_review_required = bool(human_review_required)
+        next_action = (
+            "manual_review_required"
+            if human_review_required
+            else "wait_for_more_truth"
+        )
+        post_reentry_validation_routing_block_reason = (
+            normalized_validation_routing_block_reason
+            or "blocked_post_reentry_validation_routing"
+        )
+        if not normalized_source_authoritative_selected:
+            missing_inputs.append("authoritative_source_selected")
+        if normalized_source_authoritative_kind != "reentry":
+            missing_inputs.append("authoritative_source_kind_reentry")
+        if not normalized_validation_routing_candidate:
+            missing_inputs.append("validation_routing_candidate")
+        if not normalized_safe_for_validation_routing:
+            missing_inputs.append("safe_for_validation_routing")
+    else:
+        post_reentry_validation_routing_allowed = True
+        post_reentry_validation_routing_block_reason = ""
+        allowed_set = set(normalized_allowed_changed_files)
+        expected_set = set(normalized_expected_changed_files)
+        post_reentry_validation_target_files = sorted(
+            set(
+                path
+                for path in normalized_source_changed_files
+                if path in allowed_set or path in expected_set
+            )
+        )
+        post_reentry_py_compile_candidate_files = sorted(
+            [path for path in post_reentry_validation_target_files if path.endswith(".py")]
+        )
+        if not post_reentry_py_compile_candidate_files:
+            status = "blocked_no_post_reentry_py_compile_candidates"
+            post_reentry_cycle_status = "post_reentry_cycle_blocked_no_py_compile_candidates"
+            post_reentry_cycle_blocked = True
+            post_reentry_cycle_block_reason = "blocked_no_post_reentry_py_compile_candidates"
+            human_review_required = True
+            manual_review_required = True
+            next_action = "manual_review_required"
+        else:
+            validation_state = _build_project_browser_autonomous_post_write_validation_execution_state(
+                repository_path=normalized_repository_path,
+                source_routing_status="validation_routing_allowed",
+                source_validation_allowed=True,
+                source_validation_block_reason="",
+                validation_target_files=post_reentry_validation_target_files,
+                py_compile_candidate_files=post_reentry_py_compile_candidate_files,
+                targeted_test_candidate_files=[],
+                human_review_required=False,
+                source_next_action="run_post_write_validation",
+            )
+            validation_status = _normalize_text(
+                validation_state.get(
+                    "project_browser_autonomous_post_write_validation_execution_status"
+                ),
+                default="blocked_routing_not_allowed",
+            )
+            post_reentry_validation_executed = bool(
+                validation_state.get(
+                    "project_browser_autonomous_post_write_validation_execution_validation_executed",
+                    False,
+                )
+            )
+            post_reentry_validation_passed = bool(
+                validation_state.get(
+                    "project_browser_autonomous_post_write_validation_execution_validation_passed",
+                    False,
+                )
+            )
+            post_reentry_validation_failed = bool(
+                validation_state.get(
+                    "project_browser_autonomous_post_write_validation_execution_validation_failed",
+                    False,
+                )
+            )
+            post_reentry_validation_timeout = bool(validation_status == "validation_timeout")
+            post_reentry_py_compile_results = list(
+                validation_state.get(
+                    "project_browser_autonomous_post_write_validation_execution_py_compile_results",
+                    [],
+                )
+                if isinstance(
+                    validation_state.get(
+                        "project_browser_autonomous_post_write_validation_execution_py_compile_results",
+                        [],
+                    ),
+                    list,
+                )
+                else []
+            )
+
+            if post_reentry_validation_passed:
+                status = "post_reentry_safety_refresh_validation_passed"
+                post_reentry_cycle_status = "post_reentry_cycle_passed"
+                post_reentry_cycle_passed = True
+                post_reentry_cycle_failed = False
+                post_reentry_cycle_blocked = False
+                post_reentry_cycle_block_reason = ""
+                continuation_candidate = True
+                continuation_prompt_kind = "next"
+                continuation_next_action = "prepare_bounded_continuation"
+                rollback_candidate = False
+                rollback_reason = ""
+                human_review_required = False
+                manual_review_required = False
+                next_action = "prepare_bounded_continuation"
+            elif post_reentry_validation_timeout:
+                status = "post_reentry_safety_refresh_validation_timeout"
+                post_reentry_cycle_status = "post_reentry_cycle_blocked_validation_timeout"
+                post_reentry_cycle_blocked = True
+                post_reentry_cycle_block_reason = "post_reentry_validation_timeout"
+                continuation_candidate = False
+                rollback_candidate = True
+                rollback_reason = "post_reentry_validation_timeout"
+                human_review_required = True
+                manual_review_required = True
+                next_action = "manual_review_required"
+            elif post_reentry_validation_failed:
+                status = "post_reentry_safety_refresh_validation_failed"
+                post_reentry_cycle_status = "post_reentry_cycle_failed_validation"
+                post_reentry_cycle_failed = True
+                post_reentry_cycle_blocked = False
+                post_reentry_cycle_block_reason = "post_reentry_validation_failed"
+                continuation_candidate = True
+                continuation_prompt_kind = "fix"
+                continuation_next_action = "generate_fix_prompt"
+                rollback_candidate = True
+                rollback_reason = "post_reentry_validation_failed"
+                human_review_required = False
+                manual_review_required = False
+                next_action = "generate_fix_prompt"
+            else:
+                status = "blocked_insufficient_post_reentry_truth"
+                post_reentry_cycle_status = "post_reentry_cycle_blocked_insufficient_truth"
+                post_reentry_cycle_blocked = True
+                post_reentry_cycle_block_reason = "blocked_insufficient_post_reentry_truth"
+                human_review_required = True
+                manual_review_required = True
+                next_action = "manual_review_required"
+                missing_inputs.append("post_reentry_validation_outcome")
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if continuation_prompt_kind not in {"fix", "next", "none"}:
+        continuation_prompt_kind = "none"
+    if continuation_next_action not in {
+        "prepare_bounded_continuation",
+        "generate_fix_prompt",
+        "manual_review_required",
+    }:
+        continuation_next_action = "manual_review_required"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_post_reentry_safety_refresh_status": status,
+        "project_browser_autonomous_post_reentry_safety_refresh_source_assimilation_status": (
+            normalized_source_assimilation_status
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_source_authoritative_kind": (
+            normalized_source_authoritative_kind
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_source_result_class": (
+            normalized_source_result_class
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_source_changed_files": (
+            normalized_source_changed_files
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_source_changed_files_count": int(
+            normalized_source_changed_files_count
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_validation_routing_allowed": bool(
+            post_reentry_validation_routing_allowed
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_validation_routing_block_reason": (
+            post_reentry_validation_routing_block_reason
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_validation_target_files": (
+            post_reentry_validation_target_files
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_py_compile_candidate_files": (
+            post_reentry_py_compile_candidate_files
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_validation_executed": bool(
+            post_reentry_validation_executed
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_validation_passed": bool(
+            post_reentry_validation_passed
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_validation_failed": bool(
+            post_reentry_validation_failed
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_validation_timeout": bool(
+            post_reentry_validation_timeout
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_py_compile_results": (
+            post_reentry_py_compile_results
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_status": (
+            post_reentry_cycle_status
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_passed": bool(
+            post_reentry_cycle_passed
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_failed": bool(
+            post_reentry_cycle_failed
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_blocked": bool(
+            post_reentry_cycle_blocked
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_block_reason": (
+            post_reentry_cycle_block_reason
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_continuation_candidate": bool(
+            continuation_candidate
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_continuation_prompt_kind": (
+            continuation_prompt_kind
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_continuation_next_action": (
+            continuation_next_action
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_rollback_candidate": bool(
+            rollback_candidate
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_rollback_reason": rollback_reason,
+        "project_browser_autonomous_post_reentry_safety_refresh_manual_review_required": bool(
+            manual_review_required
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_human_review_required": bool(
+            human_review_required
+        ),
+        "project_browser_autonomous_post_reentry_safety_refresh_next_action": next_action,
+        "project_browser_autonomous_post_reentry_safety_refresh_runtime_posture": runtime_posture,
+        "project_browser_autonomous_post_reentry_safety_refresh_missing_inputs": (
+            _serialize_required_signals(
+                [
+                    *missing_inputs,
+                    normalized_source_authoritative_block_reason,
+                    normalized_prompt170_compat_source_status,
+                    normalized_prompt170_compat_result_class,
+                    normalized_source_next_action,
+                    "prompt170_compat_safe"
+                    if normalized_prompt170_compat_safe_for_validation_routing
+                    else "",
+                    "prompt170_compat_human_review"
+                    if normalized_prompt170_compat_human_review_required
+                    else "",
+                    "prompt170_compat_changed_files"
+                    if normalized_prompt170_compat_changed_files
+                    else "",
+                    normalized_source_prompt_path,
+                    normalized_source_prompt_kind,
+                ]
+            )
+        ),
+    }
+
+
 def _build_project_browser_autonomous_prompt_selection_state(
     *,
     validation_passed: bool,
@@ -78503,6 +78971,289 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_reentry_result_assimilation_next_action"
     ] = project_browser_autonomous_reentry_result_assimilation_next_action
 
+    project_browser_autonomous_post_reentry_safety_refresh_state = (
+        _build_project_browser_autonomous_post_reentry_safety_refresh_state(
+            repository_path=str(execution_repo_path),
+            source_assimilation_status=project_browser_autonomous_reentry_result_assimilation_status,
+            source_authoritative_kind=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_authoritative_source_kind"
+                ),
+                default="none",
+            ),
+            source_authoritative_selected=bool(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_authoritative_source_selected",
+                    False,
+                )
+            ),
+            source_authoritative_block_reason=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_authoritative_source_block_reason"
+                ),
+                default="",
+            ),
+            source_result_class=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_source_result_class"
+                ),
+                default="blocked",
+            ),
+            source_status=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_source_status"
+                ),
+                default="insufficient_truth",
+            ),
+            source_prompt_kind=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_source_prompt_kind"
+                ),
+                default="none",
+            ),
+            source_prompt_path=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_source_prompt_path"
+                ),
+                default="",
+            ),
+            source_changed_files=_normalize_string_list(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_source_changed_files"
+                )
+            ),
+            source_changed_files_count=_as_non_negative_int(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_source_changed_files_count",
+                    0,
+                ),
+                default=0,
+            ),
+            expected_changed_files=_normalize_string_list(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_expected_changed_files"
+                )
+            ),
+            allowed_changed_files=_normalize_string_list(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_allowed_changed_files"
+                )
+            ),
+            unexpected_changed_files=_normalize_string_list(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_unexpected_changed_files"
+                )
+            ),
+            forbidden_changed_files=_normalize_string_list(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_forbidden_changed_files"
+                )
+            ),
+            too_many_changed_files=bool(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_too_many_changed_files",
+                    False,
+                )
+            ),
+            safe_for_validation_routing=bool(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_safe_for_validation_routing",
+                    False,
+                )
+            ),
+            validation_routing_candidate=bool(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_validation_routing_candidate",
+                    False,
+                )
+            ),
+            validation_routing_block_reason=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_validation_routing_block_reason"
+                ),
+                default="",
+            ),
+            prompt170_compat_source_status=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_prompt170_compat_source_status"
+                ),
+                default="insufficient_truth",
+            ),
+            prompt170_compat_result_class=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_prompt170_compat_result_class"
+                ),
+                default="insufficient_truth",
+            ),
+            prompt170_compat_changed_files=_normalize_string_list(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_prompt170_compat_changed_files"
+                )
+            ),
+            prompt170_compat_safe_for_validation_routing=bool(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_prompt170_compat_safe_for_validation_routing",
+                    False,
+                )
+            ),
+            prompt170_compat_human_review_required=bool(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_prompt170_compat_human_review_required",
+                    False,
+                )
+            ),
+            source_human_review_required=bool(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_human_review_required",
+                    False,
+                )
+            ),
+            source_next_action=_normalize_text(
+                project_browser_autonomous_reentry_result_assimilation_state_normalized.get(
+                    "project_browser_autonomous_reentry_result_assimilation_next_action"
+                ),
+                default="",
+            ),
+        )
+    )
+    post_reentry_safety_refresh_allowed_statuses = {
+        "post_reentry_safety_refresh_validation_passed",
+        "post_reentry_safety_refresh_validation_failed",
+        "post_reentry_safety_refresh_validation_timeout",
+        "post_reentry_safety_refresh_invocation_failure",
+        "post_reentry_safety_refresh_invocation_timeout",
+        "blocked_no_post_reentry_py_compile_candidates",
+        "blocked_post_reentry_validation_routing",
+        "blocked_post_reentry_unsafe_changes",
+        "blocked_insufficient_post_reentry_truth",
+        "insufficient_truth",
+    }
+    post_reentry_safety_refresh_allowed_next_actions = {
+        "prepare_bounded_continuation",
+        "generate_fix_prompt",
+        "manual_review_required",
+        "wait_for_more_truth",
+        "insufficient_truth",
+    }
+    post_reentry_safety_refresh_field_names = (
+        "status",
+        "source_assimilation_status",
+        "source_authoritative_kind",
+        "source_result_class",
+        "source_changed_files",
+        "source_changed_files_count",
+        "post_reentry_validation_routing_allowed",
+        "post_reentry_validation_routing_block_reason",
+        "post_reentry_validation_target_files",
+        "post_reentry_py_compile_candidate_files",
+        "post_reentry_validation_executed",
+        "post_reentry_validation_passed",
+        "post_reentry_validation_failed",
+        "post_reentry_validation_timeout",
+        "post_reentry_py_compile_results",
+        "post_reentry_cycle_status",
+        "post_reentry_cycle_passed",
+        "post_reentry_cycle_failed",
+        "post_reentry_cycle_blocked",
+        "post_reentry_cycle_block_reason",
+        "continuation_candidate",
+        "continuation_prompt_kind",
+        "continuation_next_action",
+        "rollback_candidate",
+        "rollback_reason",
+        "manual_review_required",
+        "human_review_required",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_post_reentry_safety_refresh_status = _normalize_text(
+        project_browser_autonomous_post_reentry_safety_refresh_state.get(
+            "project_browser_autonomous_post_reentry_safety_refresh_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_post_reentry_safety_refresh_status not in (
+        post_reentry_safety_refresh_allowed_statuses
+    ):
+        project_browser_autonomous_post_reentry_safety_refresh_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_post_reentry_safety_refresh_next_action = _normalize_text(
+        project_browser_autonomous_post_reentry_safety_refresh_state.get(
+            "project_browser_autonomous_post_reentry_safety_refresh_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_post_reentry_safety_refresh_next_action not in (
+        post_reentry_safety_refresh_allowed_next_actions
+    ):
+        project_browser_autonomous_post_reentry_safety_refresh_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_post_reentry_safety_refresh_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in post_reentry_safety_refresh_field_names:
+        key = f"project_browser_autonomous_post_reentry_safety_refresh_{field_name}"
+        value = project_browser_autonomous_post_reentry_safety_refresh_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_post_reentry_safety_refresh_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_post_reentry_safety_refresh_next_action
+        elif field_name in {"source_authoritative_kind"}:
+            normalized_source_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_source_kind
+                if normalized_source_kind in {"reentry", "normal_write", "none"}
+                else "none"
+            )
+        elif field_name in {"continuation_prompt_kind"}:
+            normalized_prompt_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_prompt_kind
+                if normalized_prompt_kind in {"fix", "next", "none"}
+                else "none"
+            )
+        elif field_name in {
+            "post_reentry_validation_routing_allowed",
+            "post_reentry_validation_executed",
+            "post_reentry_validation_passed",
+            "post_reentry_validation_failed",
+            "post_reentry_validation_timeout",
+            "post_reentry_cycle_passed",
+            "post_reentry_cycle_failed",
+            "post_reentry_cycle_blocked",
+            "continuation_candidate",
+            "rollback_candidate",
+            "manual_review_required",
+            "human_review_required",
+        }:
+            value = bool(value)
+        elif field_name in {"source_changed_files_count"}:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name in {
+            "source_changed_files",
+            "post_reentry_validation_target_files",
+            "post_reentry_py_compile_candidate_files",
+            "runtime_posture",
+            "missing_inputs",
+        }:
+            value = _normalize_string_list(value)
+        elif field_name in {"post_reentry_py_compile_results"}:
+            value = value if isinstance(value, list) else []
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_post_reentry_safety_refresh_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_post_reentry_safety_refresh_state_normalized[
+        "project_browser_autonomous_post_reentry_safety_refresh_status"
+    ] = project_browser_autonomous_post_reentry_safety_refresh_status
+    project_browser_autonomous_post_reentry_safety_refresh_state_normalized[
+        "project_browser_autonomous_post_reentry_safety_refresh_next_action"
+    ] = project_browser_autonomous_post_reentry_safety_refresh_next_action
+
     if project_planning_summary_available:
         project_planning_summary_compact.update(
             {
@@ -81006,6 +81757,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_generated_prompt_reentry_routing_state_normalized,
                 **project_browser_autonomous_codex_reentry_invocation_state_normalized,
                 **project_browser_autonomous_reentry_result_assimilation_state_normalized,
+                **project_browser_autonomous_post_reentry_safety_refresh_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -81965,6 +82717,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_reentry_result_assimilation_next_action"
             if project_browser_autonomous_reentry_result_assimilation_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_post_reentry_safety_refresh_status"
+            if project_browser_autonomous_post_reentry_safety_refresh_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_post_reentry_safety_refresh_next_action"
+            if project_browser_autonomous_post_reentry_safety_refresh_next_action
             else "",
             ]
     )
@@ -88094,6 +88852,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_generated_prompt_reentry_routing_state_normalized,
         **project_browser_autonomous_codex_reentry_invocation_state_normalized,
         **project_browser_autonomous_reentry_result_assimilation_state_normalized,
+        **project_browser_autonomous_post_reentry_safety_refresh_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(
