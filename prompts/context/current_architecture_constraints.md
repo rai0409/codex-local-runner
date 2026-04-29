@@ -3000,3 +3000,30 @@ Authoritative bounded N-step result rule:
 - Prompt222 must not generate prompts, invoke Codex, validate, execute rollback,
   execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
   create new executors.
+
+
+<!-- prompt223-update -->
+## Prompt223 architecture constraint update
+
+Prompt223 adds raise-to-2 preflight decision metadata.
+
+Authoritative raise-to-2 rule:
+- Prompt223 may consider N=2 only from Prompt222 bounded N-step result assimilation.
+- Prompt223 must not infer raise-to-2 readiness from Prompt221, Prompt220, or older
+  state alone.
+- N=2 may be prepared only when Prompt222 proves:
+  - `result_class=="completed_fresh_surface"`
+  - `completed_fresh_surface_detected=true`
+  - `n_step_runtime_safety_confidence=="high"`
+  - `one_step_accounting_valid=true`
+  - `non_selected_steps_noop_confirmed=true`
+  - `stop_policy_passed=true`
+  - terminal result/source evidence exists
+  - budget truth is checked and sufficient
+- Existing-truth-only and guarded-existing-truth outcomes must not raise to N=2.
+- Prompt223 must emit only Prompt224 N=2 preflight metadata.
+- Prompt223 must not execute N=2, generate prompts, invoke Codex, validate, execute
+  rollback, execute commit/tag, mutate git, push, create GitHub operations, retry,
+  loop, or create new executors.
+- Prompt224 must revalidate Prompt223's N=2 contract and enforce per-step guards
+  before any future execution coordinator may run.

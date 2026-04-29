@@ -4580,3 +4580,71 @@ Known follow-up:
   - valid one-step accounting
   - non-selected step no-op
   - stop-policy passed.
+
+
+<!-- prompt223-update -->
+## Prompt223 — raise-to-2 preflight decision gate
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_raise_to_2_preflight_decision_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_raise_to_2_preflight_decision_*`.
+- Consumes Prompt222 bounded N-step result assimilation:
+  `project_browser_autonomous_bounded_n_step_result_assimilation_*`.
+- Implements Prompt222 authoritative gating with:
+  - status / result truth
+  - source-step truth
+  - manual / blocked / failed / insufficient status exceptions
+- Enforces fresh-surface-only raise policy.
+- Allows N=2 preflight only when:
+  - `completed_fresh_surface_detected=true`
+  - `result_class=="completed_fresh_surface"`
+  - `runtime_safety_confidence=="high"`
+  - stop-policy / no-op / accounting / terminal / controller / target / budget guards pass
+- Blocks existing-truth-only and guarded-existing-truth paths:
+  - `raise_to_2_preflight_blocked_existing_truth_only`
+  - `next_action="prepare_end_to_end_flow_check"`
+  - `max_continuation_steps_next=1`
+- Adds budget fallback / guard:
+  - prefers Prompt222 budget fields when present
+  - falls back through existing normalized budget-bearing maps
+  - missing or unsafe budget truth blocks with insufficient truth
+- Emits Prompt224 N=2 execution preflight contract:
+  - `prompt224_n2_execution_ready=true`
+  - `prompt224_n2_execution_source="prompt223_raise_to_2_preflight_decision"`
+  - `prompt224_n2_execution_contract`
+- Preserves metadata-only boundaries:
+  - no downstream execution
+  - no prompt generation
+  - no Codex invocation
+  - no rollback / commit / tag execution
+  - no git mutation
+  - no push
+  - no retry / loop / unbounded start
+- Exposed Prompt223 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt223 implementation.
+- No tests were run.
+- Only modified file was:
+  `automation/orchestration/planned_execution_runner.py`.
+
+Known risk:
+- Budget fallback depends on prior normalized budget surfaces sharing consistent
+  budget key semantics. If budget keys drift, Prompt223 safely blocks with
+  `raise_to_2_preflight_blocked_insufficient_truth`.
+
+Known follow-up:
+- Prompt224 should consume
+  `project_browser_autonomous_raise_to_2_preflight_decision_*`, validate the
+  Prompt223 contract, and build a metadata-only N=2 execution preflight consumer
+  with strict per-step stop-policy / result-assimilation / budget guards.
