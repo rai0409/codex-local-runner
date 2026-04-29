@@ -1890,3 +1890,21 @@ Authoritative precedence:
 Current limitation:
 - Prompt173 classifies the next safe action but does not yet hand it off to the
   existing fix/next prompt generation flow.
+
+
+<!-- prompt174-update -->
+## Prompt174 architecture constraint update
+
+Prompt174 adds a cycle handoff controller from Prompt173 one-step cycle results to
+existing fix/next prompt readiness flows.
+
+Authoritative handoff rule:
+- `cycle_passed` may hand off to the next-prompt readiness flow.
+- `cycle_failed_validation` may hand off to the fix-prompt readiness flow.
+- blocked, timeout, unsafe, or manual-review cases must not hand off to generation.
+- Prompt174 must not generate prompt files, invoke Codex, rollback, commit, create
+  GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt174 adds advisory bridge metadata to Prompt160/162 readiness maps.
+- Prompt175 must explicitly consume this metadata inside readiness decision logic.

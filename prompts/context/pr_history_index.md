@@ -1583,3 +1583,54 @@ Scope notes:
 - No tests were run.
 - No new executor behavior, runtime commands, retry loop, rollback, commit, GitHub
   operation, scheduler, daemon, or queue drainer was added.
+
+
+<!-- prompt174-update -->
+## Prompt174 — cycle handoff controller to fix/next readiness flows
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_cycle_handoff_controller_state(...)`
+  in `automation/orchestration/planned_execution_runner.py`.
+- Added cycle handoff controller output under:
+  `project_browser_autonomous_cycle_handoff_controller_*`.
+- Implemented deterministic handoff routing:
+  - `handoff_to_next_prompt_flow`
+  - `handoff_to_fix_prompt_flow`
+  - `handoff_blocked_manual_review`
+  - `handoff_blocked_insufficient_truth`
+- Added handoff flags:
+  - `handoff_allowed`
+  - `handoff_target`
+  - `handoff_prompt_kind`
+  - `should_generate_next_prompt`
+  - `should_generate_fix_prompt`
+  - `should_prepare_next_cycle`
+  - `should_start_next_cycle`
+  - `should_invoke_codex=false`
+  - `should_rollback=false`
+- Added additive readiness handoff metadata bridge fields:
+  - `project_browser_autonomous_fix_prompt_readiness_cycle_handoff_available`
+  - `project_browser_autonomous_fix_prompt_readiness_cycle_handoff_prompt_kind`
+  - `project_browser_autonomous_fix_prompt_readiness_cycle_handoff_reason`
+  - `project_browser_autonomous_next_prompt_readiness_cycle_handoff_available`
+  - `project_browser_autonomous_next_prompt_readiness_cycle_handoff_prompt_kind`
+  - `project_browser_autonomous_next_prompt_readiness_cycle_handoff_reason`
+- Exposed normalized Prompt174 controller state in compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt174 implementation.
+- No tests were run.
+- No prompt files were generated.
+- No Codex invocation, rollback, commit, GitHub operation, retry loop, scheduler,
+  daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt174 bridge fields are advisory metadata until Prompt175 consumes them in
+  fix/next readiness decision logic.
