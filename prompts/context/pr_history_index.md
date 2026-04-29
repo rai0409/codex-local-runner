@@ -4174,3 +4174,81 @@ Known follow-up:
   `prompt218_multistep_execution_ready=true`, revalidate
   `prompt218_multistep_execution_contract`, and execute exactly one bounded action
   through existing paths only.
+
+
+<!-- prompt218-update -->
+## Prompt218 — bounded multi-step execution coordinator
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_multistep_execution_coordinator_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_multistep_execution_coordinator_*`.
+- Consumes Prompt217 bounded multi-step handoff guard:
+  `project_browser_autonomous_bounded_multistep_handoff_guard_*`.
+- Revalidates Prompt217 execution preflight:
+  - authoritative source checks
+  - `prompt218_multistep_execution_contract`
+  - kind / source / flags / max-next-steps / next-action checks
+- Derives exactly one bounded action from Prompt217 source retrigger mapping and
+  guarded result-assimilation fallback.
+- Handles deterministic blocked states:
+  - blocked no action
+  - blocked multiple actions
+  - conflict metadata
+- Implements existing truth revalidation:
+  - honors `existing_truth_requires_revalidation`
+  - requires terminal truth / source consistency
+  - sets `existing_truth_revalidated`
+  - blocks with `bounded_multistep_execution_blocked_existing_truth_revalidation`
+    when revalidation fails
+- Delegates metadata-only to existing normalized bounded-path truth surfaces:
+  - generated prompt reentry
+  - rollback execution
+  - commit/tag execution
+  - fix prompt generation
+  - next prompt generation
+  - result assimilation chain
+- Sets delegated existing path fields and path-specific action executed flags from
+  existing attempted / terminal truth only.
+- Enforces non-selected action no-op guarantees.
+- Adds Prompt219 handoff:
+  - `prompt219_result_ready_for_assimilation=true`
+  - `prompt219_result_assimilation_source="prompt218_bounded_multistep_execution_coordinator"`
+  - `prompt219_result_next_stage="bounded_multistep_execution_result_assimilation"`
+- Preserves execution boundaries:
+  - no new executor
+  - no retry
+  - no loop / unbounded loop
+  - no push
+  - no GitHub operation
+  - no tests / docs changes
+  - no direct execution outside existing bounded-path truth surfaces
+- Exposed Prompt218 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt218 implementation.
+- No tests were run.
+- Prompt218 is metadata-only coordination over existing bounded-path truth surfaces.
+- It does not prove fresh runtime execution occurred unless existing path truth
+  includes attempted / terminal metadata.
+
+Known risk:
+- Action derivation is intentionally strict. If upstream Prompt217 emits partially
+  contradictory multistep / follow-up markers, Prompt218 resolves to blocked /
+  manual-review rather than attempting permissive fallback.
+
+Known follow-up:
+- Prompt219 should consume
+  `project_browser_autonomous_bounded_multistep_execution_coordinator_*`, classify
+  completed / existing-truth-revalidated / blocked / manual-stop outcomes per
+  selected action kind, and emit bounded controller feedback metadata for the next
+  safe coordination stage.

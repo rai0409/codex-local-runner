@@ -2862,3 +2862,30 @@ Authoritative bounded handoff rule:
   execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
   create new executors.
 - Prompt218 must revalidate Prompt217 execution preflight before any bounded action.
+
+
+<!-- prompt218-update -->
+## Prompt218 architecture constraint update
+
+Prompt218 adds bounded multi-step execution coordinator metadata.
+
+Authoritative execution-coordinator rule:
+- Prompt218 may derive bounded action execution only from Prompt217 bounded
+  multi-step handoff guard output.
+- Prompt218 must not infer execution readiness from Prompt216, Prompt215, or older
+  controller states alone.
+- Prompt218 must revalidate Prompt217 execution preflight before deriving action.
+- Prompt218 must select exactly one bounded action or stop/block.
+- Prompt218 remains bounded:
+  - `max_next_steps=1`
+  - no retry
+  - no unbounded loop
+  - no new executor
+  - no push
+  - no GitHub operation
+- Prompt218 delegates metadata-only to existing bounded-path truth surfaces.
+- Fresh runtime execution is not proven unless path-specific attempted / terminal
+  metadata exists.
+- Prompt219 must classify Prompt218 outcomes into fresh action, existing-truth
+  revalidated, existing path block, manual stop, blocked, failed, or insufficient
+  truth.
