@@ -2554,3 +2554,26 @@ Current limitation:
 - Prompt204 emits the launch contract but does not execute it.
 - Prompt205 should execute exactly one selected launch via existing bounded paths and
   emit result handoff metadata for Prompt206.
+
+
+<!-- prompt205-update -->
+## Prompt205 architecture constraint update
+
+Prompt205 adds next-step launch execution integration.
+
+Authoritative launch execution rule:
+- Prompt205 may integrate exactly one launch kind selected by Prompt204.
+- Prompt205 must not create new executors.
+- Prompt205 must not run multiple launches.
+- Prompt205 must not push, call GitHub, retry, loop, create daemons, schedulers, or
+  queue drainers.
+- Generated prompt re-entry launch must use existing re-entry invocation metadata/path.
+- Rollback execution launch must use existing bounded rollback execution metadata/path.
+- Commit execution launch must use existing bounded commit/tag execution metadata/path.
+- Non-selected launch kinds must remain no-op.
+- Prompt205 must always emit Prompt206 result assimilation handoff metadata.
+
+Current limitation:
+- Prompt205 integrates delegated launch execution state, but does not yet classify
+  launch result outcomes into controller feedback.
+- Prompt206 should add next-step launch result assimilation metadata only.

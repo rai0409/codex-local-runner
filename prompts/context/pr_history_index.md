@@ -3317,3 +3317,59 @@ Known follow-up:
 - Prompt205 should consume `project_browser_autonomous_next_step_launch_contract_*`
   and execute exactly one bounded launch action through existing execution paths,
   with strict non-selected-launch no-op guarantees and result handoff metadata.
+
+
+<!-- prompt205-update -->
+## Prompt205 — next-step launch execution integration
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_next_step_launch_execution_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_next_step_launch_execution_*`.
+- Consumes Prompt204 next-step launch contract:
+  `project_browser_autonomous_next_step_launch_contract_*`.
+- Implements exactly-one launch execution integration for:
+  - `generated_prompt_reentry_launch`
+  - `rollback_execution_launch`
+  - `commit_execution_launch`
+  - `manual_stop`
+- Delegates only through already existing execution-state paths:
+  - generated prompt re-entry via existing re-entry invocation metadata
+  - rollback execution via existing rollback execution metadata
+  - commit/tag execution via existing commit/tag execution metadata
+- Adds exactly-one launch enforcement, conflict handling, budget/safety gating, and
+  deterministic blocked reasons.
+- Adds non-selected launch no-op guarantees and multiple-launch block:
+  `next_step_launch_execution_blocked_multiple_launches`.
+- Does not introduce new executor paths.
+- Preserves execution boundaries:
+  - no push
+  - no GitHub operation
+  - no retry/loop
+  - no new executor
+- Adds Prompt206 handoff:
+  - `next_step_launch_result_ready_for_assimilation=true`
+  - `next_step_launch_result_assimilation_source="prompt205_next_step_launch_execution"`
+  - `next_step_launch_result_next_stage="next_step_launch_result_assimilation"`
+- Exposed Prompt205 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt205 implementation.
+- No tests were run.
+- Prompt205 consumes already-produced delegated execution states. If future runs need
+  Prompt205 to re-trigger execution directly, additional ordering/control wiring may
+  be required.
+
+Known follow-up:
+- Prompt206 should consume
+  `project_browser_autonomous_next_step_launch_execution_*` and classify launch
+  results into controller feedback without executing any additional launch.
