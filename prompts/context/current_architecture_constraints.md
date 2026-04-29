@@ -2916,3 +2916,32 @@ Authoritative bounded result rule:
   execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
   create new executors.
 - Prompt220 must use Prompt219 as the sole bounded continuation decision input.
+
+
+<!-- prompt220-update -->
+## Prompt220 architecture constraint update
+
+Prompt220 adds bounded continuation decision metadata.
+
+Authoritative bounded continuation rule:
+- Prompt220 may select bounded continuation only from Prompt219 bounded multi-step
+  execution result assimilation.
+- Prompt220 must not infer continuation from Prompt218, Prompt217, or older
+  bounded-path states alone.
+- Prompt220 must distinguish:
+  - completed fresh action
+  - completed existing truth revalidated
+  - manual stop
+  - blocked / failed / insufficient truth
+- Prompt220 must emit only bounded preflight metadata for Prompt221.
+- Prompt220 must preserve:
+  - `max_continuation_steps=1`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+  - no retry
+  - no loop start
+- Prompt220 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+- Prompt221 must consume Prompt220's Prompt221 preflight contract as the sole
+  continuation input and must not raise continuation steps above 1.

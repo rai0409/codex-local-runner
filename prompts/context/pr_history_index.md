@@ -4332,3 +4332,74 @@ Known follow-up:
   - completed fresh action
   - completed existing truth revalidated
   - manual / blocked / failed terminal stop paths.
+
+
+<!-- prompt220-update -->
+## Prompt220 — bounded continuation decision gate
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_continuation_decision_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_continuation_decision_*`.
+- Consumes Prompt219 bounded multi-step execution result assimilation:
+  `project_browser_autonomous_bounded_multistep_execution_result_assimilation_*`.
+- Uses Prompt219 as the authoritative bounded continuation decision input.
+- Does not fall back to Prompt218 / Prompt217-only inference when Prompt219 is
+  present but unsafe, blocked, failed, manual-stop, or insufficient.
+- Derives continuation candidates only from Prompt219 normalized state:
+  - `bounded_n_step_candidate`
+  - `result_assimilation_chain_candidate`
+  - `manual_stop_candidate`
+  - `blocked_candidate`
+- Implements fresh / existing-truth continuation policy:
+  - `completed_fresh_action` -> `n_step_continuation_confidence="high"`
+  - `completed_existing_truth_revalidated` -> `n_step_continuation_confidence="guarded"`
+  - existing truth revalidated path preserves guarded continuation policy
+  - unsafe result classes do not proceed to bounded N-step
+- Implements exactly-one continuation target handling with conflict metadata and
+  manual-review stop routing.
+- Emits Prompt221 bounded N-step preflight:
+  - `prompt221_n_step_ready=true`
+  - `prompt221_n_step_source="prompt220_bounded_continuation_decision"`
+  - `prompt221_n_step_contract`
+- Prompt221 contract remains bounded:
+  - `max_continuation_steps=1`
+  - `allow_unbounded_loop=false`
+  - `allow_retry=false`
+  - stop-policy guard required
+  - budget guard required
+  - result-assimilation required
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no rollback execution
+  - no commit/tag execution
+  - no validation execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop start
+- Exposed Prompt220 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt220 implementation.
+- No tests were run.
+- Prompt220 is intentionally conservative. If Prompt219 status/result-class
+  vocabulary expands, Prompt220 may classify to blocked / insufficient until
+  mappings are updated.
+
+Known follow-up:
+- Prompt221 should consume
+  `project_browser_autonomous_bounded_continuation_decision_prompt221_n_step_contract`
+  as the only preflight contract input, enforce `max_continuation_steps=1`,
+  preserve `allow_unbounded_loop=false`, and keep the guarded continuation policy
+  for existing-truth-revalidated paths.
