@@ -2129,3 +2129,24 @@ Authoritative rollback readiness rule:
 Current limitation:
 - Rollback tracked/untracked classification relies on current git status metadata
   plus source metadata. Prompt185 must revalidate paths and plan before executing.
+
+
+<!-- prompt185-update -->
+## Prompt185 architecture constraint update
+
+Prompt185 adds bounded rollback execution.
+
+Authoritative rollback execution rule:
+- Prompt185 may execute rollback only from Prompt184's safe emitted plan.
+- Prompt185 must not use `git reset --hard`, `git clean -fd`, recursive deletion,
+  broad globs, arbitrary rm, shell-based rollback commands, or new executors.
+- Tracked rollback is limited to validated explicit files.
+- Untracked/runtime removal is limited to explicitly listed safe generated/runtime
+  files.
+- Prompt185 must capture post-rollback status and route failures to manual review.
+
+Current limitation:
+- Prompt185 executes rollback and captures result metadata, but does not yet classify
+  whether the autonomous flow can continue after rollback or must stop.
+- Prompt186 should add rollback result assimilation and post-rollback routing
+  metadata without executing more commands.
