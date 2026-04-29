@@ -1908,3 +1908,24 @@ Authoritative handoff rule:
 Current limitation:
 - Prompt174 adds advisory bridge metadata to Prompt160/162 readiness maps.
 - Prompt175 must explicitly consume this metadata inside readiness decision logic.
+
+
+<!-- prompt175-update -->
+## Prompt175 architecture constraint update
+
+Prompt175 consumes Prompt174 cycle handoff metadata inside existing fix/next prompt
+readiness builders.
+
+Authoritative safety rule:
+- `cycle_handoff_acknowledged=true` is a positive input only.
+- It must not bypass human review, missing truth, unsafe status, or existing
+  readiness blockers.
+- Fix readiness may acknowledge only `fix` handoff with reason `validation_failed`.
+- Next readiness may acknowledge only `next` handoff with reason `cycle_passed`.
+- Prompt175 must not generate prompt files, invoke Codex, rollback, commit, create
+  GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Readiness status is not yet re-evaluated from acknowledged handoff in the same run.
+- Prompt176 should add a small safety-gated precedence layer for in-run readiness
+  re-evaluation.

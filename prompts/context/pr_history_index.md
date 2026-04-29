@@ -1634,3 +1634,47 @@ Scope notes:
 Known follow-up:
 - Prompt174 bridge fields are advisory metadata until Prompt175 consumes them in
   fix/next readiness decision logic.
+
+
+<!-- prompt175-update -->
+## Prompt175 — consume cycle handoff metadata in fix/next readiness decisions
+
+Status: completed.
+
+Changed:
+- Updated existing fix/next prompt readiness builders to consume Prompt174
+  cycle-handoff metadata.
+- Added handoff-consumption fields under both readiness prefixes:
+  - `cycle_handoff_consumed`
+  - `cycle_handoff_acknowledged`
+  - `cycle_handoff_prompt_kind`
+  - `cycle_handoff_reason`
+  - `cycle_handoff_block_reason`
+  - `cycle_handoff_readiness_source`
+- Fix readiness acknowledges handoff only when:
+  - handoff available is true
+  - prompt kind is `fix`
+  - reason is `validation_failed`
+- Next readiness acknowledges handoff only when:
+  - handoff available is true
+  - prompt kind is `next`
+  - reason is `cycle_passed`
+- Mismatched handoff kind/reason is explicitly blocked.
+- Existing readiness safety gates remain authoritative; handoff is not a safety
+  bypass.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt175 implementation.
+- No tests were run.
+- No prompt files were generated.
+- No Codex invocation, rollback, commit, GitHub operation, retry loop, scheduler,
+  daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt175 consumes and acknowledges handoff metadata, but readiness status is still
+  governed by existing safety logic. Prompt176 should add safety-gated in-run
+  readiness re-evaluation from acknowledged handoff.

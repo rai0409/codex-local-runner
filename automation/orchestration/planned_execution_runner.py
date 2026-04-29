@@ -47719,6 +47719,9 @@ def _build_project_browser_autonomous_fix_prompt_readiness_state(
     metadata_consistency_failed: bool,
     human_review_required: bool,
     rollback_required: bool,
+    cycle_handoff_available: bool = False,
+    cycle_handoff_prompt_kind: str = "none",
+    cycle_handoff_reason: str = "",
 ) -> dict[str, Any]:
     allowed_statuses = {
         "ready_to_generate_fix_prompt",
@@ -47791,6 +47794,26 @@ def _build_project_browser_autonomous_fix_prompt_readiness_state(
     normalized_py_compile_exit_code = int(_as_int(py_compile_exit_code, default=-1))
     metadata_passed = bool(metadata_consistency_passed)
     metadata_failed = bool(metadata_consistency_failed)
+    normalized_cycle_handoff_prompt_kind = _normalize_text(
+        cycle_handoff_prompt_kind,
+        default="none",
+    )
+    normalized_cycle_handoff_reason = _normalize_text(cycle_handoff_reason, default="")
+    cycle_handoff_consumed = bool(cycle_handoff_available)
+    cycle_handoff_acknowledged = bool(
+        cycle_handoff_consumed
+        and normalized_cycle_handoff_prompt_kind == "fix"
+        and normalized_cycle_handoff_reason == "validation_failed"
+    )
+    cycle_handoff_readiness_source = (
+        "cycle_failed_validation" if cycle_handoff_acknowledged else ""
+    )
+    cycle_handoff_block_reason = ""
+    if cycle_handoff_consumed and not cycle_handoff_acknowledged:
+        if normalized_cycle_handoff_prompt_kind != "fix":
+            cycle_handoff_block_reason = "mismatched_cycle_handoff_prompt_kind"
+        elif normalized_cycle_handoff_reason != "validation_failed":
+            cycle_handoff_block_reason = "mismatched_cycle_handoff_reason"
 
     target_file_candidates: list[str] = []
     for file_path in [*normalized_changed_files, *normalized_touched_files]:
@@ -48031,6 +48054,24 @@ def _build_project_browser_autonomous_fix_prompt_readiness_state(
         ),
         "project_browser_autonomous_fix_prompt_readiness_expected_patch_path": (
             normalized_expected_patch_path
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_consumed": bool(
+            cycle_handoff_consumed
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_acknowledged": bool(
+            cycle_handoff_acknowledged
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_prompt_kind": (
+            normalized_cycle_handoff_prompt_kind
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_reason": (
+            normalized_cycle_handoff_reason
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_block_reason": (
+            cycle_handoff_block_reason
+        ),
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_readiness_source": (
+            cycle_handoff_readiness_source
         ),
     }
 
@@ -48445,6 +48486,9 @@ def _build_project_browser_autonomous_next_prompt_readiness_state(
     validation_missing_inputs: list[str] | None,
     fix_readiness_missing_inputs: list[str] | None,
     fix_generation_missing_inputs: list[str] | None,
+    cycle_handoff_available: bool = False,
+    cycle_handoff_prompt_kind: str = "none",
+    cycle_handoff_reason: str = "",
 ) -> dict[str, Any]:
     allowed_statuses = {
         "ready_to_generate_next_prompt",
@@ -48522,6 +48566,24 @@ def _build_project_browser_autonomous_next_prompt_readiness_state(
     normalized_target_files = _normalize_string_list(
         implementation_prompt_preferred_files or []
     )
+    normalized_cycle_handoff_prompt_kind = _normalize_text(
+        cycle_handoff_prompt_kind,
+        default="none",
+    )
+    normalized_cycle_handoff_reason = _normalize_text(cycle_handoff_reason, default="")
+    cycle_handoff_consumed = bool(cycle_handoff_available)
+    cycle_handoff_acknowledged = bool(
+        cycle_handoff_consumed
+        and normalized_cycle_handoff_prompt_kind == "next"
+        and normalized_cycle_handoff_reason == "cycle_passed"
+    )
+    cycle_handoff_readiness_source = "cycle_passed" if cycle_handoff_acknowledged else ""
+    cycle_handoff_block_reason = ""
+    if cycle_handoff_consumed and not cycle_handoff_acknowledged:
+        if normalized_cycle_handoff_prompt_kind != "next":
+            cycle_handoff_block_reason = "mismatched_cycle_handoff_prompt_kind"
+        elif normalized_cycle_handoff_reason != "cycle_passed":
+            cycle_handoff_block_reason = "mismatched_cycle_handoff_reason"
     validation_missing = _normalize_string_list(validation_missing_inputs or [])
     fix_readiness_missing = _normalize_string_list(fix_readiness_missing_inputs or [])
     fix_generation_missing = _normalize_string_list(fix_generation_missing_inputs or [])
@@ -48717,6 +48779,24 @@ def _build_project_browser_autonomous_next_prompt_readiness_state(
         "project_browser_autonomous_next_prompt_readiness_runtime_posture": runtime_posture,
         "project_browser_autonomous_next_prompt_readiness_missing_inputs": (
             _serialize_required_signals(missing_inputs)
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_consumed": bool(
+            cycle_handoff_consumed
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_acknowledged": bool(
+            cycle_handoff_acknowledged
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_prompt_kind": (
+            normalized_cycle_handoff_prompt_kind
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_reason": (
+            normalized_cycle_handoff_reason
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_block_reason": (
+            cycle_handoff_block_reason
+        ),
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_readiness_source": (
+            cycle_handoff_readiness_source
         ),
     }
 
@@ -70846,6 +70926,24 @@ def _build_approved_restart_execution_contract_surface(
             rollback_required=bool(
                 post_apply_validation_result.get("rollback_required", False)
             ),
+            cycle_handoff_available=bool(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_available",
+                    False,
+                )
+            ),
+            cycle_handoff_prompt_kind=_normalize_text(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_prompt_kind"
+                ),
+                default="none",
+            ),
+            cycle_handoff_reason=_normalize_text(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_reason"
+                ),
+                default="",
+            ),
         )
     )
     fix_prompt_readiness_allowed_statuses = {
@@ -70924,6 +71022,12 @@ def _build_approved_restart_execution_contract_surface(
         "runtime_posture",
         "missing_inputs",
         "expected_patch_path",
+        "cycle_handoff_consumed",
+        "cycle_handoff_acknowledged",
+        "cycle_handoff_prompt_kind",
+        "cycle_handoff_reason",
+        "cycle_handoff_block_reason",
+        "cycle_handoff_readiness_source",
     )
 
     project_browser_autonomous_fix_prompt_readiness_status = _normalize_text(
@@ -70981,6 +71085,8 @@ def _build_approved_restart_execution_contract_surface(
             "metadata_consistency_failed",
             "human_review_required",
             "rollback_required",
+            "cycle_handoff_consumed",
+            "cycle_handoff_acknowledged",
         }:
             value = bool(value)
         elif field_name == "py_compile_exit_code":
@@ -71284,6 +71390,24 @@ def _build_approved_restart_execution_contract_surface(
                     "project_browser_autonomous_fix_prompt_generation_missing_inputs"
                 )
             ),
+            cycle_handoff_available=bool(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_next_prompt_readiness_cycle_handoff_available",
+                    False,
+                )
+            ),
+            cycle_handoff_prompt_kind=_normalize_text(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_next_prompt_readiness_cycle_handoff_prompt_kind"
+                ),
+                default="none",
+            ),
+            cycle_handoff_reason=_normalize_text(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_next_prompt_readiness_cycle_handoff_reason"
+                ),
+                default="",
+            ),
         )
     )
     next_prompt_readiness_allowed_statuses = {
@@ -71335,6 +71459,12 @@ def _build_approved_restart_execution_contract_surface(
         "next_action",
         "runtime_posture",
         "missing_inputs",
+        "cycle_handoff_consumed",
+        "cycle_handoff_acknowledged",
+        "cycle_handoff_prompt_kind",
+        "cycle_handoff_reason",
+        "cycle_handoff_block_reason",
+        "cycle_handoff_readiness_source",
     )
     project_browser_autonomous_next_prompt_readiness_status = _normalize_text(
         project_browser_autonomous_next_prompt_readiness_state.get(
@@ -71376,6 +71506,8 @@ def _build_approved_restart_execution_contract_surface(
             "generation_blocked",
             "prompt_generation_attempted",
             "prompt_generated",
+            "cycle_handoff_consumed",
+            "cycle_handoff_acknowledged",
         }:
             value = bool(value)
         elif field_name in {"next_target_files", "runtime_posture", "missing_inputs"}:
@@ -73936,55 +74068,104 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_cycle_handoff_controller_next_action"
     ] = project_browser_autonomous_cycle_handoff_controller_next_action
 
-    # Metadata-only bridge for existing readiness flows; no decision override here.
+    # Metadata-only bridge for existing readiness flows; no safety bypass.
+    cycle_handoff_available = bool(
+        project_browser_autonomous_cycle_handoff_controller_state_normalized.get(
+            "project_browser_autonomous_cycle_handoff_controller_readiness_handoff_available",
+            False,
+        )
+    )
+    cycle_handoff_prompt_kind = _normalize_text(
+        project_browser_autonomous_cycle_handoff_controller_state_normalized.get(
+            "project_browser_autonomous_cycle_handoff_controller_readiness_handoff_prompt_kind"
+        ),
+        default="none",
+    )
+    cycle_handoff_reason = _normalize_text(
+        project_browser_autonomous_cycle_handoff_controller_state_normalized.get(
+            "project_browser_autonomous_cycle_handoff_controller_readiness_handoff_reason"
+        ),
+        default="",
+    )
+    if not cycle_handoff_available:
+        cycle_handoff_prompt_kind = "none"
+        cycle_handoff_reason = ""
+
     project_browser_autonomous_fix_prompt_readiness_state_normalized[
         "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_available"
-    ] = bool(
-        project_browser_autonomous_cycle_handoff_controller_state_normalized.get(
-            "project_browser_autonomous_cycle_handoff_controller_readiness_handoff_available",
-            False,
-        )
-    )
+    ] = cycle_handoff_available
     project_browser_autonomous_fix_prompt_readiness_state_normalized[
         "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_prompt_kind"
-    ] = _normalize_text(
-        project_browser_autonomous_cycle_handoff_controller_state_normalized.get(
-            "project_browser_autonomous_cycle_handoff_controller_readiness_handoff_prompt_kind"
-        ),
-        default="none",
-    )
+    ] = cycle_handoff_prompt_kind
     project_browser_autonomous_fix_prompt_readiness_state_normalized[
         "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_reason"
-    ] = _normalize_text(
-        project_browser_autonomous_cycle_handoff_controller_state_normalized.get(
-            "project_browser_autonomous_cycle_handoff_controller_readiness_handoff_reason"
-        ),
-        default="blocked_insufficient_handoff_truth",
+    ] = cycle_handoff_reason
+
+    fix_cycle_handoff_consumed = bool(cycle_handoff_available)
+    fix_cycle_handoff_acknowledged = bool(
+        fix_cycle_handoff_consumed
+        and cycle_handoff_prompt_kind == "fix"
+        and cycle_handoff_reason == "validation_failed"
     )
+    fix_cycle_handoff_block_reason = ""
+    fix_cycle_handoff_readiness_source = ""
+    if fix_cycle_handoff_acknowledged:
+        fix_cycle_handoff_readiness_source = "cycle_failed_validation"
+    elif fix_cycle_handoff_consumed:
+        if cycle_handoff_prompt_kind != "fix":
+            fix_cycle_handoff_block_reason = "mismatched_cycle_handoff_prompt_kind"
+        elif cycle_handoff_reason != "validation_failed":
+            fix_cycle_handoff_block_reason = "mismatched_cycle_handoff_reason"
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_consumed"
+    ] = fix_cycle_handoff_consumed
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_acknowledged"
+    ] = fix_cycle_handoff_acknowledged
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_block_reason"
+    ] = fix_cycle_handoff_block_reason
+    project_browser_autonomous_fix_prompt_readiness_state_normalized[
+        "project_browser_autonomous_fix_prompt_readiness_cycle_handoff_readiness_source"
+    ] = fix_cycle_handoff_readiness_source
+
     project_browser_autonomous_next_prompt_readiness_state_normalized[
         "project_browser_autonomous_next_prompt_readiness_cycle_handoff_available"
-    ] = bool(
-        project_browser_autonomous_cycle_handoff_controller_state_normalized.get(
-            "project_browser_autonomous_cycle_handoff_controller_readiness_handoff_available",
-            False,
-        )
-    )
+    ] = cycle_handoff_available
     project_browser_autonomous_next_prompt_readiness_state_normalized[
         "project_browser_autonomous_next_prompt_readiness_cycle_handoff_prompt_kind"
-    ] = _normalize_text(
-        project_browser_autonomous_cycle_handoff_controller_state_normalized.get(
-            "project_browser_autonomous_cycle_handoff_controller_readiness_handoff_prompt_kind"
-        ),
-        default="none",
-    )
+    ] = cycle_handoff_prompt_kind
     project_browser_autonomous_next_prompt_readiness_state_normalized[
         "project_browser_autonomous_next_prompt_readiness_cycle_handoff_reason"
-    ] = _normalize_text(
-        project_browser_autonomous_cycle_handoff_controller_state_normalized.get(
-            "project_browser_autonomous_cycle_handoff_controller_readiness_handoff_reason"
-        ),
-        default="blocked_insufficient_handoff_truth",
+    ] = cycle_handoff_reason
+
+    next_cycle_handoff_consumed = bool(cycle_handoff_available)
+    next_cycle_handoff_acknowledged = bool(
+        next_cycle_handoff_consumed
+        and cycle_handoff_prompt_kind == "next"
+        and cycle_handoff_reason == "cycle_passed"
     )
+    next_cycle_handoff_block_reason = ""
+    next_cycle_handoff_readiness_source = ""
+    if next_cycle_handoff_acknowledged:
+        next_cycle_handoff_readiness_source = "cycle_passed"
+    elif next_cycle_handoff_consumed:
+        if cycle_handoff_prompt_kind != "next":
+            next_cycle_handoff_block_reason = "mismatched_cycle_handoff_prompt_kind"
+        elif cycle_handoff_reason != "cycle_passed":
+            next_cycle_handoff_block_reason = "mismatched_cycle_handoff_reason"
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_consumed"
+    ] = next_cycle_handoff_consumed
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_acknowledged"
+    ] = next_cycle_handoff_acknowledged
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_block_reason"
+    ] = next_cycle_handoff_block_reason
+    project_browser_autonomous_next_prompt_readiness_state_normalized[
+        "project_browser_autonomous_next_prompt_readiness_cycle_handoff_readiness_source"
+    ] = next_cycle_handoff_readiness_source
 
     if project_planning_summary_available:
         project_planning_summary_compact.update(

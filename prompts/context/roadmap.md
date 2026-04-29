@@ -1733,3 +1733,29 @@ Next fastest path:
 Prompt175 must not add tests, prompt file generation, Codex invocation, rollback,
 commit, GitHub operations, retry loops, daemons, schedulers, queue drainers, or new
 executors.
+
+
+<!-- prompt175-update -->
+## Roadmap update after Prompt175
+
+Completed:
+- Prompt169: Codex workspace-write result assimilation and changed-file safety
+  classification.
+- Prompt170: metadata-only post-write validation routing and candidate derivation.
+- Prompt171: bounded post-write py_compile validation execution.
+- Prompt172: metadata-only one-step autonomous cycle summary.
+- Prompt173: active-path human-review and downstream validation precedence hardening.
+- Prompt174: cycle handoff controller and advisory readiness handoff metadata bridge.
+- Prompt175: explicit consumption of cycle handoff metadata in fix/next readiness
+  builders.
+
+Next fastest path:
+- Prompt176: safety-gated in-run readiness re-evaluation from acknowledged cycle
+  handoff.
+- Prompt177: connect re-evaluated readiness to existing Prompt161/163 generation flow.
+- Prompt178: bounded re-entry readiness toward selected prompt/Codex invocation.
+- Prompt179+: rollback readiness and rollback execution.
+
+Prompt176 must not add tests, prompt file generation, Codex invocation, rollback,
+commit, GitHub operations, retry loops, daemons, schedulers, queue drainers, or new
+executors.
