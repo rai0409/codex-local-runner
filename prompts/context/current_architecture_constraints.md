@@ -3206,3 +3206,22 @@ Architecture constraints:
 - Do not force N=2 readiness when Prompt222 lacks fresh successful one-step evidence.
 - Downstream stages should preserve specific upstream block reasons while also exposing stable reason families.
 - No-loop, no-retry, no-push, no-GitHub, and no-new-executor boundaries remain mandatory.
+
+## Prompt228-fix8 constraint update
+
+Prompt228-fix8 added stable reason taxonomy surfaces across Prompt224→228.
+
+Current N=2 blocked/manual-stop taxonomy behavior:
+- Prompt224/225/226 preserve the root specific reason:
+  - primary_reason=blocked_prompt222_not_fresh_surface
+  - reason_family=fresh_surface_missing
+  - upstream_reason_source=prompt222_bounded_n_step_result_assimilation
+- Prompt227/228 remain safe manual-stop:
+  - reason_family=manual_stop
+- Prompt229 readiness remains false for the current no-fresh-surface path.
+
+Architecture constraints:
+- Downstream routing should prefer reason_family over parsing raw blocked_* tokens.
+- primary_reason must remain available for diagnostics.
+- Existing raw block reason fields must remain backward-compatible.
+- Do not relax N=2 authority, readiness, accounting, no-loop, no-retry, no-push, no-GitHub, or no-new-executor boundaries.

@@ -5083,3 +5083,56 @@ Known follow-up:
   - Downstream consumers should handle specific reason tokens and generic fallbacks consistently.
 - Next:
   - Prompt228-fix8 should normalize blocked-reason taxonomy across Prompt224→228 using stable machine-readable dual fields such as primary_reason and reason_family.
+
+## Prompt228-fix8 - Normalize Prompt224-228 N2 block reason taxonomy
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Purpose:
+  - Add stable machine-readable reason taxonomy across Prompt224→228.
+  - Preserve specific diagnostic reason tokens while adding normalized routing fields.
+- Added:
+  - _derive_bounded_n2_reason_taxonomy(...)
+  - Prompt224 taxonomy fields:
+    - project_browser_autonomous_bounded_n2_execution_preflight_primary_reason
+    - project_browser_autonomous_bounded_n2_execution_preflight_reason_family
+    - project_browser_autonomous_bounded_n2_execution_preflight_upstream_reason_source
+  - Prompt225 taxonomy fields:
+    - project_browser_autonomous_bounded_n2_execution_coordinator_primary_reason
+    - project_browser_autonomous_bounded_n2_execution_coordinator_reason_family
+    - project_browser_autonomous_bounded_n2_execution_coordinator_upstream_reason_source
+  - Prompt226 taxonomy fields:
+    - project_browser_autonomous_bounded_n2_execution_result_assimilation_primary_reason
+    - project_browser_autonomous_bounded_n2_execution_result_assimilation_reason_family
+    - project_browser_autonomous_bounded_n2_execution_result_assimilation_upstream_reason_source
+  - Prompt227 taxonomy fields:
+    - project_browser_autonomous_bounded_n2_post_result_decision_primary_reason
+    - project_browser_autonomous_bounded_n2_post_result_decision_reason_family
+    - project_browser_autonomous_bounded_n2_post_result_decision_upstream_reason_source
+  - Prompt228 taxonomy fields:
+    - project_browser_autonomous_selected_post_n2_preflight_primary_reason
+    - project_browser_autonomous_selected_post_n2_preflight_reason_family
+    - project_browser_autonomous_selected_post_n2_preflight_upstream_reason_source
+- Result:
+  - missing_count=0 for requested taxonomy fields.
+  - approved_restart_execution_contract.json generated.
+  - Prompt224/225/226:
+    - primary_reason=blocked_prompt222_not_fresh_surface
+    - reason_family=fresh_surface_missing
+    - upstream_reason_source=prompt222_bounded_n_step_result_assimilation
+  - Prompt227/228 remain safe manual-stop:
+    - reason_family=manual_stop
+  - Prompt228 Prompt229 readiness remains false:
+    - prompt229_e2e_flow_check_ready=false
+    - prompt229_fresh_runtime_evidence_ready=false
+- Safety:
+  - N=2 authority/allow/readiness logic unchanged.
+  - No tests added.
+  - No docs edited during Codex run.
+  - No Prompt229 added.
+  - No executor, rollback, commit/tag execution, push, GitHub, retry, or unbounded-loop behavior added.
+- Remaining risk:
+  - Some downstream consumers may still rely on old raw reason tokens.
+  - Future stages should prefer reason_family for routing and keep primary_reason for diagnostics.
+- Next:
+  - Prompt228-fix9 should migrate downstream decision/readout surfaces to consume reason_family first and add a compatibility shim report for legacy token consumers.
