@@ -2254,3 +2254,53 @@ Known follow-up:
 - Prompt187 should consume `project_browser_autonomous_rollback_result_assimilation_*`
   and decide whether post-rollback fix continuation is allowed under remaining
   budgets, or whether the flow must stop for manual review.
+
+
+<!-- prompt187-update -->
+## Prompt187 — post-rollback continuation gate
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_post_rollback_continuation_gate_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_post_rollback_continuation_gate_*`.
+- Consumes Prompt186 rollback result assimilation as the authoritative source:
+  `project_browser_autonomous_rollback_result_assimilation_*`.
+- Does not infer continuation from raw Prompt185 rollback execution when Prompt186
+  truth is present.
+- Added deterministic budget booleans:
+  - `fix_budget_available`
+  - `cycle_budget_available`
+  - `failure_budget_available`
+- Clean / expected-dirty rollback only allows fix continuation when safety and
+  budget gates pass.
+- Added status:
+  - `post_rollback_continuation_allowed_fix`
+- Hard-stops partial failure, failed rollback, timeout, unexpected dirty, and
+  review-required states.
+- Added blocked statuses for:
+  - fix budget exhaustion
+  - failure budget exhaustion
+  - insufficient truth
+  - rollback not required
+- Enforced commit-safety invariant:
+  - `safe_to_commit_after_rollback=false`
+  - `should_commit=false`
+- Exposed Prompt187 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt187 implementation.
+- No tests were run.
+- No Codex invocation, prompt generation, rollback re-execution, commit, GitHub
+  operation, retry loop, scheduler, daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt188 should consume `project_browser_autonomous_post_rollback_continuation_gate_*`
+  and connect allowed post-rollback fix continuation to the existing fix prompt
+  readiness/generation flow without invoking Codex.

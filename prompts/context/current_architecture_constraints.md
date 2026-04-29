@@ -2171,3 +2171,24 @@ Current limitation:
 - Prompt186 can recommend `generate_fix_prompt_after_rollback`, but does not yet
   check remaining fix/failure budgets for post-rollback continuation.
 - Prompt187 should add that budget-gated post-rollback continuation decision.
+
+
+<!-- prompt187-update -->
+## Prompt187 architecture constraint update
+
+Prompt187 adds a post-rollback continuation gate.
+
+Authoritative post-rollback continuation rule:
+- Prompt187 must consume Prompt186 rollback result assimilation as authoritative.
+- Clean or expected-dirty rollback may continue only to fix prompt generation, and
+  only when fix/failure budgets allow it.
+- Rollback failure, timeout, partial failure, unexpected dirty, or review-required
+  states must hard-stop to manual review.
+- Rollback result must never be used as a commit-ready source.
+- Prompt187 must not generate prompts, invoke Codex, execute rollback, commit, create
+  GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt187 can allow post-rollback fix continuation, but it does not yet feed that
+  decision into existing fix prompt readiness/generation flow.
+- Prompt188 should add that handoff/readiness wiring without invoking Codex.
