@@ -49540,6 +49540,308 @@ def _build_project_browser_autonomous_next_prompt_generation_state(
     }
 
 
+def _build_project_browser_autonomous_generated_prompt_reentry_readiness_state(
+    *,
+    fix_generation_status: str,
+    fix_prompt_generated: bool,
+    fix_prompt_handoff_path: str,
+    fix_prompt_handoff_write_completed: bool,
+    fix_prompt_handoff_write_failed: bool,
+    fix_human_review_required: bool,
+    fix_next_action: str,
+    fix_cycle_handoff_generation_input_available: bool = False,
+    fix_cycle_handoff_generation_input_consumed: bool = False,
+    fix_cycle_handoff_generation_input_kind: str = "none",
+    fix_cycle_handoff_generation_input_block_reason: str = "",
+    next_generation_status: str = "",
+    next_prompt_generated: bool = False,
+    next_prompt_handoff_path: str = "",
+    next_prompt_handoff_write_completed: bool = False,
+    next_prompt_handoff_write_failed: bool = False,
+    next_human_review_required: bool = False,
+    next_next_action: str = "",
+    next_cycle_handoff_generation_input_available: bool = False,
+    next_cycle_handoff_generation_input_consumed: bool = False,
+    next_cycle_handoff_generation_input_kind: str = "none",
+    next_cycle_handoff_generation_input_block_reason: str = "",
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "reentry_fix_prompt_ready",
+        "reentry_next_prompt_ready",
+        "reentry_blocked_human_review_required",
+        "reentry_blocked_insufficient_truth",
+        "reentry_blocked_ambiguous_prompt_kind",
+        "insufficient_truth",
+    }
+    allowed_prompt_kinds = {"fix", "next", "none"}
+    allowed_targets = {
+        "prompt_selection_and_codex_invocation_readiness",
+        "manual_review",
+        "none",
+    }
+    allowed_next_actions = {
+        "prepare_fix_prompt_reentry",
+        "prepare_next_prompt_reentry",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    runtime_posture = [
+        "metadata_only_generated_prompt_reentry_readiness",
+        "no_prompt_generation",
+        "no_prompt_execution",
+        "no_codex_invocation",
+        "no_autonomous_loop",
+        "no_git_mutation",
+    ]
+    fix_allowed_path = "/tmp/codex-local-runner-decision/generated_fix_prompt.txt"
+    next_allowed_path = "/tmp/codex-local-runner-decision/generated_next_prompt.txt"
+    max_prompt_size_bytes = 20000
+
+    normalized_fix_generation_status = _normalize_text(
+        fix_generation_status,
+        default="insufficient_truth",
+    )
+    normalized_next_generation_status = _normalize_text(
+        next_generation_status,
+        default="insufficient_truth",
+    )
+    normalized_fix_prompt_handoff_path = _normalize_text(fix_prompt_handoff_path, default="")
+    normalized_next_prompt_handoff_path = _normalize_text(next_prompt_handoff_path, default="")
+    normalized_fix_cycle_kind = _normalize_text(
+        fix_cycle_handoff_generation_input_kind,
+        default="none",
+    )
+    normalized_next_cycle_kind = _normalize_text(
+        next_cycle_handoff_generation_input_kind,
+        default="none",
+    )
+    normalized_fix_cycle_block_reason = _normalize_text(
+        fix_cycle_handoff_generation_input_block_reason,
+        default="",
+    )
+    normalized_next_cycle_block_reason = _normalize_text(
+        next_cycle_handoff_generation_input_block_reason,
+        default="",
+    )
+
+    def _safe_prompt_path(path_text: str, expected_path: str) -> tuple[bool, str]:
+        normalized_path = _normalize_text(path_text, default="")
+        if not normalized_path:
+            return False, "blocked_insufficient_reentry_truth"
+        if normalized_path != expected_path:
+            return False, "blocked_unexpected_prompt_path"
+        prompt_path_obj = Path(normalized_path)
+        if prompt_path_obj.is_symlink():
+            return False, "blocked_prompt_path_symlink"
+        if not prompt_path_obj.exists():
+            return False, "blocked_prompt_path_missing"
+        if not prompt_path_obj.is_file():
+            return False, "blocked_prompt_path_not_file"
+        try:
+            size_bytes = prompt_path_obj.stat().st_size
+        except OSError:
+            return False, "blocked_prompt_path_unreadable"
+        if size_bytes <= 0:
+            return False, "blocked_prompt_path_empty"
+        if size_bytes > max_prompt_size_bytes:
+            return False, "blocked_prompt_path_too_large"
+        return True, ""
+
+    fix_path_safe, fix_path_block_reason = _safe_prompt_path(
+        normalized_fix_prompt_handoff_path,
+        fix_allowed_path,
+    )
+    next_path_safe, next_path_block_reason = _safe_prompt_path(
+        normalized_next_prompt_handoff_path,
+        next_allowed_path,
+    )
+
+    fix_cycle_ok = True
+    if bool(fix_cycle_handoff_generation_input_available):
+        fix_cycle_ok = bool(fix_cycle_handoff_generation_input_consumed) and bool(
+            normalized_fix_cycle_kind in {"fix", "none"}
+        )
+    next_cycle_ok = True
+    if bool(next_cycle_handoff_generation_input_available):
+        next_cycle_ok = bool(next_cycle_handoff_generation_input_consumed) and bool(
+            normalized_next_cycle_kind in {"next", "none"}
+        )
+
+    fix_ready = bool(
+        normalized_fix_generation_status == "prompt_generated"
+        and bool(fix_prompt_generated)
+        and bool(fix_prompt_handoff_write_completed)
+        and not bool(fix_prompt_handoff_write_failed)
+        and not bool(fix_human_review_required)
+        and fix_path_safe
+        and fix_cycle_ok
+    )
+    next_ready = bool(
+        normalized_next_generation_status == "prompt_generated"
+        and bool(next_prompt_generated)
+        and bool(next_prompt_handoff_write_completed)
+        and not bool(next_prompt_handoff_write_failed)
+        and not bool(next_human_review_required)
+        and next_path_safe
+        and next_cycle_ok
+    )
+
+    status = "insufficient_truth"
+    reentry_allowed = False
+    reentry_block_reason = "blocked_insufficient_reentry_truth"
+    reentry_prompt_kind = "none"
+    reentry_prompt_path = ""
+    reentry_target = "none"
+    should_update_prompt_selection = False
+    should_update_invocation_readiness = False
+    should_invoke_codex = False
+    should_start_next_cycle = False
+    should_rollback = False
+    human_review_required = False
+    next_action = "insufficient_truth"
+    missing_inputs: list[str] = []
+
+    if bool(fix_human_review_required) or bool(next_human_review_required):
+        status = "reentry_blocked_human_review_required"
+        reentry_block_reason = "blocked_human_review_required"
+        reentry_target = "manual_review"
+        human_review_required = True
+        next_action = "manual_review_required"
+    elif fix_ready and next_ready:
+        status = "reentry_blocked_ambiguous_prompt_kind"
+        reentry_block_reason = "blocked_ambiguous_fix_and_next_reentry"
+        reentry_target = "manual_review"
+        human_review_required = True
+        next_action = "manual_review_required"
+    elif fix_ready:
+        status = "reentry_fix_prompt_ready"
+        reentry_allowed = True
+        reentry_block_reason = ""
+        reentry_prompt_kind = "fix"
+        reentry_prompt_path = normalized_fix_prompt_handoff_path
+        reentry_target = "prompt_selection_and_codex_invocation_readiness"
+        should_update_prompt_selection = True
+        should_update_invocation_readiness = True
+        human_review_required = False
+        next_action = "prepare_fix_prompt_reentry"
+    elif next_ready:
+        status = "reentry_next_prompt_ready"
+        reentry_allowed = True
+        reentry_block_reason = ""
+        reentry_prompt_kind = "next"
+        reentry_prompt_path = normalized_next_prompt_handoff_path
+        reentry_target = "prompt_selection_and_codex_invocation_readiness"
+        should_update_prompt_selection = True
+        should_update_invocation_readiness = True
+        human_review_required = False
+        next_action = "prepare_next_prompt_reentry"
+    else:
+        status = "reentry_blocked_insufficient_truth"
+        reentry_block_reason = "blocked_insufficient_reentry_truth"
+        reentry_target = "manual_review"
+        human_review_required = True
+        next_action = "manual_review_required"
+        if normalized_fix_generation_status != "prompt_generated":
+            missing_inputs.append("fix_generation_prompt_not_generated")
+        if normalized_next_generation_status != "prompt_generated":
+            missing_inputs.append("next_generation_prompt_not_generated")
+        if not fix_path_safe and fix_path_block_reason:
+            missing_inputs.append(f"fix:{fix_path_block_reason}")
+        if not next_path_safe and next_path_block_reason:
+            missing_inputs.append(f"next:{next_path_block_reason}")
+        if (
+            bool(fix_cycle_handoff_generation_input_available)
+            and not fix_cycle_ok
+            and normalized_fix_cycle_block_reason
+        ):
+            missing_inputs.append(f"fix:{normalized_fix_cycle_block_reason}")
+        if (
+            bool(next_cycle_handoff_generation_input_available)
+            and not next_cycle_ok
+            and normalized_next_cycle_block_reason
+        ):
+            missing_inputs.append(f"next:{normalized_next_cycle_block_reason}")
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if reentry_prompt_kind not in allowed_prompt_kinds:
+        reentry_prompt_kind = "none"
+    if reentry_target not in allowed_targets:
+        reentry_target = "none"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_generated_prompt_reentry_readiness_status": status,
+        "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_allowed": bool(
+            reentry_allowed
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_block_reason": (
+            reentry_block_reason
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_prompt_kind": (
+            reentry_prompt_kind
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_prompt_path": (
+            reentry_prompt_path
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_target": (
+            reentry_target
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_should_update_prompt_selection": bool(
+            should_update_prompt_selection
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_should_update_invocation_readiness": bool(
+            should_update_invocation_readiness
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_should_invoke_codex": bool(
+            should_invoke_codex
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_should_start_next_cycle": bool(
+            should_start_next_cycle
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_should_rollback": bool(
+            should_rollback
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_source_fix_generation_status": (
+            normalized_fix_generation_status
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_source_fix_prompt_generated": bool(
+            fix_prompt_generated
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_source_fix_prompt_handoff_write_completed": bool(
+            fix_prompt_handoff_write_completed
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_source_next_generation_status": (
+            normalized_next_generation_status
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_source_next_prompt_generated": bool(
+            next_prompt_generated
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_source_next_prompt_handoff_write_completed": bool(
+            next_prompt_handoff_write_completed
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_human_review_required": bool(
+            human_review_required
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_next_action": (
+            next_action
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_source_fix_next_action": (
+            _normalize_text(fix_next_action, default="")
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_readiness_source_next_next_action": (
+            _normalize_text(next_next_action, default="")
+        ),
+    }
+
+
 def _build_project_browser_autonomous_prompt_selection_state(
     *,
     validation_passed: bool,
@@ -75554,6 +75856,253 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_next_prompt_generation_cycle_handoff_generation_input_block_reason"
     ] = next_generation_input_block_reason
 
+    project_browser_autonomous_generated_prompt_reentry_readiness_state = (
+        _build_project_browser_autonomous_generated_prompt_reentry_readiness_state(
+            fix_generation_status=project_browser_autonomous_fix_prompt_generation_status,
+            fix_prompt_generated=bool(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_prompt_generated",
+                    False,
+                )
+            ),
+            fix_prompt_handoff_path=_normalize_text(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_prompt_handoff_path"
+                ),
+                default="",
+            ),
+            fix_prompt_handoff_write_completed=bool(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_prompt_handoff_write_completed",
+                    False,
+                )
+            ),
+            fix_prompt_handoff_write_failed=bool(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_prompt_handoff_write_failed",
+                    False,
+                )
+            ),
+            fix_human_review_required=bool(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_human_review_required",
+                    False,
+                )
+            ),
+            fix_next_action=_normalize_text(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_next_action"
+                ),
+                default="",
+            ),
+            fix_cycle_handoff_generation_input_available=bool(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_cycle_handoff_generation_input_available",
+                    False,
+                )
+            ),
+            fix_cycle_handoff_generation_input_consumed=bool(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_cycle_handoff_generation_input_consumed",
+                    False,
+                )
+            ),
+            fix_cycle_handoff_generation_input_kind=_normalize_text(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_cycle_handoff_generation_input_kind"
+                ),
+                default="none",
+            ),
+            fix_cycle_handoff_generation_input_block_reason=_normalize_text(
+                project_browser_autonomous_fix_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_fix_prompt_generation_cycle_handoff_generation_input_block_reason"
+                ),
+                default="",
+            ),
+            next_generation_status=project_browser_autonomous_next_prompt_generation_status,
+            next_prompt_generated=bool(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_prompt_generated",
+                    False,
+                )
+            ),
+            next_prompt_handoff_path=_normalize_text(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_prompt_handoff_path"
+                ),
+                default="",
+            ),
+            next_prompt_handoff_write_completed=bool(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_prompt_handoff_write_completed",
+                    False,
+                )
+            ),
+            next_prompt_handoff_write_failed=bool(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_prompt_handoff_write_failed",
+                    False,
+                )
+            ),
+            next_human_review_required=bool(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_human_review_required",
+                    False,
+                )
+            ),
+            next_next_action=_normalize_text(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_next_action"
+                ),
+                default="",
+            ),
+            next_cycle_handoff_generation_input_available=bool(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_cycle_handoff_generation_input_available",
+                    False,
+                )
+            ),
+            next_cycle_handoff_generation_input_consumed=bool(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_cycle_handoff_generation_input_consumed",
+                    False,
+                )
+            ),
+            next_cycle_handoff_generation_input_kind=_normalize_text(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_cycle_handoff_generation_input_kind"
+                ),
+                default="none",
+            ),
+            next_cycle_handoff_generation_input_block_reason=_normalize_text(
+                project_browser_autonomous_next_prompt_generation_state_normalized.get(
+                    "project_browser_autonomous_next_prompt_generation_cycle_handoff_generation_input_block_reason"
+                ),
+                default="",
+            ),
+        )
+    )
+    generated_prompt_reentry_allowed_statuses = {
+        "reentry_fix_prompt_ready",
+        "reentry_next_prompt_ready",
+        "reentry_blocked_human_review_required",
+        "reentry_blocked_insufficient_truth",
+        "reentry_blocked_ambiguous_prompt_kind",
+        "insufficient_truth",
+    }
+    generated_prompt_reentry_allowed_prompt_kinds = {"fix", "next", "none"}
+    generated_prompt_reentry_allowed_targets = {
+        "prompt_selection_and_codex_invocation_readiness",
+        "manual_review",
+        "none",
+    }
+    generated_prompt_reentry_allowed_next_actions = {
+        "prepare_fix_prompt_reentry",
+        "prepare_next_prompt_reentry",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    generated_prompt_reentry_field_names = (
+        "status",
+        "reentry_allowed",
+        "reentry_block_reason",
+        "reentry_prompt_kind",
+        "reentry_prompt_path",
+        "reentry_target",
+        "should_update_prompt_selection",
+        "should_update_invocation_readiness",
+        "should_invoke_codex",
+        "should_start_next_cycle",
+        "should_rollback",
+        "source_fix_generation_status",
+        "source_fix_prompt_generated",
+        "source_fix_prompt_handoff_write_completed",
+        "source_next_generation_status",
+        "source_next_prompt_generated",
+        "source_next_prompt_handoff_write_completed",
+        "human_review_required",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+        "source_fix_next_action",
+        "source_next_next_action",
+    )
+    project_browser_autonomous_generated_prompt_reentry_readiness_status = _normalize_text(
+        project_browser_autonomous_generated_prompt_reentry_readiness_state.get(
+            "project_browser_autonomous_generated_prompt_reentry_readiness_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_generated_prompt_reentry_readiness_status not in (
+        generated_prompt_reentry_allowed_statuses
+    ):
+        project_browser_autonomous_generated_prompt_reentry_readiness_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_generated_prompt_reentry_readiness_next_action = _normalize_text(
+        project_browser_autonomous_generated_prompt_reentry_readiness_state.get(
+            "project_browser_autonomous_generated_prompt_reentry_readiness_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_generated_prompt_reentry_readiness_next_action not in (
+        generated_prompt_reentry_allowed_next_actions
+    ):
+        project_browser_autonomous_generated_prompt_reentry_readiness_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in generated_prompt_reentry_field_names:
+        key = f"project_browser_autonomous_generated_prompt_reentry_readiness_{field_name}"
+        value = project_browser_autonomous_generated_prompt_reentry_readiness_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_generated_prompt_reentry_readiness_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_generated_prompt_reentry_readiness_next_action
+        elif field_name == "reentry_prompt_kind":
+            normalized_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_kind
+                if normalized_kind in generated_prompt_reentry_allowed_prompt_kinds
+                else "none"
+            )
+        elif field_name == "reentry_target":
+            normalized_target = _normalize_text(value, default="none")
+            value = (
+                normalized_target
+                if normalized_target in generated_prompt_reentry_allowed_targets
+                else "none"
+            )
+        elif field_name in {
+            "reentry_allowed",
+            "should_update_prompt_selection",
+            "should_update_invocation_readiness",
+            "should_invoke_codex",
+            "should_start_next_cycle",
+            "should_rollback",
+            "source_fix_prompt_generated",
+            "source_fix_prompt_handoff_write_completed",
+            "source_next_prompt_generated",
+            "source_next_prompt_handoff_write_completed",
+            "human_review_required",
+        }:
+            value = bool(value)
+        elif field_name in {"runtime_posture", "missing_inputs"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized[
+        "project_browser_autonomous_generated_prompt_reentry_readiness_status"
+    ] = project_browser_autonomous_generated_prompt_reentry_readiness_status
+    project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized[
+        "project_browser_autonomous_generated_prompt_reentry_readiness_next_action"
+    ] = project_browser_autonomous_generated_prompt_reentry_readiness_next_action
+
     if project_planning_summary_available:
         project_planning_summary_compact.update(
             {
@@ -78053,6 +78602,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_post_write_validation_execution_state_normalized,
                 **project_browser_autonomous_one_step_cycle_state_normalized,
                 **project_browser_autonomous_cycle_handoff_controller_state_normalized,
+                **project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -78988,6 +79538,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_cycle_handoff_controller_next_action"
             if project_browser_autonomous_cycle_handoff_controller_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_generated_prompt_reentry_readiness_status"
+            if project_browser_autonomous_generated_prompt_reentry_readiness_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_generated_prompt_reentry_readiness_next_action"
+            if project_browser_autonomous_generated_prompt_reentry_readiness_next_action
             else "",
             ]
     )
@@ -85113,6 +85669,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_post_write_validation_execution_state_normalized,
         **project_browser_autonomous_one_step_cycle_state_normalized,
         **project_browser_autonomous_cycle_handoff_controller_state_normalized,
+        **project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(

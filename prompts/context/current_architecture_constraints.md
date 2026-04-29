@@ -1974,3 +1974,24 @@ Current limitation:
   Prompt165 invocation readiness, or Prompt167 workspace-write invocation.
 - Prompt178 should add re-entry readiness metadata for that path without invoking
   Codex yet.
+
+
+<!-- prompt178-update -->
+## Prompt178 architecture constraint update
+
+Prompt178 adds generated prompt re-entry readiness from refreshed Prompt161/163
+generation outputs.
+
+Authoritative re-entry rule:
+- Only fixed generated prompt handoff paths are allowed:
+  `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+- Re-entry must block unexpected paths, symlinks, missing/non-file paths, empty files,
+  oversized files, human-review cases, insufficient truth, and ambiguous fix+next
+  readiness.
+- Prompt178 must not invoke Codex, start a next cycle, rollback, commit, create
+  GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Re-entry readiness does not yet refresh Prompt164 selection or Prompt165/167
+  invocation readiness. Prompt179 should add that wiring without executing Codex.

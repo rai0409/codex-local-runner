@@ -1770,3 +1770,47 @@ Known follow-up:
 - Prompt178 should create generated prompt output re-entry readiness so Prompt161/163
   generation outputs can feed Prompt164 selection and Prompt165/167 Codex invocation
   readiness in a later bounded step.
+
+
+<!-- prompt178-update -->
+## Prompt178 — generated prompt re-entry readiness
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_generated_prompt_reentry_readiness_state(...)`.
+- Added normalized state under:
+  `project_browser_autonomous_generated_prompt_reentry_readiness_*`.
+- Implemented metadata-only re-entry classification from refreshed Prompt177
+  generation outputs:
+  - `reentry_fix_prompt_ready`
+  - `reentry_next_prompt_ready`
+  - `reentry_blocked_human_review_required`
+  - `reentry_blocked_ambiguous_prompt_kind`
+  - `reentry_blocked_insufficient_truth`
+- Re-entry path validation is fixed to:
+  - `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  - `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+- Blocks unexpected paths, symlinks, missing/non-file paths, empty files, and
+  oversized prompt files over 20000 bytes.
+- Blocks ambiguous fix+next readiness with:
+  - `reentry_blocked_ambiguous_prompt_kind`
+  - `blocked_ambiguous_fix_and_next_reentry`
+- Exposed Prompt178 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt178 implementation.
+- No tests were run.
+- No Codex invocation, rollback, commit, GitHub operation, retry loop, scheduler,
+  daemon, queue drainer, or new executor was added.
+- Prompt178 is metadata-only and prepares deterministic re-entry signals.
+
+Known follow-up:
+- Prompt179 should consume Prompt178 re-entry readiness and connect it to existing
+  Prompt164 selection, Prompt165 invocation readiness, and Prompt167 write invocation
+  re-entry metadata without invoking Codex.
