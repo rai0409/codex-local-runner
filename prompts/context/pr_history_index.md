@@ -2209,3 +2209,48 @@ Known follow-up:
 - Prompt186 should consume `project_browser_autonomous_rollback_execution_*` and
   classify the post-rollback state for continuation/manual-review routing without
   executing more rollback or Codex.
+
+
+<!-- prompt186-update -->
+## Prompt186 — rollback result assimilation
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_rollback_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_rollback_result_assimilation_*`.
+- Consumes Prompt185 rollback execution:
+  `project_browser_autonomous_rollback_execution_*`.
+- Implements deterministic rollback result statuses:
+  - `rollback_result_assimilation_completed_clean`
+  - `rollback_result_assimilation_completed_expected_dirty`
+  - `rollback_result_assimilation_partial_failure`
+  - `rollback_result_assimilation_failed`
+  - `rollback_result_assimilation_timeout`
+  - `rollback_result_assimilation_unexpected_dirty`
+  - `rollback_result_assimilation_not_required`
+  - `rollback_result_assimilation_blocked_insufficient_truth`
+- Clean / expected-dirty rollback routes to:
+  `generate_fix_prompt_after_rollback`.
+- Partial failure / failed / timeout / unexpected dirty routes to:
+  `manual_review_required`.
+- Rollback success is not treated as overall task success and does not grant commit.
+- Derives rollback remaining dirty files from `post_rollback_git_status_short`.
+- Exposed Prompt186 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt186 implementation.
+- No tests were run.
+- No rollback re-execution, Codex invocation, prompt generation, commit, GitHub
+  operation, retry loop, scheduler, daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt187 should consume `project_browser_autonomous_rollback_result_assimilation_*`
+  and decide whether post-rollback fix continuation is allowed under remaining
+  budgets, or whether the flow must stop for manual review.

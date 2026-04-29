@@ -53184,6 +53184,368 @@ def _build_project_browser_autonomous_rollback_execution_state(
     }
 
 
+def _build_project_browser_autonomous_rollback_result_assimilation_state(
+    *,
+    rollback_execution_status: str,
+    rollback_execution_allowed: bool,
+    rollback_execution_attempted: bool,
+    rollback_execution_completed: bool,
+    rollback_execution_failed: bool,
+    rollback_execution_block_reason: str,
+    rollback_reason: str,
+    rollback_strategy: str,
+    rollback_target_files: list[str] | None,
+    rollback_restored_tracked_files: list[str] | None,
+    rollback_removed_untracked_files: list[str] | None,
+    rollback_skipped_files: list[str] | None,
+    rollback_failed_files: list[str] | None,
+    rollback_command_results: list[dict[str, Any]] | None,
+    rollback_commands_attempted: int,
+    rollback_commands_completed: int,
+    rollback_exit_code: int,
+    rollback_timed_out: bool,
+    pre_rollback_git_status_short: str,
+    post_rollback_git_status_short: str,
+    post_rollback_dirty: bool,
+    post_rollback_expected_dirty_only: bool,
+    rollback_execution_human_review_required: bool,
+    rollback_execution_next_action: str,
+    rollback_readiness_status: str,
+    rollback_readiness_allowed: bool,
+    rollback_readiness_block_reason: str,
+    rollback_readiness_next_action: str,
+    continuation_status: str,
+    continuation_next_action: str,
+    post_reentry_status: str,
+    post_reentry_next_action: str,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "rollback_result_assimilation_completed_clean",
+        "rollback_result_assimilation_completed_expected_dirty",
+        "rollback_result_assimilation_partial_failure",
+        "rollback_result_assimilation_failed",
+        "rollback_result_assimilation_timeout",
+        "rollback_result_assimilation_unexpected_dirty",
+        "rollback_result_assimilation_not_required",
+        "rollback_result_assimilation_blocked_insufficient_truth",
+        "insufficient_truth",
+    }
+    runtime_posture = [
+        "prompt186_rollback_result_assimilation",
+        "metadata_only",
+        "no_rollback_execution",
+        "no_codex_invocation",
+        "no_prompt_generation",
+        "no_commit",
+    ]
+
+    normalized_rollback_execution_status = _normalize_text(
+        rollback_execution_status,
+        default="insufficient_truth",
+    )
+    normalized_rollback_execution_block_reason = _normalize_text(
+        rollback_execution_block_reason,
+        default="",
+    )
+    normalized_rollback_reason = _normalize_text(rollback_reason, default="")
+    normalized_rollback_strategy = _normalize_text(
+        rollback_strategy,
+        default="blocked_manual_review",
+    )
+    normalized_pre_status_short = _normalize_text(pre_rollback_git_status_short, default="")
+    normalized_post_status_short = _normalize_text(post_rollback_git_status_short, default="")
+    normalized_rollback_execution_next_action = _normalize_text(
+        rollback_execution_next_action,
+        default="manual_review_required",
+    )
+    normalized_rollback_readiness_status = _normalize_text(
+        rollback_readiness_status,
+        default="insufficient_truth",
+    )
+    normalized_rollback_readiness_block_reason = _normalize_text(
+        rollback_readiness_block_reason,
+        default="",
+    )
+    normalized_rollback_readiness_next_action = _normalize_text(
+        rollback_readiness_next_action,
+        default="manual_review_required",
+    )
+    normalized_continuation_status = _normalize_text(
+        continuation_status,
+        default="insufficient_truth",
+    )
+    normalized_continuation_next_action = _normalize_text(
+        continuation_next_action,
+        default="insufficient_truth",
+    )
+    normalized_post_reentry_status = _normalize_text(
+        post_reentry_status,
+        default="insufficient_truth",
+    )
+    normalized_post_reentry_next_action = _normalize_text(
+        post_reentry_next_action,
+        default="insufficient_truth",
+    )
+
+    normalized_rollback_target_files = _normalize_string_list(rollback_target_files or [])
+    normalized_restored_tracked_files = _normalize_string_list(
+        rollback_restored_tracked_files or []
+    )
+    normalized_removed_untracked_files = _normalize_string_list(
+        rollback_removed_untracked_files or []
+    )
+    normalized_skipped_files = _normalize_string_list(rollback_skipped_files or [])
+    normalized_failed_files = _normalize_string_list(rollback_failed_files or [])
+    normalized_command_results = (
+        rollback_command_results if isinstance(rollback_command_results, list) else []
+    )
+
+    rollback_remaining_dirty_files = _serialize_required_signals(
+        [
+            _normalize_text(_parse_git_status_path(line), default="")
+            for line in normalized_post_status_short.splitlines()
+        ]
+    )
+
+    status = "rollback_result_assimilation_blocked_insufficient_truth"
+    rollback_result_available = False
+    rollback_result_selected = False
+    rollback_result_class = "blocked"
+    rollback_result_block_reason = "blocked_insufficient_rollback_result_truth"
+    rollback_completed_cleanly = False
+    rollback_completed_with_expected_dirty = False
+    rollback_partial_failure = False
+    rollback_failed = False
+    rollback_timeout = False
+    safe_to_continue_after_rollback = False
+    safe_to_commit_after_rollback = False
+    should_generate_fix_prompt = False
+    should_generate_next_prompt = False
+    should_invoke_codex = False
+    should_execute_rollback = False
+    should_commit = False
+    should_stop = True
+    stop_reason = "insufficient_rollback_result_truth"
+    human_review_required = True
+    next_action = "manual_review_required"
+
+    if normalized_rollback_execution_status == "rollback_execution_not_required":
+        status = "rollback_result_assimilation_not_required"
+        rollback_result_available = False
+        rollback_result_selected = False
+        rollback_result_class = "not_required"
+        rollback_result_block_reason = "rollback_not_required"
+        should_stop = False
+        stop_reason = ""
+        human_review_required = False
+        next_action = "no_rollback_required"
+    elif normalized_rollback_execution_status in {
+        "rollback_execution_completed",
+        "rollback_execution_partial_failure",
+        "rollback_execution_failed",
+        "rollback_execution_timeout",
+    }:
+        rollback_result_available = True
+        rollback_result_selected = True
+        rollback_result_block_reason = ""
+
+        if bool(rollback_timed_out) or normalized_rollback_execution_status == "rollback_execution_timeout":
+            status = "rollback_result_assimilation_timeout"
+            rollback_result_class = "timeout"
+            rollback_timeout = True
+            rollback_failed = True
+            should_stop = True
+            stop_reason = "rollback_timeout"
+            human_review_required = True
+            next_action = "manual_review_required"
+        elif normalized_rollback_execution_status == "rollback_execution_partial_failure":
+            status = "rollback_result_assimilation_partial_failure"
+            rollback_result_class = "partial_failure"
+            rollback_partial_failure = True
+            rollback_failed = True
+            should_stop = True
+            stop_reason = "rollback_partial_failure"
+            human_review_required = True
+            next_action = "manual_review_required"
+        elif normalized_rollback_execution_status == "rollback_execution_failed" or bool(
+            rollback_execution_failed
+        ):
+            status = "rollback_result_assimilation_failed"
+            rollback_result_class = "failed"
+            rollback_failed = True
+            should_stop = True
+            stop_reason = "rollback_failed"
+            human_review_required = True
+            next_action = "manual_review_required"
+        elif bool(post_rollback_dirty) and not bool(post_rollback_expected_dirty_only):
+            status = "rollback_result_assimilation_unexpected_dirty"
+            rollback_result_class = "unexpected_dirty"
+            rollback_failed = True
+            should_stop = True
+            stop_reason = "unexpected_dirty_after_rollback"
+            human_review_required = True
+            next_action = "manual_review_required"
+        elif not bool(post_rollback_dirty):
+            status = "rollback_result_assimilation_completed_clean"
+            rollback_result_class = "completed_clean"
+            rollback_completed_cleanly = True
+            safe_to_continue_after_rollback = True
+            safe_to_commit_after_rollback = False
+            should_generate_fix_prompt = True
+            should_stop = False
+            stop_reason = ""
+            human_review_required = False
+            next_action = "generate_fix_prompt_after_rollback"
+        else:
+            status = "rollback_result_assimilation_completed_expected_dirty"
+            rollback_result_class = "completed_expected_dirty"
+            rollback_completed_with_expected_dirty = True
+            safe_to_continue_after_rollback = True
+            safe_to_commit_after_rollback = False
+            should_generate_fix_prompt = True
+            should_stop = False
+            stop_reason = ""
+            human_review_required = False
+            next_action = "generate_fix_prompt_after_rollback"
+    else:
+        status = "rollback_result_assimilation_blocked_insufficient_truth"
+        rollback_result_available = False
+        rollback_result_selected = False
+        rollback_result_class = "blocked"
+        rollback_result_block_reason = "blocked_insufficient_rollback_result_truth"
+        safe_to_continue_after_rollback = False
+        safe_to_commit_after_rollback = False
+        should_stop = True
+        stop_reason = "insufficient_rollback_result_truth"
+        human_review_required = True
+        next_action = "manual_review_required"
+
+    if rollback_execution_human_review_required and status not in {
+        "rollback_result_assimilation_completed_clean",
+        "rollback_result_assimilation_completed_expected_dirty",
+        "rollback_result_assimilation_not_required",
+    }:
+        human_review_required = True
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_rollback_result_assimilation_status": status,
+        "project_browser_autonomous_rollback_result_assimilation_rollback_result_available": bool(
+            rollback_result_available
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_result_selected": bool(
+            rollback_result_selected
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_result_class": (
+            rollback_result_class
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_result_block_reason": (
+            rollback_result_block_reason
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_completed_cleanly": bool(
+            rollback_completed_cleanly
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_completed_with_expected_dirty": bool(
+            rollback_completed_with_expected_dirty
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_partial_failure": bool(
+            rollback_partial_failure
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_failed": bool(
+            rollback_failed
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_timeout": bool(
+            rollback_timeout
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_post_rollback_dirty": bool(
+            post_rollback_dirty
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_post_rollback_expected_dirty_only": bool(
+            post_rollback_expected_dirty_only
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_post_rollback_git_status_short": (
+            normalized_post_status_short
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_restored_tracked_files": (
+            normalized_restored_tracked_files
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_removed_untracked_files": (
+            normalized_removed_untracked_files
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_failed_files": (
+            normalized_failed_files
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_rollback_remaining_dirty_files": (
+            rollback_remaining_dirty_files
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_safe_to_continue_after_rollback": bool(
+            safe_to_continue_after_rollback
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_safe_to_commit_after_rollback": bool(
+            safe_to_commit_after_rollback
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_should_generate_fix_prompt": bool(
+            should_generate_fix_prompt
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_should_generate_next_prompt": bool(
+            should_generate_next_prompt
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_should_invoke_codex": bool(
+            should_invoke_codex
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_should_execute_rollback": bool(
+            should_execute_rollback
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_should_commit": bool(
+            should_commit
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_should_stop": bool(
+            should_stop
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_stop_reason": stop_reason,
+        "project_browser_autonomous_rollback_result_assimilation_human_review_required": bool(
+            human_review_required
+        ),
+        "project_browser_autonomous_rollback_result_assimilation_next_action": next_action,
+        "project_browser_autonomous_rollback_result_assimilation_runtime_posture": runtime_posture,
+        "project_browser_autonomous_rollback_result_assimilation_missing_inputs": (
+            _serialize_required_signals(
+                [
+                    normalized_rollback_execution_status,
+                    normalized_rollback_execution_block_reason,
+                    normalized_rollback_execution_next_action,
+                    normalized_rollback_readiness_status,
+                    normalized_rollback_readiness_block_reason,
+                    normalized_rollback_readiness_next_action,
+                    normalized_continuation_status,
+                    normalized_continuation_next_action,
+                    normalized_post_reentry_status,
+                    normalized_post_reentry_next_action,
+                    normalized_rollback_reason,
+                    normalized_rollback_strategy,
+                    str(_as_non_negative_int(rollback_commands_attempted, default=0)),
+                    str(_as_non_negative_int(rollback_commands_completed, default=0)),
+                    str(_as_int(rollback_exit_code, default=0)),
+                    "rollback_target_files_missing"
+                    if rollback_result_available and not normalized_rollback_target_files
+                    else "",
+                    "rollback_command_results_missing"
+                    if rollback_result_available and not normalized_command_results
+                    else "",
+                    "pre_rollback_status_missing"
+                    if rollback_result_available and not normalized_pre_status_short
+                    else "",
+                    "rollback_skipped_files_present"
+                    if normalized_skipped_files
+                    else "",
+                ]
+            )
+        ),
+    }
+
+
 def _build_project_browser_autonomous_prompt_selection_state(
     *,
     validation_passed: bool,
@@ -81500,6 +81862,276 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_rollback_execution_next_action"
     ] = project_browser_autonomous_rollback_execution_next_action
 
+    project_browser_autonomous_rollback_result_assimilation_state = (
+        _build_project_browser_autonomous_rollback_result_assimilation_state(
+            rollback_execution_status=project_browser_autonomous_rollback_execution_status,
+            rollback_execution_allowed=bool(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_execution_allowed",
+                    False,
+                )
+            ),
+            rollback_execution_attempted=bool(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_execution_attempted",
+                    False,
+                )
+            ),
+            rollback_execution_completed=bool(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_execution_completed",
+                    False,
+                )
+            ),
+            rollback_execution_failed=bool(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_execution_failed",
+                    False,
+                )
+            ),
+            rollback_execution_block_reason=_normalize_text(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_execution_block_reason"
+                ),
+                default="",
+            ),
+            rollback_reason=_normalize_text(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_reason"
+                ),
+                default="",
+            ),
+            rollback_strategy=_normalize_text(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_strategy"
+                ),
+                default="blocked_manual_review",
+            ),
+            rollback_target_files=_normalize_string_list(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_target_files"
+                )
+            ),
+            rollback_restored_tracked_files=_normalize_string_list(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_restored_tracked_files"
+                )
+            ),
+            rollback_removed_untracked_files=_normalize_string_list(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_removed_untracked_files"
+                )
+            ),
+            rollback_skipped_files=_normalize_string_list(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_skipped_files"
+                )
+            ),
+            rollback_failed_files=_normalize_string_list(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_failed_files"
+                )
+            ),
+            rollback_command_results=(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_command_results"
+                )
+                if isinstance(
+                    project_browser_autonomous_rollback_execution_state_normalized.get(
+                        "project_browser_autonomous_rollback_execution_rollback_command_results"
+                    ),
+                    list,
+                )
+                else []
+            ),
+            rollback_commands_attempted=_as_non_negative_int(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_commands_attempted"
+                ),
+                default=0,
+            ),
+            rollback_commands_completed=_as_non_negative_int(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_commands_completed"
+                ),
+                default=0,
+            ),
+            rollback_exit_code=_as_int(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_exit_code"
+                ),
+                default=0,
+            ),
+            rollback_timed_out=bool(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_rollback_timed_out",
+                    False,
+                )
+            ),
+            pre_rollback_git_status_short=_normalize_text(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_pre_rollback_git_status_short"
+                ),
+                default="",
+            ),
+            post_rollback_git_status_short=_normalize_text(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_post_rollback_git_status_short"
+                ),
+                default="",
+            ),
+            post_rollback_dirty=bool(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_post_rollback_dirty",
+                    False,
+                )
+            ),
+            post_rollback_expected_dirty_only=bool(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_post_rollback_expected_dirty_only",
+                    False,
+                )
+            ),
+            rollback_execution_human_review_required=bool(
+                project_browser_autonomous_rollback_execution_state_normalized.get(
+                    "project_browser_autonomous_rollback_execution_human_review_required",
+                    False,
+                )
+            ),
+            rollback_execution_next_action=project_browser_autonomous_rollback_execution_next_action,
+            rollback_readiness_status=project_browser_autonomous_rollback_readiness_status,
+            rollback_readiness_allowed=bool(
+                project_browser_autonomous_rollback_readiness_state_normalized.get(
+                    "project_browser_autonomous_rollback_readiness_rollback_readiness_allowed",
+                    False,
+                )
+            ),
+            rollback_readiness_block_reason=_normalize_text(
+                project_browser_autonomous_rollback_readiness_state_normalized.get(
+                    "project_browser_autonomous_rollback_readiness_rollback_readiness_block_reason"
+                ),
+                default="",
+            ),
+            rollback_readiness_next_action=project_browser_autonomous_rollback_readiness_next_action,
+            continuation_status=project_browser_autonomous_bounded_continuation_controller_status,
+            continuation_next_action=project_browser_autonomous_bounded_continuation_controller_next_action,
+            post_reentry_status=project_browser_autonomous_post_reentry_safety_refresh_status,
+            post_reentry_next_action=project_browser_autonomous_post_reentry_safety_refresh_next_action,
+        )
+    )
+    rollback_result_assimilation_allowed_statuses = {
+        "rollback_result_assimilation_completed_clean",
+        "rollback_result_assimilation_completed_expected_dirty",
+        "rollback_result_assimilation_partial_failure",
+        "rollback_result_assimilation_failed",
+        "rollback_result_assimilation_timeout",
+        "rollback_result_assimilation_unexpected_dirty",
+        "rollback_result_assimilation_not_required",
+        "rollback_result_assimilation_blocked_insufficient_truth",
+        "insufficient_truth",
+    }
+    rollback_result_assimilation_field_names = (
+        "status",
+        "rollback_result_available",
+        "rollback_result_selected",
+        "rollback_result_class",
+        "rollback_result_block_reason",
+        "rollback_completed_cleanly",
+        "rollback_completed_with_expected_dirty",
+        "rollback_partial_failure",
+        "rollback_failed",
+        "rollback_timeout",
+        "post_rollback_dirty",
+        "post_rollback_expected_dirty_only",
+        "post_rollback_git_status_short",
+        "restored_tracked_files",
+        "removed_untracked_files",
+        "rollback_failed_files",
+        "rollback_remaining_dirty_files",
+        "safe_to_continue_after_rollback",
+        "safe_to_commit_after_rollback",
+        "should_generate_fix_prompt",
+        "should_generate_next_prompt",
+        "should_invoke_codex",
+        "should_execute_rollback",
+        "should_commit",
+        "should_stop",
+        "stop_reason",
+        "human_review_required",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_rollback_result_assimilation_status = _normalize_text(
+        project_browser_autonomous_rollback_result_assimilation_state.get(
+            "project_browser_autonomous_rollback_result_assimilation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_rollback_result_assimilation_status not in (
+        rollback_result_assimilation_allowed_statuses
+    ):
+        project_browser_autonomous_rollback_result_assimilation_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_rollback_result_assimilation_next_action = _normalize_text(
+        project_browser_autonomous_rollback_result_assimilation_state.get(
+            "project_browser_autonomous_rollback_result_assimilation_next_action"
+        ),
+        default="manual_review_required",
+    )
+    project_browser_autonomous_rollback_result_assimilation_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in rollback_result_assimilation_field_names:
+        key = f"project_browser_autonomous_rollback_result_assimilation_{field_name}"
+        value = project_browser_autonomous_rollback_result_assimilation_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_rollback_result_assimilation_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_rollback_result_assimilation_next_action
+        elif field_name in {
+            "rollback_result_available",
+            "rollback_result_selected",
+            "rollback_completed_cleanly",
+            "rollback_completed_with_expected_dirty",
+            "rollback_partial_failure",
+            "rollback_failed",
+            "rollback_timeout",
+            "post_rollback_dirty",
+            "post_rollback_expected_dirty_only",
+            "safe_to_continue_after_rollback",
+            "safe_to_commit_after_rollback",
+            "should_generate_fix_prompt",
+            "should_generate_next_prompt",
+            "should_invoke_codex",
+            "should_execute_rollback",
+            "should_commit",
+            "should_stop",
+            "human_review_required",
+        }:
+            value = bool(value)
+        elif field_name in {
+            "restored_tracked_files",
+            "removed_untracked_files",
+            "rollback_failed_files",
+            "rollback_remaining_dirty_files",
+            "runtime_posture",
+            "missing_inputs",
+        }:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_rollback_result_assimilation_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_rollback_result_assimilation_state_normalized[
+        "project_browser_autonomous_rollback_result_assimilation_status"
+    ] = project_browser_autonomous_rollback_result_assimilation_status
+    project_browser_autonomous_rollback_result_assimilation_state_normalized[
+        "project_browser_autonomous_rollback_result_assimilation_next_action"
+    ] = project_browser_autonomous_rollback_result_assimilation_next_action
+
     if project_planning_summary_available:
         project_planning_summary_compact.update(
             {
@@ -84007,6 +84639,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_bounded_continuation_controller_state_normalized,
                 **project_browser_autonomous_rollback_readiness_state_normalized,
                 **project_browser_autonomous_rollback_execution_state_normalized,
+                **project_browser_autonomous_rollback_result_assimilation_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -84990,6 +85623,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_rollback_execution_next_action"
             if project_browser_autonomous_rollback_execution_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_rollback_result_assimilation_status"
+            if project_browser_autonomous_rollback_result_assimilation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_rollback_result_assimilation_next_action"
+            if project_browser_autonomous_rollback_result_assimilation_next_action
             else "",
             ]
     )
@@ -91123,6 +91762,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_bounded_continuation_controller_state_normalized,
         **project_browser_autonomous_rollback_readiness_state_normalized,
         **project_browser_autonomous_rollback_execution_state_normalized,
+        **project_browser_autonomous_rollback_result_assimilation_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(

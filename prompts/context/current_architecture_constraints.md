@@ -2150,3 +2150,24 @@ Current limitation:
   whether the autonomous flow can continue after rollback or must stop.
 - Prompt186 should add rollback result assimilation and post-rollback routing
   metadata without executing more commands.
+
+
+<!-- prompt186-update -->
+## Prompt186 architecture constraint update
+
+Prompt186 assimilates rollback execution results.
+
+Authoritative rollback result rule:
+- Rollback success means unsafe changes were recovered, not that the development
+  task succeeded.
+- Clean or expected-dirty rollback may route toward fix prompt generation only.
+- Rollback failure, partial failure, timeout, or unexpected dirty must route to
+  manual review.
+- Rollback result must never be used as a commit-ready source.
+- Prompt186 must not execute rollback, invoke Codex, generate prompts, commit,
+  create GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt186 can recommend `generate_fix_prompt_after_rollback`, but does not yet
+  check remaining fix/failure budgets for post-rollback continuation.
+- Prompt187 should add that budget-gated post-rollback continuation decision.
