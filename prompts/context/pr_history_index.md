@@ -3506,3 +3506,63 @@ Known follow-up:
   `project_browser_autonomous_bounded_local_control_decision_*` and dispatch exactly
   one bounded control contract to the corresponding existing assimilation path, without
   executing unrelated paths.
+
+
+<!-- prompt208-update -->
+## Prompt208 — bounded control contract dispatch to assimilation path
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_control_contract_dispatch_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_control_contract_dispatch_*`.
+- Consumes Prompt207 bounded local control decision:
+  `project_browser_autonomous_bounded_local_control_decision_*`.
+- Derives dispatch candidates strictly from Prompt207:
+  - reentry result assimilation
+  - rollback result assimilation
+  - commit/tag result assimilation
+  - manual stop
+  - blocked
+- Enforces exactly-one dispatch path.
+- Adds deterministic block paths:
+  - `control_contract_dispatch_blocked_conflict`
+  - `control_contract_dispatch_blocked_insufficient_truth`
+  - `control_contract_dispatch_blocked_multiple_dispatches`
+- Adds selected-path-only additive dispatch metadata to existing normalized maps:
+  - `project_browser_autonomous_reentry_result_assimilation_*`
+  - `project_browser_autonomous_rollback_result_assimilation_*`
+  - `project_browser_autonomous_commit_tag_result_assimilation_*`
+- Added additive fields:
+  - `controller_dispatch_allowed`
+  - `controller_dispatch_source`
+  - `controller_dispatch_kind`
+  - `controller_dispatch_action`
+- Enforces manual-stop and blocked precedence.
+- Preserves metadata-only boundaries:
+  - no Codex invocation
+  - no validation execution
+  - no rollback execution
+  - no commit/tag or git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt208 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt208 implementation.
+- No tests were run.
+- Additive `controller_dispatch_*` keys are injected into existing assimilation normalized maps post-normalization.
+
+Known follow-up:
+- Prompt209 should consume `project_browser_autonomous_control_contract_dispatch_*`
+  and perform exactly one bounded downstream assimilation refresh for the dispatched
+  path, or manual stop, with Prompt210 handoff metadata.

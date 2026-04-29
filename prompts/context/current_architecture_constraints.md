@@ -2622,3 +2622,25 @@ Current limitation:
   corresponding existing assimilation path.
 - Prompt208 should add metadata-only dispatch to exactly one existing assimilation
   path.
+
+
+<!-- prompt208-update -->
+## Prompt208 architecture constraint update
+
+Prompt208 adds control contract dispatch metadata.
+
+Authoritative dispatch rule:
+- Prompt208 may dispatch only the single selected control contract from Prompt207.
+- Prompt208 must not infer dispatch readiness from Prompt206 or older assimilation maps alone.
+- Prompt208 may add selected-path-only additive metadata to existing assimilation maps.
+- Prompt208 must not execute assimilation, generate prompts, invoke Codex, validate,
+  execute rollback, execute commit/tag, mutate git, push, create GitHub operations,
+  retry, loop, or create new executors.
+- Multiple dispatch paths must block to manual review.
+- Manual-stop and blocked contracts must not trigger downstream assimilation refresh.
+
+Current limitation:
+- Prompt208 dispatches metadata to the selected assimilation path, but does not refresh
+  that path or classify the dispatch result.
+- Prompt209 should perform exactly one bounded assimilation refresh from the selected
+  dispatch and emit Prompt210 handoff metadata.
