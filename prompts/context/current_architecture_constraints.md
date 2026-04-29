@@ -2889,3 +2889,30 @@ Authoritative execution-coordinator rule:
 - Prompt219 must classify Prompt218 outcomes into fresh action, existing-truth
   revalidated, existing path block, manual stop, blocked, failed, or insufficient
   truth.
+
+
+<!-- prompt219-update -->
+## Prompt219 architecture constraint update
+
+Prompt219 adds bounded multi-step execution result assimilation.
+
+Authoritative bounded result rule:
+- Prompt219 may classify bounded multi-step execution results only from Prompt218
+  result handoff metadata.
+- Prompt219 must not infer execution result from Prompt217 preflight or Prompt216
+  follow-up guard alone.
+- Prompt219 must distinguish:
+  - completed fresh action
+  - completed existing truth revalidated
+  - blocked existing truth revalidation
+  - blocked existing path
+  - blocked non-selected action activity
+  - manual stop / failed / blocked / insufficient truth
+- Prompt219 must not start another loop step.
+- Prompt219 must keep:
+  - `should_continue_local_loop=false`
+  - `should_start_unbounded_loop=false`
+- Prompt219 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+- Prompt220 must use Prompt219 as the sole bounded continuation decision input.

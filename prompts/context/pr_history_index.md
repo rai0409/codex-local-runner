@@ -4252,3 +4252,83 @@ Known follow-up:
   completed / existing-truth-revalidated / blocked / manual-stop outcomes per
   selected action kind, and emit bounded controller feedback metadata for the next
   safe coordination stage.
+
+
+<!-- prompt219-update -->
+## Prompt219 — bounded multi-step execution result assimilation
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_multistep_execution_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_multistep_execution_result_assimilation_*`.
+- Consumes Prompt218 bounded multi-step execution coordinator:
+  `project_browser_autonomous_bounded_multistep_execution_coordinator_*`.
+- Enforces Prompt218 authoritative-source checks using:
+  - `prompt219_result_ready_for_assimilation`
+  - `prompt219_result_assimilation_source`
+  - `prompt219_result_next_stage`
+  - selected action presence or manual / blocked source status
+  - source status / result-class presence
+- Classifies bounded multi-step execution result with:
+  - `fresh_bounded_action_detected`
+  - `existing_truth_revalidated_detected`
+  - `existing_truth_revalidation_failed_detected`
+  - `existing_path_blocked_detected`
+  - `terminal_result_detected`
+  - `terminal_result_source`
+- Routes results into:
+  - completed fresh action
+  - completed existing truth revalidated
+  - existing truth revalidation blocked
+  - existing path blocked
+  - non-selected action activity blocked
+  - manual stop
+  - failed
+  - blocked
+  - insufficient truth
+- Enforces `non_selected_actions_noop=true` for successful non-stop selected actions.
+- Emits deterministic controller feedback payloads for:
+  - completed fresh action
+  - completed existing truth revalidated
+  - manual stop / blocked / failed
+- Adds next bounded control target metadata for:
+  - bounded next step decision
+  - manual review / stop
+- Preserves continuation policy:
+  - `should_continue_local_loop=false`
+  - `should_start_unbounded_loop=false`
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no rollback execution
+  - no commit/tag execution
+  - no validation execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt219 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt219 implementation.
+- No tests were run.
+- Prompt219 is intentionally strict. If upstream Prompt218 status / result-class
+  strings evolve, Prompt219 may conservatively classify to blocked / insufficient
+  until mappings are extended.
+
+Known follow-up:
+- Prompt220 should consume
+  `project_browser_autonomous_bounded_multistep_execution_result_assimilation_*`
+  as the sole bounded continuation decision input, with explicit handling for:
+  - completed fresh action
+  - completed existing truth revalidated
+  - manual / blocked / failed terminal stop paths.
