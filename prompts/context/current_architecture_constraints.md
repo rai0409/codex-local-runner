@@ -2488,3 +2488,23 @@ Current limitation:
 - Prompt201 executes the selected lane action, but does not yet classify the result
   as controller feedback.
 - Prompt202 should add selected action result assimilation and feedback routing.
+
+
+<!-- prompt202-update -->
+## Prompt202 architecture constraint update
+
+Prompt202 adds selected lane result assimilation and controller feedback.
+
+Authoritative feedback rule:
+- Prompt202 may derive controller feedback only from Prompt201 selected lane execution.
+- Prompt202 must not infer success from lane selection, contract validation, or dispatch
+  metadata alone.
+- Successful non-stop selected lane results require non-selected lanes to remain no-op.
+- Prompt202 must not generate prompts, invoke Codex, validate, execute rollback,
+  mutate git, push, create GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt202 emits controller feedback and next-controller input metadata, but does not
+  yet define the bounded local loop contract that decides whether the next step may
+  proceed.
+- Prompt203 should add that local loop contract metadata only.

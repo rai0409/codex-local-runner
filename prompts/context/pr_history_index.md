@@ -3120,3 +3120,73 @@ Known follow-up:
 - Prompt202 should consume `project_browser_autonomous_selected_lane_execution_*`,
   classify selected-lane result outcomes, and route controller feedback to the next
   bounded control decision without executing additional lanes.
+
+
+<!-- prompt202-update -->
+## Prompt202 — selected lane result assimilation and controller feedback
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_selected_lane_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_selected_lane_result_assimilation_*`.
+- Consumes Prompt201 selected lane execution:
+  `project_browser_autonomous_selected_lane_execution_*`.
+- Selects Prompt201 as authoritative only when:
+  - `selected_action_result_ready_for_assimilation=true`
+  - source is `prompt201_selected_lane_execution`
+  - next stage is `selected_lane_result_assimilation`
+  - selected lane and status/result truth are present
+- Does not infer success from Prompt198 / Prompt199 / Prompt200 state alone.
+- Implements selected lane result classifications:
+  - `selected_lane_result_next_prompt_completed`
+  - `selected_lane_result_fix_prompt_completed`
+  - `selected_lane_result_rollback_readiness_completed`
+  - `selected_lane_result_commit_readiness_completed`
+  - `selected_lane_result_manual_stop`
+  - `selected_lane_result_failed`
+  - `selected_lane_result_blocked`
+  - `selected_lane_result_blocked_non_selected_lane_activity`
+  - `selected_lane_result_blocked_insufficient_truth`
+- Verifies successful non-stop lane results require:
+  `non_selected_lanes_noop=true`.
+- Emits controller feedback metadata:
+  - `controller_feedback_ready`
+  - `controller_feedback_kind`
+  - `controller_feedback_source`
+  - `controller_feedback_payload`
+  - `next_controller_input_ready`
+  - `next_controller_input_kind`
+  - `next_controller_input_source`
+  - `next_controller_action_hint`
+- Adds preparation booleans:
+  - `should_prepare_generated_prompt_reentry`
+  - `should_prepare_rollback_execution`
+  - `should_prepare_commit_execution`
+  - `should_prepare_next_controller_decision`
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no validation execution
+  - no rollback execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt202 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt202 implementation.
+- No tests were run.
+- Runtime behavior across upstream state permutations is not yet covered.
+
+Known follow-up:
+- Prompt203 should consume
+  `project_browser_autonomous_selected_lane_result_assimilation_*` and reconcile
+  controller feedback into a bounded local loop contract without executing any action.
