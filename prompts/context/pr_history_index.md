@@ -2824,3 +2824,61 @@ Known follow-up:
 - Prompt197 should consume `project_browser_autonomous_commit_tag_result_assimilation_*`
   and add bounded multi-cycle autonomous control with strict stop/continue policy,
   budget-aware routing, and no execution side effects.
+
+
+<!-- prompt197-update -->
+## Prompt197 — bounded multi-cycle autonomous controller
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_multi_cycle_controller_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_multi_cycle_controller_*`.
+- Consumes Prompt196 commit/tag result assimilation as highest-priority authoritative
+  stage and prevents older cycle states from overriding it.
+- Adds deterministic budget fields and remaining counters for:
+  - cycle budget
+  - fix attempt budget
+  - rollback budget
+  - Codex invocation budget
+  - commit budget
+- Implements deterministic routing decisions:
+  - manual review block
+  - commit/tag failure or unsafe block
+  - budget exhaustion block
+  - next-cycle ready
+  - prepare commit
+  - rollback-ready
+  - fix-ready
+  - insufficient truth fallback
+- Adds clean post-commit continuation policy:
+  automatic next-cycle continuation requires completed Prompt196 handoff and
+  `post_commit_dirty=false`.
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no validation execution
+  - no rollback execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no loop start
+- Exposed Prompt197 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt197 implementation.
+- No tests were run.
+- Codex invocation counting is conservative and currently derived from available
+  attempt booleans. Future prompts should align counters to canonical run-ledger
+  truth when available.
+
+Known follow-up:
+- Prompt198 should consume `project_browser_autonomous_multi_cycle_controller_*`
+  and select exactly one bounded downstream lane with strict mutual exclusivity and
+  explicit lane contract payloads.

@@ -2385,3 +2385,23 @@ Current limitation:
 - Prompt196 prepares next-cycle/GitHub-readiness handoff but does not choose or start
   the next autonomous cycle.
 - Prompt197 should add bounded multi-cycle autonomous controller metadata only.
+
+
+<!-- prompt197-update -->
+## Prompt197 architecture constraint update
+
+Prompt197 adds the bounded multi-cycle autonomous controller.
+
+Authoritative controller rule:
+- Prompt197 may decide the next safe high-level direction, but must not execute it.
+- Prompt197 must not generate prompts, invoke Codex, validate, execute rollback,
+  mutate git, push, create GitHub operations, retry, loop, or create new executors.
+- Prompt197 must prioritize newer Prompt196 commit/tag assimilation over older cycle
+  states.
+- Automatic next-cycle continuation requires clean post-commit state.
+- Budget exhaustion and manual-review signals must stop automation.
+
+Current limitation:
+- Prompt197 chooses high-level intent, but does not enforce a single downstream lane
+  contract.
+- Prompt198 should add terminal lane selection with strict mutual exclusivity.
