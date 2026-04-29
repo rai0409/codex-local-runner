@@ -3085,3 +3085,35 @@ Authoritative N=2 execution rule:
   - blocked step1
   - blocked step2
   - manual stop / failed / insufficient truth.
+
+
+<!-- prompt226-update -->
+## Prompt226 architecture constraint update
+
+Prompt226 adds bounded N=2 execution result assimilation.
+
+Authoritative N=2 result rule:
+- Prompt226 may classify bounded N=2 result only from Prompt225 result handoff.
+- Prompt226 must not infer N=2 result from Prompt224 preflight, Prompt223 raise gate,
+  or older states alone.
+- Prompt226 must validate:
+  - 0..2 step accounting
+  - step2-after-step1 constraint
+  - non-selected step no-op
+  - fresh runtime evidence
+  - existing-truth-only result
+  - manual stop / blocked / failed / insufficient truth
+- `fresh_runtime_execution_confirmed=true` only when two fresh runtime steps are
+  detected.
+- One fresh step or existing-truth-only outcomes may proceed only to an E2E or
+  fresh-runtime-evidence gate, not to further raising.
+- Prompt226 must keep:
+  - `further_raise_candidate=false`
+  - no local loop continuation
+  - no unbounded loop
+  - no retry
+  - no push / GitHub operation
+- Prompt226 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+- Prompt227 must consume Prompt226 as the sole next-stage decision input.

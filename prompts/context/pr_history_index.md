@@ -4809,3 +4809,89 @@ Known follow-up:
   `project_browser_autonomous_bounded_n2_execution_coordinator_*`, validate 0..2
   step accounting, verify non-selected step no-op, classify fresh runtime evidence,
   and emit next bounded-control safety metadata only.
+
+
+<!-- prompt226-update -->
+## Prompt226 — bounded N=2 execution result assimilation
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_n2_execution_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_n2_execution_result_assimilation_*`.
+- Consumes Prompt225 bounded N=2 execution coordinator:
+  `project_browser_autonomous_bounded_n2_execution_coordinator_*`.
+- Enforces Prompt225 authoritative result handling using:
+  - `prompt226_result_ready_for_assimilation`
+  - `prompt226_result_assimilation_source`
+  - `prompt226_result_next_stage`
+  - Prompt225 status / result truth
+- Implements N=2 step accounting validation:
+  - max continuation steps is 2
+  - attempted / completed bounds
+  - step2-after-step1 constraint
+  - loop / retry flag constraints
+- Invalid accounting routes to:
+  - `bounded_n2_result_blocked_step_accounting_violation`
+- Enforces non-selected step no-op verification:
+  - successful non-stop outcomes require `non_selected_steps_noop_confirmed`
+  - violations route to `bounded_n2_result_blocked_non_selected_step_activity`
+- Classifies fresh runtime evidence:
+  - `two_fresh_runtime_steps_detected`
+  - `one_fresh_runtime_step_detected`
+  - `fresh_runtime_execution_confirmed`
+- `fresh_runtime_execution_confirmed=true` only for two-fresh runtime steps.
+- Classifies outcomes:
+  - completed two fresh runtime steps
+  - completed one fresh runtime step
+  - completed existing truth only
+  - blocked step1
+  - blocked step2
+  - manual stop
+  - failed
+  - blocked
+  - insufficient truth
+- Adds E2E flow check candidate metadata:
+  - `e2e_flow_check_candidate`
+  - `next_bounded_control_target_*`
+  - `should_prepare_e2e_flow_check`
+  - `should_prepare_fresh_runtime_evidence_gate`
+  - `further_raise_candidate`
+  - `further_raise_block_reason`
+- Adds controller feedback payloads for:
+  - fresh two-step
+  - one-step
+  - existing-truth
+  - stop / blocked / failed
+- Preserves continuation boundaries:
+  - `should_continue_local_loop=false`
+  - `should_start_unbounded_loop=false`
+  - `should_invoke_codex=false`
+  - `should_execute_rollback=false`
+  - `should_execute_commit=false`
+  - `should_push=false`
+- Exposed Prompt226 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt226 implementation.
+- No tests were run.
+- Prompt226 classification depends on upstream Prompt225 surface truth granularity.
+  Ambiguous terminal markers conservatively classify to blocked / insufficient truth.
+
+Known follow-up:
+- Prompt227 should consume
+  `project_browser_autonomous_bounded_n2_execution_result_assimilation_*` and choose
+  exactly one next safe contract:
+  - end-to-end flow check
+  - fresh runtime evidence gate
+  - manual stop
+  - blocked
+- Prompt227 must remain metadata-only and must not raise beyond N=2.
