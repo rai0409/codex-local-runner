@@ -2765,3 +2765,62 @@ Known follow-up:
 - Prompt196 should consume `project_browser_autonomous_commit_tag_execution_*` and
   add metadata-only commit/tag execution result assimilation, including completed,
   partial, failed, timeout, post-commit handoff, and manual-review routing.
+
+
+<!-- prompt196-update -->
+## Prompt196 — commit/tag result assimilation and post-commit handoff
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_commit_tag_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_commit_tag_result_assimilation_*`.
+- Consumes Prompt195 commit/tag execution:
+  `project_browser_autonomous_commit_tag_execution_*`.
+- Uses Prompt195 execution state as authoritative and does not infer success from
+  Prompt194 readiness alone.
+- Implements deterministic result classifications:
+  - completed
+  - completed with unexpected dirty
+  - partial commit/tag failure
+  - failed git add
+  - failed git commit
+  - failed git tag
+  - timeout
+  - blocked
+  - blocked insufficient truth
+- Derives `post_commit_dirty` from `post_commit_git_status_short`.
+- Routes unexpected dirty after commit/tag to manual review.
+- Adds post-commit handoff outputs:
+  - `safe_post_commit_handoff`
+  - `post_commit_handoff_allowed`
+  - `post_commit_handoff_kind`
+  - `post_commit_handoff_source`
+  - `should_prepare_next_cycle`
+  - `should_prepare_github_handoff`
+- Successful clean commit/tag routes to:
+  `next_action="prepare_next_cycle_or_github_readiness"`
+  without starting a cycle.
+- Preserves metadata-only execution boundaries:
+  - no git mutation
+  - no push
+  - no Codex invocation
+  - no rollback execution
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt196 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt196 implementation.
+- No tests were run.
+
+Known follow-up:
+- Prompt197 should consume `project_browser_autonomous_commit_tag_result_assimilation_*`
+  and add bounded multi-cycle autonomous control with strict stop/continue policy,
+  budget-aware routing, and no execution side effects.

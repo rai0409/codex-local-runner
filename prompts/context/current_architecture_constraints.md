@@ -2362,3 +2362,26 @@ Current limitation:
 - Prompt195 executes commit/tag and records execution metadata, but does not yet
   assimilate the outcome for post-commit handoff or next-cycle control.
 - Prompt196 should add metadata-only commit/tag execution result assimilation.
+
+
+<!-- prompt196-update -->
+## Prompt196 architecture constraint update
+
+Prompt196 adds metadata-only commit/tag execution result assimilation.
+
+Authoritative post-commit handoff rule:
+- Prompt196 may prepare next-cycle handoff only from successful Prompt195 commit/tag
+  completion.
+- Prompt196 must not infer success from Prompt194 readiness alone.
+- Partial commit/tag failure, git add failure, git commit failure, git tag failure,
+  timeout, blocked insufficient truth, or unexpected dirty after commit/tag must route
+  to manual review.
+- Prompt196 must not mutate git, push, invoke Codex, execute rollback, create GitHub
+  operations, retry, loop, or create new executors.
+- Prompt197 should require clean post-commit handoff for automatic continuation unless
+  a future explicit policy permits expected runtime dirty files.
+
+Current limitation:
+- Prompt196 prepares next-cycle/GitHub-readiness handoff but does not choose or start
+  the next autonomous cycle.
+- Prompt197 should add bounded multi-cycle autonomous controller metadata only.
