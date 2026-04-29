@@ -2277,3 +2277,26 @@ Authoritative checkpoint rule:
 Current limitation:
 - Prompt191 only confirms readiness. It does not execute the post-rollback fix
   Codex re-entry. Prompt192 should perform exactly one guarded execution attempt.
+
+
+<!-- prompt192-update -->
+## Prompt192 architecture constraint update
+
+Prompt192 adds bounded post-rollback fix Codex re-entry execution.
+
+Authoritative execution rule:
+- Prompt192 may execute Codex only when Prompt191 final checkpoint is ready.
+- Prompt192 must execute at most one invocation.
+- Prompt192 must reuse existing Prompt180 / Prompt167 workspace-write invocation
+  machinery.
+- Prompt192 must not create a new Codex executor.
+- Prompt192 must not retry, loop, execute rollback, commit, tag, create GitHub
+  operations, or create new executors.
+- Prompt192 must emit handoff metadata for post-execution assimilation.
+
+Current limitation:
+- Prompt192 executes post-rollback fix re-entry and records result metadata, but does
+  not yet classify changed files, run validation, or update cycle outcome from that
+  result.
+- Prompt193 should add that post-rollback-fix re-entry result assimilation and
+  safety refresh without invoking Codex again.

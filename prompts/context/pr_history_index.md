@@ -2518,3 +2518,61 @@ Known follow-up:
 - Prompt192 should consume `project_browser_autonomous_post_rollback_fix_reentry_checkpoint_*`
   and execute exactly one bounded post-rollback fix Codex re-entry attempt only when
   the checkpoint is ready.
+
+
+<!-- prompt192-update -->
+## Prompt192 — bounded post-rollback fix Codex re-entry execution
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_post_rollback_fix_reentry_execution_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_post_rollback_fix_reentry_execution_*`.
+- Consumes Prompt191 checkpoint:
+  `project_browser_autonomous_post_rollback_fix_reentry_checkpoint_*`.
+- Executes only when the final checkpoint is ready.
+- Reuses existing Prompt180 / Prompt167 workspace-write machinery by delegating to:
+  `_build_project_browser_autonomous_codex_write_invocation_state(...)`.
+- Does not create a new Codex executor.
+- Executes at most one post-rollback fix re-entry invocation.
+- Adds deterministic blocked statuses for:
+  - checkpoint not ready
+  - manual review
+  - unsafe prompt path
+  - max invocation mismatch
+  - unexpected prior action
+  - insufficient truth
+- Classifies execution result into:
+  - `completed_with_changes`
+  - `completed_no_changes`
+  - `completed_failure`
+  - `completed_timeout`
+- Adds Prompt193 handoff fields:
+  - `post_rollback_fix_reentry_result_ready_for_assimilation`
+  - `post_rollback_fix_reentry_result_assimilation_source`
+  - `post_rollback_fix_reentry_result_next_stage`
+- Preserves execution boundaries:
+  - no retry
+  - no loop
+  - no rollback execution
+  - no commit/stage
+  - no GitHub operation
+- Exposed Prompt192 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt192 implementation.
+- No tests were run.
+- Runtime behavior still depends on actual checkpoint/runtime conditions and local
+  Codex CLI availability.
+
+Known follow-up:
+- Prompt193 should consume `project_browser_autonomous_post_rollback_fix_reentry_execution_*`
+  and route the result back through source selection, changed-file safety
+  classification, validation routing, bounded py_compile validation, and cycle
+  classification.
