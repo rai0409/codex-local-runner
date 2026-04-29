@@ -2087,3 +2087,24 @@ Authoritative post-reentry rule:
 Current limitation:
 - Prompt182 does not decide cycle budgets, fix budgets, stop reasons, or continuation
   permission. Prompt183 should add bounded continuation control.
+
+
+<!-- prompt183-update -->
+## Prompt183 architecture constraint update
+
+Prompt183 adds bounded continuation control from Prompt182 post-reentry safety
+refresh.
+
+Authoritative continuation rule:
+- Prompt183 must prefer:
+  `project_browser_autonomous_post_reentry_safety_refresh_*`
+  as the authoritative source for re-entry-aware continuation.
+- Prompt183 may decide only metadata control state:
+  next continuation, fix continuation, rollback preparation, manual review, or stop.
+- Prompt183 must not generate prompts, invoke Codex, start a cycle, rollback, commit,
+  create GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt183 can mark rollback as required/candidate but does not determine concrete
+  rollback files or strategy.
+- Prompt184 should add rollback readiness without executing rollback.

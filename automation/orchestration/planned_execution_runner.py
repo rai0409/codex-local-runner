@@ -51719,6 +51719,388 @@ def _build_project_browser_autonomous_post_reentry_safety_refresh_state(
     }
 
 
+def _build_project_browser_autonomous_bounded_continuation_controller_state(
+    *,
+    source_status: str,
+    source_post_reentry_cycle_status: str,
+    source_post_reentry_cycle_passed: bool,
+    source_post_reentry_cycle_failed: bool,
+    source_post_reentry_cycle_blocked: bool,
+    source_post_reentry_cycle_block_reason: str,
+    source_continuation_candidate: bool,
+    source_continuation_prompt_kind: str,
+    source_continuation_next_action: str,
+    source_rollback_candidate: bool,
+    source_rollback_reason: str,
+    source_human_review_required: bool,
+    source_manual_review_required: bool,
+    source_next_action: str,
+    reentry_invocation_attempted: bool,
+    existing_cycle_index: int,
+    existing_fix_attempt_index: int,
+    existing_reentry_invocations_used: int,
+    existing_failure_count: int,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "continuation_allowed_next",
+        "continuation_allowed_fix",
+        "continuation_blocked_rollback_required",
+        "continuation_blocked_manual_review_required",
+        "continuation_blocked_cycle_budget_exhausted",
+        "continuation_blocked_fix_budget_exhausted",
+        "continuation_blocked_failure_budget_exhausted",
+        "continuation_blocked_insufficient_truth",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "generate_next_prompt",
+        "generate_fix_prompt",
+        "prepare_rollback",
+        "manual_review_required",
+        "stop_bounded_continuation",
+        "insufficient_truth",
+    }
+    max_cycles = 2
+    max_fix_attempts = 1
+    max_reentry_invocations = 1
+    failure_budget = 1
+    runtime_posture = [
+        "prompt183_bounded_continuation_controller",
+        "metadata_only_controller",
+        "authoritative_prompt182_source",
+        "no_prompt_generation",
+        "no_codex_invocation",
+        "no_cycle_start",
+        "no_rollback_execution",
+        "no_commit",
+    ]
+
+    normalized_source_status = _normalize_text(source_status, default="insufficient_truth")
+    normalized_cycle_status = _normalize_text(
+        source_post_reentry_cycle_status,
+        default="insufficient_truth",
+    )
+    normalized_cycle_block_reason = _normalize_text(
+        source_post_reentry_cycle_block_reason,
+        default="",
+    )
+    normalized_continuation_prompt_kind = _normalize_text(
+        source_continuation_prompt_kind,
+        default="none",
+    )
+    if normalized_continuation_prompt_kind not in {"next", "fix", "none"}:
+        normalized_continuation_prompt_kind = "none"
+    normalized_continuation_next_action = _normalize_text(
+        source_continuation_next_action,
+        default="",
+    )
+    normalized_rollback_reason = _normalize_text(source_rollback_reason, default="")
+    normalized_source_next_action = _normalize_text(source_next_action, default="")
+
+    cycle_index = _as_non_negative_int(existing_cycle_index, default=1)
+    if cycle_index <= 0:
+        cycle_index = 1
+    remaining_cycles = max(max_cycles - cycle_index, 0)
+
+    fix_attempt_index = _as_non_negative_int(existing_fix_attempt_index, default=0)
+    remaining_fix_attempts = max(max_fix_attempts - fix_attempt_index, 0)
+
+    reentry_invocations_used = _as_non_negative_int(
+        existing_reentry_invocations_used,
+        default=1 if reentry_invocation_attempted else 0,
+    )
+
+    prompt182_failed = bool(source_post_reentry_cycle_failed) or bool(
+        normalized_source_status
+        in {
+            "post_reentry_safety_refresh_validation_failed",
+            "post_reentry_safety_refresh_invocation_failure",
+        }
+    )
+    failure_count = _as_non_negative_int(
+        existing_failure_count,
+        default=1 if prompt182_failed else 0,
+    )
+
+    authoritative_continuation_source = (
+        "project_browser_autonomous_post_reentry_safety_refresh"
+        if normalized_source_status
+        else "none"
+    )
+    continuation_allowed = False
+    continuation_block_reason = "blocked_insufficient_continuation_truth"
+    continuation_prompt_kind = "none"
+    continuation_next_action = "manual_review_required"
+    rollback_required = False
+    rollback_candidate = bool(source_rollback_candidate)
+    rollback_reason = normalized_rollback_reason
+    should_generate_next_prompt = False
+    should_generate_fix_prompt = False
+    should_invoke_codex = False
+    should_start_next_cycle = False
+    should_rollback = False
+    should_commit = False
+    human_review_required = bool(source_human_review_required)
+    manual_review_required = bool(source_manual_review_required)
+    stop_reason = "insufficient_truth"
+    next_action = "manual_review_required"
+    status = "continuation_blocked_insufficient_truth"
+
+    unsafe_or_timeout_source = bool(
+        source_rollback_candidate
+        or normalized_source_status
+        in {
+            "blocked_post_reentry_unsafe_changes",
+            "post_reentry_safety_refresh_validation_timeout",
+            "post_reentry_safety_refresh_invocation_timeout",
+        }
+    )
+    if unsafe_or_timeout_source and not rollback_reason:
+        rollback_reason = "post_reentry_rollback_required"
+
+    # Priority 1: manual review
+    if bool(source_human_review_required) or bool(source_manual_review_required):
+        status = "continuation_blocked_manual_review_required"
+        continuation_allowed = False
+        continuation_block_reason = "manual_review_required"
+        rollback_required = bool(source_rollback_candidate)
+        stop_reason = "manual_review_required"
+        next_action = "manual_review_required"
+        human_review_required = True
+        manual_review_required = True
+    # Priority 2: rollback / unsafe / timeout
+    elif unsafe_or_timeout_source:
+        status = "continuation_blocked_rollback_required"
+        continuation_allowed = False
+        continuation_block_reason = "rollback_required"
+        rollback_required = True
+        rollback_candidate = True
+        stop_reason = "rollback_required"
+        next_action = "prepare_rollback"
+        human_review_required = bool(source_human_review_required)
+        manual_review_required = bool(source_manual_review_required)
+    # Priority 3: budget exhaustion
+    elif (
+        normalized_continuation_prompt_kind == "next"
+        and remaining_cycles <= 0
+        and bool(source_continuation_candidate)
+    ):
+        status = "continuation_blocked_cycle_budget_exhausted"
+        continuation_allowed = False
+        continuation_block_reason = "cycle_budget_exhausted"
+        stop_reason = "cycle_budget_exhausted"
+        next_action = "stop_bounded_continuation"
+        human_review_required = False
+        manual_review_required = False
+    elif (
+        normalized_continuation_prompt_kind == "fix"
+        and remaining_fix_attempts <= 0
+        and bool(source_continuation_candidate)
+    ):
+        status = "continuation_blocked_fix_budget_exhausted"
+        continuation_allowed = False
+        continuation_block_reason = "fix_budget_exhausted"
+        rollback_candidate = True
+        rollback_reason = "fix_budget_exhausted"
+        stop_reason = "fix_budget_exhausted"
+        next_action = "prepare_rollback"
+        human_review_required = False
+        manual_review_required = False
+    elif failure_count > failure_budget:
+        status = "continuation_blocked_failure_budget_exhausted"
+        continuation_allowed = False
+        continuation_block_reason = "failure_budget_exhausted"
+        rollback_candidate = True
+        rollback_reason = "failure_budget_exhausted"
+        stop_reason = "failure_budget_exhausted"
+        next_action = "prepare_rollback"
+        human_review_required = False
+        manual_review_required = False
+    # Priority 4: next continuation allowed
+    elif (
+        bool(source_post_reentry_cycle_passed)
+        and bool(source_continuation_candidate)
+        and normalized_continuation_prompt_kind == "next"
+        and not bool(source_human_review_required)
+        and not bool(source_rollback_candidate)
+        and remaining_cycles > 0
+    ):
+        status = "continuation_allowed_next"
+        continuation_allowed = True
+        continuation_block_reason = ""
+        continuation_prompt_kind = "next"
+        continuation_next_action = (
+            "generate_next_prompt"
+            if normalized_continuation_next_action != "generate_next_prompt"
+            else normalized_continuation_next_action
+        )
+        should_generate_next_prompt = True
+        should_generate_fix_prompt = False
+        rollback_required = False
+        rollback_candidate = False
+        rollback_reason = ""
+        human_review_required = False
+        manual_review_required = False
+        stop_reason = ""
+        next_action = "generate_next_prompt"
+    # Priority 5: fix continuation allowed
+    elif (
+        bool(source_post_reentry_cycle_failed)
+        and bool(source_continuation_candidate)
+        and normalized_continuation_prompt_kind == "fix"
+        and not bool(source_human_review_required)
+        and remaining_fix_attempts > 0
+        and failure_count <= failure_budget
+    ):
+        status = "continuation_allowed_fix"
+        continuation_allowed = True
+        continuation_block_reason = ""
+        continuation_prompt_kind = "fix"
+        continuation_next_action = (
+            "generate_fix_prompt"
+            if normalized_continuation_next_action != "generate_fix_prompt"
+            else normalized_continuation_next_action
+        )
+        should_generate_next_prompt = False
+        should_generate_fix_prompt = True
+        rollback_required = False
+        human_review_required = False
+        manual_review_required = False
+        stop_reason = ""
+        next_action = "generate_fix_prompt"
+    # Priority 6: fallback insufficient truth
+    else:
+        status = "continuation_blocked_insufficient_truth"
+        continuation_allowed = False
+        continuation_block_reason = "blocked_insufficient_continuation_truth"
+        continuation_prompt_kind = (
+            normalized_continuation_prompt_kind
+            if normalized_continuation_prompt_kind in {"fix", "next"}
+            else "none"
+        )
+        continuation_next_action = (
+            normalized_continuation_next_action
+            if normalized_continuation_next_action
+            else normalized_source_next_action
+        )
+        human_review_required = True
+        manual_review_required = True
+        stop_reason = "insufficient_truth"
+        next_action = "manual_review_required"
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+    if continuation_next_action not in {
+        "generate_next_prompt",
+        "generate_fix_prompt",
+        "prepare_rollback",
+        "manual_review_required",
+        "stop_bounded_continuation",
+        "",
+    }:
+        continuation_next_action = "manual_review_required"
+
+    return {
+        "project_browser_autonomous_bounded_continuation_controller_status": status,
+        "project_browser_autonomous_bounded_continuation_controller_authoritative_continuation_source": (
+            authoritative_continuation_source
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_continuation_allowed": bool(
+            continuation_allowed
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_continuation_block_reason": (
+            continuation_block_reason
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_continuation_prompt_kind": (
+            continuation_prompt_kind
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_continuation_next_action": (
+            continuation_next_action
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_max_cycles": int(max_cycles),
+        "project_browser_autonomous_bounded_continuation_controller_cycle_index": int(
+            cycle_index
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_remaining_cycles": int(
+            remaining_cycles
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_max_fix_attempts": int(
+            max_fix_attempts
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_fix_attempt_index": int(
+            fix_attempt_index
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_remaining_fix_attempts": int(
+            remaining_fix_attempts
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_max_reentry_invocations": int(
+            max_reentry_invocations
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_reentry_invocations_used": int(
+            reentry_invocations_used
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_failure_budget": int(
+            failure_budget
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_failure_count": int(
+            failure_count
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_rollback_required": bool(
+            rollback_required
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_rollback_candidate": bool(
+            rollback_candidate
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_rollback_reason": (
+            rollback_reason
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_should_generate_next_prompt": bool(
+            should_generate_next_prompt
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_should_generate_fix_prompt": bool(
+            should_generate_fix_prompt
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_should_invoke_codex": bool(
+            should_invoke_codex
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_should_start_next_cycle": bool(
+            should_start_next_cycle
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_should_rollback": bool(
+            should_rollback
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_should_commit": bool(
+            should_commit
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_human_review_required": bool(
+            human_review_required
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_manual_review_required": bool(
+            manual_review_required
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_stop_reason": stop_reason,
+        "project_browser_autonomous_bounded_continuation_controller_next_action": next_action,
+        "project_browser_autonomous_bounded_continuation_controller_runtime_posture": (
+            runtime_posture
+        ),
+        "project_browser_autonomous_bounded_continuation_controller_missing_inputs": (
+            _serialize_required_signals(
+                [
+                    normalized_source_status,
+                    normalized_cycle_status,
+                    normalized_cycle_block_reason,
+                    normalized_source_next_action,
+                    "authoritative_source_missing"
+                    if authoritative_continuation_source == "none"
+                    else "",
+                ]
+            )
+        ),
+    }
+
+
 def _build_project_browser_autonomous_prompt_selection_state(
     *,
     validation_passed: bool,
@@ -79254,6 +79636,273 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_post_reentry_safety_refresh_next_action"
     ] = project_browser_autonomous_post_reentry_safety_refresh_next_action
 
+    prompt182_failed_for_budget = bool(
+        project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+            "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_failed",
+            False,
+        )
+    ) or bool(
+        project_browser_autonomous_post_reentry_safety_refresh_status
+        in {
+            "post_reentry_safety_refresh_validation_failed",
+            "post_reentry_safety_refresh_invocation_failure",
+        }
+    )
+    project_browser_autonomous_bounded_continuation_controller_state = (
+        _build_project_browser_autonomous_bounded_continuation_controller_state(
+            source_status=project_browser_autonomous_post_reentry_safety_refresh_status,
+            source_post_reentry_cycle_status=_normalize_text(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_status"
+                ),
+                default="insufficient_truth",
+            ),
+            source_post_reentry_cycle_passed=bool(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_passed",
+                    False,
+                )
+            ),
+            source_post_reentry_cycle_failed=bool(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_failed",
+                    False,
+                )
+            ),
+            source_post_reentry_cycle_blocked=bool(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_blocked",
+                    True,
+                )
+            ),
+            source_post_reentry_cycle_block_reason=_normalize_text(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_post_reentry_cycle_block_reason"
+                ),
+                default="",
+            ),
+            source_continuation_candidate=bool(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_continuation_candidate",
+                    False,
+                )
+            ),
+            source_continuation_prompt_kind=_normalize_text(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_continuation_prompt_kind"
+                ),
+                default="none",
+            ),
+            source_continuation_next_action=_normalize_text(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_continuation_next_action"
+                ),
+                default="",
+            ),
+            source_rollback_candidate=bool(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_rollback_candidate",
+                    False,
+                )
+            ),
+            source_rollback_reason=_normalize_text(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_rollback_reason"
+                ),
+                default="",
+            ),
+            source_human_review_required=bool(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_human_review_required",
+                    False,
+                )
+            ),
+            source_manual_review_required=bool(
+                project_browser_autonomous_post_reentry_safety_refresh_state_normalized.get(
+                    "project_browser_autonomous_post_reentry_safety_refresh_manual_review_required",
+                    False,
+                )
+            ),
+            source_next_action=project_browser_autonomous_post_reentry_safety_refresh_next_action,
+            reentry_invocation_attempted=bool(
+                project_browser_autonomous_codex_reentry_invocation_state_normalized.get(
+                    "project_browser_autonomous_codex_reentry_invocation_reentry_invocation_attempted",
+                    False,
+                )
+            ),
+            existing_cycle_index=_as_non_negative_int(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_bounded_continuation_controller_cycle_index",
+                    1,
+                ),
+                default=1,
+            ),
+            existing_fix_attempt_index=_as_non_negative_int(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_bounded_continuation_controller_fix_attempt_index",
+                    0,
+                ),
+                default=0,
+            ),
+            existing_reentry_invocations_used=_as_non_negative_int(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_bounded_continuation_controller_reentry_invocations_used",
+                    (
+                        1
+                        if bool(
+                            project_browser_autonomous_codex_reentry_invocation_state_normalized.get(
+                                "project_browser_autonomous_codex_reentry_invocation_reentry_invocation_attempted",
+                                False,
+                            )
+                        )
+                        else 0
+                    ),
+                ),
+                default=0,
+            ),
+            existing_failure_count=_as_non_negative_int(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_bounded_continuation_controller_failure_count",
+                    1 if prompt182_failed_for_budget else 0,
+                ),
+                default=0,
+            ),
+        )
+    )
+    bounded_continuation_controller_allowed_statuses = {
+        "continuation_allowed_next",
+        "continuation_allowed_fix",
+        "continuation_blocked_rollback_required",
+        "continuation_blocked_manual_review_required",
+        "continuation_blocked_cycle_budget_exhausted",
+        "continuation_blocked_fix_budget_exhausted",
+        "continuation_blocked_failure_budget_exhausted",
+        "continuation_blocked_insufficient_truth",
+        "insufficient_truth",
+    }
+    bounded_continuation_controller_allowed_next_actions = {
+        "generate_next_prompt",
+        "generate_fix_prompt",
+        "prepare_rollback",
+        "manual_review_required",
+        "stop_bounded_continuation",
+        "insufficient_truth",
+    }
+    bounded_continuation_controller_field_names = (
+        "status",
+        "authoritative_continuation_source",
+        "continuation_allowed",
+        "continuation_block_reason",
+        "continuation_prompt_kind",
+        "continuation_next_action",
+        "max_cycles",
+        "cycle_index",
+        "remaining_cycles",
+        "max_fix_attempts",
+        "fix_attempt_index",
+        "remaining_fix_attempts",
+        "max_reentry_invocations",
+        "reentry_invocations_used",
+        "failure_budget",
+        "failure_count",
+        "rollback_required",
+        "rollback_candidate",
+        "rollback_reason",
+        "should_generate_next_prompt",
+        "should_generate_fix_prompt",
+        "should_invoke_codex",
+        "should_start_next_cycle",
+        "should_rollback",
+        "should_commit",
+        "human_review_required",
+        "manual_review_required",
+        "stop_reason",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_bounded_continuation_controller_status = _normalize_text(
+        project_browser_autonomous_bounded_continuation_controller_state.get(
+            "project_browser_autonomous_bounded_continuation_controller_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_bounded_continuation_controller_status not in (
+        bounded_continuation_controller_allowed_statuses
+    ):
+        project_browser_autonomous_bounded_continuation_controller_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_bounded_continuation_controller_next_action = _normalize_text(
+        project_browser_autonomous_bounded_continuation_controller_state.get(
+            "project_browser_autonomous_bounded_continuation_controller_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_bounded_continuation_controller_next_action not in (
+        bounded_continuation_controller_allowed_next_actions
+    ):
+        project_browser_autonomous_bounded_continuation_controller_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_bounded_continuation_controller_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in bounded_continuation_controller_field_names:
+        key = f"project_browser_autonomous_bounded_continuation_controller_{field_name}"
+        value = project_browser_autonomous_bounded_continuation_controller_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_bounded_continuation_controller_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_bounded_continuation_controller_next_action
+        elif field_name in {"continuation_prompt_kind"}:
+            normalized_prompt_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_prompt_kind
+                if normalized_prompt_kind in {"next", "fix", "none"}
+                else "none"
+            )
+        elif field_name in {
+            "continuation_allowed",
+            "rollback_required",
+            "rollback_candidate",
+            "should_generate_next_prompt",
+            "should_generate_fix_prompt",
+            "should_invoke_codex",
+            "should_start_next_cycle",
+            "should_rollback",
+            "should_commit",
+            "human_review_required",
+            "manual_review_required",
+        }:
+            value = bool(value)
+        elif field_name in {
+            "max_cycles",
+            "cycle_index",
+            "remaining_cycles",
+            "max_fix_attempts",
+            "fix_attempt_index",
+            "remaining_fix_attempts",
+            "max_reentry_invocations",
+            "reentry_invocations_used",
+            "failure_budget",
+            "failure_count",
+        }:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name in {"runtime_posture", "missing_inputs"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_bounded_continuation_controller_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_bounded_continuation_controller_state_normalized[
+        "project_browser_autonomous_bounded_continuation_controller_status"
+    ] = project_browser_autonomous_bounded_continuation_controller_status
+    project_browser_autonomous_bounded_continuation_controller_state_normalized[
+        "project_browser_autonomous_bounded_continuation_controller_next_action"
+    ] = project_browser_autonomous_bounded_continuation_controller_next_action
+
     if project_planning_summary_available:
         project_planning_summary_compact.update(
             {
@@ -81758,6 +82407,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_codex_reentry_invocation_state_normalized,
                 **project_browser_autonomous_reentry_result_assimilation_state_normalized,
                 **project_browser_autonomous_post_reentry_safety_refresh_state_normalized,
+                **project_browser_autonomous_bounded_continuation_controller_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -82723,6 +83373,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_post_reentry_safety_refresh_next_action"
             if project_browser_autonomous_post_reentry_safety_refresh_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_bounded_continuation_controller_status"
+            if project_browser_autonomous_bounded_continuation_controller_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_bounded_continuation_controller_next_action"
+            if project_browser_autonomous_bounded_continuation_controller_next_action
             else "",
             ]
     )
@@ -88853,6 +89509,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_codex_reentry_invocation_state_normalized,
         **project_browser_autonomous_reentry_result_assimilation_state_normalized,
         **project_browser_autonomous_post_reentry_safety_refresh_state_normalized,
+        **project_browser_autonomous_bounded_continuation_controller_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(

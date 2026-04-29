@@ -2039,3 +2039,56 @@ Known follow-up:
   legacy Prompt170/171/172 state objects.
 - Prompt183 should consume `project_browser_autonomous_post_reentry_safety_refresh_*`
   as the authoritative source for bounded continuation control.
+
+
+<!-- prompt183-update -->
+## Prompt183 — bounded continuation controller
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_continuation_controller_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_continuation_controller_*`.
+- Consumes Prompt182 post-reentry safety refresh as the authoritative continuation
+  source and avoids overriding it with legacy cycle fields.
+- Added continuation budget accounting for:
+  - `max_cycles`
+  - `cycle_index`
+  - `remaining_cycles`
+  - `max_fix_attempts`
+  - `fix_attempt_index`
+  - `remaining_fix_attempts`
+  - `max_reentry_invocations`
+  - `reentry_invocations_used`
+  - `failure_budget`
+  - `failure_count`
+- Added control decisions for:
+  - next prompt generation path
+  - fix prompt generation path
+  - rollback-required block
+  - manual-review block
+  - insufficient-truth block
+  - budget exhaustion
+- Kept execution flags metadata-only:
+  - `should_invoke_codex=false`
+  - `should_start_next_cycle=false`
+  - `should_rollback=false`
+  - `should_commit=false`
+- Exposed Prompt183 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt183 implementation.
+- No tests were run.
+- No prompt generation, Codex invocation, continuation execution, rollback execution,
+  commit, GitHub operation, retry loop, scheduler, daemon, queue drainer, or new
+  executor was added.
+
+Known follow-up:
+- Prompt184 should consume Prompt183 rollback_candidate / rollback_required /
+  rollback_reason and build metadata-only rollback readiness.
