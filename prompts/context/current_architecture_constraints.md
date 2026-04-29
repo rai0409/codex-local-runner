@@ -2577,3 +2577,25 @@ Current limitation:
 - Prompt205 integrates delegated launch execution state, but does not yet classify
   launch result outcomes into controller feedback.
 - Prompt206 should add next-step launch result assimilation metadata only.
+
+
+<!-- prompt206-update -->
+## Prompt206 architecture constraint update
+
+Prompt206 adds next-step launch result assimilation.
+
+Authoritative launch-result rule:
+- Prompt206 may derive launch-result feedback only from Prompt205 next-step launch
+  execution output.
+- Prompt206 must not infer launch-result success from Prompt204 launch contract or
+  Prompt203 local loop contract alone.
+- Successful non-stop launch results require non-selected launches to remain no-op.
+- Prompt206 must not continue the local loop directly.
+- Prompt206 must not generate prompts, invoke Codex, validate, execute rollback,
+  mutate git, push, create GitHub operations, retry, loop, or create new executors.
+
+Current limitation:
+- Prompt206 emits launch-result feedback, but does not yet select the next bounded
+  control contract.
+- Prompt207 should reconcile Prompt206 feedback into exactly one next control
+  contract without executing it.

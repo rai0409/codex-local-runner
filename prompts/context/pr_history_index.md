@@ -3373,3 +3373,73 @@ Known follow-up:
 - Prompt206 should consume
   `project_browser_autonomous_next_step_launch_execution_*` and classify launch
   results into controller feedback without executing any additional launch.
+
+
+<!-- prompt206-update -->
+## Prompt206 — next-step launch result assimilation and controller feedback
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_next_step_launch_result_assimilation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_next_step_launch_result_assimilation_*`.
+- Consumes Prompt205 next-step launch execution:
+  `project_browser_autonomous_next_step_launch_execution_*`.
+- Selects Prompt205 as authoritative only when:
+  - `next_step_launch_result_ready_for_assimilation=true`
+  - source is `prompt205_next_step_launch_execution`
+  - next stage is `next_step_launch_result_assimilation`
+  - selected launch kind is present
+  - Prompt205 status or result class is present
+- Does not infer success from Prompt204 launch contract or Prompt203 local loop
+  contract alone.
+- Implements deterministic result classifications:
+  - `generated_prompt_reentry_completed`
+  - `rollback_execution_completed`
+  - `commit_execution_completed`
+  - `manual_stop`
+  - `failed`
+  - `blocked`
+  - `insufficient_truth`
+- Enforces non-selected launch no-op verification for successful non-stop launches.
+- Blocks non-selected launch activity with:
+  `next_step_launch_result_blocked_non_selected_launch_activity`.
+- Emits controller feedback payloads for:
+  - generated prompt re-entry result ready
+  - rollback execution result ready
+  - commit execution result ready
+  - manual stop / failed / blocked
+- Preserves continuation policy:
+  - `should_continue_local_loop=false`
+  - Prompt206 does not advance the loop itself.
+- Preserves metadata-only boundaries:
+  - no prompt generation
+  - no Codex invocation
+  - no validation execution
+  - no rollback execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt206 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt206 implementation.
+- No tests were run.
+- Prompt205 currently delegates by consuming existing execution-path states rather
+  than re-triggering those paths inline; future ordering/control wiring may be needed
+  if fresh re-trigger behavior is required.
+
+Known follow-up:
+- Prompt207 should consume
+  `project_browser_autonomous_next_step_launch_result_assimilation_*` and emit exactly
+  one safe next control contract: continue to the appropriate result assimilation
+  path, manual stop, or blocked/manual-review.
