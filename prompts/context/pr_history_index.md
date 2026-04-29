@@ -2092,3 +2092,60 @@ Scope notes:
 Known follow-up:
 - Prompt184 should consume Prompt183 rollback_candidate / rollback_required /
   rollback_reason and build metadata-only rollback readiness.
+
+
+<!-- prompt184-update -->
+## Prompt184 — rollback readiness controller
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_rollback_readiness_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_rollback_readiness_*`.
+- Implemented rollback source precedence using latest post-reentry truth:
+  1. Prompt182 `source_changed_files`
+  2. Prompt181 `source_changed_files`
+  3. Prompt180 `changed_files_after`
+  4. Prompt167 normal write files only when re-entry is not active
+- Avoids stale normal-write fallback when re-entry is active.
+- Added rollback file safety classification:
+  - tracked / untracked / runtime
+  - forbidden / unexpected / unsafe
+  - missing / symlink / out-of-repo
+- Added conservative forbidden/unsafe checks:
+  - `.git/*`
+  - traversal / out-of-repo
+  - symlink
+  - env / secret / pyc / cache patterns
+  - context docs unless explicitly allowed
+- Added rollback readiness statuses:
+  - `rollback_readiness_allowed`
+  - `rollback_readiness_not_required`
+  - blocked manual/no-target/forbidden/unsafe/symlink/out-of-repo/ambiguous/too-many/insufficient-truth statuses
+- Added deterministic rollback strategies:
+  - `restore_tracked_only`
+  - `restore_tracked_and_remove_safe_untracked`
+  - `blocked_manual_review`
+- Emits rollback execution plan metadata only.
+- Sets `rollback_execution_allowed_next` for Prompt185 handoff.
+- Keeps rollback readiness metadata-only:
+  - `should_execute_rollback=false`
+  - no rollback execution
+- Exposed Prompt184 status and next_action through compact planning summary,
+  supporting truth refs, and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt184 implementation.
+- No tests were run.
+- No rollback execution, Codex invocation, prompt generation, commit, GitHub
+  operation, retry loop, scheduler, daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt185 should consume `project_browser_autonomous_rollback_readiness_*` and
+  execute only the emitted safe bounded rollback plan when
+  `rollback_execution_allowed_next=true`.

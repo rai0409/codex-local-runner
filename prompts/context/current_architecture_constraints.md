@@ -2108,3 +2108,24 @@ Current limitation:
 - Prompt183 can mark rollback as required/candidate but does not determine concrete
   rollback files or strategy.
 - Prompt184 should add rollback readiness without executing rollback.
+
+
+<!-- prompt184-update -->
+## Prompt184 architecture constraint update
+
+Prompt184 adds metadata-only rollback readiness.
+
+Authoritative rollback readiness rule:
+- Prompt184 may derive rollback targets and strategy, but must not execute rollback.
+- Prompt184 must prefer latest post-reentry truth when re-entry is active.
+- Prompt184 must not fall back to stale normal Prompt167 write outputs when re-entry
+  source is active.
+- Prompt184 may set `rollback_execution_allowed_next=true` only when rollback targets
+  and strategy are safe and deterministic.
+- Prompt184 must not run `git checkout`, `git reset`, `git clean`, `rm`, invoke
+  Codex, start another cycle, commit, create GitHub operations, retry, loop, or
+  create new executors.
+
+Current limitation:
+- Rollback tracked/untracked classification relies on current git status metadata
+  plus source metadata. Prompt185 must revalidate paths and plan before executing.

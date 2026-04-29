@@ -2001,3 +2001,39 @@ Next fastest path:
 
 Prompt184 must not add tests, invoke Codex, execute rollback, commit, GitHub
 operations, retry loops, daemons, schedulers, queue drainers, or new executors.
+
+
+<!-- prompt184-update -->
+## Roadmap update after Prompt184
+
+Completed:
+- Prompt169: Codex workspace-write result assimilation and changed-file safety
+  classification.
+- Prompt170: metadata-only post-write validation routing and candidate derivation.
+- Prompt171: bounded post-write py_compile validation execution.
+- Prompt172: metadata-only one-step autonomous cycle summary.
+- Prompt173: active-path human-review and downstream validation precedence hardening.
+- Prompt174: cycle handoff controller and advisory readiness handoff metadata bridge.
+- Prompt175: explicit consumption of cycle handoff metadata in fix/next readiness
+  builders.
+- Prompt176: safety-gated in-run readiness re-evaluation from acknowledged cycle
+  handoff.
+- Prompt177: same-run generation-state wiring from re-evaluated readiness.
+- Prompt178: generated prompt re-entry readiness.
+- Prompt179: generated prompt re-entry routing to selection/invocation readiness.
+- Prompt180: controlled single bounded re-entry Codex invocation.
+- Prompt181: re-entry result assimilation and Prompt170-compatible routing inputs.
+- Prompt182: post-reentry validation and cycle refresh.
+- Prompt183: bounded continuation controller.
+- Prompt184: rollback readiness controller.
+
+Next fastest path:
+- Prompt185: bounded rollback execution.
+- Prompt186: commit/tag readiness.
+- Prompt187: commit/tag execution.
+- Prompt188: bounded multi-cycle autonomous controller.
+
+Prompt185 must not add tests, invoke Codex, generate prompts, commit, GitHub
+operations, retry loops, daemons, schedulers, queue drainers, or new executors.
+Prompt185 must not use `git reset --hard`, `git clean -fd`, broad globs, or recursive
+directory deletion.
