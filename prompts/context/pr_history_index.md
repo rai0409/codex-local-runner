@@ -4099,3 +4099,78 @@ Known follow-up:
   `project_browser_autonomous_direct_retrigger_followup_guard_*`, validate
   `prompt217_multistep_contract`, and enforce stop / budget / preflight guards for
   the bounded multi-step coordinator handoff without executing downstream actions.
+
+
+<!-- prompt217-update -->
+## Prompt217 — bounded multi-step handoff guard
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_bounded_multistep_handoff_guard_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_bounded_multistep_handoff_guard_*`.
+- Consumes Prompt216 direct re-trigger follow-up guard:
+  `project_browser_autonomous_direct_retrigger_followup_guard_*`.
+- Enforces Prompt216-authoritative gating:
+  - Prompt216 status
+  - follow-up availability
+  - selected follow-up presence
+  - blocked / manual-stop handling
+- Revalidates Prompt216 `prompt217_multistep_contract`:
+  - contract kind
+  - source marker
+  - selected follow-up kind
+  - `max_next_steps==1`
+  - `allow_unbounded_loop=false`
+  - required guard flags
+  - next action
+- Adds stop / budget / preflight gates:
+  - required stop/safety booleans
+  - `cycle_budget_remaining > 0`
+  - deterministic blocked/manual-stop handling
+  - blocked reason prioritization
+- Preserves existing-truth revalidation policy:
+  - `fresh_attempt_detected=false`
+  - `existing_truth_surface_detected=true`
+  - `existing_truth_requires_revalidation=true`
+- Emits Prompt218 bounded multi-step execution preflight:
+  - `prompt218_multistep_execution_ready`
+  - `prompt218_multistep_execution_source`
+  - `prompt218_multistep_execution_contract`
+- Prompt218 contract remains bounded:
+  - no retry
+  - `max_next_steps=1`
+  - `allow_unbounded_loop=false`
+  - stop / budget / result-assimilation requirements
+- Preserves metadata-only boundaries:
+  - no Codex invocation
+  - no prompt generation
+  - no rollback execution
+  - no commit/tag execution
+  - no validation execution
+  - no git mutation
+  - no push
+  - no GitHub operation
+  - no retry/loop
+- Exposed Prompt217 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt217 implementation.
+- No tests were run.
+- Prompt217 is intentionally conservative. Contradictory upstream Prompt216 flags
+  resolve to blocked/manual-review instead of attempting recovery.
+
+Known follow-up:
+- Prompt218 should consume
+  `project_browser_autonomous_bounded_multistep_handoff_guard_*`, require
+  `prompt218_multistep_execution_ready=true`, revalidate
+  `prompt218_multistep_execution_contract`, and execute exactly one bounded action
+  through existing paths only.

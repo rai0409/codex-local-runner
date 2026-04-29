@@ -2835,3 +2835,30 @@ Authoritative follow-up rule:
   create new executors.
 - Prompt217 must revalidate Prompt216 multistep contract before any bounded
   multi-step handoff.
+
+
+<!-- prompt217-update -->
+## Prompt217 architecture constraint update
+
+Prompt217 adds bounded multi-step handoff guard metadata.
+
+Authoritative bounded handoff rule:
+- Prompt217 may prepare bounded execution only from Prompt216 direct re-trigger
+  follow-up guard output.
+- Prompt217 must not infer bounded execution readiness from Prompt215, Prompt214, or
+  older controller states alone.
+- Prompt217 must revalidate Prompt216 multistep contract before preparing Prompt218.
+- Prompt217 must preserve:
+  - `max_next_steps=1`
+  - `allow_unbounded_loop=false`
+  - no retry
+  - stop-policy guard required
+  - budget guard required
+  - result-assimilation required
+- Prompt217 must preserve existing-truth revalidation metadata when fresh runtime
+  attempt was not proven.
+- Prompt217 must not execute multi-step actions.
+- Prompt217 must not generate prompts, invoke Codex, validate, execute rollback,
+  execute commit/tag, mutate git, push, create GitHub operations, retry, loop, or
+  create new executors.
+- Prompt218 must revalidate Prompt217 execution preflight before any bounded action.
