@@ -1814,3 +1814,52 @@ Known follow-up:
 - Prompt179 should consume Prompt178 re-entry readiness and connect it to existing
   Prompt164 selection, Prompt165 invocation readiness, and Prompt167 write invocation
   re-entry metadata without invoking Codex.
+
+
+<!-- prompt179-update -->
+## Prompt179 — generated prompt re-entry routing to selection/invocation readiness
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_generated_prompt_reentry_routing_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_generated_prompt_reentry_routing_*`.
+- Implemented deterministic re-entry routing statuses:
+  - `reentry_routing_fix_ready`
+  - `reentry_routing_next_ready`
+  - `reentry_routing_blocked`
+  - `reentry_routing_blocked_ambiguous`
+  - `reentry_routing_blocked_unsafe_path`
+  - `reentry_routing_blocked_insufficient_truth`
+- Added Prompt164 selection refresh metadata:
+  - `project_browser_autonomous_prompt_selection_reentry_refresh_*`
+- Added Prompt165 invocation readiness refresh metadata:
+  - `project_browser_autonomous_codex_invocation_readiness_reentry_*`
+- Added Prompt167 workspace-write invocation re-entry metadata:
+  - `project_browser_autonomous_codex_write_invocation_readiness_reentry_*`
+  - `reentry_max_invocations=1`
+  - `reentry_should_invoke_codex=false`
+  - `reentry_should_start_next_cycle=false`
+  - `reentry_should_rollback=false`
+- Revalidated only fixed generated prompt paths:
+  - `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  - `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+- Blocks symlink, missing, non-file, empty, oversized, unexpected path, ambiguity,
+  human-review, and insufficient-truth cases.
+- Exposed Prompt179 routing state in compact planning summary, supporting truth refs,
+  and final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt179 implementation.
+- No tests were run.
+- No Codex invocation, rollback, commit, GitHub operation, retry loop, scheduler,
+  daemon, queue drainer, or new executor was added.
+
+Known follow-up:
+- Prompt180 should consume Prompt179 re-entry routing and perform at most one bounded
+  re-entry Codex invocation decision/execution path with no loop or retry.

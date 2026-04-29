@@ -1995,3 +1995,24 @@ Authoritative re-entry rule:
 Current limitation:
 - Re-entry readiness does not yet refresh Prompt164 selection or Prompt165/167
   invocation readiness. Prompt179 should add that wiring without executing Codex.
+
+
+<!-- prompt179-update -->
+## Prompt179 architecture constraint update
+
+Prompt179 connects generated prompt re-entry readiness into Prompt164 selection,
+Prompt165 invocation readiness, and Prompt167 workspace-write invocation re-entry
+metadata.
+
+Authoritative safety rule:
+- Re-entry routing may only use fixed generated prompt handoff paths:
+  `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+- Re-entry metadata may prepare at most one future invocation:
+  `reentry_max_invocations=1`.
+- Prompt179 must not invoke Codex, retry, loop, rollback, commit, create GitHub
+  operations, schedulers, daemons, queue drainers, or new executors.
+
+Current limitation:
+- Prompt179 prepares re-entry metadata only. Prompt180 must consume it and perform
+  a controlled single bounded re-entry invocation path.

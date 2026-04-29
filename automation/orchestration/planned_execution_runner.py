@@ -49842,6 +49842,264 @@ def _build_project_browser_autonomous_generated_prompt_reentry_readiness_state(
     }
 
 
+def _build_project_browser_autonomous_generated_prompt_reentry_routing_state(
+    *,
+    reentry_status: str,
+    reentry_allowed: bool,
+    reentry_prompt_kind: str,
+    reentry_prompt_path: str,
+    reentry_target: str,
+    should_update_prompt_selection: bool,
+    should_update_invocation_readiness: bool,
+    should_invoke_codex: bool,
+    should_start_next_cycle: bool,
+    should_rollback: bool,
+    human_review_required: bool,
+    next_action: str,
+    reentry_block_reason: str,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "reentry_routing_fix_ready",
+        "reentry_routing_next_ready",
+        "reentry_routing_blocked",
+        "reentry_routing_blocked_ambiguous",
+        "reentry_routing_blocked_unsafe_path",
+        "reentry_routing_blocked_insufficient_truth",
+    }
+    allowed_prompt_kinds = {"fix", "next", "none"}
+    allowed_next_actions = {
+        "prepare_bounded_reentry_codex_invocation",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    allowed_prompt_paths = {
+        "/tmp/codex-local-runner-decision/generated_fix_prompt.txt",
+        "/tmp/codex-local-runner-decision/generated_next_prompt.txt",
+    }
+    max_prompt_size_bytes = 20000
+    runtime_posture = [
+        "metadata_only_generated_prompt_reentry_routing",
+        "no_codex_invocation",
+        "no_prompt_generation",
+        "no_prompt_execution",
+        "no_git_mutation",
+        "no_autonomous_loop",
+    ]
+
+    source_status = _normalize_text(reentry_status, default="insufficient_truth")
+    normalized_prompt_kind = _normalize_text(reentry_prompt_kind, default="none")
+    normalized_prompt_path = _normalize_text(reentry_prompt_path, default="")
+    normalized_reentry_target = _normalize_text(reentry_target, default="")
+    normalized_source_next_action = _normalize_text(next_action, default="")
+    normalized_source_block_reason = _normalize_text(reentry_block_reason, default="")
+
+    path_is_exact = normalized_prompt_path in allowed_prompt_paths
+    prompt_path_obj = Path(normalized_prompt_path) if normalized_prompt_path else None
+    path_exists = bool(prompt_path_obj and prompt_path_obj.exists())
+    path_is_file = bool(prompt_path_obj and prompt_path_obj.is_file())
+    path_is_symlink = bool(prompt_path_obj and prompt_path_obj.is_symlink())
+    size_bytes = 0
+    if prompt_path_obj and path_exists and path_is_file and not path_is_symlink:
+        try:
+            size_bytes = _as_non_negative_int(prompt_path_obj.stat().st_size, default=0)
+        except OSError:
+            size_bytes = 0
+    file_non_empty = size_bytes > 0
+    file_too_large = size_bytes > max_prompt_size_bytes
+    path_safe = bool(
+        path_is_exact
+        and path_exists
+        and path_is_file
+        and not path_is_symlink
+        and file_non_empty
+        and not file_too_large
+    )
+
+    status = "reentry_routing_blocked_insufficient_truth"
+    reentry_routing_allowed = False
+    reentry_routing_block_reason = "blocked_insufficient_reentry_truth"
+    selection_refresh_allowed = False
+    selection_refresh_kind = "none"
+    selection_refresh_path = ""
+    invocation_readiness_refresh_allowed = False
+    write_invocation_reentry_prepared = False
+    next_action_out = "manual_review_required"
+    missing_inputs: list[str] = []
+
+    if bool(human_review_required):
+        status = "reentry_routing_blocked"
+        reentry_routing_block_reason = "blocked_human_review_required"
+        next_action_out = "manual_review_required"
+    elif source_status == "reentry_blocked_ambiguous_prompt_kind" or (
+        normalized_source_block_reason == "blocked_ambiguous_fix_and_next_reentry"
+    ):
+        status = "reentry_routing_blocked_ambiguous"
+        reentry_routing_block_reason = "blocked_ambiguous_fix_and_next_reentry"
+        next_action_out = "manual_review_required"
+    elif bool(reentry_allowed) and not path_safe:
+        status = "reentry_routing_blocked_unsafe_path"
+        if not normalized_prompt_path:
+            reentry_routing_block_reason = "blocked_prompt_path_missing"
+            missing_inputs.append("reentry_prompt_path")
+        elif not path_is_exact:
+            reentry_routing_block_reason = "blocked_prompt_path_unexpected"
+        elif path_is_symlink:
+            reentry_routing_block_reason = "blocked_prompt_path_symlink"
+        elif not path_exists:
+            reentry_routing_block_reason = "blocked_prompt_path_missing"
+        elif not path_is_file:
+            reentry_routing_block_reason = "blocked_prompt_path_not_file"
+        elif not file_non_empty:
+            reentry_routing_block_reason = "blocked_prompt_empty"
+        elif file_too_large:
+            reentry_routing_block_reason = "blocked_prompt_too_large"
+        else:
+            reentry_routing_block_reason = "blocked_prompt_path_unexpected"
+        next_action_out = "manual_review_required"
+    elif (
+        bool(reentry_allowed)
+        and not bool(human_review_required)
+        and normalized_prompt_kind == "fix"
+        and path_safe
+    ):
+        status = "reentry_routing_fix_ready"
+        reentry_routing_allowed = True
+        reentry_routing_block_reason = ""
+        selection_refresh_allowed = bool(should_update_prompt_selection)
+        selection_refresh_kind = "fix"
+        selection_refresh_path = normalized_prompt_path
+        invocation_readiness_refresh_allowed = bool(
+            selection_refresh_allowed and should_update_invocation_readiness
+        )
+        write_invocation_reentry_prepared = bool(invocation_readiness_refresh_allowed)
+        next_action_out = "prepare_bounded_reentry_codex_invocation"
+    elif (
+        bool(reentry_allowed)
+        and not bool(human_review_required)
+        and normalized_prompt_kind == "next"
+        and path_safe
+    ):
+        status = "reentry_routing_next_ready"
+        reentry_routing_allowed = True
+        reentry_routing_block_reason = ""
+        selection_refresh_allowed = bool(should_update_prompt_selection)
+        selection_refresh_kind = "next"
+        selection_refresh_path = normalized_prompt_path
+        invocation_readiness_refresh_allowed = bool(
+            selection_refresh_allowed and should_update_invocation_readiness
+        )
+        write_invocation_reentry_prepared = bool(invocation_readiness_refresh_allowed)
+        next_action_out = "prepare_bounded_reentry_codex_invocation"
+    else:
+        status = "reentry_routing_blocked_insufficient_truth"
+        reentry_routing_block_reason = "blocked_insufficient_reentry_truth"
+        next_action_out = "manual_review_required"
+        if normalized_source_block_reason:
+            missing_inputs.append(normalized_source_block_reason)
+        if not normalized_prompt_kind or normalized_prompt_kind == "none":
+            missing_inputs.append("reentry_prompt_kind")
+        if not normalized_prompt_path:
+            missing_inputs.append("reentry_prompt_path")
+        if not normalized_reentry_target:
+            missing_inputs.append("reentry_target")
+
+    if status not in allowed_statuses:
+        status = "reentry_routing_blocked_insufficient_truth"
+    if selection_refresh_kind not in allowed_prompt_kinds:
+        selection_refresh_kind = "none"
+    if normalized_prompt_kind not in allowed_prompt_kinds:
+        normalized_prompt_kind = "none"
+    if next_action_out not in allowed_next_actions:
+        next_action_out = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_generated_prompt_reentry_routing_status": status,
+        "project_browser_autonomous_generated_prompt_reentry_routing_reentry_routing_allowed": bool(
+            reentry_routing_allowed
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_reentry_routing_block_reason": (
+            reentry_routing_block_reason
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_kind": (
+            normalized_prompt_kind
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_path": (
+            normalized_prompt_path
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_selection_refresh_allowed": bool(
+            selection_refresh_allowed
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_selection_refresh_kind": (
+            selection_refresh_kind
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_selection_refresh_path": (
+            selection_refresh_path
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_invocation_readiness_refresh_allowed": bool(
+            invocation_readiness_refresh_allowed
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_write_invocation_reentry_prepared": bool(
+            write_invocation_reentry_prepared
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_max_reentry_invocations": 1,
+        "project_browser_autonomous_generated_prompt_reentry_routing_should_invoke_codex": bool(
+            False
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_should_start_next_cycle": bool(
+            False
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_should_rollback": bool(
+            False
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_human_review_required": bool(
+            bool(human_review_required) or not bool(reentry_routing_allowed)
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_next_action": (
+            next_action_out
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_runtime_posture": runtime_posture,
+        "project_browser_autonomous_generated_prompt_reentry_routing_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_source_status": (
+            source_status
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_source_next_action": (
+            normalized_source_next_action
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_source_block_reason": (
+            normalized_source_block_reason
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_source_target": (
+            normalized_reentry_target
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_source_should_invoke_codex": bool(
+            should_invoke_codex
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_source_should_start_next_cycle": bool(
+            should_start_next_cycle
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_source_should_rollback": bool(
+            should_rollback
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_path_is_exact": bool(
+            path_is_exact
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_path_exists": bool(
+            path_exists
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_path_is_symlink": bool(
+            path_is_symlink
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_file_non_empty": bool(
+            file_non_empty
+        ),
+        "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_file_too_large": bool(
+            file_too_large
+        ),
+    }
+
+
 def _build_project_browser_autonomous_prompt_selection_state(
     *,
     validation_passed: bool,
@@ -76103,6 +76361,364 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_generated_prompt_reentry_readiness_next_action"
     ] = project_browser_autonomous_generated_prompt_reentry_readiness_next_action
 
+    project_browser_autonomous_generated_prompt_reentry_routing_state = (
+        _build_project_browser_autonomous_generated_prompt_reentry_routing_state(
+            reentry_status=project_browser_autonomous_generated_prompt_reentry_readiness_status,
+            reentry_allowed=bool(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_allowed",
+                    False,
+                )
+            ),
+            reentry_prompt_kind=_normalize_text(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_prompt_kind"
+                ),
+                default="none",
+            ),
+            reentry_prompt_path=_normalize_text(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_prompt_path"
+                ),
+                default="",
+            ),
+            reentry_target=_normalize_text(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_target"
+                ),
+                default="",
+            ),
+            should_update_prompt_selection=bool(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_should_update_prompt_selection",
+                    False,
+                )
+            ),
+            should_update_invocation_readiness=bool(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_should_update_invocation_readiness",
+                    False,
+                )
+            ),
+            should_invoke_codex=bool(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_should_invoke_codex",
+                    False,
+                )
+            ),
+            should_start_next_cycle=bool(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_should_start_next_cycle",
+                    False,
+                )
+            ),
+            should_rollback=bool(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_should_rollback",
+                    False,
+                )
+            ),
+            human_review_required=bool(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_human_review_required",
+                    False,
+                )
+            ),
+            next_action=_normalize_text(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_next_action"
+                ),
+                default="",
+            ),
+            reentry_block_reason=_normalize_text(
+                project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_readiness_reentry_block_reason"
+                ),
+                default="",
+            ),
+        )
+    )
+    generated_prompt_reentry_routing_allowed_statuses = {
+        "reentry_routing_fix_ready",
+        "reentry_routing_next_ready",
+        "reentry_routing_blocked",
+        "reentry_routing_blocked_ambiguous",
+        "reentry_routing_blocked_unsafe_path",
+        "reentry_routing_blocked_insufficient_truth",
+        "insufficient_truth",
+    }
+    generated_prompt_reentry_routing_allowed_prompt_kinds = {"fix", "next", "none"}
+    generated_prompt_reentry_routing_allowed_next_actions = {
+        "prepare_bounded_reentry_codex_invocation",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    generated_prompt_reentry_routing_field_names = (
+        "status",
+        "reentry_routing_allowed",
+        "reentry_routing_block_reason",
+        "reentry_prompt_kind",
+        "reentry_prompt_path",
+        "selection_refresh_allowed",
+        "selection_refresh_kind",
+        "selection_refresh_path",
+        "invocation_readiness_refresh_allowed",
+        "write_invocation_reentry_prepared",
+        "max_reentry_invocations",
+        "should_invoke_codex",
+        "should_start_next_cycle",
+        "should_rollback",
+        "human_review_required",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+        "source_status",
+        "source_next_action",
+        "source_block_reason",
+        "source_target",
+        "source_should_invoke_codex",
+        "source_should_start_next_cycle",
+        "source_should_rollback",
+        "reentry_prompt_path_is_exact",
+        "reentry_prompt_path_exists",
+        "reentry_prompt_path_is_symlink",
+        "reentry_prompt_file_non_empty",
+        "reentry_prompt_file_too_large",
+    )
+    project_browser_autonomous_generated_prompt_reentry_routing_status = _normalize_text(
+        project_browser_autonomous_generated_prompt_reentry_routing_state.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_generated_prompt_reentry_routing_status not in (
+        generated_prompt_reentry_routing_allowed_statuses
+    ):
+        project_browser_autonomous_generated_prompt_reentry_routing_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_generated_prompt_reentry_routing_next_action = _normalize_text(
+        project_browser_autonomous_generated_prompt_reentry_routing_state.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_generated_prompt_reentry_routing_next_action not in (
+        generated_prompt_reentry_routing_allowed_next_actions
+    ):
+        project_browser_autonomous_generated_prompt_reentry_routing_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_generated_prompt_reentry_routing_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in generated_prompt_reentry_routing_field_names:
+        key = f"project_browser_autonomous_generated_prompt_reentry_routing_{field_name}"
+        value = project_browser_autonomous_generated_prompt_reentry_routing_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_generated_prompt_reentry_routing_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_generated_prompt_reentry_routing_next_action
+        elif field_name in {"reentry_prompt_kind", "selection_refresh_kind"}:
+            normalized_prompt_kind = _normalize_text(value, default="none")
+            value = (
+                normalized_prompt_kind
+                if normalized_prompt_kind in generated_prompt_reentry_routing_allowed_prompt_kinds
+                else "none"
+            )
+        elif field_name in {
+            "reentry_routing_allowed",
+            "selection_refresh_allowed",
+            "invocation_readiness_refresh_allowed",
+            "write_invocation_reentry_prepared",
+            "should_invoke_codex",
+            "should_start_next_cycle",
+            "should_rollback",
+            "human_review_required",
+            "source_should_invoke_codex",
+            "source_should_start_next_cycle",
+            "source_should_rollback",
+            "reentry_prompt_path_is_exact",
+            "reentry_prompt_path_exists",
+            "reentry_prompt_path_is_symlink",
+            "reentry_prompt_file_non_empty",
+            "reentry_prompt_file_too_large",
+        }:
+            value = bool(value)
+        elif field_name in {"max_reentry_invocations"}:
+            value = _as_non_negative_int(value, default=1)
+        elif field_name in {"runtime_posture", "missing_inputs"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_generated_prompt_reentry_routing_state_normalized[
+        "project_browser_autonomous_generated_prompt_reentry_routing_status"
+    ] = project_browser_autonomous_generated_prompt_reentry_routing_status
+    project_browser_autonomous_generated_prompt_reentry_routing_state_normalized[
+        "project_browser_autonomous_generated_prompt_reentry_routing_next_action"
+    ] = project_browser_autonomous_generated_prompt_reentry_routing_next_action
+
+    selection_refresh_allowed = bool(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_selection_refresh_allowed",
+            False,
+        )
+    )
+    selection_refresh_kind = _normalize_text(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_selection_refresh_kind"
+        ),
+        default="none",
+    )
+    selection_refresh_path = _normalize_text(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_selection_refresh_path"
+        ),
+        default="",
+    )
+    invocation_refresh_allowed = bool(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_invocation_readiness_refresh_allowed",
+            False,
+        )
+    )
+    reentry_path_is_exact = bool(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_path_is_exact",
+            False,
+        )
+    )
+    reentry_path_exists = bool(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_path_exists",
+            False,
+        )
+    )
+    reentry_path_is_symlink = bool(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_path_is_symlink",
+            False,
+        )
+    )
+    reentry_file_non_empty = bool(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_file_non_empty",
+            False,
+        )
+    )
+    reentry_file_too_large = bool(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_reentry_prompt_file_too_large",
+            False,
+        )
+    )
+    reentry_selected_prompt_ready = bool(
+        selection_refresh_allowed
+        and invocation_refresh_allowed
+        and selection_refresh_kind in {"fix", "next"}
+        and bool(selection_refresh_path)
+        and reentry_path_is_exact
+        and reentry_path_exists
+        and not reentry_path_is_symlink
+        and reentry_file_non_empty
+        and not reentry_file_too_large
+    )
+    reentry_block_reason = _normalize_text(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_reentry_routing_block_reason"
+        ),
+        default="",
+    )
+    project_browser_autonomous_prompt_selection_state_normalized[
+        "project_browser_autonomous_prompt_selection_reentry_refresh_allowed"
+    ] = bool(selection_refresh_allowed)
+    project_browser_autonomous_prompt_selection_state_normalized[
+        "project_browser_autonomous_prompt_selection_reentry_refresh_kind"
+    ] = selection_refresh_kind
+    project_browser_autonomous_prompt_selection_state_normalized[
+        "project_browser_autonomous_prompt_selection_reentry_refresh_path"
+    ] = selection_refresh_path
+    project_browser_autonomous_prompt_selection_state_normalized[
+        "project_browser_autonomous_prompt_selection_reentry_refresh_source"
+    ] = "project_browser_autonomous_generated_prompt_reentry_routing"
+    project_browser_autonomous_prompt_selection_state_normalized[
+        "project_browser_autonomous_prompt_selection_reentry_refresh_block_reason"
+    ] = reentry_block_reason
+
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_refresh_allowed"
+    ] = bool(invocation_refresh_allowed)
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_selected_prompt_kind"
+    ] = selection_refresh_kind
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_selected_prompt_path"
+    ] = selection_refresh_path
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_selected_prompt_ready"
+    ] = bool(reentry_selected_prompt_ready)
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_selected_prompt_path_is_exact"
+    ] = bool(reentry_path_is_exact)
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_selected_prompt_path_exists"
+    ] = bool(reentry_path_exists)
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_selected_prompt_path_is_symlink"
+    ] = bool(reentry_path_is_symlink)
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_selected_prompt_file_non_empty"
+    ] = bool(reentry_file_non_empty)
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_selected_prompt_file_too_large"
+    ] = bool(reentry_file_too_large)
+    project_browser_autonomous_codex_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_invocation_readiness_reentry_refresh_block_reason"
+    ] = reentry_block_reason
+
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_prepared"
+    ] = bool(
+        project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+            "project_browser_autonomous_generated_prompt_reentry_routing_write_invocation_reentry_prepared",
+            False,
+        )
+    )
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_selected_prompt_kind"
+    ] = selection_refresh_kind
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_selected_prompt_path"
+    ] = selection_refresh_path
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_selected_prompt_ready"
+    ] = bool(reentry_selected_prompt_ready)
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_max_invocations"
+    ] = 1
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_should_invoke_codex"
+    ] = False
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_should_start_next_cycle"
+    ] = False
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_should_rollback"
+    ] = False
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_next_action"
+    ] = (
+        "prepare_bounded_reentry_codex_invocation"
+        if reentry_selected_prompt_ready
+        else "manual_review_required"
+    )
+    project_browser_autonomous_codex_write_invocation_readiness_state_normalized[
+        "project_browser_autonomous_codex_write_invocation_readiness_reentry_block_reason"
+    ] = reentry_block_reason
+
     if project_planning_summary_available:
         project_planning_summary_compact.update(
             {
@@ -78603,6 +79219,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_one_step_cycle_state_normalized,
                 **project_browser_autonomous_cycle_handoff_controller_state_normalized,
                 **project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized,
+                **project_browser_autonomous_generated_prompt_reentry_routing_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -79544,6 +80161,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_generated_prompt_reentry_readiness_next_action"
             if project_browser_autonomous_generated_prompt_reentry_readiness_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_generated_prompt_reentry_routing_status"
+            if project_browser_autonomous_generated_prompt_reentry_routing_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_generated_prompt_reentry_routing_next_action"
+            if project_browser_autonomous_generated_prompt_reentry_routing_next_action
             else "",
             ]
     )
@@ -85670,6 +86293,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_one_step_cycle_state_normalized,
         **project_browser_autonomous_cycle_handoff_controller_state_normalized,
         **project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized,
+        **project_browser_autonomous_generated_prompt_reentry_routing_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(
