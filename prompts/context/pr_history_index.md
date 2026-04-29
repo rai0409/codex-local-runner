@@ -5005,3 +5005,40 @@ Known follow-up:
 - Prompt229 should consume `project_browser_autonomous_selected_post_n2_preflight_*`,
   validate selected Prompt229 contract completeness, and enforce local-only /
   no-push / no-GitHub / no-retry / no-loop constraints before any runnable stage.
+
+## Prompt228-fix6 - Prompt222→223→224 N=2 authority reason refinement
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Purpose:
+  - Diagnose Prompt222→Prompt223→Prompt224 N=2 authority chain.
+  - Keep N=2 blocked when upstream truth is genuinely insufficient.
+  - Replace generic Prompt224 block reason with a more precise upstream-derived reason.
+- Result:
+  - No Prompt222→223 or Prompt223→224 field-name mismatch found.
+  - Prompt222 truth is genuinely blocked:
+    - bounded_n_step_result_assimilation_status=bounded_n_step_result_blocked_step_accounting_violation
+    - result_class=blocked_step_accounting_violation
+    - one_step_accounting_valid=false
+    - completed_fresh_surface_detected=false
+    - stop_policy_passed=false
+    - manual_review_required=true
+    - should_stop=true
+  - Prompt223 remained safe/manual-stop:
+    - prompt222_authoritative=true
+    - raise_to_2_decision_allowed=false
+    - raise_to_2_decision_block_reason=blocked_not_completed_fresh_surface
+    - prompt224_n2_execution_ready=false
+  - Prompt224 now surfaces the precise upstream reason:
+    - before: blocked_prompt223_not_authoritative
+    - after: blocked_prompt222_not_fresh_surface
+- Safety:
+  - No Prompt229 added.
+  - No tests added.
+  - No docs edited during Codex run.
+  - No executor, rollback, commit/tag execution, push, GitHub, retry, or unbounded-loop behavior added.
+- Remaining risk:
+  - Prompt225 still reports generic blocked_prompt224_not_authoritative.
+  - Prompt226 still reports bounded_n2_result_blocked_step_accounting_violation.
+- Next:
+  - Prompt228-fix7 should propagate Prompt224 precise block reasons into Prompt225/Prompt226 manual-stop/blocked surfaces without relaxing authority, safety, or accounting gates.

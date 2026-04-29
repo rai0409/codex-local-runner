@@ -3163,3 +3163,26 @@ Authoritative selected preflight rule:
   push, GitHub operations, retry, loop, or raise beyond N=2.
 - Prompt229 must consume only the selected Prompt228 contract and validate local-only
   / no-push / no-GitHub / no-retry / no-loop constraints before any runnable stage.
+
+## Prompt228-fix6 constraint update
+
+Prompt228-fix6 confirmed that N=2 raise is currently blocked by genuine upstream Prompt222 truth, not by a Prompt222→223 or Prompt223→224 field-name mismatch.
+
+Current authoritative chain behavior:
+- Prompt222 is authoritative but blocked:
+  - one_step_accounting_valid=false
+  - completed_fresh_surface_detected=false
+  - stop_policy_passed=false
+  - manual_review_required=true
+  - should_stop=true
+- Prompt223 correctly remains not allowed:
+  - prompt222_authoritative=true
+  - raise_to_2_decision_allowed=false
+  - raise_to_2_decision_block_reason=blocked_not_completed_fresh_surface
+- Prompt224 now reports a precise upstream-derived block reason:
+  - blocked_prompt222_not_fresh_surface
+
+Architecture constraint:
+- Do not force N=2 readiness when Prompt222 lacks fresh successful one-step evidence.
+- Do not weaken Prompt226 step-accounting validation.
+- Downstream stages may improve block-reason propagation, but must not relax authority, no-loop, no-retry, no-push, or no-executor boundaries.
