@@ -3566,3 +3566,57 @@ Known follow-up:
 - Prompt209 should consume `project_browser_autonomous_control_contract_dispatch_*`
   and perform exactly one bounded downstream assimilation refresh for the dispatched
   path, or manual stop, with Prompt210 handoff metadata.
+
+
+<!-- prompt209-update -->
+## Prompt209 — bounded downstream assimilation refresh
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_control_dispatch_refresh_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_control_dispatch_refresh_*`.
+- Consumes Prompt208 control contract dispatch:
+  `project_browser_autonomous_control_contract_dispatch_*`.
+- Selects Prompt208 as authoritative source for downstream assimilation refresh.
+- Implements exactly-one refresh handling for:
+  - reentry result assimilation
+  - rollback result assimilation
+  - commit/tag result assimilation
+  - manual stop
+  - blocked
+- Refreshes only the selected existing assimilation metadata linkage:
+  - reentry path: existing reentry result assimilation metadata
+  - rollback path: existing rollback result assimilation metadata
+  - commit path: existing commit/tag result assimilation metadata
+- Does not execute Codex, rollback, commit/tag, validation, prompt generation, git
+  mutation, push, GitHub operation, retry, or loop.
+- Adds non-selected refresh no-op guarantees.
+- Adds multiple-refresh conflict guard:
+  `control_dispatch_refresh_blocked_multiple_refreshes`.
+- Adds Prompt210 handoff:
+  - `control_dispatch_refresh_result_ready_for_assimilation=true`
+  - `control_dispatch_refresh_result_assimilation_source="prompt209_control_dispatch_refresh"`
+  - `control_dispatch_refresh_result_next_stage="control_dispatch_refresh_result_assimilation"`
+- Exposed Prompt209 status and next_action through:
+  - compact planning summary
+  - supporting truth refs
+  - final approved restart payload.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt209 implementation.
+- No tests were run.
+- Refresh completion depends on selected existing assimilation status presence.
+  Empty upstream status intentionally blocks with
+  `control_dispatch_refresh_blocked_existing_assimilation`.
+
+Known follow-up:
+- Prompt210 should consume
+  `project_browser_autonomous_control_dispatch_refresh_*`, classify refresh result,
+  emit controller feedback, and derive exactly one bounded next control target or
+  manual stop without executing downstream actions.

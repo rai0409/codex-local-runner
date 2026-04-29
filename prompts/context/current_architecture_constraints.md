@@ -2644,3 +2644,25 @@ Current limitation:
   that path or classify the dispatch result.
 - Prompt209 should perform exactly one bounded assimilation refresh from the selected
   dispatch and emit Prompt210 handoff metadata.
+
+
+<!-- prompt209-update -->
+## Prompt209 architecture constraint update
+
+Prompt209 adds exactly-one downstream assimilation refresh.
+
+Authoritative refresh rule:
+- Prompt209 may refresh only the single selected assimilation path dispatched by
+  Prompt208.
+- Prompt209 must not infer refresh readiness from Prompt207 or older assimilation maps alone.
+- Prompt209 must not execute Codex, rollback, commit/tag, validation, prompt
+  generation, git mutation, push, GitHub operation, retry, loop, or create new
+  executors.
+- Non-selected assimilation paths must remain no-op.
+- Multiple refresh paths must block to manual review.
+- Prompt209 must always emit Prompt210 result assimilation handoff metadata.
+
+Current limitation:
+- Prompt209 emits refresh result metadata, but does not yet classify it into final
+  controller feedback / next bounded control target.
+- Prompt210 should add that metadata-only classification.
