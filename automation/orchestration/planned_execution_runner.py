@@ -50100,6 +50100,478 @@ def _build_project_browser_autonomous_generated_prompt_reentry_routing_state(
     }
 
 
+def _build_project_browser_autonomous_codex_reentry_invocation_state(
+    *,
+    repository_path: str,
+    reentry_routing_status: str,
+    reentry_routing_allowed: bool,
+    reentry_prompt_kind: str,
+    reentry_prompt_path: str,
+    selection_refresh_allowed: bool,
+    invocation_readiness_refresh_allowed: bool,
+    write_invocation_reentry_prepared: bool,
+    reentry_selected_prompt_kind: str,
+    reentry_selected_prompt_path: str,
+    reentry_selected_prompt_ready: bool,
+    reentry_prompt_path_is_exact: bool,
+    reentry_prompt_path_exists: bool,
+    reentry_prompt_path_is_symlink: bool,
+    reentry_prompt_file_non_empty: bool,
+    reentry_prompt_file_too_large: bool,
+    reentry_max_invocations: int,
+    reentry_should_start_next_cycle: bool,
+    reentry_should_rollback: bool,
+    human_review_required: bool,
+    reentry_routing_block_reason: str,
+    prior_write_invocation_attempted: bool,
+    prior_write_invocation_completed: bool,
+) -> dict[str, Any]:
+    allowed_statuses = {
+        "reentry_invocation_completed_with_changes",
+        "reentry_invocation_completed_no_changes",
+        "reentry_invocation_completed_failure",
+        "reentry_invocation_completed_timeout",
+        "blocked_human_review_required",
+        "blocked_reentry_routing_not_allowed",
+        "blocked_selection_refresh_not_allowed",
+        "blocked_invocation_readiness_not_allowed",
+        "blocked_write_reentry_not_prepared",
+        "blocked_prompt_not_ready",
+        "blocked_prompt_path_unsafe",
+        "blocked_ambiguous_reentry_prompt_kind",
+        "blocked_max_reentry_invocations_not_one",
+        "blocked_rollback_required",
+        "blocked_insufficient_reentry_invocation_truth",
+        "insufficient_truth",
+    }
+    allowed_next_actions = {
+        "prepare_bounded_reentry_codex_invocation",
+        "reentry_result_assimilation",
+        "manual_review_required",
+        "wait_for_more_truth",
+        "insufficient_truth",
+    }
+    allowed_prompt_paths = {
+        "/tmp/codex-local-runner-decision/generated_fix_prompt.txt",
+        "/tmp/codex-local-runner-decision/generated_next_prompt.txt",
+    }
+    max_prompt_size_bytes = 20000
+    runtime_posture = [
+        "prompt180_single_bounded_reentry_invocation",
+        "reuses_prompt167_workspace_write_executor",
+        "no_retry",
+        "no_loop",
+        "no_rollback",
+        "no_git_stage_commit_push",
+        "no_github_mutation",
+    ]
+
+    normalized_repository_path = _normalize_text(repository_path, default="")
+    normalized_routing_status = _normalize_text(
+        reentry_routing_status,
+        default="insufficient_truth",
+    )
+    normalized_reentry_prompt_kind = _normalize_text(reentry_prompt_kind, default="none")
+    normalized_reentry_prompt_path = _normalize_text(reentry_prompt_path, default="")
+    normalized_selected_prompt_kind = _normalize_text(
+        reentry_selected_prompt_kind,
+        default="none",
+    )
+    normalized_selected_prompt_path = _normalize_text(
+        reentry_selected_prompt_path,
+        default="",
+    )
+    normalized_block_reason = _normalize_text(reentry_routing_block_reason, default="")
+
+    effective_prompt_kind = (
+        normalized_selected_prompt_kind
+        if normalized_selected_prompt_kind in {"fix", "next"}
+        else normalized_reentry_prompt_kind
+    )
+    effective_prompt_path = (
+        normalized_selected_prompt_path or normalized_reentry_prompt_path
+    )
+
+    prompt_path_obj = Path(effective_prompt_path) if effective_prompt_path else None
+    prompt_path_is_exact_now = effective_prompt_path in allowed_prompt_paths
+    prompt_path_exists_now = bool(prompt_path_obj and prompt_path_obj.exists())
+    prompt_path_is_symlink_now = bool(prompt_path_obj and prompt_path_obj.is_symlink())
+    prompt_path_is_file_now = bool(prompt_path_obj and prompt_path_obj.is_file())
+    prompt_size_bytes_now = 0
+    if prompt_path_obj and prompt_path_exists_now and prompt_path_is_file_now and not prompt_path_is_symlink_now:
+        try:
+            prompt_size_bytes_now = _as_non_negative_int(
+                prompt_path_obj.stat().st_size,
+                default=0,
+            )
+        except OSError:
+            prompt_size_bytes_now = 0
+    prompt_file_non_empty_now = prompt_size_bytes_now > 0
+    prompt_file_too_large_now = prompt_size_bytes_now > max_prompt_size_bytes
+    prompt_path_safe = bool(
+        prompt_path_is_exact_now
+        and prompt_path_exists_now
+        and prompt_path_is_file_now
+        and not prompt_path_is_symlink_now
+        and prompt_file_non_empty_now
+        and not prompt_file_too_large_now
+    )
+
+    normalized_max_invocations = _as_non_negative_int(reentry_max_invocations, default=0)
+    ambiguity_detected = bool(
+        normalized_reentry_prompt_kind in {"fix", "next"}
+        and normalized_selected_prompt_kind in {"fix", "next"}
+        and normalized_reentry_prompt_kind != normalized_selected_prompt_kind
+    )
+    allowed_for_execution = False
+    status = "insufficient_truth"
+    block_reason = "blocked_insufficient_reentry_invocation_truth"
+    next_action = "wait_for_more_truth"
+    missing_inputs: list[str] = []
+    local_human_review_required = bool(human_review_required)
+
+    if local_human_review_required:
+        status = "blocked_human_review_required"
+        block_reason = "blocked_human_review_required"
+        next_action = "manual_review_required"
+    elif bool(reentry_should_rollback):
+        status = "blocked_rollback_required"
+        block_reason = "blocked_rollback_required"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif not bool(reentry_routing_allowed):
+        status = "blocked_reentry_routing_not_allowed"
+        block_reason = (
+            normalized_block_reason
+            if normalized_block_reason
+            else "blocked_reentry_routing_not_allowed"
+        )
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif not bool(selection_refresh_allowed):
+        status = "blocked_selection_refresh_not_allowed"
+        block_reason = "blocked_selection_refresh_not_allowed"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif not bool(invocation_readiness_refresh_allowed):
+        status = "blocked_invocation_readiness_not_allowed"
+        block_reason = "blocked_invocation_readiness_not_allowed"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif not bool(write_invocation_reentry_prepared):
+        status = "blocked_write_reentry_not_prepared"
+        block_reason = "blocked_write_reentry_not_prepared"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif bool(prior_write_invocation_attempted) or bool(prior_write_invocation_completed):
+        status = "blocked_invocation_readiness_not_allowed"
+        block_reason = "prior_write_invocation_already_attempted"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif ambiguity_detected or effective_prompt_kind not in {"fix", "next"}:
+        status = "blocked_ambiguous_reentry_prompt_kind"
+        block_reason = "blocked_ambiguous_reentry_prompt_kind"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif not bool(reentry_selected_prompt_ready):
+        status = "blocked_prompt_not_ready"
+        block_reason = "blocked_prompt_not_ready"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif normalized_max_invocations != 1:
+        status = "blocked_max_reentry_invocations_not_one"
+        block_reason = "blocked_max_reentry_invocations_not_one"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif not prompt_path_safe:
+        status = "blocked_prompt_path_unsafe"
+        if not effective_prompt_path:
+            block_reason = "blocked_prompt_path_missing"
+            missing_inputs.append("reentry_prompt_path")
+        elif not prompt_path_is_exact_now:
+            block_reason = "blocked_prompt_path_unexpected"
+        elif prompt_path_is_symlink_now:
+            block_reason = "blocked_prompt_path_symlink"
+        elif not prompt_path_exists_now:
+            block_reason = "blocked_prompt_path_missing"
+        elif not prompt_path_is_file_now:
+            block_reason = "blocked_prompt_path_not_file"
+        elif not prompt_file_non_empty_now:
+            block_reason = "blocked_prompt_empty"
+        elif prompt_file_too_large_now:
+            block_reason = "blocked_prompt_too_large"
+        else:
+            block_reason = "blocked_prompt_path_unsafe"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+    elif not normalized_repository_path:
+        status = "blocked_insufficient_reentry_invocation_truth"
+        block_reason = "blocked_insufficient_reentry_invocation_truth"
+        next_action = "wait_for_more_truth"
+        missing_inputs.append("repository_path")
+        local_human_review_required = True
+    elif bool(reentry_should_start_next_cycle):
+        status = "blocked_insufficient_reentry_invocation_truth"
+        block_reason = "blocked_insufficient_reentry_invocation_truth"
+        next_action = "manual_review_required"
+        local_human_review_required = True
+        missing_inputs.append("reentry_should_start_next_cycle")
+    else:
+        allowed_for_execution = True
+        status = "insufficient_truth"
+        block_reason = ""
+        next_action = "prepare_bounded_reentry_codex_invocation"
+        local_human_review_required = False
+
+    write_state: dict[str, Any] = {}
+    reentry_invocation_attempted = False
+    reentry_invocation_completed = False
+    reentry_invocations_attempted = 0
+    reentry_invocations_completed = 0
+    result_class = "blocked"
+    exit_code = -1
+    timed_out = False
+    changed_files_after: list[str] = []
+    changed_files_count_after = 0
+    command: list[str] = []
+    stdout_path = "/tmp/codex-local-runner-decision/codex_write_invocation_stdout.txt"
+    stderr_path = "/tmp/codex-local-runner-decision/codex_write_invocation_stderr.txt"
+    result_path = "/tmp/codex-local-runner-decision/codex_write_invocation_result.json"
+    git_diff_name_only_path = "/tmp/codex-local-runner-decision/codex_write_git_diff_name_only.txt"
+    git_diff_numstat_path = "/tmp/codex-local-runner-decision/codex_write_git_diff_numstat.txt"
+    reentry_result_ready_for_assimilation = False
+    reentry_result_assimilation_source = ""
+    reentry_result_next_stage = "manual_review_or_blocked_reentry"
+
+    if allowed_for_execution:
+        write_state = _build_project_browser_autonomous_codex_write_invocation_state(
+            repository_path=normalized_repository_path,
+            codex_invocation_readiness_status="ready_to_invoke_codex",
+            codex_invocation_readiness_allowed=True,
+            selected_prompt_kind=effective_prompt_kind,
+            selected_prompt_path=effective_prompt_path,
+            selected_prompt_source="project_browser_autonomous_generated_prompt_reentry_routing",
+            selected_prompt_ready=True,
+            selected_prompt_path_is_exact=True,
+            selected_prompt_path_exists=True,
+            selected_prompt_path_is_symlink=False,
+            selected_prompt_file_non_empty=True,
+            selected_prompt_file_too_large=False,
+            rollback_required=False,
+            human_review_required=False,
+            insufficient_truth=False,
+            max_invocations=1,
+            prior_write_invocation_attempted=bool(prior_write_invocation_attempted),
+            prior_write_invocation_completed=bool(prior_write_invocation_completed),
+        )
+        write_exec_status = _normalize_text(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_execution_status"
+            ),
+            default="insufficient_truth",
+        )
+        write_result_status = _normalize_text(
+            write_state.get("project_browser_autonomous_codex_write_invocation_result_status"),
+            default="insufficient_truth",
+        )
+        write_exec_block_reason = _normalize_text(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_execution_block_reason"
+            ),
+            default="",
+        )
+        command = _normalize_string_list(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_execution_invocation_command"
+            )
+        )
+        stdout_path = _normalize_text(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_execution_invocation_stdout_path"
+            ),
+            default=stdout_path,
+        )
+        stderr_path = _normalize_text(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_execution_invocation_stderr_path"
+            ),
+            default=stderr_path,
+        )
+        result_path = _normalize_text(
+            write_state.get("project_browser_autonomous_codex_write_invocation_result_result_json_path"),
+            default=result_path,
+        )
+        git_diff_name_only_path = _normalize_text(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_result_git_diff_name_only_path"
+            ),
+            default=git_diff_name_only_path,
+        )
+        git_diff_numstat_path = _normalize_text(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_result_git_diff_numstat_path"
+            ),
+            default=git_diff_numstat_path,
+        )
+        changed_files_after = _normalize_string_list(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_result_changed_files_after"
+            )
+        )
+        changed_files_count_after = _as_non_negative_int(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_result_changed_files_count_after"
+            ),
+            default=len(changed_files_after),
+        )
+        exit_code = int(
+            _as_int(
+                write_state.get(
+                    "project_browser_autonomous_codex_write_invocation_result_exit_code"
+                ),
+                default=-1,
+            )
+        )
+        timed_out = bool(
+            write_state.get("project_browser_autonomous_codex_write_invocation_result_timeout", False)
+        )
+        reentry_invocation_attempted = bool(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_execution_invocation_attempted",
+                False,
+            )
+        )
+        reentry_invocation_completed = bool(
+            write_state.get(
+                "project_browser_autonomous_codex_write_invocation_execution_invocation_completed",
+                False,
+            )
+        )
+        reentry_invocations_attempted = 1 if reentry_invocation_attempted else 0
+        reentry_invocations_completed = (
+            1 if (reentry_invocation_completed and not timed_out) else 0
+        )
+
+        if write_result_status == "completed_with_changes":
+            status = "reentry_invocation_completed_with_changes"
+            result_class = "completed_with_changes"
+            next_action = "reentry_result_assimilation"
+            reentry_result_ready_for_assimilation = True
+        elif write_result_status == "completed_no_changes":
+            status = "reentry_invocation_completed_no_changes"
+            result_class = "completed_no_changes"
+            next_action = "reentry_result_assimilation"
+            reentry_result_ready_for_assimilation = True
+        elif write_result_status == "completed_failure":
+            status = "reentry_invocation_completed_failure"
+            result_class = "completed_failure"
+            next_action = "reentry_result_assimilation"
+            reentry_result_ready_for_assimilation = True
+            local_human_review_required = True
+        elif write_result_status == "completed_timeout":
+            status = "reentry_invocation_completed_timeout"
+            result_class = "completed_timeout"
+            next_action = "reentry_result_assimilation"
+            reentry_result_ready_for_assimilation = True
+            local_human_review_required = True
+        else:
+            status = "blocked_insufficient_reentry_invocation_truth"
+            result_class = "blocked"
+            block_reason = (
+                write_exec_block_reason
+                if write_exec_block_reason
+                else (
+                    write_exec_status
+                    if write_exec_status != "insufficient_truth"
+                    else "blocked_insufficient_reentry_invocation_truth"
+                )
+            )
+            next_action = "manual_review_required"
+            local_human_review_required = True
+            reentry_result_ready_for_assimilation = False
+
+        if reentry_result_ready_for_assimilation:
+            reentry_result_assimilation_source = "prompt180_reentry_invocation"
+            reentry_result_next_stage = "reentry_result_assimilation"
+        else:
+            reentry_result_assimilation_source = ""
+            reentry_result_next_stage = "manual_review_or_blocked_reentry"
+
+    if status not in allowed_statuses:
+        status = "insufficient_truth"
+    if next_action not in allowed_next_actions:
+        next_action = "insufficient_truth"
+
+    return {
+        "project_browser_autonomous_codex_reentry_invocation_status": status,
+        "project_browser_autonomous_codex_reentry_invocation_reentry_invocation_allowed": bool(
+            allowed_for_execution
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_invocation_attempted": bool(
+            reentry_invocation_attempted
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_invocation_completed": bool(
+            reentry_invocation_completed
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_invocation_block_reason": (
+            block_reason
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_prompt_kind": (
+            effective_prompt_kind if effective_prompt_kind in {"fix", "next"} else "none"
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_prompt_path": (
+            effective_prompt_path
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_max_reentry_invocations": int(
+            normalized_max_invocations
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_invocations_attempted": int(
+            reentry_invocations_attempted
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_invocations_completed": int(
+            reentry_invocations_completed
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reused_write_invocation_path": True,
+        "project_browser_autonomous_codex_reentry_invocation_execution_sandbox": "workspace-write",
+        "project_browser_autonomous_codex_reentry_invocation_command": command,
+        "project_browser_autonomous_codex_reentry_invocation_stdout_path": stdout_path,
+        "project_browser_autonomous_codex_reentry_invocation_stderr_path": stderr_path,
+        "project_browser_autonomous_codex_reentry_invocation_result_path": result_path,
+        "project_browser_autonomous_codex_reentry_invocation_git_diff_name_only_path": (
+            git_diff_name_only_path
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_git_diff_numstat_path": (
+            git_diff_numstat_path
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_changed_files_after": (
+            changed_files_after
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_changed_files_count_after": int(
+            changed_files_count_after
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_result_class": result_class,
+        "project_browser_autonomous_codex_reentry_invocation_exit_code": int(exit_code),
+        "project_browser_autonomous_codex_reentry_invocation_timed_out": bool(timed_out),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_result_ready_for_assimilation": bool(
+            reentry_result_ready_for_assimilation
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_result_assimilation_source": (
+            reentry_result_assimilation_source
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_reentry_result_next_stage": (
+            reentry_result_next_stage
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_human_review_required": bool(
+            local_human_review_required
+        ),
+        "project_browser_autonomous_codex_reentry_invocation_next_action": next_action,
+        "project_browser_autonomous_codex_reentry_invocation_runtime_posture": runtime_posture,
+        "project_browser_autonomous_codex_reentry_invocation_missing_inputs": (
+            _serialize_required_signals(missing_inputs)
+        ),
+    }
+
+
 def _build_project_browser_autonomous_prompt_selection_state(
     *,
     validation_passed: bool,
@@ -76719,6 +77191,211 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_codex_write_invocation_readiness_reentry_block_reason"
     ] = reentry_block_reason
 
+    project_browser_autonomous_codex_reentry_invocation_state = (
+        _build_project_browser_autonomous_codex_reentry_invocation_state(
+            repository_path=str(execution_repo_path),
+            reentry_routing_status=project_browser_autonomous_generated_prompt_reentry_routing_status,
+            reentry_routing_allowed=bool(
+                project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_routing_reentry_routing_allowed",
+                    False,
+                )
+            ),
+            reentry_prompt_kind=selection_refresh_kind,
+            reentry_prompt_path=selection_refresh_path,
+            selection_refresh_allowed=bool(selection_refresh_allowed),
+            invocation_readiness_refresh_allowed=bool(invocation_refresh_allowed),
+            write_invocation_reentry_prepared=bool(
+                project_browser_autonomous_codex_write_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_readiness_reentry_prepared",
+                    False,
+                )
+            ),
+            reentry_selected_prompt_kind=_normalize_text(
+                project_browser_autonomous_codex_write_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_readiness_reentry_selected_prompt_kind"
+                ),
+                default="none",
+            ),
+            reentry_selected_prompt_path=_normalize_text(
+                project_browser_autonomous_codex_write_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_readiness_reentry_selected_prompt_path"
+                ),
+                default="",
+            ),
+            reentry_selected_prompt_ready=bool(
+                project_browser_autonomous_codex_write_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_readiness_reentry_selected_prompt_ready",
+                    False,
+                )
+            ),
+            reentry_prompt_path_is_exact=bool(reentry_path_is_exact),
+            reentry_prompt_path_exists=bool(reentry_path_exists),
+            reentry_prompt_path_is_symlink=bool(reentry_path_is_symlink),
+            reentry_prompt_file_non_empty=bool(reentry_file_non_empty),
+            reentry_prompt_file_too_large=bool(reentry_file_too_large),
+            reentry_max_invocations=_as_non_negative_int(
+                project_browser_autonomous_codex_write_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_readiness_reentry_max_invocations"
+                ),
+                default=1,
+            ),
+            reentry_should_start_next_cycle=bool(
+                project_browser_autonomous_codex_write_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_readiness_reentry_should_start_next_cycle",
+                    False,
+                )
+            ),
+            reentry_should_rollback=bool(
+                project_browser_autonomous_codex_write_invocation_readiness_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_readiness_reentry_should_rollback",
+                    False,
+                )
+            ),
+            human_review_required=bool(
+                project_browser_autonomous_generated_prompt_reentry_routing_state_normalized.get(
+                    "project_browser_autonomous_generated_prompt_reentry_routing_human_review_required",
+                    True,
+                )
+            ),
+            reentry_routing_block_reason=reentry_block_reason,
+            prior_write_invocation_attempted=bool(
+                project_browser_autonomous_codex_write_invocation_execution_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_execution_invocation_attempted",
+                    False,
+                )
+            ),
+            prior_write_invocation_completed=bool(
+                project_browser_autonomous_codex_write_invocation_execution_state_normalized.get(
+                    "project_browser_autonomous_codex_write_invocation_execution_invocation_completed",
+                    False,
+                )
+            ),
+        )
+    )
+    codex_reentry_invocation_allowed_statuses = {
+        "reentry_invocation_completed_with_changes",
+        "reentry_invocation_completed_no_changes",
+        "reentry_invocation_completed_failure",
+        "reentry_invocation_completed_timeout",
+        "blocked_human_review_required",
+        "blocked_reentry_routing_not_allowed",
+        "blocked_selection_refresh_not_allowed",
+        "blocked_invocation_readiness_not_allowed",
+        "blocked_write_reentry_not_prepared",
+        "blocked_prompt_not_ready",
+        "blocked_prompt_path_unsafe",
+        "blocked_ambiguous_reentry_prompt_kind",
+        "blocked_max_reentry_invocations_not_one",
+        "blocked_rollback_required",
+        "blocked_insufficient_reentry_invocation_truth",
+        "insufficient_truth",
+    }
+    codex_reentry_invocation_allowed_next_actions = {
+        "prepare_bounded_reentry_codex_invocation",
+        "reentry_result_assimilation",
+        "manual_review_required",
+        "wait_for_more_truth",
+        "insufficient_truth",
+    }
+    codex_reentry_invocation_field_names = (
+        "status",
+        "reentry_invocation_allowed",
+        "reentry_invocation_attempted",
+        "reentry_invocation_completed",
+        "reentry_invocation_block_reason",
+        "reentry_prompt_kind",
+        "reentry_prompt_path",
+        "max_reentry_invocations",
+        "reentry_invocations_attempted",
+        "reentry_invocations_completed",
+        "reused_write_invocation_path",
+        "execution_sandbox",
+        "command",
+        "stdout_path",
+        "stderr_path",
+        "result_path",
+        "git_diff_name_only_path",
+        "git_diff_numstat_path",
+        "changed_files_after",
+        "changed_files_count_after",
+        "result_class",
+        "exit_code",
+        "timed_out",
+        "reentry_result_ready_for_assimilation",
+        "reentry_result_assimilation_source",
+        "reentry_result_next_stage",
+        "human_review_required",
+        "next_action",
+        "runtime_posture",
+        "missing_inputs",
+    )
+    project_browser_autonomous_codex_reentry_invocation_status = _normalize_text(
+        project_browser_autonomous_codex_reentry_invocation_state.get(
+            "project_browser_autonomous_codex_reentry_invocation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_reentry_invocation_status not in (
+        codex_reentry_invocation_allowed_statuses
+    ):
+        project_browser_autonomous_codex_reentry_invocation_status = "insufficient_truth"
+    project_browser_autonomous_codex_reentry_invocation_next_action = _normalize_text(
+        project_browser_autonomous_codex_reentry_invocation_state.get(
+            "project_browser_autonomous_codex_reentry_invocation_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_reentry_invocation_next_action not in (
+        codex_reentry_invocation_allowed_next_actions
+    ):
+        project_browser_autonomous_codex_reentry_invocation_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_codex_reentry_invocation_state_normalized: dict[str, Any] = {}
+    for field_name in codex_reentry_invocation_field_names:
+        key = f"project_browser_autonomous_codex_reentry_invocation_{field_name}"
+        value = project_browser_autonomous_codex_reentry_invocation_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_reentry_invocation_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_reentry_invocation_next_action
+        elif field_name in {
+            "reentry_invocation_allowed",
+            "reentry_invocation_attempted",
+            "reentry_invocation_completed",
+            "reused_write_invocation_path",
+            "timed_out",
+            "reentry_result_ready_for_assimilation",
+            "human_review_required",
+        }:
+            value = bool(value)
+        elif field_name in {
+            "max_reentry_invocations",
+            "reentry_invocations_attempted",
+            "reentry_invocations_completed",
+            "changed_files_count_after",
+        }:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name in {"exit_code"}:
+            value = int(_as_int(value, default=-1))
+        elif field_name in {
+            "command",
+            "changed_files_after",
+            "runtime_posture",
+            "missing_inputs",
+        }:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_reentry_invocation_state_normalized[key] = value
+    project_browser_autonomous_codex_reentry_invocation_state_normalized[
+        "project_browser_autonomous_codex_reentry_invocation_status"
+    ] = project_browser_autonomous_codex_reentry_invocation_status
+    project_browser_autonomous_codex_reentry_invocation_state_normalized[
+        "project_browser_autonomous_codex_reentry_invocation_next_action"
+    ] = project_browser_autonomous_codex_reentry_invocation_next_action
+
     if project_planning_summary_available:
         project_planning_summary_compact.update(
             {
@@ -79220,6 +79897,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_cycle_handoff_controller_state_normalized,
                 **project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized,
                 **project_browser_autonomous_generated_prompt_reentry_routing_state_normalized,
+                **project_browser_autonomous_codex_reentry_invocation_state_normalized,
                 "project_browser_autonomous_one_bounded_launch_runtime_posture": (
                     _normalize_string_list(
                         project_browser_autonomous_one_bounded_launch_state.get(
@@ -80167,6 +80845,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_generated_prompt_reentry_routing_next_action"
             if project_browser_autonomous_generated_prompt_reentry_routing_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_reentry_invocation_status"
+            if project_browser_autonomous_codex_reentry_invocation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_reentry_invocation_next_action"
+            if project_browser_autonomous_codex_reentry_invocation_next_action
             else "",
             ]
     )
@@ -86294,6 +86978,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_cycle_handoff_controller_state_normalized,
         **project_browser_autonomous_generated_prompt_reentry_readiness_state_normalized,
         **project_browser_autonomous_generated_prompt_reentry_routing_state_normalized,
+        **project_browser_autonomous_codex_reentry_invocation_state_normalized,
         "project_browser_autonomous_one_bounded_launch_runtime_posture": (
             _normalize_string_list(
                 project_browser_autonomous_one_bounded_launch_state.get(

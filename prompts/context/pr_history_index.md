@@ -1863,3 +1863,59 @@ Scope notes:
 Known follow-up:
 - Prompt180 should consume Prompt179 re-entry routing and perform at most one bounded
   re-entry Codex invocation decision/execution path with no loop or retry.
+
+
+<!-- prompt180-update -->
+## Prompt180 — controlled single bounded re-entry Codex invocation
+
+Status: completed.
+
+Changed:
+- Added `_build_project_browser_autonomous_codex_reentry_invocation_state(...)`.
+- Added normalized metadata under:
+  `project_browser_autonomous_codex_reentry_invocation_*`.
+- Consumes Prompt179 re-entry routing and refresh metadata.
+- Reuses the existing Prompt167 workspace-write invocation path:
+  `_build_project_browser_autonomous_codex_write_invocation_state(...)`.
+- Prompt180 owns the execution decision and does not treat Prompt179
+  `reentry_should_invoke_codex=false` as a blocker.
+- Executes at most one re-entry Codex invocation when all safety gates pass.
+- Blocks when:
+  - human review is required
+  - re-entry routing is not allowed
+  - selection refresh is not allowed
+  - invocation readiness refresh is not allowed
+  - write re-entry is not prepared
+  - prompt is not ready
+  - prompt path is unsafe
+  - re-entry prompt kind is ambiguous
+  - max re-entry invocations is not exactly 1
+  - rollback is required
+  - re-entry invocation truth is insufficient
+- Revalidates only fixed generated prompt paths:
+  - `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  - `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+- Captures command/stdout/stderr/result/diff paths and changed-file stats through
+  reused Prompt167 output.
+- Adds Prompt181 handoff fields:
+  - `reentry_result_ready_for_assimilation`
+  - `reentry_result_assimilation_source`
+  - `reentry_result_next_stage`
+- Blocks re-entry if a prior Prompt167 write invocation was already attempted in the
+  same run, preserving single-attempt safety.
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+
+Scope notes:
+- No docs/tests were edited by Prompt180 implementation.
+- No tests were run.
+- No rollback, commit, GitHub operation, retry loop, scheduler, daemon, queue drainer,
+  or new executor was added.
+- Prompt180 adds a second bounded invocation path but limits it to max one attempt.
+
+Known follow-up:
+- Prompt181 should consume `project_browser_autonomous_codex_reentry_invocation_*`
+  as the primary post-reentry source and route the result back toward the existing
+  assimilation / validation safety path.

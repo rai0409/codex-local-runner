@@ -2016,3 +2016,28 @@ Authoritative safety rule:
 Current limitation:
 - Prompt179 prepares re-entry metadata only. Prompt180 must consume it and perform
   a controlled single bounded re-entry invocation path.
+
+
+<!-- prompt180-update -->
+## Prompt180 architecture constraint update
+
+Prompt180 adds controlled single bounded Codex re-entry invocation from generated
+fix/next prompt re-entry metadata.
+
+Authoritative safety rule:
+- Prompt180 may invoke Codex at most once.
+- Prompt180 must not retry, loop, rollback, commit, create GitHub operations,
+  schedulers, daemons, queue drainers, or new executors.
+- Prompt180 must use fixed generated prompt paths only:
+  `/tmp/codex-local-runner-decision/generated_fix_prompt.txt`
+  `/tmp/codex-local-runner-decision/generated_next_prompt.txt`
+- Prompt180 owns the re-entry execution decision; Prompt179
+  `reentry_should_invoke_codex=false` is not a blocker because Prompt179 was
+  metadata-only.
+- Prompt180 must block if a prior Prompt167 write invocation already attempted in
+  the same run.
+
+Current limitation:
+- Prompt180 executes bounded re-entry but does not yet feed the re-entry result back
+  into the Prompt169-style assimilation and Prompt170-style validation routing path.
+- Prompt181 should add that re-entry result assimilation/routing metadata.
