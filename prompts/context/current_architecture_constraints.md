@@ -3513,3 +3513,43 @@ Next step:
 
 - Prompt235 may prepare an observed artifact intake contract.
 - Prompt235 must not read files, scan the filesystem, execute commands, infer evidence, update Prompt222, or re-evaluate N=2.
+
+## Prompt235 architecture note - fresh runtime evidence observed artifact intake contract
+
+Prompt235 adds a metadata-only observed artifact intake contract:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_observed_artifact_intake_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_manual_run_result_review_*
+- Current status:
+  - fresh_runtime_evidence_observed_artifact_intake_contract_prepared
+- Current interpretation:
+  - Prompt235 prepared artifact intake metadata only.
+  - It did not read files.
+  - It did not scan the filesystem.
+  - It did not execute commands.
+  - It did not invoke Codex.
+  - It did not mutate git state.
+  - It did not infer fresh runtime evidence.
+  - Therefore observed_outputs_available, fresh_runtime_evidence_detected, fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+- Required artifacts:
+  - approved_restart_execution_contract.json
+  - run_state.json
+  - manifest.json
+- Safety invariant:
+  - should_read_files=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt236 may prepare a supplied artifact path review surface.
+- Prompt236 must not parse file contents, validate JSON contents, infer evidence, update Prompt222 fields, or re-evaluate N=2.

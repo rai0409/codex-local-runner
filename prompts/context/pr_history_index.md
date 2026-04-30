@@ -5604,3 +5604,63 @@ Known follow-up:
   - No commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
 - Next:
   - Prompt235 should consume project_browser_autonomous_fresh_runtime_evidence_manual_run_result_review_* and prepare a metadata-only observed artifact intake contract.
+
+## Prompt235 - fresh runtime evidence observed artifact intake contract
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_evidence_observed_artifact_intake_state(...)
+  - project_browser_autonomous_fresh_runtime_evidence_observed_artifact_intake_*
+- Purpose:
+  - Consume Prompt234 manual run result review surface.
+  - Prepare a metadata-only observed artifact intake contract.
+  - Do not read files, scan filesystem, execute commands, or infer evidence.
+- Key current values:
+  - status=fresh_runtime_evidence_observed_artifact_intake_contract_prepared
+  - source=prompt235_fresh_runtime_evidence_observed_artifact_intake
+  - prompt234_surface_available=true
+  - prompt234_surface_authoritative=true
+  - selected_check_kind=fresh_runtime_evidence_check
+  - intake_contract_ready=true
+  - required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - observed_artifacts_from_prompt234=[]
+  - missing_observed_artifacts_from_prompt234=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - expected_supplied_artifact_paths=[]
+  - artifact_review_scope=explicit_supplied_paths_only
+  - observed_outputs_available=false
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - prompt236_ready=true
+  - should_prepare_prompt236=true
+  - should_read_files=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+  - should_stop=true
+  - next_action=prepare_prompt236_fresh_runtime_evidence_supplied_artifact_path_review
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt235 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt235_out_20260430_202144
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt235_run_20260430_202144.log
+- Safety:
+  - No file-read behavior.
+  - No filesystem-scan behavior.
+  - No command/runbook/check execution path.
+  - No Codex invocation.
+  - No commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+- Next:
+  - Prompt236 should consume project_browser_autonomous_fresh_runtime_evidence_observed_artifact_intake_* and prepare a metadata-only supplied artifact path review surface.
