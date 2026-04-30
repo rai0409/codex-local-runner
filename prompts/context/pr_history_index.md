@@ -6233,3 +6233,64 @@ Known follow-up:
   - No N=2 re-evaluation.
 - Next:
   - Prompt245 should consume project_browser_autonomous_artifact_review_manual_supply_handling_phase_* and prepare a read/parse permission gate plus content/JSON consistency contract.
+
+## Prompt245 - read/parse permission and content consistency phase
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_read_parse_permission_content_consistency_state(...)
+  - project_browser_autonomous_read_parse_permission_content_consistency_*
+- Purpose:
+  - Consume Prompt244 artifact review/manual supply handling phase.
+  - Prepare read permission gate, parse permission gate, existence validation permission gate, content consistency contract, JSON schema expectation contract, artifact triad preconditions, artifact review readiness, and fresh evidence validity preconditions.
+  - Preserve metadata-only blocked posture while explicit artifact paths are missing.
+- Key current values:
+  - status=read_parse_permission_content_consistency_blocked_missing_supplied_paths
+  - source=prompt245_read_parse_permission_content_consistency
+  - required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - supplied_artifact_paths=[]
+  - missing_supplied_artifact_paths=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - read_permission=false
+  - parse_permission=false
+  - existence_validation_permission=false
+  - read_permission_status=blocked_missing_supplied_artifact_paths
+  - parse_permission_status=blocked_missing_supplied_artifact_paths
+  - existence_validation_permission_status=blocked_missing_supplied_artifact_paths
+  - artifact_review_readiness=false
+  - artifact_review_block_reason=missing_supplied_artifact_paths
+  - prompt246_artifact_content_review_ready=false
+  - prompt246_artifact_content_review_block_reason=missing_supplied_artifact_paths
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - truth_update_allowed=false
+  - prompt222_reflection_allowed=false
+  - n2_readiness_allowed=false
+  - should_prepare_prompt246=true
+  - should_stop=true
+  - next_action=prepare_prompt246_artifact_content_review_and_fresh_evidence_validity
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt245 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-prompt245-dryrun-20260430213545
+  - RUNLOG=/tmp/codex-local-runner-prompt245-dryrun-20260430213545.runlog
+- Safety:
+  - Metadata-only surface.
+  - No file reading.
+  - No JSON parsing.
+  - No filesystem scan.
+  - No existence validation.
+  - No command execution.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+  - No Prompt222 update.
+  - No N=2 re-evaluation.
+  - No fresh-evidence/accounting booleans set true.
+- Next:
+  - Prompt246 should consume project_browser_autonomous_read_parse_permission_content_consistency_* and prepare artifact content review readiness, JSON/schema review readiness, fresh evidence validity decision readiness, truth update readiness, Prompt222 reflection blocked posture, and N=2 blocked posture.

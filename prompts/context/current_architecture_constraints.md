@@ -3954,3 +3954,52 @@ Next step:
 - Prompt245 should prepare a read/parse permission gate plus content/JSON consistency contract.
 - Prompt245 may define read permission, parse permission, content consistency contract, JSON key/schema expectation contract, and triad consistency preconditions.
 - Prompt245 must not actually read files, parse JSON, mark fresh evidence valid, update Prompt222, or re-evaluate N=2.
+
+## Prompt245 architecture note - read/parse permission and content consistency phase
+
+Prompt245 adds a metadata-only read/parse permission and content consistency phase:
+
+- Prefix:
+  - project_browser_autonomous_read_parse_permission_content_consistency_*
+- Source:
+  - project_browser_autonomous_artifact_review_manual_supply_handling_phase_*
+- Current status:
+  - read_parse_permission_content_consistency_blocked_missing_supplied_paths
+- Current interpretation:
+  - Prompt245 prepared read/parse/existence permission gates and content/JSON consistency contracts.
+  - Explicit artifact paths are still missing.
+  - read_permission=false.
+  - parse_permission=false.
+  - existence_validation_permission=false.
+  - artifact_review_readiness=false.
+  - prompt246_artifact_content_review_ready=false.
+  - fresh_runtime_evidence_valid=false.
+  - truth_update_allowed=false.
+  - prompt222_reflection_allowed=false.
+  - n2_readiness_allowed=false.
+  - It did not read files, parse JSON, validate file existence, scan filesystem, execute commands, invoke Codex, mutate git, update Prompt222, or re-evaluate N=2.
+- Current blocker:
+  - missing_supplied_artifact_paths
+- Required artifacts:
+  - approved_restart_execution_contract.json
+  - run_state.json
+  - manifest.json
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt246 should prepare artifact content review and fresh evidence validity readiness/decision metadata.
+- Since supplied_artifact_paths is still empty and read/parse permissions are false, Prompt246 must keep all evidence/truth/Prompt222/N=2 outcomes blocked/false.
+- Prompt246 must not read files, parse JSON, mark evidence valid, update Prompt222, or re-evaluate N=2.
