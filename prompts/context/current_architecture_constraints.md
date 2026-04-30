@@ -3475,3 +3475,41 @@ Next step:
 - Prompt234 may prepare a metadata-only manual run result review surface.
 - Prompt234 must not infer observed evidence from command_packet_ready alone.
 - Prompt234 must not execute the command, execute the runbook, invoke Codex, mutate git, push, rollback, retry, or start an unbounded loop.
+
+## Prompt234 architecture note - fresh runtime evidence manual run result review surface
+
+Prompt234 adds a metadata-only manual run result review surface:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_manual_run_result_review_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_manual_run_command_packet_*
+- Current status:
+  - fresh_runtime_evidence_manual_run_result_review_prepared_no_observed_outputs
+- Current interpretation:
+  - Prompt234 consumed the Prompt233 command packet.
+  - It did not execute the command packet.
+  - It did not execute the runbook.
+  - It did not invoke Codex.
+  - It did not mutate git state.
+  - It did not observe fresh runtime evidence.
+  - Required artifacts are known, but observed_artifacts is empty.
+  - Therefore observed_outputs_available, fresh_runtime_evidence_detected, fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+- Required artifacts for later intake:
+  - approved_restart_execution_contract.json
+  - run_state.json
+  - manifest.json
+- Safety invariant:
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt235 may prepare an observed artifact intake contract.
+- Prompt235 must not read files, scan the filesystem, execute commands, infer evidence, update Prompt222, or re-evaluate N=2.
