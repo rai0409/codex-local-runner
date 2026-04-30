@@ -6347,3 +6347,53 @@ Known follow-up:
   - No fresh-runtime-evidence or one-step-accounting booleans set true.
 - Next:
   - Prompt247 should consume project_browser_autonomous_artifact_content_review_fresh_evidence_validity_* and prepare a Prompt222/N=2 bridge readiness phase.
+
+## Prompt247 - Prompt222 and N=2 bridge readiness phase
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_prompt222_n2_bridge_readiness_phase_state(...)
+  - project_browser_autonomous_prompt222_n2_bridge_readiness_phase_*
+- Purpose:
+  - Consume Prompt246 artifact content review / fresh evidence validity readiness surface.
+  - Prepare Prompt222 bridge readiness, N=2 readiness summary, and bounded continuation readiness summary.
+  - Preserve blocked posture while fresh runtime evidence is not valid and supplied artifact paths are missing.
+- Key current values:
+  - status=prompt222_n2_bridge_readiness_phase_blocked_fresh_evidence_not_valid
+  - source=prompt247_prompt222_n2_bridge_readiness_phase
+  - prompt222_update_status=blocked_fresh_runtime_evidence_not_valid
+  - prompt222_update_block_reason=missing_supplied_artifact_paths
+  - n2_readiness_status=blocked_fresh_runtime_evidence_not_valid
+  - bounded_continuation_status=blocked_n2_readiness_not_allowed
+  - manual_artifact_supply_still_required=true
+  - next_manual_action=supply_explicit_fresh_runtime_artifact_paths
+  - should_prepare_prompt248=true
+  - should_update_prompt222=false
+  - should_re_evaluate_n2=false
+  - should_start_bounded_continuation=false
+  - should_stop=true
+  - next_action=prepare_prompt248_manual_artifact_supply_or_supplied_path_ingestion_phase
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt247 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-prompt247-dryrun-20260430222749
+  - RUNLOG=/tmp/codex-local-runner-prompt247-dryrun-20260430222749.runlog
+- Safety:
+  - Metadata-only surface.
+  - No Prompt222 update.
+  - No N=2 re-evaluation.
+  - No bounded continuation execution.
+  - No file read.
+  - No JSON parse.
+  - No existence validation.
+  - No filesystem scan.
+  - No command execution.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+  - No fresh-evidence/accounting booleans set true.
+- Next:
+  - Prompt248 should consume project_browser_autonomous_prompt222_n2_bridge_readiness_phase_* and define the explicit supplied-path ingestion interface and payload schema needed to unblock missing_supplied_artifact_paths.

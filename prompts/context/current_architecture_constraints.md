@@ -4047,3 +4047,50 @@ Next step:
 - Prompt247 should prepare Prompt222/N=2 bridge readiness metadata.
 - Since fresh_runtime_evidence_valid=false, Prompt247 must keep Prompt222 update, N=2 re-evaluation, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed blocked/false.
 - Prompt247 must not update Prompt222, re-evaluate N=2, execute commands, or mutate git.
+
+## Prompt247 architecture note - Prompt222/N=2 bridge readiness phase
+
+Prompt247 adds a metadata-only Prompt222/N=2 bridge readiness phase:
+
+- Prefix:
+  - project_browser_autonomous_prompt222_n2_bridge_readiness_phase_*
+- Source:
+  - project_browser_autonomous_artifact_content_review_fresh_evidence_validity_*
+- Current status:
+  - prompt222_n2_bridge_readiness_phase_blocked_fresh_evidence_not_valid
+- Current interpretation:
+  - Prompt247 prepared Prompt222 bridge readiness, N=2 readiness summary, and bounded continuation readiness metadata.
+  - Fresh runtime evidence is not valid because explicit supplied artifact paths are missing.
+  - Prompt222 update is not allowed.
+  - N=2 re-evaluation is not allowed.
+  - Bounded continuation is not allowed.
+  - Manual artifact supply is still required.
+  - It did not update Prompt222, re-evaluate N=2, start bounded continuation, read files, parse JSON, validate existence, scan filesystem, execute commands, invoke Codex, mutate git, or set fresh evidence/accounting booleans true.
+- Current blocker:
+  - missing_supplied_artifact_paths
+- Required next supplied path fields:
+  - approved_restart_execution_contract_json_path
+  - run_state_json_path
+  - manifest_json_path
+- Safety invariant:
+  - should_update_prompt222=false
+  - should_re_evaluate_n2=false
+  - should_start_bounded_continuation=false
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt248 should define an explicit supplied-path ingestion interface and payload schema.
+- Prompt248 should specify how approved_restart_execution_contract_json_path, run_state_json_path, and manifest_json_path are represented in the final approved restart payload normalized map.
+- Prompt248 must not read files, parse JSON, validate existence, update Prompt222, re-evaluate N=2, start bounded continuation, execute commands, or mutate git.
