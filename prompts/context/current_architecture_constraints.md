@@ -3271,3 +3271,24 @@ Architecture constraints:
 - Legacy raw reason tokens remain diagnostic/backward-compatible only.
 - Do not infer execution readiness from selected_reason_family or root_cause_reason_family alone.
 - Existing no-loop, no-retry, no-push, no-GitHub, no-new-executor, and accounting-safety boundaries remain mandatory.
+
+## Prompt228-fix11 constraint update
+
+Prompt228-fix11 added a downstream N=2 policy conformance gate.
+
+Current conformance behavior:
+- policy_surface_available=true
+- policy_surface_authoritative=true
+- legacy_token_only_routing_detected=false
+- reason_family_routing_available=true
+- root_cause_routing_available=true
+- prompt229_readiness_policy_respected=true
+- conformance_passed=true
+- should_prepare_prompt229=false
+- should_prepare_manual_review=true
+
+Architecture constraints:
+- Downstream routing must prefer project_browser_autonomous_bounded_n2_policy_conformance_gate_* over legacy raw reason-token parsing.
+- Prompt229 readiness must remain controlled by explicit Prompt228 readiness booleans.
+- reason_family/root_cause_reason_family may guide routing and remediation, but must not imply execution readiness by themselves.
+- Existing no-loop, no-retry, no-push, no-GitHub, no-new-executor, and accounting-safety boundaries remain mandatory.

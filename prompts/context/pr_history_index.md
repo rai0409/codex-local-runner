@@ -5226,3 +5226,40 @@ Known follow-up:
   - Some downstream consumers may still ignore the new policy surface and route by legacy reason tokens only.
 - Next:
   - Prompt228-fix11 should add a downstream-consumer conformance gate that flags legacy-token-only routing when project_browser_autonomous_bounded_n2_reason_consumer_policy_* is available.
+
+## Prompt228-fix11 - Add N2 policy conformance gate
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Purpose:
+  - Add a conformance gate to verify downstream routing uses the N=2 consumer policy surface instead of legacy raw reason tokens only.
+  - Ensure Prompt229 readiness is governed by explicit Prompt228 readiness booleans, not by reason_family alone.
+- Added:
+  - _build_project_browser_autonomous_bounded_n2_policy_conformance_gate_state(...)
+  - Output prefix:
+    - project_browser_autonomous_bounded_n2_policy_conformance_gate_*
+- Result:
+  - conformance status=bounded_n2_policy_conformance_passed_manual_stop
+  - policy_surface_available=true
+  - policy_surface_authoritative=true
+  - legacy_token_only_routing_detected=false
+  - reason_family_routing_available=true
+  - root_cause_routing_available=true
+  - prompt229_readiness_policy_respected=true
+  - conformance_passed=true
+  - conformance_block_reason=""
+  - should_prepare_prompt229=false
+  - should_prepare_manual_review=true
+  - Prompt228 Prompt229 readiness remains false:
+    - prompt229_e2e_flow_check_ready=false
+    - prompt229_fresh_runtime_evidence_ready=false
+- Safety:
+  - N=2 authority/allow/readiness gates unchanged.
+  - No tests added.
+  - No docs edited during Codex run.
+  - No Prompt229 added.
+  - No executor, rollback, commit/tag execution, push, GitHub, retry, or unbounded-loop behavior added.
+- Remaining risk:
+  - External/downstream consumers may still ignore the conformance gate until migrated to project_browser_autonomous_bounded_n2_policy_conformance_gate_*.
+- Next:
+  - Prompt228-fix12 should add a compact Prompt229+ canonical handoff packet using policy-conformance fields and de-emphasizing raw legacy tokens.
