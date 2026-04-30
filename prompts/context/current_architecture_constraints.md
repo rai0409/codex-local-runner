@@ -3397,3 +3397,33 @@ Next step:
 - Prompt232 may prepare a bounded/manual fresh runtime evidence runbook contract.
 - In Prompt232, execution_contract means contract/runbook metadata only.
 - Prompt232 must not execute the command, invoke Codex, mutate git, push, rollback, retry, or start an unbounded loop.
+
+## Prompt232 architecture note - fresh runtime evidence runbook contract
+
+Prompt232 adds a metadata-only bounded/manual runbook contract:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_runbook_contract_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_result_review_*
+- Current status:
+  - fresh_runtime_evidence_runbook_contract_prepared
+- Current interpretation:
+  - Prompt232 prepared a bounded/manual runbook contract.
+  - It did not execute the runbook.
+  - It did not execute a check command.
+  - It did not observe fresh runtime evidence.
+  - Therefore observed_outputs_available, fresh_runtime_evidence_detected, fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+- Safety invariant:
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt233 should prepare a bounded manual run command packet from the Prompt232 runbook contract.
+- Prompt233 must not execute the command, execute the runbook, invoke Codex, mutate git, push, rollback, retry, or start an unbounded loop.

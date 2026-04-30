@@ -5433,3 +5433,60 @@ Known follow-up:
   - No commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
 - Next:
   - Prompt232 should consume project_browser_autonomous_fresh_runtime_evidence_result_review_* and prepare a bounded/manual fresh runtime evidence runbook contract.
+
+## Prompt232 - fresh runtime evidence runbook contract
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_evidence_runbook_contract_state(...)
+  - project_browser_autonomous_fresh_runtime_evidence_runbook_contract_*
+- Purpose:
+  - Consume Prompt231 fresh runtime evidence result review surface.
+  - Prepare a metadata-only bounded/manual runbook contract for obtaining fresh runtime evidence later.
+  - Do not execute the runbook in Prompt232.
+- Key current values:
+  - status=fresh_runtime_evidence_runbook_contract_prepared
+  - source=prompt232_fresh_runtime_evidence_runbook_contract
+  - prompt231_surface_available=true
+  - prompt231_surface_authoritative=true
+  - selected_check_kind=fresh_runtime_evidence_check
+  - runbook_ready=true
+  - runbook_kind=bounded_manual_fresh_runtime_evidence_check
+  - transport_mode=dry-run
+  - repo_path=/home/rai/codex-local-runner
+  - artifacts_dir=/tmp/codex-local-runner-decision/artifacts
+  - suggested_out_dir_prefix=/tmp/codex-local-runner-checks/prompt230_fresh_runtime_evidence
+  - job_id_prefix=prompt230-fresh-runtime-evidence
+  - observed_outputs_available=false
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - prompt233_ready=true
+  - should_prepare_prompt233=true
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+  - should_stop=true
+  - next_action=prepare_prompt233_fresh_runtime_evidence_manual_run_result_review
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt232 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt232_out_20260430_200300
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt232_run_20260430_200300.log
+- Safety:
+  - No runbook execution.
+  - No shell/check command execution path.
+  - No Codex invocation.
+  - No commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+- Next:
+  - Prompt233 should consume project_browser_autonomous_fresh_runtime_evidence_runbook_contract_* and prepare a bounded manual run command packet.
