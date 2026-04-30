@@ -3339,3 +3339,32 @@ Interpretation rule:
 Current next step:
 
 - Prompt230 should consume the Prompt229 contract and expose project_browser_autonomous_fresh_runtime_evidence_check_* without mutating git state or invoking Codex.
+
+## Prompt230 architecture note - fresh runtime evidence check surface
+
+Prompt230 adds a metadata-only evidence check surface:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_check_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_e2e_readiness_gate_*
+- Current status:
+  - fresh_runtime_evidence_check_prepared
+- Current interpretation:
+  - Prompt230 consumed the Prompt229 check contract.
+  - It did not execute the check command.
+  - It did not observe fresh runtime evidence.
+  - Therefore completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+- Safety invariant:
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt231 may prepare a metadata-only fresh runtime evidence result review surface.
+- Prompt231 must not infer evidence from Prompt230 readiness alone.
+- Prompt231 must not mutate git state or invoke Codex.

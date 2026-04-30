@@ -5337,3 +5337,50 @@ Known follow-up:
   - No N=2 authority relaxation.
 - Next:
   - Prompt230 should consume the Prompt229 check contract and expose a metadata-only fresh runtime evidence check consumer/preflight surface.
+
+## Prompt230 - fresh runtime evidence check surface
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_evidence_check_state(...)
+  - project_browser_autonomous_fresh_runtime_evidence_check_*
+- Purpose:
+  - Consume Prompt229 fresh runtime / E2E readiness gate contract.
+  - Prepare a metadata-only fresh runtime evidence check surface for Prompt231.
+- Key current values:
+  - status=fresh_runtime_evidence_check_prepared
+  - source=prompt230_fresh_runtime_evidence_check
+  - contract_available=true
+  - contract_authoritative=true
+  - selected_check_kind=fresh_runtime_evidence_check
+  - command_contract_available=true
+  - fresh_runtime_evidence_required=true
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - prompt231_review_ready=true
+  - should_prepare_prompt231=true
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+  - should_stop=true
+  - next_action=prepare_prompt231_fresh_runtime_evidence_result_review
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt230_out_20260430_195300
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt230_run_20260430_195300.log
+- Safety:
+  - No new executor.
+  - No shell/check command execution path.
+  - No Codex invocation.
+  - No commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+- Next:
+  - Prompt231 should consume project_browser_autonomous_fresh_runtime_evidence_check_* and expose a metadata-only fresh runtime evidence result review surface.
