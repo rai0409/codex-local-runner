@@ -4003,3 +4003,47 @@ Next step:
 - Prompt246 should prepare artifact content review and fresh evidence validity readiness/decision metadata.
 - Since supplied_artifact_paths is still empty and read/parse permissions are false, Prompt246 must keep all evidence/truth/Prompt222/N=2 outcomes blocked/false.
 - Prompt246 must not read files, parse JSON, mark evidence valid, update Prompt222, or re-evaluate N=2.
+
+## Prompt246 architecture note - artifact content review and fresh evidence validity readiness phase
+
+Prompt246 adds a metadata-only artifact content review / fresh evidence validity readiness phase:
+
+- Prefix:
+  - project_browser_autonomous_artifact_content_review_fresh_evidence_validity_*
+- Source:
+  - project_browser_autonomous_read_parse_permission_content_consistency_*
+- Current status:
+  - artifact_content_review_fresh_evidence_validity_blocked_missing_supplied_paths
+- Current interpretation:
+  - Prompt246 prepared artifact content review, JSON review, artifact triad review, fresh evidence validity, and Prompt247 bridge readiness metadata.
+  - Explicit artifact paths are still missing.
+  - read/parse/existence permissions are still false.
+  - Artifact content is not reviewable.
+  - Fresh evidence validity remains blocked.
+  - truth_update_allowed=false.
+  - prompt222_reflection_allowed=false.
+  - n2_readiness_allowed=false.
+  - prompt247_bridge_ready=true only means the next metadata bridge surface may be prepared.
+  - It does not authorize Prompt222 updates or N=2 re-evaluation.
+- Current blocker:
+  - prompt247_bridge_block_reason=missing_supplied_artifact_paths
+  - fresh_evidence_validity_block_reason=missing_supplied_artifact_paths
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt247 should prepare Prompt222/N=2 bridge readiness metadata.
+- Since fresh_runtime_evidence_valid=false, Prompt247 must keep Prompt222 update, N=2 re-evaluation, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed blocked/false.
+- Prompt247 must not update Prompt222, re-evaluate N=2, execute commands, or mutate git.
