@@ -6477,3 +6477,47 @@ Known follow-up:
   - No fresh-evidence/accounting booleans set true.
 - Next:
   - Prompt250 should consume project_browser_autonomous_supplied_path_payload_normalization_permission_* and prepare a bounded artifact existence/read/parse gate surface.
+
+## Prompt250 - bounded artifact existence/read/parse gate
+
+Status: implemented
+
+Commit scope:
+- Added metadata-only bounded artifact existence/read/parse gate.
+- No file existence validation, file read, JSON parse, filesystem scan, shell command execution, git mutation, Prompt222 update, N=2 re-evaluation, or bounded continuation start was added.
+
+Primary builder:
+- `_build_project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state(...)`
+- Location observed: `automation/orchestration/planned_execution_runner.py:88169`
+
+Exposure wiring observed:
+- Prompt250 build + normalization wiring: `automation/orchestration/planned_execution_runner.py:139442`
+- Compact planning summary exposure: `automation/orchestration/planned_execution_runner.py:140053`
+- Supporting truth refs exposure: `automation/orchestration/planned_execution_runner.py:143964`
+- Final approved restart payload normalized map merge: `automation/orchestration/planned_execution_runner.py:150168`
+
+Validation:
+- `python -m py_compile automation/orchestration/planned_execution_runner.py` passed.
+- `python -m py_compile scripts/run_planned_execution.py` passed.
+- Dry-run completed with `OUT_DIR=/tmp/prompt250_out`, `job_id=project-planned-exec`, `run_status=dry_run_completed`, `processed_units=1`, `next_action=signal_recollect`.
+- Required `project_browser_autonomous_bounded_artifact_existence_read_parse_gate_*` fields were present in `/tmp/prompt250_out/project-planned-exec/approved_restart_execution_contract.json`.
+
+Observed current-chain posture:
+- `status=bounded_artifact_existence_read_parse_gate_blocked_missing_supplied_path_payload`
+- `supplied_path_payload_detected=false`
+- `accepted_supplied_path_fields=[]`
+- `missing_supplied_path_fields=["approved_restart_execution_contract_json_path","run_state_json_path","manifest_json_path"]`
+- `normalized_supplied_artifact_paths=[]`
+- `supplied_artifact_path_map={}`
+- `existence_review_permission=false`
+- `read_permission=false`
+- `parse_permission=false`
+- `artifact_review_ready=false`
+- `fresh_evidence_validity_gate_ready=false`
+- `prompt251_ready=true`
+- `prompt251_block_reason=missing_supplied_path_payload`
+
+Important note:
+- This branch did not yet contain explicit Prompt249 builder symbols.
+- Prompt250 was wired against the normalized ingestion surface with compatible metadata fallback.
+- Therefore Prompt251 should not proceed to artifact content review yet. It should add an explicit supplied-path payload carrier / normalization bridge first.

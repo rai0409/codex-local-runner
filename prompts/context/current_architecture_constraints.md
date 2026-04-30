@@ -4141,3 +4141,28 @@ Next step:
 
 - Prompt250 should prepare a bounded artifact existence/read/parse gate.
 - Since no explicit supplied-path payload is present yet, Prompt250 must keep actual existence validation, file reading, JSON parsing, evidence validity, Prompt222 update, N=2 re-evaluation, and bounded continuation blocked/false.
+
+## Prompt250 architecture constraint update
+
+Prompt250 added a metadata-only bounded artifact existence/read/parse gate.
+
+The current blocker remains:
+- `missing_supplied_path_payload`
+
+The following operations are still forbidden before an explicit supplied-path payload carrier and normalization bridge exists:
+- actual file existence validation
+- actual file read
+- actual JSON parse
+- filesystem scan
+- glob expansion
+- log scraping
+- shell command execution
+- git mutation
+- Prompt222 update
+- N=2 re-evaluation
+- bounded continuation start
+
+Next required step:
+- Prompt251 must add an explicit supplied-path payload carrier / normalization bridge.
+- Prompt251 must remain metadata-only.
+- Prompt251 must not perform artifact content review, file access, JSON parsing, Prompt222 update, N=2 re-evaluation, or bounded continuation.
