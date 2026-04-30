@@ -6397,3 +6397,83 @@ Known follow-up:
   - No fresh-evidence/accounting booleans set true.
 - Next:
   - Prompt248 should consume project_browser_autonomous_prompt222_n2_bridge_readiness_phase_* and define the explicit supplied-path ingestion interface and payload schema needed to unblock missing_supplied_artifact_paths.
+
+## Prompt249 - supplied path payload normalization and permission recalculation
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_supplied_path_payload_normalization_permission_state(...)
+  - project_browser_autonomous_supplied_path_payload_normalization_permission_*
+- Purpose:
+  - Consume Prompt248 supplied-path ingestion interface.
+  - Normalize explicitly supplied artifact path payload metadata.
+  - Classify accepted/missing/rejected supplied path fields.
+  - Recalculate same-run scope, artifact-name, path-source, and review permission unlock metadata.
+  - Preserve blocked posture while explicit supplied-path payload is missing.
+- Key current values:
+  - status=supplied_path_payload_normalization_permission_awaiting_explicit_payload
+  - source=prompt249_supplied_path_payload_normalization_permission
+  - required_supplied_path_fields=[approved_restart_execution_contract_json_path, run_state_json_path, manifest_json_path]
+  - supplied_path_payload_detected=false
+  - supplied_path_payload_status=awaiting_explicit_supplied_path_payload
+  - accepted_supplied_path_fields=[]
+  - missing_supplied_path_fields=[approved_restart_execution_contract_json_path, run_state_json_path, manifest_json_path]
+  - rejected_supplied_path_fields=[]
+  - normalized_supplied_artifact_paths=[]
+  - supplied_artifact_path_map={}
+  - artifact_supply_out_dir=""
+  - artifact_supply_job_id=""
+  - artifact_supply_transport_mode=""
+  - same_run_scope_conformance=blocked_missing_supplied_path_payload
+  - artifact_name_conformance=blocked_missing_supplied_path_payload
+  - path_source_conformance=blocked_missing_supplied_path_payload
+  - review_permission_unlock_preconditions_ready=false
+  - existence_review_permission=false
+  - read_permission=false
+  - parse_permission=false
+  - permission_recalculation_status=blocked_missing_supplied_path_payload
+  - prompt250_gate_ready=true
+  - prompt250_gate_block_reason=missing_supplied_path_payload
+  - observed_outputs_available=false
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - prompt222_update_allowed=false
+  - n2_readiness_allowed=false
+  - bounded_continuation_allowed=false
+  - should_prepare_prompt250=true
+  - should_update_prompt222=false
+  - should_re_evaluate_n2=false
+  - should_start_bounded_continuation=false
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_stop=true
+  - next_action=prepare_prompt250_bounded_artifact_existence_read_parse_gate
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt249 fields present with missing_count=0
+  - OUT_DIR=<replace_with_prompt249_out_dir>
+  - RUNLOG=<replace_with_prompt249_runlog>
+- Safety:
+  - Metadata-only surface.
+  - No file read.
+  - No JSON parse.
+  - No file-existence validation.
+  - No filesystem scan.
+  - No command execution.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+  - No Prompt222 update.
+  - No N=2 re-evaluation.
+  - No bounded continuation execution.
+  - No fresh-evidence/accounting booleans set true.
+- Next:
+  - Prompt250 should consume project_browser_autonomous_supplied_path_payload_normalization_permission_* and prepare a bounded artifact existence/read/parse gate surface.
