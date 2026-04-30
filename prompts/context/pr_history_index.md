@@ -5965,3 +5965,72 @@ Known follow-up:
   - No N=2 re-evaluation.
 - Next:
   - Prompt241 should consume project_browser_autonomous_fresh_runtime_evidence_validity_decision_* and prepare a combined truth bridge readiness, blocked Prompt222 reflection posture, N=2 readiness blocked summary, and manual artifact supply direction surface.
+
+## Prompt241 - fresh runtime evidence truth bridge and blocked readiness summary
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_evidence_truth_bridge_state(...)
+  - project_browser_autonomous_fresh_runtime_evidence_truth_bridge_*
+- Purpose:
+  - Consume Prompt240 validity decision surface.
+  - Prepare metadata-only truth bridge readiness.
+  - Preserve blocked Prompt222 reflection posture.
+  - Preserve blocked N=2 readiness summary.
+  - Direct next step to manual artifact supply.
+- Key current values:
+  - status=fresh_runtime_evidence_truth_bridge_blocked_validity_not_ready
+  - source=prompt241_fresh_runtime_evidence_truth_bridge
+  - prompt240_surface_available=true
+  - prompt240_surface_authoritative=true
+  - selected_check_kind=fresh_runtime_evidence_check
+  - required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - supplied_artifact_paths=[]
+  - missing_supplied_artifact_paths=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - validity_decision_ready=false
+  - validity_status=blocked_artifact_consistency_not_reviewable
+  - validity_block_reason=missing_supplied_artifact_paths
+  - truth_bridge_ready=true
+  - truth_update_allowed=false
+  - truth_update_status=blocked_validity_not_ready
+  - truth_update_block_reason=missing_supplied_artifact_paths
+  - prompt222_reflection_ready=true
+  - prompt222_reflection_allowed=false
+  - prompt222_reflection_status=blocked_truth_update_not_allowed
+  - n2_readiness_summary_ready=true
+  - n2_readiness_allowed=false
+  - n2_readiness_status=blocked_fresh_runtime_evidence_not_valid
+  - manual_artifact_supply_required=true
+  - manual_artifact_supply_reason=missing_supplied_artifact_paths
+  - manual_artifact_supply_required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - manual_artifact_supply_next_action=prepare_prompt242_manual_artifact_supply_path_intake
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - should_prepare_prompt242=true
+  - should_stop=true
+  - next_action=prepare_prompt242_manual_artifact_supply_path_intake
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt241 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt241_out_20260430_205056
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt241_run_20260430_205056.log
+- Safety:
+  - Metadata-only surface.
+  - No file read.
+  - No JSON parse.
+  - No filesystem scan.
+  - No file-existence validation.
+  - No command execution.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/retry/unbounded-loop behavior.
+  - No Prompt222 update.
+  - No N=2 re-evaluation.
+- Next:
+  - Prompt242 should consume project_browser_autonomous_fresh_runtime_evidence_truth_bridge_* and prepare manual artifact supply path intake plus review permission gates.

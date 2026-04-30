@@ -3773,3 +3773,47 @@ Next step:
 
 - Prompt241 may prepare a combined truth bridge readiness / blocked Prompt222 reflection / N=2 blocked summary / manual artifact supply direction surface.
 - Since validity_decision_ready=false, Prompt241 must keep truth_update_allowed=false and must not update Prompt222 or re-evaluate N=2.
+
+## Prompt241 architecture note - fresh runtime evidence truth bridge and blocked readiness summary
+
+Prompt241 adds a metadata-only truth bridge / blocked readiness surface:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_truth_bridge_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_validity_decision_*
+- Current status:
+  - fresh_runtime_evidence_truth_bridge_blocked_validity_not_ready
+- Current interpretation:
+  - Prompt241 consumed Prompt240 validity decision metadata.
+  - Validity is blocked because required artifact paths are missing.
+  - truth_update_allowed=false.
+  - prompt222_reflection_allowed=false.
+  - n2_readiness_allowed=false.
+  - manual_artifact_supply_required=true.
+  - The next required artifacts are:
+    - approved_restart_execution_contract.json
+    - run_state.json
+    - manifest.json
+  - It did not read files, parse JSON, validate file existence, scan filesystem, execute commands, invoke Codex, mutate git, update Prompt222, or re-evaluate N=2.
+- Current blocker:
+  - manual_artifact_supply_reason=missing_supplied_artifact_paths
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt242 should prepare manual artifact supply path intake plus review permission gates.
+- Prompt242 may define explicit path intake, path-shape requirements, same out_dir/job_id requirements, and existence/content/JSON review permission gates.
+- Prompt242 must not read files, parse JSON, mark evidence valid, update Prompt222, or re-evaluate N=2.
