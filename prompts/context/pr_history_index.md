@@ -6034,3 +6034,67 @@ Known follow-up:
   - No N=2 re-evaluation.
 - Next:
   - Prompt242 should consume project_browser_autonomous_fresh_runtime_evidence_truth_bridge_* and prepare manual artifact supply path intake plus review permission gates.
+
+## Prompt242 - manual artifact supply path intake and review permission gates
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_manual_artifact_supply_path_intake_state(...)
+  - project_browser_autonomous_manual_artifact_supply_path_intake_*
+- Purpose:
+  - Consume Prompt241 fresh runtime evidence truth bridge surface.
+  - Prepare manual artifact supply path intake.
+  - Define path-shape, same-run scope, artifact-name requirements, and review permission gates.
+  - Do not read files, parse JSON, validate existence, execute commands, update Prompt222, or re-evaluate N=2.
+- Key current values:
+  - status=manual_artifact_supply_path_intake_awaiting_explicit_paths
+  - source=prompt242_manual_artifact_supply_path_intake
+  - prompt241_surface_available=true
+  - prompt241_surface_authoritative=true
+  - selected_check_kind=fresh_runtime_evidence_check
+  - required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - supplied_artifact_paths=[]
+  - missing_supplied_artifact_paths=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - manual_artifact_supply_required=true
+  - manual_artifact_supply_reason=missing_supplied_artifact_paths
+  - path_intake_ready=true
+  - path_intake_status=awaiting_explicit_supplied_artifact_paths
+  - expected_supplied_path_fields=[approved_restart_execution_contract_json_path, run_state_json_path, manifest_json_path]
+  - path_shape_requirements=[explicit_paths_only, absolute_or_repo_resolved_paths_only, no_glob_expansion, no_filesystem_discovery]
+  - same_run_scope_requirements=[same_out_dir_required, same_job_id_required, same_transport_mode_required]
+  - artifact_name_requirements=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - existence_review_permission=false
+  - content_review_permission=false
+  - json_review_permission=false
+  - artifact_review_assimilation_ready=false
+  - artifact_review_assimilation_block_reason=missing_supplied_artifact_paths
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - should_prepare_prompt243=true
+  - should_stop=true
+  - next_action=prepare_prompt243_artifact_review_assimilation_and_validity_recheck
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt242 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt242_out_20260430_205535
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt242_run_20260430_205535.log
+- Safety:
+  - Metadata-only surface.
+  - No file reading.
+  - No JSON parsing.
+  - No filesystem scan.
+  - No existence validation.
+  - No command execution.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+  - No Prompt222 update.
+  - No N=2 re-evaluation.
+- Next:
+  - Prompt243 should consume project_browser_autonomous_manual_artifact_supply_path_intake_* and prepare a broader artifact supply/review readiness and validity recheck phase.

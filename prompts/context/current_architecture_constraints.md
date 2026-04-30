@@ -3817,3 +3817,45 @@ Next step:
 - Prompt242 should prepare manual artifact supply path intake plus review permission gates.
 - Prompt242 may define explicit path intake, path-shape requirements, same out_dir/job_id requirements, and existence/content/JSON review permission gates.
 - Prompt242 must not read files, parse JSON, mark evidence valid, update Prompt222, or re-evaluate N=2.
+
+## Prompt242 architecture note - manual artifact supply path intake and review gates
+
+Prompt242 adds a metadata-only manual artifact supply path intake surface:
+
+- Prefix:
+  - project_browser_autonomous_manual_artifact_supply_path_intake_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_truth_bridge_*
+- Current status:
+  - manual_artifact_supply_path_intake_awaiting_explicit_paths
+- Current interpretation:
+  - Prompt242 prepared explicit artifact path intake metadata.
+  - Required artifact paths are still not supplied.
+  - Path intake is ready, but existence/content/JSON review permissions remain false.
+  - Artifact review assimilation is not ready.
+  - It did not read files, parse JSON, validate file existence, scan filesystem, execute commands, invoke Codex, mutate git, update Prompt222, or re-evaluate N=2.
+- Required artifacts:
+  - approved_restart_execution_contract.json
+  - run_state.json
+  - manifest.json
+- Current blocker:
+  - artifact_review_assimilation_block_reason=missing_supplied_artifact_paths
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt243 should prepare a broader artifact supply and review readiness phase.
+- Prompt243 may combine artifact supply status, path intake summary, review permission summary, assimilation readiness, and validity recheck readiness.
+- Prompt243 must not read files, parse JSON, mark evidence valid, update Prompt222, or re-evaluate N=2.
