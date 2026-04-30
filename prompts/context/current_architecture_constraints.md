@@ -3601,3 +3601,49 @@ Next step:
 
 - Prompt237 may prepare an artifact existence review surface.
 - Prompt237 must not parse JSON contents, infer evidence validity, update Prompt222 fields, or re-evaluate N=2.
+
+## Prompt237 architecture note - fresh runtime evidence artifact existence review surface
+
+Prompt237 adds a metadata-only artifact existence review surface:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_artifact_existence_review_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_supplied_artifact_path_review_*
+- Current status:
+  - fresh_runtime_evidence_artifact_existence_review_prepared_no_supplied_paths
+- Current interpretation:
+  - Prompt237 prepared existence-review metadata only.
+  - No explicit supplied artifact paths are currently present.
+  - Required artifacts are therefore not reviewable yet:
+    - approved_restart_execution_contract.json
+    - run_state.json
+    - manifest.json
+  - It did not read files.
+  - It did not parse JSON.
+  - It did not validate file existence.
+  - It did not scan the filesystem.
+  - It did not execute commands.
+  - It did not invoke Codex.
+  - It did not mutate git state.
+  - It did not infer fresh runtime evidence.
+  - Therefore observed_outputs_available, fresh_runtime_evidence_detected, fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt238 should prepare a broader artifact review readiness surface.
+- Prompt238 should combine supplied path readiness, existence review readiness, content/JSON review readiness, and evidence validation preconditions.
+- Prompt238 must not read files, parse JSON, execute commands, infer evidence validity, update Prompt222 fields, or re-evaluate N=2.
