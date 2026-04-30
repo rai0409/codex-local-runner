@@ -5862,3 +5862,55 @@ Known follow-up:
   - No N=2 re-evaluation.
 - Next:
   - Prompt239 should consume project_browser_autonomous_fresh_runtime_evidence_artifact_review_readiness_* and prepare a metadata-only artifact consistency review surface.
+
+## Prompt239 - fresh runtime evidence artifact consistency review surface
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_evidence_artifact_consistency_review_state(...)
+  - project_browser_autonomous_fresh_runtime_evidence_artifact_consistency_review_*
+- Purpose:
+  - Consume Prompt238 artifact review readiness surface.
+  - Summarize whether required fresh-runtime artifacts are reviewable as a coherent set.
+  - Preserve blocked/not-reviewable posture while supplied_artifact_paths is empty.
+- Key current values:
+  - status=fresh_runtime_evidence_artifact_consistency_review_not_reviewable_missing_supplied_paths
+  - source=prompt239_fresh_runtime_evidence_artifact_consistency_review
+  - selected_check_kind=fresh_runtime_evidence_check
+  - required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - supplied_artifact_paths=[]
+  - missing_supplied_artifact_paths=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - content_review_ready=false
+  - json_review_ready=false
+  - evidence_validation_ready=false
+  - consistency_review_ready=false
+  - artifact_consistency_status=not_reviewable_missing_supplied_artifact_paths
+  - consistency_block_reason=missing_supplied_artifact_paths
+  - consistency_findings=[required_artifacts_known, supplied_artifact_paths_missing, existence_review_not_reviewable_missing_paths, content_review_blocked, json_review_blocked, evidence_validation_blocked]
+  - prompt240_preconditions_ready=false
+  - prompt240_ready=true
+  - should_prepare_prompt240=true
+  - should_stop=true
+  - next_action=prepare_prompt240_fresh_runtime_evidence_validity_decision
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt239 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt239_out_20260430_204121
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt239_run_20260430_204121.log
+- Safety:
+  - Metadata-only surface.
+  - No file reads.
+  - No JSON parsing.
+  - No file-existence validation.
+  - No filesystem scanning.
+  - No command/runbook/check execution path.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+  - No Prompt222 update.
+  - No N=2 re-evaluation.
+- Next:
+  - Prompt240 should consume project_browser_autonomous_fresh_runtime_evidence_artifact_consistency_review_* and prepare a metadata-only fresh runtime evidence validity decision surface.

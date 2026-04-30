@@ -3693,3 +3693,43 @@ Next step:
 - Prompt239 may prepare an artifact consistency review surface.
 - Prompt239 must not read files, parse JSON, infer evidence validity, update Prompt222 fields, or re-evaluate N=2.
 - Because supplied_artifact_paths is currently empty, Prompt239 should preserve a blocked/not-reviewable consistency posture.
+
+## Prompt239 architecture note - fresh runtime evidence artifact consistency review surface
+
+Prompt239 adds a metadata-only artifact consistency review surface:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_artifact_consistency_review_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_artifact_review_readiness_*
+- Current status:
+  - fresh_runtime_evidence_artifact_consistency_review_not_reviewable_missing_supplied_paths
+- Current interpretation:
+  - Prompt239 summarized required artifact consistency readiness.
+  - Required artifacts are known, but supplied artifact paths are still empty.
+  - Artifact set consistency is not reviewable yet.
+  - prompt240_preconditions_ready=false.
+  - prompt240_ready=true only means Prompt240 may prepare the next metadata surface.
+  - It does not mean evidence validity can be decided true.
+  - It did not read files, parse JSON, validate file existence, scan filesystem, execute commands, invoke Codex, mutate git, update Prompt222, or re-evaluate N=2.
+- Current blocker:
+  - consistency_block_reason=missing_supplied_artifact_paths
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt240 may prepare a fresh runtime evidence validity decision surface.
+- Since prompt240_preconditions_ready=false, Prompt240 must keep fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed false.
+- Prompt240 must not read files, parse JSON, infer validity true, update Prompt222 fields, or re-evaluate N=2.
