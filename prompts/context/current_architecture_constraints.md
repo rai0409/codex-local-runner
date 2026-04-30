@@ -3647,3 +3647,49 @@ Next step:
 - Prompt238 should prepare a broader artifact review readiness surface.
 - Prompt238 should combine supplied path readiness, existence review readiness, content/JSON review readiness, and evidence validation preconditions.
 - Prompt238 must not read files, parse JSON, execute commands, infer evidence validity, update Prompt222 fields, or re-evaluate N=2.
+
+## Prompt238 architecture note - fresh runtime evidence artifact review readiness surface
+
+Prompt238 adds a metadata-only artifact review readiness surface:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_artifact_review_readiness_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_artifact_existence_review_*
+- Current status:
+  - fresh_runtime_evidence_artifact_review_readiness_blocked_missing_supplied_paths
+- Current interpretation:
+  - Prompt238 consolidated path, existence, content, JSON, and evidence-validation readiness metadata.
+  - No explicit supplied artifact paths are currently present.
+  - Content review, JSON review, and evidence validation are not ready.
+  - It did not read files.
+  - It did not parse JSON.
+  - It did not validate file existence.
+  - It did not scan the filesystem.
+  - It did not execute commands.
+  - It did not invoke Codex.
+  - It did not mutate git state.
+  - It did not update Prompt222 fields.
+  - It did not re-evaluate N=2.
+  - Therefore observed_outputs_available, fresh_runtime_evidence_detected, fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+- Current blocker:
+  - readiness_block_reason=missing_supplied_artifact_paths
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt239 may prepare an artifact consistency review surface.
+- Prompt239 must not read files, parse JSON, infer evidence validity, update Prompt222 fields, or re-evaluate N=2.
+- Because supplied_artifact_paths is currently empty, Prompt239 should preserve a blocked/not-reviewable consistency posture.
