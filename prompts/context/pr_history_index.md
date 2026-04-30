@@ -5664,3 +5664,68 @@ Known follow-up:
   - No commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
 - Next:
   - Prompt236 should consume project_browser_autonomous_fresh_runtime_evidence_observed_artifact_intake_* and prepare a metadata-only supplied artifact path review surface.
+
+## Prompt236 - fresh runtime evidence supplied artifact path review surface
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_evidence_supplied_artifact_path_review_state(...)
+  - project_browser_autonomous_fresh_runtime_evidence_supplied_artifact_path_review_*
+- Purpose:
+  - Consume Prompt235 observed artifact intake contract.
+  - Prepare a metadata-only supplied artifact path review surface.
+  - Do not read files, parse JSON, validate file existence, scan filesystem, execute commands, or infer evidence.
+- Key current values:
+  - status=fresh_runtime_evidence_supplied_artifact_path_review_prepared_no_supplied_paths
+  - source=prompt236_fresh_runtime_evidence_supplied_artifact_path_review
+  - prompt235_surface_available=true
+  - prompt235_surface_authoritative=true
+  - selected_check_kind=fresh_runtime_evidence_check
+  - path_review_ready=true
+  - required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - supplied_artifact_paths=[]
+  - missing_supplied_artifact_paths=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - artifact_path_requirements=[explicit_paths_only, no_filesystem_discovery, no_glob_expansion, same_out_dir_required, same_job_id_required, required_artifact_names_must_match]
+  - path_review_scope=explicit_supplied_paths_only
+  - forbidden_actions=[read_files, parse_json, filesystem_scan, command_execution, codex_invocation, git_mutation, commit, tag, push, rollback, retry, github_mutation, unbounded_loop, prompt222_update, n2_reevaluation]
+  - observed_outputs_available=false
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - prompt237_ready=true
+  - should_prepare_prompt237=true
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+  - should_stop=true
+  - next_action=prepare_prompt237_fresh_runtime_evidence_artifact_existence_review
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt236 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt236_out_20260430_202619
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt236_run_20260430_202619.log
+- Safety:
+  - No file reading.
+  - No JSON parsing.
+  - No file existence validation.
+  - No filesystem scanning.
+  - No command/runbook/check execution path.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+- Next:
+  - Prompt237 should consume project_browser_autonomous_fresh_runtime_evidence_supplied_artifact_path_review_* and prepare a metadata-only artifact existence review surface.

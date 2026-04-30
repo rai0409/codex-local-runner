@@ -3553,3 +3553,51 @@ Next step:
 
 - Prompt236 may prepare a supplied artifact path review surface.
 - Prompt236 must not parse file contents, validate JSON contents, infer evidence, update Prompt222 fields, or re-evaluate N=2.
+
+## Prompt236 architecture note - fresh runtime evidence supplied artifact path review surface
+
+Prompt236 adds a metadata-only supplied artifact path review surface:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_supplied_artifact_path_review_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_observed_artifact_intake_*
+- Current status:
+  - fresh_runtime_evidence_supplied_artifact_path_review_prepared_no_supplied_paths
+- Current interpretation:
+  - Prompt236 prepared path review metadata only.
+  - No explicit supplied artifact paths are currently present.
+  - It did not read files.
+  - It did not parse JSON.
+  - It did not validate file existence.
+  - It did not scan the filesystem.
+  - It did not execute commands.
+  - It did not invoke Codex.
+  - It did not mutate git state.
+  - It did not infer fresh runtime evidence.
+  - Therefore observed_outputs_available, fresh_runtime_evidence_detected, fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+- Artifact path requirements:
+  - explicit_paths_only
+  - no_filesystem_discovery
+  - no_glob_expansion
+  - same_out_dir_required
+  - same_job_id_required
+  - required_artifact_names_must_match
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt237 may prepare an artifact existence review surface.
+- Prompt237 must not parse JSON contents, infer evidence validity, update Prompt222 fields, or re-evaluate N=2.
