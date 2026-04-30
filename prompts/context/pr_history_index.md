@@ -5914,3 +5914,54 @@ Known follow-up:
   - No N=2 re-evaluation.
 - Next:
   - Prompt240 should consume project_browser_autonomous_fresh_runtime_evidence_artifact_consistency_review_* and prepare a metadata-only fresh runtime evidence validity decision surface.
+
+## Prompt240 - fresh runtime evidence validity decision surface
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_evidence_validity_decision_state(...)
+  - project_browser_autonomous_fresh_runtime_evidence_validity_decision_*
+- Purpose:
+  - Consume Prompt239 artifact consistency review surface.
+  - Decide whether fresh runtime evidence validity can be determined.
+  - Preserve blocked/false posture while artifact consistency is not reviewable.
+- Key current values:
+  - status=fresh_runtime_evidence_validity_decision_blocked_artifact_consistency_not_reviewable
+  - source=prompt240_fresh_runtime_evidence_validity_decision
+  - selected_check_kind=fresh_runtime_evidence_check
+  - required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - supplied_artifact_paths=[]
+  - missing_supplied_artifact_paths=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - artifact_consistency_status=not_reviewable_missing_supplied_artifact_paths
+  - consistency_block_reason=missing_supplied_artifact_paths
+  - prompt240_preconditions_ready=false
+  - validity_decision_ready=false
+  - validity_status=blocked_artifact_consistency_not_reviewable
+  - validity_block_reason=missing_supplied_artifact_paths
+  - validity_findings=[artifact_consistency_not_reviewable, supplied_artifact_paths_missing, content_review_not_ready, json_review_not_ready, evidence_validation_not_ready]
+  - prompt241_bridge_ready=true
+  - should_prepare_prompt241=true
+  - should_stop=true
+  - next_action=prepare_prompt241_fresh_runtime_evidence_truth_bridge
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt240 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt240_out_20260430_204600
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt240_run_20260430_204600.log
+- Safety:
+  - Metadata-only surface.
+  - No file read.
+  - No JSON parse.
+  - No filesystem scan.
+  - No file-existence validation.
+  - No command execution.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+  - No Prompt222 update.
+  - No N=2 re-evaluation.
+- Next:
+  - Prompt241 should consume project_browser_autonomous_fresh_runtime_evidence_validity_decision_* and prepare a combined truth bridge readiness, blocked Prompt222 reflection posture, N=2 readiness blocked summary, and manual artifact supply direction surface.

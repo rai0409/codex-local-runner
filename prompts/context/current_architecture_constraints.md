@@ -3733,3 +3733,43 @@ Next step:
 - Prompt240 may prepare a fresh runtime evidence validity decision surface.
 - Since prompt240_preconditions_ready=false, Prompt240 must keep fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed false.
 - Prompt240 must not read files, parse JSON, infer validity true, update Prompt222 fields, or re-evaluate N=2.
+
+## Prompt240 architecture note - fresh runtime evidence validity decision surface
+
+Prompt240 adds a metadata-only validity decision surface:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_validity_decision_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_artifact_consistency_review_*
+- Current status:
+  - fresh_runtime_evidence_validity_decision_blocked_artifact_consistency_not_reviewable
+- Current interpretation:
+  - Prompt240 consumed artifact consistency review metadata.
+  - Artifact consistency is not reviewable because supplied artifact paths are missing.
+  - prompt240_preconditions_ready=false.
+  - validity_decision_ready=false.
+  - fresh_runtime_evidence_valid remains false.
+  - completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+  - prompt241_bridge_ready=true only means Prompt241 may prepare the next metadata-only bridge surface.
+  - It does not authorize Prompt222 updates, truth updates, or N=2 readiness changes.
+- Current blocker:
+  - validity_block_reason=missing_supplied_artifact_paths
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt241 may prepare a combined truth bridge readiness / blocked Prompt222 reflection / N=2 blocked summary / manual artifact supply direction surface.
+- Since validity_decision_ready=false, Prompt241 must keep truth_update_allowed=false and must not update Prompt222 or re-evaluate N=2.
