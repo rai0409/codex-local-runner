@@ -6168,3 +6168,68 @@ Known follow-up:
   - No N=2 re-evaluation.
 - Next:
   - Prompt244 should consume project_browser_autonomous_artifact_supply_review_readiness_phase_* and prepare a broader manual supply handling, review permission recalculation, assimilation readiness, and next read/parse gate direction phase.
+
+## Prompt244 - artifact review and manual supply handling phase
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_artifact_review_manual_supply_handling_phase_state(...)
+  - project_browser_autonomous_artifact_review_manual_supply_handling_phase_*
+- Purpose:
+  - Consume Prompt243 artifact supply/review readiness phase.
+  - Prepare manual supply handling, path extraction/normalization metadata, permission recalculation, assimilation readiness, validity recheck readiness, and next read/parse gate direction.
+  - Preserve blocked posture while explicit artifact paths are missing.
+- Key current values:
+  - status=artifact_review_manual_supply_handling_phase_awaiting_explicit_paths
+  - source=prompt244_artifact_review_manual_supply_handling_phase
+  - supplied_artifact_paths=[]
+  - missing_supplied_artifact_paths=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - manual_supply_handling_ready=true
+  - manual_supply_status=awaiting_explicit_supplied_artifact_paths
+  - path_extraction_status=no_explicit_paths_to_extract
+  - normalized_supplied_artifact_paths=[]
+  - path_requirement_conformance=blocked_missing_supplied_artifact_paths
+  - same_run_scope_conformance=blocked_missing_supplied_artifact_paths
+  - artifact_name_conformance=blocked_missing_supplied_artifact_paths
+  - review_permission_recalculation_status=blocked_missing_supplied_artifact_paths
+  - review_permission_summary={existence_review_permission:false, content_review_permission:false, json_review_permission:false}
+  - artifact_review_assimilation_ready=false
+  - artifact_review_assimilation_status=blocked_missing_supplied_artifact_paths
+  - validity_recheck_ready=false
+  - validity_recheck_status=blocked_artifact_review_not_ready
+  - read_parse_gate_ready=false
+  - read_parse_gate_status=blocked_missing_supplied_artifact_paths
+  - truth_update_allowed=false
+  - prompt222_reflection_allowed=false
+  - n2_readiness_allowed=false
+  - should_prepare_prompt245=true
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_stop=true
+  - next_action=prepare_prompt245_read_parse_permission_and_content_consistency_contract
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt244 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt244_out_20260430_210849
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt244_run_20260430_210849.log
+- Safety:
+  - Metadata-only surface.
+  - No file read.
+  - No JSON parse.
+  - No filesystem scan.
+  - No existence validation.
+  - No command execution.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+  - No Prompt222 update.
+  - No N=2 re-evaluation.
+- Next:
+  - Prompt245 should consume project_browser_autonomous_artifact_review_manual_supply_handling_phase_* and prepare a read/parse permission gate plus content/JSON consistency contract.

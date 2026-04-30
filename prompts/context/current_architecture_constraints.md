@@ -3904,3 +3904,53 @@ Next step:
 
 - Prompt244 should prepare manual supplied path handling, explicit path extraction/normalization metadata, path requirement conformance, review permission recalculation, artifact review assimilation readiness, validity recheck readiness, and next read/parse gate direction.
 - Prompt244 must not read files, parse JSON, mark evidence valid, update Prompt222, or re-evaluate N=2.
+
+## Prompt244 architecture note - artifact review manual supply handling phase
+
+Prompt244 adds a metadata-only artifact review/manual supply handling phase:
+
+- Prefix:
+  - project_browser_autonomous_artifact_review_manual_supply_handling_phase_*
+- Source:
+  - project_browser_autonomous_artifact_supply_review_readiness_phase_*
+- Current status:
+  - artifact_review_manual_supply_handling_phase_awaiting_explicit_paths
+- Current interpretation:
+  - Prompt244 prepared manual supply handling and read/parse gate direction metadata.
+  - Explicit artifact paths are still missing.
+  - Path extraction has no explicit paths to extract.
+  - Review permission recalculation is blocked.
+  - Artifact review assimilation is not ready.
+  - Validity recheck is not ready.
+  - Read/parse gate is not ready.
+  - truth_update_allowed=false.
+  - prompt222_reflection_allowed=false.
+  - n2_readiness_allowed=false.
+  - It did not read files, parse JSON, validate file existence, scan filesystem, execute commands, invoke Codex, mutate git, update Prompt222, or re-evaluate N=2.
+- Current blocker:
+  - read_parse_gate_status=blocked_missing_supplied_artifact_paths
+  - artifact_review_assimilation_status=blocked_missing_supplied_artifact_paths
+  - validity_recheck_status=blocked_artifact_review_not_ready
+- Required artifacts:
+  - approved_restart_execution_contract.json
+  - run_state.json
+  - manifest.json
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt245 should prepare a read/parse permission gate plus content/JSON consistency contract.
+- Prompt245 may define read permission, parse permission, content consistency contract, JSON key/schema expectation contract, and triad consistency preconditions.
+- Prompt245 must not actually read files, parse JSON, mark fresh evidence valid, update Prompt222, or re-evaluate N=2.
