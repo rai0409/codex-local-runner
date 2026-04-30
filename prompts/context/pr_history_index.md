@@ -5303,3 +5303,37 @@ Known follow-up:
   - Downstream consumers must explicitly adopt project_browser_autonomous_bounded_n2_prompt229_handoff_packet_*.
 - Next:
   - Prompt229 should consume the canonical handoff packet and create a metadata-only fresh runtime evidence / E2E readiness gate.
+
+## Prompt229 - fresh runtime E2E readiness gate
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_e2e_readiness_gate_state(...)
+  - project_browser_autonomous_fresh_runtime_e2e_readiness_gate_*
+- Purpose:
+  - Consume Prompt228-fix12 canonical Prompt229 handoff packet.
+  - Convert root_cause_reason_family=fresh_surface_missing into a metadata-only Prompt230 check contract.
+- Key behavior:
+  - selected_check_kind=fresh_runtime_evidence_check
+  - fresh_runtime_evidence_required=true
+  - fresh_runtime_evidence_available=false
+  - fresh_runtime_evidence_check_ready=true
+  - e2e_readiness_check_ready=false
+  - prompt230_check_ready=true
+  - should_prepare_prompt230=true
+  - should_prepare_fresh_runtime_evidence_check=true
+  - should_prepare_e2e_readiness_check=false
+  - should_prepare_manual_review=true
+  - should_invoke_codex=false
+  - should_push=false
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py and run_planned_execution.py
+  - runner dry-run generated approved_restart_execution_contract.json
+  - missing_count=0 in key Prompt229 inspection
+- Safety:
+  - No Codex execution.
+  - No rollback/commit/push/GitHub/retry/unbounded-loop behavior.
+  - No N=2 authority relaxation.
+- Next:
+  - Prompt230 should consume the Prompt229 check contract and expose a metadata-only fresh runtime evidence check consumer/preflight surface.

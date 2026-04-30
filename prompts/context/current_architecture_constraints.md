@@ -3312,3 +3312,30 @@ Architecture constraints:
 - Do not infer Prompt229 readiness from reason_family alone.
 - Prompt229 readiness must remain controlled by explicit readiness booleans and the handoff packet.
 - The current blocker is fresh_surface_missing; next work should prepare fresh runtime evidence / E2E readiness without adding execution, push, GitHub, retry, or unbounded-loop behavior.
+
+## Prompt229 architecture note - fresh runtime E2E readiness gate
+
+Prompt229 adds a metadata-only readiness gate:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_e2e_readiness_gate_*
+- Source:
+  - project_browser_autonomous_bounded_n2_prompt229_handoff_packet_*
+- Root cause handled:
+  - root_cause_reason_family=fresh_surface_missing
+- Contract emitted:
+  - project_browser_autonomous_fresh_runtime_e2e_readiness_gate_prompt230_check_contract
+  - project_browser_autonomous_fresh_runtime_e2e_readiness_gate_check_command_contract
+  - expected_output_files
+  - success_criteria
+  - failure_triage_fields
+
+Interpretation rule:
+
+- prompt230_check_ready=true means Prompt230 may prepare/check fresh runtime evidence metadata.
+- It does not mean fresh runtime evidence already exists.
+- It does not authorize Codex execution, rollback, commit, tag, push, GitHub mutation, retry, unbounded loop, or N=2 execution.
+
+Current next step:
+
+- Prompt230 should consume the Prompt229 contract and expose project_browser_autonomous_fresh_runtime_evidence_check_* without mutating git state or invoking Codex.
