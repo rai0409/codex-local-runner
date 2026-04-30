@@ -5384,3 +5384,52 @@ Known follow-up:
   - No commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
 - Next:
   - Prompt231 should consume project_browser_autonomous_fresh_runtime_evidence_check_* and expose a metadata-only fresh runtime evidence result review surface.
+
+## Prompt231 - fresh runtime evidence result review surface
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_evidence_result_review_state(...)
+  - project_browser_autonomous_fresh_runtime_evidence_result_review_*
+- Purpose:
+  - Consume Prompt230 fresh runtime evidence check surface.
+  - Prepare a metadata-only fresh runtime evidence result review surface.
+  - Keep current chain blocked until real fresh runtime evidence is observed.
+- Key current values:
+  - status=fresh_runtime_evidence_result_review_prepared_no_observed_outputs
+  - source=prompt231_fresh_runtime_evidence_result_review
+  - prompt230_surface_available=true
+  - prompt230_surface_authoritative=true
+  - selected_check_kind=fresh_runtime_evidence_check
+  - command_contract_available=true
+  - review_prepared=true
+  - observed_outputs_available=false
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - prompt232_ready=true
+  - should_prepare_prompt232=true
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+  - should_stop=true
+  - next_action=prepare_prompt232_fresh_runtime_evidence_execution_contract
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt231_out_20260430_195757
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt231_run_20260430_195757.log
+- Safety:
+  - No check command execution path.
+  - No Codex invocation.
+  - No new executor.
+  - No commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+- Next:
+  - Prompt232 should consume project_browser_autonomous_fresh_runtime_evidence_result_review_* and prepare a bounded/manual fresh runtime evidence runbook contract.

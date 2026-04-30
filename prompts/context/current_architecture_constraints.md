@@ -3368,3 +3368,32 @@ Next step:
 - Prompt231 may prepare a metadata-only fresh runtime evidence result review surface.
 - Prompt231 must not infer evidence from Prompt230 readiness alone.
 - Prompt231 must not mutate git state or invoke Codex.
+
+## Prompt231 architecture note - fresh runtime evidence result review surface
+
+Prompt231 adds a metadata-only result review surface:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_result_review_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_check_*
+- Current status:
+  - fresh_runtime_evidence_result_review_prepared_no_observed_outputs
+- Current interpretation:
+  - Prompt231 consumed the Prompt230 evidence check surface.
+  - It did not execute the check command.
+  - It did not observe fresh runtime evidence.
+  - Therefore observed_outputs_available, fresh_runtime_evidence_detected, fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+- Safety invariant:
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt232 may prepare a bounded/manual fresh runtime evidence runbook contract.
+- In Prompt232, execution_contract means contract/runbook metadata only.
+- Prompt232 must not execute the command, invoke Codex, mutate git, push, rollback, retry, or start an unbounded loop.
