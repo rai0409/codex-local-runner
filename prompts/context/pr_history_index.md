@@ -6098,3 +6098,73 @@ Known follow-up:
   - No N=2 re-evaluation.
 - Next:
   - Prompt243 should consume project_browser_autonomous_manual_artifact_supply_path_intake_* and prepare a broader artifact supply/review readiness and validity recheck phase.
+
+## Prompt243 - artifact supply and review readiness phase
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_artifact_supply_review_readiness_phase_state(...)
+  - project_browser_autonomous_artifact_supply_review_readiness_phase_*
+- Purpose:
+  - Consume Prompt242 manual artifact supply path intake surface.
+  - Consolidate artifact supply status, path intake status, review permission summary, artifact review assimilation readiness, validity recheck readiness, and blocked truth/N=2 posture.
+  - Preserve metadata-only blocked posture while explicit artifact paths are missing.
+- Key current values:
+  - status=artifact_supply_review_readiness_phase_blocked_missing_supplied_paths
+  - source=prompt243_artifact_supply_review_readiness_phase
+  - prompt242_surface_available=true
+  - prompt242_surface_authoritative=true
+  - selected_check_kind=fresh_runtime_evidence_check
+  - required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - supplied_artifact_paths=[]
+  - missing_supplied_artifact_paths=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - manual_artifact_supply_required=true
+  - path_intake_ready=true
+  - path_intake_status=awaiting_explicit_supplied_artifact_paths
+  - expected_supplied_path_fields=[approved_restart_execution_contract_json_path, run_state_json_path, manifest_json_path]
+  - path_shape_requirements=[explicit_paths_only, absolute_or_repo_resolved_paths_only, no_glob_expansion, no_filesystem_discovery]
+  - same_run_scope_requirements=[same_out_dir_required, same_job_id_required, same_transport_mode_required]
+  - artifact_name_requirements=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - review_permission_summary={existence_review_permission:false, content_review_permission:false, json_review_permission:false}
+  - artifact_review_assimilation_ready=false
+  - artifact_review_assimilation_status=blocked_missing_supplied_artifact_paths
+  - artifact_review_assimilation_block_reason=missing_supplied_artifact_paths
+  - validity_recheck_ready=false
+  - validity_recheck_status=blocked_artifact_review_not_ready
+  - validity_recheck_block_reason=missing_supplied_artifact_paths
+  - truth_update_allowed=false
+  - prompt222_reflection_allowed=false
+  - n2_readiness_allowed=false
+  - next_manual_action=supply_explicit_fresh_runtime_artifact_paths
+  - forbidden_actions=[read_files, parse_json, validate_file_existence, filesystem_scan, command_execution, codex_invocation, git_mutation, commit, tag, push, rollback, retry, github_mutation, unbounded_loop, prompt222_update, n2_reevaluation]
+  - observed_outputs_available=false
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - should_prepare_prompt244=true
+  - should_stop=true
+  - next_action=prepare_prompt244_artifact_review_and_manual_supply_handling_phase
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt243 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt243_out_20260430_210128
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt243_run_20260430_210128.log
+- Safety:
+  - Metadata-only surface.
+  - No file reads.
+  - No JSON parsing.
+  - No filesystem scanning.
+  - No existence validation.
+  - No shell execution.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+  - No Prompt222 update.
+  - No N=2 re-evaluation.
+- Next:
+  - Prompt244 should consume project_browser_autonomous_artifact_supply_review_readiness_phase_* and prepare a broader manual supply handling, review permission recalculation, assimilation readiness, and next read/parse gate direction phase.

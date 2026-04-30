@@ -3859,3 +3859,48 @@ Next step:
 - Prompt243 should prepare a broader artifact supply and review readiness phase.
 - Prompt243 may combine artifact supply status, path intake summary, review permission summary, assimilation readiness, and validity recheck readiness.
 - Prompt243 must not read files, parse JSON, mark evidence valid, update Prompt222, or re-evaluate N=2.
+
+## Prompt243 architecture note - artifact supply and review readiness phase
+
+Prompt243 adds a metadata-only artifact supply/review readiness phase:
+
+- Prefix:
+  - project_browser_autonomous_artifact_supply_review_readiness_phase_*
+- Source:
+  - project_browser_autonomous_manual_artifact_supply_path_intake_*
+- Current status:
+  - artifact_supply_review_readiness_phase_blocked_missing_supplied_paths
+- Current interpretation:
+  - Prompt243 consolidated manual artifact supply status, path intake, review permissions, assimilation readiness, validity recheck readiness, and blocked truth/N=2 posture.
+  - Explicit artifact paths are still missing.
+  - Artifact review assimilation is not ready.
+  - Validity recheck is not ready.
+  - truth_update_allowed=false.
+  - prompt222_reflection_allowed=false.
+  - n2_readiness_allowed=false.
+  - It did not read files, parse JSON, validate file existence, scan filesystem, execute commands, invoke Codex, mutate git, update Prompt222, or re-evaluate N=2.
+- Current blocker:
+  - artifact_review_assimilation_block_reason=missing_supplied_artifact_paths
+  - validity_recheck_block_reason=missing_supplied_artifact_paths
+- Required artifacts:
+  - approved_restart_execution_contract.json
+  - run_state.json
+  - manifest.json
+- Safety invariant:
+  - should_read_files=false
+  - should_parse_json=false
+  - should_validate_file_existence=false
+  - should_scan_filesystem=false
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+
+Next step:
+
+- Prompt244 should prepare manual supplied path handling, explicit path extraction/normalization metadata, path requirement conformance, review permission recalculation, artifact review assimilation readiness, validity recheck readiness, and next read/parse gate direction.
+- Prompt244 must not read files, parse JSON, mark evidence valid, update Prompt222, or re-evaluate N=2.
