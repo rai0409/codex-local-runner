@@ -3292,3 +3292,23 @@ Architecture constraints:
 - Prompt229 readiness must remain controlled by explicit Prompt228 readiness booleans.
 - reason_family/root_cause_reason_family may guide routing and remediation, but must not imply execution readiness by themselves.
 - Existing no-loop, no-retry, no-push, no-GitHub, no-new-executor, and accounting-safety boundaries remain mandatory.
+
+## Prompt228-fix12 constraint update
+
+Prompt228-fix12 added a canonical Prompt229 handoff packet.
+
+Current handoff behavior:
+- handoff_ready=false
+- selected_prompt229_path=none
+- prompt229_handoff_block_reason=prompt228_not_ready
+- selected_reason_family=manual_stop
+- root_cause_reason_family=fresh_surface_missing
+- should_prepare_prompt229=false
+- should_prepare_manual_review=true
+- should_stop=true
+
+Architecture constraints:
+- Prompt229+ should read project_browser_autonomous_bounded_n2_prompt229_handoff_packet_* as the canonical handoff surface.
+- Do not infer Prompt229 readiness from reason_family alone.
+- Prompt229 readiness must remain controlled by explicit readiness booleans and the handoff packet.
+- The current blocker is fresh_surface_missing; next work should prepare fresh runtime evidence / E2E readiness without adding execution, push, GitHub, retry, or unbounded-loop behavior.

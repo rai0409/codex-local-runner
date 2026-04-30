@@ -5263,3 +5263,43 @@ Known follow-up:
   - External/downstream consumers may still ignore the conformance gate until migrated to project_browser_autonomous_bounded_n2_policy_conformance_gate_*.
 - Next:
   - Prompt228-fix12 should add a compact Prompt229+ canonical handoff packet using policy-conformance fields and de-emphasizing raw legacy tokens.
+
+## Prompt228-fix12 - Add canonical Prompt229 handoff packet
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Purpose:
+  - Add a compact policy-backed canonical handoff packet for Prompt229+ stages.
+  - Avoid requiring Prompt229+ to read many detailed Prompt224-228 taxonomy/readout/policy/conformance fields directly.
+- Added:
+  - _build_project_browser_autonomous_bounded_n2_prompt229_handoff_packet_state(...)
+  - Output prefix:
+    - project_browser_autonomous_bounded_n2_prompt229_handoff_packet_*
+- Result:
+  - status=bounded_n2_prompt229_handoff_manual_stop
+  - handoff_ready=false
+  - handoff_source=prompt228_fix12_bounded_n2_prompt229_handoff_packet
+  - handoff_stage=prompt229_preflight_handoff
+  - conformance_passed=true
+  - policy_surface_authoritative=true
+  - selected_reason_family=manual_stop
+  - root_cause_reason_family=fresh_surface_missing
+  - prompt229_allowed_by_policy=false
+  - prompt229_ready_from_prompt228_booleans=false
+  - selected_prompt229_path=none
+  - prompt229_handoff_block_reason=prompt228_not_ready
+  - should_prepare_prompt229=false
+  - should_prepare_manual_review=true
+  - should_stop=true
+- Meaning:
+  - Prompt229 handoff packet is now available.
+  - Current artifacts still do not authorize Prompt229 because fresh runtime evidence is missing.
+- Safety:
+  - No Prompt229 added.
+  - No tests added.
+  - No docs edited during Codex run.
+  - No executor, rollback, commit/tag execution, push, GitHub, retry, or unbounded-loop behavior added.
+- Remaining risk:
+  - Downstream consumers must explicitly adopt project_browser_autonomous_bounded_n2_prompt229_handoff_packet_*.
+- Next:
+  - Prompt229 should consume the canonical handoff packet and create a metadata-only fresh runtime evidence / E2E readiness gate.
