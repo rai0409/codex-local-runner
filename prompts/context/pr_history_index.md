@@ -5490,3 +5490,62 @@ Known follow-up:
   - No commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
 - Next:
   - Prompt233 should consume project_browser_autonomous_fresh_runtime_evidence_runbook_contract_* and prepare a bounded manual run command packet.
+
+## Prompt233 - fresh runtime evidence manual run command packet
+
+- File changed:
+  - automation/orchestration/planned_execution_runner.py
+- Added:
+  - _build_project_browser_autonomous_fresh_runtime_evidence_manual_run_command_packet_state(...)
+  - project_browser_autonomous_fresh_runtime_evidence_manual_run_command_packet_*
+- Purpose:
+  - Consume Prompt232 bounded/manual runbook contract.
+  - Prepare a metadata-only bounded manual command packet for obtaining fresh runtime evidence later.
+  - Do not execute the command packet in Prompt233.
+- Key current values:
+  - status=fresh_runtime_evidence_manual_run_command_packet_prepared
+  - source=prompt233_fresh_runtime_evidence_manual_run_command_packet
+  - prompt232_surface_available=true
+  - prompt232_surface_authoritative=true
+  - selected_check_kind=fresh_runtime_evidence_check
+  - command_packet_ready=true
+  - runbook_kind=bounded_manual_fresh_runtime_evidence_check
+  - transport_mode=dry-run
+  - repo_path=/home/rai/codex-local-runner
+  - artifacts_dir=/tmp/codex-local-runner-decision/artifacts
+  - required_artifacts=[approved_restart_execution_contract.json, run_state.json, manifest.json]
+  - forbidden_actions=[codex_invocation, git_mutation, commit, tag, push, rollback, retry, github_mutation, unbounded_loop]
+  - observed_outputs_available=false
+  - fresh_runtime_evidence_detected=false
+  - fresh_runtime_evidence_valid=false
+  - completed_fresh_surface_detected=false
+  - one_step_accounting_valid=false
+  - stop_policy_passed=false
+  - prompt234_ready=true
+  - should_prepare_prompt234=true
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+  - should_stop=true
+  - next_action=prepare_prompt234_fresh_runtime_evidence_manual_run_result_review
+- Validation observed:
+  - py_compile passed for planned_execution_runner.py
+  - py_compile passed for scripts/run_planned_execution.py
+  - runner dry-run completed
+  - approved_restart_execution_contract.json generated
+  - required Prompt233 fields present with missing_count=0
+  - OUT_DIR=/tmp/codex-local-runner-checks/prompt233_out_20260430_201144
+  - RUNLOG=/tmp/codex-local-runner-checks/prompt233_run_20260430_201144.log
+- Safety:
+  - No command/runbook execution path.
+  - No Codex invocation.
+  - No git mutation/commit/tag/push/rollback/GitHub/retry/unbounded-loop behavior.
+- Note:
+  - command_template formatting escaped ${OUT_DIR} to avoid KeyError('OUT_DIR') during dry-run artifact generation.
+- Next:
+  - Prompt234 should consume project_browser_autonomous_fresh_runtime_evidence_manual_run_command_packet_* and prepare a metadata-only manual run result review surface.

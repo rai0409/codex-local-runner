@@ -3427,3 +3427,51 @@ Next step:
 
 - Prompt233 should prepare a bounded manual run command packet from the Prompt232 runbook contract.
 - Prompt233 must not execute the command, execute the runbook, invoke Codex, mutate git, push, rollback, retry, or start an unbounded loop.
+
+## Prompt233 architecture note - fresh runtime evidence manual run command packet
+
+Prompt233 adds a metadata-only bounded manual command packet:
+
+- Prefix:
+  - project_browser_autonomous_fresh_runtime_evidence_manual_run_command_packet_*
+- Source:
+  - project_browser_autonomous_fresh_runtime_evidence_runbook_contract_*
+- Current status:
+  - fresh_runtime_evidence_manual_run_command_packet_prepared
+- Current interpretation:
+  - Prompt233 prepared a command packet only.
+  - It did not execute the command packet.
+  - It did not execute the runbook.
+  - It did not invoke Codex.
+  - It did not mutate git state.
+  - It did not observe fresh runtime evidence.
+  - Therefore observed_outputs_available, fresh_runtime_evidence_detected, fresh_runtime_evidence_valid, completed_fresh_surface_detected, one_step_accounting_valid, and stop_policy_passed remain false.
+- Safety invariant:
+  - should_execute_manual_command=false
+  - should_execute_runbook=false
+  - should_execute_check_command=false
+  - should_invoke_codex=false
+  - should_execute_commit=false
+  - should_execute_rollback=false
+  - should_push=false
+  - should_start_unbounded_loop=false
+- Required artifacts for later review:
+  - approved_restart_execution_contract.json
+  - run_state.json
+  - manifest.json
+- Forbidden actions:
+  - codex_invocation
+  - git_mutation
+  - commit
+  - tag
+  - push
+  - rollback
+  - retry
+  - github_mutation
+  - unbounded_loop
+
+Next step:
+
+- Prompt234 may prepare a metadata-only manual run result review surface.
+- Prompt234 must not infer observed evidence from command_packet_ready alone.
+- Prompt234 must not execute the command, execute the runbook, invoke Codex, mutate git, push, rollback, retry, or start an unbounded loop.
