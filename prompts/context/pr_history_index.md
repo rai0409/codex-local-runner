@@ -6816,3 +6816,49 @@ Observed key state:
 Next:
 - Prompt255 should add commit/tag command suggestion, next PR advancement metadata, project completion detection, and fix retry route metadata.
 - It must not execute git mutation, commit, tag, merge, push, Codex, ChatGPT, shell commands, or filesystem scans.
+
+## Prompt255 - commit/next-PR decision metadata
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only commit/next-PR decision support.
+- Added fix retry route metadata.
+- Added dev-loop completion metadata.
+- Synthetic dry-run MVP now reaches project_complete.
+- Commit/tag/merge/push remain external suggestions only and are not executed by the runner.
+- No ChatGPT API call, Codex invocation, artifact read/parse, filesystem scan, git diff inspection, command execution, git mutation, commit/tag/merge/push execution, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builders:
+  - _build_project_browser_autonomous_commit_next_pr_metadata_state(...)
+  - _build_project_browser_autonomous_fix_retry_route_state(...)
+  - _build_project_browser_autonomous_dev_loop_completion_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- dry-run passed.
+- Contract inspected:
+  /tmp/prompt255_out/prompt255-dry-run/approved_restart_execution_contract.json
+
+Observed key state:
+- commit_next_pr_metadata_status=commit_next_pr_metadata_ready
+- commit_next_pr_metadata_next_action=complete_project_metadata
+- fix_retry_route_status=fix_retry_route_not_required
+- fix_retry_route_next_action=prepare_commit_or_next_pr_metadata
+- dev_loop_completion_status=dev_loop_completion_project_complete
+- dev_loop_completion_next_action=complete_project
+- dev_loop_mvp_status=project_complete
+- dev_loop_mvp_current_stage=project_complete
+- dev_loop_mvp_next_action=complete_project
+- dev_loop_mvp_should_continue=false
+- dev_loop_mvp_should_stop=true
+
+Next:
+- Prompt256 should validate non-happy-path MVP behavior:
+  - failed Codex result / fix route
+  - multi-PR queue / next_pr_available=true
+  - explicit scenario mode that does not override real input
+- It must keep all execution, git mutation, ChatGPT/Codex invocation, and filesystem inspection disabled.

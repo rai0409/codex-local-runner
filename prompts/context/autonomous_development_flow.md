@@ -81,3 +81,24 @@ Current next milestone:
 - Add project completion detection.
 - Add fix retry route metadata.
 - Do not execute git mutation in-run.
+
+## Prompt255 implemented MVP completion metadata
+
+Prompt255 completed the synthetic approve-path MVP loop as metadata.
+
+Validated synthetic path:
+- project input
+- analysis summary
+- roadmap PR queue
+- PR prompt generation
+- Codex handoff readiness
+- Codex result ingestion
+- review approve decision
+- commit/next PR metadata
+- project_complete
+
+Current next milestone:
+- Validate failed-result fix route.
+- Validate multi-PR next_pr_available path.
+- Add explicit scenario mode for MVP verification.
+- Keep all mutation and external execution disabled.

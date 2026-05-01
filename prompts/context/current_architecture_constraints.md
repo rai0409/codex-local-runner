@@ -4309,3 +4309,30 @@ Safety constraints preserved:
 Next direction:
 - Prompt255 should add safe commit/tag command suggestion and next PR advancement metadata.
 - It should keep all mutation as external/manual command suggestions only.
+
+## Prompt255 constraint update - commit/next-PR metadata
+
+Prompt255 adds metadata-only commit/next-PR decision support.
+
+Current invariant:
+- Synthetic dry-run MVP can now reach project_complete.
+- Commit/tag/merge/push are still not executed by the runner.
+- Commit/tag strings are external suggestions only.
+- Fix retry and next-PR routing exist as metadata surfaces.
+
+Safety constraints preserved:
+- No ChatGPT API call.
+- No Codex invocation.
+- No artifact read or JSON parse.
+- No filesystem scan.
+- No git diff inspection.
+- No command execution.
+- No git mutation.
+- No commit/tag/merge/push execution.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Prompt256 should add explicit MVP scenario modes for approve, fix, and multi-PR next advancement.
+- Scenario metadata must not override explicit real dev-loop input.
