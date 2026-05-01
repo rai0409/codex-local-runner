@@ -6862,3 +6862,52 @@ Next:
   - multi-PR queue / next_pr_available=true
   - explicit scenario mode that does not override real input
 - It must keep all execution, git mutation, ChatGPT/Codex invocation, and filesystem inspection disabled.
+
+## Prompt256 - MVP scenario modes and result matrix
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only MVP scenario mode selection.
+- Added scenario result matrix validation.
+- Scenario mode now influences synthetic dev-loop input and synthetic Codex result behavior.
+- Default dry-run scenario is approve_single_pr_project_complete.
+- Current dry-run validates selected scenario and reaches project_complete.
+- No ChatGPT API call, Codex invocation, artifact read/parse, filesystem scan, command execution, git mutation, commit/tag/merge/push execution, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builders:
+  - _build_project_browser_autonomous_mvp_scenario_mode_state(...)
+  - _build_project_browser_autonomous_mvp_scenario_result_matrix_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- dry-run passed.
+- Contract inspected:
+  /tmp/prompt256_out/prompt256-dry-run/approved_restart_execution_contract.json
+
+Observed key state:
+- mvp_scenario_mode_status=mvp_scenario_mode_ready
+- mvp_scenario_mode_next_action=apply_mvp_scenario_mode
+- mvp_scenario_mode_selected=approve_single_pr_project_complete
+- mvp_scenario_result_matrix_status=mvp_scenario_result_matrix_passed
+- mvp_scenario_result_matrix_next_action=scenario_matrix_validated
+- review_fix_decision_status=review_fix_decision_approved
+- commit_next_pr_metadata_status=commit_next_pr_metadata_ready
+- dev_loop_completion_status=dev_loop_completion_project_complete
+- dev_loop_mvp_status=project_complete
+- dev_loop_mvp_current_stage=project_complete
+- dev_loop_mvp_next_action=complete_project
+- dev_loop_mvp_should_continue=false
+- dev_loop_mvp_should_stop=true
+
+Note:
+- A previous diff capture for this change may have been generated with prompt_id=prompt255 by mistake.
+- The actual implementation is Prompt256 and should be treated as Prompt256 in history.
+
+Next:
+- Prompt257 should add explicit real dev-loop input ingestion/readiness.
+- It should let explicit project_request_text, analysis_summary, roadmap_pr_queue, active_pr, scenario_mode, and Codex result metadata drive the MVP path without relying on synthetic seeds.
+- It must keep ChatGPT/Codex execution, filesystem inspection, command execution, and git mutation disabled.

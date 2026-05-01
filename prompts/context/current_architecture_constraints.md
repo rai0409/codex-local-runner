@@ -4336,3 +4336,30 @@ Safety constraints preserved:
 Next direction:
 - Prompt256 should add explicit MVP scenario modes for approve, fix, and multi-PR next advancement.
 - Scenario metadata must not override explicit real dev-loop input.
+
+## Prompt256 constraint update - MVP scenario modes
+
+Prompt256 adds metadata-only MVP scenario mode selection and scenario result matrix validation.
+
+Current invariant:
+- Scenario mode is metadata-only.
+- Scenario mode may select synthetic verification paths.
+- Synthetic seeds must not override explicit real dev-loop input.
+- Default dry-run mode is approve_single_pr_project_complete.
+- Selected scenario result is validated by expected/observed status and next_action.
+
+Safety constraints preserved:
+- No ChatGPT API call.
+- No Codex invocation.
+- No artifact read or JSON parse.
+- No filesystem scan.
+- No command execution.
+- No git mutation.
+- No commit/tag/merge/push execution.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Prompt257 should shift from synthetic-only verification to explicit real dev-loop input ingestion.
+- Explicit input must have priority over synthetic seeds.

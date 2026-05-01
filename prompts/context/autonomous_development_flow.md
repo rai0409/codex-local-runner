@@ -102,3 +102,17 @@ Current next milestone:
 - Validate multi-PR next_pr_available path.
 - Add explicit scenario mode for MVP verification.
 - Keep all mutation and external execution disabled.
+
+## Prompt256 implemented MVP scenario modes
+
+Prompt256 added scenario selection and scenario result matrix validation.
+
+Validated metadata capability:
+- approve_single_pr_project_complete
+- failed_result_fix_route
+- approve_multi_pr_next_pr_available
+
+Current next milestone:
+- Add explicit real dev-loop input readiness.
+- Use explicit project request / analysis / roadmap PR queue / active PR / Codex result metadata.
+- Keep synthetic seeds only as fallback dry-run verification.
