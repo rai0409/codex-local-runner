@@ -7115,3 +7115,61 @@ Next:
   - explicit_result_fail_fix_route
   - explicit_result_multi_pr_approve_next_pr
 - It should remain metadata-only and should not add tests/docs/new files.
+
+## Prompt261 - explicit result branch validation
+
+Status: implemented / validated
+
+Summary:
+- Added compact selected-branch validation for Prompt260 explicit result scenario modes.
+- Added branch-kind classification for:
+  - default_approve_branch
+  - fail_fix_branch
+  - multi_pr_next_branch
+- Validation compares expected vs observed review decision, MVP status, next_action, should_continue, should_stop, and next_pr_index.
+- Default dry-run selected explicit_result_approve_project_complete and validated default_approve_branch.
+- No ChatGPT/Codex invocation, external executor, network path, command execution feature path, git mutation path, tests, docs, or new files were added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builder:
+  - _build_project_browser_autonomous_explicit_result_branch_validation_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- normal dry-run passed.
+- Contract inspected:
+  /tmp/prompt261_out/prompt261-dry-run/approved_restart_execution_contract.json
+
+Observed key state:
+- explicit_result_scenario_mode_status=explicit_result_scenario_mode_ready
+- explicit_result_scenario_mode_selected=explicit_result_approve_project_complete
+- explicit_result_scenario_mode_next_action=apply_explicit_result_scenario_mode
+- review_fix_decision_status=review_fix_decision_approved
+- review_fix_decision_review_decision=approve
+- fix_retry_route_status=fix_retry_route_not_required
+- commit_next_pr_metadata_status=commit_next_pr_metadata_ready
+- commit_next_pr_metadata_next_pr_available=false
+- commit_next_pr_metadata_next_pr_index=0
+- dev_loop_completion_status=dev_loop_completion_project_complete
+- explicit_result_scenario_validation_status=explicit_result_scenario_validation_passed
+- explicit_result_branch_validation_status=explicit_result_branch_validation_passed
+- explicit_result_branch_validation_branch_kind=default_approve_branch
+- explicit_result_branch_validation_selected_mode=explicit_result_approve_project_complete
+- explicit_result_branch_validation_passed=true
+- dev_loop_mvp_status=project_complete
+- dev_loop_mvp_current_stage=project_complete
+- dev_loop_mvp_next_action=complete_project
+- dev_loop_mvp_should_continue=false
+- dev_loop_mvp_should_stop=true
+
+Important direction change:
+- Prompt252-Prompt261 completed the metadata/state-machine MVP baseline.
+- Next work must shift from adding metadata-only validation surfaces to connecting actual bounded execution paths.
+- Prompt262 should start with the ChatGPT browser UI path, using existing bounded browser command/execution components.
+- Do not create a new browser executor.
+- If the existing browser send/read path is unavailable, block with precise missing path/input reason instead of adding more metadata-only scaffolding.
+
+Next:
+- Prompt262 should connect one actual ChatGPT browser project-analysis prompt send path using existing bounded browser primitives.

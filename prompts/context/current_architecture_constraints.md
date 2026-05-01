@@ -4485,3 +4485,34 @@ Safety constraints preserved:
 
 Next direction:
 - Prompt261 should validate non-default explicit result scenario branches through compact metadata surfaces.
+
+## Prompt261 constraint update - branch validation and execution-shift baseline
+
+Prompt261 adds selected explicit result branch validation.
+
+Current invariant:
+- The metadata/state-machine MVP can represent:
+  - approve -> project_complete
+  - fail -> revise_pr_prompt_or_retry_codex
+  - multi-PR approve -> generate_next_pr_prompt
+- Prompt261 validates selected branch expectations against observed review decision, MVP status, next_action, continuation flags, stop flag, and next PR index.
+- Default dry-run validates the approve branch.
+
+Direction change after Prompt261:
+- Do not keep adding metadata-only scenario/validation layers unless required to connect real execution.
+- Next prompts should prioritize actual bounded execution wiring:
+  - ChatGPT browser prompt send
+  - ChatGPT browser response read/assimilation
+  - Codex handoff/execution
+  - Codex result review
+  - commit/tag gate
+- For ChatGPT, use the browser UI path, not ChatGPT API.
+- Reuse existing bounded browser primitives and command/execution paths.
+- Do not create a new browser executor unless explicitly scoped.
+
+Safety constraints preserved:
+- No new ChatGPT/Codex invocation path was added by Prompt261.
+- No external executor/network path.
+- No command execution feature path.
+- No git mutation.
+- No tests/docs/new files.

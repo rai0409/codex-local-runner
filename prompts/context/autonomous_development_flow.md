@@ -184,3 +184,19 @@ Available branches for Prompt261 validation:
 
 Current next milestone:
 - Validate non-default branches without adding execution, mutation, tests, docs, or new files.
+
+## Prompt261 implemented selected branch validation
+
+Prompt261 added selected branch validation for the explicit result scenario modes.
+
+Metadata MVP status:
+- approve branch can validate project_complete.
+- fail branch expectations are defined for revise_pr_prompt_or_retry_codex.
+- multi-PR branch expectations are defined for generate_next_pr_prompt.
+- The autonomous development state-machine baseline is now sufficient to shift to execution wiring.
+
+Current next milestone:
+- Stop expanding metadata-only validation unless needed.
+- Connect actual ChatGPT browser UI send path for project analysis.
+- Use existing bounded browser command/execution path.
+- If browser execution prerequisites are missing, block honestly with exact missing inputs/path.
