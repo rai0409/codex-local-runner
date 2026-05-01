@@ -4363,3 +4363,29 @@ Safety constraints preserved:
 Next direction:
 - Prompt257 should shift from synthetic-only verification to explicit real dev-loop input ingestion.
 - Explicit input must have priority over synthetic seeds.
+
+## Prompt257 constraint update - explicit real input readiness
+
+Prompt257 adds metadata-only explicit real dev-loop input readiness.
+
+Current invariant:
+- Synthetic MVP path is preserved when no explicit real input is supplied.
+- Explicit input readiness can detect project request, analysis summary, roadmap PR queue, active PR, scenario mode, Codex result, validation, and changed files metadata.
+- Real-input MVP path readiness classifies whether the current metadata is ready for PR prompt, Codex handoff, result review, or still waiting for explicit input.
+- Explicit readiness must not authorize ChatGPT/Codex execution, filesystem inspection, shell execution, or git mutation.
+
+Safety constraints preserved:
+- No ChatGPT API call.
+- No Codex invocation.
+- No artifact read or JSON parse.
+- No filesystem scan.
+- No git diff inspection.
+- No shell/manual/check command execution.
+- No git mutation.
+- No commit/tag/merge/push execution.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Prompt258 should inject explicit real input metadata for dry-run verification and ensure synthetic seeds do not override it.

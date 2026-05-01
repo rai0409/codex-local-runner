@@ -116,3 +116,16 @@ Current next milestone:
 - Add explicit real dev-loop input readiness.
 - Use explicit project request / analysis / roadmap PR queue / active PR / Codex result metadata.
 - Keep synthetic seeds only as fallback dry-run verification.
+
+## Prompt257 implemented explicit real input readiness
+
+Prompt257 added readiness surfaces for explicit real dev-loop input.
+
+Current capability:
+- Detect explicit project request / analysis / roadmap PR queue / active PR / scenario / Codex result metadata.
+- Classify real-input path readiness.
+- Preserve synthetic MVP fallback when no explicit input is present.
+
+Current next milestone:
+- Add explicit real input injection / override metadata for dry-run verification.
+- Verify explicit input can drive PR prompt generation and Codex handoff readiness without synthetic seed reliance.

@@ -6911,3 +6911,44 @@ Next:
 - Prompt257 should add explicit real dev-loop input ingestion/readiness.
 - It should let explicit project_request_text, analysis_summary, roadmap_pr_queue, active_pr, scenario_mode, and Codex result metadata drive the MVP path without relying on synthetic seeds.
 - It must keep ChatGPT/Codex execution, filesystem inspection, command execution, and git mutation disabled.
+
+## Prompt257 - explicit real dev-loop input readiness
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only explicit real dev-loop input readiness.
+- Added real-input MVP path readiness classification.
+- Explicit input readiness now detects project request, analysis summary, roadmap PR queue, active PR, scenario mode, Codex result, validation, and changed files metadata.
+- Current dry-run still preserves the Prompt256 synthetic path and reaches project_complete because no explicit real input is supplied.
+- No ChatGPT API call, Codex invocation, artifact read/parse, filesystem scan, git diff inspection, shell/manual/check command execution, git mutation, commit/tag/merge/push execution, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builders:
+  - _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(...)
+  - _build_project_browser_autonomous_real_input_mvp_path_readiness_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- dry-run passed.
+- Contract inspected:
+  /tmp/prompt257_out/prompt257-dry-run/approved_restart_execution_contract.json
+
+Observed key state:
+- explicit_dev_loop_input_readiness_status=explicit_dev_loop_input_readiness_missing_required_input
+- explicit_dev_loop_input_readiness_next_action=use_synthetic_seed_or_provide_explicit_input
+- real_input_mvp_path_readiness_status=real_input_mvp_path_waiting_for_explicit_input
+- real_input_mvp_path_readiness_next_action=use_synthetic_seed_or_provide_explicit_input
+- mvp_scenario_mode_status=mvp_scenario_mode_ready
+- mvp_scenario_mode_next_action=apply_mvp_scenario_mode
+- mvp_scenario_result_matrix_status=mvp_scenario_result_matrix_passed
+- mvp_scenario_result_matrix_next_action=scenario_matrix_validated
+- dev_loop_mvp_status=project_complete
+- dev_loop_mvp_next_action=complete_project
+
+Next:
+- Prompt258 should add metadata-only explicit real input injection / dry-run override support.
+- It should verify that explicit project_request_text, analysis_summary, roadmap_pr_queue, active_pr, and scenario_mode can drive the path to PR prompt / Codex handoff readiness without relying on synthetic input.
+- It must keep ChatGPT/Codex execution, filesystem inspection, command execution, and git mutation disabled.
