@@ -1,13 +1,45 @@
 #!/usr/bin/env bash
 set -u
 
-PROMPT_ID="${1:-}"
-TITLE="${2:-}"
+# Usage:
+#   ./scripts/capture_prompt_diff.sh
+#   ./scripts/capture_prompt_diff.sh prompt258 explicit-real-input-injection
+#
+# No-arg mode:
+#   Infers the next prompt id from the latest promptNNN-* tag.
+#   Example: latest tag prompt257-explicit-dev-loop-input-readiness -> prompt258
 
-if [ -z "$PROMPT_ID" ] || [ -z "$TITLE" ]; then
-  echo "Usage: $0 <prompt_id> <title>"
-  echo "Example: $0 prompt255 commit-next-pr-metadata"
-  exit 2
+INPUT_PROMPT_ID="${1:-}"
+INPUT_TITLE="${2:-}"
+
+LATEST_PROMPT_TAG="$(
+  git tag --list 'prompt[0-9]*' \
+    | grep -E '^prompt[0-9]+' \
+    | sed -E 's/^(prompt[0-9]+).*/\1 &/' \
+    | sort -V \
+    | tail -n 1 \
+    | cut -d' ' -f2-
+)"
+
+if [ -z "$INPUT_PROMPT_ID" ]; then
+  if [ -n "$LATEST_PROMPT_TAG" ]; then
+    LATEST_NUM="$(
+      printf '%s\n' "$LATEST_PROMPT_TAG" \
+        | sed -E 's/^prompt([0-9]+).*/\1/'
+    )"
+    NEXT_NUM=$((10#$LATEST_NUM + 1))
+    PROMPT_ID="prompt${NEXT_NUM}"
+  else
+    PROMPT_ID="prompt_unknown"
+  fi
+else
+  PROMPT_ID="$INPUT_PROMPT_ID"
+fi
+
+if [ -z "$INPUT_TITLE" ]; then
+  TITLE="auto-diff"
+else
+  TITLE="$INPUT_TITLE"
 fi
 
 TS="$(date +%Y%m%d_%H%M%S)"
@@ -24,6 +56,7 @@ PATCH="$OUT_DIR/${TS}_${PROMPT_ID}_${SAFE_TITLE}_full.patch"
   echo "prompt_id=$PROMPT_ID"
   echo "title=$TITLE"
   echo "repo=$(pwd)"
+  echo "latest_prompt_tag=${LATEST_PROMPT_TAG:-}"
   echo
 
   echo "## Git HEAD"
@@ -107,5 +140,8 @@ PATCH="$OUT_DIR/${TS}_${PROMPT_ID}_${SAFE_TITLE}_full.patch"
   git diff --cached --find-renames --find-copies --binary
 } > "$PATCH"
 
+echo "PROMPT_ID=$PROMPT_ID"
+echo "TITLE=$TITLE"
+echo "LATEST_PROMPT_TAG=${LATEST_PROMPT_TAG:-}"
 echo "REPORT=$REPORT"
 echo "PATCH=$PATCH"
