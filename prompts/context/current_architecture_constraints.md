@@ -4543,3 +4543,33 @@ Next direction:
 - Prompt262b should resolve the exact runtime mode or command needed to perform one bounded browser send.
 - Do not add another metadata-only scenario/validation surface.
 - If runtime cannot be enabled safely, block with exact missing prerequisite.
+
+## Prompt262b constraint update - browser runtime enablement
+
+Prompt262b adds ChatGPT browser runtime enablement metadata.
+
+Current invariant:
+- ChatGPT means browser UI path, not ChatGPT API.
+- Existing browser send path is available.
+- Actual send was not attempted in dry-run.
+- Required transport mode is live.
+- send_attempted=true remains allowed only after an actual bounded browser send receipt from the existing runner/browser execution path.
+- Ad-hoc shell/browser send commands remain forbidden.
+- Prompt262b did not add a new browser executor.
+
+Current blocker:
+- current_transport_mode=dry-run
+- required_transport_mode=live
+- runtime_block_reason=command_queue_blocked
+- queue_mode=none
+- executor_mode=none
+- launch_preflight_mode=blocked
+
+Required environment prerequisites:
+- playwright_runtime_available
+- browser_session_user_data_dir_configured
+- chatgpt_login_session_active
+- selector_contract_ready
+
+Next direction:
+- Prompt263 should resolve the live browser runtime blockers and attempt exactly one bounded ChatGPT browser project-analysis send if safe.
