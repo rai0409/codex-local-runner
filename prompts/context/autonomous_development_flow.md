@@ -51,3 +51,13 @@ Current next milestone:
 - Provide explicit synthetic dev-loop input.
 - Advance from missing_project_request to generated PR prompt and Codex handoff readiness.
 - Keep ChatGPT/Codex/git execution external or metadata-only.
+
+## Prompt253 implemented synthetic MVP handoff readiness
+
+Prompt253 added dry-run synthetic input so the MVP spine can advance to PR prompt generation and Codex handoff readiness.
+
+Current next milestone:
+- Add Codex result ingestion metadata.
+- Add approve/fix review decision.
+- Add fix prompt generation.
+- Add commit/next-PR decision metadata without executing git mutation.

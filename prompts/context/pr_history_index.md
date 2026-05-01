@@ -6715,3 +6715,48 @@ Observed key dev_loop_mvp state:
 
 Next:
 - Prompt253 should provide a synthetic explicit dev-loop input path and drive the MVP spine from project_request to generated PR prompt / Codex handoff readiness.
+
+## Prompt253 - dev-loop synthetic input to PR prompt handoff
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only synthetic dev-loop input seed.
+- Added PR prompt readiness surface.
+- Dry-run now advances the autonomous MVP spine from missing_project_request to await_codex_result.
+- Synthetic input is only for dry-run / MVP verification and must not override explicit dev-loop input.
+- No ChatGPT API call, Codex invocation, artifact read/parse, filesystem scan, command execution, git mutation, commit/tag/merge/push, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builders:
+  - _build_project_browser_autonomous_dev_loop_synthetic_input_seed_state(...)
+  - _build_project_browser_autonomous_dev_loop_pr_prompt_readiness_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- dry-run passed.
+- Contract inspected:
+  /tmp/prompt253_out/project-planned-exec/approved_restart_execution_contract.json
+- Diff report:
+  /tmp/codex-local-runner-diff-logs/20260501_204537_prompt253_dev-loop-synthetic-input_diff_report.txt
+- Full patch:
+  /tmp/codex-local-runner-diff-logs/20260501_204537_prompt253_dev-loop-synthetic-input_full.patch
+
+Observed key state:
+- synthetic_input_seed_status=synthetic_input_seed_ready
+- synthetic_input_seed_enabled=true
+- synthetic_input_seed_enabled_reason=normal_dry_run_without_explicit_dev_loop_input
+- synthetic_input_seed_next_action=apply_synthetic_input_to_dev_loop
+- pr_prompt_readiness_status=pr_prompt_readiness_ready_for_codex_handoff
+- pr_prompt_readiness_next_action=await_codex_result
+- pr_prompt_ready=true
+- codex_handoff_ready=true
+- dev_loop_mvp_status=waiting_for_codex_result
+- dev_loop_mvp_current_stage=codex_result_review
+- dev_loop_mvp_next_action=await_codex_result
+
+Next:
+- Prompt254 should add metadata-only Codex result ingestion / review / fix decision.
+- It should advance from await_codex_result to approve/fix decision without invoking Codex or mutating git.

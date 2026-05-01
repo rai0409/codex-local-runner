@@ -4249,3 +4249,32 @@ Safety constraints preserved:
 Next direction:
 - Prompt253 should not add another tiny blocked surface.
 - Prompt253 should add explicit synthetic dev-loop input support and verify the MVP spine can advance to PR prompt generation and Codex handoff readiness without external execution.
+
+## Prompt253 constraint update - synthetic input / PR prompt readiness
+
+Prompt253 validates the autonomous development MVP spine using metadata-only synthetic input.
+
+Current invariant:
+- Synthetic input is dry-run / MVP verification only.
+- Synthetic input must not override explicit dev-loop input.
+- The MVP spine can now reach:
+  - pr_prompt_ready=true
+  - codex_handoff_ready=true
+  - current_stage=codex_result_review
+  - next_action=await_codex_result
+
+Safety constraints preserved:
+- No ChatGPT API call.
+- No Codex invocation.
+- No artifact read or JSON parse.
+- No filesystem scan.
+- No command execution.
+- No git mutation.
+- No commit/tag/merge/push.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Prompt254 should add explicit/synthetic Codex result ingestion and review/fix decision metadata.
+- It must not execute commit, merge, push, Codex, ChatGPT, or shell commands.
