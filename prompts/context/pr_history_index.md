@@ -6521,3 +6521,65 @@ Important note:
 - This branch did not yet contain explicit Prompt249 builder symbols.
 - Prompt250 was wired against the normalized ingestion surface with compatible metadata fallback.
 - Therefore Prompt251 should not proceed to artifact content review yet. It should add an explicit supplied-path payload carrier / normalization bridge first.
+
+## Prompt250 - bounded artifact existence/read/parse gate
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only bounded artifact existence/read/parse gate.
+- Implemented Prompt249-style supplied path payload normalization / permission state and wired Prompt250 to consume the normalized state.
+- Prompt250 remains safely blocked because explicit supplied artifact paths are still missing.
+- No actual file read, JSON parse, file existence validation, filesystem scan, shell command execution, git mutation, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builder:
+  - _build_project_browser_autonomous_supplied_path_payload_normalization_permission_state(...)
+- Prompt250 builder:
+  - _build_project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state(...)
+- Key wiring:
+  - Prompt249 build/normalize and Prompt250 consumption wired.
+  - Prompt250 status / next_action exposed in compact planning summary.
+  - Prompt250 fields exposed in supporting truth refs.
+  - Prompt250 fields included in final approved restart payload normalized map.
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- Dry-run completed.
+- OUT_DIR=/tmp/codex-local-runner-prompt250-gate-dryrun-20260501195533
+- RUNLOG=/tmp/codex-local-runner-prompt250-gate-dryrun-20260501195533.runlog
+- Contract inspected:
+  /tmp/codex-local-runner-prompt250-gate-dryrun-20260501195533/project-planned-exec/approved_restart_execution_contract.json
+- project_browser_autonomous_bounded_artifact_existence_read_parse_gate_* required keys:
+  FOUND=65, MISSING=0
+
+Observed key state:
+- status=bounded_artifact_existence_read_parse_gate_blocked_missing_supplied_path_payload
+- source=prompt250_bounded_artifact_existence_read_parse_gate
+- bounded_existence_validation_gate_ready=true
+- bounded_existence_validation_allowed=false
+- bounded_existence_validation_status=blocked_missing_supplied_path_payload
+- bounded_file_read_gate_ready=true
+- bounded_file_read_allowed=false
+- bounded_file_read_status=blocked_missing_supplied_path_payload
+- bounded_json_parse_gate_ready=true
+- bounded_json_parse_allowed=false
+- bounded_json_parse_status=blocked_missing_supplied_path_payload
+- artifact_access_plan_ready=true
+- artifact_access_plan_status=blocked_missing_supplied_path_payload
+- artifact_access_plan=[]
+- artifact_review_ready=false
+- fresh_evidence_validity_gate_ready=false
+- prompt251_ready=true
+- prompt251_block_reason=missing_supplied_path_payload
+- should_read_files=false
+- should_parse_json=false
+- should_validate_file_existence=false
+- should_scan_filesystem=false
+- should_stop=true
+
+Next:
+- Prompt251 should not perform artifact review yet.
+- Prompt251 should add an explicit supplied-path payload carrier / normalization bridge.

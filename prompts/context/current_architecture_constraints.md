@@ -4166,3 +4166,31 @@ Next required step:
 - Prompt251 must add an explicit supplied-path payload carrier / normalization bridge.
 - Prompt251 must remain metadata-only.
 - Prompt251 must not perform artifact content review, file access, JSON parsing, Prompt222 update, N=2 re-evaluation, or bounded continuation.
+
+## Prompt250 constraint update - bounded artifact existence/read/parse gate
+
+Prompt250 established a metadata-only gate before artifact existence validation, file read, and JSON parse.
+
+Current invariant:
+- Explicit supplied artifact paths are still missing.
+- Therefore artifact review and fresh evidence validity remain blocked.
+- Prompt251 must focus on explicit supplied-path payload carrier / normalization bridge, not artifact content review.
+
+Safety constraints preserved:
+- No actual file read.
+- No JSON parse.
+- No file existence validation.
+- No filesystem scan.
+- No glob expansion.
+- No log scraping.
+- No shell command execution.
+- No Codex/browser executor addition.
+- No git mutation.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Required artifact path fields remain:
+- approved_restart_execution_contract_json_path
+- run_state_json_path
+- manifest_json_path
