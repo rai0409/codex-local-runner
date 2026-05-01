@@ -170,3 +170,17 @@ Current next milestone:
 - Validate explicit failed-result fix route.
 - Validate explicit multi-PR approve continuation route.
 - Keep all mutation and external execution disabled.
+
+## Prompt260 implemented explicit result scenario modes
+
+Prompt260 added selected-mode validation for explicit result branches.
+
+Validated default branch:
+- explicit_result_approve_project_complete -> project_complete
+
+Available branches for Prompt261 validation:
+- explicit_result_fail_fix_route -> revise_pr_prompt_or_retry_codex
+- explicit_result_multi_pr_approve_next_pr -> generate_next_pr_prompt
+
+Current next milestone:
+- Validate non-default branches without adding execution, mutation, tests, docs, or new files.

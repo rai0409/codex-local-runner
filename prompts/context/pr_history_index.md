@@ -7059,3 +7059,59 @@ Next:
   - fail -> revise_pr_prompt_or_retry_codex
   - multi_pr_approve -> generate_next_pr_prompt
 - It must keep ChatGPT/Codex execution, filesystem inspection, command execution, and git mutation disabled.
+
+## Prompt260 - explicit result scenario modes
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only explicit result scenario mode selection.
+- Added explicit result scenario validation.
+- Supported selected modes:
+  - explicit_result_approve_project_complete
+  - explicit_result_fail_fix_route
+  - explicit_result_multi_pr_approve_next_pr
+- Default dry-run selected explicit_result_approve_project_complete and validated approve -> project_complete.
+- Prompt258 real-input injection now receives explicit result scenario mode.
+- Prompt259 Codex-result injection now receives explicit result scenario mode.
+- fail mode can set validation_passed=false / review_mode=fix.
+- multi-PR mode can emit two-item roadmap queue for next-PR continuation.
+- No ChatGPT/Codex invocation, external executor, network path, command execution, git mutation, tests, docs, or new files were added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builders:
+  - _build_project_browser_autonomous_explicit_result_scenario_mode_state(...)
+  - _build_project_browser_autonomous_explicit_result_scenario_validation_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- dry-run passed.
+- Contract inspected:
+  /tmp/prompt260_out/prompt260-dry-run/approved_restart_execution_contract.json
+
+Observed key state:
+- explicit_result_scenario_mode_status=explicit_result_scenario_mode_ready
+- explicit_result_scenario_mode_next_action=apply_explicit_result_scenario_mode
+- explicit_result_scenario_mode_selected=explicit_result_approve_project_complete
+- explicit_codex_result_injection_status=explicit_codex_result_injection_ready
+- explicit_codex_result_injection_validation_passed=true
+- codex_result_ingestion_status=codex_result_ingestion_ready
+- review_fix_decision_status=review_fix_decision_approved
+- review_fix_decision_review_decision=approve
+- fix_retry_route_status=fix_retry_route_not_required
+- commit_next_pr_metadata_status=commit_next_pr_metadata_ready
+- dev_loop_completion_status=dev_loop_completion_project_complete
+- explicit_result_scenario_validation_status=explicit_result_scenario_validation_passed
+- explicit_result_scenario_validation_passed=true
+- dev_loop_mvp_status=project_complete
+- dev_loop_mvp_next_action=complete_project
+- dev_loop_mvp_should_continue=false
+- dev_loop_mvp_should_stop=true
+
+Next:
+- Prompt261 should validate the two non-default explicit result scenario branches:
+  - explicit_result_fail_fix_route
+  - explicit_result_multi_pr_approve_next_pr
+- It should remain metadata-only and should not add tests/docs/new files.

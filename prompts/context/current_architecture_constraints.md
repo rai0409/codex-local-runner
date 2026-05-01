@@ -4453,3 +4453,35 @@ Safety constraints preserved:
 Next direction:
 - Prompt260 should add explicit result scenario modes for approve, fail, and multi-PR approve.
 - Scenario mode must remain metadata-only and must not authorize execution or mutation.
+
+## Prompt260 constraint update - explicit result scenario modes
+
+Prompt260 adds metadata-only explicit result scenario mode selection and validation.
+
+Current invariant:
+- Explicit result scenario mode is metadata-only.
+- It may alter Prompt258/259 dry-run injection fixtures only when those injections are enabled.
+- It must not alter or replace user-supplied explicit project input or user-supplied explicit Codex result metadata.
+- Default dry-run mode remains explicit_result_approve_project_complete.
+- Selected scenario validation checks expected/observed MVP status, next_action, review decision, and completion status.
+
+Supported explicit result modes:
+- explicit_result_approve_project_complete
+- explicit_result_fail_fix_route
+- explicit_result_multi_pr_approve_next_pr
+
+Safety constraints preserved:
+- No ChatGPT/Codex invocation.
+- No external executor/network path.
+- No artifact read or JSON parse.
+- No filesystem scan.
+- No command execution.
+- No git mutation.
+- No commit/tag/merge/push execution.
+- No tests/docs/new files.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Prompt261 should validate non-default explicit result scenario branches through compact metadata surfaces.
