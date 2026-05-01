@@ -6583,3 +6583,69 @@ Observed key state:
 Next:
 - Prompt251 should not perform artifact review yet.
 - Prompt251 should add an explicit supplied-path payload carrier / normalization bridge.
+
+## Prompt251 - supplied path payload carrier normalization
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only explicit supplied-path payload carrier / normalization bridge.
+- Prompt251 now detects and classifies explicit supplied artifact path payload metadata.
+- Current chain still has no explicit payload, so it correctly remains blocked on missing_supplied_path_payload.
+- No actual file read, JSON parse, file existence validation, filesystem scan, command execution, git mutation, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builder:
+  - _build_project_browser_autonomous_supplied_path_payload_carrier_normalization_state(...)
+- Prefix:
+  - project_browser_autonomous_supplied_path_payload_carrier_normalization_*
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- Dry-run passed:
+  - OUT_DIR=/tmp/prompt251_out/project-planned-exec
+  - Contract inspected:
+    /tmp/prompt251_out/project-planned-exec/approved_restart_execution_contract.json
+
+Observed key state:
+- status=supplied_path_payload_carrier_normalization_awaiting_explicit_payload
+- source=prompt251_supplied_path_payload_carrier_normalization
+- prompt250_surface_available=true
+- prompt250_surface_authoritative=true
+- payload_carrier_ready=true
+- payload_detected=false
+- payload_source=""
+- accepted_fields=[]
+- missing_fields=[
+  "approved_restart_execution_contract_json_path",
+  "run_state_json_path",
+  "manifest_json_path"
+]
+- rejected_fields=[]
+- normalized_supplied_artifact_paths=[]
+- supplied_artifact_path_map={}
+- same_run_scope_conformance=blocked_missing_supplied_path_payload
+- artifact_name_conformance=blocked_missing_supplied_path_payload
+- path_source_conformance=blocked_missing_supplied_path_payload
+- review_permission_unlock_preconditions_ready=false
+- existence_review_permission=false
+- read_permission=false
+- parse_permission=false
+- prompt252_ready=true
+- prompt252_block_reason=missing_supplied_path_payload
+- should_validate_file_existence=false
+- should_read_files=false
+- should_parse_json=false
+- should_scan_filesystem=false
+- should_update_prompt222=false
+- should_re_evaluate_n2=false
+- should_start_bounded_continuation=false
+- should_prepare_prompt252=true
+- should_stop=true
+- next_action=prepare_prompt252_explicit_supplied_path_payload_present_normalization
+
+Next:
+- Do not continue with tiny single-surface prompts.
+- Prompt252 should combine explicit payload present normalization with an autonomous development MVP control spine.

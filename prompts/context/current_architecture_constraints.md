@@ -4194,3 +4194,30 @@ Required artifact path fields remain:
 - approved_restart_execution_contract_json_path
 - run_state_json_path
 - manifest_json_path
+
+## Prompt251 constraint update - supplied path payload carrier
+
+Prompt251 added the metadata-only carrier / normalization bridge for explicit supplied artifact path payloads.
+
+Current invariant:
+- No explicit supplied artifact path payload is present yet.
+- The chain remains blocked on missing_supplied_path_payload.
+- Payload classification exists, but artifact access is still not allowed.
+
+Safety constraints preserved:
+- No actual file read.
+- No JSON parse.
+- No file existence validation.
+- No filesystem scan or glob expansion.
+- No log scraping.
+- No shell command execution.
+- No Codex/browser executor addition.
+- No git mutation.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Move faster toward the autonomous development MVP.
+- Prompt252 should not be only another tiny payload surface.
+- Prompt252 should add a compact autonomous development control spine while preserving explicit permission separation and safe blocked defaults.
