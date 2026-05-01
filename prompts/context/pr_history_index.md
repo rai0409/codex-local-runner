@@ -7006,3 +7006,56 @@ Next:
 - Prompt259 should add metadata-only explicit Codex result injection.
 - It should verify that explicit Codex result metadata drives result ingestion, review approve/fix decision, and commit/next-PR metadata without relying on synthetic Codex result seed.
 - It must keep ChatGPT/Codex execution, filesystem inspection, command execution, and git mutation disabled.
+
+## Prompt259 - explicit Codex result review to project complete
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only explicit Codex result injection.
+- Added explicit Codex result review validation.
+- Codex result ingestion source priority now includes Prompt259 explicit Codex result injection before Prompt254 synthetic seed.
+- Explicit Codex result injection drives result ingestion, review approve decision, commit/next-PR metadata, dev-loop completion, and project_complete.
+- Synthetic Codex result seed does not override explicit/injected Codex result metadata.
+- No ChatGPT API call, Codex invocation, external executor/network path, artifact read/parse, filesystem scan, command execution, git mutation, commit/tag/merge/push execution, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builders:
+  - _build_project_browser_autonomous_explicit_codex_result_injection_state(...)
+  - _build_project_browser_autonomous_explicit_codex_result_review_validation_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- dry-run passed.
+- Contract inspected:
+  /tmp/prompt259_out/prompt259-dry-run/approved_restart_execution_contract.json
+
+Observed key state:
+- explicit_codex_result_injection_status=explicit_codex_result_injection_ready
+- explicit_codex_result_injection_next_action=apply_explicit_codex_result
+- codex_result_ingestion_status=codex_result_ingestion_ready
+- codex_result_ingestion_next_action=review_codex_result
+- codex_result_ingestion_result_source=prompt259_explicit_codex_result_injection
+- review_fix_decision_status=review_fix_decision_approved
+- review_fix_decision_review_decision=approve
+- review_fix_decision_next_action=prepare_commit_or_next_pr_metadata
+- commit_next_pr_metadata_status=commit_next_pr_metadata_ready
+- commit_next_pr_metadata_next_action=complete_project_metadata
+- dev_loop_completion_status=dev_loop_completion_project_complete
+- dev_loop_completion_next_action=complete_project
+- explicit_codex_result_review_validation_status=explicit_codex_result_review_validation_passed
+- explicit_codex_result_review_validation_next_action=complete_project
+- dev_loop_mvp_status=project_complete
+- dev_loop_mvp_next_action=complete_project
+- dev_loop_mvp_should_continue=false
+- dev_loop_mvp_should_stop=true
+
+Next:
+- Prompt260 should add explicit result scenario mode for approve, fail, and multi_pr_approve.
+- It should validate real-input MVP branches:
+  - approve -> project_complete
+  - fail -> revise_pr_prompt_or_retry_codex
+  - multi_pr_approve -> generate_next_pr_prompt
+- It must keep ChatGPT/Codex execution, filesystem inspection, command execution, and git mutation disabled.

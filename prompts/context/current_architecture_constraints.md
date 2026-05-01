@@ -4421,3 +4421,35 @@ Safety constraints preserved:
 Next direction:
 - Prompt259 should add explicit Codex result injection for dry-run verification.
 - Explicit Codex result injection should have priority over synthetic Codex result seed and should not override user-supplied explicit Codex result metadata.
+
+## Prompt259 constraint update - explicit Codex result review
+
+Prompt259 adds metadata-only explicit Codex result injection and review validation.
+
+Current invariant:
+- Prompt259 explicit Codex result injection is dry-run verification metadata.
+- Prompt259 injected result must not override user-supplied explicit Codex result metadata.
+- Prompt259 injected result has priority over Prompt254 synthetic Codex result seed.
+- The explicit real-input approve path can now reach:
+  - codex_result_ingestion_ready
+  - review_fix_decision_approved
+  - commit_next_pr_metadata_ready
+  - dev_loop_completion_project_complete
+  - dev_loop_mvp_status=project_complete
+
+Safety constraints preserved:
+- No ChatGPT API call.
+- No Codex invocation.
+- No external executor/network path.
+- No artifact read or JSON parse.
+- No filesystem scan.
+- No command execution.
+- No git mutation.
+- No commit/tag/merge/push execution.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Prompt260 should add explicit result scenario modes for approve, fail, and multi-PR approve.
+- Scenario mode must remain metadata-only and must not authorize execution or mutation.
