@@ -4516,3 +4516,30 @@ Safety constraints preserved:
 - No command execution feature path.
 - No git mutation.
 - No tests/docs/new files.
+
+## Prompt262 constraint update - ChatGPT browser send gate
+
+Prompt262 adds the ChatGPT browser project-analysis send gate.
+
+Current invariant:
+- ChatGPT means browser UI path, not ChatGPT API.
+- The project-analysis prompt payload can be prepared.
+- Existing browser path is classified as available.
+- Dry-run transport mode blocks actual send.
+- Actual send requires non_dry_run_browser_runtime_enabled.
+- Prepared metadata and browser path availability do not count as send_attempted.
+- send_attempted=true is allowed only after an existing bounded browser send path is actually invoked.
+
+Safety constraints preserved:
+- No new browser executor.
+- No ChatGPT API call.
+- No Codex invocation path.
+- No external executor/network expansion.
+- No command-execution feature path.
+- No git mutation.
+- No tests/docs/new files.
+
+Next direction:
+- Prompt262b should resolve the exact runtime mode or command needed to perform one bounded browser send.
+- Do not add another metadata-only scenario/validation surface.
+- If runtime cannot be enabled safely, block with exact missing prerequisite.
