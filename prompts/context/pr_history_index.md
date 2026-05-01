@@ -6952,3 +6952,57 @@ Next:
 - Prompt258 should add metadata-only explicit real input injection / dry-run override support.
 - It should verify that explicit project_request_text, analysis_summary, roadmap_pr_queue, active_pr, and scenario_mode can drive the path to PR prompt / Codex handoff readiness without relying on synthetic input.
 - It must keep ChatGPT/Codex execution, filesystem inspection, command execution, and git mutation disabled.
+
+## Prompt258 - explicit real input injection to Codex handoff
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only explicit real input injection.
+- Added explicit real input handoff validation.
+- Explicit real input injection now drives project request, analysis summary, roadmap PR queue, active PR, and scenario mode into the existing dev-loop input assembly.
+- Source priority now places Prompt258 injected explicit real input before Prompt253 synthetic input seed.
+- Prompt258 injection reaches PR prompt generation and Codex handoff readiness.
+- Synthetic Codex result seed is disabled while Prompt258 injected real input is active, so the MVP correctly stops at waiting_for_codex_result.
+- No ChatGPT API call, Codex invocation, artifact read/parse, filesystem scan, command execution, git mutation, commit/tag/merge/push, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builders:
+  - _build_project_browser_autonomous_explicit_real_input_injection_state(...)
+  - _build_project_browser_autonomous_explicit_real_input_handoff_validation_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- dry-run passed.
+- Contract inspected:
+  /tmp/prompt258_out/prompt258-dry-run/approved_restart_execution_contract.json
+
+Observed key state:
+- explicit_real_input_injection_status=explicit_real_input_injection_ready
+- explicit_real_input_injection_enabled=true
+- explicit_real_input_injection_enabled_reason=normal_dry_run_without_explicit_real_input
+- explicit_real_input_injection_next_action=apply_explicit_real_input
+- explicit_dev_loop_input_readiness_status=explicit_dev_loop_input_readiness_ready_for_pr_prompt
+- explicit_dev_loop_input_readiness_next_action=generate_next_pr_prompt
+- real_input_mvp_path_readiness_status=real_input_mvp_path_ready_for_codex_handoff
+- real_input_mvp_path_readiness_path_kind=explicit_real_pr_prompt_to_handoff_path
+- real_input_mvp_path_readiness_next_action=await_codex_result
+- explicit_real_input_handoff_validation_status=explicit_real_input_handoff_validation_passed
+- explicit_real_input_handoff_validation_passed=true
+- explicit_real_input_handoff_validation_next_action=await_codex_result
+- pr_prompt_generation_status=pr_prompt_generation_ready
+- pr_prompt_generation_prompt_ready=true
+- codex_handoff_status=codex_handoff_ready
+- codex_handoff_ready=true
+- dev_loop_mvp_status=waiting_for_codex_result
+- dev_loop_mvp_current_stage=codex_result_review
+- dev_loop_mvp_next_action=await_codex_result
+- dev_loop_mvp_should_continue=false
+- dev_loop_mvp_should_stop=true
+
+Next:
+- Prompt259 should add metadata-only explicit Codex result injection.
+- It should verify that explicit Codex result metadata drives result ingestion, review approve/fix decision, and commit/next-PR metadata without relying on synthetic Codex result seed.
+- It must keep ChatGPT/Codex execution, filesystem inspection, command execution, and git mutation disabled.

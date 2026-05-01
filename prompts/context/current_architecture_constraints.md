@@ -4389,3 +4389,35 @@ Safety constraints preserved:
 
 Next direction:
 - Prompt258 should inject explicit real input metadata for dry-run verification and ensure synthetic seeds do not override it.
+
+## Prompt258 constraint update - explicit real input handoff
+
+Prompt258 adds metadata-only explicit real input injection and handoff validation.
+
+Current invariant:
+- Prompt258 injection is dry-run explicit-input verification metadata.
+- Prompt258 injected input must not override user-supplied explicit input.
+- Prompt258 injected input has priority over synthetic input seed.
+- Synthetic Codex result seed is disabled while Prompt258 injected real input is active.
+- The MVP can now reach:
+  - explicit_dev_loop_input_readiness_ready_for_pr_prompt
+  - real_input_mvp_path_ready_for_codex_handoff
+  - pr_prompt_generation_ready
+  - codex_handoff_ready
+  - waiting_for_codex_result
+
+Safety constraints preserved:
+- No ChatGPT API call.
+- No Codex invocation.
+- No artifact read or JSON parse.
+- No filesystem scan.
+- No command execution.
+- No git mutation.
+- No commit/tag/merge/push execution.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Prompt259 should add explicit Codex result injection for dry-run verification.
+- Explicit Codex result injection should have priority over synthetic Codex result seed and should not override user-supplied explicit Codex result metadata.

@@ -129,3 +129,22 @@ Current capability:
 Current next milestone:
 - Add explicit real input injection / override metadata for dry-run verification.
 - Verify explicit input can drive PR prompt generation and Codex handoff readiness without synthetic seed reliance.
+
+## Prompt258 implemented explicit real input handoff
+
+Prompt258 added explicit real input injection and validation.
+
+Validated real-input path:
+- explicit project request
+- explicit analysis summary
+- explicit roadmap PR queue
+- explicit active PR
+- PR prompt generation
+- Codex handoff readiness
+- waiting_for_codex_result
+
+Current next milestone:
+- Add explicit Codex result injection.
+- Validate explicit result review approve/fix path.
+- Validate commit/next PR metadata from explicit result metadata.
+- Keep all mutation and external execution disabled.
