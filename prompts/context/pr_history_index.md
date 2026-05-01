@@ -6760,3 +6760,59 @@ Observed key state:
 Next:
 - Prompt254 should add metadata-only Codex result ingestion / review / fix decision.
 - It should advance from await_codex_result to approve/fix decision without invoking Codex or mutating git.
+
+## Prompt254 - Codex result ingestion and review/fix decision
+
+Status: implemented / validated
+
+Summary:
+- Added metadata-only synthetic Codex result seed.
+- Added Codex result ingestion surface.
+- Added review/fix decision surface.
+- Existing codex_result_review_decision now consumes Prompt254 ingestion metadata.
+- Dry-run now advances the autonomous MVP spine from await_codex_result to codex_result_approved.
+- No ChatGPT API call, Codex invocation, artifact read/parse, filesystem scan, git diff inspection, command execution, git mutation, commit/tag/merge/push, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builders:
+  - _build_project_browser_autonomous_codex_result_synthetic_seed_state(...)
+  - _build_project_browser_autonomous_codex_result_ingestion_state(...)
+  - _build_project_browser_autonomous_review_fix_decision_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- dry-run passed.
+- Contract inspected:
+  /tmp/prompt254_out/project-planned-exec/approved_restart_execution_contract.json
+- Diff report:
+  /tmp/codex-local-runner-diff-logs/20260501_205735_prompt254_codex-result-review-decision_diff_report.txt
+- Full patch:
+  /tmp/codex-local-runner-diff-logs/20260501_205735_prompt254_codex-result-review-decision_full.patch
+
+Observed key state:
+- codex_result_synthetic_seed_status=codex_result_synthetic_seed_ready
+- codex_result_synthetic_seed_enabled=true
+- codex_result_synthetic_seed_enabled_reason=normal_dry_run_without_explicit_codex_result
+- codex_result_synthetic_seed_next_action=ingest_codex_result_metadata
+- codex_result_ingestion_status=codex_result_ingestion_ready
+- codex_result_ingestion_result_detected=true
+- codex_result_ingestion_result_source=prompt254_synthetic_codex_result_seed
+- codex_result_ingestion_next_action=review_codex_result
+- review_fix_decision_status=review_fix_decision_approved
+- review_fix_decision_review_decision=approve
+- review_fix_decision_next_action=prepare_commit_or_next_pr_metadata
+- codex_result_review_decision_status=codex_result_review_approved
+- codex_result_review_decision_result_detected=true
+- codex_result_review_decision_next_action=commit_externally_or_generate_next_pr
+- dev_loop_mvp_status=codex_result_approved
+- dev_loop_mvp_current_stage=commit_or_next_pr_decision
+- dev_loop_mvp_next_action=commit_externally_or_generate_next_pr
+- dev_loop_mvp_codex_result_detected=true
+- dev_loop_mvp_should_continue=true
+- dev_loop_mvp_should_stop=false
+
+Next:
+- Prompt255 should add commit/tag command suggestion, next PR advancement metadata, project completion detection, and fix retry route metadata.
+- It must not execute git mutation, commit, tag, merge, push, Codex, ChatGPT, shell commands, or filesystem scans.

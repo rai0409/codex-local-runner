@@ -61,3 +61,23 @@ Current next milestone:
 - Add approve/fix review decision.
 - Add fix prompt generation.
 - Add commit/next-PR decision metadata without executing git mutation.
+
+## Prompt254 implemented Codex result review decision
+
+Prompt254 added synthetic Codex result ingestion and review/fix decision metadata.
+
+Current MVP path validated:
+- project input
+- analysis summary
+- roadmap PR queue
+- PR prompt generation
+- Codex handoff readiness
+- Codex result ingestion
+- review approve decision
+
+Current next milestone:
+- Add commit/tag command suggestions.
+- Add next PR advancement metadata.
+- Add project completion detection.
+- Add fix retry route metadata.
+- Do not execute git mutation in-run.

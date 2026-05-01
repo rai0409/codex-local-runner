@@ -4278,3 +4278,34 @@ Safety constraints preserved:
 Next direction:
 - Prompt254 should add explicit/synthetic Codex result ingestion and review/fix decision metadata.
 - It must not execute commit, merge, push, Codex, ChatGPT, or shell commands.
+
+## Prompt254 constraint update - Codex result review decision
+
+Prompt254 adds metadata-only Codex result ingestion and review/fix decision.
+
+Current invariant:
+- Synthetic Codex result is dry-run / MVP verification only.
+- Synthetic result must not override explicit Codex result metadata.
+- The MVP spine can now reach:
+  - codex_result_detected=true
+  - review_decision=approve
+  - current_stage=commit_or_next_pr_decision
+  - next_action=commit_externally_or_generate_next_pr
+- Commit/merge/push are still not executed by the runner.
+
+Safety constraints preserved:
+- No ChatGPT API call.
+- No Codex invocation.
+- No artifact read or JSON parse.
+- No filesystem scan.
+- No git diff inspection.
+- No command execution.
+- No git mutation.
+- No commit/tag/merge/push.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Prompt255 should add safe commit/tag command suggestion and next PR advancement metadata.
+- It should keep all mutation as external/manual command suggestions only.
