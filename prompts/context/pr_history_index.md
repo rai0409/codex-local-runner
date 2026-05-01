@@ -6649,3 +6649,69 @@ Observed key state:
 Next:
 - Do not continue with tiny single-surface prompts.
 - Prompt252 should combine explicit payload present normalization with an autonomous development MVP control spine.
+
+## Prompt252 - autonomous development MVP control spine
+
+Status: implemented / validated
+
+Summary:
+- Added autonomous development MVP control spine.
+- Added explicit dev-loop input carrier and state surfaces for project intake, ChatGPT analysis request, roadmap/PR queue, PR prompt generation, Codex handoff, Codex result review decision, and unified MVP state.
+- Current chain correctly stops at missing_project_request.
+- No ChatGPT API call, Codex invocation, artifact read/parse, filesystem scan, command execution, git mutation, commit/tag/merge/push, Prompt222 update, N=2 re-evaluation, or bounded continuation execution was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Added builders:
+  - _build_project_browser_autonomous_dev_loop_input_state(...)
+  - _build_project_browser_autonomous_project_intake_state(...)
+  - _build_project_browser_autonomous_project_analysis_request_state(...)
+  - _build_project_browser_autonomous_roadmap_pr_split_queue_state(...)
+  - _build_project_browser_autonomous_pr_prompt_generation_state(...)
+  - _build_project_browser_autonomous_codex_handoff_state(...)
+  - _build_project_browser_autonomous_codex_result_review_decision_state(...)
+  - _build_project_browser_autonomous_dev_loop_mvp_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- Normal dry-run passed.
+- Contract inspected:
+  /tmp/prompt252_out/project-planned-exec/approved_restart_execution_contract.json
+
+Observed key dev_loop_input state:
+- status=dev_loop_input_waiting_for_project_request
+- source=prompt252_dev_loop_input
+- project_request_text=""
+- constraints=[]
+- analysis_summary=""
+- roadmap_pr_queue=[]
+- active_pr_index=0
+- active_pr={}
+- codex_result_summary=""
+- codex_validation_passed=false
+- detected_input_fields=[]
+- missing_input_fields=["project_request_text"]
+- ready=false
+- next_action=provide_project_request
+
+Observed key dev_loop_mvp state:
+- status=waiting_for_project_request
+- source=prompt252_autonomous_dev_loop_mvp
+- current_stage=project_intake
+- next_action=provide_project_request
+- block_reason=missing_project_request
+- project_request_detected=false
+- project_analysis_ready=false
+- roadmap_ready=false
+- active_pr_index=0
+- pr_prompt_ready=false
+- codex_handoff_ready=false
+- codex_result_detected=false
+- review_decision=waiting
+- commit_allowed=false
+- should_continue=false
+- should_stop=true
+
+Next:
+- Prompt253 should provide a synthetic explicit dev-loop input path and drive the MVP spine from project_request to generated PR prompt / Codex handoff readiness.

@@ -4221,3 +4221,31 @@ Next direction:
 - Move faster toward the autonomous development MVP.
 - Prompt252 should not be only another tiny payload surface.
 - Prompt252 should add a compact autonomous development control spine while preserving explicit permission separation and safe blocked defaults.
+
+## Prompt252 constraint update - autonomous development MVP spine
+
+Prompt252 added the autonomous development MVP control spine.
+
+Current invariant:
+- The chain now has a dev-loop input carrier and MVP control state.
+- No project request is currently supplied, so the correct state is:
+  - current_stage=project_intake
+  - next_action=provide_project_request
+  - block_reason=missing_project_request
+- External execution is still not allowed by the runner.
+
+Safety constraints preserved:
+- No ChatGPT API call.
+- No Codex invocation.
+- No artifact read or JSON parse.
+- No filesystem scan.
+- No shell/manual/check command execution.
+- No git mutation.
+- No commit/tag/merge/push.
+- No Prompt222 update.
+- No N=2 re-evaluation.
+- No bounded continuation execution.
+
+Next direction:
+- Prompt253 should not add another tiny blocked surface.
+- Prompt253 should add explicit synthetic dev-loop input support and verify the MVP spine can advance to PR prompt generation and Codex handoff readiness without external execution.

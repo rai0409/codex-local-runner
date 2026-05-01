@@ -32,3 +32,22 @@ Core exposed fields should include:
 - commit_decision
 - should_continue
 - should_stop
+
+## Prompt252 implemented MVP spine
+
+Prompt252 added the first full autonomous development MVP control spine.
+
+Available surfaces:
+- project_browser_autonomous_dev_loop_input_*
+- project_browser_autonomous_project_intake_*
+- project_browser_autonomous_project_analysis_request_*
+- project_browser_autonomous_roadmap_pr_split_queue_*
+- project_browser_autonomous_pr_prompt_generation_*
+- project_browser_autonomous_codex_handoff_*
+- project_browser_autonomous_codex_result_review_decision_*
+- project_browser_autonomous_dev_loop_mvp_*
+
+Current next milestone:
+- Provide explicit synthetic dev-loop input.
+- Advance from missing_project_request to generated PR prompt and Codex handoff readiness.
+- Keep ChatGPT/Codex/git execution external or metadata-only.
