@@ -4645,3 +4645,39 @@ Safety constraints preserved:
 Next direction:
 - Prompt263c should resolve selector_contract_not_ready using existing selector contract/runtime paths only.
 - Do not create a new browser executor or broad selector system.
+
+## Prompt263c constraint update - selector contract key requirements
+
+Prompt263c updates ChatGPT browser selector contract readiness.
+
+Current invariant:
+- ChatGPT means browser UI path, not ChatGPT API.
+- Project request is detected.
+- Project-analysis prompt payload is ready.
+- Existing browser path is available.
+- Actual bounded ChatGPT browser send has not been attempted.
+- Highest-priority blocker remains selector_contract_not_ready.
+- selector_contract_required_keys:
+  - chat_input
+  - send_trigger
+  - latest_assistant_response
+  - message_ready
+  - loading_state
+- selector_contract_missing_keys currently contains all required keys.
+- selector_contract_keys_available=false.
+
+Safety constraints preserved:
+- No new browser executor.
+- No ChatGPT API call.
+- No Codex invocation.
+- No queue drain.
+- No scheduler, daemon, or loop.
+- No tests/docs/new files.
+- No ad-hoc browser command.
+- No command-execution feature path.
+- No git mutation.
+
+Next direction:
+- Prompt263d should wire/supply required selector contract keys through existing selector contract paths.
+- Prompt263d should treat actual send_attempted=true as the only success condition.
+- If actual send is impossible due to missing environment/session/login/executor, it must return failed/blocked, not success.

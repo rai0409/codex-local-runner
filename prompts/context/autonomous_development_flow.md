@@ -271,3 +271,25 @@ Current next milestone:
   - message_ready
   - loading_state
 - Then rerun live bounded ChatGPT browser send.
+
+## Prompt263c identified missing selector contract keys
+
+Prompt263c made the ChatGPT browser selector contract blocker concrete.
+
+Current status:
+- project request detected
+- project-analysis prompt payload ready
+- existing browser send path available
+- actual send not attempted
+- highest-priority blocker: selector_contract_not_ready
+- missing selector keys:
+  - chat_input
+  - send_trigger
+  - latest_assistant_response
+  - message_ready
+  - loading_state
+
+Current next milestone:
+- Provide/wire the required selector keys through existing selector contract paths.
+- Run one bounded ChatGPT browser project-analysis send.
+- Prompt263d should count only send_attempted=true as success.
