@@ -4573,3 +4573,36 @@ Required environment prerequisites:
 
 Next direction:
 - Prompt263 should resolve the live browser runtime blockers and attempt exactly one bounded ChatGPT browser project-analysis send if safe.
+
+## Prompt263 constraint update - command queue blocker
+
+Prompt263 updates ChatGPT browser runtime enablement classification.
+
+Current invariant:
+- ChatGPT means browser UI path, not ChatGPT API.
+- Existing browser send path remains available.
+- Project request is detected and project-analysis prompt payload is ready.
+- Actual send is still not attempted.
+- Highest-priority blocker is command_queue_blocked.
+- Secondary blockers:
+  - browser_executor_mode_none
+  - launch_preflight_blocked
+  - browser_user_data_dir_missing
+  - chatgpt_login_session_missing
+  - selector_contract_not_ready
+
+Safety constraints preserved:
+- No new browser executor.
+- No new Playwright owner.
+- No ChatGPT API call.
+- No Codex invocation.
+- No queue drain.
+- No scheduler, daemon, or loop.
+- No tests/docs/new files.
+- No command-execution feature path.
+- No git mutation.
+
+Next direction:
+- Prompt263b should resolve command_queue_blocked first.
+- Do not continue adding metadata-only validation surfaces.
+- Use existing browser queue/executor/preflight/session/selector paths only.

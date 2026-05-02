@@ -7282,3 +7282,64 @@ Next:
 - Prompt263 should resolve queue_mode=none, executor_mode=none, and launch_preflight_mode=blocked.
 - Prompt263 should perform exactly one bounded ChatGPT browser project-analysis send if safe.
 - If still blocked, it must report the exact missing browser runtime prerequisite.
+
+## Prompt263 - ChatGPT browser live blocker classification
+
+Status: implemented / validated
+
+Summary:
+- Updated ChatGPT browser runtime enablement classification.
+- Added highest_priority_blocker, secondary_blockers, and operator_action to runtime enablement.
+- No actual bounded ChatGPT browser send was attempted because runtime was not safely available.
+- Project request is now detected and prompt payload is ready in dry-run.
+- Highest-priority blocker is now command_queue_blocked.
+- Secondary blockers are browser_executor_mode_none, launch_preflight_blocked, browser_user_data_dir_missing, chatgpt_login_session_missing, and selector_contract_not_ready.
+- No new browser executor, Playwright owner, ChatGPT API call, Codex invocation path, queue drain, scheduler, daemon, loop, tests, docs, new files, command-execution feature path, or git mutation path was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Updated:
+  - _build_project_browser_autonomous_chatgpt_browser_runtime_enablement_state(...)
+- Added normalized outputs:
+  - project_browser_autonomous_chatgpt_browser_runtime_enablement_highest_priority_blocker
+  - project_browser_autonomous_chatgpt_browser_runtime_enablement_secondary_blockers
+  - project_browser_autonomous_chatgpt_browser_runtime_enablement_operator_action
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- normal dry-run passed.
+- Contract inspected:
+  /tmp/prompt263_out/prompt263-dry-run-after-patch/approved_restart_execution_contract.json
+
+Observed key state:
+- chatgpt_browser_project_analysis_send_status=chatgpt_browser_project_analysis_send_blocked_runtime_mode
+- chatgpt_browser_project_analysis_send_project_request_detected=true
+- chatgpt_browser_project_analysis_send_prompt_payload_ready=true
+- chatgpt_browser_project_analysis_send_browser_path_status=available
+- chatgpt_browser_project_analysis_send_execution_mode=existing_bounded_browser_path_available_runtime_blocked
+- chatgpt_browser_project_analysis_send_send_allowed=false
+- chatgpt_browser_project_analysis_send_send_attempted=false
+- chatgpt_browser_project_analysis_send_block_reason=dry_run_transport_mode
+- chatgpt_browser_project_analysis_send_required_runtime_mode=non_dry_run_browser_runtime_enabled
+- chatgpt_browser_project_analysis_send_next_action=rerun_with_browser_runtime_enabled
+- chatgpt_browser_runtime_enablement_status=chatgpt_browser_runtime_enablement_blocked_dry_run
+- chatgpt_browser_runtime_enablement_current_transport_mode=dry-run
+- chatgpt_browser_runtime_enablement_required_transport_mode=live
+- chatgpt_browser_runtime_enablement_browser_runtime_available=false
+- chatgpt_browser_runtime_enablement_existing_send_path_available=true
+- chatgpt_browser_runtime_enablement_runtime_block_reason=command_queue_blocked
+- chatgpt_browser_runtime_enablement_queue_mode=none
+- chatgpt_browser_runtime_enablement_executor_mode=none
+- chatgpt_browser_runtime_enablement_launch_preflight_mode=blocked
+- chatgpt_browser_runtime_enablement_highest_priority_blocker=command_queue_blocked
+- chatgpt_browser_runtime_enablement_secondary_blockers=["browser_executor_mode_none","launch_preflight_blocked","browser_user_data_dir_missing","chatgpt_login_session_missing","selector_contract_not_ready"]
+- chatgpt_browser_runtime_enablement_next_action=rerun_with_browser_runtime_enabled
+
+Operator action:
+- Unblock browser command queue by restoring selector contract + session prerequisites, then rerun the live command.
+
+Next:
+- Prompt263b should resolve command_queue_blocked.
+- It should identify why browser command queue mode is none/blocked and connect existing selector/session prerequisites to the live-capable browser queue path.
+- It should attempt exactly one bounded ChatGPT browser send only if queue/executor/preflight become live-capable.
