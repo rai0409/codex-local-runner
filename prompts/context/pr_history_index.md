@@ -7343,3 +7343,61 @@ Next:
 - Prompt263b should resolve command_queue_blocked.
 - It should identify why browser command queue mode is none/blocked and connect existing selector/session prerequisites to the live-capable browser queue path.
 - It should attempt exactly one bounded ChatGPT browser send only if queue/executor/preflight become live-capable.
+
+## Prompt263b - ChatGPT browser selector contract blocker
+
+Status: implemented / validated
+
+Summary:
+- Updated ChatGPT browser runtime enablement root-cause classification.
+- No new helper was added.
+- command_queue_blocked is no longer the final root cause.
+- Highest-priority blocker is now selector_contract_not_ready.
+- Project request is detected and project-analysis prompt payload is ready.
+- Existing browser path remains available.
+- Actual bounded ChatGPT browser send was not attempted.
+- No new browser executor, ChatGPT API call, Codex invocation, queue drain, scheduler, daemon, loop, tests, docs, new files, ad-hoc browser command, command-execution feature path, or git mutation path was added.
+
+Implementation:
+- File: automation/orchestration/planned_execution_runner.py
+- Updated:
+  - _build_project_browser_autonomous_chatgpt_browser_runtime_enablement_state(...)
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- python -m py_compile scripts/run_planned_execution.py passed.
+- normal dry-run passed.
+- Contract inspected:
+  /tmp/prompt263b_out/prompt263b-dry-run/prompt263b-dry-run/approved_restart_execution_contract.json
+
+Observed key state:
+- chatgpt_browser_project_analysis_send_status=chatgpt_browser_project_analysis_send_blocked_runtime_mode
+- chatgpt_browser_project_analysis_send_project_request_detected=true
+- chatgpt_browser_project_analysis_send_prompt_payload_ready=true
+- chatgpt_browser_project_analysis_send_browser_path_status=available
+- chatgpt_browser_project_analysis_send_execution_mode=existing_bounded_browser_path_available_runtime_blocked
+- chatgpt_browser_project_analysis_send_send_allowed=false
+- chatgpt_browser_project_analysis_send_send_attempted=false
+- chatgpt_browser_project_analysis_send_block_reason=dry_run_transport_mode
+- chatgpt_browser_project_analysis_send_required_runtime_mode=non_dry_run_browser_runtime_enabled
+- chatgpt_browser_project_analysis_send_next_action=rerun_with_browser_runtime_enabled
+- chatgpt_browser_runtime_enablement_status=chatgpt_browser_runtime_enablement_blocked_dry_run
+- chatgpt_browser_runtime_enablement_current_transport_mode=dry-run
+- chatgpt_browser_runtime_enablement_required_transport_mode=live
+- chatgpt_browser_runtime_enablement_browser_runtime_available=false
+- chatgpt_browser_runtime_enablement_existing_send_path_available=true
+- chatgpt_browser_runtime_enablement_runtime_block_reason=command_queue_blocked
+- chatgpt_browser_runtime_enablement_queue_mode=none
+- chatgpt_browser_runtime_enablement_executor_mode=none
+- chatgpt_browser_runtime_enablement_launch_preflight_mode=blocked
+- chatgpt_browser_runtime_enablement_highest_priority_blocker=selector_contract_not_ready
+- chatgpt_browser_runtime_enablement_secondary_blockers=["browser_user_data_dir_missing","browser_executor_mode_none","launch_preflight_blocked"]
+- chatgpt_browser_runtime_enablement_next_action=rerun_with_browser_runtime_enabled
+
+Operator action:
+- Provide ready selector contract entries for chat_input, send_trigger, latest_assistant_response, message_ready, and loading_state, then rerun the live command.
+
+Next:
+- Prompt263c should resolve selector_contract_not_ready.
+- It should locate existing selector contract fields/builders/defaults and wire ready selector contract entries into the existing browser runtime path.
+- It should attempt exactly one bounded ChatGPT browser send only if selector/session/executor/preflight become live-capable.

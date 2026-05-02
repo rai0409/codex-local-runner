@@ -251,3 +251,23 @@ Current next milestone:
 - Resolve browser command queue blocker.
 - Make browser queue/executor/preflight live-capable through existing paths.
 - Attempt one bounded ChatGPT browser project-analysis send only when safe.
+
+## Prompt263b identified selector contract blocker
+
+Prompt263b moved the ChatGPT browser live-send blocker from command_queue_blocked to selector_contract_not_ready.
+
+Current status:
+- project request detected
+- project-analysis prompt payload ready
+- existing browser send path available
+- actual send not attempted
+- highest-priority blocker: selector_contract_not_ready
+
+Current next milestone:
+- Provide/wire ready selector contract entries:
+  - chat_input
+  - send_trigger
+  - latest_assistant_response
+  - message_ready
+  - loading_state
+- Then rerun live bounded ChatGPT browser send.
