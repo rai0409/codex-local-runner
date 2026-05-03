@@ -108,17 +108,44 @@ async function setAutoRunEnabled(enabled) {
   await setStatePatch({
     auto_run_enabled: true,
     auto_run_polling: false,
+    run_in_progress: false,
     last_blocked_reason: "",
+    last_terminal_status: "",
+    last_terminal_reason: "",
+    last_run_result: "",
     target_tab_found: false
   });
   await startAutoRunPolling();
   return stateCache;
 }
 
+async function resetAutoRunState() {
+  await clearAutoRunAlarm();
+  const resetPatch = {
+    auto_run_polling: false,
+    run_in_progress: false,
+    last_task_fingerprint: "",
+    last_dispatched_task_fingerprint: "",
+    last_terminal_status: "",
+    last_terminal_reason: "",
+    last_run_result: "",
+    last_blocked_reason: "",
+    target_tab_found: false
+  };
+  await setStatePatch(resetPatch);
+  return stateCache;
+}
+
 async function initializeBackgroundState() {
   await ensureStateDefaults();
-  if (stateCache.auto_run_enabled && stateCache.auto_run_polling) {
+  if (stateCache.auto_run_enabled) {
     await startAutoRunPolling();
+    return;
+  }
+
+  if (stateCache.auto_run_polling) {
+    await clearAutoRunAlarm();
+    await setStatePatch({ auto_run_polling: false, run_in_progress: false });
   }
 }
 
@@ -375,6 +402,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         ok: false,
         error: "bridge_fetch_failed",
         detail: String(error?.message || error || "autorun_status_failed")
+      }));
+    return true;
+  }
+
+  if (message.type === "BRIDGE_RESET_AUTORUN_STATE") {
+    void resetAutoRunState()
+      .then((state) => sendResponse({ ok: true, state }))
+      .catch((error) => sendResponse({
+        ok: false,
+        error: "bridge_fetch_failed",
+        detail: String(error?.message || error || "autorun_reset_failed")
       }));
     return true;
   }

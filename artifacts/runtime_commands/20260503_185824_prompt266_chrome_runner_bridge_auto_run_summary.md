@@ -48,6 +48,16 @@ Prompt266.5 should minimally harden:
 - stale blocked-state reset path
 - retry/reset behavior without adding a new bridge protocol
 
+## Operator commands (extension service-worker console)
+- Enable auto-run:
+  - `chrome.runtime.sendMessage({ type: "BRIDGE_SET_AUTORUN_ENABLED", enabled: true }, console.log);`
+- Disable auto-run:
+  - `chrome.runtime.sendMessage({ type: "BRIDGE_SET_AUTORUN_ENABLED", enabled: false }, console.log);`
+- Check status:
+  - `chrome.runtime.sendMessage({ type: "BRIDGE_GET_AUTORUN_STATUS" }, console.log);`
+- Reset state (does not fetch/send tasks):
+  - `chrome.runtime.sendMessage({ type: "BRIDGE_RESET_AUTORUN_STATE" }, console.log);`
+
 ## Not included
 - No tests.
 - No Playwright.
