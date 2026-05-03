@@ -7,6 +7,7 @@ const DIAG_MARKER = "[BRIDGE_DIAGNOSE_ONLY]";
 
 let runInProgress = false;
 let runOverlay = null;
+let currentTaskId = "";
 let currentTaskFingerprint = "";
 const runHighlightCleanups = [];
 
@@ -516,6 +517,8 @@ async function postStatus(status, reason, extra = {}) {
     reason,
     page_url: window.location.href,
     timestamp: new Date().toISOString(),
+    task_id: currentTaskId || undefined,
+    request_fingerprint: currentTaskFingerprint || undefined,
     task_fingerprint: currentTaskFingerprint || undefined,
     ...extra
   };
@@ -538,7 +541,12 @@ async function fetchNextTask() {
   return {
     hasTask: Boolean(data && data.has_task),
     prompt: typeof data?.prompt === "string" ? data.prompt : "",
-    taskFingerprint: typeof data?.task_fingerprint === "string" ? data.task_fingerprint : ""
+    taskId: typeof data?.task_id === "string" ? data.task_id : "",
+    requestFingerprint: typeof data?.request_fingerprint === "string" ? data.request_fingerprint : "",
+    taskFingerprint: typeof data?.task_fingerprint === "string" ? data.task_fingerprint : "",
+    status: typeof data?.status === "string" ? data.status : "",
+    attemptCount: Number.isFinite(Number(data?.attempt_count)) ? Number(data.attempt_count) : 0,
+    createdAt: typeof data?.created_at === "string" ? data.created_at : ""
   };
 }
 
@@ -924,7 +932,13 @@ async function waitForStableAssistantResponse() {
 }
 
 async function postResult(responseText, metadata) {
-  await bridgePostResult({ response: responseText, metadata });
+  await bridgePostResult({
+    response: responseText,
+    metadata,
+    task_id: currentTaskId || undefined,
+    request_fingerprint: currentTaskFingerprint || undefined,
+    task_fingerprint: currentTaskFingerprint || undefined
+  });
 }
 
 function runtimeSendMessage(payload) {
@@ -1024,6 +1038,7 @@ async function runChatGptBridgeOnce(options = {}) {
   }
 
   runInProgress = true;
+  currentTaskId = "";
   currentTaskFingerprint = "";
 
   let composerCandidates = [];
@@ -1052,13 +1067,22 @@ async function runChatGptBridgeOnce(options = {}) {
     }
 
     currentTaskFingerprint =
+      (typeof options.request_fingerprint === "string" && options.request_fingerprint.trim()) ||
       (typeof options.task_fingerprint === "string" && options.task_fingerprint.trim()) ||
+      (typeof task.requestFingerprint === "string" && task.requestFingerprint.trim()) ||
       (typeof task.taskFingerprint === "string" && task.taskFingerprint.trim()) ||
       computeTaskFingerprint(promptToUse);
+    currentTaskId =
+      (typeof options.task_id === "string" && options.task_id.trim()) ||
+      (typeof task.taskId === "string" && task.taskId.trim()) ||
+      "";
 
     await postStatus("running", "task_fetched", {
       step: "task_fetched",
-      prompt_length: normalizeText(promptToUse).length
+      prompt_length: normalizeText(promptToUse).length,
+      task_status: task.status || "",
+      attempt_count: task.attemptCount,
+      created_at: task.createdAt || undefined
     });
 
     composerCandidates = collectComposerCandidates();
@@ -1188,7 +1212,9 @@ async function runChatGptBridgeOnce(options = {}) {
       response_length: response.text.length,
       response_selector_used: response.selector_used,
       stable_polls: response.stable_polls,
-      transient_candidate_seen: response.transient_candidate_seen
+      transient_candidate_seen: response.transient_candidate_seen,
+      task_id: currentTaskId || undefined,
+      request_fingerprint: currentTaskFingerprint || undefined
     };
 
     await postResult(response.text, metadata);
@@ -1210,6 +1236,7 @@ async function runChatGptBridgeOnce(options = {}) {
   } finally {
     cleanupRunDiagnostics();
     runInProgress = false;
+    currentTaskId = "";
     currentTaskFingerprint = "";
   }
 }

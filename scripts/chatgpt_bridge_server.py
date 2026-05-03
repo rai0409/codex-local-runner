@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-import os
+import hashlib
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -32,6 +32,118 @@ def _read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return ""
+
+
+def _normalize_text(value: str) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _compute_request_fingerprint(prompt: str) -> str:
+    normalized = _normalize_text(prompt)
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}:{len(normalized)}"
+
+
+def _request_created_at(path: Path) -> str:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return ""
+    created = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+    return created.replace(microsecond=0).isoformat()
+
+
+def _request_mtime_ns(path: Path) -> int:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return 0
+    return int(getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000)))
+
+
+def _build_task_identity(prompt: str) -> dict[str, Any]:
+    fingerprint = _compute_request_fingerprint(prompt)
+    created_at = _request_created_at(REQUEST_PATH)
+    mtime_ns = _request_mtime_ns(REQUEST_PATH)
+    task_id = f"task-{fingerprint.split(':', 1)[1][:16]}-{mtime_ns}"
+    return {
+        "task_id": task_id,
+        "request_fingerprint": fingerprint,
+        "created_at": created_at,
+    }
+
+
+def _map_runtime_status_to_task_status(status: str, reason: str) -> str:
+    normalized_status = str(status or "").strip().lower()
+    normalized_reason = str(reason or "").strip().lower()
+
+    if normalized_status in {"response_saved", "result_saved"} or normalized_reason == "result_saved":
+        return "response_saved"
+    if normalized_status == "blocked":
+        return "blocked"
+    if normalized_status in {"running", "sent"}:
+        return "in_progress"
+    if normalized_status == "consumed":
+        return "consumed"
+    return "ready"
+
+
+def _build_next_task_payload() -> dict[str, Any]:
+    prompt = _read_text(REQUEST_PATH)
+    if not prompt.strip():
+        return {
+            "has_task": False,
+            "prompt": "",
+            "task_id": "",
+            "request_fingerprint": "",
+            "created_at": "",
+            "attempt_count": 0,
+            "status": "consumed",
+        }
+
+    identity = _build_task_identity(prompt)
+    existing = _read_status()
+    existing_task_id = str(existing.get("task_id") or "")
+    existing_fingerprint = str(existing.get("request_fingerprint") or existing.get("task_fingerprint") or "")
+    is_same_task = (
+        existing_task_id == identity["task_id"]
+        and existing_fingerprint == identity["request_fingerprint"]
+    )
+
+    if is_same_task:
+        raw_task_status = str(existing.get("task_status") or "")
+        task_status = raw_task_status if raw_task_status in {
+            "ready",
+            "in_progress",
+            "response_saved",
+            "blocked",
+            "consumed",
+        } else _map_runtime_status_to_task_status(
+            str(existing.get("status") or ""),
+            str(existing.get("reason") or ""),
+        )
+        attempt_count = _safe_int(existing.get("attempt_count"), 0)
+    else:
+        task_status = "ready"
+        attempt_count = 0
+
+    has_task = task_status == "ready"
+    return {
+        "has_task": has_task,
+        "prompt": prompt if has_task else "",
+        "task_id": identity["task_id"],
+        "request_fingerprint": identity["request_fingerprint"],
+        "created_at": identity["created_at"],
+        "attempt_count": attempt_count,
+        "status": task_status,
+    }
 
 
 def _read_status() -> dict[str, Any]:
@@ -109,9 +221,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         _ensure_base_dir()
         if self.path == "/next-task":
-            prompt = _read_text(REQUEST_PATH)
-            has_task = bool(prompt.strip())
-            self._send_json({"has_task": has_task, "prompt": prompt if has_task else ""})
+            self._send_json(_build_next_task_payload())
             return
 
         if self.path == "/status":
@@ -135,9 +245,24 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
             RESPONSE_PATH.write_text(response_text, encoding="utf-8")
             metadata = payload.get("metadata") if isinstance(payload, dict) else None
+            next_task = _build_next_task_payload()
+            task_id = str(payload.get("task_id") or next_task.get("task_id") or "")
+            request_fingerprint = str(
+                payload.get("request_fingerprint")
+                or payload.get("task_fingerprint")
+                or next_task.get("request_fingerprint")
+                or ""
+            )
+            created_at = str(payload.get("created_at") or next_task.get("created_at") or "")
+            attempt_count = _safe_int(next_task.get("attempt_count"), 0)
             status_payload = {
                 "status": "response_saved",
                 "reason": "result_received",
+                "task_status": "response_saved",
+                "task_id": task_id,
+                "request_fingerprint": request_fingerprint,
+                "created_at": created_at,
+                "attempt_count": attempt_count,
                 "response_path": str(RESPONSE_PATH),
                 "response_length": len(response_text),
                 "result_received_at": _now_iso(),
@@ -156,7 +281,34 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 return
             if payload is None:
                 payload = {}
+            next_task = _build_next_task_payload()
+            task_id = str(payload.get("task_id") or next_task.get("task_id") or "")
+            request_fingerprint = str(
+                payload.get("request_fingerprint")
+                or payload.get("task_fingerprint")
+                or next_task.get("request_fingerprint")
+                or ""
+            )
+            created_at = str(payload.get("created_at") or next_task.get("created_at") or "")
+            status_value = str(payload.get("status") or "")
+            reason_value = str(payload.get("reason") or "")
+
+            existing = _read_status()
+            same_task = (
+                str(existing.get("task_id") or "") == task_id
+                and str(existing.get("request_fingerprint") or existing.get("task_fingerprint") or "") == request_fingerprint
+            )
+            attempt_count = _safe_int(existing.get("attempt_count"), 0) if same_task else 0
+            if status_value.lower() == "running" and reason_value == "task_fetched":
+                attempt_count += 1
+
             merged = _merge_status(payload)
+            merged["task_id"] = task_id
+            merged["request_fingerprint"] = request_fingerprint
+            merged["created_at"] = created_at
+            merged["attempt_count"] = attempt_count
+            merged["task_status"] = _map_runtime_status_to_task_status(status_value, reason_value)
+            _write_status(merged)
             self._send_json({"ok": True, "status": merged})
             return
 

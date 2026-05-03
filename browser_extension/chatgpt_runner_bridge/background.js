@@ -24,7 +24,9 @@ const STATE_DEFAULTS = {
   auto_run_polling: false,
   target_tab_found: false,
   run_in_progress: false,
+  last_task_id: "",
   last_task_fingerprint: "",
+  last_dispatched_task_id: "",
   last_dispatched_task_fingerprint: "",
   last_terminal_status: "",
   last_terminal_reason: "",
@@ -37,6 +39,18 @@ let autoRunTickInFlight = false;
 
 function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeTaskIdentityFromPayload(payload = {}) {
+  const taskId = typeof payload.task_id === "string" ? payload.task_id : "";
+  const requestFingerprint =
+    typeof payload.request_fingerprint === "string"
+      ? payload.request_fingerprint
+      : (typeof payload.task_fingerprint === "string" ? payload.task_fingerprint : "");
+  return {
+    taskId: taskId.trim(),
+    requestFingerprint: requestFingerprint.trim()
+  };
 }
 
 function computeTaskFingerprint(text) {
@@ -124,7 +138,9 @@ async function resetAutoRunState() {
   const resetPatch = {
     auto_run_polling: false,
     run_in_progress: false,
+    last_task_id: "",
     last_task_fingerprint: "",
+    last_dispatched_task_id: "",
     last_dispatched_task_fingerprint: "",
     last_terminal_status: "",
     last_terminal_reason: "",
@@ -240,20 +256,45 @@ async function maybeRunAutoBridgeOnce() {
 
     const responseBody = nextTaskResult.response || {};
     const prompt = typeof responseBody.prompt === "string" ? responseBody.prompt : "";
+    const taskStatus = typeof responseBody.status === "string" ? responseBody.status : "";
+    const taskId = typeof responseBody.task_id === "string" ? responseBody.task_id : "";
+    const requestFingerprint = typeof responseBody.request_fingerprint === "string"
+      ? responseBody.request_fingerprint
+      : "";
+    const effectiveFingerprint = requestFingerprint || computeTaskFingerprint(prompt);
     const hasTask = Boolean(responseBody.has_task) && normalizeText(prompt).length > 0;
-    if (!hasTask) {
+    const terminalTaskState = new Set(["in_progress", "response_saved", "blocked", "consumed"]);
+
+    if (terminalTaskState.has(taskStatus)) {
       await setStatePatch({
+        run_in_progress: false,
         target_tab_found: false,
-        run_in_progress: false
+        last_task_id: taskId || stateCache.last_task_id,
+        last_task_fingerprint: effectiveFingerprint || stateCache.last_task_fingerprint,
+        last_terminal_status: taskStatus,
+        last_terminal_reason: taskStatus,
+        last_run_result: toResultLabel(taskStatus, taskStatus),
+        last_blocked_reason: taskStatus === "blocked" ? "blocked" : stateCache.last_blocked_reason
       });
       return;
     }
 
-    const taskFingerprint = computeTaskFingerprint(prompt);
+    if (!hasTask) {
+      await setStatePatch({
+        target_tab_found: false,
+        run_in_progress: false,
+        last_task_id: taskId || stateCache.last_task_id,
+        last_task_fingerprint: effectiveFingerprint || stateCache.last_task_fingerprint
+      });
+      return;
+    }
+
+    const taskFingerprint = effectiveFingerprint;
     if (
-      taskFingerprint &&
-      (taskFingerprint === stateCache.last_task_fingerprint ||
-        taskFingerprint === stateCache.last_dispatched_task_fingerprint)
+      (taskId && (taskId === stateCache.last_task_id || taskId === stateCache.last_dispatched_task_id)) ||
+      (taskFingerprint &&
+        (taskFingerprint === stateCache.last_task_fingerprint ||
+          taskFingerprint === stateCache.last_dispatched_task_fingerprint))
     ) {
       return;
     }
@@ -262,6 +303,7 @@ async function maybeRunAutoBridgeOnce() {
     if (!targetTab || typeof targetTab.id !== "number") {
       await pauseAutoRunOnTerminal("blocked", "chatgpt_tab_not_found", {
         target_tab_found: false,
+        last_task_id: taskId,
         last_task_fingerprint: taskFingerprint
       });
       return;
@@ -270,6 +312,8 @@ async function maybeRunAutoBridgeOnce() {
     await setStatePatch({
       target_tab_found: true,
       run_in_progress: true,
+      last_dispatched_task_id: taskId,
+      last_task_id: taskId,
       last_dispatched_task_fingerprint: taskFingerprint,
       last_task_fingerprint: taskFingerprint,
       last_run_result: "running:dispatch_requested",
@@ -280,6 +324,8 @@ async function maybeRunAutoBridgeOnce() {
       await chrome.tabs.sendMessage(targetTab.id, {
         type: "RUN_CHATGPT_BRIDGE_ONCE",
         auto_run: true,
+        task_id: taskId,
+        request_fingerprint: requestFingerprint,
         task_fingerprint: taskFingerprint
       });
     } catch (error) {
@@ -297,8 +343,9 @@ async function maybeRunAutoBridgeOnce() {
 async function updateStateFromRunPayload(payload = {}) {
   const status = typeof payload.status === "string" ? payload.status : "";
   const reason = typeof payload.reason === "string" ? payload.reason : "";
-  const taskFingerprint =
-    typeof payload.task_fingerprint === "string" ? payload.task_fingerprint : "";
+  const identity = normalizeTaskIdentityFromPayload(payload);
+  const taskId = identity.taskId;
+  const taskFingerprint = identity.requestFingerprint;
 
   const runInProgress = status === "running" || status === "sent";
   const patch = {
@@ -308,6 +355,10 @@ async function updateStateFromRunPayload(payload = {}) {
     target_tab_found: true
   };
 
+  if (taskId) {
+    patch.last_task_id = taskId;
+    patch.last_dispatched_task_id = taskId;
+  }
   if (taskFingerprint) {
     patch.last_task_fingerprint = taskFingerprint;
     patch.last_dispatched_task_fingerprint = taskFingerprint;
@@ -317,9 +368,16 @@ async function updateStateFromRunPayload(payload = {}) {
 
   if (isTerminalState(status, reason)) {
     await pauseAutoRunOnTerminal(status || "blocked", reason || "bridge_error", taskFingerprint ? {
+      ...(taskId ? {
+        last_task_id: taskId,
+        last_dispatched_task_id: taskId
+      } : {}),
       last_task_fingerprint: taskFingerprint,
       last_dispatched_task_fingerprint: taskFingerprint
-    } : {});
+    } : (taskId ? {
+      last_task_id: taskId,
+      last_dispatched_task_id: taskId
+    } : {}));
   }
 }
 
