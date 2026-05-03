@@ -91692,12 +91692,11 @@ def _build_project_browser_autonomous_chatgpt_browser_runtime_enablement_state(
 def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
     *,
     project_analysis_request_text: str,
-    project_request_from_dev_loop_input: str,
-    project_request_from_explicit_real_input_injection: str,
-    project_request_fallback: str,
     browser_prompt_payload: Mapping[str, Any] | None,
     browser_queue_handoff_payload: Mapping[str, Any] | None,
     prior_browser_state: Mapping[str, Any] | None,
+    one_shot_execution_enabled: Any = None,
+    one_shot_wait_enabled: Any = None,
     max_wait_seconds: int = 600,
     poll_interval_seconds: int = 10,
 ) -> dict[str, Any]:
@@ -91705,6 +91704,9 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
     request_path = base_dir_path / "request.md"
     response_path = base_dir_path / "response.md"
     status_path = base_dir_path / "status.json"
+    response_read_limit_bytes = 8192
+    status_json_read_limit_bytes = 8192
+    preview_chars = 500
 
     def _normalize_preview_text(text: str, *, max_chars: int = 500) -> str:
         if not text:
@@ -91733,14 +91735,15 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
             return snapshot
         try:
             size_bytes = _as_non_negative_int(path_obj.stat().st_size, default=0)
-            raw_bytes = path_obj.read_bytes()
+            with path_obj.open("rb") as file_obj:
+                raw_bytes = file_obj.read(status_json_read_limit_bytes)
         except OSError as exc:
             snapshot["parse_error"] = f"{exc.__class__.__name__}:{exc}"
             return snapshot
         snapshot["size_bytes"] = size_bytes
-        preview_bytes = raw_bytes[:8192]
+        preview_bytes = raw_bytes[:status_json_read_limit_bytes]
         preview_text = preview_bytes.decode("utf-8", errors="replace")
-        snapshot["preview"] = _normalize_preview_text(preview_text, max_chars=500)
+        snapshot["preview"] = _normalize_preview_text(preview_text, max_chars=preview_chars)
         try:
             parsed = json.loads(raw_bytes.decode("utf-8", errors="replace"))
         except Exception as exc:  # pragma: no cover - defensive parse boundary
@@ -91811,17 +91814,18 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
         snapshot["read_attempted"] = True
         try:
             file_size = _as_non_negative_int(path_obj.stat().st_size, default=0)
-            raw_bytes = path_obj.read_bytes()
+            with path_obj.open("rb") as file_obj:
+                raw_bytes = file_obj.read(response_read_limit_bytes)
         except OSError as exc:
             snapshot["size_bytes"] = 0
             snapshot["read_error"] = f"{exc.__class__.__name__}:{exc}"
             snapshot["status"] = "chrome_runner_bridge_response_read_error"
             return snapshot
         snapshot["size_bytes"] = file_size
-        text = raw_bytes[:8192].decode("utf-8", errors="replace")
+        text = raw_bytes[:response_read_limit_bytes].decode("utf-8", errors="replace")
         normalized_text = text.strip()
         snapshot["read_completed"] = True
-        snapshot["preview"] = _normalize_preview_text(normalized_text, max_chars=500)
+        snapshot["preview"] = _normalize_preview_text(normalized_text, max_chars=preview_chars)
         if normalized_text:
             snapshot["fingerprint"] = hashlib.sha256(normalized_text.encode("utf-8")).hexdigest()
         else:
@@ -91844,19 +91848,19 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
             prior_browser_state=prior_browser_state,
         )
     )
-    request_text_from_analysis_request = _normalize_text(
-        project_analysis_request_text,
-        default="",
-    )
-    project_request_text = ""
-    for candidate in (
-        _normalize_text(project_request_from_dev_loop_input, default=""),
-        _normalize_text(project_request_from_explicit_real_input_injection, default=""),
-        _normalize_text(project_request_fallback, default=""),
-    ):
-        if candidate:
-            project_request_text = candidate
-            break
+    request_text_from_analysis_request = _normalize_text(project_analysis_request_text, default="")
+
+    def _read_bool_flag(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
 
     selected_request_text = ""
     request_source = ""
@@ -91866,13 +91870,6 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
     elif request_text_from_analysis_request:
         selected_request_text = request_text_from_analysis_request
         request_source = "project_browser_autonomous_project_analysis_request_text"
-    elif project_request_text:
-        selected_request_text = (
-            "Analyze this project request and return compact structured output with keys: "
-            "analysis_summary, roadmap_pr_queue, active_pr_index, active_pr, pr_prompt_seed. "
-            f"Project request: {project_request_text}"
-        )
-        request_source = "prompt262_project_request_prompt_compiler"
 
     operator_action = (
         "Open a logged-in normal Chrome ChatGPT tab, ensure the composer is empty and no "
@@ -91884,22 +91881,31 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
         wait_poll_seconds = 10
     if wait_timeout_seconds <= 0:
         wait_timeout_seconds = 600
+    execution_enabled = _read_bool_flag(one_shot_execution_enabled, default=False)
+    wait_enabled = _read_bool_flag(one_shot_wait_enabled, default=False)
 
     state: dict[str, Any] = {
         "project_browser_autonomous_chrome_runner_bridge_one_shot_status": (
-            "chrome_runner_bridge_one_shot_blocked_missing_prompt"
+            "chrome_runner_bridge_one_shot_not_requested"
         ),
         "project_browser_autonomous_chrome_runner_bridge_one_shot_next_action": (
-            "provide_bridge_request_prompt"
+            "enable_chrome_runner_bridge_one_shot"
         ),
         "project_browser_autonomous_chrome_runner_bridge_base_dir": str(base_dir_path),
         "project_browser_autonomous_chrome_runner_bridge_request_path": str(request_path),
         "project_browser_autonomous_chrome_runner_bridge_response_path": str(response_path),
         "project_browser_autonomous_chrome_runner_bridge_status_path": str(status_path),
+        "project_browser_autonomous_chrome_runner_bridge_one_shot_execution_enabled": bool(
+            execution_enabled
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_one_shot_wait_enabled": bool(
+            wait_enabled
+        ),
         "project_browser_autonomous_chrome_runner_bridge_request_written": False,
         "project_browser_autonomous_chrome_runner_bridge_request_size_bytes": 0,
         "project_browser_autonomous_chrome_runner_bridge_request_fingerprint": "",
         "project_browser_autonomous_chrome_runner_bridge_request_source": request_source,
+        "project_browser_autonomous_chrome_runner_bridge_request_write_error": "",
         "project_browser_autonomous_chrome_runner_bridge_operator_action_required": False,
         "project_browser_autonomous_chrome_runner_bridge_operator_action_kind": "",
         "project_browser_autonomous_chrome_runner_bridge_operator_action": "",
@@ -91907,7 +91913,7 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
         "project_browser_autonomous_chrome_runner_bridge_wait_timeout_seconds": wait_timeout_seconds,
         "project_browser_autonomous_chrome_runner_bridge_wait_poll_interval_seconds": wait_poll_seconds,
         "project_browser_autonomous_chrome_runner_bridge_wait_elapsed_seconds": 0,
-        "project_browser_autonomous_chrome_runner_bridge_wait_exit_reason": "",
+        "project_browser_autonomous_chrome_runner_bridge_wait_exit_reason": "wait_not_enabled",
         "project_browser_autonomous_chrome_runner_bridge_response_exists": False,
         "project_browser_autonomous_chrome_runner_bridge_response_is_file": False,
         "project_browser_autonomous_chrome_runner_bridge_response_size_bytes": 0,
@@ -91937,7 +91943,16 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
         ),
     }
 
+    if not execution_enabled:
+        return state
+
     if not selected_request_text:
+        state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+            "chrome_runner_bridge_one_shot_blocked_missing_prompt"
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+            "provide_bridge_request_prompt"
+        )
         return state
 
     try:
@@ -91971,8 +91986,11 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
         state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
             "inspect_bridge_cleanup_error"
         )
-        state["project_browser_autonomous_chrome_runner_bridge_cleanup_error"] = (
+        state["project_browser_autonomous_chrome_runner_bridge_request_write_error"] = (
             f"request_write_failed:{exc.__class__.__name__}:{exc}"
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_cleanup_error"] = (
+            state["project_browser_autonomous_chrome_runner_bridge_request_write_error"]
         )
         return state
 
@@ -91992,6 +92010,12 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
     state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
         "click_chrome_runner_bridge_once"
     )
+    state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+        "wait_not_enabled"
+    )
+
+    if not wait_enabled:
+        return state
 
     terminal_blocked_reasons = {
         "human_verification_required",
@@ -92004,6 +92028,7 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
     }
 
     state["project_browser_autonomous_chrome_runner_bridge_wait_attempted"] = True
+    state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = ""
     state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
         "chrome_runner_bridge_one_shot_waiting_for_response"
     )
@@ -147978,22 +148003,6 @@ def _build_approved_restart_execution_contract_surface(
                 ),
                 default="",
             ),
-            project_request_from_dev_loop_input=_normalize_text(
-                project_browser_autonomous_dev_loop_input_state_normalized.get(
-                    "project_browser_autonomous_dev_loop_input_project_request_text"
-                ),
-                default="",
-            ),
-            project_request_from_explicit_real_input_injection=_normalize_text(
-                project_browser_autonomous_explicit_real_input_injection_state_normalized.get(
-                    "project_browser_autonomous_explicit_real_input_injection_project_request_text"
-                ),
-                default="",
-            ),
-            project_request_fallback=_normalize_text(
-                prior_approved_restart_execution.get("project_request_text"),
-                default="",
-            ),
             browser_prompt_payload=project_browser_prompt_payload_state,
             browser_queue_handoff_payload=(
                 dict(project_pr_queue_state.get("queue_handoff_payload", {}))
@@ -148001,11 +148010,32 @@ def _build_approved_restart_execution_contract_surface(
                 else {}
             ),
             prior_browser_state=prior_approved_restart_execution,
+            one_shot_execution_enabled=(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_chrome_runner_bridge_one_shot_execution_enabled"
+                )
+                if "project_browser_autonomous_chrome_runner_bridge_one_shot_execution_enabled"
+                in prior_approved_restart_execution
+                else approved_restart.get(
+                    "project_browser_autonomous_chrome_runner_bridge_one_shot_execution_enabled"
+                )
+            ),
+            one_shot_wait_enabled=(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_chrome_runner_bridge_one_shot_wait_enabled"
+                )
+                if "project_browser_autonomous_chrome_runner_bridge_one_shot_wait_enabled"
+                in prior_approved_restart_execution
+                else approved_restart.get(
+                    "project_browser_autonomous_chrome_runner_bridge_one_shot_wait_enabled"
+                )
+            ),
             max_wait_seconds=600,
             poll_interval_seconds=10,
         )
     )
     chrome_runner_bridge_one_shot_allowed_statuses = {
+        "chrome_runner_bridge_one_shot_not_requested",
         "chrome_runner_bridge_one_shot_blocked_missing_prompt",
         "chrome_runner_bridge_one_shot_blocked_cleanup_failed",
         "chrome_runner_bridge_one_shot_request_written_waiting_for_operator",
@@ -148019,6 +148049,7 @@ def _build_approved_restart_execution_contract_surface(
         "insufficient_truth",
     }
     chrome_runner_bridge_one_shot_allowed_next_actions = {
+        "enable_chrome_runner_bridge_one_shot",
         "provide_bridge_request_prompt",
         "inspect_bridge_cleanup_error",
         "click_chrome_runner_bridge_once",
@@ -148047,10 +148078,13 @@ def _build_approved_restart_execution_contract_surface(
         "request_path",
         "response_path",
         "status_path",
+        "one_shot_execution_enabled",
+        "one_shot_wait_enabled",
         "request_written",
         "request_size_bytes",
         "request_fingerprint",
         "request_source",
+        "request_write_error",
         "operator_action_required",
         "operator_action_kind",
         "operator_action",
@@ -148122,6 +148156,8 @@ def _build_approved_restart_execution_contract_surface(
             if value not in chrome_runner_bridge_one_shot_allowed_response_statuses:
                 value = "insufficient_truth"
         elif field_name in {
+            "one_shot_execution_enabled",
+            "one_shot_wait_enabled",
             "request_written",
             "operator_action_required",
             "wait_attempted",
@@ -152793,7 +152829,7 @@ def _build_approved_restart_execution_contract_surface(
             if project_browser_autonomous_chrome_runner_bridge_one_shot_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_operator_action_required"
-            if project_browser_autonomous_chrome_runner_bridge_one_shot_status
+            if project_browser_autonomous_chrome_runner_bridge_operator_action_required
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"
             if project_browser_autonomous_chrome_runner_bridge_wait_exit_reason
