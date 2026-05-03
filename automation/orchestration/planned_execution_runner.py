@@ -92627,6 +92627,337 @@ def _build_project_browser_autonomous_chrome_runner_bridge_response_assimilation
     return state
 
 
+def _build_project_browser_autonomous_chrome_runner_bridge_bounded_loop_state(
+    *,
+    response_assimilation_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    assimilation_state = (
+        dict(response_assimilation_state) if isinstance(response_assimilation_state, Mapping) else {}
+    )
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(
+        key: str,
+        *,
+        default: bool = False,
+    ) -> bool:
+        if key in prior_payload:
+            value = prior_payload.get(key)
+        else:
+            value = approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_int(key: str, *, default: int) -> int:
+        if key in prior_payload:
+            value = prior_payload.get(key)
+        else:
+            value = approved_restart.get(key)
+        return _as_non_negative_int(value, default=default)
+
+    loop_enabled = _read_flag(
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_enabled",
+        default=False,
+    )
+    loop_execute_enabled = _read_flag(
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_execute_enabled",
+        default=False,
+    )
+    loop_max_iterations = _read_int(
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_max_iterations",
+        default=1,
+    )
+    if loop_max_iterations <= 0:
+        loop_max_iterations = 1
+    loop_iteration = _read_int(
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_iteration",
+        default=_read_int(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_current_iteration",
+            default=0,
+        ),
+    )
+    max_consecutive_failures = 1
+    failure_count = _as_non_negative_int(
+        prior_payload.get(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_failure_count",
+            0,
+        ),
+        default=0,
+    )
+
+    assimilation_status = _normalize_text(
+        assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"
+        ),
+        default="not_assimilated",
+    )
+    assimilation_next_action = _normalize_text(
+        assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action"
+        ),
+        default="manual_review_required",
+    )
+    assimilation_prompt = _normalize_text(
+        assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_prompt"
+        ),
+        default="",
+    )
+    assimilation_summary = _normalize_text(
+        assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_summary"
+        ),
+        default="",
+    )
+    allowed_assimilation_next_actions = {
+        "run_codex_with_assimilated_prompt",
+        "run_codex_fix_prompt",
+        "decide_fix_or_complete",
+        "prepare_commit_or_pr_gate",
+        "manual_review_required",
+    }
+    route_for_codex = assimilation_next_action in {
+        "run_codex_with_assimilated_prompt",
+        "run_codex_fix_prompt",
+    }
+    selected_prompt = assimilation_prompt if route_for_codex else ""
+    selected_prompt_fingerprint = (
+        hashlib.sha256(selected_prompt.encode("utf-8")).hexdigest() if selected_prompt else ""
+    )
+    prior_selected_prompt_fingerprint = _normalize_text(
+        prior_payload.get(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt_fingerprint"
+        ),
+        default="",
+    )
+    duplicate_prompt_detected = bool(
+        selected_prompt_fingerprint
+        and prior_selected_prompt_fingerprint
+        and selected_prompt_fingerprint == prior_selected_prompt_fingerprint
+    )
+
+    blocked_unsafe_tokens = (
+        "playwright",
+        "chatgpt api",
+        "openai api",
+        "captcha bypass",
+        "verify bypass",
+        "store cookie",
+        "store cookies",
+        "store token",
+        "store tokens",
+        "store session",
+        "store sessions",
+        "daemon",
+        "scheduler",
+        "background queue",
+        "queue drain",
+        "unbounded loop",
+        "infinite loop",
+        "new shell execution",
+        "new codex execution",
+        "auto commit",
+        "automatic commit",
+        "auto tag",
+        "automatic tag",
+        "auto pr",
+        "automatic pr",
+        "auto merge",
+        "automatic merge",
+        "rm -rf /",
+        "delete /",
+        "outside repo",
+    )
+    lower_prompt = selected_prompt.lower()
+    unsafe_prompt_detected = bool(
+        selected_prompt and any(token in lower_prompt for token in blocked_unsafe_tokens)
+    )
+
+    loop_status = "loop_not_requested"
+    loop_next_action = "enable_bounded_loop"
+    loop_stop_reason = "loop_disabled"
+    decision_summary = "bounded loop disabled by default"
+    loop_routed = False
+
+    if loop_enabled:
+        loop_status = "loop_decision_only"
+        loop_next_action = assimilation_next_action
+        loop_stop_reason = "decision_only_execution_disabled"
+        decision_summary = f"selected assimilation next action: {assimilation_next_action or 'none'}"
+
+        if failure_count >= max_consecutive_failures:
+            loop_status = "loop_iteration_limit_reached"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "max_consecutive_failures_reached"
+            decision_summary = "bounded loop stopped after consecutive failure limit"
+        elif loop_iteration >= loop_max_iterations:
+            loop_status = "loop_iteration_limit_reached"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "max_iterations_reached"
+            decision_summary = "bounded loop stopped at max iteration limit"
+        elif assimilation_status != "assimilated":
+            loop_status = "loop_blocked_missing_assimilation"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = f"assimilation_status:{assimilation_status or 'unknown'}"
+            decision_summary = "bounded loop blocked because no assimilated bridge response was available"
+        elif assimilation_next_action not in allowed_assimilation_next_actions:
+            loop_status = "loop_blocked_invalid_next_action"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "invalid_assimilation_next_action"
+            decision_summary = "bounded loop blocked due to unsupported assimilation next action"
+        elif assimilation_next_action == "manual_review_required":
+            loop_status = "loop_blocked_manual_review"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "manual_review_required"
+            decision_summary = "bounded loop stopped because manual review is required"
+        elif route_for_codex and not selected_prompt:
+            loop_status = "loop_blocked_missing_assimilation"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "selected_prompt_missing"
+            decision_summary = "bounded loop blocked because routed prompt text was unavailable"
+        elif route_for_codex and unsafe_prompt_detected:
+            loop_status = "loop_blocked_unsafe_prompt"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "unsafe_prompt_detected"
+            decision_summary = "bounded loop blocked by unsafe assimilated prompt content"
+        elif route_for_codex and duplicate_prompt_detected:
+            loop_status = "loop_blocked_duplicate_prompt"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "duplicate_prompt_fingerprint"
+            decision_summary = "bounded loop blocked because the assimilated prompt fingerprint is duplicated"
+        elif not loop_execute_enabled:
+            loop_status = "loop_decision_only"
+            loop_next_action = assimilation_next_action
+            loop_stop_reason = "execution_not_enabled"
+            decision_summary = "bounded loop decision exposed without execution routing"
+        elif assimilation_next_action == "run_codex_with_assimilated_prompt":
+            route_path = Path("/tmp/codex-local-runner-decision/generated_next_prompt.txt")
+            if route_path.is_symlink() or not route_path.parent.exists():
+                loop_status = "loop_blocked_no_existing_runner_route"
+                loop_next_action = "manual_review_required"
+                loop_stop_reason = "existing_next_prompt_route_unavailable"
+                decision_summary = "bounded loop could not route to existing next-prompt surface"
+            else:
+                try:
+                    tmp_path = route_path.with_name(f"{route_path.name}.tmp")
+                    tmp_path.write_text(selected_prompt, encoding="utf-8")
+                    os.replace(tmp_path, route_path)
+                except OSError:
+                    loop_status = "loop_blocked_no_existing_runner_route"
+                    loop_next_action = "manual_review_required"
+                    loop_stop_reason = "existing_next_prompt_route_write_failed"
+                    decision_summary = "bounded loop failed to write existing next-prompt surface"
+                else:
+                    loop_status = "loop_ready_or_routed_to_codex"
+                    loop_next_action = "run_existing_codex_implementation_step"
+                    loop_stop_reason = "routed_to_existing_next_prompt_surface"
+                    decision_summary = "bounded loop routed assimilated prompt to existing implementation surface"
+                    loop_routed = True
+                    loop_iteration = min(loop_max_iterations, loop_iteration + 1)
+        elif assimilation_next_action == "run_codex_fix_prompt":
+            route_path = Path("/tmp/codex-local-runner-decision/generated_fix_prompt.txt")
+            if route_path.is_symlink() or not route_path.parent.exists():
+                loop_status = "loop_blocked_no_existing_runner_route"
+                loop_next_action = "manual_review_required"
+                loop_stop_reason = "existing_fix_prompt_route_unavailable"
+                decision_summary = "bounded loop could not route to existing fix-prompt surface"
+            else:
+                try:
+                    tmp_path = route_path.with_name(f"{route_path.name}.tmp")
+                    tmp_path.write_text(selected_prompt, encoding="utf-8")
+                    os.replace(tmp_path, route_path)
+                except OSError:
+                    loop_status = "loop_blocked_no_existing_runner_route"
+                    loop_next_action = "manual_review_required"
+                    loop_stop_reason = "existing_fix_prompt_route_write_failed"
+                    decision_summary = "bounded loop failed to write existing fix-prompt surface"
+                else:
+                    loop_status = "loop_ready_or_routed_to_codex_fix"
+                    loop_next_action = "run_existing_codex_fix_step"
+                    loop_stop_reason = "routed_to_existing_fix_prompt_surface"
+                    decision_summary = "bounded loop routed assimilated prompt to existing fix surface"
+                    loop_routed = True
+                    loop_iteration = min(loop_max_iterations, loop_iteration + 1)
+        elif assimilation_next_action == "decide_fix_or_complete":
+            loop_status = "loop_ready_to_decide_fix_or_complete"
+            loop_next_action = "decide_fix_or_complete"
+            loop_stop_reason = "review_decision_ready"
+            decision_summary = "bounded loop prepared review decision handoff"
+        elif assimilation_next_action == "prepare_commit_or_pr_gate":
+            loop_status = "loop_ready_for_commit_or_pr_gate"
+            loop_next_action = "prepare_commit_or_pr_gate"
+            loop_stop_reason = "commit_or_pr_gate_ready"
+            decision_summary = "bounded loop prepared commit/PR gate readiness"
+        else:
+            loop_status = "loop_blocked_invalid_next_action"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "invalid_assimilation_next_action"
+            decision_summary = "bounded loop blocked due to unsupported assimilation next action"
+
+    return {
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_status": loop_status,
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action": loop_next_action,
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_enabled": bool(loop_enabled),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_execute_enabled": bool(
+            loop_execute_enabled
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_iteration": _as_non_negative_int(
+            loop_iteration,
+            default=0,
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_current_iteration": _as_non_negative_int(
+            loop_iteration,
+            default=0,
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_max_iterations": _as_non_negative_int(
+            loop_max_iterations,
+            default=1,
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_stop_reason": (
+            _normalize_text(loop_stop_reason, default="")
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt": (
+            _normalize_text(selected_prompt, default="")
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt_fingerprint": (
+            _normalize_text(selected_prompt_fingerprint, default="")
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_decision_summary": (
+            _normalize_text(decision_summary or assimilation_summary, default="")
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_routed": bool(loop_routed),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_failure_count": _as_non_negative_int(
+            failure_count + (1 if str(loop_status).startswith("loop_blocked_") else 0),
+            default=0,
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_max_consecutive_failures": (
+            max_consecutive_failures
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_runtime_posture": [
+            "bounded_loop_single_step",
+            "default_off",
+            "no_unbounded_loop",
+            "no_new_executor_path",
+            "no_commit_pr_merge_automation",
+        ],
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -148689,6 +149020,110 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized[
             key
         ] = value
+    project_browser_autonomous_chrome_runner_bridge_bounded_loop_state = (
+        _build_project_browser_autonomous_chrome_runner_bridge_bounded_loop_state(
+            response_assimilation_state=project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    chrome_runner_bridge_bounded_loop_allowed_statuses = {
+        "loop_not_requested",
+        "loop_decision_only",
+        "loop_ready_or_routed_to_codex",
+        "loop_ready_or_routed_to_codex_fix",
+        "loop_ready_to_decide_fix_or_complete",
+        "loop_ready_for_commit_or_pr_gate",
+        "loop_blocked_manual_review",
+        "loop_iteration_limit_reached",
+        "loop_blocked_missing_assimilation",
+        "loop_blocked_invalid_next_action",
+        "loop_blocked_duplicate_prompt",
+        "loop_blocked_unsafe_prompt",
+        "loop_blocked_no_existing_runner_route",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_bounded_loop_allowed_next_actions = {
+        "enable_bounded_loop",
+        "run_existing_codex_implementation_step",
+        "run_existing_codex_fix_step",
+        "decide_fix_or_complete",
+        "prepare_commit_or_pr_gate",
+        "manual_review_required",
+        "run_codex_with_assimilated_prompt",
+        "run_codex_fix_prompt",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_bounded_loop_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "iteration",
+        "current_iteration",
+        "max_iterations",
+        "stop_reason",
+        "selected_prompt",
+        "selected_prompt_fingerprint",
+        "decision_summary",
+        "routed",
+        "failure_count",
+        "max_consecutive_failures",
+        "runtime_posture",
+    )
+    project_browser_autonomous_chrome_runner_bridge_bounded_loop_status = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_status
+        not in chrome_runner_bridge_bounded_loop_allowed_statuses
+    ):
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action
+        not in chrome_runner_bridge_bounded_loop_allowed_next_actions
+    ):
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chrome_runner_bridge_bounded_loop_field_names:
+        key = f"project_browser_autonomous_chrome_runner_bridge_bounded_loop_{field_name}"
+        value = project_browser_autonomous_chrome_runner_bridge_bounded_loop_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_chrome_runner_bridge_bounded_loop_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action
+        elif field_name in {"enabled", "execute_enabled", "routed"}:
+            value = bool(value)
+        elif field_name in {
+            "iteration",
+            "current_iteration",
+            "max_iterations",
+            "failure_count",
+            "max_consecutive_failures",
+        }:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name == "runtime_posture":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized[
+            key
+        ] = value
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -149223,6 +149658,18 @@ def _build_approved_restart_execution_contract_surface(
                 ),
                 "project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action": (
                     project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_bounded_loop_status": (
+                    project_browser_autonomous_chrome_runner_bridge_bounded_loop_status
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action": (
+                    project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_bounded_loop_routed": bool(
+                    project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized.get(
+                        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_routed",
+                        False,
+                    )
                 ),
                 "project_browser_autonomous_dev_loop_pr_prompt_readiness_status": (
                     project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -153344,6 +153791,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action"
             if project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"
+            if project_browser_autonomous_chrome_runner_bridge_bounded_loop_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action"
+            if project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -159595,6 +160048,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chatgpt_browser_runtime_enablement_state_normalized,
         **project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized,
         **project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized,
+        **project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -159645,6 +160099,9 @@ def _build_approved_restart_execution_contract_surface(
             dict(
                 project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized
             )
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized": (
+            dict(project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
