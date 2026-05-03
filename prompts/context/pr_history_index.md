@@ -7468,3 +7468,11 @@ Next:
 - Prompt263d must not treat blocker classification as success.
 - Prompt263d should supply/wire required selector keys through the existing selector contract path and perform exactly one bounded ChatGPT browser send.
 - Prompt263d success must require send_attempted=true from the existing runner/browser execution path.
+
+## 20260503_153627 Prompt264 Chrome Runner Bridge E2E success
+
+- Prompt264/264b/264c/264d/264e path established Chrome extension based ChatGPT browser handoff MVP.
+- Playwright route remains avoided for ChatGPT browser automation due Verify instability.
+- Chrome extension route now supports background bridge fetch, visible composer diagnostics, send confirmation, transient thinking-text skip, and conservative final response polling.
+- E2E smoke reached response.md=OK.
+- Runbook: artifacts/runtime_commands/20260503_122150_prompt264_chrome_runner_bridge_e2e_success_runbook.md

@@ -4681,3 +4681,12 @@ Next direction:
 - Prompt263d should wire/supply required selector contract keys through existing selector contract paths.
 - Prompt263d should treat actual send_attempted=true as the only success condition.
 - If actual send is impossible due to missing environment/session/login/executor, it must return failed/blocked, not success.
+
+## 20260503_153627 Prompt264 Chrome Runner Bridge E2E success
+
+- Added/validated normal Chrome + ChatGPT Runner Bridge route as a practical browser-based ChatGPT handoff path.
+- Confirmed request.md -> bridge server -> Chrome extension -> ChatGPT tab -> response.md flow.
+- Final smoke result: response.md contained OK.
+- Confirmed visible composer and real send-button detection; selected submit candidate uses data-testid=send-button / aria_label=プロンプトを送信する.
+- Current conservative polling: RESPONSE_TIMEOUT_MS=600000, RESPONSE_POLL_INTERVAL_MS=10000, STABLE_POLLS_REQUIRED=3, USER_MESSAGE_CONFIRM_TIMEOUT_MS=30000, USER_MESSAGE_RETRY_INTERVAL_MS=10000.
+- Runbook: artifacts/runtime_commands/20260503_122150_prompt264_chrome_runner_bridge_e2e_success_runbook.md
