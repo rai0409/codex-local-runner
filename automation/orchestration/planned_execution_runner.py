@@ -15,6 +15,8 @@ import time
 from typing import Any
 from typing import Callable
 from typing import Mapping
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from automation.control.action_handoff import build_action_handoff_payload
 from automation.control.next_action_controller import evaluate_next_action_from_run_dir
@@ -92238,6 +92240,393 @@ def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
     return state
 
 
+def _build_project_browser_autonomous_chrome_runner_bridge_response_assimilation_state(
+    *,
+    bridge_one_shot_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    default_base_dir = "/tmp/codex-local-runner-chatgpt-bridge"
+    one_shot_state = dict(bridge_one_shot_state) if isinstance(bridge_one_shot_state, Mapping) else {}
+    base_dir_text = _normalize_text(
+        one_shot_state.get("project_browser_autonomous_chrome_runner_bridge_base_dir"),
+        default=default_base_dir,
+    )
+    base_dir_path = Path(base_dir_text or default_base_dir)
+    response_path = Path(
+        _normalize_text(
+            one_shot_state.get("project_browser_autonomous_chrome_runner_bridge_response_path"),
+            default=str(base_dir_path / "response.md"),
+        )
+    )
+    status_path = Path(
+        _normalize_text(
+            one_shot_state.get("project_browser_autonomous_chrome_runner_bridge_status_path"),
+            default=str(base_dir_path / "status.json"),
+        )
+    )
+    status_read_limit_bytes = 8192
+    response_read_limit_bytes = 32768
+    summary_max_chars = 240
+    prompt_max_chars = 6000
+
+    def _normalize_preview_text(text: str, *, max_chars: int = 500) -> str:
+        if not text:
+            return ""
+        normalized = " ".join(text.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _looks_transient(text: str) -> bool:
+        normalized_text = _normalize_text(text, default="")
+        if not normalized_text:
+            return True
+        lower = normalized_text.lower()
+        exact_transients = {
+            "thinking",
+            "thinking...",
+            "generating",
+            "generating...",
+            "思考中",
+            "考え中",
+            "応答を生成しています",
+            "応答を生成しています...",
+            "...",
+        }
+        if lower in exact_transients or normalized_text in exact_transients:
+            return True
+        if len(normalized_text) <= 40:
+            tokens = ("thinking", "generating", "思考中", "考え中", "生成しています", "応答を生成")
+            if any(token in lower or token in normalized_text for token in tokens):
+                return True
+        return False
+
+    def _map_runtime_to_task_status(status: str, reason: str) -> str:
+        normalized_status = _normalize_text(status, default="").lower()
+        normalized_reason = _normalize_text(reason, default="").lower()
+        if normalized_status in {"response_saved", "result_saved"} or normalized_reason in {
+            "result_saved",
+            "response_saved",
+        }:
+            return "response_saved"
+        if normalized_status == "blocked":
+            return "blocked"
+        if normalized_status in {"running", "sent", "in_progress"}:
+            return "in_progress"
+        if normalized_status == "consumed":
+            return "consumed"
+        return "ready"
+
+    def _classify_assimilation(payload_text: str) -> tuple[str, str, str, str]:
+        normalized_text = _normalize_text(payload_text, default="")
+        lower = normalized_text.lower()
+
+        def _contains_any(tokens: tuple[str, ...]) -> bool:
+            return any(token in lower for token in tokens)
+
+        has_blocker_signal = _contains_any(
+            (
+                "manual review",
+                "blocked",
+                "unclear",
+                "insufficient",
+                "cannot determine",
+                "cannot proceed",
+                "captcha",
+                "verify",
+            )
+        )
+        has_completion_signal = _contains_any(
+            (
+                "ready to commit",
+                "ready for commit",
+                "ready to open pr",
+                "pr-ready",
+                "pull request ready",
+                "ready for pr",
+                "looks complete",
+                "task complete",
+                "implementation complete",
+            )
+        )
+        has_fix_signal = _contains_any(("fix", "corrective", "repair", "patch", "resolve", "address"))
+        has_failure_signal = _contains_any(("bug", "issue", "error", "failing", "regression", "failed test"))
+        has_review_signal = _contains_any(("review", "diff", "result", "validation", "test results"))
+        has_prompt_contract_signal = (
+            "goal" in lower
+            and "allowed files" in lower
+            and "forbidden files" in lower
+            and "expected artifact" in lower
+        ) or ("files to modify" in lower and "validation" in lower)
+
+        if has_blocker_signal:
+            return (
+                "blocked_or_manual_review",
+                "manual_review_required",
+                "bridge response indicates manual review or blocked state",
+                "response_content_blocked_or_unclear",
+            )
+        if has_completion_signal:
+            return (
+                "completion_decision",
+                "prepare_commit_or_pr_gate",
+                "bridge response indicates completion or PR readiness",
+                "",
+            )
+        if has_fix_signal and has_failure_signal:
+            return (
+                "fix_prompt",
+                "run_codex_fix_prompt",
+                "bridge response provides corrective implementation guidance",
+                "",
+            )
+        if has_review_signal and not has_prompt_contract_signal:
+            return (
+                "review_result",
+                "decide_fix_or_complete",
+                "bridge response appears to be a review/result assessment",
+                "",
+            )
+        if has_prompt_contract_signal or _contains_any(("implementation prompt", "implement", "apply patch")):
+            return (
+                "implementation_prompt",
+                "run_codex_with_assimilated_prompt",
+                "bridge response provides implementation instructions",
+                "",
+            )
+        return (
+            "blocked_or_manual_review",
+            "manual_review_required",
+            "bridge response was saved but could not be conservatively classified",
+            "response_unclassified",
+        )
+
+    state: dict[str, Any] = {
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_status": "not_assimilated",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind": (
+            "blocked_or_manual_review"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action": (
+            "manual_review_required"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_summary": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_prompt": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason": (
+            "status_not_response_saved"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_task_status": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_runtime_status": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_runtime_reason": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_response_status": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status": (
+            "not_attempted"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_error": "",
+    }
+
+    status_payload: dict[str, Any] = {}
+    if not status_path.exists():
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "status_json_missing"
+        )
+        return state
+    if not status_path.is_file():
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "status_json_not_file"
+        )
+        return state
+    try:
+        with status_path.open("rb") as file_obj:
+            raw_status = file_obj.read(status_read_limit_bytes)
+    except OSError as exc:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            f"status_json_read_error:{exc.__class__.__name__}"
+        )
+        return state
+
+    try:
+        parsed_status = json.loads(raw_status.decode("utf-8", errors="replace"))
+    except Exception as exc:  # pragma: no cover - defensive parse boundary
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            f"status_json_parse_error:{exc.__class__.__name__}"
+        )
+        return state
+    if not isinstance(parsed_status, Mapping):
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "status_json_not_mapping"
+        )
+        return state
+    status_payload = dict(parsed_status)
+    runtime_status = _normalize_text(status_payload.get("status"), default="").lower()
+    runtime_reason = _normalize_text(status_payload.get("reason"), default="").lower()
+    task_status = _normalize_text(status_payload.get("task_status"), default="").lower()
+    if not task_status:
+        task_status = _map_runtime_to_task_status(runtime_status, runtime_reason)
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_task_status"] = (
+        task_status
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_runtime_status"] = (
+        runtime_status
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_runtime_reason"] = (
+        runtime_reason
+    )
+
+    if task_status != "response_saved":
+        if task_status == "in_progress":
+            blocked_reason = "task_in_progress"
+        elif task_status == "blocked":
+            blocked_reason = "task_blocked"
+        elif task_status == "consumed":
+            blocked_reason = "task_already_consumed"
+        elif task_status == "ready":
+            blocked_reason = "task_not_completed"
+        else:
+            blocked_reason = "status_not_response_saved"
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            blocked_reason
+        )
+        return state
+
+    response_status = _normalize_text(
+        one_shot_state.get("project_browser_autonomous_chrome_runner_bridge_response_status"),
+        default="",
+    )
+    if not response_status:
+        response_status = "chrome_runner_bridge_response_missing"
+        if response_path.exists():
+            if not response_path.is_file():
+                response_status = "chrome_runner_bridge_response_not_file"
+            else:
+                try:
+                    with response_path.open("rb") as file_obj:
+                        raw_probe = file_obj.read(1024)
+                except OSError:
+                    response_status = "chrome_runner_bridge_response_read_error"
+                else:
+                    probe_text = raw_probe.decode("utf-8", errors="replace").strip()
+                    if not probe_text:
+                        response_status = "chrome_runner_bridge_response_empty"
+                    elif _looks_transient(probe_text):
+                        response_status = "chrome_runner_bridge_response_transient"
+                    else:
+                        response_status = "chrome_runner_bridge_response_ready"
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_response_status"] = (
+        response_status
+    )
+    if response_status != "chrome_runner_bridge_response_ready":
+        response_status_to_reason = {
+            "chrome_runner_bridge_response_missing": "response_missing",
+            "chrome_runner_bridge_response_not_file": "response_not_file",
+            "chrome_runner_bridge_response_empty": "response_empty",
+            "chrome_runner_bridge_response_transient": "response_transient",
+            "chrome_runner_bridge_response_read_error": "response_read_error",
+        }
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            response_status_to_reason.get(response_status, "response_not_ready")
+        )
+        return state
+
+    try:
+        with response_path.open("rb") as file_obj:
+            raw_response = file_obj.read(response_read_limit_bytes)
+    except OSError as exc:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            f"response_read_error:{exc.__class__.__name__}"
+        )
+        return state
+    response_text = raw_response.decode("utf-8", errors="replace").strip()
+    if not response_text:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "response_empty"
+        )
+        return state
+    if _looks_transient(response_text):
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "response_transient"
+        )
+        return state
+
+    kind, next_action, summary, blocked_reason = _classify_assimilation(response_text)
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind"] = kind
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action"] = (
+        next_action
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_summary"] = (
+        _normalize_preview_text(summary or response_text, max_chars=summary_max_chars)
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_prompt"] = (
+        _normalize_preview_text(response_text, max_chars=prompt_max_chars)
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+        blocked_reason
+    )
+
+    assimilated_kinds = {
+        "implementation_prompt",
+        "review_result",
+        "fix_prompt",
+        "completion_decision",
+    }
+    if kind in assimilated_kinds:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"] = (
+            "assimilated"
+        )
+        consume_payload: dict[str, Any] = {}
+        for key in ("task_id", "request_fingerprint", "created_at"):
+            value = _normalize_text(status_payload.get(key), default="")
+            if value:
+                consume_payload[key] = value
+        consume_body = json.dumps(consume_payload).encode("utf-8")
+        request = urllib_request.Request(
+            "http://127.0.0.1:8765/consume-result",
+            data=consume_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib_request.urlopen(request, timeout=2.0) as response_obj:  # noqa: S310
+                response_bytes = response_obj.read(8192)
+        except urllib_error.URLError as exc:
+            state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status"] = (
+                "consume_post_failed"
+            )
+            state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_error"] = (
+                f"{exc.__class__.__name__}:{exc}"
+            )
+        except OSError as exc:
+            state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status"] = (
+                "consume_post_failed"
+            )
+            state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_error"] = (
+                f"{exc.__class__.__name__}:{exc}"
+            )
+        else:
+            parsed_response: dict[str, Any] = {}
+            try:
+                decoded = json.loads(response_bytes.decode("utf-8", errors="replace"))
+            except Exception:
+                decoded = {}
+            if isinstance(decoded, Mapping):
+                parsed_response = dict(decoded)
+            consume_ok = bool(parsed_response.get("ok", False))
+            if consume_ok:
+                state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status"] = (
+                    "consume_succeeded"
+                )
+            else:
+                state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status"] = (
+                    "consume_post_failed"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_error"] = (
+                    "consume_response_not_ok"
+                )
+    else:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"] = (
+            "blocked"
+        )
+    return state
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -148196,6 +148585,110 @@ def _build_approved_restart_execution_contract_surface(
         ),
         default="",
     )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_state = (
+        _build_project_browser_autonomous_chrome_runner_bridge_response_assimilation_state(
+            bridge_one_shot_state=project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized
+        )
+    )
+    chrome_runner_bridge_response_assimilation_allowed_statuses = {
+        "assimilated",
+        "not_assimilated",
+        "blocked",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_response_assimilation_allowed_kinds = {
+        "implementation_prompt",
+        "review_result",
+        "fix_prompt",
+        "completion_decision",
+        "blocked_or_manual_review",
+        "unclassified",
+    }
+    chrome_runner_bridge_response_assimilation_allowed_next_actions = {
+        "run_codex_with_assimilated_prompt",
+        "decide_fix_or_complete",
+        "run_codex_fix_prompt",
+        "prepare_commit_or_pr_gate",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_response_assimilation_field_names = (
+        "status",
+        "kind",
+        "next_action",
+        "summary",
+        "prompt",
+        "blocked_reason",
+        "source_task_status",
+        "source_runtime_status",
+        "source_runtime_reason",
+        "source_response_status",
+        "consume_status",
+        "consume_error",
+    )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_status = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_status
+        not in chrome_runner_bridge_response_assimilation_allowed_statuses
+    ):
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind"
+        ),
+        default="unclassified",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind
+        not in chrome_runner_bridge_response_assimilation_allowed_kinds
+    ):
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind = (
+            "unclassified"
+        )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action"
+        ),
+        default="manual_review_required",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
+        not in chrome_runner_bridge_response_assimilation_allowed_next_actions
+    ):
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chrome_runner_bridge_response_assimilation_field_names:
+        key = (
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_"
+            f"{field_name}"
+        )
+        value = project_browser_autonomous_chrome_runner_bridge_response_assimilation_state.get(
+            key
+        )
+        if field_name == "status":
+            value = project_browser_autonomous_chrome_runner_bridge_response_assimilation_status
+        elif field_name == "kind":
+            value = project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind
+        elif field_name == "next_action":
+            value = (
+                project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
+            )
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized[
+            key
+        ] = value
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -148721,6 +149214,15 @@ def _build_approved_restart_execution_contract_surface(
                 ),
                 "project_browser_autonomous_chrome_runner_bridge_wait_exit_reason": (
                     project_browser_autonomous_chrome_runner_bridge_wait_exit_reason
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_response_assimilation_status": (
+                    project_browser_autonomous_chrome_runner_bridge_response_assimilation_status
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind": (
+                    project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action": (
+                    project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
                 ),
                 "project_browser_autonomous_dev_loop_pr_prompt_readiness_status": (
                     project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -152833,6 +153335,15 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"
             if project_browser_autonomous_chrome_runner_bridge_wait_exit_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"
+            if project_browser_autonomous_chrome_runner_bridge_response_assimilation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind"
+            if project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action"
+            if project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -159083,6 +159594,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chatgpt_browser_project_analysis_send_state_normalized,
         **project_browser_autonomous_chatgpt_browser_runtime_enablement_state_normalized,
         **project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized,
+        **project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -159128,6 +159640,11 @@ def _build_approved_restart_execution_contract_surface(
         "continuation_budget_branch_remaining": continuation_budget_branch_remaining,
         "project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized": (
             dict(project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized)
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized": (
+            dict(
+                project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized
+            )
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
