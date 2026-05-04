@@ -94858,6 +94858,747 @@ def _build_project_browser_autonomous_commit_tag_gate_state(
     }
 
 
+def _build_project_browser_autonomous_commit_tag_execution_state_prompt276(
+    *,
+    commit_tag_gate_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    gate_state = dict(commit_tag_gate_state) if isinstance(commit_tag_gate_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _compact(text: Any, *, max_chars: int = 200) -> str:
+        value = _normalize_text(text, default="")
+        if not value:
+            return ""
+        normalized = " ".join(value.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _is_safe_tag_name(value: str) -> bool:
+        if not value:
+            return False
+        return all(ch.isalnum() or ch in {"-", "_", "."} for ch in value)
+
+    def _is_safe_changed_path(path_text: str) -> tuple[bool, str]:
+        path = _normalize_text(path_text, default="")
+        if not path:
+            return (False, "empty_path")
+        if Path(path).is_absolute() or path.startswith("/") or path.startswith("\\"):
+            return (False, f"absolute_path:{path}")
+        normalized = path.replace("\\", "/")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        if not normalized:
+            return (False, "malformed_path")
+        if ".." in normalized.split("/"):
+            return (False, f"parent_traversal:{path}")
+        if normalized == ".git" or normalized.startswith(".git/"):
+            return (False, f"git_internal:{path}")
+        if normalized.startswith("../") or "/../" in normalized:
+            return (False, f"outside_repo:{path}")
+        if " -> " in normalized:
+            return (False, f"ambiguous_path:{path}")
+        return (True, normalized)
+
+    def _parse_git_status_short(output: str) -> tuple[dict[str, str], list[str]]:
+        parsed: dict[str, str] = {}
+        ambiguous: list[str] = []
+        for raw_line in output.splitlines():
+            line = raw_line.rstrip("\n")
+            if not line.strip():
+                continue
+            if len(line) < 4 or line[2] != " ":
+                ambiguous.append(f"malformed_status_line:{line}")
+                continue
+            code = line[:2]
+            x, y = code[0], code[1]
+            path_text = line[3:].strip()
+            if not path_text or path_text.startswith('"') or " -> " in path_text:
+                ambiguous.append(f"ambiguous_path:{line}")
+                continue
+            if x in {"R", "C", "U"} or y in {"R", "C", "U"}:
+                ambiguous.append(f"unsupported_status:{line}")
+                continue
+            if x not in {" ", "M", "A", "D", "?"} or y not in {" ", "M", "A", "D", "?"}:
+                ambiguous.append(f"unsupported_status:{line}")
+                continue
+            path = path_text.replace("\\", "/")
+            if path in parsed:
+                ambiguous.append(f"duplicate_status_entry:{path}")
+                continue
+            parsed[path] = code
+        return parsed, ambiguous
+
+    gate_status = _normalize_text(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_status"),
+        default="",
+    )
+    gate_next_action = _normalize_text(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_next_action"),
+        default="",
+    )
+    gate_ready = bool(gate_state.get("project_browser_autonomous_commit_tag_gate_ready", False))
+    commit_message = _compact(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_commit_message"),
+        max_chars=200,
+    )
+    tag_name = _normalize_text(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_tag_name"),
+        default="",
+    )
+    changed_files = _normalize_string_list(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_changed_files")
+    )
+    validation_summary = _compact(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_validation_summary"),
+        max_chars=200,
+    ).lower()
+    review_summary = _compact(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_review_summary"),
+        max_chars=200,
+    )
+
+    execution_enabled = _read_flag(
+        "project_browser_autonomous_commit_tag_execution_enabled",
+        default=False,
+    )
+    execute_enabled = _read_flag(
+        "project_browser_autonomous_commit_tag_execution_execute_enabled",
+        default=False,
+    )
+
+    max_changed_files = 25
+    large_change_approved = False
+    for key in (
+        "project_browser_autonomous_commit_tag_large_change_approved",
+        "project_browser_autonomous_large_change_approved",
+    ):
+        if key in approved_restart or key in prior_payload:
+            large_change_approved = _read_flag(key, default=False)
+            break
+
+    status = "commit_tag_execution_not_requested"
+    next_action = "enable_commit_tag_execution"
+    blocked_reason = "execution_disabled"
+    commit_sha = ""
+    tag_created = False
+    git_status_short = ""
+    post_git_status_short = ""
+
+    gate_ready_for_execution = bool(
+        gate_status == "commit_tag_gate_ready"
+        and gate_ready
+        and gate_next_action == "prepare_explicit_commit_tag_execution_step"
+    )
+
+    if not execution_enabled:
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    status = "commit_tag_execution_decision_only"
+    next_action = "run_commit_tag_execution_when_explicitly_enabled"
+    blocked_reason = "execute_disabled"
+
+    if not gate_ready_for_execution:
+        status = "commit_tag_execution_blocked_missing_gate"
+        next_action = "manual_review_required"
+        blocked_reason = "commit_tag_gate_not_ready"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    safe_changed_files: list[str] = []
+    for path in changed_files:
+        safe, normalized_or_reason = _is_safe_changed_path(path)
+        if not safe:
+            status = "commit_tag_execution_blocked_preflight"
+            next_action = "manual_review_required"
+            blocked_reason = normalized_or_reason
+            return {
+                "project_browser_autonomous_commit_tag_execution_status": status,
+                "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+                "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+                "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                    execute_enabled
+                ),
+                "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+                "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+                "project_browser_autonomous_commit_tag_execution_changed_files": changed_files,
+                "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+                "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+                "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+                "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                    post_git_status_short
+                ),
+                "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+            }
+        safe_changed_files.append(normalized_or_reason)
+    safe_changed_files = _normalize_string_list(safe_changed_files)
+
+    if len(safe_changed_files) > max_changed_files and not large_change_approved:
+        status = "commit_tag_execution_blocked_large_change"
+        next_action = "manual_review_required"
+        blocked_reason = "changed_file_count_exceeds_limit"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    validation_missing_or_failing = (
+        not validation_summary
+        or "not_available" in validation_summary
+        or "unavailable" in validation_summary
+        or "missing" in validation_summary
+        or "error" in validation_summary
+        or "failed" in validation_summary
+        or "failure" in validation_summary
+        or "diff_check_has_errors" in validation_summary
+    )
+    if validation_missing_or_failing:
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "validation_missing_or_failing"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    if not commit_message or len(commit_message) > 200 or "\n" in commit_message:
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "invalid_commit_message"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    if not _is_safe_tag_name(tag_name):
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "invalid_tag_name"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    if not safe_changed_files:
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "missing_changed_files"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    if not execute_enabled:
+        status = "commit_tag_execution_decision_only"
+        next_action = "set_execute_enabled_to_run_local_commit_tag"
+        blocked_reason = "execution_not_enabled"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    repo_path_text = _normalize_text(execution_repo_path, default="")
+    repo_path_obj = Path(repo_path_text) if repo_path_text else Path.cwd()
+    if not repo_path_obj.exists() or not repo_path_obj.is_dir():
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "execution_repo_unavailable"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    try:
+        pre_status_run = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=str(repo_path_obj),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_failed"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    git_status_short = _compact(pre_status_run.stdout, max_chars=4000)
+    if int(pre_status_run.returncode) != 0:
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_nonzero_exit"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    parsed_status, ambiguous_status = _parse_git_status_short(pre_status_run.stdout)
+    if ambiguous_status:
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = ambiguous_status[0]
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    expected_set = set(safe_changed_files)
+    seen_set = set(parsed_status.keys())
+    if not expected_set.issubset(seen_set):
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        missing = sorted(expected_set - seen_set)
+        blocked_reason = f"expected_files_missing_from_git_status:{','.join(missing[:5])}"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    extras = sorted(seen_set - expected_set)
+    if extras:
+        status = "commit_tag_execution_blocked_unexpected_changes"
+        next_action = "manual_review_required"
+        blocked_reason = f"unexpected_changed_files:{','.join(extras[:5])}"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    try:
+        tag_check_run = subprocess.run(
+            ["git", "tag", "--list", tag_name],
+            cwd=str(repo_path_obj),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_tag_list_failed"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    if int(tag_check_run.returncode) != 0:
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_tag_list_nonzero_exit"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    if _normalize_text(tag_check_run.stdout, default=""):
+        status = "commit_tag_execution_blocked_existing_tag"
+        next_action = "manual_review_required"
+        blocked_reason = "tag_already_exists"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    commit_attempted = False
+    try:
+        add_run = subprocess.run(
+            ["git", "add", "--", *safe_changed_files],
+            cwd=str(repo_path_obj),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_add_failed"
+    else:
+        if int(add_run.returncode) != 0:
+            status = "commit_tag_execution_blocked_git_failed"
+            next_action = "manual_review_required"
+            blocked_reason = "git_add_nonzero_exit"
+        else:
+            commit_attempted = True
+            try:
+                commit_run = subprocess.run(
+                    ["git", "commit", "-m", commit_message],
+                    cwd=str(repo_path_obj),
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError):
+                status = "commit_tag_execution_blocked_git_failed"
+                next_action = "manual_review_required"
+                blocked_reason = "git_commit_failed"
+            else:
+                if int(commit_run.returncode) != 0:
+                    status = "commit_tag_execution_blocked_git_failed"
+                    next_action = "manual_review_required"
+                    blocked_reason = "git_commit_nonzero_exit"
+                else:
+                    try:
+                        sha_run = subprocess.run(
+                            ["git", "rev-parse", "HEAD"],
+                            cwd=str(repo_path_obj),
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                            check=False,
+                        )
+                    except (OSError, subprocess.SubprocessError):
+                        status = "commit_tag_execution_blocked_git_failed"
+                        next_action = "manual_review_required"
+                        blocked_reason = "git_rev_parse_failed"
+                    else:
+                        if int(sha_run.returncode) != 0:
+                            status = "commit_tag_execution_blocked_git_failed"
+                            next_action = "manual_review_required"
+                            blocked_reason = "git_rev_parse_nonzero_exit"
+                        else:
+                            commit_sha = _normalize_text(sha_run.stdout, default="")
+                            tag_message = _compact(
+                                f"Prompt276 local tag: {review_summary or commit_message}",
+                                max_chars=200,
+                            )
+                            try:
+                                tag_run = subprocess.run(
+                                    ["git", "tag", "-a", tag_name, "-m", tag_message],
+                                    cwd=str(repo_path_obj),
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=60,
+                                    check=False,
+                                )
+                            except (OSError, subprocess.SubprocessError):
+                                status = "commit_tag_execution_committed_tag_failed"
+                                next_action = "manual_review_required"
+                                blocked_reason = "git_tag_failed"
+                            else:
+                                if int(tag_run.returncode) != 0:
+                                    status = "commit_tag_execution_committed_tag_failed"
+                                    next_action = "manual_review_required"
+                                    blocked_reason = "git_tag_nonzero_exit"
+                                else:
+                                    status = "commit_tag_execution_committed_and_tagged"
+                                    next_action = "update_pr_queue_or_prepare_next_pr"
+                                    blocked_reason = "none"
+                                    tag_created = True
+    if commit_attempted:
+        try:
+            post_status_run = subprocess.run(
+                ["git", "status", "--short"],
+                cwd=str(repo_path_obj),
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            post_git_status_short = ""
+        else:
+            post_git_status_short = _compact(post_status_run.stdout, max_chars=4000)
+            if (
+                status == "commit_tag_execution_committed_and_tagged"
+                and _normalize_text(post_status_run.stdout, default="")
+            ):
+                parsed_post, ambiguous_post = _parse_git_status_short(post_status_run.stdout)
+                if ambiguous_post:
+                    status = "commit_tag_execution_blocked_preflight"
+                    next_action = "manual_review_required"
+                    blocked_reason = ambiguous_post[0]
+                else:
+                    remaining = set(parsed_post.keys())
+                    if remaining.intersection(set(safe_changed_files)):
+                        status = "commit_tag_execution_blocked_preflight"
+                        next_action = "manual_review_required"
+                        blocked_reason = "post_status_not_clean_for_expected_files"
+
+    return {
+        "project_browser_autonomous_commit_tag_execution_status": status,
+        "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+        "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+        "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+            execute_enabled
+        ),
+        "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+        "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+        "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+        "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+        "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+        "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+        "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+            post_git_status_short
+        ),
+        "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -151417,6 +152158,86 @@ def _build_approved_restart_execution_contract_surface(
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_commit_tag_gate_state_normalized[key] = value
+    project_browser_autonomous_commit_tag_execution_state_prompt276 = (
+        _build_project_browser_autonomous_commit_tag_execution_state_prompt276(
+            commit_tag_gate_state=project_browser_autonomous_commit_tag_gate_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    commit_tag_execution_prompt276_allowed_statuses = {
+        "commit_tag_execution_not_requested",
+        "commit_tag_execution_decision_only",
+        "commit_tag_execution_blocked_missing_gate",
+        "commit_tag_execution_blocked_preflight",
+        "commit_tag_execution_blocked_large_change",
+        "commit_tag_execution_blocked_unexpected_changes",
+        "commit_tag_execution_blocked_existing_tag",
+        "commit_tag_execution_blocked_git_failed",
+        "commit_tag_execution_committed_tag_failed",
+        "commit_tag_execution_committed_and_tagged",
+        "insufficient_truth",
+    }
+    commit_tag_execution_prompt276_allowed_next_actions = {
+        "enable_commit_tag_execution",
+        "run_commit_tag_execution_when_explicitly_enabled",
+        "manual_review_required",
+        "set_execute_enabled_to_run_local_commit_tag",
+        "update_pr_queue_or_prepare_next_pr",
+        "insufficient_truth",
+    }
+    commit_tag_execution_prompt276_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "commit_message",
+        "tag_name",
+        "changed_files",
+        "commit_sha",
+        "tag_created",
+        "git_status_short",
+        "post_git_status_short",
+        "blocked_reason",
+    )
+    project_browser_autonomous_commit_tag_execution_status = _normalize_text(
+        project_browser_autonomous_commit_tag_execution_state_prompt276.get(
+            "project_browser_autonomous_commit_tag_execution_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_commit_tag_execution_status
+        not in commit_tag_execution_prompt276_allowed_statuses
+    ):
+        project_browser_autonomous_commit_tag_execution_status = "insufficient_truth"
+    project_browser_autonomous_commit_tag_execution_next_action = _normalize_text(
+        project_browser_autonomous_commit_tag_execution_state_prompt276.get(
+            "project_browser_autonomous_commit_tag_execution_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_commit_tag_execution_next_action
+        not in commit_tag_execution_prompt276_allowed_next_actions
+    ):
+        project_browser_autonomous_commit_tag_execution_next_action = "insufficient_truth"
+    project_browser_autonomous_commit_tag_execution_state_normalized: dict[str, Any] = {}
+    for field_name in commit_tag_execution_prompt276_field_names:
+        key = f"project_browser_autonomous_commit_tag_execution_{field_name}"
+        value = project_browser_autonomous_commit_tag_execution_state_prompt276.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_commit_tag_execution_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_commit_tag_execution_next_action
+        elif field_name in {"enabled", "execute_enabled", "tag_created"}:
+            value = bool(value)
+        elif field_name == "changed_files":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_commit_tag_execution_state_normalized[key] = value
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -152012,6 +152833,18 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_commit_tag_gate_ready": bool(
                     project_browser_autonomous_commit_tag_gate_state_normalized.get(
                         "project_browser_autonomous_commit_tag_gate_ready",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_commit_tag_execution_status": (
+                    project_browser_autonomous_commit_tag_execution_status
+                ),
+                "project_browser_autonomous_commit_tag_execution_next_action": (
+                    project_browser_autonomous_commit_tag_execution_next_action
+                ),
+                "project_browser_autonomous_commit_tag_execution_tag_created": bool(
+                    project_browser_autonomous_commit_tag_execution_state_normalized.get(
+                        "project_browser_autonomous_commit_tag_execution_tag_created",
                         False,
                     )
                 ),
@@ -162428,6 +163261,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
         **project_browser_autonomous_commit_tag_gate_state_normalized,
+        **project_browser_autonomous_commit_tag_execution_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -162496,6 +163330,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_commit_tag_gate_state_normalized": (
             dict(project_browser_autonomous_commit_tag_gate_state_normalized)
+        ),
+        "project_browser_autonomous_commit_tag_execution_state_normalized": (
+            dict(project_browser_autonomous_commit_tag_execution_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
