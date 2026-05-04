@@ -3424,6 +3424,35 @@ def _merge_retry_context_inputs(
     return merged
 
 
+_BOUNDED_LOCAL_LOOP_CONTROL_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_bounded_local_loop_enabled",
+    "project_browser_autonomous_bounded_local_loop_continue_enabled",
+    "project_browser_autonomous_bounded_local_loop_max_iterations",
+    "project_browser_autonomous_bounded_local_loop_iteration",
+    "project_browser_autonomous_bounded_local_loop_max_consecutive_failures",
+    "project_browser_autonomous_bounded_local_loop_consecutive_failures",
+)
+
+
+def _merge_bounded_local_loop_controls_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    policy_snapshot: Mapping[str, Any] | None,
+    retry_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    policy_payload = dict(policy_snapshot) if isinstance(policy_snapshot, Mapping) else {}
+    retry_payload = dict(retry_context) if isinstance(retry_context, Mapping) else {}
+
+    for key in _BOUNDED_LOCAL_LOOP_CONTROL_KEYS:
+        if key in policy_payload and policy_payload.get(key) is not None:
+            merged[key] = policy_payload.get(key)
+    for key in _BOUNDED_LOCAL_LOOP_CONTROL_KEYS:
+        if key in retry_payload and retry_payload.get(key) is not None:
+            merged[key] = retry_payload.get(key)
+    return merged
+
+
 def _resolve_approval_input_payload(
     *,
     explicit_approval_input: Mapping[str, Any] | None,
@@ -98020,8 +98049,21 @@ def _build_project_browser_autonomous_bounded_local_loop_coordinator_state(
         else {}
     )
 
+    bounded_control_keys = set(_BOUNDED_LOCAL_LOOP_CONTROL_KEYS)
+
+    def _resolve_control_value(key: str) -> Any:
+        if key in bounded_control_keys:
+            if key in approved_restart and approved_restart.get(key) is not None:
+                return approved_restart.get(key)
+            if key in prior_payload:
+                return prior_payload.get(key)
+            return None
+        if key in prior_payload:
+            return prior_payload.get(key)
+        return approved_restart.get(key)
+
     def _read_flag(key: str, *, default: bool = False) -> bool:
-        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        value = _resolve_control_value(key)
         if isinstance(value, bool):
             return value
         if isinstance(value, int):
@@ -98034,11 +98076,11 @@ def _build_project_browser_autonomous_bounded_local_loop_coordinator_state(
         return default
 
     def _read_int(key: str, *, default: int) -> int:
-        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        value = _resolve_control_value(key)
         return _as_non_negative_int(value, default=default)
 
     def _read_text(key: str, *, default: str = "") -> str:
-        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        value = _resolve_control_value(key)
         return _normalize_text(value, default=default)
 
     def _is_blocked_or_manual(status: str, next_action: str) -> bool:
@@ -170527,6 +170569,13 @@ class PlannedExecutionRunner:
         prior_approved_restart_execution_contract_payload = _read_json_object_if_exists(
             approved_restart_execution_contract_path
         )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_bounded_local_loop_controls_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_contract_payload,
+                policy_snapshot=policy_payload,
+                retry_context=effective_retry_context,
+            )
+        )
         approved_restart_execution_contract_payload = (
             _build_approved_restart_execution_contract_surface(
                 run_id=resolved_job_id,
@@ -170537,7 +170586,7 @@ class PlannedExecutionRunner:
                 approval_runtime_rules_payload=approval_runtime_rules_contract_payload,
                 failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
                 loop_hardening_contract_payload=loop_hardening_contract_payload,
-                approved_restart_payload=approved_restart_contract_payload,
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 approval_response_payload=approval_response_contract_payload,
                 approval_safety_payload=approval_safety_contract_payload,
                 prior_approved_restart_execution_payload=prior_approved_restart_execution_contract_payload,
