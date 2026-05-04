@@ -97976,6 +97976,549 @@ def _build_project_browser_autonomous_safe_revert_state(
     }
 
 
+def _build_project_browser_autonomous_bounded_local_loop_coordinator_state(
+    *,
+    local_loop_state: Mapping[str, Any] | None,
+    codex_execution_connector_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    chatgpt_diff_review_request_state: Mapping[str, Any] | None,
+    chatgpt_diff_review_decision_state: Mapping[str, Any] | None,
+    safe_revert_state: Mapping[str, Any] | None,
+    commit_tag_gate_state: Mapping[str, Any] | None,
+    commit_tag_execution_state: Mapping[str, Any] | None,
+    pr_queue_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    local_loop = dict(local_loop_state) if isinstance(local_loop_state, Mapping) else {}
+    codex_connector = (
+        dict(codex_execution_connector_state)
+        if isinstance(codex_execution_connector_state, Mapping)
+        else {}
+    )
+    codex_capture = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    review_request = (
+        dict(chatgpt_diff_review_request_state)
+        if isinstance(chatgpt_diff_review_request_state, Mapping)
+        else {}
+    )
+    review_decision = (
+        dict(chatgpt_diff_review_decision_state)
+        if isinstance(chatgpt_diff_review_decision_state, Mapping)
+        else {}
+    )
+    safe_revert = dict(safe_revert_state) if isinstance(safe_revert_state, Mapping) else {}
+    commit_gate = dict(commit_tag_gate_state) if isinstance(commit_tag_gate_state, Mapping) else {}
+    commit_execution = (
+        dict(commit_tag_execution_state) if isinstance(commit_tag_execution_state, Mapping) else {}
+    )
+    pr_queue = dict(pr_queue_state) if isinstance(pr_queue_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_int(key: str, *, default: int) -> int:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        return _as_non_negative_int(value, default=default)
+
+    def _read_text(key: str, *, default: str = "") -> str:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        return _normalize_text(value, default=default)
+
+    def _is_blocked_or_manual(status: str, next_action: str) -> bool:
+        normalized_status = _normalize_text(status, default="")
+        normalized_next_action = _normalize_text(next_action, default="")
+        if normalized_next_action == "manual_review_required":
+            return True
+        if "blocked" in normalized_status:
+            return True
+        if "manual_review" in normalized_status:
+            return True
+        return False
+
+    loop_enabled = _read_flag(
+        "project_browser_autonomous_bounded_local_loop_enabled",
+        default=False,
+    )
+    continue_enabled = _read_flag(
+        "project_browser_autonomous_bounded_local_loop_continue_enabled",
+        default=False,
+    )
+    max_iterations = _read_int(
+        "project_browser_autonomous_bounded_local_loop_max_iterations",
+        default=3,
+    )
+    if max_iterations <= 0:
+        max_iterations = 3
+    iteration = _read_int(
+        "project_browser_autonomous_bounded_local_loop_iteration",
+        default=0,
+    )
+    max_consecutive_failures = _read_int(
+        "project_browser_autonomous_bounded_local_loop_max_consecutive_failures",
+        default=1,
+    )
+    if max_consecutive_failures <= 0:
+        max_consecutive_failures = 1
+    consecutive_failures = _read_int(
+        "project_browser_autonomous_bounded_local_loop_consecutive_failures",
+        default=0,
+    )
+    prior_progress_fingerprint = _read_text(
+        "project_browser_autonomous_bounded_local_loop_progress_fingerprint",
+        default="",
+    )
+
+    local_loop_status = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_status"),
+        default="",
+    )
+    local_loop_next_action = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_next_action"),
+        default="",
+    )
+    local_loop_selected_step_fingerprint = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_selected_step_fingerprint"),
+        default="",
+    )
+
+    codex_connector_status = _normalize_text(
+        codex_connector.get("project_browser_autonomous_codex_execution_connector_status"),
+        default="",
+    )
+    codex_connector_next_action = _normalize_text(
+        codex_connector.get("project_browser_autonomous_codex_execution_connector_next_action"),
+        default="",
+    )
+    codex_connector_prompt_fingerprint = _normalize_text(
+        codex_connector.get("project_browser_autonomous_codex_execution_connector_prompt_fingerprint"),
+        default="",
+    )
+
+    capture_status = _normalize_text(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_status"),
+        default="",
+    )
+    capture_next_action = _normalize_text(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_next_action"),
+        default="",
+    )
+    capture_changed_files = _normalize_string_list(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+    capture_diff_summary = _normalize_text(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_diff_summary"),
+        default="",
+    )
+
+    review_request_status = _normalize_text(
+        review_request.get("project_browser_autonomous_chatgpt_diff_review_request_status"),
+        default="",
+    )
+    review_request_next_action = _normalize_text(
+        review_request.get("project_browser_autonomous_chatgpt_diff_review_request_next_action"),
+        default="",
+    )
+    review_decision_status = _normalize_text(
+        review_decision.get("project_browser_autonomous_chatgpt_diff_review_decision_status"),
+        default="",
+    )
+    review_decision_next_action = _normalize_text(
+        review_decision.get("project_browser_autonomous_chatgpt_diff_review_decision_next_action"),
+        default="",
+    )
+    review_decision_value = _normalize_text(
+        review_decision.get("project_browser_autonomous_chatgpt_diff_review_decision"),
+        default="",
+    )
+
+    safe_revert_status = _normalize_text(
+        safe_revert.get("project_browser_autonomous_safe_revert_status"),
+        default="",
+    )
+    safe_revert_next_action = _normalize_text(
+        safe_revert.get("project_browser_autonomous_safe_revert_next_action"),
+        default="",
+    )
+
+    commit_gate_status = _normalize_text(
+        commit_gate.get("project_browser_autonomous_commit_tag_gate_status"),
+        default="",
+    )
+    commit_gate_next_action = _normalize_text(
+        commit_gate.get("project_browser_autonomous_commit_tag_gate_next_action"),
+        default="",
+    )
+    commit_execution_status = _normalize_text(
+        commit_execution.get("project_browser_autonomous_commit_tag_execution_status"),
+        default="",
+    )
+    commit_execution_next_action = _normalize_text(
+        commit_execution.get("project_browser_autonomous_commit_tag_execution_next_action"),
+        default="",
+    )
+    commit_execution_commit_sha = _normalize_text(
+        commit_execution.get("project_browser_autonomous_commit_tag_execution_commit_sha"),
+        default="",
+    )
+    commit_execution_tag_name = _normalize_text(
+        commit_execution.get("project_browser_autonomous_commit_tag_execution_tag_name"),
+        default="",
+    )
+
+    pr_queue_status = _normalize_text(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_status"),
+        default="",
+    )
+    pr_queue_next_action = _normalize_text(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_next_action"),
+        default="",
+    )
+    pr_queue_active_pr_id = _normalize_text(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_active_pr_id"),
+        default="",
+    )
+    pr_queue_next_pr_id = _normalize_text(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_next_pr_id"),
+        default="",
+    )
+    pr_queue_next_pr_index = _as_int(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_next_pr_index"),
+        default=-1,
+    )
+
+    progress_signature_payload = {
+        "local_loop_selected_step_fingerprint": local_loop_selected_step_fingerprint,
+        "codex_connector_status": codex_connector_status,
+        "codex_connector_prompt_fingerprint": codex_connector_prompt_fingerprint,
+        "capture_changed_files": capture_changed_files,
+        "capture_diff_summary": capture_diff_summary,
+        "review_decision_status": review_decision_status,
+        "review_decision": review_decision_value,
+        "safe_revert_status": safe_revert_status,
+        "commit_sha": commit_execution_commit_sha,
+        "tag_name": commit_execution_tag_name,
+        "pr_queue_active_pr_id": pr_queue_active_pr_id,
+        "pr_queue_next_pr_id": pr_queue_next_pr_id,
+        "pr_queue_status": pr_queue_status,
+    }
+    progress_fingerprint = hashlib.sha256(
+        json.dumps(
+            progress_signature_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    progress_changed = bool(not prior_progress_fingerprint or prior_progress_fingerprint != progress_fingerprint)
+
+    selected_component = "bounded_local_loop_coordinator"
+    selected_component_status = "not_selected"
+    selected_component_next_action = ""
+    selected_next_action = "blocked_no_next_step"
+    blocked_reason = ""
+    fix_recommendations: list[str] = []
+    coordinator_status = "bounded_local_loop_not_requested"
+
+    if not loop_enabled:
+        coordinator_status = "bounded_local_loop_not_requested"
+        selected_next_action = "enable_bounded_local_loop"
+        blocked_reason = "bounded_local_loop_disabled"
+        fix_recommendations = ["enable bounded local loop when one local iteration is intended"]
+    else:
+        project_complete = bool(
+            pr_queue_status == "pr_queue_state_project_complete"
+            or local_loop_status == "local_loop_project_complete"
+        )
+        blocked_components = (
+            ("local_loop", local_loop_status, local_loop_next_action),
+            ("codex_execution_connector", codex_connector_status, codex_connector_next_action),
+            ("codex_capture_gate", capture_status, capture_next_action),
+            ("chatgpt_diff_review_request", review_request_status, review_request_next_action),
+            ("chatgpt_diff_review_decision", review_decision_status, review_decision_next_action),
+            ("safe_revert", safe_revert_status, safe_revert_next_action),
+            ("commit_tag_gate", commit_gate_status, commit_gate_next_action),
+            ("commit_tag_execution", commit_execution_status, commit_execution_next_action),
+            ("pr_queue_state", pr_queue_status, pr_queue_next_action),
+        )
+        first_blocked_component: tuple[str, str, str] | None = None
+        for component_name, component_status, component_next_action in blocked_components:
+            if _is_blocked_or_manual(component_status, component_next_action):
+                first_blocked_component = (
+                    component_name,
+                    component_status,
+                    component_next_action,
+                )
+                break
+
+        if project_complete:
+            selected_component = "pr_queue_state"
+            selected_component_status = pr_queue_status
+            selected_component_next_action = pr_queue_next_action
+            selected_next_action = "project_complete"
+            coordinator_status = "bounded_local_loop_project_complete"
+            blocked_reason = "none"
+        elif first_blocked_component is not None:
+            selected_component = first_blocked_component[0]
+            selected_component_status = first_blocked_component[1]
+            selected_component_next_action = first_blocked_component[2]
+            selected_next_action = "manual_review_required"
+            coordinator_status = "bounded_local_loop_blocked_manual_review"
+            blocked_reason = f"blocked_component:{selected_component}"
+            fix_recommendations = [
+                "resolve the blocked/manual-review state in the selected component",
+                "re-run bounded local loop coordinator after blocked reason is cleared",
+            ]
+        elif safe_revert_status == "safe_revert_reverted":
+            selected_component = "safe_revert"
+            selected_component_status = safe_revert_status
+            selected_component_next_action = safe_revert_next_action
+            selected_next_action = "regenerate_pr_prompt_or_continue_loop"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif codex_connector_status == "codex_execution_connector_executed":
+            selected_component = "codex_execution_connector"
+            selected_component_status = codex_connector_status
+            selected_component_next_action = codex_connector_next_action
+            selected_next_action = "run_codex_capture_gate"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif capture_status == "codex_capture_gate_captured":
+            selected_component = "codex_capture_gate"
+            selected_component_status = capture_status
+            selected_component_next_action = capture_next_action
+            selected_next_action = "prepare_chatgpt_diff_review_request"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif review_request_status in {
+            "chatgpt_diff_review_request_written",
+            "chatgpt_diff_review_request_ready",
+        }:
+            selected_component = "chatgpt_diff_review_request"
+            selected_component_status = review_request_status
+            selected_component_next_action = review_request_next_action
+            selected_next_action = "wait_for_chatgpt_diff_review_response"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            review_decision_status == "chatgpt_diff_review_decision_approved_for_commit_gate"
+            or review_decision_value == "approve"
+        ):
+            selected_component = "chatgpt_diff_review_decision"
+            selected_component_status = review_decision_status
+            selected_component_next_action = review_decision_next_action
+            selected_next_action = "prepare_commit_tag_gate"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif review_decision_value == "fix":
+            selected_component = "chatgpt_diff_review_decision"
+            selected_component_status = review_decision_status
+            selected_component_next_action = review_decision_next_action
+            selected_next_action = "run_codex_fix"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif review_decision_value == "revert":
+            selected_component = "chatgpt_diff_review_decision"
+            selected_component_status = review_decision_status
+            selected_component_next_action = review_decision_next_action
+            selected_next_action = "prepare_safe_revert"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif commit_gate_status == "commit_tag_gate_ready":
+            selected_component = "commit_tag_gate"
+            selected_component_status = commit_gate_status
+            selected_component_next_action = commit_gate_next_action
+            selected_next_action = "prepare_explicit_commit_tag_execution"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif commit_execution_status == "commit_tag_execution_committed_and_tagged":
+            selected_component = "commit_tag_execution"
+            selected_component_status = commit_execution_status
+            selected_component_next_action = commit_execution_next_action
+            selected_next_action = "update_pr_queue_or_prepare_next_pr"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            pr_queue_status == "pr_queue_state_updated"
+            and pr_queue_next_pr_index >= 0
+        ):
+            selected_component = "pr_queue_state"
+            selected_component_status = pr_queue_status
+            selected_component_next_action = pr_queue_next_action
+            selected_next_action = "prepare_next_pr_prompt"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            local_loop_status == "local_loop_ready_run_codex_implementation"
+            or local_loop_next_action == "run_codex_implementation"
+        ):
+            selected_component = "local_loop"
+            selected_component_status = local_loop_status
+            selected_component_next_action = local_loop_next_action
+            selected_next_action = "run_codex_implementation"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            local_loop_status == "local_loop_ready_run_codex_fix"
+            or local_loop_next_action == "run_codex_fix"
+        ):
+            selected_component = "local_loop"
+            selected_component_status = local_loop_status
+            selected_component_next_action = local_loop_next_action
+            selected_next_action = "run_codex_fix"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            local_loop_status == "local_loop_ready_prepare_safe_revert"
+            or local_loop_next_action == "prepare_safe_revert"
+        ):
+            selected_component = "local_loop"
+            selected_component_status = local_loop_status
+            selected_component_next_action = local_loop_next_action
+            selected_next_action = "prepare_safe_revert"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            local_loop_status == "local_loop_ready_prepare_next_pr_prompt"
+            or local_loop_next_action == "prepare_next_pr_prompt"
+        ):
+            selected_component = "local_loop"
+            selected_component_status = local_loop_status
+            selected_component_next_action = local_loop_next_action
+            selected_next_action = "prepare_next_pr_prompt"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        else:
+            selected_component = "bounded_local_loop_coordinator"
+            selected_component_status = "no_next_step"
+            selected_component_next_action = "blocked_no_next_step"
+            selected_next_action = "blocked_no_next_step"
+            coordinator_status = "bounded_local_loop_blocked_no_next_step"
+            blocked_reason = "no_next_step_available"
+            fix_recommendations = [
+                "refresh local loop and gate states to produce a routable next step",
+                "perform manual review if state progression signals are incomplete",
+            ]
+
+        selected_is_blocked = bool(
+            selected_next_action in {"manual_review_required", "blocked_no_next_step"}
+            or coordinator_status
+            in {
+                "bounded_local_loop_blocked_manual_review",
+                "bounded_local_loop_blocked_no_next_step",
+            }
+            or _is_blocked_or_manual(selected_component_status, selected_component_next_action)
+        )
+        updated_consecutive_failures = consecutive_failures
+        if selected_is_blocked:
+            updated_consecutive_failures = _as_non_negative_int(consecutive_failures, default=0) + 1
+        elif progress_changed:
+            updated_consecutive_failures = 0
+
+        if coordinator_status not in {"bounded_local_loop_project_complete"} and not continue_enabled:
+            coordinator_status = "bounded_local_loop_decision_only"
+            selected_next_action = "set_continue_enabled_for_next_local_step"
+            blocked_reason = "continue_not_enabled"
+            fix_recommendations = ["set bounded local loop continue flag for one local iteration"]
+        elif coordinator_status == "bounded_local_loop_project_complete":
+            pass
+        elif iteration >= max_iterations:
+            coordinator_status = "bounded_local_loop_blocked_iteration_limit"
+            selected_next_action = "manual_review_required"
+            blocked_reason = "max_iterations_reached"
+            fix_recommendations = [
+                "review outcomes and increase iteration budget only with explicit approval",
+            ]
+        elif _as_non_negative_int(updated_consecutive_failures, default=0) >= max_consecutive_failures:
+            coordinator_status = "bounded_local_loop_blocked_failure_limit"
+            selected_next_action = "manual_review_required"
+            blocked_reason = "max_consecutive_failures_reached"
+            fix_recommendations = ["resolve repeated blocked/manual state before continuing"]
+        elif not progress_changed:
+            coordinator_status = "bounded_local_loop_blocked_duplicate_or_no_progress"
+            selected_next_action = "manual_review_required"
+            blocked_reason = "duplicate_or_no_progress_fingerprint"
+            fix_recommendations = [
+                "change at least one progression state before requesting continue",
+                "avoid re-dispatching same local step without new evidence",
+            ]
+
+        routable_actions = {
+            "run_codex_implementation",
+            "run_codex_fix",
+            "run_codex_capture_gate",
+            "prepare_chatgpt_diff_review_request",
+            "wait_for_chatgpt_diff_review_response",
+            "prepare_safe_revert",
+            "regenerate_pr_prompt_or_continue_loop",
+            "prepare_commit_tag_gate",
+            "prepare_explicit_commit_tag_execution",
+            "update_pr_queue_or_prepare_next_pr",
+            "prepare_next_pr_prompt",
+        }
+        iteration_out = _as_non_negative_int(iteration, default=0)
+        if (
+            continue_enabled
+            and coordinator_status == "bounded_local_loop_ready_continue"
+            and selected_next_action in routable_actions
+            and progress_changed
+        ):
+            iteration_out = min(max_iterations, iteration_out + 1)
+        consecutive_failures = _as_non_negative_int(updated_consecutive_failures, default=0)
+        iteration = iteration_out
+
+    return {
+        "project_browser_autonomous_bounded_local_loop_status": coordinator_status,
+        "project_browser_autonomous_bounded_local_loop_next_action": selected_next_action,
+        "project_browser_autonomous_bounded_local_loop_enabled": bool(loop_enabled),
+        "project_browser_autonomous_bounded_local_loop_continue_enabled": bool(continue_enabled),
+        "project_browser_autonomous_bounded_local_loop_iteration": _as_non_negative_int(
+            iteration,
+            default=0,
+        ),
+        "project_browser_autonomous_bounded_local_loop_max_iterations": _as_non_negative_int(
+            max_iterations,
+            default=3,
+        ),
+        "project_browser_autonomous_bounded_local_loop_consecutive_failures": _as_non_negative_int(
+            consecutive_failures,
+            default=0,
+        ),
+        "project_browser_autonomous_bounded_local_loop_max_consecutive_failures": _as_non_negative_int(
+            max_consecutive_failures,
+            default=1,
+        ),
+        "project_browser_autonomous_bounded_local_loop_progress_fingerprint": progress_fingerprint,
+        "project_browser_autonomous_bounded_local_loop_selected_component": selected_component,
+        "project_browser_autonomous_bounded_local_loop_selected_component_status": (
+            selected_component_status
+        ),
+        "project_browser_autonomous_bounded_local_loop_selected_component_next_action": (
+            selected_component_next_action
+        ),
+        "project_browser_autonomous_bounded_local_loop_blocked_reason": blocked_reason,
+        "project_browser_autonomous_bounded_local_loop_fix_recommendations": _normalize_string_list(
+            fix_recommendations
+        ),
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -154956,6 +155499,110 @@ def _build_approved_restart_execution_contract_surface(
             value = _normalize_text(value, default="")
         project_browser_autonomous_safe_revert_state_normalized[key] = value
 
+    project_browser_autonomous_bounded_local_loop_state = (
+        _build_project_browser_autonomous_bounded_local_loop_coordinator_state(
+            local_loop_state=project_browser_autonomous_local_loop_state_normalized,
+            codex_execution_connector_state=project_browser_autonomous_codex_execution_connector_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            chatgpt_diff_review_request_state=project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
+            chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+            safe_revert_state=project_browser_autonomous_safe_revert_state_normalized,
+            commit_tag_gate_state=project_browser_autonomous_commit_tag_gate_state_normalized,
+            commit_tag_execution_state=project_browser_autonomous_commit_tag_execution_state_normalized,
+            pr_queue_state=project_browser_autonomous_pr_queue_state_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    bounded_local_loop_allowed_statuses = {
+        "bounded_local_loop_not_requested",
+        "bounded_local_loop_decision_only",
+        "bounded_local_loop_ready_continue",
+        "bounded_local_loop_project_complete",
+        "bounded_local_loop_blocked_iteration_limit",
+        "bounded_local_loop_blocked_failure_limit",
+        "bounded_local_loop_blocked_duplicate_or_no_progress",
+        "bounded_local_loop_blocked_manual_review",
+        "bounded_local_loop_blocked_no_next_step",
+        "insufficient_truth",
+    }
+    bounded_local_loop_allowed_next_actions = {
+        "enable_bounded_local_loop",
+        "set_continue_enabled_for_next_local_step",
+        "run_codex_implementation",
+        "run_codex_fix",
+        "run_codex_capture_gate",
+        "prepare_chatgpt_diff_review_request",
+        "wait_for_chatgpt_diff_review_response",
+        "prepare_safe_revert",
+        "regenerate_pr_prompt_or_continue_loop",
+        "prepare_commit_tag_gate",
+        "prepare_explicit_commit_tag_execution",
+        "update_pr_queue_or_prepare_next_pr",
+        "prepare_next_pr_prompt",
+        "project_complete",
+        "manual_review_required",
+        "blocked_no_next_step",
+        "insufficient_truth",
+    }
+    bounded_local_loop_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "continue_enabled",
+        "iteration",
+        "max_iterations",
+        "consecutive_failures",
+        "max_consecutive_failures",
+        "progress_fingerprint",
+        "selected_component",
+        "selected_component_status",
+        "selected_component_next_action",
+        "blocked_reason",
+        "fix_recommendations",
+    )
+    project_browser_autonomous_bounded_local_loop_status = _normalize_text(
+        project_browser_autonomous_bounded_local_loop_state.get(
+            "project_browser_autonomous_bounded_local_loop_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_bounded_local_loop_status not in bounded_local_loop_allowed_statuses:
+        project_browser_autonomous_bounded_local_loop_status = "insufficient_truth"
+    project_browser_autonomous_bounded_local_loop_next_action = _normalize_text(
+        project_browser_autonomous_bounded_local_loop_state.get(
+            "project_browser_autonomous_bounded_local_loop_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_bounded_local_loop_next_action
+        not in bounded_local_loop_allowed_next_actions
+    ):
+        project_browser_autonomous_bounded_local_loop_next_action = "insufficient_truth"
+    project_browser_autonomous_bounded_local_loop_state_normalized: dict[str, Any] = {}
+    for field_name in bounded_local_loop_field_names:
+        key = f"project_browser_autonomous_bounded_local_loop_{field_name}"
+        value = project_browser_autonomous_bounded_local_loop_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_bounded_local_loop_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_bounded_local_loop_next_action
+        elif field_name in {"enabled", "continue_enabled"}:
+            value = bool(value)
+        elif field_name in {
+            "iteration",
+            "max_iterations",
+            "consecutive_failures",
+            "max_consecutive_failures",
+        }:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name == "fix_recommendations":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_bounded_local_loop_state_normalized[key] = value
+
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
             selected_mode=project_browser_autonomous_mvp_scenario_mode_selected,
@@ -155613,6 +156260,38 @@ def _build_approved_restart_execution_contract_surface(
                         "project_browser_autonomous_safe_revert_reverted",
                         False,
                     )
+                ),
+                "project_browser_autonomous_bounded_local_loop_status": (
+                    project_browser_autonomous_bounded_local_loop_status
+                ),
+                "project_browser_autonomous_bounded_local_loop_next_action": (
+                    project_browser_autonomous_bounded_local_loop_next_action
+                ),
+                "project_browser_autonomous_bounded_local_loop_iteration": _as_non_negative_int(
+                    project_browser_autonomous_bounded_local_loop_state_normalized.get(
+                        "project_browser_autonomous_bounded_local_loop_iteration",
+                        0,
+                    ),
+                    default=0,
+                ),
+                "project_browser_autonomous_bounded_local_loop_consecutive_failures": _as_non_negative_int(
+                    project_browser_autonomous_bounded_local_loop_state_normalized.get(
+                        "project_browser_autonomous_bounded_local_loop_consecutive_failures",
+                        0,
+                    ),
+                    default=0,
+                ),
+                "project_browser_autonomous_bounded_local_loop_selected_component": _normalize_text(
+                    project_browser_autonomous_bounded_local_loop_state_normalized.get(
+                        "project_browser_autonomous_bounded_local_loop_selected_component"
+                    ),
+                    default="",
+                ),
+                "project_browser_autonomous_bounded_local_loop_selected_component_status": _normalize_text(
+                    project_browser_autonomous_bounded_local_loop_state_normalized.get(
+                        "project_browser_autonomous_bounded_local_loop_selected_component_status"
+                    ),
+                    default="",
                 ),
                 "project_browser_autonomous_dev_loop_pr_prompt_readiness_status": (
                     project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -159794,6 +160473,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_safe_revert_next_action"
             if project_browser_autonomous_safe_revert_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_bounded_local_loop_status"
+            if project_browser_autonomous_bounded_local_loop_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_bounded_local_loop_next_action"
+            if project_browser_autonomous_bounded_local_loop_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -166056,6 +166741,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_local_loop_state_normalized,
         **project_browser_autonomous_codex_execution_connector_state_normalized,
         **project_browser_autonomous_safe_revert_state_normalized,
+        **project_browser_autonomous_bounded_local_loop_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -166139,6 +166825,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_safe_revert_state_normalized": (
             dict(project_browser_autonomous_safe_revert_state_normalized)
+        ),
+        "project_browser_autonomous_bounded_local_loop_state_normalized": (
+            dict(project_browser_autonomous_bounded_local_loop_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }

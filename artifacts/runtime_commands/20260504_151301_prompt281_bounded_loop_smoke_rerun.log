@@ -1,0 +1,52 @@
+== Prompt281 bounded loop smoke rerun ==
+timestamp=20260504_151301
+
+== git head ==
+c5f38db (HEAD -> main, tag: prompt280-safe-revert-gate) Add safe revert gate
+bc74e71 (tag: prompt279-codex-execution-connector) Add existing Codex execution connector
+11c5e90 (tag: prompt278.5-local-loop-controller-hardening) Harden local autonomous loop controller
+
+== git status before rerun ==
+ M automation/orchestration/planned_execution_runner.py
+?? artifacts/runtime_commands/20260504_150222_prompt281_bounded_loop_smoke.log
+?? artifacts/runtime_commands/20260504_151301_prompt281_bounded_loop_smoke_rerun.log
+?? artifacts/runtime_commands/run_prompt281_bounded_loop_smoke.py
+
+== py_compile ==
+py_compile_exit=0
+
+== run smoke rerun ==
+Traceback (most recent call last):
+  File "/home/rai/codex-local-runner/artifacts/runtime_commands/run_prompt281_bounded_loop_smoke.py", line 219, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/rai/codex-local-runner/artifacts/runtime_commands/run_prompt281_bounded_loop_smoke.py", line 24, in main
+    spec.loader.exec_module(mod)
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/home/rai/codex-local-runner/automation/orchestration/planned_execution_runner.py", line 167717, in <module>
+    @dataclass
+     ^^^^^^^^^
+  File "/usr/lib/python3.12/dataclasses.py", line 1268, in dataclass
+    return wrap(cls)
+           ^^^^^^^^^
+  File "/usr/lib/python3.12/dataclasses.py", line 1258, in wrap
+    return _process_class(cls, init, repr, eq, order, unsafe_hash,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/dataclasses.py", line 983, in _process_class
+    and _is_type(type, cls, dataclasses, dataclasses.KW_ONLY,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/dataclasses.py", line 749, in _is_type
+    ns = sys.modules.get(cls.__module__).__dict__
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute '__dict__'. Did you mean: '__dir__'?
+SMOKE_EXCEPTION
+smoke_exit=2
+
+== result json ==
+
+== git status after rerun ==
+ M automation/orchestration/planned_execution_runner.py
+?? artifacts/runtime_commands/20260504_150222_prompt281_bounded_loop_smoke.log
+?? artifacts/runtime_commands/20260504_151301_prompt281_bounded_loop_smoke_rerun.log
+?? artifacts/runtime_commands/run_prompt281_bounded_loop_smoke.py
