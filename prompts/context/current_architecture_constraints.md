@@ -4702,3 +4702,7 @@ Codex invocation runtime fixes must remain one-shot and bounded. Do not bypass C
 ## Prompt284.8 constraint
 
 When Codex live invocation is classified as `network_denied`, automation must not repeatedly retry live Codex. Add only a deterministic stop/decision surface. Do not bypass network restrictions, create new connector paths, widen live authorization, auto-commit/tag, push, create PRs, merge, delete branches, start daemon/scheduler behavior, or run unbounded loops.
+
+## Prompt284.9 constraint
+
+When `project_browser_autonomous_codex_live_next_action=stop_live_network_unavailable` and `project_browser_autonomous_codex_live_retry_allowed=false`, top-level continuation / launch logic must not repeatedly attempt live Codex. Wire this as a deterministic stop guard only. Do not bypass network restrictions, create new connector paths, widen live authorization, auto-commit/tag, push, create PRs, merge, delete branches, start daemon/scheduler behavior, or run unbounded loops.

@@ -7499,3 +7499,17 @@ Next:
 - Receipt and connector surfaces expose `retry_likely_repeats=true`.
 - Prompt285 diff capture remains blocked because Codex produced no diff.
 - Next: Prompt284.8 should add a contract-level deterministic stop surface so automation does not repeatedly retry live Codex when network is denied.
+
+## Prompt284.8 Codex live network stop surface
+
+- Prompt284.8 added a deterministic stop surface for Codex live network denial.
+- Observed stop values:
+  - `project_browser_autonomous_codex_live_network_status=blocked`
+  - `project_browser_autonomous_codex_live_network_blocker_class=network_denied`
+  - `project_browser_autonomous_codex_live_network_blocked_reason=codex_invocation_blocked_network_denied`
+  - `project_browser_autonomous_codex_live_retry_allowed=false`
+  - `project_browser_autonomous_codex_live_retry_likely_repeats=true`
+  - `project_browser_autonomous_codex_live_next_action=stop_live_network_unavailable`
+  - `project_browser_autonomous_codex_live_manual_action_required=true`
+- Prompt285 remains blocked because no Codex diff was produced.
+- Next: Prompt284.9 should connect this stop surface into top-level continuation / launch guards so repeated live Codex attempts are short-circuited.

@@ -98117,6 +98117,116 @@ def _build_project_browser_autonomous_safe_revert_state(
     }
 
 
+def _build_project_browser_autonomous_codex_live_network_state(
+    *,
+    codex_execution_connector_state: Mapping[str, Any] | None,
+    codex_invocation_execution_state: Mapping[str, Any] | None,
+    codex_invocation_result_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    connector = (
+        dict(codex_execution_connector_state)
+        if isinstance(codex_execution_connector_state, Mapping)
+        else {}
+    )
+    invocation_execution = (
+        dict(codex_invocation_execution_state)
+        if isinstance(codex_invocation_execution_state, Mapping)
+        else {}
+    )
+    invocation_result = (
+        dict(codex_invocation_result_state)
+        if isinstance(codex_invocation_result_state, Mapping)
+        else {}
+    )
+
+    blocker_class = _normalize_text(
+        connector.get(
+            "project_browser_autonomous_codex_execution_connector_invocation_blocker_class"
+        ),
+        default=_normalize_text(
+            invocation_result.get(
+                "project_browser_autonomous_codex_invocation_result_blocker_class"
+            ),
+            default=_normalize_text(
+                invocation_execution.get(
+                    "project_browser_autonomous_codex_invocation_execution_blocker_class"
+                ),
+                default="none",
+            ),
+        ),
+    )
+    blocked_reason = _normalize_text(
+        connector.get(
+            "project_browser_autonomous_codex_execution_connector_invocation_blocked_reason"
+        ),
+        default=_normalize_text(
+            invocation_result.get(
+                "project_browser_autonomous_codex_invocation_result_blocked_reason"
+            ),
+            default=_normalize_text(
+                invocation_execution.get(
+                    "project_browser_autonomous_codex_invocation_execution_blocked_reason"
+                ),
+                default="none",
+            ),
+        ),
+    )
+    retry_likely_repeats = bool(
+        connector.get(
+            "project_browser_autonomous_codex_execution_connector_invocation_retry_likely_repeats",
+            invocation_result.get(
+                "project_browser_autonomous_codex_invocation_result_retry_likely_repeats",
+                invocation_execution.get(
+                    "project_browser_autonomous_codex_invocation_execution_retry_likely_repeats",
+                    False,
+                ),
+            ),
+        )
+    )
+
+    status = "available"
+    next_action = "continue_codex_flow"
+    retry_allowed = True
+    manual_action_required = False
+
+    if (
+        blocker_class == "network_denied"
+        or blocked_reason == "codex_invocation_blocked_network_denied"
+    ):
+        status = "blocked"
+        blocker_class = "network_denied"
+        blocked_reason = "codex_invocation_blocked_network_denied"
+        retry_allowed = False
+        retry_likely_repeats = True
+        next_action = "stop_live_network_unavailable"
+        manual_action_required = True
+    elif blocker_class and blocker_class != "none":
+        status = "blocked"
+        retry_allowed = not retry_likely_repeats
+        next_action = "manual_review_required"
+        manual_action_required = True
+    elif blocked_reason and blocked_reason != "none":
+        status = "blocked"
+        blocker_class = "unknown"
+        retry_allowed = not retry_likely_repeats
+        next_action = "manual_review_required"
+        manual_action_required = True
+
+    return {
+        "project_browser_autonomous_codex_live_network_status": status,
+        "project_browser_autonomous_codex_live_network_blocker_class": blocker_class,
+        "project_browser_autonomous_codex_live_network_blocked_reason": blocked_reason,
+        "project_browser_autonomous_codex_live_retry_allowed": bool(retry_allowed),
+        "project_browser_autonomous_codex_live_retry_likely_repeats": bool(
+            retry_likely_repeats
+        ),
+        "project_browser_autonomous_codex_live_next_action": next_action,
+        "project_browser_autonomous_codex_live_manual_action_required": bool(
+            manual_action_required
+        ),
+    }
+
+
 def _build_project_browser_autonomous_bounded_local_loop_coordinator_state(
     *,
     local_loop_state: Mapping[str, Any] | None,
@@ -155836,6 +155946,60 @@ def _build_approved_restart_execution_contract_surface(
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_codex_execution_connector_state_normalized[key] = value
+    project_browser_autonomous_codex_live_network_state = (
+        _build_project_browser_autonomous_codex_live_network_state(
+            codex_execution_connector_state=project_browser_autonomous_codex_execution_connector_state_normalized,
+            codex_invocation_execution_state=project_browser_autonomous_codex_invocation_execution_state_normalized,
+            codex_invocation_result_state=project_browser_autonomous_codex_invocation_result_state_normalized,
+        )
+    )
+    codex_live_network_allowed_statuses = {"available", "blocked", "insufficient_truth"}
+    codex_live_network_allowed_next_actions = {
+        "continue_codex_flow",
+        "manual_review_required",
+        "stop_live_network_unavailable",
+        "insufficient_truth",
+    }
+    codex_live_network_field_key_map = {
+        "status": "project_browser_autonomous_codex_live_network_status",
+        "blocker_class": "project_browser_autonomous_codex_live_network_blocker_class",
+        "blocked_reason": "project_browser_autonomous_codex_live_network_blocked_reason",
+        "retry_allowed": "project_browser_autonomous_codex_live_retry_allowed",
+        "retry_likely_repeats": "project_browser_autonomous_codex_live_retry_likely_repeats",
+        "next_action": "project_browser_autonomous_codex_live_next_action",
+        "manual_action_required": "project_browser_autonomous_codex_live_manual_action_required",
+    }
+    project_browser_autonomous_codex_live_network_status = _normalize_text(
+        project_browser_autonomous_codex_live_network_state.get(
+            "project_browser_autonomous_codex_live_network_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_live_network_status not in codex_live_network_allowed_statuses:
+        project_browser_autonomous_codex_live_network_status = "insufficient_truth"
+    project_browser_autonomous_codex_live_network_next_action = _normalize_text(
+        project_browser_autonomous_codex_live_network_state.get(
+            "project_browser_autonomous_codex_live_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_codex_live_network_next_action
+        not in codex_live_network_allowed_next_actions
+    ):
+        project_browser_autonomous_codex_live_network_next_action = "insufficient_truth"
+    project_browser_autonomous_codex_live_network_state_normalized: dict[str, Any] = {}
+    for field_name, key in codex_live_network_field_key_map.items():
+        value = project_browser_autonomous_codex_live_network_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_live_network_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_live_network_next_action
+        elif field_name in {"retry_allowed", "retry_likely_repeats", "manual_action_required"}:
+            value = bool(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_live_network_state_normalized[key] = value
     project_browser_autonomous_safe_revert_state = (
         _build_project_browser_autonomous_safe_revert_state(
             chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
@@ -167157,6 +167321,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_pr_queue_state_state_normalized,
         **project_browser_autonomous_local_loop_state_normalized,
         **project_browser_autonomous_codex_execution_connector_state_normalized,
+        **project_browser_autonomous_codex_live_network_state_normalized,
         **project_browser_autonomous_safe_revert_state_normalized,
         **project_browser_autonomous_bounded_local_loop_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
@@ -167233,6 +167398,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_pr_queue_state_state_normalized": (
             dict(project_browser_autonomous_pr_queue_state_state_normalized)
+        ),
+        "project_browser_autonomous_codex_live_network_state_normalized": (
+            dict(project_browser_autonomous_codex_live_network_state_normalized)
         ),
         "project_browser_autonomous_local_loop_state_normalized": (
             dict(project_browser_autonomous_local_loop_state_normalized)
