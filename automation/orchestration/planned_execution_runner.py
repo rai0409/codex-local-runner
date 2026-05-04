@@ -96203,6 +96203,14 @@ def _build_project_browser_autonomous_local_loop_state(
             return normalized
         return normalized[:max_chars]
 
+    def _bound_prompt_text(text: Any, *, max_chars: int = 12000) -> str:
+        value = _normalize_text(text, default="")
+        if not value:
+            return ""
+        if len(value) <= max_chars:
+            return value
+        return value[:max_chars]
+
     def _read_text_bounded(path_text: str, *, limit_bytes: int = 32768) -> tuple[str, str]:
         path_obj = Path(path_text)
         if not path_obj.exists():
@@ -96220,6 +96228,11 @@ def _build_project_browser_autonomous_local_loop_state(
         return (text, "ready")
 
     def _route_text(path_text: str, content: str) -> tuple[bool, str]:
+        bounded_content = _bound_prompt_text(content, max_chars=12000)
+        if not bounded_content:
+            return (False, "route_prompt_empty")
+        if len(bounded_content.encode("utf-8")) > 32768:
+            return (False, "route_prompt_too_large")
         route_path = Path(path_text)
         if route_path.is_symlink():
             return (False, "route_symlink_blocked")
@@ -96229,7 +96242,7 @@ def _build_project_browser_autonomous_local_loop_state(
             return (False, "route_parent_missing")
         try:
             temp_path = route_path.with_name(f"{route_path.name}.tmp")
-            temp_path.write_text(content, encoding="utf-8")
+            temp_path.write_text(bounded_content, encoding="utf-8")
             os.replace(temp_path, route_path)
         except OSError as exc:
             return (False, f"route_write_failed:{exc.__class__.__name__}")
@@ -96295,6 +96308,10 @@ def _build_project_browser_autonomous_local_loop_state(
         commit_execution_state.get("project_browser_autonomous_commit_tag_execution_next_action"),
         default="",
     )
+    commit_execution_commit_sha = _normalize_text(
+        commit_execution_state.get("project_browser_autonomous_commit_tag_execution_commit_sha"),
+        default="",
+    )
 
     pr_queue_status = _normalize_text(
         queue_state.get("project_browser_autonomous_pr_queue_state_status"),
@@ -96325,6 +96342,23 @@ def _build_project_browser_autonomous_local_loop_state(
         for entry in queue_state.get("project_browser_autonomous_pr_queue_state_pr_queue", []):
             if isinstance(entry, Mapping):
                 pr_queue_items.append(dict(entry))
+    queue_completed_commit_sha = _normalize_text(
+        queue_state.get("project_browser_autonomous_pr_queue_state_completed_commit_sha"),
+        default="",
+    )
+    queue_active_item_commit_sha = ""
+    if 0 <= active_pr_index < len(pr_queue_items):
+        queue_active_item_commit_sha = _normalize_text(
+            pr_queue_items[active_pr_index].get("commit_sha"),
+            default="",
+        )
+    queue_reflects_commit_execution = bool(
+        commit_execution_commit_sha
+        and (
+            queue_completed_commit_sha == commit_execution_commit_sha
+            or queue_active_item_commit_sha == commit_execution_commit_sha
+        )
+    )
 
     bounded_loop_status = _normalize_text(
         bounded_loop_state.get("project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"),
@@ -96464,6 +96498,71 @@ def _build_project_browser_autonomous_local_loop_state(
             "resolve blocking/manual-review state before routing",
             "re-run after blocked reason is cleared",
         ]
+    elif pr_queue_status == "pr_queue_state_project_complete":
+        status = "local_loop_project_complete"
+        next_action = "project_complete"
+        blocked_reason = "none"
+    elif pr_queue_status == "pr_queue_state_updated" and next_pr_index >= 0:
+        status = "local_loop_ready_prepare_next_pr_prompt"
+        next_action = "prepare_next_pr_prompt"
+        blocked_reason = "none"
+        if 0 <= next_pr_index < len(pr_queue_items):
+            next_item = dict(pr_queue_items[next_pr_index])
+            next_pr_id = _normalize_text(next_item.get("id"), default=next_pr_id)
+            candidate_prompt = _normalize_text(
+                next_item.get("prompt"),
+                default=_normalize_text(
+                    next_item.get("prompt_text"),
+                    default=_normalize_text(
+                        next_item.get("implementation_prompt"),
+                        default=_normalize_text(next_item.get("pr_prompt"), default=""),
+                    ),
+                ),
+            )
+            candidate_prompt_fingerprint = _normalize_text(
+                next_item.get("prompt_fingerprint"),
+                default="",
+            )
+            if candidate_prompt:
+                selected_prompt = _bound_prompt_text(candidate_prompt, max_chars=12000)
+                selected_prompt_fingerprint = (
+                    candidate_prompt_fingerprint
+                    if candidate_prompt_fingerprint
+                    else hashlib.sha256(selected_prompt.encode("utf-8")).hexdigest()
+                )
+            else:
+                if candidate_prompt_fingerprint:
+                    selected_prompt_fingerprint = candidate_prompt_fingerprint
+                item_summary = _compact(next_item.get("summary"), max_chars=360)
+                item_changed_files = _normalize_string_list(next_item.get("changed_files"))[:20]
+                item_blocked_reason = _normalize_text(next_item.get("blocked_reason"), default="")
+                changed_hint = ", ".join(item_changed_files) if item_changed_files else "(none)"
+                selected_prompt = _bound_prompt_text(
+                    (
+                        "Generate one bounded implementation prompt for the single PR item below.\n"
+                        "Return only the implementation prompt text for Codex.\n\n"
+                        f"PR item id: {next_pr_id or f'pr-{next_pr_index}'}\n"
+                        f"PR item status: {_normalize_text(next_item.get('status'), default='pending')}\n"
+                        f"PR item summary: {item_summary or '(none)'}\n"
+                        f"PR item changed_files: {changed_hint}\n"
+                        f"PR item prompt_fingerprint: {candidate_prompt_fingerprint or '(none)'}\n"
+                        f"PR item blocked_reason: {item_blocked_reason or '(none)'}\n\n"
+                        "Constraints:\n"
+                        "- scope: this PR item only\n"
+                        "- no git commands, no commit/tag/push/merge/PR creation\n"
+                        "- concise and implementation-ready prompt"
+                    ),
+                    max_chars=12000,
+                )
+                if not selected_prompt_fingerprint:
+                    selected_prompt_fingerprint = hashlib.sha256(
+                        selected_prompt.encode("utf-8")
+                    ).hexdigest()
+        else:
+            status = "local_loop_blocked_missing_state"
+            next_action = "manual_review_required"
+            blocked_reason = "next_pr_index_out_of_range"
+            fix_recommendations = ["repair local pr_queue state next_pr_index/next_pr_id"]
     elif review_decision == "revert":
         status = "local_loop_ready_prepare_safe_revert"
         next_action = "prepare_safe_revert"
@@ -96481,11 +96580,11 @@ def _build_project_browser_autonomous_local_loop_state(
         status = "local_loop_ready_run_codex_fix"
         next_action = "run_codex_fix"
         blocked_reason = "none"
-        selected_prompt = review_fix_prompt
+        selected_prompt = _bound_prompt_text(review_fix_prompt, max_chars=12000)
         selected_prompt_fingerprint = (
             review_fix_prompt_fingerprint
             if review_fix_prompt_fingerprint
-            else hashlib.sha256(review_fix_prompt.encode("utf-8")).hexdigest()
+            else hashlib.sha256(selected_prompt.encode("utf-8")).hexdigest()
         )
     elif (
         review_decision == "approve"
@@ -96495,72 +96594,15 @@ def _build_project_browser_autonomous_local_loop_state(
         status = "local_loop_ready_prepare_commit_tag_gate"
         next_action = "prepare_commit_tag_gate"
         blocked_reason = "none"
-    elif commit_execution_status == "commit_tag_execution_committed_and_tagged":
+    elif (
+        commit_execution_status == "commit_tag_execution_committed_and_tagged"
+        and pr_queue_status
+        not in {"pr_queue_state_updated", "pr_queue_state_project_complete"}
+        and not queue_reflects_commit_execution
+    ):
         status = "local_loop_decision_only"
         next_action = "update_pr_queue_or_prepare_next_pr"
         blocked_reason = "awaiting_pr_queue_state_update"
-    elif pr_queue_status == "pr_queue_state_updated" and next_pr_index >= 0:
-        status = "local_loop_ready_prepare_next_pr_prompt"
-        next_action = "prepare_next_pr_prompt"
-        blocked_reason = "none"
-        if 0 <= next_pr_index < len(pr_queue_items):
-            next_item = dict(pr_queue_items[next_pr_index])
-            next_pr_id = _normalize_text(next_item.get("id"), default=next_pr_id)
-            candidate_prompt = _normalize_text(
-                next_item.get("prompt_text"),
-                default=_normalize_text(
-                    next_item.get("prompt"),
-                    default=_normalize_text(
-                        next_item.get("implementation_prompt"),
-                        default=_normalize_text(next_item.get("pr_prompt"), default=""),
-                    ),
-                ),
-            )
-            candidate_prompt_fingerprint = _normalize_text(
-                next_item.get("prompt_fingerprint"),
-                default="",
-            )
-            if candidate_prompt:
-                selected_prompt = candidate_prompt[:6000]
-                selected_prompt_fingerprint = (
-                    candidate_prompt_fingerprint
-                    if candidate_prompt_fingerprint
-                    else hashlib.sha256(selected_prompt.encode("utf-8")).hexdigest()
-                )
-            else:
-                if candidate_prompt_fingerprint:
-                    selected_prompt_fingerprint = candidate_prompt_fingerprint
-                item_summary = _compact(next_item.get("summary"), max_chars=360)
-                item_changed_files = _normalize_string_list(next_item.get("changed_files"))[:20]
-                item_blocked_reason = _normalize_text(next_item.get("blocked_reason"), default="")
-                changed_hint = ", ".join(item_changed_files) if item_changed_files else "(none)"
-                selected_prompt = (
-                    "Generate one bounded implementation prompt for the single PR item below.\n"
-                    "Return only the implementation prompt text for Codex.\n\n"
-                    f"PR item id: {next_pr_id or f'pr-{next_pr_index}'}\n"
-                    f"PR item status: {_normalize_text(next_item.get('status'), default='pending')}\n"
-                    f"PR item summary: {item_summary or '(none)'}\n"
-                    f"PR item changed_files: {changed_hint}\n"
-                    f"PR item prompt_fingerprint: {candidate_prompt_fingerprint or '(none)'}\n"
-                    f"PR item blocked_reason: {item_blocked_reason or '(none)'}\n\n"
-                    "Constraints:\n"
-                    "- scope: this PR item only\n"
-                    "- no git commands, no commit/tag/push/merge/PR creation\n"
-                    "- concise and implementation-ready prompt"
-                )[:6000]
-                if not selected_prompt_fingerprint:
-                    selected_prompt_fingerprint = hashlib.sha256(
-                        selected_prompt.encode("utf-8")
-                    ).hexdigest()
-        else:
-            status = "local_loop_blocked_missing_state"
-            next_action = "manual_review_required"
-            blocked_reason = "next_pr_index_out_of_range"
-            fix_recommendations = ["repair local pr_queue state next_pr_index/next_pr_id"]
-    elif pr_queue_status == "pr_queue_state_project_complete":
-        status = "local_loop_project_complete"
-        next_action = "project_complete"
-        blocked_reason = "none"
     else:
         implementation_prompt_text = ""
         implementation_prompt_fingerprint = ""
@@ -96605,7 +96647,7 @@ def _build_project_browser_autonomous_local_loop_state(
             status = "local_loop_ready_run_codex_implementation"
             next_action = "run_codex_implementation"
             blocked_reason = "none"
-            selected_prompt = implementation_prompt_text[:6000]
+            selected_prompt = _bound_prompt_text(implementation_prompt_text, max_chars=12000)
             selected_prompt_fingerprint = implementation_prompt_fingerprint
         else:
             status = "local_loop_blocked_no_next_step"
@@ -96616,6 +96658,8 @@ def _build_project_browser_autonomous_local_loop_state(
                 "perform manual review and set explicit next action",
             ]
 
+    if selected_prompt:
+        selected_prompt = _bound_prompt_text(selected_prompt, max_chars=12000)
     if selected_prompt and not selected_prompt_fingerprint:
         selected_prompt_fingerprint = hashlib.sha256(selected_prompt.encode("utf-8")).hexdigest()
 
@@ -96643,7 +96687,6 @@ def _build_project_browser_autonomous_local_loop_state(
         selected_step_fingerprint
         and prior_selected_step_fingerprint
         and selected_step_fingerprint == prior_selected_step_fingerprint
-        and status.startswith("local_loop_ready_")
     ):
         status = "local_loop_blocked_duplicate_step"
         next_action = "manual_review_required"
@@ -96654,6 +96697,23 @@ def _build_project_browser_autonomous_local_loop_state(
         ]
 
     routed = False
+    if status.startswith("local_loop_ready_") and loop_route_enabled:
+        if selected_step_fingerprint and prior_selected_step_fingerprint and (
+            selected_step_fingerprint == prior_selected_step_fingerprint
+        ):
+            status = "local_loop_blocked_duplicate_step"
+            next_action = "manual_review_required"
+            blocked_reason = "duplicate_step_fingerprint"
+        elif selected_step_fingerprint and (
+            selected_step_fingerprint
+            == _normalize_text(
+                prior_payload.get("project_browser_autonomous_local_loop_selected_prompt_fingerprint"),
+                default="",
+            )
+        ):
+            status = "local_loop_blocked_duplicate_step"
+            next_action = "manual_review_required"
+            blocked_reason = "duplicate_step_fingerprint"
     if status.startswith("local_loop_ready_") and loop_route_enabled:
         if next_action == "run_codex_implementation":
             if not selected_prompt:
@@ -96708,23 +96768,76 @@ def _build_project_browser_autonomous_local_loop_state(
                 else:
                     routed = True
             else:
-                request_path = Path("/tmp/codex-local-runner-chatgpt-bridge/request.md")
-                if request_path.is_symlink():
+                duplicate_request_fingerprints = {
+                    _normalize_text(
+                        prior_payload.get("project_browser_autonomous_local_loop_selected_prompt_fingerprint"),
+                        default="",
+                    ),
+                    _normalize_text(
+                        prior_payload.get("project_browser_autonomous_local_loop_selected_step_fingerprint"),
+                        default="",
+                    ),
+                    _normalize_text(
+                        approved_restart.get(
+                            "project_browser_autonomous_local_loop_selected_prompt_fingerprint"
+                        ),
+                        default="",
+                    ),
+                    _normalize_text(
+                        approved_restart.get("project_browser_autonomous_local_loop_selected_step_fingerprint"),
+                        default="",
+                    ),
+                    _normalize_text(
+                        prior_payload.get(
+                            "project_browser_autonomous_chatgpt_diff_review_request_prompt_fingerprint"
+                        ),
+                        default="",
+                    ),
+                    _normalize_text(
+                        approved_restart.get(
+                            "project_browser_autonomous_chatgpt_diff_review_request_prompt_fingerprint"
+                        ),
+                        default="",
+                    ),
+                }
+                duplicate_request_fingerprints.discard("")
+                if selected_prompt_fingerprint and (
+                    selected_prompt_fingerprint in duplicate_request_fingerprints
+                ):
+                    status = "local_loop_blocked_duplicate_step"
+                    next_action = "manual_review_required"
+                    blocked_reason = "duplicate_next_pr_bridge_request_fingerprint"
+                elif len(selected_prompt.encode("utf-8")) > 32768:
                     status = "local_loop_blocked_missing_state"
                     next_action = "manual_review_required"
-                    blocked_reason = "bridge_request_path_symlink_blocked"
+                    blocked_reason = "bridge_request_prompt_too_large"
                 else:
-                    try:
-                        request_path.parent.mkdir(parents=True, exist_ok=True)
-                        temp_path = request_path.with_name(f"{request_path.name}.tmp")
-                        temp_path.write_text(selected_prompt, encoding="utf-8")
-                        os.replace(temp_path, request_path)
-                    except OSError as exc:
+                    bridge_dir = Path("/tmp/codex-local-runner-chatgpt-bridge")
+                    request_path = bridge_dir / "request.md"
+                    response_path = bridge_dir / "response.md"
+                    status_path = bridge_dir / "status.json"
+                    if request_path.is_symlink():
                         status = "local_loop_blocked_missing_state"
                         next_action = "manual_review_required"
-                        blocked_reason = f"bridge_request_write_failed:{exc.__class__.__name__}"
+                        blocked_reason = "bridge_request_path_symlink_blocked"
                     else:
-                        routed = True
+                        try:
+                            bridge_dir.mkdir(parents=True, exist_ok=True)
+                            for stale_path in (response_path, status_path):
+                                if not stale_path.exists():
+                                    continue
+                                if not stale_path.is_file() and not stale_path.is_symlink():
+                                    raise OSError(f"stale_path_not_file:{stale_path}")
+                                stale_path.unlink()
+                            temp_path = request_path.with_name(f"{request_path.name}.tmp")
+                            temp_path.write_text(selected_prompt, encoding="utf-8")
+                            os.replace(temp_path, request_path)
+                        except OSError as exc:
+                            status = "local_loop_blocked_missing_state"
+                            next_action = "manual_review_required"
+                            blocked_reason = f"bridge_request_write_failed:{exc.__class__.__name__}"
+                        else:
+                            routed = True
         if routed:
             local_iteration_out = min(loop_max_iterations, local_iteration_out + 1)
     elif status.startswith("local_loop_ready_") and not loop_route_enabled:
