@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-import os
+import hashlib
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,6 +17,14 @@ RESPONSE_PATH = BASE_DIR / "response.md"
 STATUS_PATH = BASE_DIR / "status.json"
 HOST = "0.0.0.0"
 PORT = 8765
+TASK_STATES = {"ready", "in_progress", "response_saved", "blocked", "consumed"}
+ALLOWED_TASK_TRANSITIONS: dict[str, set[str]] = {
+    "ready": {"in_progress", "blocked"},
+    "in_progress": {"response_saved", "blocked"},
+    "response_saved": {"consumed"},
+    "blocked": set(),
+    "consumed": set(),
+}
 
 
 def _now_iso() -> str:
@@ -32,6 +40,185 @@ def _read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return ""
+
+
+def _normalize_text(value: str) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _compute_request_fingerprint(prompt: str) -> str:
+    normalized = _normalize_text(prompt)
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}:{len(normalized)}"
+
+
+def _request_created_at(path: Path) -> str:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return ""
+    created = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+    return created.replace(microsecond=0).isoformat()
+
+
+def _request_mtime_ns(path: Path) -> int:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return 0
+    return int(getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000)))
+
+
+def _build_task_identity(prompt: str) -> dict[str, Any]:
+    fingerprint = _compute_request_fingerprint(prompt)
+    created_at = _request_created_at(REQUEST_PATH)
+    mtime_ns = _request_mtime_ns(REQUEST_PATH)
+    task_id = f"task-{fingerprint.split(':', 1)[1][:16]}-{mtime_ns}"
+    return {
+        "task_id": task_id,
+        "request_fingerprint": fingerprint,
+        "created_at": created_at,
+    }
+
+
+def _current_request_snapshot() -> dict[str, Any]:
+    prompt = _read_text(REQUEST_PATH)
+    if not prompt.strip():
+        return {
+            "has_request": False,
+            "prompt": "",
+            "identity": {"task_id": "", "request_fingerprint": "", "created_at": ""},
+        }
+    return {
+        "has_request": True,
+        "prompt": prompt,
+        "identity": _build_task_identity(prompt),
+    }
+
+
+def _identity_matches(lhs: dict[str, Any], rhs: dict[str, Any]) -> bool:
+    lhs_task = str(lhs.get("task_id") or "")
+    lhs_fingerprint = str(lhs.get("request_fingerprint") or "")
+    rhs_task = str(rhs.get("task_id") or "")
+    rhs_fingerprint = str(rhs.get("request_fingerprint") or "")
+
+    if lhs_task and rhs_task and lhs_fingerprint and rhs_fingerprint:
+        return lhs_task == rhs_task and lhs_fingerprint == rhs_fingerprint
+    if lhs_fingerprint and rhs_fingerprint:
+        return lhs_fingerprint == rhs_fingerprint
+    if lhs_task and rhs_task:
+        return lhs_task == rhs_task
+    return False
+
+
+def _extract_identity_from_status(status_doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "task_id": str(status_doc.get("task_id") or ""),
+        "request_fingerprint": str(status_doc.get("request_fingerprint") or status_doc.get("task_fingerprint") or ""),
+        "created_at": str(status_doc.get("created_at") or ""),
+    }
+
+
+def _normalize_task_status(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in TASK_STATES else ""
+
+
+def _extract_task_status(status_doc: dict[str, Any]) -> str:
+    direct = _normalize_task_status(status_doc.get("task_status"))
+    if direct:
+        return direct
+    return _map_runtime_status_to_task_status(
+        str(status_doc.get("status") or ""),
+        str(status_doc.get("reason") or ""),
+    )
+
+
+def _resolve_identity(
+    payload: dict[str, Any],
+    request_identity: dict[str, Any],
+    existing_identity: dict[str, Any],
+) -> dict[str, Any]:
+    payload_task_id = str(payload.get("task_id") or "")
+    payload_fingerprint = str(payload.get("request_fingerprint") or payload.get("task_fingerprint") or "")
+    payload_created_at = str(payload.get("created_at") or "")
+    return {
+        "task_id": payload_task_id or str(request_identity.get("task_id") or "") or str(existing_identity.get("task_id") or ""),
+        "request_fingerprint": payload_fingerprint
+        or str(request_identity.get("request_fingerprint") or "")
+        or str(existing_identity.get("request_fingerprint") or ""),
+        "created_at": payload_created_at or str(request_identity.get("created_at") or "") or str(existing_identity.get("created_at") or ""),
+    }
+
+
+def _transition_task_status(previous: str, desired: str) -> tuple[str, bool]:
+    prev = _normalize_task_status(previous) or "ready"
+    nxt = _normalize_task_status(desired) or prev
+    if nxt == prev:
+        return prev, False
+    if nxt in ALLOWED_TASK_TRANSITIONS.get(prev, set()):
+        return nxt, True
+    return prev, False
+
+
+def _map_runtime_status_to_task_status(status: str, reason: str) -> str:
+    normalized_status = str(status or "").strip().lower()
+    normalized_reason = str(reason or "").strip().lower()
+
+    if normalized_status in {"response_saved", "result_saved"} or normalized_reason == "result_saved":
+        return "response_saved"
+    if normalized_status == "blocked":
+        return "blocked"
+    if normalized_status in {"running", "sent"}:
+        return "in_progress"
+    if normalized_status == "consumed":
+        return "consumed"
+    return "ready"
+
+
+def _build_next_task_payload() -> dict[str, Any]:
+    request_snapshot = _current_request_snapshot()
+    prompt = request_snapshot["prompt"]
+    if not request_snapshot["has_request"]:
+        return {
+            "has_task": False,
+            "prompt": "",
+            "task_id": "",
+            "request_fingerprint": "",
+            "created_at": "",
+            "attempt_count": 0,
+            "status": "consumed",
+        }
+
+    identity = request_snapshot["identity"]
+    existing = _read_status()
+    existing_identity = _extract_identity_from_status(existing)
+    is_same_task = _identity_matches(existing_identity, identity)
+
+    if is_same_task:
+        task_status = _extract_task_status(existing)
+        attempt_count = _safe_int(existing.get("attempt_count"), 0)
+    else:
+        task_status = "ready"
+        attempt_count = 0
+
+    has_task = task_status == "ready"
+    return {
+        "has_task": has_task,
+        "prompt": prompt if has_task else "",
+        "task_id": identity["task_id"],
+        "request_fingerprint": identity["request_fingerprint"],
+        "created_at": identity["created_at"],
+        "attempt_count": attempt_count,
+        "status": task_status,
+    }
 
 
 def _read_status() -> dict[str, Any]:
@@ -52,15 +239,6 @@ def _write_status(payload: dict[str, Any]) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-
-
-def _merge_status(update: dict[str, Any]) -> dict[str, Any]:
-    existing = _read_status()
-    existing.update(update)
-    existing["updated_at"] = _now_iso()
-    _write_status(existing)
-    return existing
-
 
 class BridgeHandler(BaseHTTPRequestHandler):
     server_version = "chatgpt-bridge/0.1"
@@ -109,9 +287,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         _ensure_base_dir()
         if self.path == "/next-task":
-            prompt = _read_text(REQUEST_PATH)
-            has_task = bool(prompt.strip())
-            self._send_json({"has_task": has_task, "prompt": prompt if has_task else ""})
+            self._send_json(_build_next_task_payload())
             return
 
         if self.path == "/status":
@@ -135,18 +311,39 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
             RESPONSE_PATH.write_text(response_text, encoding="utf-8")
             metadata = payload.get("metadata") if isinstance(payload, dict) else None
-            status_payload = {
-                "status": "response_saved",
-                "reason": "result_received",
+            existing = _read_status()
+            existing_identity = _extract_identity_from_status(existing)
+            request_snapshot = _current_request_snapshot()
+            resolved_identity = _resolve_identity(payload, request_snapshot["identity"], existing_identity)
+            same_task = _identity_matches(existing_identity, resolved_identity)
+            previous_task_status = _extract_task_status(existing) if same_task else "ready"
+            next_task_status, transitioned = _transition_task_status(previous_task_status, "response_saved")
+            attempt_count = _safe_int(existing.get("attempt_count"), 0) if same_task else 0
+            runtime_status = "response_saved" if next_task_status == "response_saved" else str(existing.get("status") or "blocked")
+            runtime_reason = "result_received" if next_task_status == "response_saved" else "result_transition_blocked"
+
+            status_doc: dict[str, Any] = dict(existing)
+            status_doc.update({
+                "status": runtime_status,
+                "reason": runtime_reason,
+                "task_status": next_task_status,
+                "task_id": resolved_identity["task_id"],
+                "request_fingerprint": resolved_identity["request_fingerprint"],
+                "created_at": resolved_identity["created_at"],
+                "attempt_count": attempt_count,
                 "response_path": str(RESPONSE_PATH),
                 "response_length": len(response_text),
                 "result_received_at": _now_iso(),
-            }
+            })
             if isinstance(metadata, dict):
-                status_payload["metadata"] = metadata
-
-            merged = _merge_status(status_payload)
-            self._send_json({"ok": True, "status": merged})
+                status_doc["metadata"] = metadata
+            status_doc["updated_at"] = _now_iso()
+            if not transitioned and next_task_status != "response_saved":
+                status_doc["task_transition_blocked"] = f"{previous_task_status}->response_saved"
+            else:
+                status_doc.pop("task_transition_blocked", None)
+            _write_status(status_doc)
+            self._send_json({"ok": True, "status": status_doc})
             return
 
         if self.path == "/status":
@@ -156,8 +353,103 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 return
             if payload is None:
                 payload = {}
-            merged = _merge_status(payload)
-            self._send_json({"ok": True, "status": merged})
+            existing = _read_status()
+            existing_identity = _extract_identity_from_status(existing)
+            request_snapshot = _current_request_snapshot()
+            resolved_identity = _resolve_identity(payload, request_snapshot["identity"], existing_identity)
+            status_value = str(payload.get("status") or "")
+            reason_value = str(payload.get("reason") or "")
+            desired_task_status = _map_runtime_status_to_task_status(status_value, reason_value)
+            same_task = _identity_matches(existing_identity, resolved_identity)
+            previous_task_status = _extract_task_status(existing) if same_task else "ready"
+            next_task_status, transitioned = _transition_task_status(previous_task_status, desired_task_status)
+            attempt_count = _safe_int(existing.get("attempt_count"), 0) if same_task else 0
+            if previous_task_status == "ready" and next_task_status == "in_progress" and transitioned:
+                attempt_count += 1
+
+            status_doc: dict[str, Any] = dict(existing)
+            status_doc.update(payload)
+            status_doc["task_id"] = resolved_identity["task_id"]
+            status_doc["request_fingerprint"] = resolved_identity["request_fingerprint"]
+            status_doc["created_at"] = resolved_identity["created_at"]
+            status_doc["attempt_count"] = attempt_count
+            status_doc["task_status"] = next_task_status
+            status_doc["updated_at"] = _now_iso()
+            if not transitioned and next_task_status != desired_task_status:
+                status_doc["task_transition_blocked"] = f"{previous_task_status}->{desired_task_status}"
+            else:
+                status_doc.pop("task_transition_blocked", None)
+            _write_status(status_doc)
+            self._send_json({"ok": True, "status": status_doc})
+            return
+
+        if self.path == "/consume-result":
+            payload, error = self._parse_json_body()
+            if error:
+                self._send_json({"error": error}, status=HTTPStatus.BAD_REQUEST)
+                return
+            if payload is None:
+                payload = {}
+
+            existing = _read_status()
+            existing_identity = _extract_identity_from_status(existing)
+            request_snapshot = _current_request_snapshot()
+            resolved_identity = _resolve_identity(payload, request_snapshot["identity"], existing_identity)
+            same_task = _identity_matches(existing_identity, resolved_identity)
+            previous_task_status = _extract_task_status(existing) if same_task else "ready"
+            next_task_status, transitioned = _transition_task_status(previous_task_status, "consumed")
+
+            status_doc: dict[str, Any] = dict(existing)
+            status_doc["status"] = "consumed"
+            status_doc["reason"] = "result_consumed"
+            status_doc["task_status"] = next_task_status
+            status_doc["task_id"] = resolved_identity["task_id"]
+            status_doc["request_fingerprint"] = resolved_identity["request_fingerprint"]
+            status_doc["created_at"] = resolved_identity["created_at"]
+            status_doc["attempt_count"] = _safe_int(existing.get("attempt_count"), 0) if same_task else 0
+            status_doc["updated_at"] = _now_iso()
+            if not transitioned and next_task_status != "consumed":
+                status_doc["task_transition_blocked"] = f"{previous_task_status}->consumed"
+            else:
+                status_doc.pop("task_transition_blocked", None)
+            _write_status(status_doc)
+            self._send_json({"ok": True, "status": status_doc})
+            return
+
+        if self.path == "/task-reset":
+            payload, error = self._parse_json_body()
+            if error:
+                self._send_json({"error": error}, status=HTTPStatus.BAD_REQUEST)
+                return
+            if payload is None:
+                payload = {}
+
+            request_snapshot = _current_request_snapshot()
+            if request_snapshot["has_request"]:
+                identity = request_snapshot["identity"]
+                status_doc = {
+                    "status": "idle",
+                    "reason": "task_reset",
+                    "task_status": "ready",
+                    "task_id": identity["task_id"],
+                    "request_fingerprint": identity["request_fingerprint"],
+                    "created_at": identity["created_at"],
+                    "attempt_count": 0,
+                    "updated_at": _now_iso(),
+                }
+            else:
+                status_doc = {
+                    "status": "idle",
+                    "reason": "task_reset",
+                    "task_status": "consumed",
+                    "task_id": "",
+                    "request_fingerprint": "",
+                    "created_at": "",
+                    "attempt_count": 0,
+                    "updated_at": _now_iso(),
+                }
+            _write_status(status_doc)
+            self._send_json({"ok": True, "status": status_doc})
             return
 
         self._send_json({"error": "not_found"}, status=HTTPStatus.NOT_FOUND)

@@ -1,0 +1,115 @@
+{
+  "summary": {
+    "decision_only": {
+      "status": "bounded_local_loop_decision_only",
+      "next_action": "set_continue_enabled_for_next_local_step",
+      "iteration": 0,
+      "consecutive_failures": 0,
+      "progress_fingerprint": "884e7eb4049bec71649bd5dbb10b9b52577f685539754e70d7b701343842b61d",
+      "selected_component": "local_loop",
+      "selected_component_status": "local_loop_ready_run_codex_implementation",
+      "blocked_reason": "continue_not_enabled"
+    },
+    "one_step_continue": {
+      "status": "bounded_local_loop_ready_continue",
+      "next_action": "run_codex_implementation",
+      "iteration": 1,
+      "consecutive_failures": 0,
+      "progress_fingerprint": "884e7eb4049bec71649bd5dbb10b9b52577f685539754e70d7b701343842b61d",
+      "selected_component": "local_loop",
+      "selected_component_status": "local_loop_ready_run_codex_implementation",
+      "blocked_reason": "none"
+    },
+    "duplicate_no_progress": {
+      "status": "bounded_local_loop_blocked_duplicate_or_no_progress",
+      "next_action": "manual_review_required",
+      "iteration": 1,
+      "consecutive_failures": 0,
+      "progress_fingerprint": "884e7eb4049bec71649bd5dbb10b9b52577f685539754e70d7b701343842b61d",
+      "selected_component": "local_loop",
+      "selected_component_status": "local_loop_ready_run_codex_implementation",
+      "blocked_reason": "duplicate_or_no_progress_fingerprint"
+    },
+    "project_complete": {
+      "status": "bounded_local_loop_project_complete",
+      "next_action": "project_complete",
+      "iteration": 0,
+      "consecutive_failures": 0,
+      "progress_fingerprint": "4d5da1ece0f645c8a672c8ccf5d64715cb13ce2726fe8f21c5160eb92290a061",
+      "selected_component": "pr_queue_state",
+      "selected_component_status": "pr_queue_state_project_complete",
+      "blocked_reason": "none"
+    }
+  },
+  "raw": {
+    "decision_only": {
+      "project_browser_autonomous_bounded_local_loop_status": "bounded_local_loop_decision_only",
+      "project_browser_autonomous_bounded_local_loop_next_action": "set_continue_enabled_for_next_local_step",
+      "project_browser_autonomous_bounded_local_loop_enabled": true,
+      "project_browser_autonomous_bounded_local_loop_continue_enabled": false,
+      "project_browser_autonomous_bounded_local_loop_iteration": 0,
+      "project_browser_autonomous_bounded_local_loop_max_iterations": 3,
+      "project_browser_autonomous_bounded_local_loop_consecutive_failures": 0,
+      "project_browser_autonomous_bounded_local_loop_max_consecutive_failures": 1,
+      "project_browser_autonomous_bounded_local_loop_progress_fingerprint": "884e7eb4049bec71649bd5dbb10b9b52577f685539754e70d7b701343842b61d",
+      "project_browser_autonomous_bounded_local_loop_selected_component": "local_loop",
+      "project_browser_autonomous_bounded_local_loop_selected_component_status": "local_loop_ready_run_codex_implementation",
+      "project_browser_autonomous_bounded_local_loop_selected_component_next_action": "run_codex_implementation",
+      "project_browser_autonomous_bounded_local_loop_blocked_reason": "continue_not_enabled",
+      "project_browser_autonomous_bounded_local_loop_fix_recommendations": [
+        "set bounded local loop continue flag for one local iteration"
+      ]
+    },
+    "one_step_continue": {
+      "project_browser_autonomous_bounded_local_loop_status": "bounded_local_loop_ready_continue",
+      "project_browser_autonomous_bounded_local_loop_next_action": "run_codex_implementation",
+      "project_browser_autonomous_bounded_local_loop_enabled": true,
+      "project_browser_autonomous_bounded_local_loop_continue_enabled": true,
+      "project_browser_autonomous_bounded_local_loop_iteration": 1,
+      "project_browser_autonomous_bounded_local_loop_max_iterations": 3,
+      "project_browser_autonomous_bounded_local_loop_consecutive_failures": 0,
+      "project_browser_autonomous_bounded_local_loop_max_consecutive_failures": 1,
+      "project_browser_autonomous_bounded_local_loop_progress_fingerprint": "884e7eb4049bec71649bd5dbb10b9b52577f685539754e70d7b701343842b61d",
+      "project_browser_autonomous_bounded_local_loop_selected_component": "local_loop",
+      "project_browser_autonomous_bounded_local_loop_selected_component_status": "local_loop_ready_run_codex_implementation",
+      "project_browser_autonomous_bounded_local_loop_selected_component_next_action": "run_codex_implementation",
+      "project_browser_autonomous_bounded_local_loop_blocked_reason": "none",
+      "project_browser_autonomous_bounded_local_loop_fix_recommendations": []
+    },
+    "duplicate_no_progress": {
+      "project_browser_autonomous_bounded_local_loop_status": "bounded_local_loop_blocked_duplicate_or_no_progress",
+      "project_browser_autonomous_bounded_local_loop_next_action": "manual_review_required",
+      "project_browser_autonomous_bounded_local_loop_enabled": true,
+      "project_browser_autonomous_bounded_local_loop_continue_enabled": true,
+      "project_browser_autonomous_bounded_local_loop_iteration": 1,
+      "project_browser_autonomous_bounded_local_loop_max_iterations": 3,
+      "project_browser_autonomous_bounded_local_loop_consecutive_failures": 0,
+      "project_browser_autonomous_bounded_local_loop_max_consecutive_failures": 1,
+      "project_browser_autonomous_bounded_local_loop_progress_fingerprint": "884e7eb4049bec71649bd5dbb10b9b52577f685539754e70d7b701343842b61d",
+      "project_browser_autonomous_bounded_local_loop_selected_component": "local_loop",
+      "project_browser_autonomous_bounded_local_loop_selected_component_status": "local_loop_ready_run_codex_implementation",
+      "project_browser_autonomous_bounded_local_loop_selected_component_next_action": "run_codex_implementation",
+      "project_browser_autonomous_bounded_local_loop_blocked_reason": "duplicate_or_no_progress_fingerprint",
+      "project_browser_autonomous_bounded_local_loop_fix_recommendations": [
+        "change at least one progression state before requesting continue",
+        "avoid re-dispatching same local step without new evidence"
+      ]
+    },
+    "project_complete": {
+      "project_browser_autonomous_bounded_local_loop_status": "bounded_local_loop_project_complete",
+      "project_browser_autonomous_bounded_local_loop_next_action": "project_complete",
+      "project_browser_autonomous_bounded_local_loop_enabled": true,
+      "project_browser_autonomous_bounded_local_loop_continue_enabled": true,
+      "project_browser_autonomous_bounded_local_loop_iteration": 0,
+      "project_browser_autonomous_bounded_local_loop_max_iterations": 3,
+      "project_browser_autonomous_bounded_local_loop_consecutive_failures": 0,
+      "project_browser_autonomous_bounded_local_loop_max_consecutive_failures": 1,
+      "project_browser_autonomous_bounded_local_loop_progress_fingerprint": "4d5da1ece0f645c8a672c8ccf5d64715cb13ce2726fe8f21c5160eb92290a061",
+      "project_browser_autonomous_bounded_local_loop_selected_component": "pr_queue_state",
+      "project_browser_autonomous_bounded_local_loop_selected_component_status": "pr_queue_state_project_complete",
+      "project_browser_autonomous_bounded_local_loop_selected_component_next_action": "project_local_queue_complete",
+      "project_browser_autonomous_bounded_local_loop_blocked_reason": "none",
+      "project_browser_autonomous_bounded_local_loop_fix_recommendations": []
+    }
+  }
+}

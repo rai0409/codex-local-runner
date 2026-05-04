@@ -15,6 +15,8 @@ import time
 from typing import Any
 from typing import Callable
 from typing import Mapping
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from automation.control.action_handoff import build_action_handoff_payload
 from automation.control.next_action_controller import evaluate_next_action_from_run_dir
@@ -91689,6 +91691,6834 @@ def _build_project_browser_autonomous_chatgpt_browser_runtime_enablement_state(
     }
 
 
+def _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
+    *,
+    project_analysis_request_text: str,
+    browser_prompt_payload: Mapping[str, Any] | None,
+    browser_queue_handoff_payload: Mapping[str, Any] | None,
+    prior_browser_state: Mapping[str, Any] | None,
+    one_shot_execution_enabled: Any = None,
+    one_shot_wait_enabled: Any = None,
+    max_wait_seconds: int = 600,
+    poll_interval_seconds: int = 10,
+) -> dict[str, Any]:
+    base_dir_path = Path("/tmp/codex-local-runner-chatgpt-bridge")
+    request_path = base_dir_path / "request.md"
+    response_path = base_dir_path / "response.md"
+    status_path = base_dir_path / "status.json"
+    response_read_limit_bytes = 8192
+    status_json_read_limit_bytes = 8192
+    preview_chars = 500
+
+    def _normalize_preview_text(text: str, *, max_chars: int = 500) -> str:
+        if not text:
+            return ""
+        normalized = " ".join(text.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _read_status_json_snapshot(path_obj: Path) -> dict[str, Any]:
+        snapshot: dict[str, Any] = {
+            "exists": False,
+            "size_bytes": 0,
+            "preview": "",
+            "parse_completed": False,
+            "parse_error": "",
+            "last_status": "",
+            "last_reason": "",
+            "last_step": "",
+        }
+        if not path_obj.exists():
+            return snapshot
+        snapshot["exists"] = True
+        if not path_obj.is_file():
+            snapshot["parse_error"] = "status_json_not_regular_file"
+            return snapshot
+        try:
+            size_bytes = _as_non_negative_int(path_obj.stat().st_size, default=0)
+            with path_obj.open("rb") as file_obj:
+                raw_bytes = file_obj.read(status_json_read_limit_bytes)
+        except OSError as exc:
+            snapshot["parse_error"] = f"{exc.__class__.__name__}:{exc}"
+            return snapshot
+        snapshot["size_bytes"] = size_bytes
+        preview_bytes = raw_bytes[:status_json_read_limit_bytes]
+        preview_text = preview_bytes.decode("utf-8", errors="replace")
+        snapshot["preview"] = _normalize_preview_text(preview_text, max_chars=preview_chars)
+        try:
+            parsed = json.loads(raw_bytes.decode("utf-8", errors="replace"))
+        except Exception as exc:  # pragma: no cover - defensive parse boundary
+            snapshot["parse_error"] = f"{exc.__class__.__name__}:{exc}"
+            return snapshot
+        if not isinstance(parsed, Mapping):
+            snapshot["parse_error"] = "status_json_not_mapping"
+            return snapshot
+        parsed_obj = dict(parsed)
+        snapshot["parse_completed"] = True
+        snapshot["last_status"] = _normalize_text(parsed_obj.get("status"), default="")
+        snapshot["last_reason"] = _normalize_text(parsed_obj.get("reason"), default="")
+        snapshot["last_step"] = _normalize_text(
+            parsed_obj.get("step"),
+            default=_normalize_text(parsed_obj.get("status_step"), default=""),
+        )
+        return snapshot
+
+    def _is_transient_response(normalized_text: str, text_length: int) -> bool:
+        lower = normalized_text.lower()
+        if not normalized_text:
+            return True
+        exact_transients = {
+            "思考中",
+            "考え中",
+            "thinking",
+            "thinking...",
+            "generating",
+            "generating...",
+            "応答を生成しています",
+            "応答を生成しています...",
+            "...",
+        }
+        if lower in exact_transients or normalized_text in exact_transients:
+            return True
+        contains_tokens = [
+            "thinking",
+            "generating",
+            "思考中",
+            "考え中",
+            "生成しています",
+            "応答を生成",
+        ]
+        if text_length <= 40 and any(token in lower or token in normalized_text for token in contains_tokens):
+            return True
+        return False
+
+    def _read_response_snapshot(path_obj: Path) -> dict[str, Any]:
+        snapshot: dict[str, Any] = {
+            "exists": False,
+            "is_file": False,
+            "size_bytes": 0,
+            "read_attempted": False,
+            "read_completed": False,
+            "read_error": "",
+            "preview": "",
+            "fingerprint": "",
+            "transient_detected": False,
+            "status": "chrome_runner_bridge_response_missing",
+        }
+        if not path_obj.exists():
+            return snapshot
+        snapshot["exists"] = True
+        if not path_obj.is_file():
+            snapshot["status"] = "chrome_runner_bridge_response_not_file"
+            return snapshot
+        snapshot["is_file"] = True
+        snapshot["read_attempted"] = True
+        try:
+            file_size = _as_non_negative_int(path_obj.stat().st_size, default=0)
+            with path_obj.open("rb") as file_obj:
+                raw_bytes = file_obj.read(response_read_limit_bytes)
+        except OSError as exc:
+            snapshot["size_bytes"] = 0
+            snapshot["read_error"] = f"{exc.__class__.__name__}:{exc}"
+            snapshot["status"] = "chrome_runner_bridge_response_read_error"
+            return snapshot
+        snapshot["size_bytes"] = file_size
+        text = raw_bytes[:response_read_limit_bytes].decode("utf-8", errors="replace")
+        normalized_text = text.strip()
+        snapshot["read_completed"] = True
+        snapshot["preview"] = _normalize_preview_text(normalized_text, max_chars=preview_chars)
+        if normalized_text:
+            snapshot["fingerprint"] = hashlib.sha256(normalized_text.encode("utf-8")).hexdigest()
+        else:
+            snapshot["fingerprint"] = ""
+        text_length = len(normalized_text)
+        transient_detected = _is_transient_response(normalized_text, text_length)
+        snapshot["transient_detected"] = transient_detected
+        if not normalized_text:
+            snapshot["status"] = "chrome_runner_bridge_response_empty"
+        elif transient_detected:
+            snapshot["status"] = "chrome_runner_bridge_response_transient"
+        else:
+            snapshot["status"] = "chrome_runner_bridge_response_ready"
+        return snapshot
+
+    prepared_prompt_text, prepared_prompt_source_status, prepared_prompt_source_reason = (
+        _resolve_project_browser_prepared_prompt_text(
+            browser_prompt_payload=browser_prompt_payload,
+            browser_queue_handoff_payload=browser_queue_handoff_payload,
+            prior_browser_state=prior_browser_state,
+        )
+    )
+    request_text_from_analysis_request = _normalize_text(project_analysis_request_text, default="")
+
+    def _read_bool_flag(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    selected_request_text = ""
+    request_source = ""
+    if prepared_prompt_source_status == "available" and prepared_prompt_text:
+        selected_request_text = prepared_prompt_text
+        request_source = "project_browser_prepared_prompt_text"
+    elif request_text_from_analysis_request:
+        selected_request_text = request_text_from_analysis_request
+        request_source = "project_browser_autonomous_project_analysis_request_text"
+
+    operator_action = (
+        "Open a logged-in normal Chrome ChatGPT tab, ensure the composer is empty and no "
+        "Verify/CAPTCHA is visible, then click ChatGPT Runner Bridge once."
+    )
+    wait_timeout_seconds = _as_non_negative_int(max_wait_seconds, default=600)
+    wait_poll_seconds = _as_non_negative_int(poll_interval_seconds, default=10)
+    if wait_poll_seconds <= 0:
+        wait_poll_seconds = 10
+    if wait_timeout_seconds <= 0:
+        wait_timeout_seconds = 600
+    execution_enabled = _read_bool_flag(one_shot_execution_enabled, default=False)
+    wait_enabled = _read_bool_flag(one_shot_wait_enabled, default=False)
+
+    state: dict[str, Any] = {
+        "project_browser_autonomous_chrome_runner_bridge_one_shot_status": (
+            "chrome_runner_bridge_one_shot_not_requested"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_one_shot_next_action": (
+            "enable_chrome_runner_bridge_one_shot"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_base_dir": str(base_dir_path),
+        "project_browser_autonomous_chrome_runner_bridge_request_path": str(request_path),
+        "project_browser_autonomous_chrome_runner_bridge_response_path": str(response_path),
+        "project_browser_autonomous_chrome_runner_bridge_status_path": str(status_path),
+        "project_browser_autonomous_chrome_runner_bridge_one_shot_execution_enabled": bool(
+            execution_enabled
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_one_shot_wait_enabled": bool(
+            wait_enabled
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_request_written": False,
+        "project_browser_autonomous_chrome_runner_bridge_request_size_bytes": 0,
+        "project_browser_autonomous_chrome_runner_bridge_request_fingerprint": "",
+        "project_browser_autonomous_chrome_runner_bridge_request_source": request_source,
+        "project_browser_autonomous_chrome_runner_bridge_request_write_error": "",
+        "project_browser_autonomous_chrome_runner_bridge_operator_action_required": False,
+        "project_browser_autonomous_chrome_runner_bridge_operator_action_kind": "",
+        "project_browser_autonomous_chrome_runner_bridge_operator_action": "",
+        "project_browser_autonomous_chrome_runner_bridge_wait_attempted": False,
+        "project_browser_autonomous_chrome_runner_bridge_wait_timeout_seconds": wait_timeout_seconds,
+        "project_browser_autonomous_chrome_runner_bridge_wait_poll_interval_seconds": wait_poll_seconds,
+        "project_browser_autonomous_chrome_runner_bridge_wait_elapsed_seconds": 0,
+        "project_browser_autonomous_chrome_runner_bridge_wait_exit_reason": "wait_not_enabled",
+        "project_browser_autonomous_chrome_runner_bridge_response_exists": False,
+        "project_browser_autonomous_chrome_runner_bridge_response_is_file": False,
+        "project_browser_autonomous_chrome_runner_bridge_response_size_bytes": 0,
+        "project_browser_autonomous_chrome_runner_bridge_response_read_attempted": False,
+        "project_browser_autonomous_chrome_runner_bridge_response_read_completed": False,
+        "project_browser_autonomous_chrome_runner_bridge_response_read_error": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_preview": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_fingerprint": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_transient_detected": False,
+        "project_browser_autonomous_chrome_runner_bridge_response_status": (
+            "chrome_runner_bridge_response_missing"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_status_json_exists": False,
+        "project_browser_autonomous_chrome_runner_bridge_status_json_size_bytes": 0,
+        "project_browser_autonomous_chrome_runner_bridge_status_json_preview": "",
+        "project_browser_autonomous_chrome_runner_bridge_status_json_parse_completed": False,
+        "project_browser_autonomous_chrome_runner_bridge_status_json_parse_error": "",
+        "project_browser_autonomous_chrome_runner_bridge_status_json_last_status": "",
+        "project_browser_autonomous_chrome_runner_bridge_status_json_last_reason": "",
+        "project_browser_autonomous_chrome_runner_bridge_status_json_last_step": "",
+        "project_browser_autonomous_chrome_runner_bridge_cleanup_error": "",
+        "project_browser_autonomous_chrome_runner_bridge_prompt_source_status": (
+            prepared_prompt_source_status
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_prompt_source_reason": (
+            prepared_prompt_source_reason
+        ),
+    }
+
+    if not execution_enabled:
+        return state
+
+    if not selected_request_text:
+        state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+            "chrome_runner_bridge_one_shot_blocked_missing_prompt"
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+            "provide_bridge_request_prompt"
+        )
+        return state
+
+    try:
+        base_dir_path.mkdir(parents=True, exist_ok=True)
+        for stale_path in (response_path, status_path):
+            if not stale_path.exists():
+                continue
+            if not stale_path.is_file() and not stale_path.is_symlink():
+                raise OSError(f"stale_path_not_file:{stale_path}")
+            stale_path.unlink()
+    except OSError as exc:
+        state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+            "chrome_runner_bridge_one_shot_blocked_cleanup_failed"
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+            "inspect_bridge_cleanup_error"
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_cleanup_error"] = (
+            f"{exc.__class__.__name__}:{exc}"
+        )
+        return state
+
+    try:
+        temp_path = request_path.with_name(f"{request_path.name}.tmp")
+        temp_path.write_text(selected_request_text, encoding="utf-8")
+        os.replace(temp_path, request_path)
+    except OSError as exc:
+        state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+            "chrome_runner_bridge_one_shot_blocked_cleanup_failed"
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+            "inspect_bridge_cleanup_error"
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_request_write_error"] = (
+            f"request_write_failed:{exc.__class__.__name__}:{exc}"
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_cleanup_error"] = (
+            state["project_browser_autonomous_chrome_runner_bridge_request_write_error"]
+        )
+        return state
+
+    request_size_bytes = _as_non_negative_int(len(selected_request_text.encode("utf-8")), default=0)
+    request_fingerprint = hashlib.sha256(selected_request_text.encode("utf-8")).hexdigest()
+    state["project_browser_autonomous_chrome_runner_bridge_request_written"] = True
+    state["project_browser_autonomous_chrome_runner_bridge_request_size_bytes"] = request_size_bytes
+    state["project_browser_autonomous_chrome_runner_bridge_request_fingerprint"] = request_fingerprint
+    state["project_browser_autonomous_chrome_runner_bridge_operator_action_required"] = True
+    state["project_browser_autonomous_chrome_runner_bridge_operator_action_kind"] = (
+        "click_chrome_extension_once"
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_operator_action"] = operator_action
+    state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+        "chrome_runner_bridge_one_shot_request_written_waiting_for_operator"
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+        "click_chrome_runner_bridge_once"
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+        "wait_not_enabled"
+    )
+
+    if not wait_enabled:
+        return state
+
+    terminal_blocked_reasons = {
+        "human_verification_required",
+        "submit_not_confirmed",
+        "bridge_error",
+        "response_timeout",
+        "composer_not_found",
+        "prompt_insert_failed",
+        "run_in_progress",
+    }
+
+    state["project_browser_autonomous_chrome_runner_bridge_wait_attempted"] = True
+    state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = ""
+    state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+        "chrome_runner_bridge_one_shot_waiting_for_response"
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+        "wait_for_chrome_runner_bridge_response"
+    )
+    start = time.monotonic()
+    deadline = start + wait_timeout_seconds
+
+    while True:
+        now_ts = time.monotonic()
+        elapsed_seconds = _as_non_negative_int(int(now_ts - start), default=0)
+        state["project_browser_autonomous_chrome_runner_bridge_wait_elapsed_seconds"] = elapsed_seconds
+
+        status_snapshot = _read_status_json_snapshot(status_path)
+        state["project_browser_autonomous_chrome_runner_bridge_status_json_exists"] = bool(
+            status_snapshot["exists"]
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_status_json_size_bytes"] = _as_non_negative_int(
+            status_snapshot["size_bytes"],
+            default=0,
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_status_json_preview"] = _normalize_text(
+            status_snapshot["preview"],
+            default="",
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_status_json_parse_completed"] = bool(
+            status_snapshot["parse_completed"]
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_status_json_parse_error"] = _normalize_text(
+            status_snapshot["parse_error"],
+            default="",
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_status_json_last_status"] = _normalize_text(
+            status_snapshot["last_status"],
+            default="",
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_status_json_last_reason"] = _normalize_text(
+            status_snapshot["last_reason"],
+            default="",
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_status_json_last_step"] = _normalize_text(
+            status_snapshot["last_step"],
+            default="",
+        )
+
+        response_snapshot = _read_response_snapshot(response_path)
+        state["project_browser_autonomous_chrome_runner_bridge_response_exists"] = bool(
+            response_snapshot["exists"]
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_response_is_file"] = bool(
+            response_snapshot["is_file"]
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_response_size_bytes"] = _as_non_negative_int(
+            response_snapshot["size_bytes"],
+            default=0,
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_response_read_attempted"] = bool(
+            response_snapshot["read_attempted"]
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_response_read_completed"] = bool(
+            response_snapshot["read_completed"]
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_response_read_error"] = _normalize_text(
+            response_snapshot["read_error"],
+            default="",
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_response_preview"] = _normalize_text(
+            response_snapshot["preview"],
+            default="",
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_response_fingerprint"] = _normalize_text(
+            response_snapshot["fingerprint"],
+            default="",
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_response_transient_detected"] = bool(
+            response_snapshot["transient_detected"]
+        )
+        response_status = _normalize_text(
+            response_snapshot["status"],
+            default="chrome_runner_bridge_response_missing",
+        )
+        state["project_browser_autonomous_chrome_runner_bridge_response_status"] = response_status
+
+        last_status = _normalize_text(status_snapshot.get("last_status"), default="")
+        last_reason = _normalize_text(status_snapshot.get("last_reason"), default="")
+        reason_is_terminal_blocked = (
+            last_reason in terminal_blocked_reasons
+            or (last_status == "blocked" and last_reason in terminal_blocked_reasons)
+        )
+        status_reports_result_saved = bool(
+            last_status in {"response_saved", "result_saved"}
+            or last_reason in {"response_saved", "result_saved"}
+        )
+
+        if response_status == "chrome_runner_bridge_response_ready":
+            state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+                "chrome_runner_bridge_one_shot_response_ready"
+            )
+            state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+                "assimilate_bridge_response"
+            )
+            state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+                "response_ready"
+            )
+            break
+
+        if reason_is_terminal_blocked:
+            state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+                "chrome_runner_bridge_one_shot_blocked_by_extension_status"
+            )
+            state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+                "inspect_bridge_status_json"
+            )
+            state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+                "extension_terminal_blocked"
+            )
+            break
+
+        if status_reports_result_saved:
+            if response_status == "chrome_runner_bridge_response_transient":
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+                    "chrome_runner_bridge_one_shot_response_transient"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+                    "wait_or_rerun_after_final_response"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+                    "response_transient"
+                )
+                break
+            if response_status == "chrome_runner_bridge_response_empty":
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+                    "chrome_runner_bridge_one_shot_response_empty"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+                    "rerun_chrome_runner_bridge_once"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+                    "response_empty"
+                )
+                break
+            if response_status == "chrome_runner_bridge_response_read_error":
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+                    "chrome_runner_bridge_one_shot_response_read_error"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+                    "inspect_bridge_response_read_error"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+                    "response_read_error"
+                )
+                break
+
+        if now_ts >= deadline:
+            if response_status == "chrome_runner_bridge_response_transient":
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+                    "chrome_runner_bridge_one_shot_response_transient"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+                    "wait_or_rerun_after_final_response"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+                    "timeout_response_transient"
+                )
+            elif response_status == "chrome_runner_bridge_response_empty":
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+                    "chrome_runner_bridge_one_shot_response_empty"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+                    "rerun_chrome_runner_bridge_once"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+                    "timeout_response_empty"
+                )
+            elif response_status == "chrome_runner_bridge_response_read_error":
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+                    "chrome_runner_bridge_one_shot_response_read_error"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+                    "inspect_bridge_response_read_error"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+                    "timeout_response_read_error"
+                )
+            else:
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_status"] = (
+                    "chrome_runner_bridge_one_shot_timeout"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"] = (
+                    "inspect_bridge_status_or_rerun_once"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"] = (
+                    "timeout"
+                )
+            break
+
+        remaining = max(0.0, deadline - now_ts)
+        sleep_seconds = min(float(wait_poll_seconds), remaining)
+        if sleep_seconds <= 0:
+            continue
+        time.sleep(sleep_seconds)
+
+    state["project_browser_autonomous_chrome_runner_bridge_wait_elapsed_seconds"] = (
+        _as_non_negative_int(int(time.monotonic() - start), default=0)
+    )
+    return state
+
+
+def _build_project_browser_autonomous_chrome_runner_bridge_response_assimilation_state(
+    *,
+    bridge_one_shot_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    default_base_dir = "/tmp/codex-local-runner-chatgpt-bridge"
+    one_shot_state = dict(bridge_one_shot_state) if isinstance(bridge_one_shot_state, Mapping) else {}
+    base_dir_text = _normalize_text(
+        one_shot_state.get("project_browser_autonomous_chrome_runner_bridge_base_dir"),
+        default=default_base_dir,
+    )
+    base_dir_path = Path(base_dir_text or default_base_dir)
+    response_path = Path(
+        _normalize_text(
+            one_shot_state.get("project_browser_autonomous_chrome_runner_bridge_response_path"),
+            default=str(base_dir_path / "response.md"),
+        )
+    )
+    status_path = Path(
+        _normalize_text(
+            one_shot_state.get("project_browser_autonomous_chrome_runner_bridge_status_path"),
+            default=str(base_dir_path / "status.json"),
+        )
+    )
+    status_read_limit_bytes = 8192
+    response_read_limit_bytes = 32768
+    summary_max_chars = 240
+    prompt_max_chars = 6000
+
+    def _normalize_preview_text(text: str, *, max_chars: int = 500) -> str:
+        if not text:
+            return ""
+        normalized = " ".join(text.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _looks_transient(text: str) -> bool:
+        normalized_text = _normalize_text(text, default="")
+        if not normalized_text:
+            return True
+        lower = normalized_text.lower()
+        exact_transients = {
+            "thinking",
+            "thinking...",
+            "generating",
+            "generating...",
+            "思考中",
+            "考え中",
+            "応答を生成しています",
+            "応答を生成しています...",
+            "...",
+        }
+        if lower in exact_transients or normalized_text in exact_transients:
+            return True
+        if len(normalized_text) <= 40:
+            tokens = ("thinking", "generating", "思考中", "考え中", "生成しています", "応答を生成")
+            if any(token in lower or token in normalized_text for token in tokens):
+                return True
+        return False
+
+    def _map_runtime_to_task_status(status: str, reason: str) -> str:
+        normalized_status = _normalize_text(status, default="").lower()
+        normalized_reason = _normalize_text(reason, default="").lower()
+        if normalized_status in {"response_saved", "result_saved"} or normalized_reason in {
+            "result_saved",
+            "response_saved",
+        }:
+            return "response_saved"
+        if normalized_status == "blocked":
+            return "blocked"
+        if normalized_status in {"running", "sent", "in_progress"}:
+            return "in_progress"
+        if normalized_status == "consumed":
+            return "consumed"
+        return "ready"
+
+    def _classify_assimilation(payload_text: str) -> tuple[str, str, str, str]:
+        normalized_text = _normalize_text(payload_text, default="")
+        lower = normalized_text.lower()
+
+        def _contains_any(tokens: tuple[str, ...]) -> bool:
+            return any(token in lower for token in tokens)
+
+        has_blocker_signal = _contains_any(
+            (
+                "manual review",
+                "blocked",
+                "unclear",
+                "insufficient",
+                "cannot determine",
+                "cannot proceed",
+                "captcha",
+                "verify",
+            )
+        )
+        has_completion_signal = _contains_any(
+            (
+                "ready to commit",
+                "ready for commit",
+                "ready to open pr",
+                "pr-ready",
+                "pull request ready",
+                "ready for pr",
+                "looks complete",
+                "task complete",
+                "implementation complete",
+            )
+        )
+        has_fix_signal = _contains_any(("fix", "corrective", "repair", "patch", "resolve", "address"))
+        has_failure_signal = _contains_any(("bug", "issue", "error", "failing", "regression", "failed test"))
+        has_review_signal = _contains_any(("review", "diff", "result", "validation", "test results"))
+        has_prompt_contract_signal = (
+            "goal" in lower
+            and "allowed files" in lower
+            and "forbidden files" in lower
+            and "expected artifact" in lower
+        ) or ("files to modify" in lower and "validation" in lower)
+
+        if has_blocker_signal:
+            return (
+                "blocked_or_manual_review",
+                "manual_review_required",
+                "bridge response indicates manual review or blocked state",
+                "response_content_blocked_or_unclear",
+            )
+        if has_completion_signal:
+            return (
+                "completion_decision",
+                "prepare_commit_or_pr_gate",
+                "bridge response indicates completion or PR readiness",
+                "",
+            )
+        if has_fix_signal and has_failure_signal:
+            return (
+                "fix_prompt",
+                "run_codex_fix_prompt",
+                "bridge response provides corrective implementation guidance",
+                "",
+            )
+        if has_review_signal and not has_prompt_contract_signal:
+            return (
+                "review_result",
+                "decide_fix_or_complete",
+                "bridge response appears to be a review/result assessment",
+                "",
+            )
+        if has_prompt_contract_signal or _contains_any(("implementation prompt", "implement", "apply patch")):
+            return (
+                "implementation_prompt",
+                "run_codex_with_assimilated_prompt",
+                "bridge response provides implementation instructions",
+                "",
+            )
+        return (
+            "blocked_or_manual_review",
+            "manual_review_required",
+            "bridge response was saved but could not be conservatively classified",
+            "response_unclassified",
+        )
+
+    state: dict[str, Any] = {
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_status": "not_assimilated",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind": (
+            "blocked_or_manual_review"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action": (
+            "manual_review_required"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_summary": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_prompt": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason": (
+            "status_not_response_saved"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_task_status": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_runtime_status": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_runtime_reason": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_response_status": "",
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status": (
+            "not_attempted"
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_error": "",
+    }
+
+    status_payload: dict[str, Any] = {}
+    if not status_path.exists():
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "status_json_missing"
+        )
+        return state
+    if not status_path.is_file():
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "status_json_not_file"
+        )
+        return state
+    try:
+        with status_path.open("rb") as file_obj:
+            raw_status = file_obj.read(status_read_limit_bytes)
+    except OSError as exc:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            f"status_json_read_error:{exc.__class__.__name__}"
+        )
+        return state
+
+    try:
+        parsed_status = json.loads(raw_status.decode("utf-8", errors="replace"))
+    except Exception as exc:  # pragma: no cover - defensive parse boundary
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            f"status_json_parse_error:{exc.__class__.__name__}"
+        )
+        return state
+    if not isinstance(parsed_status, Mapping):
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "status_json_not_mapping"
+        )
+        return state
+    status_payload = dict(parsed_status)
+    runtime_status = _normalize_text(status_payload.get("status"), default="").lower()
+    runtime_reason = _normalize_text(status_payload.get("reason"), default="").lower()
+    task_status = _normalize_text(status_payload.get("task_status"), default="").lower()
+    if not task_status:
+        task_status = _map_runtime_to_task_status(runtime_status, runtime_reason)
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_task_status"] = (
+        task_status
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_runtime_status"] = (
+        runtime_status
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_runtime_reason"] = (
+        runtime_reason
+    )
+
+    if task_status != "response_saved":
+        if task_status == "in_progress":
+            blocked_reason = "task_in_progress"
+        elif task_status == "blocked":
+            blocked_reason = "task_blocked"
+        elif task_status == "consumed":
+            blocked_reason = "task_already_consumed"
+        elif task_status == "ready":
+            blocked_reason = "task_not_completed"
+        else:
+            blocked_reason = "status_not_response_saved"
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            blocked_reason
+        )
+        return state
+
+    response_status = _normalize_text(
+        one_shot_state.get("project_browser_autonomous_chrome_runner_bridge_response_status"),
+        default="",
+    )
+    if not response_status:
+        response_status = "chrome_runner_bridge_response_missing"
+        if response_path.exists():
+            if not response_path.is_file():
+                response_status = "chrome_runner_bridge_response_not_file"
+            else:
+                try:
+                    with response_path.open("rb") as file_obj:
+                        raw_probe = file_obj.read(1024)
+                except OSError:
+                    response_status = "chrome_runner_bridge_response_read_error"
+                else:
+                    probe_text = raw_probe.decode("utf-8", errors="replace").strip()
+                    if not probe_text:
+                        response_status = "chrome_runner_bridge_response_empty"
+                    elif _looks_transient(probe_text):
+                        response_status = "chrome_runner_bridge_response_transient"
+                    else:
+                        response_status = "chrome_runner_bridge_response_ready"
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_source_response_status"] = (
+        response_status
+    )
+    if response_status != "chrome_runner_bridge_response_ready":
+        response_status_to_reason = {
+            "chrome_runner_bridge_response_missing": "response_missing",
+            "chrome_runner_bridge_response_not_file": "response_not_file",
+            "chrome_runner_bridge_response_empty": "response_empty",
+            "chrome_runner_bridge_response_transient": "response_transient",
+            "chrome_runner_bridge_response_read_error": "response_read_error",
+        }
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            response_status_to_reason.get(response_status, "response_not_ready")
+        )
+        return state
+
+    try:
+        with response_path.open("rb") as file_obj:
+            raw_response = file_obj.read(response_read_limit_bytes)
+    except OSError as exc:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            f"response_read_error:{exc.__class__.__name__}"
+        )
+        return state
+    response_text = raw_response.decode("utf-8", errors="replace").strip()
+    if not response_text:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "response_empty"
+        )
+        return state
+    if _looks_transient(response_text):
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+            "response_transient"
+        )
+        return state
+
+    kind, next_action, summary, blocked_reason = _classify_assimilation(response_text)
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind"] = kind
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action"] = (
+        next_action
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_summary"] = (
+        _normalize_preview_text(summary or response_text, max_chars=summary_max_chars)
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_prompt"] = (
+        _normalize_preview_text(response_text, max_chars=prompt_max_chars)
+    )
+    state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_blocked_reason"] = (
+        blocked_reason
+    )
+
+    assimilated_kinds = {
+        "implementation_prompt",
+        "review_result",
+        "fix_prompt",
+        "completion_decision",
+    }
+    if kind in assimilated_kinds:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"] = (
+            "assimilated"
+        )
+        consume_payload: dict[str, Any] = {}
+        for key in ("task_id", "request_fingerprint", "created_at"):
+            value = _normalize_text(status_payload.get(key), default="")
+            if value:
+                consume_payload[key] = value
+        consume_body = json.dumps(consume_payload).encode("utf-8")
+        request = urllib_request.Request(
+            "http://127.0.0.1:8765/consume-result",
+            data=consume_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib_request.urlopen(request, timeout=2.0) as response_obj:  # noqa: S310
+                response_bytes = response_obj.read(8192)
+        except urllib_error.URLError as exc:
+            state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status"] = (
+                "consume_post_failed"
+            )
+            state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_error"] = (
+                f"{exc.__class__.__name__}:{exc}"
+            )
+        except OSError as exc:
+            state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status"] = (
+                "consume_post_failed"
+            )
+            state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_error"] = (
+                f"{exc.__class__.__name__}:{exc}"
+            )
+        else:
+            parsed_response: dict[str, Any] = {}
+            try:
+                decoded = json.loads(response_bytes.decode("utf-8", errors="replace"))
+            except Exception:
+                decoded = {}
+            if isinstance(decoded, Mapping):
+                parsed_response = dict(decoded)
+            consume_ok = bool(parsed_response.get("ok", False))
+            if consume_ok:
+                state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status"] = (
+                    "consume_succeeded"
+                )
+            else:
+                state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_status"] = (
+                    "consume_post_failed"
+                )
+                state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_consume_error"] = (
+                    "consume_response_not_ok"
+                )
+    else:
+        state["project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"] = (
+            "blocked"
+        )
+    return state
+
+
+def _build_project_browser_autonomous_chrome_runner_bridge_bounded_loop_state(
+    *,
+    response_assimilation_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    assimilation_state = (
+        dict(response_assimilation_state) if isinstance(response_assimilation_state, Mapping) else {}
+    )
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(
+        key: str,
+        *,
+        default: bool = False,
+    ) -> bool:
+        if key in prior_payload:
+            value = prior_payload.get(key)
+        else:
+            value = approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_int(key: str, *, default: int) -> int:
+        if key in prior_payload:
+            value = prior_payload.get(key)
+        else:
+            value = approved_restart.get(key)
+        return _as_non_negative_int(value, default=default)
+
+    loop_enabled = _read_flag(
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_enabled",
+        default=False,
+    )
+    loop_execute_enabled = _read_flag(
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_execute_enabled",
+        default=False,
+    )
+    loop_max_iterations = _read_int(
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_max_iterations",
+        default=1,
+    )
+    if loop_max_iterations <= 0:
+        loop_max_iterations = 1
+    loop_iteration = _read_int(
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_iteration",
+        default=_read_int(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_current_iteration",
+            default=0,
+        ),
+    )
+    max_consecutive_failures = 1
+    failure_count = _as_non_negative_int(
+        prior_payload.get(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_failure_count",
+            0,
+        ),
+        default=0,
+    )
+
+    assimilation_status = _normalize_text(
+        assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"
+        ),
+        default="not_assimilated",
+    )
+    assimilation_next_action = _normalize_text(
+        assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action"
+        ),
+        default="manual_review_required",
+    )
+    assimilation_prompt = _normalize_text(
+        assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_prompt"
+        ),
+        default="",
+    )
+    assimilation_summary = _normalize_text(
+        assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_summary"
+        ),
+        default="",
+    )
+    allowed_assimilation_next_actions = {
+        "run_codex_with_assimilated_prompt",
+        "run_codex_fix_prompt",
+        "decide_fix_or_complete",
+        "prepare_commit_or_pr_gate",
+        "manual_review_required",
+    }
+    route_for_codex = assimilation_next_action in {
+        "run_codex_with_assimilated_prompt",
+        "run_codex_fix_prompt",
+    }
+    selected_prompt = assimilation_prompt if route_for_codex else ""
+    selected_prompt_fingerprint = (
+        hashlib.sha256(selected_prompt.encode("utf-8")).hexdigest() if selected_prompt else ""
+    )
+    prior_selected_prompt_fingerprint = _normalize_text(
+        prior_payload.get(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt_fingerprint"
+        ),
+        default="",
+    )
+    duplicate_prompt_detected = bool(
+        selected_prompt_fingerprint
+        and prior_selected_prompt_fingerprint
+        and selected_prompt_fingerprint == prior_selected_prompt_fingerprint
+    )
+
+    blocked_unsafe_tokens = (
+        "playwright",
+        "chatgpt api",
+        "openai api",
+        "captcha bypass",
+        "verify bypass",
+        "store cookie",
+        "store cookies",
+        "store token",
+        "store tokens",
+        "store session",
+        "store sessions",
+        "daemon",
+        "scheduler",
+        "background queue",
+        "queue drain",
+        "unbounded loop",
+        "infinite loop",
+        "new shell execution",
+        "new codex execution",
+        "auto commit",
+        "automatic commit",
+        "auto tag",
+        "automatic tag",
+        "auto pr",
+        "automatic pr",
+        "auto merge",
+        "automatic merge",
+        "rm -rf /",
+        "delete /",
+        "outside repo",
+    )
+    lower_prompt = selected_prompt.lower()
+    unsafe_prompt_detected = bool(
+        selected_prompt and any(token in lower_prompt for token in blocked_unsafe_tokens)
+    )
+
+    loop_status = "loop_not_requested"
+    loop_next_action = "enable_bounded_loop"
+    loop_stop_reason = "loop_disabled"
+    decision_summary = "bounded loop disabled by default"
+    loop_routed = False
+
+    if loop_enabled:
+        loop_status = "loop_decision_only"
+        loop_next_action = assimilation_next_action
+        loop_stop_reason = "decision_only_execution_disabled"
+        decision_summary = f"selected assimilation next action: {assimilation_next_action or 'none'}"
+
+        if failure_count >= max_consecutive_failures:
+            loop_status = "loop_iteration_limit_reached"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "max_consecutive_failures_reached"
+            decision_summary = "bounded loop stopped after consecutive failure limit"
+        elif loop_iteration >= loop_max_iterations:
+            loop_status = "loop_iteration_limit_reached"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "max_iterations_reached"
+            decision_summary = "bounded loop stopped at max iteration limit"
+        elif assimilation_status != "assimilated":
+            loop_status = "loop_blocked_missing_assimilation"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = f"assimilation_status:{assimilation_status or 'unknown'}"
+            decision_summary = "bounded loop blocked because no assimilated bridge response was available"
+        elif assimilation_next_action not in allowed_assimilation_next_actions:
+            loop_status = "loop_blocked_invalid_next_action"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "invalid_assimilation_next_action"
+            decision_summary = "bounded loop blocked due to unsupported assimilation next action"
+        elif assimilation_next_action == "manual_review_required":
+            loop_status = "loop_blocked_manual_review"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "manual_review_required"
+            decision_summary = "bounded loop stopped because manual review is required"
+        elif route_for_codex and not selected_prompt:
+            loop_status = "loop_blocked_missing_assimilation"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "selected_prompt_missing"
+            decision_summary = "bounded loop blocked because routed prompt text was unavailable"
+        elif route_for_codex and unsafe_prompt_detected:
+            loop_status = "loop_blocked_unsafe_prompt"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "unsafe_prompt_detected"
+            decision_summary = "bounded loop blocked by unsafe assimilated prompt content"
+        elif route_for_codex and duplicate_prompt_detected:
+            loop_status = "loop_blocked_duplicate_prompt"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "duplicate_prompt_fingerprint"
+            decision_summary = "bounded loop blocked because the assimilated prompt fingerprint is duplicated"
+        elif not loop_execute_enabled:
+            loop_status = "loop_decision_only"
+            loop_next_action = assimilation_next_action
+            loop_stop_reason = "execution_not_enabled"
+            decision_summary = "bounded loop decision exposed without execution routing"
+        elif assimilation_next_action == "run_codex_with_assimilated_prompt":
+            route_path = Path("/tmp/codex-local-runner-decision/generated_next_prompt.txt")
+            if route_path.is_symlink() or not route_path.parent.exists():
+                loop_status = "loop_blocked_no_existing_runner_route"
+                loop_next_action = "manual_review_required"
+                loop_stop_reason = "existing_next_prompt_route_unavailable"
+                decision_summary = "bounded loop could not route to existing next-prompt surface"
+            else:
+                try:
+                    tmp_path = route_path.with_name(f"{route_path.name}.tmp")
+                    tmp_path.write_text(selected_prompt, encoding="utf-8")
+                    os.replace(tmp_path, route_path)
+                except OSError:
+                    loop_status = "loop_blocked_no_existing_runner_route"
+                    loop_next_action = "manual_review_required"
+                    loop_stop_reason = "existing_next_prompt_route_write_failed"
+                    decision_summary = "bounded loop failed to write existing next-prompt surface"
+                else:
+                    loop_status = "loop_ready_or_routed_to_codex"
+                    loop_next_action = "run_existing_codex_implementation_step"
+                    loop_stop_reason = "routed_to_existing_next_prompt_surface"
+                    decision_summary = "bounded loop routed assimilated prompt to existing implementation surface"
+                    loop_routed = True
+                    loop_iteration = min(loop_max_iterations, loop_iteration + 1)
+        elif assimilation_next_action == "run_codex_fix_prompt":
+            route_path = Path("/tmp/codex-local-runner-decision/generated_fix_prompt.txt")
+            if route_path.is_symlink() or not route_path.parent.exists():
+                loop_status = "loop_blocked_no_existing_runner_route"
+                loop_next_action = "manual_review_required"
+                loop_stop_reason = "existing_fix_prompt_route_unavailable"
+                decision_summary = "bounded loop could not route to existing fix-prompt surface"
+            else:
+                try:
+                    tmp_path = route_path.with_name(f"{route_path.name}.tmp")
+                    tmp_path.write_text(selected_prompt, encoding="utf-8")
+                    os.replace(tmp_path, route_path)
+                except OSError:
+                    loop_status = "loop_blocked_no_existing_runner_route"
+                    loop_next_action = "manual_review_required"
+                    loop_stop_reason = "existing_fix_prompt_route_write_failed"
+                    decision_summary = "bounded loop failed to write existing fix-prompt surface"
+                else:
+                    loop_status = "loop_ready_or_routed_to_codex_fix"
+                    loop_next_action = "run_existing_codex_fix_step"
+                    loop_stop_reason = "routed_to_existing_fix_prompt_surface"
+                    decision_summary = "bounded loop routed assimilated prompt to existing fix surface"
+                    loop_routed = True
+                    loop_iteration = min(loop_max_iterations, loop_iteration + 1)
+        elif assimilation_next_action == "decide_fix_or_complete":
+            loop_status = "loop_ready_to_decide_fix_or_complete"
+            loop_next_action = "decide_fix_or_complete"
+            loop_stop_reason = "review_decision_ready"
+            decision_summary = "bounded loop prepared review decision handoff"
+        elif assimilation_next_action == "prepare_commit_or_pr_gate":
+            loop_status = "loop_ready_for_commit_or_pr_gate"
+            loop_next_action = "prepare_commit_or_pr_gate"
+            loop_stop_reason = "commit_or_pr_gate_ready"
+            decision_summary = "bounded loop prepared commit/PR gate readiness"
+        else:
+            loop_status = "loop_blocked_invalid_next_action"
+            loop_next_action = "manual_review_required"
+            loop_stop_reason = "invalid_assimilation_next_action"
+            decision_summary = "bounded loop blocked due to unsupported assimilation next action"
+
+    return {
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_status": loop_status,
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action": loop_next_action,
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_enabled": bool(loop_enabled),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_execute_enabled": bool(
+            loop_execute_enabled
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_iteration": _as_non_negative_int(
+            loop_iteration,
+            default=0,
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_current_iteration": _as_non_negative_int(
+            loop_iteration,
+            default=0,
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_max_iterations": _as_non_negative_int(
+            loop_max_iterations,
+            default=1,
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_stop_reason": (
+            _normalize_text(loop_stop_reason, default="")
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt": (
+            _normalize_text(selected_prompt, default="")
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt_fingerprint": (
+            _normalize_text(selected_prompt_fingerprint, default="")
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_decision_summary": (
+            _normalize_text(decision_summary or assimilation_summary, default="")
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_routed": bool(loop_routed),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_failure_count": _as_non_negative_int(
+            failure_count + (1 if str(loop_status).startswith("loop_blocked_") else 0),
+            default=0,
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_max_consecutive_failures": (
+            max_consecutive_failures
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_runtime_posture": [
+            "bounded_loop_single_step",
+            "default_off",
+            "no_unbounded_loop",
+            "no_new_executor_path",
+            "no_commit_pr_merge_automation",
+        ],
+    }
+
+
+def _build_project_browser_autonomous_codex_execution_gate_state(
+    *,
+    bounded_loop_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    bounded_loop = dict(bounded_loop_state) if isinstance(bounded_loop_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(
+        key: str,
+        *,
+        default: bool = False,
+    ) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_prompt_snapshot(path_text: str) -> dict[str, Any]:
+        path_obj = Path(path_text)
+        snapshot = {
+            "path": path_text,
+            "exists": False,
+            "is_file": False,
+            "size_bytes": 0,
+            "read_error": "",
+            "preview": "",
+            "fingerprint": "",
+            "text": "",
+            "non_empty": False,
+        }
+        if not path_obj.exists():
+            return snapshot
+        snapshot["exists"] = True
+        if not path_obj.is_file():
+            return snapshot
+        snapshot["is_file"] = True
+        try:
+            file_size = _as_non_negative_int(path_obj.stat().st_size, default=0)
+            with path_obj.open("rb") as file_obj:
+                raw = file_obj.read(32768)
+        except OSError as exc:
+            snapshot["read_error"] = f"{exc.__class__.__name__}:{exc}"
+            return snapshot
+        text = raw.decode("utf-8", errors="replace").strip()
+        snapshot["size_bytes"] = file_size
+        snapshot["text"] = text
+        snapshot["non_empty"] = bool(text)
+        snapshot["preview"] = (" ".join(text.split()))[:500] if text else ""
+        snapshot["fingerprint"] = (
+            hashlib.sha256(text.encode("utf-8")).hexdigest() if text else ""
+        )
+        return snapshot
+
+    gate_enabled = _read_flag(
+        "project_browser_autonomous_codex_execution_gate_enabled",
+        default=False,
+    )
+    gate_execute_enabled = _read_flag(
+        "project_browser_autonomous_codex_execution_gate_execute_enabled",
+        default=False,
+    )
+    bounded_loop_status = _normalize_text(
+        bounded_loop.get("project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"),
+        default="",
+    )
+    bounded_loop_next_action = _normalize_text(
+        bounded_loop.get("project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action"),
+        default="",
+    )
+    next_prompt_path = "/tmp/codex-local-runner-decision/generated_next_prompt.txt"
+    fix_prompt_path = "/tmp/codex-local-runner-decision/generated_fix_prompt.txt"
+    next_prompt_snapshot = _read_prompt_snapshot(next_prompt_path)
+    fix_prompt_snapshot = _read_prompt_snapshot(fix_prompt_path)
+
+    prompt_kind = "none"
+    prompt_path = ""
+    selected_snapshot = {
+        "size_bytes": 0,
+        "preview": "",
+        "fingerprint": "",
+        "text": "",
+        "exists": False,
+        "is_file": False,
+        "non_empty": False,
+        "read_error": "",
+    }
+    if bounded_loop_status == "loop_ready_or_routed_to_codex":
+        prompt_kind = "implementation"
+        prompt_path = next_prompt_path
+        selected_snapshot = dict(next_prompt_snapshot)
+    elif bounded_loop_status == "loop_ready_or_routed_to_codex_fix":
+        prompt_kind = "fix"
+        prompt_path = fix_prompt_path
+        selected_snapshot = dict(fix_prompt_snapshot)
+
+    prompt_fingerprint = _normalize_text(selected_snapshot.get("fingerprint"), default="")
+    prompt_preview = _normalize_text(selected_snapshot.get("preview"), default="")
+    prompt_text = _normalize_text(selected_snapshot.get("text"), default="")
+    prompt_size_bytes = _as_non_negative_int(selected_snapshot.get("size_bytes"), default=0)
+
+    prior_fingerprints = {
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+            default="",
+        ),
+        _normalize_text(
+            prior_payload.get(
+                "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt_fingerprint"
+            ),
+            default="",
+        ),
+    }
+    prior_fingerprints.discard("")
+    duplicate_prompt = bool(prompt_fingerprint and prompt_fingerprint in prior_fingerprints)
+
+    unsafe_tokens = (
+        "playwright",
+        "chatgpt api",
+        "openai api",
+        "captcha bypass",
+        "verify bypass",
+        "store cookie",
+        "store cookies",
+        "store token",
+        "store tokens",
+        "store session",
+        "store sessions",
+        "unbounded loop",
+        "infinite loop",
+        "daemon",
+        "scheduler",
+        "background queue",
+        "queue drain",
+        "new shell execution",
+        "new codex execution",
+        "auto commit",
+        "automatic commit",
+        "auto tag",
+        "automatic tag",
+        "auto pr",
+        "automatic pr",
+        "auto merge",
+        "automatic merge",
+        "rm -rf /",
+        "delete /",
+        "outside repo",
+    )
+    lower_prompt = prompt_text.lower()
+    unsafe_prompt = bool(prompt_text and any(token in lower_prompt for token in unsafe_tokens))
+
+    bounded_loop_threshold_ready = bounded_loop_status in {
+        "loop_ready_or_routed_to_codex",
+        "loop_ready_or_routed_to_codex_fix",
+    }
+    prompt_exists = bool(selected_snapshot.get("exists", False))
+    prompt_is_file = bool(selected_snapshot.get("is_file", False))
+    prompt_non_empty = bool(selected_snapshot.get("non_empty", False))
+    prompt_read_error = _normalize_text(selected_snapshot.get("read_error"), default="")
+    existing_safe_route = (
+        (prompt_kind == "implementation" and bounded_loop_next_action == "run_existing_codex_implementation_step")
+        or (prompt_kind == "fix" and bounded_loop_next_action == "run_existing_codex_fix_step")
+    )
+    threshold_passed = bool(
+        bounded_loop_threshold_ready
+        and prompt_exists
+        and prompt_is_file
+        and prompt_non_empty
+        and not prompt_read_error
+        and not unsafe_prompt
+        and not duplicate_prompt
+    )
+
+    status = "codex_execution_gate_not_requested"
+    next_action = "enable_codex_execution_gate"
+    blocked_reason = "gate_disabled"
+    approved_for_execution = False
+
+    if gate_enabled:
+        status = "codex_execution_gate_decision_only"
+        next_action = "manual_review_required"
+        blocked_reason = "decision_only_execution_disabled"
+        if not bounded_loop_threshold_ready:
+            status = "codex_execution_gate_blocked_threshold"
+            next_action = "manual_review_required"
+            blocked_reason = "bounded_loop_not_ready_for_codex_gate"
+        elif not prompt_exists or not prompt_is_file or not prompt_non_empty or prompt_read_error:
+            status = "codex_execution_gate_blocked_missing_routed_prompt"
+            next_action = "manual_review_required"
+            if prompt_read_error:
+                blocked_reason = "routed_prompt_read_error"
+            elif not prompt_exists:
+                blocked_reason = "routed_prompt_missing"
+            elif not prompt_is_file:
+                blocked_reason = "routed_prompt_not_file"
+            else:
+                blocked_reason = "routed_prompt_empty"
+        elif duplicate_prompt:
+            status = "codex_execution_gate_blocked_duplicate_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "duplicate_prompt_fingerprint"
+        elif unsafe_prompt:
+            status = "codex_execution_gate_blocked_unsafe_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "unsafe_prompt_detected"
+        elif not threshold_passed:
+            status = "codex_execution_gate_blocked_threshold"
+            next_action = "manual_review_required"
+            blocked_reason = "threshold_not_passed"
+        elif not existing_safe_route:
+            status = "codex_execution_gate_blocked_no_existing_codex_route"
+            next_action = "manual_review_required"
+            blocked_reason = "existing_safe_codex_route_not_detected"
+        elif not gate_execute_enabled:
+            status = "codex_execution_gate_decision_only"
+            next_action = (
+                "run_existing_codex_implementation_step"
+                if prompt_kind == "implementation"
+                else "run_existing_codex_fix_step"
+            )
+            blocked_reason = "execution_not_enabled"
+        else:
+            status = "codex_execution_gate_ready"
+            next_action = (
+                "run_existing_codex_implementation_step"
+                if prompt_kind == "implementation"
+                else "run_existing_codex_fix_step"
+            )
+            blocked_reason = "none"
+            approved_for_execution = True
+
+    return {
+        "project_browser_autonomous_codex_execution_gate_status": status,
+        "project_browser_autonomous_codex_execution_gate_next_action": next_action,
+        "project_browser_autonomous_codex_execution_gate_enabled": bool(gate_enabled),
+        "project_browser_autonomous_codex_execution_gate_execute_enabled": bool(
+            gate_execute_enabled
+        ),
+        "project_browser_autonomous_codex_execution_gate_prompt_kind": prompt_kind,
+        "project_browser_autonomous_codex_execution_gate_prompt_path": prompt_path,
+        "project_browser_autonomous_codex_execution_gate_prompt_size_bytes": prompt_size_bytes,
+        "project_browser_autonomous_codex_execution_gate_prompt_fingerprint": prompt_fingerprint,
+        "project_browser_autonomous_codex_execution_gate_prompt_preview": prompt_preview,
+        "project_browser_autonomous_codex_execution_gate_threshold_passed": bool(threshold_passed),
+        "project_browser_autonomous_codex_execution_gate_approved_for_execution": bool(
+            approved_for_execution
+        ),
+        "project_browser_autonomous_codex_execution_gate_blocked_reason": blocked_reason,
+    }
+
+
+def _build_project_browser_autonomous_codex_capture_gate_state(
+    *,
+    codex_execution_gate_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    codex_gate = dict(codex_execution_gate_state) if isinstance(codex_execution_gate_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_text_bounded(path_text: str, *, read_limit_bytes: int = 32768) -> str:
+        path_obj = Path(path_text)
+        if not path_obj.exists() or not path_obj.is_file():
+            return ""
+        try:
+            with path_obj.open("rb") as file_obj:
+                raw = file_obj.read(read_limit_bytes)
+        except OSError:
+            return ""
+        return raw.decode("utf-8", errors="replace")
+
+    def _parse_capture_stdout(stdout_text: str) -> tuple[str, str]:
+        report = ""
+        patch = ""
+        for raw_line in stdout_text.splitlines():
+            line = _normalize_text(raw_line, default="")
+            if line.startswith("REPORT="):
+                report = line.partition("=")[2].strip()
+            elif line.startswith("PATCH="):
+                patch = line.partition("=")[2].strip()
+        return report, patch
+
+    def _extract_changed_files(report_text: str) -> list[str]:
+        changed: list[str] = []
+        if not report_text:
+            return changed
+        capture = False
+        for raw_line in report_text.splitlines():
+            line = raw_line.rstrip("\n")
+            normalized = line.strip()
+            if normalized.startswith("## Diff name-status - unstaged tracked") or normalized.startswith(
+                "## Diff name-status - staged"
+            ):
+                capture = True
+                continue
+            if capture and normalized.startswith("## "):
+                capture = False
+            if not capture or not normalized:
+                continue
+            parts = normalized.split(None, 1)
+            if len(parts) != 2:
+                continue
+            status_code = parts[0]
+            file_path = parts[1].strip()
+            if status_code and status_code[0] in {"A", "C", "D", "M", "R", "T", "U"} and file_path:
+                changed.append(file_path)
+        return _normalize_string_list(changed, sort_items=True)
+
+    capture_enabled = _read_flag(
+        "project_browser_autonomous_codex_capture_gate_enabled",
+        default=False,
+    )
+    capture_execute_enabled = _read_flag(
+        "project_browser_autonomous_codex_capture_gate_execute_enabled",
+        default=False,
+    )
+    gate_status = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_status"),
+        default="",
+    )
+    gate_approved = bool(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_approved_for_execution", False)
+    )
+    prompt_kind = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_kind"),
+        default="none",
+    )
+    prompt_path = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_path"),
+        default="",
+    )
+    prompt_fingerprint = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+        default="",
+    )
+    codex_route_next_action = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_next_action"),
+        default="",
+    )
+    has_existing_codex_execution_route = codex_route_next_action in {
+        "run_existing_codex_implementation_step",
+        "run_existing_codex_fix_step",
+    }
+
+    script_path = "scripts/capture_prompt_diff.sh"
+    script_path_obj = Path(script_path)
+    script_exists = script_path_obj.exists() and script_path_obj.is_file() and not script_path_obj.is_symlink()
+    known_output_dir = Path("/tmp/codex-local-runner-diff-logs")
+
+    status = "codex_capture_gate_not_requested"
+    next_action = "enable_codex_capture_gate"
+    blocked_reason = "capture_gate_disabled"
+    changed_files: list[str] = []
+    diff_summary = ""
+    validation_summary = ""
+    codex_output_summary = ""
+    capture_output_path = ""
+    capture_artifact_paths: list[str] = []
+    capture_failure_count = 0
+
+    if capture_enabled:
+        if gate_status != "codex_execution_gate_ready" or not gate_approved:
+            status = "codex_capture_gate_blocked_missing_execution_gate"
+            next_action = "manual_review_required"
+            blocked_reason = "codex_execution_gate_not_ready_or_not_approved"
+        elif not has_existing_codex_execution_route:
+            status = "codex_capture_gate_blocked_no_existing_codex_execution_route"
+            next_action = "manual_review_required"
+            blocked_reason = "no_existing_codex_execution_route"
+        elif not script_exists:
+            status = "codex_capture_gate_blocked_missing_capture_script"
+            next_action = "manual_review_required"
+            blocked_reason = "capture_script_missing_or_unsafe_path"
+        elif not capture_execute_enabled:
+            status = "codex_capture_gate_decision_only"
+            next_action = "enable_codex_capture_execute"
+            blocked_reason = "execution_not_enabled"
+        else:
+            status = "codex_capture_gate_ready"
+            next_action = "capture_with_existing_script"
+            blocked_reason = "none"
+
+            repo_path_text = _normalize_text(execution_repo_path, default="")
+            repo_path_obj = Path(repo_path_text) if repo_path_text else Path.cwd()
+            if not repo_path_obj.exists() or not repo_path_obj.is_dir():
+                status = "codex_capture_gate_blocked_execution_or_capture_failed"
+                next_action = "manual_review_required"
+                blocked_reason = "execution_repo_path_unavailable"
+            else:
+                try:
+                    capture_run = subprocess.run(
+                        [script_path],
+                        cwd=str(repo_path_obj),
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        check=False,
+                    )
+                except (OSError, subprocess.SubprocessError):
+                    status = "codex_capture_gate_blocked_execution_or_capture_failed"
+                    next_action = "manual_review_required"
+                    blocked_reason = "capture_script_execution_failed"
+                else:
+                    if int(capture_run.returncode) != 0:
+                        status = "codex_capture_gate_blocked_execution_or_capture_failed"
+                        next_action = "manual_review_required"
+                        blocked_reason = "capture_script_nonzero_exit"
+                    report_path_text, patch_path_text = _parse_capture_stdout(
+                        _normalize_text(capture_run.stdout, default="")
+                    )
+                    candidate_artifacts: list[str] = []
+                    for path_text in (report_path_text, patch_path_text):
+                        if path_text:
+                            candidate_artifacts.append(path_text)
+                    if not candidate_artifacts and known_output_dir.exists() and known_output_dir.is_dir():
+                        report_candidates = sorted(
+                            known_output_dir.glob("*_diff_report.txt"),
+                            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+                            reverse=True,
+                        )
+                        patch_candidates = sorted(
+                            known_output_dir.glob("*_full.patch"),
+                            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+                            reverse=True,
+                        )
+                        if report_candidates:
+                            candidate_artifacts.append(str(report_candidates[0]))
+                        if patch_candidates:
+                            candidate_artifacts.append(str(patch_candidates[0]))
+                    capture_artifact_paths = _normalize_string_list(candidate_artifacts, sort_items=False)
+                    report_text = ""
+                    patch_text = ""
+                    if capture_artifact_paths:
+                        for artifact_path in capture_artifact_paths:
+                            if artifact_path.endswith("_diff_report.txt"):
+                                report_text = _read_text_bounded(artifact_path, read_limit_bytes=32768)
+                                if report_text and not capture_output_path:
+                                    capture_output_path = artifact_path
+                            elif artifact_path.endswith("_full.patch"):
+                                patch_text = _read_text_bounded(artifact_path, read_limit_bytes=32768)
+                    changed_files = _extract_changed_files(report_text)
+                    if report_text:
+                        diff_summary = (
+                            f"capture report available; changed_files={len(changed_files)}; "
+                            f"report_chars={len(report_text)}"
+                        )
+                    elif patch_text:
+                        diff_summary = (
+                            f"capture patch available; changed_files={len(changed_files)}; "
+                            f"patch_chars={len(patch_text)}"
+                        )
+                    else:
+                        diff_summary = "capture output unavailable"
+                    if "Diff check" in report_text:
+                        if "error:" in report_text.lower():
+                            validation_summary = "diff_check_has_errors"
+                        else:
+                            validation_summary = "diff_check_present"
+                    else:
+                        validation_summary = "validation_not_available"
+                    codex_output_summary = (
+                        f"prompt_kind={prompt_kind}; prompt_fingerprint={prompt_fingerprint[:16]}; "
+                        f"capture_exit_code={int(capture_run.returncode)}"
+                    )
+                    if (
+                        status == "codex_capture_gate_ready"
+                        and not report_text
+                        and not patch_text
+                    ):
+                        status = "codex_capture_gate_blocked_capture_unavailable"
+                        next_action = "manual_review_required"
+                        blocked_reason = "capture_output_unavailable"
+                    elif status == "codex_capture_gate_ready":
+                        status = "codex_capture_gate_captured"
+                        next_action = "prepare_chatgpt_diff_review_request"
+                        blocked_reason = "none"
+
+    if status.startswith("codex_capture_gate_blocked_"):
+        capture_failure_count = 1
+
+    return {
+        "project_browser_autonomous_codex_capture_gate_status": status,
+        "project_browser_autonomous_codex_capture_gate_next_action": next_action,
+        "project_browser_autonomous_codex_capture_gate_enabled": bool(capture_enabled),
+        "project_browser_autonomous_codex_capture_gate_execute_enabled": bool(
+            capture_execute_enabled
+        ),
+        "project_browser_autonomous_codex_capture_gate_prompt_kind": prompt_kind,
+        "project_browser_autonomous_codex_capture_gate_prompt_path": prompt_path,
+        "project_browser_autonomous_codex_capture_gate_prompt_fingerprint": prompt_fingerprint,
+        "project_browser_autonomous_codex_capture_gate_script_path": script_path,
+        "project_browser_autonomous_codex_capture_gate_changed_files": _normalize_string_list(
+            changed_files
+        ),
+        "project_browser_autonomous_codex_capture_gate_diff_summary": _normalize_text(
+            diff_summary,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_validation_summary": _normalize_text(
+            validation_summary,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_codex_output_summary": _normalize_text(
+            codex_output_summary,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_capture_output_path": _normalize_text(
+            capture_output_path,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_capture_artifact_paths": (
+            _normalize_string_list(capture_artifact_paths)
+        ),
+        "project_browser_autonomous_codex_capture_gate_blocked_reason": _normalize_text(
+            blocked_reason,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_capture_failure_count": _as_non_negative_int(
+            capture_failure_count,
+            default=0,
+        ),
+    }
+
+
+def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
+    *,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    capture_gate = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _compact_text(value: Any, *, max_chars: int = 600) -> str:
+        text = _normalize_text(value, default="")
+        if not text:
+            return ""
+        normalized = " ".join(text.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _render_list(items: list[str], *, max_items: int = 40, max_chars: int = 1600) -> str:
+        if not items:
+            return "(none)"
+        lines: list[str] = []
+        consumed = 0
+        for index, item in enumerate(items[:max_items], start=1):
+            line = f"{index}. {item}"
+            if consumed + len(line) + 1 > max_chars:
+                break
+            lines.append(line)
+            consumed += len(line) + 1
+        if len(items) > len(lines):
+            lines.append(f"... ({len(items) - len(lines)} more)")
+        return "\n".join(lines)
+
+    request_enabled = _read_flag(
+        "project_browser_autonomous_chatgpt_diff_review_request_enabled",
+        default=False,
+    )
+    request_write_enabled = _read_flag(
+        "project_browser_autonomous_chatgpt_diff_review_request_write_enabled",
+        default=False,
+    )
+    capture_status = _normalize_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_status"),
+        default="",
+    )
+    changed_files = _normalize_string_list(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+    diff_summary = _compact_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_diff_summary")
+    )
+    validation_summary = _compact_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_validation_summary")
+    )
+    codex_output_summary = _compact_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_codex_output_summary")
+    )
+    capture_output_path = _normalize_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_capture_output_path"),
+        default="",
+    )
+    capture_artifact_paths = _normalize_string_list(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_capture_artifact_paths")
+    )
+    prompt_kind = _normalize_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_prompt_kind"),
+        default="",
+    )
+    prompt_fingerprint = _normalize_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_prompt_fingerprint"),
+        default="",
+    )
+
+    review_prompt = ""
+    if capture_status == "codex_capture_gate_captured":
+        review_prompt = "\n".join(
+            [
+                "You are reviewing a bounded Codex change intake.",
+                "",
+                "Use only the structured evidence below. Do not assume missing context.",
+                "",
+                "## Capture Evidence",
+                f"- prompt_kind: {prompt_kind or '(unknown)'}",
+                f"- prompt_fingerprint: {prompt_fingerprint or '(missing)'}",
+                f"- capture_output_path: {capture_output_path or '(none)'}",
+                "- changed_files:",
+                _render_list(changed_files, max_items=60, max_chars=1800),
+                "- capture_artifact_paths:",
+                _render_list(capture_artifact_paths, max_items=20, max_chars=1200),
+                f"- diff_summary: {diff_summary or '(none)'}",
+                f"- validation_summary: {validation_summary or '(none)'}",
+                f"- codex_output_summary: {codex_output_summary or '(none)'}",
+                "",
+                "## Decision Policy",
+                "- approve only if scope is correct and validation is acceptable",
+                "- fix if direction is right but corrections are needed",
+                "- revert if unsafe, wrong-scope, or worse than baseline",
+                "- manual_review if unclear or high-risk",
+                "- commit_recommendation must be false for high risk or any blocking issue",
+                "",
+                "## Output Format (JSON object only)",
+                '{',
+                '  "decision": "approve | fix | revert | manual_review",',
+                '  "confidence": 0.0,',
+                '  "risk": "low | medium | high",',
+                '  "blocking_issues": ["..."],',
+                '  "fix_prompt": "...",',
+                '  "revert_reason": "...",',
+                '  "commit_recommendation": false,',
+                '  "summary": "..."',
+                '}',
+            ]
+        ).strip()
+    if len(review_prompt) > 8000:
+        review_prompt = review_prompt[:8000]
+    review_prompt_fingerprint = (
+        hashlib.sha256(review_prompt.encode("utf-8")).hexdigest() if review_prompt else ""
+    )
+
+    prior_prompt_fingerprints = {
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_chatgpt_diff_review_request_prompt_fingerprint"),
+            default="",
+        ),
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_chrome_runner_bridge_request_fingerprint"),
+            default="",
+        ),
+    }
+    prior_prompt_fingerprints.discard("")
+    duplicate_prompt = bool(
+        review_prompt_fingerprint and review_prompt_fingerprint in prior_prompt_fingerprints
+    )
+
+    status = "chatgpt_diff_review_request_not_requested"
+    next_action = "enable_chatgpt_diff_review_request"
+    blocked_reason = "review_request_disabled"
+
+    if request_enabled:
+        status = "chatgpt_diff_review_request_ready"
+        next_action = "write_chatgpt_diff_review_request"
+        blocked_reason = "none"
+        if capture_status != "codex_capture_gate_captured":
+            status = "chatgpt_diff_review_request_blocked_missing_capture"
+            next_action = "manual_review_required"
+            blocked_reason = "capture_gate_not_captured"
+        elif not review_prompt:
+            status = "chatgpt_diff_review_request_blocked_empty_review_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "empty_review_prompt"
+        elif duplicate_prompt:
+            status = "chatgpt_diff_review_request_blocked_duplicate_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "duplicate_review_prompt_fingerprint"
+        elif not request_write_enabled:
+            status = "chatgpt_diff_review_request_decision_only"
+            next_action = "write_chatgpt_diff_review_request"
+            blocked_reason = "write_not_enabled"
+        else:
+            bridge_dir = Path("/tmp/codex-local-runner-chatgpt-bridge")
+            request_path = bridge_dir / "request.md"
+            response_path = bridge_dir / "response.md"
+            status_path = bridge_dir / "status.json"
+            try:
+                bridge_dir.mkdir(parents=True, exist_ok=True)
+                for stale_path in (response_path, status_path):
+                    if not stale_path.exists():
+                        continue
+                    if not stale_path.is_file() and not stale_path.is_symlink():
+                        raise OSError(f"stale_path_not_file:{stale_path}")
+                    stale_path.unlink()
+                temp_path = request_path.with_name(f"{request_path.name}.tmp")
+                temp_path.write_text(review_prompt, encoding="utf-8")
+                os.replace(temp_path, request_path)
+            except OSError as exc:
+                status = "chatgpt_diff_review_request_blocked_write_failed"
+                next_action = "manual_review_required"
+                blocked_reason = f"write_failed:{exc.__class__.__name__}:{exc}"
+            else:
+                status = "chatgpt_diff_review_request_written"
+                next_action = "wait_for_chatgpt_diff_review_response"
+                blocked_reason = "none"
+
+    return {
+        "project_browser_autonomous_chatgpt_diff_review_request_status": status,
+        "project_browser_autonomous_chatgpt_diff_review_request_next_action": next_action,
+        "project_browser_autonomous_chatgpt_diff_review_request_enabled": bool(request_enabled),
+        "project_browser_autonomous_chatgpt_diff_review_request_write_enabled": bool(
+            request_write_enabled
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_prompt": review_prompt,
+        "project_browser_autonomous_chatgpt_diff_review_request_prompt_fingerprint": (
+            review_prompt_fingerprint
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_changed_files": (
+            _normalize_string_list(changed_files)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_blocked_reason": blocked_reason,
+    }
+
+
+def _build_project_browser_autonomous_chatgpt_diff_review_decision_state(
+    *,
+    chatgpt_diff_review_request_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    request_state = (
+        dict(chatgpt_diff_review_request_state)
+        if isinstance(chatgpt_diff_review_request_state, Mapping)
+        else {}
+    )
+    capture_state = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _clip_preview(text: str, *, max_chars: int = 500) -> str:
+        normalized = " ".join(text.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _looks_transient(text: str) -> bool:
+        normalized = _normalize_text(text, default="")
+        if not normalized:
+            return True
+        lower = normalized.lower()
+        exact_transients = {
+            "thinking",
+            "thinking...",
+            "generating",
+            "generating...",
+            "思考中",
+            "考え中",
+            "応答を生成しています",
+            "応答を生成しています...",
+            "...",
+        }
+        if lower in exact_transients or normalized in exact_transients:
+            return True
+        if len(normalized) <= 40:
+            tokens = ("thinking", "generating", "思考中", "考え中", "生成しています", "応答を生成")
+            if any(token in lower or token in normalized for token in tokens):
+                return True
+        return False
+
+    def _map_runtime_to_task_status(status: str, reason: str) -> str:
+        normalized_status = _normalize_text(status, default="").lower()
+        normalized_reason = _normalize_text(reason, default="").lower()
+        if normalized_status in {"response_saved", "result_saved"} or normalized_reason in {
+            "result_saved",
+            "response_saved",
+        }:
+            return "response_saved"
+        if normalized_status == "blocked":
+            return "blocked"
+        if normalized_status in {"running", "sent", "in_progress"}:
+            return "in_progress"
+        if normalized_status == "consumed":
+            return "consumed"
+        return "ready"
+
+    def _attempt_json_object_parse(text: str) -> dict[str, Any] | None:
+        bounded = _normalize_text(text, default="")
+        if not bounded:
+            return None
+        try:
+            parsed = json.loads(bounded)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, Mapping):
+            return dict(parsed)
+        if "```" in bounded:
+            fence_markers = ("```json", "```JSON", "```")
+            for marker in fence_markers:
+                start = bounded.find(marker)
+                if start < 0:
+                    continue
+                payload_start = bounded.find("\n", start)
+                if payload_start < 0:
+                    continue
+                end = bounded.find("```", payload_start + 1)
+                if end < 0:
+                    continue
+                candidate = bounded[payload_start + 1 : end].strip()
+                if not candidate:
+                    continue
+                try:
+                    parsed = json.loads(candidate)
+                except Exception:
+                    continue
+                if isinstance(parsed, Mapping):
+                    return dict(parsed)
+        first_brace = bounded.find("{")
+        if first_brace < 0:
+            return None
+        max_scan = min(len(bounded), 12000)
+        start = first_brace
+        while start >= 0 and start < max_scan:
+            depth = 0
+            in_string = False
+            escaped = False
+            for index in range(start, max_scan):
+                char = bounded[index]
+                if in_string:
+                    if escaped:
+                        escaped = False
+                    elif char == "\\":
+                        escaped = True
+                    elif char == '"':
+                        in_string = False
+                    continue
+                if char == '"':
+                    in_string = True
+                    continue
+                if char == "{":
+                    depth += 1
+                elif char == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = bounded[start : index + 1]
+                        try:
+                            parsed = json.loads(candidate)
+                        except Exception:
+                            break
+                        if isinstance(parsed, Mapping):
+                            return dict(parsed)
+                        break
+            start = bounded.find("{", start + 1, max_scan)
+        return None
+
+    def _extract_scalar_line_value(response_text: str, key: str) -> str:
+        key_patterns = (f'"{key}"', key)
+        for raw_line in response_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            lower_line = line.lower()
+            if not any(pattern.lower() in lower_line for pattern in key_patterns):
+                continue
+            if ":" not in line:
+                continue
+            _, raw_value = line.split(":", 1)
+            value = raw_value.strip().rstrip(",")
+            if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+                return value[1:-1].strip()
+            if value.startswith("'") and value.endswith("'") and len(value) >= 2:
+                return value[1:-1].strip()
+            return value.strip()
+        return ""
+
+    def _parse_blocking_issues_fallback(response_text: str) -> list[str]:
+        extracted: list[str] = []
+        for raw_line in response_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            lower_line = line.lower()
+            if "blocking_issues" in lower_line and "[" in line and "]" in line:
+                start = line.find("[")
+                end = line.rfind("]")
+                if start >= 0 and end > start:
+                    candidate = line[start : end + 1]
+                    try:
+                        parsed = json.loads(candidate)
+                    except Exception:
+                        continue
+                    if isinstance(parsed, list):
+                        extracted = _normalize_string_list(parsed)
+                        break
+            if line.startswith("- ") and extracted:
+                extracted.append(line[2:].strip())
+        return _normalize_string_list(extracted)
+
+    def _parse_review_fields(
+        response_text: str,
+    ) -> tuple[dict[str, Any], bool, str]:
+        bounded = response_text[:12000]
+        parsed_json = _attempt_json_object_parse(bounded)
+        if parsed_json is not None:
+            return (parsed_json, True, "json")
+
+        decision = _normalize_text(_extract_scalar_line_value(bounded, "decision"), default="").lower()
+        confidence_raw = _normalize_text(_extract_scalar_line_value(bounded, "confidence"), default="")
+        risk = _normalize_text(_extract_scalar_line_value(bounded, "risk"), default="").lower()
+        fix_prompt = _normalize_text(_extract_scalar_line_value(bounded, "fix_prompt"), default="")
+        revert_reason = _normalize_text(_extract_scalar_line_value(bounded, "revert_reason"), default="")
+        commit_recommendation_raw = _normalize_text(
+            _extract_scalar_line_value(bounded, "commit_recommendation"),
+            default="",
+        ).lower()
+        summary = _normalize_text(_extract_scalar_line_value(bounded, "summary"), default="")
+        blocking_issues = _parse_blocking_issues_fallback(bounded)
+
+        extracted: dict[str, Any] = {}
+        if decision:
+            extracted["decision"] = decision
+        if confidence_raw:
+            extracted["confidence"] = confidence_raw
+        if risk:
+            extracted["risk"] = risk
+        if blocking_issues:
+            extracted["blocking_issues"] = blocking_issues
+        if fix_prompt:
+            extracted["fix_prompt"] = fix_prompt
+        if revert_reason:
+            extracted["revert_reason"] = revert_reason
+        if commit_recommendation_raw:
+            extracted["commit_recommendation"] = commit_recommendation_raw
+        if summary:
+            extracted["summary"] = summary
+
+        if not extracted:
+            return ({}, False, "parse_failed")
+        return (extracted, False, "fallback_extracted")
+
+    def _normalize_decision(value: Any) -> str:
+        decision = _normalize_text(value, default="").lower()
+        if decision in {"approve", "fix", "revert", "manual_review"}:
+            return decision
+        return "manual_review"
+
+    def _normalize_confidence(value: Any) -> float:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return max(0.0, min(1.0, float(value)))
+        text = _normalize_text(value, default="")
+        if not text:
+            return 0.0
+        try:
+            parsed = float(text)
+        except ValueError:
+            return 0.0
+        return max(0.0, min(1.0, parsed))
+
+    def _normalize_risk(value: Any) -> str:
+        risk = _normalize_text(value, default="").lower()
+        if risk in {"low", "medium", "high"}:
+            return risk
+        return "high"
+
+    def _normalize_blocking_issues(value: Any) -> list[str]:
+        if isinstance(value, list):
+            return _normalize_string_list(value)
+        text = _normalize_text(value, default="")
+        if not text:
+            return []
+        return [text]
+
+    def _normalize_commit_recommendation(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        return text in {"1", "true", "yes", "on"}
+
+    request_status = _normalize_text(
+        request_state.get("project_browser_autonomous_chatgpt_diff_review_request_status"),
+        default="",
+    )
+    request_applicable = request_status in {
+        "chatgpt_diff_review_request_ready",
+        "chatgpt_diff_review_request_written",
+        "chatgpt_diff_review_request_decision_only",
+    }
+
+    changed_files = _normalize_string_list(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+    base_dir_path = Path("/tmp/codex-local-runner-chatgpt-bridge")
+    response_path = base_dir_path / "response.md"
+    status_path = base_dir_path / "status.json"
+    routed_fix_prompt_path = Path("/tmp/codex-local-runner-decision/generated_fix_prompt.txt")
+
+    status = "chatgpt_diff_review_decision_not_applicable"
+    next_action = "wait_for_chatgpt_diff_review_response"
+    decision = "manual_review"
+    confidence = 0.0
+    risk = "high"
+    blocking_issues: list[str] = []
+    fix_prompt = ""
+    fix_prompt_fingerprint = ""
+    revert_reason = ""
+    revert_plan = ""
+    commit_recommendation = False
+    summary = ""
+    blocked_reason = "not_applicable"
+    routed = False
+    response_status = "missing"
+    response_size_bytes = 0
+    response_preview = ""
+
+    if not request_applicable:
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    status = "chatgpt_diff_review_decision_blocked_missing_response"
+    next_action = "wait_for_chatgpt_diff_review_response"
+    blocked_reason = "status_json_missing"
+
+    if not status_path.exists() or not status_path.is_file():
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    try:
+        with status_path.open("rb") as file_obj:
+            raw_status = file_obj.read(8192)
+    except OSError as exc:
+        blocked_reason = f"status_json_read_error:{exc.__class__.__name__}"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    try:
+        parsed_status = json.loads(raw_status.decode("utf-8", errors="replace"))
+    except Exception as exc:  # pragma: no cover - defensive parse boundary
+        blocked_reason = f"status_json_parse_error:{exc.__class__.__name__}"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    if not isinstance(parsed_status, Mapping):
+        blocked_reason = "status_json_not_mapping"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    status_payload = dict(parsed_status)
+    runtime_status = _normalize_text(status_payload.get("status"), default="").lower()
+    runtime_reason = _normalize_text(status_payload.get("reason"), default="").lower()
+    task_status = _normalize_text(status_payload.get("task_status"), default="").lower()
+    if not task_status:
+        task_status = _map_runtime_to_task_status(runtime_status, runtime_reason)
+    if task_status != "response_saved":
+        blocked_reason = (
+            "response_not_saved"
+            if task_status == "ready"
+            else (
+                "response_in_progress"
+                if task_status == "in_progress"
+                else (
+                    "response_blocked"
+                    if task_status == "blocked"
+                    else (
+                        "response_already_consumed"
+                        if task_status == "consumed"
+                        else "response_not_available"
+                    )
+                )
+            )
+        )
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    if not response_path.exists() or not response_path.is_file():
+        blocked_reason = "response_missing"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    response_status = "read_attempted"
+    try:
+        response_size_bytes = _as_non_negative_int(response_path.stat().st_size, default=0)
+        with response_path.open("rb") as file_obj:
+            raw_response = file_obj.read(32768)
+    except OSError as exc:
+        blocked_reason = f"response_read_error:{exc.__class__.__name__}"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    response_text = raw_response.decode("utf-8", errors="replace").strip()
+    response_preview = _clip_preview(response_text, max_chars=500)
+    if not response_text:
+        blocked_reason = "response_empty"
+        response_status = "empty"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    if _looks_transient(response_text):
+        blocked_reason = "response_transient"
+        response_status = "transient"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    response_status = "ready"
+
+    parsed_fields, parsed_as_json, parse_mode = _parse_review_fields(response_text)
+    if not parsed_fields:
+        status = "chatgpt_diff_review_decision_blocked_parse_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "review_response_parse_failed"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    decision = _normalize_decision(parsed_fields.get("decision"))
+    confidence = _normalize_confidence(parsed_fields.get("confidence"))
+    risk = _normalize_risk(parsed_fields.get("risk"))
+    blocking_issues = _normalize_blocking_issues(parsed_fields.get("blocking_issues"))
+    fix_prompt = _normalize_text(parsed_fields.get("fix_prompt"), default="")
+    fix_prompt = fix_prompt[:6000] if fix_prompt else ""
+    fix_prompt_fingerprint = (
+        hashlib.sha256(fix_prompt.encode("utf-8")).hexdigest() if fix_prompt else ""
+    )
+    revert_reason = _normalize_text(parsed_fields.get("revert_reason"), default="")
+    commit_recommendation = _normalize_commit_recommendation(
+        parsed_fields.get("commit_recommendation")
+    )
+    summary = _normalize_text(parsed_fields.get("summary"), default="")
+    if not summary:
+        summary = (
+            "chatgpt diff review response parsed"
+            if parsed_as_json
+            else f"chatgpt diff review response parsed via {parse_mode}"
+        )
+    summary = summary[:600]
+
+    unsafe_tokens = (
+        "playwright",
+        "chatgpt api",
+        "openai api",
+        "captcha bypass",
+        "verify bypass",
+        "store cookie",
+        "store cookies",
+        "store token",
+        "store tokens",
+        "store session",
+        "store sessions",
+        "unbounded loop",
+        "infinite loop",
+        "daemon",
+        "scheduler",
+        "background queue",
+        "queue drain",
+        "new shell execution",
+        "new codex execution",
+        "auto commit",
+        "automatic commit",
+        "auto tag",
+        "automatic tag",
+        "auto pr",
+        "automatic pr",
+        "auto merge",
+        "automatic merge",
+        "rm -rf /",
+        "delete /",
+        "outside repo",
+    )
+    unsafe_fix_prompt = bool(
+        fix_prompt and any(token in fix_prompt.lower() for token in unsafe_tokens)
+    )
+
+    if decision == "approve":
+        approve_valid = bool(
+            confidence >= 0.80
+            and risk in {"low", "medium"}
+            and not blocking_issues
+            and commit_recommendation
+        )
+        if approve_valid:
+            status = "chatgpt_diff_review_decision_approved_for_commit_gate"
+            next_action = "prepare_commit_or_pr_gate"
+            blocked_reason = "none"
+            routed = True
+        else:
+            status = "chatgpt_diff_review_decision_manual_review"
+            next_action = "manual_review_required"
+            blocked_reason = "approve_policy_not_satisfied"
+    elif decision == "fix":
+        if unsafe_fix_prompt:
+            status = "chatgpt_diff_review_decision_blocked_unsafe_fix_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "unsafe_fix_prompt"
+        elif not fix_prompt:
+            status = "chatgpt_diff_review_decision_manual_review"
+            next_action = "manual_review_required"
+            blocked_reason = "missing_fix_prompt"
+        elif risk == "high" or blocking_issues or confidence < 0.80:
+            status = "chatgpt_diff_review_decision_manual_review"
+            next_action = "manual_review_required"
+            blocked_reason = "fix_requires_manual_review"
+        else:
+            prior_fix_fingerprints = {
+                _normalize_text(
+                    prior_payload.get("project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint"),
+                    default="",
+                ),
+                _normalize_text(
+                    prior_payload.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+                    default="",
+                ),
+            }
+            prior_fix_fingerprints.discard("")
+            existing_fix_fp = ""
+            if routed_fix_prompt_path.exists() and routed_fix_prompt_path.is_file():
+                try:
+                    with routed_fix_prompt_path.open("rb") as file_obj:
+                        existing_text = file_obj.read(32768).decode("utf-8", errors="replace").strip()
+                except OSError:
+                    existing_text = ""
+                if existing_text:
+                    existing_fix_fp = hashlib.sha256(existing_text.encode("utf-8")).hexdigest()
+            duplicate_fix_prompt = bool(
+                fix_prompt_fingerprint
+                and (
+                    fix_prompt_fingerprint in prior_fix_fingerprints
+                    or fix_prompt_fingerprint == existing_fix_fp
+                )
+            )
+            if duplicate_fix_prompt:
+                status = "chatgpt_diff_review_decision_blocked_duplicate_fix_prompt"
+                next_action = "manual_review_required"
+                blocked_reason = "duplicate_fix_prompt_fingerprint"
+            else:
+                try:
+                    routed_fix_prompt_path.parent.mkdir(parents=True, exist_ok=True)
+                    temp_path = routed_fix_prompt_path.with_name(
+                        f"{routed_fix_prompt_path.name}.tmp"
+                    )
+                    temp_path.write_text(fix_prompt, encoding="utf-8")
+                    os.replace(temp_path, routed_fix_prompt_path)
+                except OSError as exc:
+                    status = "chatgpt_diff_review_decision_manual_review"
+                    next_action = "manual_review_required"
+                    blocked_reason = f"fix_prompt_write_failed:{exc.__class__.__name__}"
+                else:
+                    status = "chatgpt_diff_review_decision_fix_routed"
+                    next_action = "run_existing_codex_fix_step"
+                    blocked_reason = "none"
+                    routed = True
+    elif decision == "revert":
+        if not revert_reason:
+            status = "chatgpt_diff_review_decision_manual_review"
+            next_action = "manual_review_required"
+            blocked_reason = "missing_revert_reason"
+        else:
+            status = "chatgpt_diff_review_decision_revert_plan_ready"
+            next_action = "manual_revert_plan_review"
+            blocked_reason = "none"
+            routed = True
+            changed_files_text = ", ".join(changed_files[:20]) if changed_files else "(none)"
+            revert_plan = (
+                "Revert plan only (no file mutation): "
+                f"{revert_reason}. Review captured changed files [{changed_files_text}], "
+                "identify exact hunks to revert, and apply safe/manual bounded rollback in a later step."
+            )[:1200]
+    else:
+        status = "chatgpt_diff_review_decision_manual_review"
+        next_action = "manual_review_required"
+        blocked_reason = "decision_manual_review_or_unrecognized"
+
+    if blocking_issues and status in {
+        "chatgpt_diff_review_decision_approved_for_commit_gate",
+        "chatgpt_diff_review_decision_fix_routed",
+    }:
+        status = "chatgpt_diff_review_decision_manual_review"
+        next_action = "manual_review_required"
+        blocked_reason = "blocking_issues_present"
+        routed = False
+    if risk == "high" and status in {
+        "chatgpt_diff_review_decision_approved_for_commit_gate",
+        "chatgpt_diff_review_decision_fix_routed",
+    }:
+        status = "chatgpt_diff_review_decision_manual_review"
+        next_action = "manual_review_required"
+        blocked_reason = "high_risk_requires_manual_review"
+        routed = False
+
+    return {
+        "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+        "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+        "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+        "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+        "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+        "project_browser_autonomous_chatgpt_diff_review_blocking_issues": (
+            _normalize_string_list(blocking_issues)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+        "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+            fix_prompt_fingerprint
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+        "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+        "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+            commit_recommendation
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+        "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+        "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+        "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+        "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": _as_non_negative_int(
+            response_size_bytes,
+            default=0,
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+    }
+
+
+def _build_project_browser_autonomous_commit_tag_gate_state(
+    *,
+    chatgpt_diff_review_decision_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    review_state = (
+        dict(chatgpt_diff_review_decision_state)
+        if isinstance(chatgpt_diff_review_decision_state, Mapping)
+        else {}
+    )
+    capture_state = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _compact(text: Any, *, max_chars: int = 240) -> str:
+        value = _normalize_text(text, default="")
+        if not value:
+            return ""
+        normalized = " ".join(value.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _is_unsafe_changed_path(path_text: str) -> tuple[bool, str]:
+        text = _normalize_text(path_text, default="")
+        if not text:
+            return (True, "empty_path")
+        if Path(text).is_absolute() or text.startswith("/") or text.startswith("\\"):
+            return (True, f"absolute_path:{text}")
+        if "://" in text:
+            return (True, f"malformed_path:{text}")
+        if ".." in text.split("/"):
+            return (True, f"parent_traversal:{text}")
+        normalized = text.replace("\\", "/")
+        if normalized == ".git" or normalized.startswith(".git/"):
+            return (True, f"git_internal_path:{text}")
+        if normalized.startswith("../") or "/../" in normalized:
+            return (True, f"outside_repo_path:{text}")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        if not normalized:
+            return (True, "malformed_path")
+        return (False, "")
+
+    gate_enabled = _read_flag(
+        "project_browser_autonomous_commit_tag_gate_enabled",
+        default=False,
+    )
+    allow_missing_validation = False
+    for key in (
+        "project_browser_autonomous_commit_tag_gate_allow_missing_validation",
+        "project_browser_autonomous_allow_missing_validation",
+    ):
+        if key in approved_restart or key in prior_payload:
+            allow_missing_validation = _read_flag(key, default=False)
+            break
+
+    review_status = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision_status"),
+        default="",
+    )
+    review_next_action = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision_next_action"),
+        default="",
+    )
+    review_decision = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision"),
+        default="",
+    )
+    review_confidence = 0.0
+    confidence_value = review_state.get("project_browser_autonomous_chatgpt_diff_review_confidence")
+    if isinstance(confidence_value, (int, float)) and not isinstance(confidence_value, bool):
+        review_confidence = max(0.0, min(1.0, float(confidence_value)))
+    review_risk = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_risk"),
+        default="high",
+    ).lower()
+    review_blocking_issues = _normalize_string_list(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_blocking_issues")
+    )
+    review_commit_recommendation = bool(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_commit_recommendation", False)
+    )
+    review_summary = _compact(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_summary"),
+        max_chars=280,
+    )
+
+    changed_files = _normalize_string_list(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+    diff_summary = _compact(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_diff_summary"),
+        max_chars=240,
+    )
+    validation_summary = _compact(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_validation_summary"),
+        max_chars=240,
+    )
+    codex_output_summary = _compact(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_codex_output_summary"),
+        max_chars=240,
+    )
+    capture_output_path = _normalize_text(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_capture_output_path"),
+        default="",
+    )
+    capture_artifact_paths = _normalize_string_list(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_capture_artifact_paths")
+    )
+    prompt_kind = _normalize_text(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_prompt_kind"),
+        default="",
+    )
+    prompt_fingerprint = _normalize_text(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_prompt_fingerprint"),
+        default="",
+    )
+
+    status = "commit_tag_gate_not_requested"
+    next_action = "enable_commit_tag_gate"
+    ready = False
+    blocked_reason = "commit_tag_gate_disabled"
+    fix_recommendations: list[str] = []
+
+    approval_valid = bool(
+        review_status == "chatgpt_diff_review_decision_approved_for_commit_gate"
+        and review_decision == "approve"
+        and review_next_action == "prepare_commit_or_pr_gate"
+    )
+
+    unsafe_path_reasons: list[str] = []
+    safe_changed_files: list[str] = []
+    for path in changed_files:
+        unsafe, reason = _is_unsafe_changed_path(path)
+        if unsafe:
+            unsafe_path_reasons.append(reason)
+        else:
+            safe_changed_files.append(path)
+
+    validation_lower = validation_summary.lower()
+    validation_failing = any(
+        token in validation_lower for token in ("error", "failed", "failure", "diff_check_has_errors")
+    )
+    validation_missing = (not validation_summary) or any(
+        token in validation_lower for token in ("not_available", "unavailable", "missing")
+    )
+
+    policy_failed_reasons: list[str] = []
+    if review_confidence < 0.80:
+        policy_failed_reasons.append("confidence_below_threshold")
+    if review_risk not in {"low", "medium"}:
+        policy_failed_reasons.append("risk_not_allowed")
+    if review_blocking_issues:
+        policy_failed_reasons.append("blocking_issues_present")
+    if not review_commit_recommendation:
+        policy_failed_reasons.append("commit_recommendation_false")
+    if not safe_changed_files:
+        policy_failed_reasons.append("no_changed_files")
+
+    if gate_enabled:
+        if not approval_valid:
+            status = "commit_tag_gate_blocked_missing_approval"
+            next_action = "request_or_recheck_chatgpt_approve_decision"
+            blocked_reason = "review_approval_not_ready"
+            fix_recommendations = [
+                "regenerate diff review and require approve decision",
+                "request manual review if decision remains unclear",
+            ]
+        elif unsafe_path_reasons:
+            status = "commit_tag_gate_blocked_unsafe_paths"
+            next_action = "inspect_unsafe_changed_paths"
+            blocked_reason = unsafe_path_reasons[0]
+            fix_recommendations = [
+                "inspect unsafe changed paths",
+                "regenerate capture with repo-local relative paths only",
+            ]
+        elif validation_failing or (validation_missing and not allow_missing_validation):
+            status = "commit_tag_gate_blocked_validation"
+            next_action = "rerun_validation_and_review"
+            blocked_reason = (
+                "validation_failed"
+                if validation_failing
+                else "validation_missing_without_allowance"
+            )
+            fix_recommendations = [
+                "rerun validation",
+                "fix validation failures before commit/tag readiness",
+                "request manual review if validation cannot be produced",
+            ]
+        elif policy_failed_reasons:
+            status = "commit_tag_gate_blocked_policy"
+            next_action = "resolve_commit_tag_gate_policy_issues"
+            blocked_reason = policy_failed_reasons[0]
+            fix_recommendations = [
+                "fix blocking issues in review result",
+                "regenerate diff review with clearer evidence",
+                "request manual review",
+            ]
+        else:
+            status = "commit_tag_gate_ready"
+            next_action = "prepare_explicit_commit_tag_execution_step"
+            blocked_reason = "none"
+            ready = True
+
+    short_fp_source = prompt_fingerprint
+    if not short_fp_source:
+        short_fp_source = hashlib.sha256(
+            "|".join([review_summary, ",".join(safe_changed_files)]).encode("utf-8")
+        ).hexdigest()
+    short_fp = short_fp_source[:10]
+    file_count = len(safe_changed_files)
+    top_files = ", ".join(safe_changed_files[:3]) if safe_changed_files else "no-files"
+    prompt_label = prompt_kind if prompt_kind else "change"
+    commit_message = (
+        f"chore: {prompt_label} review-approved ({file_count} files) - {review_summary or top_files}"
+    )
+    commit_message = _compact(commit_message, max_chars=120)
+    tag_name = f"prompt275-commit-gate-{short_fp}"
+    tag_name = "".join(
+        char if (char.isalnum() or char in {"-", "_", "."}) else "-"
+        for char in tag_name
+    ).strip("-")
+    if not tag_name:
+        tag_name = "prompt275-commit-gate-unknown"
+
+    if not fix_recommendations and not ready:
+        fix_recommendations = [
+            "rerun validation",
+            "request manual review",
+            "regenerate diff review",
+        ]
+
+    readiness_summary = (
+        f"review={review_status or 'unknown'}; confidence={review_confidence:.2f}; "
+        f"risk={review_risk or 'unknown'}; changed_files={file_count}; "
+        f"validation={validation_summary or 'missing'}; diff={diff_summary or 'n/a'}; "
+        f"capture={capture_output_path or 'n/a'}; artifacts={len(capture_artifact_paths)}; "
+        f"codex={codex_output_summary or 'n/a'}"
+    )
+
+    return {
+        "project_browser_autonomous_commit_tag_gate_status": status,
+        "project_browser_autonomous_commit_tag_gate_next_action": next_action,
+        "project_browser_autonomous_commit_tag_gate_enabled": bool(gate_enabled),
+        "project_browser_autonomous_commit_tag_gate_ready": bool(ready),
+        "project_browser_autonomous_commit_tag_gate_commit_message": commit_message,
+        "project_browser_autonomous_commit_tag_gate_tag_name": tag_name,
+        "project_browser_autonomous_commit_tag_gate_changed_files": (
+            _normalize_string_list(safe_changed_files)
+        ),
+        "project_browser_autonomous_commit_tag_gate_validation_summary": validation_summary,
+        "project_browser_autonomous_commit_tag_gate_review_summary": (
+            _compact(f"{review_summary}; {readiness_summary}", max_chars=480)
+        ),
+        "project_browser_autonomous_commit_tag_gate_blocked_reason": blocked_reason,
+        "project_browser_autonomous_commit_tag_gate_fix_recommendations": (
+            _normalize_string_list(fix_recommendations)
+        ),
+    }
+
+
+def _build_project_browser_autonomous_commit_tag_execution_state_prompt276(
+    *,
+    commit_tag_gate_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    gate_state = dict(commit_tag_gate_state) if isinstance(commit_tag_gate_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _compact(text: Any, *, max_chars: int = 200) -> str:
+        value = _normalize_text(text, default="")
+        if not value:
+            return ""
+        normalized = " ".join(value.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _is_safe_tag_name(value: str) -> bool:
+        if not value:
+            return False
+        return all(ch.isalnum() or ch in {"-", "_", "."} for ch in value)
+
+    def _is_safe_changed_path(path_text: str) -> tuple[bool, str]:
+        path = _normalize_text(path_text, default="")
+        if not path:
+            return (False, "empty_path")
+        if Path(path).is_absolute() or path.startswith("/") or path.startswith("\\"):
+            return (False, f"absolute_path:{path}")
+        normalized = path.replace("\\", "/")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        if not normalized:
+            return (False, "malformed_path")
+        if ".." in normalized.split("/"):
+            return (False, f"parent_traversal:{path}")
+        if normalized == ".git" or normalized.startswith(".git/"):
+            return (False, f"git_internal:{path}")
+        if normalized.startswith("../") or "/../" in normalized:
+            return (False, f"outside_repo:{path}")
+        if " -> " in normalized:
+            return (False, f"ambiguous_path:{path}")
+        return (True, normalized)
+
+    def _parse_git_status_short(output: str) -> tuple[dict[str, str], list[str]]:
+        parsed: dict[str, str] = {}
+        ambiguous: list[str] = []
+        for raw_line in output.splitlines():
+            line = raw_line.rstrip("\n")
+            if not line.strip():
+                continue
+            if len(line) < 4 or line[2] != " ":
+                ambiguous.append(f"malformed_status_line:{line}")
+                continue
+            code = line[:2]
+            x, y = code[0], code[1]
+            path_text = line[3:].strip()
+            if not path_text or path_text.startswith('"') or " -> " in path_text:
+                ambiguous.append(f"ambiguous_path:{line}")
+                continue
+            if x in {"R", "C", "U"} or y in {"R", "C", "U"}:
+                ambiguous.append(f"unsupported_status:{line}")
+                continue
+            if x not in {" ", "M", "A", "D", "?"} or y not in {" ", "M", "A", "D", "?"}:
+                ambiguous.append(f"unsupported_status:{line}")
+                continue
+            path = path_text.replace("\\", "/")
+            if path in parsed:
+                ambiguous.append(f"duplicate_status_entry:{path}")
+                continue
+            parsed[path] = code
+        return parsed, ambiguous
+
+    gate_status = _normalize_text(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_status"),
+        default="",
+    )
+    gate_next_action = _normalize_text(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_next_action"),
+        default="",
+    )
+    gate_ready = bool(gate_state.get("project_browser_autonomous_commit_tag_gate_ready", False))
+    commit_message = _compact(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_commit_message"),
+        max_chars=200,
+    )
+    tag_name = _normalize_text(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_tag_name"),
+        default="",
+    )
+    changed_files = _normalize_string_list(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_changed_files")
+    )
+    validation_summary = _compact(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_validation_summary"),
+        max_chars=200,
+    ).lower()
+    review_summary = _compact(
+        gate_state.get("project_browser_autonomous_commit_tag_gate_review_summary"),
+        max_chars=200,
+    )
+
+    execution_enabled = _read_flag(
+        "project_browser_autonomous_commit_tag_execution_enabled",
+        default=False,
+    )
+    execute_enabled = _read_flag(
+        "project_browser_autonomous_commit_tag_execution_execute_enabled",
+        default=False,
+    )
+
+    max_changed_files = 25
+    large_change_approved = False
+    for key in (
+        "project_browser_autonomous_commit_tag_large_change_approved",
+        "project_browser_autonomous_large_change_approved",
+    ):
+        if key in approved_restart or key in prior_payload:
+            large_change_approved = _read_flag(key, default=False)
+            break
+
+    status = "commit_tag_execution_not_requested"
+    next_action = "enable_commit_tag_execution"
+    blocked_reason = "execution_disabled"
+    commit_sha = ""
+    tag_created = False
+    git_status_short = ""
+    post_git_status_short = ""
+
+    gate_ready_for_execution = bool(
+        gate_status == "commit_tag_gate_ready"
+        and gate_ready
+        and gate_next_action == "prepare_explicit_commit_tag_execution_step"
+    )
+
+    if not execution_enabled:
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    status = "commit_tag_execution_decision_only"
+    next_action = "run_commit_tag_execution_when_explicitly_enabled"
+    blocked_reason = "execute_disabled"
+
+    if not gate_ready_for_execution:
+        status = "commit_tag_execution_blocked_missing_gate"
+        next_action = "manual_review_required"
+        blocked_reason = "commit_tag_gate_not_ready"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    safe_changed_files: list[str] = []
+    for path in changed_files:
+        safe, normalized_or_reason = _is_safe_changed_path(path)
+        if not safe:
+            status = "commit_tag_execution_blocked_preflight"
+            next_action = "manual_review_required"
+            blocked_reason = normalized_or_reason
+            return {
+                "project_browser_autonomous_commit_tag_execution_status": status,
+                "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+                "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+                "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                    execute_enabled
+                ),
+                "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+                "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+                "project_browser_autonomous_commit_tag_execution_changed_files": changed_files,
+                "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+                "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+                "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+                "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                    post_git_status_short
+                ),
+                "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+            }
+        safe_changed_files.append(normalized_or_reason)
+    safe_changed_files = _normalize_string_list(safe_changed_files)
+
+    if len(safe_changed_files) > max_changed_files and not large_change_approved:
+        status = "commit_tag_execution_blocked_large_change"
+        next_action = "manual_review_required"
+        blocked_reason = "changed_file_count_exceeds_limit"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    validation_missing_or_failing = (
+        not validation_summary
+        or "not_available" in validation_summary
+        or "unavailable" in validation_summary
+        or "missing" in validation_summary
+        or "error" in validation_summary
+        or "failed" in validation_summary
+        or "failure" in validation_summary
+        or "diff_check_has_errors" in validation_summary
+    )
+    if validation_missing_or_failing:
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "validation_missing_or_failing"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    if not commit_message or len(commit_message) > 200 or "\n" in commit_message:
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "invalid_commit_message"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    if not _is_safe_tag_name(tag_name):
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "invalid_tag_name"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    if not safe_changed_files:
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "missing_changed_files"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    if not execute_enabled:
+        status = "commit_tag_execution_decision_only"
+        next_action = "set_execute_enabled_to_run_local_commit_tag"
+        blocked_reason = "execution_not_enabled"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    repo_path_text = _normalize_text(execution_repo_path, default="")
+    repo_path_obj = Path(repo_path_text) if repo_path_text else Path.cwd()
+    if not repo_path_obj.exists() or not repo_path_obj.is_dir():
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = "execution_repo_unavailable"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    try:
+        pre_status_run = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=str(repo_path_obj),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_failed"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    git_status_short = _compact(pre_status_run.stdout, max_chars=4000)
+    if int(pre_status_run.returncode) != 0:
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_nonzero_exit"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    parsed_status, ambiguous_status = _parse_git_status_short(pre_status_run.stdout)
+    if ambiguous_status:
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        blocked_reason = ambiguous_status[0]
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    expected_set = set(safe_changed_files)
+    seen_set = set(parsed_status.keys())
+    if not expected_set.issubset(seen_set):
+        status = "commit_tag_execution_blocked_preflight"
+        next_action = "manual_review_required"
+        missing = sorted(expected_set - seen_set)
+        blocked_reason = f"expected_files_missing_from_git_status:{','.join(missing[:5])}"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    extras = sorted(seen_set - expected_set)
+    if extras:
+        status = "commit_tag_execution_blocked_unexpected_changes"
+        next_action = "manual_review_required"
+        blocked_reason = f"unexpected_changed_files:{','.join(extras[:5])}"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    try:
+        tag_check_run = subprocess.run(
+            ["git", "tag", "--list", tag_name],
+            cwd=str(repo_path_obj),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_tag_list_failed"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    if int(tag_check_run.returncode) != 0:
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_tag_list_nonzero_exit"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+    if _normalize_text(tag_check_run.stdout, default=""):
+        status = "commit_tag_execution_blocked_existing_tag"
+        next_action = "manual_review_required"
+        blocked_reason = "tag_already_exists"
+        return {
+            "project_browser_autonomous_commit_tag_execution_status": status,
+            "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+            "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+            "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+                execute_enabled
+            ),
+            "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+            "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+            "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+            "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+            "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+            "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+            "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+                post_git_status_short
+            ),
+            "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+        }
+
+    commit_attempted = False
+    try:
+        add_run = subprocess.run(
+            ["git", "add", "--", *safe_changed_files],
+            cwd=str(repo_path_obj),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        status = "commit_tag_execution_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_add_failed"
+    else:
+        if int(add_run.returncode) != 0:
+            status = "commit_tag_execution_blocked_git_failed"
+            next_action = "manual_review_required"
+            blocked_reason = "git_add_nonzero_exit"
+        else:
+            commit_attempted = True
+            try:
+                commit_run = subprocess.run(
+                    ["git", "commit", "-m", commit_message],
+                    cwd=str(repo_path_obj),
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError):
+                status = "commit_tag_execution_blocked_git_failed"
+                next_action = "manual_review_required"
+                blocked_reason = "git_commit_failed"
+            else:
+                if int(commit_run.returncode) != 0:
+                    status = "commit_tag_execution_blocked_git_failed"
+                    next_action = "manual_review_required"
+                    blocked_reason = "git_commit_nonzero_exit"
+                else:
+                    try:
+                        sha_run = subprocess.run(
+                            ["git", "rev-parse", "HEAD"],
+                            cwd=str(repo_path_obj),
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                            check=False,
+                        )
+                    except (OSError, subprocess.SubprocessError):
+                        status = "commit_tag_execution_blocked_git_failed"
+                        next_action = "manual_review_required"
+                        blocked_reason = "git_rev_parse_failed"
+                    else:
+                        if int(sha_run.returncode) != 0:
+                            status = "commit_tag_execution_blocked_git_failed"
+                            next_action = "manual_review_required"
+                            blocked_reason = "git_rev_parse_nonzero_exit"
+                        else:
+                            commit_sha = _normalize_text(sha_run.stdout, default="")
+                            tag_message = _compact(
+                                f"Prompt276 local tag: {review_summary or commit_message}",
+                                max_chars=200,
+                            )
+                            try:
+                                tag_run = subprocess.run(
+                                    ["git", "tag", "-a", tag_name, "-m", tag_message],
+                                    cwd=str(repo_path_obj),
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=60,
+                                    check=False,
+                                )
+                            except (OSError, subprocess.SubprocessError):
+                                status = "commit_tag_execution_committed_tag_failed"
+                                next_action = "manual_review_required"
+                                blocked_reason = "git_tag_failed"
+                            else:
+                                if int(tag_run.returncode) != 0:
+                                    status = "commit_tag_execution_committed_tag_failed"
+                                    next_action = "manual_review_required"
+                                    blocked_reason = "git_tag_nonzero_exit"
+                                else:
+                                    status = "commit_tag_execution_committed_and_tagged"
+                                    next_action = "update_pr_queue_or_prepare_next_pr"
+                                    blocked_reason = "none"
+                                    tag_created = True
+    if commit_attempted:
+        try:
+            post_status_run = subprocess.run(
+                ["git", "status", "--short"],
+                cwd=str(repo_path_obj),
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            post_git_status_short = ""
+        else:
+            post_git_status_short = _compact(post_status_run.stdout, max_chars=4000)
+            if (
+                status == "commit_tag_execution_committed_and_tagged"
+                and _normalize_text(post_status_run.stdout, default="")
+            ):
+                parsed_post, ambiguous_post = _parse_git_status_short(post_status_run.stdout)
+                if ambiguous_post:
+                    status = "commit_tag_execution_blocked_preflight"
+                    next_action = "manual_review_required"
+                    blocked_reason = ambiguous_post[0]
+                else:
+                    remaining = set(parsed_post.keys())
+                    if remaining.intersection(set(safe_changed_files)):
+                        status = "commit_tag_execution_blocked_preflight"
+                        next_action = "manual_review_required"
+                        blocked_reason = "post_status_not_clean_for_expected_files"
+
+    return {
+        "project_browser_autonomous_commit_tag_execution_status": status,
+        "project_browser_autonomous_commit_tag_execution_next_action": next_action,
+        "project_browser_autonomous_commit_tag_execution_enabled": bool(execution_enabled),
+        "project_browser_autonomous_commit_tag_execution_execute_enabled": bool(
+            execute_enabled
+        ),
+        "project_browser_autonomous_commit_tag_execution_commit_message": commit_message,
+        "project_browser_autonomous_commit_tag_execution_tag_name": tag_name,
+        "project_browser_autonomous_commit_tag_execution_changed_files": safe_changed_files,
+        "project_browser_autonomous_commit_tag_execution_commit_sha": commit_sha,
+        "project_browser_autonomous_commit_tag_execution_tag_created": bool(tag_created),
+        "project_browser_autonomous_commit_tag_execution_git_status_short": git_status_short,
+        "project_browser_autonomous_commit_tag_execution_post_git_status_short": (
+            post_git_status_short
+        ),
+        "project_browser_autonomous_commit_tag_execution_blocked_reason": blocked_reason,
+    }
+
+
+def _build_project_browser_autonomous_pr_queue_state_state(
+    *,
+    commit_tag_execution_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    execution_state = (
+        dict(commit_tag_execution_state)
+        if isinstance(commit_tag_execution_state, Mapping)
+        else {}
+    )
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    allowed_item_statuses = {
+        "pending",
+        "prompt_ready",
+        "codex_running",
+        "reviewing",
+        "fixing",
+        "ready_to_commit",
+        "committed",
+        "blocked",
+    }
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _compact(value: Any, *, max_chars: int = 240) -> str:
+        text = _normalize_text(value, default="")
+        if not text:
+            return ""
+        normalized = " ".join(text.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _coerce_item_status(value: Any) -> str:
+        status = _normalize_text(value, default="").lower()
+        if status in allowed_item_statuses:
+            return status
+        if status in {"complete", "completed", "done"}:
+            return "committed"
+        if status in {"error", "failed"}:
+            return "blocked"
+        return "pending"
+
+    def _queue_candidates(payload: Mapping[str, Any]) -> list[list[dict[str, Any]]]:
+        candidates: list[list[dict[str, Any]]] = []
+        for key in (
+            "project_browser_autonomous_pr_queue_state_pr_queue",
+            "project_browser_autonomous_roadmap_pr_split_queue_pr_queue",
+            "project_browser_autonomous_dev_loop_input_roadmap_pr_queue",
+            "roadmap_pr_queue",
+        ):
+            value = payload.get(key)
+            if isinstance(value, list):
+                queue_items: list[dict[str, Any]] = []
+                for entry in value:
+                    if isinstance(entry, Mapping):
+                        queue_items.append(dict(entry))
+                if queue_items:
+                    candidates.append(queue_items)
+        return candidates
+
+    def _index_candidates(payload: Mapping[str, Any]) -> list[int]:
+        result: list[int] = []
+        for key in (
+            "project_browser_autonomous_pr_queue_state_active_pr_index",
+            "project_browser_autonomous_roadmap_pr_split_queue_active_pr_index",
+            "project_browser_autonomous_dev_loop_input_active_pr_index",
+            "active_pr_index",
+        ):
+            if key in payload:
+                result.append(_as_non_negative_int(payload.get(key), default=0))
+        return result
+
+    def _normalize_queue(raw_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for idx, entry in enumerate(raw_queue):
+            item_id = _normalize_text(
+                entry.get("id"),
+                default=_normalize_text(
+                    entry.get("slice_id"),
+                    default=_normalize_text(entry.get("roadmap_item_id"), default=f"pr-{idx}"),
+                ),
+            )
+            if not item_id:
+                item_id = f"pr-{idx}"
+            normalized.append(
+                {
+                    "id": item_id,
+                    "status": _coerce_item_status(entry.get("status")),
+                    "prompt_fingerprint": _normalize_text(
+                        entry.get("prompt_fingerprint"),
+                        default="",
+                    ),
+                    "commit_sha": _normalize_text(entry.get("commit_sha"), default=""),
+                    "tag_name": _normalize_text(entry.get("tag_name"), default=""),
+                    "changed_files": _normalize_string_list(entry.get("changed_files")),
+                    "summary": _compact(entry.get("summary"), max_chars=240),
+                    "blocked_reason": _normalize_text(entry.get("blocked_reason"), default=""),
+                }
+            )
+        return normalized
+
+    def _resolve_persistence_path() -> str:
+        path_text = _normalize_text(
+            prior_payload.get("project_browser_autonomous_pr_queue_state_path"),
+            default=_normalize_text(
+                approved_restart.get("project_browser_autonomous_pr_queue_state_path"),
+                default="",
+            ),
+        )
+        if not path_text:
+            return ""
+        repo_root = Path(_normalize_text(execution_repo_path, default="") or ".").resolve()
+        try:
+            candidate = Path(path_text).resolve()
+        except OSError:
+            return ""
+        if not str(candidate).startswith(str(repo_root)):
+            return ""
+        relative_text = _normalize_text(str(candidate.relative_to(repo_root)), default="")
+        if not relative_text.startswith("artifacts/"):
+            return ""
+        return str(candidate)
+
+    state_enabled = _read_flag(
+        "project_browser_autonomous_pr_queue_state_enabled",
+        default=False,
+    )
+    state_update_enabled = _read_flag(
+        "project_browser_autonomous_pr_queue_state_update_enabled",
+        default=False,
+    )
+
+    execution_status = _normalize_text(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_status"),
+        default="",
+    )
+    execution_next_action = _normalize_text(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_next_action"),
+        default="",
+    )
+    commit_sha = _normalize_text(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_commit_sha"),
+        default="",
+    )
+    tag_name = _normalize_text(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_tag_name"),
+        default="",
+    )
+    tag_created = bool(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_tag_created", False)
+    )
+    changed_files = _normalize_string_list(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_changed_files")
+    )
+    commit_message = _compact(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_commit_message"),
+        max_chars=180,
+    )
+    post_git_status_short = _compact(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_post_git_status_short"),
+        max_chars=180,
+    )
+
+    commit_success = bool(
+        execution_status == "commit_tag_execution_committed_and_tagged"
+        and tag_created
+        and bool(commit_sha)
+        and execution_next_action == "update_pr_queue_or_prepare_next_pr"
+    )
+
+    status = "pr_queue_state_not_requested"
+    next_action = "enable_pr_queue_state_management"
+    blocked_reason = "pr_queue_state_disabled"
+    roadmap_id = _normalize_text(
+        prior_payload.get("project_browser_autonomous_pr_queue_state_roadmap_id"),
+        default=_normalize_text(approved_restart.get("project_browser_autonomous_pr_queue_state_roadmap_id"), default=""),
+    )
+    active_pr_index = 0
+    active_pr_id = ""
+    active_pr_status = ""
+    next_pr_index = -1
+    next_pr_id = ""
+    queue_summary = ""
+
+    normalized_queue: list[dict[str, Any]] = []
+    queue_candidates = _queue_candidates(prior_payload) + _queue_candidates(approved_restart)
+    if queue_candidates:
+        normalized_queue = _normalize_queue(queue_candidates[0])
+    index_candidates = _index_candidates(prior_payload) + _index_candidates(approved_restart)
+    if index_candidates:
+        active_pr_index = index_candidates[0]
+    if active_pr_index < 0:
+        active_pr_index = 0
+    if normalized_queue and active_pr_index >= len(normalized_queue):
+        active_pr_index = len(normalized_queue) - 1
+    if not roadmap_id:
+        roadmap_id = _normalize_text(
+            prior_payload.get("project_browser_autonomous_roadmap_id"),
+            default=_normalize_text(approved_restart.get("project_browser_autonomous_roadmap_id"), default=""),
+        )
+    if not roadmap_id:
+        roadmap_id = "local-roadmap"
+
+    if not state_enabled:
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    if not commit_success:
+        status = "pr_queue_state_blocked_missing_commit_tag_execution"
+        next_action = "manual_review_required"
+        blocked_reason = "commit_tag_execution_not_successful"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    if not normalized_queue and not state_update_enabled:
+        status = "pr_queue_state_decision_only"
+        next_action = "initialize_local_pr_queue_state"
+        blocked_reason = "queue_initialization_required"
+        queue_summary = "queue missing; initialization required"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    if not normalized_queue:
+        normalized_queue = [
+            {
+                "id": "pr-0",
+                "status": "committed",
+                "prompt_fingerprint": "",
+                "commit_sha": commit_sha,
+                "tag_name": tag_name,
+                "changed_files": changed_files,
+                "summary": _compact(commit_message, max_chars=240),
+                "blocked_reason": "",
+            }
+        ]
+        active_pr_index = 0
+
+    if not isinstance(normalized_queue, list) or not normalized_queue:
+        status = "pr_queue_state_blocked_missing_or_malformed_queue"
+        next_action = "manual_review_required"
+        blocked_reason = "queue_missing_or_malformed"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": [],
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    if active_pr_index >= len(normalized_queue):
+        active_pr_index = len(normalized_queue) - 1
+    if active_pr_index < 0:
+        active_pr_index = 0
+
+    for idx, item in enumerate(normalized_queue):
+        existing_sha = _normalize_text(item.get("commit_sha"), default="")
+        if idx != active_pr_index and existing_sha and existing_sha == commit_sha:
+            status = "pr_queue_state_blocked_duplicate_commit"
+            next_action = "manual_review_required"
+            blocked_reason = "commit_sha_already_recorded_in_another_item"
+            return {
+                "project_browser_autonomous_pr_queue_state_status": status,
+                "project_browser_autonomous_pr_queue_state_next_action": next_action,
+                "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+                "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                    state_update_enabled
+                ),
+                "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+                "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                    active_pr_index,
+                    default=0,
+                ),
+                "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+                "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+                "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+                "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+                "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+                "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+                "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+                "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+                "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+                "project_browser_autonomous_pr_queue_state_post_git_status_short": (
+                    post_git_status_short
+                ),
+            }
+
+    active_item = dict(normalized_queue[active_pr_index])
+    existing_active_sha = _normalize_text(active_item.get("commit_sha"), default="")
+    existing_active_tag = _normalize_text(active_item.get("tag_name"), default="")
+    duplicate_already_recorded = bool(
+        existing_active_sha == commit_sha and existing_active_tag == tag_name
+    )
+
+    if not duplicate_already_recorded:
+        active_item["status"] = "committed"
+        active_item["commit_sha"] = commit_sha
+        active_item["tag_name"] = tag_name
+        active_item["changed_files"] = changed_files
+        active_item["summary"] = _compact(commit_message or active_item.get("summary"), max_chars=240)
+        active_item["blocked_reason"] = ""
+        normalized_queue[active_pr_index] = active_item
+
+    active_pr_id = _normalize_text(active_item.get("id"), default=f"pr-{active_pr_index}")
+    active_pr_status = _coerce_item_status(active_item.get("status"))
+
+    found_next = -1
+    for idx in range(active_pr_index + 1, len(normalized_queue)):
+        candidate_status = _coerce_item_status(normalized_queue[idx].get("status"))
+        if candidate_status in {"pending", "prompt_ready"}:
+            found_next = idx
+            break
+    next_pr_index = found_next
+    if next_pr_index >= 0:
+        next_pr_id = _normalize_text(
+            normalized_queue[next_pr_index].get("id"),
+            default=f"pr-{next_pr_index}",
+        )
+
+    queue_summary = (
+        f"queue_items={len(normalized_queue)}; active_index={active_pr_index}; "
+        f"active_status={active_pr_status}; next_index={next_pr_index}"
+    )
+
+    if next_pr_index >= 0:
+        status = "pr_queue_state_updated"
+        next_action = "prepare_next_pr_prompt"
+        blocked_reason = "none"
+    else:
+        status = "pr_queue_state_project_complete"
+        next_action = "project_local_queue_complete"
+        blocked_reason = "none"
+
+    if not state_update_enabled:
+        status = "pr_queue_state_decision_only"
+        next_action = (
+            "apply_local_pr_queue_state_update"
+            if next_pr_index >= 0
+            else "confirm_local_project_complete"
+        )
+        blocked_reason = "update_not_enabled"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    persistence_path_text = _resolve_persistence_path()
+    if not persistence_path_text:
+        status = "pr_queue_state_decision_only"
+        next_action = "manual_review_required"
+        blocked_reason = "queue_persistence_path_unavailable"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    persistence_payload = {
+        "roadmap_id": roadmap_id,
+        "active_pr_index": _as_non_negative_int(active_pr_index, default=0),
+        "pr_queue": normalized_queue,
+        "updated_at": _iso_now(),
+    }
+    try:
+        persistence_text = json.dumps(
+            persistence_payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        if len(persistence_text.encode("utf-8")) > 65536:
+            raise ValueError("queue_state_payload_too_large")
+        persistence_path = Path(persistence_path_text)
+        persistence_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = persistence_path.with_name(f"{persistence_path.name}.tmp")
+        temp_path.write_text(persistence_text, encoding="utf-8")
+        os.replace(temp_path, persistence_path)
+    except Exception as exc:
+        status = "pr_queue_state_decision_only"
+        next_action = "manual_review_required"
+        blocked_reason = f"queue_state_write_failed:{exc.__class__.__name__}"
+
+    return {
+        "project_browser_autonomous_pr_queue_state_status": status,
+        "project_browser_autonomous_pr_queue_state_next_action": next_action,
+        "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+        "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+            state_update_enabled
+        ),
+        "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+        "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+            active_pr_index,
+            default=0,
+        ),
+        "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+        "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+        "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+        "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+        "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+        "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+        "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+        "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+        "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+        "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        "project_browser_autonomous_pr_queue_state_persistence_path": persistence_path_text,
+    }
+
+
+def _build_project_browser_autonomous_local_loop_state(
+    *,
+    chatgpt_diff_review_decision_state: Mapping[str, Any] | None,
+    commit_tag_gate_state: Mapping[str, Any] | None,
+    commit_tag_execution_state: Mapping[str, Any] | None,
+    pr_queue_state: Mapping[str, Any] | None,
+    chrome_runner_bridge_bounded_loop_state: Mapping[str, Any] | None,
+    codex_execution_gate_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    review_state = (
+        dict(chatgpt_diff_review_decision_state)
+        if isinstance(chatgpt_diff_review_decision_state, Mapping)
+        else {}
+    )
+    commit_gate_state = dict(commit_tag_gate_state) if isinstance(commit_tag_gate_state, Mapping) else {}
+    commit_execution_state = (
+        dict(commit_tag_execution_state) if isinstance(commit_tag_execution_state, Mapping) else {}
+    )
+    queue_state = dict(pr_queue_state) if isinstance(pr_queue_state, Mapping) else {}
+    bounded_loop_state = (
+        dict(chrome_runner_bridge_bounded_loop_state)
+        if isinstance(chrome_runner_bridge_bounded_loop_state, Mapping)
+        else {}
+    )
+    codex_gate_state = (
+        dict(codex_execution_gate_state) if isinstance(codex_execution_gate_state, Mapping) else {}
+    )
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_int(key: str, *, default: int) -> int:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        return _as_non_negative_int(value, default=default)
+
+    def _compact(text: Any, *, max_chars: int = 2000) -> str:
+        value = _normalize_text(text, default="")
+        if not value:
+            return ""
+        normalized = " ".join(value.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _bound_prompt_text(text: Any, *, max_chars: int = 12000) -> str:
+        value = _normalize_text(text, default="")
+        if not value:
+            return ""
+        if len(value) <= max_chars:
+            return value
+        return value[:max_chars]
+
+    def _read_text_bounded(path_text: str, *, limit_bytes: int = 32768) -> tuple[str, str]:
+        path_obj = Path(path_text)
+        if not path_obj.exists():
+            return ("", "missing")
+        if not path_obj.is_file():
+            return ("", "not_file")
+        try:
+            with path_obj.open("rb") as file_obj:
+                raw = file_obj.read(limit_bytes)
+        except OSError as exc:
+            return ("", f"read_error:{exc.__class__.__name__}")
+        text = raw.decode("utf-8", errors="replace").strip()
+        if not text:
+            return ("", "empty")
+        return (text, "ready")
+
+    def _route_text(path_text: str, content: str) -> tuple[bool, str]:
+        bounded_content = _bound_prompt_text(content, max_chars=12000)
+        if not bounded_content:
+            return (False, "route_prompt_empty")
+        if len(bounded_content.encode("utf-8")) > 32768:
+            return (False, "route_prompt_too_large")
+        route_path = Path(path_text)
+        if route_path.is_symlink():
+            return (False, "route_symlink_blocked")
+        if route_path.exists() and not route_path.is_file():
+            return (False, "route_not_file")
+        if not route_path.parent.exists():
+            return (False, "route_parent_missing")
+        try:
+            temp_path = route_path.with_name(f"{route_path.name}.tmp")
+            temp_path.write_text(bounded_content, encoding="utf-8")
+            os.replace(temp_path, route_path)
+        except OSError as exc:
+            return (False, f"route_write_failed:{exc.__class__.__name__}")
+        return (True, "routed")
+
+    loop_enabled = _read_flag(
+        "project_browser_autonomous_local_autonomous_loop_enabled",
+        default=False,
+    )
+    loop_route_enabled = _read_flag(
+        "project_browser_autonomous_local_autonomous_loop_route_enabled",
+        default=False,
+    )
+    loop_max_iterations = _read_int(
+        "project_browser_autonomous_local_autonomous_loop_max_iterations",
+        default=3,
+    )
+    if loop_max_iterations <= 0:
+        loop_max_iterations = 3
+    loop_iteration = _read_int(
+        "project_browser_autonomous_local_autonomous_loop_iteration",
+        default=0,
+    )
+
+    review_status = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision_status"),
+        default="",
+    )
+    review_next_action = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision_next_action"),
+        default="",
+    )
+    review_decision = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision"),
+        default="",
+    )
+    review_fix_prompt = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_fix_prompt"),
+        default="",
+    )
+    review_fix_prompt_fingerprint = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint"),
+        default="",
+    )
+    review_revert_plan = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_revert_plan"),
+        default="",
+    )
+    review_revert_reason = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_revert_reason"),
+        default="",
+    )
+
+    commit_gate_status = _normalize_text(
+        commit_gate_state.get("project_browser_autonomous_commit_tag_gate_status"),
+        default="",
+    )
+    commit_execution_status = _normalize_text(
+        commit_execution_state.get("project_browser_autonomous_commit_tag_execution_status"),
+        default="",
+    )
+    commit_execution_next_action = _normalize_text(
+        commit_execution_state.get("project_browser_autonomous_commit_tag_execution_next_action"),
+        default="",
+    )
+    commit_execution_commit_sha = _normalize_text(
+        commit_execution_state.get("project_browser_autonomous_commit_tag_execution_commit_sha"),
+        default="",
+    )
+
+    pr_queue_status = _normalize_text(
+        queue_state.get("project_browser_autonomous_pr_queue_state_status"),
+        default="",
+    )
+    pr_queue_next_action = _normalize_text(
+        queue_state.get("project_browser_autonomous_pr_queue_state_next_action"),
+        default="",
+    )
+    active_pr_index = _as_int(
+        queue_state.get("project_browser_autonomous_pr_queue_state_active_pr_index"),
+        default=0,
+    )
+    active_pr_id = _normalize_text(
+        queue_state.get("project_browser_autonomous_pr_queue_state_active_pr_id"),
+        default="",
+    )
+    next_pr_index = _as_int(
+        queue_state.get("project_browser_autonomous_pr_queue_state_next_pr_index"),
+        default=-1,
+    )
+    next_pr_id = _normalize_text(
+        queue_state.get("project_browser_autonomous_pr_queue_state_next_pr_id"),
+        default="",
+    )
+    pr_queue_items: list[dict[str, Any]] = []
+    if isinstance(queue_state.get("project_browser_autonomous_pr_queue_state_pr_queue"), list):
+        for entry in queue_state.get("project_browser_autonomous_pr_queue_state_pr_queue", []):
+            if isinstance(entry, Mapping):
+                pr_queue_items.append(dict(entry))
+    queue_completed_commit_sha = _normalize_text(
+        queue_state.get("project_browser_autonomous_pr_queue_state_completed_commit_sha"),
+        default="",
+    )
+    queue_active_item_commit_sha = ""
+    if 0 <= active_pr_index < len(pr_queue_items):
+        queue_active_item_commit_sha = _normalize_text(
+            pr_queue_items[active_pr_index].get("commit_sha"),
+            default="",
+        )
+    queue_reflects_commit_execution = bool(
+        commit_execution_commit_sha
+        and (
+            queue_completed_commit_sha == commit_execution_commit_sha
+            or queue_active_item_commit_sha == commit_execution_commit_sha
+        )
+    )
+
+    bounded_loop_status = _normalize_text(
+        bounded_loop_state.get("project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"),
+        default="",
+    )
+    codex_gate_status = _normalize_text(
+        codex_gate_state.get("project_browser_autonomous_codex_execution_gate_status"),
+        default="",
+    )
+    codex_gate_prompt_kind = _normalize_text(
+        codex_gate_state.get("project_browser_autonomous_codex_execution_gate_prompt_kind"),
+        default="",
+    )
+    codex_gate_prompt_path = _normalize_text(
+        codex_gate_state.get("project_browser_autonomous_codex_execution_gate_prompt_path"),
+        default="",
+    )
+    codex_gate_prompt_fingerprint = _normalize_text(
+        codex_gate_state.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+        default="",
+    )
+
+    status = "local_loop_not_requested"
+    next_action = "enable_local_autonomous_loop"
+    selected_prompt = ""
+    selected_prompt_fingerprint = ""
+    selected_step_fingerprint = ""
+    revert_plan = ""
+    blocked_reason = "local_loop_disabled"
+    fix_recommendations: list[str] = []
+    local_iteration_out = _as_non_negative_int(loop_iteration, default=0)
+
+    if not loop_enabled:
+        return {
+            "project_browser_autonomous_local_loop_status": status,
+            "project_browser_autonomous_local_loop_next_action": next_action,
+            "project_browser_autonomous_local_loop_enabled": bool(loop_enabled),
+            "project_browser_autonomous_local_loop_route_enabled": bool(loop_route_enabled),
+            "project_browser_autonomous_local_loop_iteration": local_iteration_out,
+            "project_browser_autonomous_local_loop_max_iterations": _as_non_negative_int(
+                loop_max_iterations,
+                default=3,
+            ),
+            "project_browser_autonomous_local_loop_active_pr_index": _as_int(active_pr_index, default=0),
+            "project_browser_autonomous_local_loop_active_pr_id": active_pr_id,
+            "project_browser_autonomous_local_loop_next_pr_index": _as_int(next_pr_index, default=-1),
+            "project_browser_autonomous_local_loop_next_pr_id": next_pr_id,
+            "project_browser_autonomous_local_loop_selected_prompt": selected_prompt,
+            "project_browser_autonomous_local_loop_selected_prompt_fingerprint": (
+                selected_prompt_fingerprint
+            ),
+            "project_browser_autonomous_local_loop_selected_step_fingerprint": (
+                selected_step_fingerprint
+            ),
+            "project_browser_autonomous_local_loop_revert_plan": revert_plan,
+            "project_browser_autonomous_local_loop_fix_recommendations": _normalize_string_list(
+                fix_recommendations
+            ),
+            "project_browser_autonomous_local_loop_blocked_reason": blocked_reason,
+        }
+
+    if loop_iteration >= loop_max_iterations:
+        status = "local_loop_blocked_iteration_limit"
+        next_action = "manual_review_required"
+        blocked_reason = "max_iterations_reached"
+        fix_recommendations = [
+            "increase local loop max iterations only with explicit approval",
+            "perform manual review before continuing",
+        ]
+        return {
+            "project_browser_autonomous_local_loop_status": status,
+            "project_browser_autonomous_local_loop_next_action": next_action,
+            "project_browser_autonomous_local_loop_enabled": bool(loop_enabled),
+            "project_browser_autonomous_local_loop_route_enabled": bool(loop_route_enabled),
+            "project_browser_autonomous_local_loop_iteration": local_iteration_out,
+            "project_browser_autonomous_local_loop_max_iterations": _as_non_negative_int(
+                loop_max_iterations,
+                default=3,
+            ),
+            "project_browser_autonomous_local_loop_active_pr_index": _as_int(active_pr_index, default=0),
+            "project_browser_autonomous_local_loop_active_pr_id": active_pr_id,
+            "project_browser_autonomous_local_loop_next_pr_index": _as_int(next_pr_index, default=-1),
+            "project_browser_autonomous_local_loop_next_pr_id": next_pr_id,
+            "project_browser_autonomous_local_loop_selected_prompt": selected_prompt,
+            "project_browser_autonomous_local_loop_selected_prompt_fingerprint": (
+                selected_prompt_fingerprint
+            ),
+            "project_browser_autonomous_local_loop_selected_step_fingerprint": (
+                selected_step_fingerprint
+            ),
+            "project_browser_autonomous_local_loop_revert_plan": revert_plan,
+            "project_browser_autonomous_local_loop_fix_recommendations": _normalize_string_list(
+                fix_recommendations
+            ),
+            "project_browser_autonomous_local_loop_blocked_reason": blocked_reason,
+        }
+
+    manual_review_triggered = bool(
+        review_next_action == "manual_review_required"
+        or review_status.startswith("chatgpt_diff_review_decision_blocked_")
+        or review_status == "chatgpt_diff_review_decision_manual_review"
+        or (
+            _normalize_text(commit_gate_state.get("project_browser_autonomous_commit_tag_gate_next_action"), default="")
+            == "manual_review_required"
+            and commit_gate_status.startswith("commit_tag_gate_blocked")
+        )
+        or (
+            commit_execution_next_action == "manual_review_required"
+            and commit_execution_status.startswith("commit_tag_execution_blocked")
+        )
+        or (
+            pr_queue_next_action == "manual_review_required"
+            and pr_queue_status.startswith("pr_queue_state_blocked")
+        )
+        or (
+            _normalize_text(
+                bounded_loop_state.get("project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action"),
+                default="",
+            )
+            == "manual_review_required"
+            and bounded_loop_status.startswith("loop_blocked")
+        )
+        or (
+            _normalize_text(
+                codex_gate_state.get("project_browser_autonomous_codex_execution_gate_next_action"),
+                default="",
+            )
+            == "manual_review_required"
+            and codex_gate_status.startswith("codex_execution_gate_blocked")
+        )
+    )
+    if manual_review_triggered:
+        status = "local_loop_blocked_manual_review"
+        next_action = "manual_review_required"
+        blocked_reason = "manual_review_or_blocked_state_detected"
+        fix_recommendations = [
+            "resolve blocking/manual-review state before routing",
+            "re-run after blocked reason is cleared",
+        ]
+    elif pr_queue_status == "pr_queue_state_project_complete":
+        status = "local_loop_project_complete"
+        next_action = "project_complete"
+        blocked_reason = "none"
+    elif pr_queue_status == "pr_queue_state_updated" and next_pr_index >= 0:
+        status = "local_loop_ready_prepare_next_pr_prompt"
+        next_action = "prepare_next_pr_prompt"
+        blocked_reason = "none"
+        if 0 <= next_pr_index < len(pr_queue_items):
+            next_item = dict(pr_queue_items[next_pr_index])
+            next_pr_id = _normalize_text(next_item.get("id"), default=next_pr_id)
+            candidate_prompt = _normalize_text(
+                next_item.get("prompt"),
+                default=_normalize_text(
+                    next_item.get("prompt_text"),
+                    default=_normalize_text(
+                        next_item.get("implementation_prompt"),
+                        default=_normalize_text(next_item.get("pr_prompt"), default=""),
+                    ),
+                ),
+            )
+            candidate_prompt_fingerprint = _normalize_text(
+                next_item.get("prompt_fingerprint"),
+                default="",
+            )
+            if candidate_prompt:
+                selected_prompt = _bound_prompt_text(candidate_prompt, max_chars=12000)
+                selected_prompt_fingerprint = (
+                    candidate_prompt_fingerprint
+                    if candidate_prompt_fingerprint
+                    else hashlib.sha256(selected_prompt.encode("utf-8")).hexdigest()
+                )
+            else:
+                if candidate_prompt_fingerprint:
+                    selected_prompt_fingerprint = candidate_prompt_fingerprint
+                item_summary = _compact(next_item.get("summary"), max_chars=360)
+                item_changed_files = _normalize_string_list(next_item.get("changed_files"))[:20]
+                item_blocked_reason = _normalize_text(next_item.get("blocked_reason"), default="")
+                changed_hint = ", ".join(item_changed_files) if item_changed_files else "(none)"
+                selected_prompt = _bound_prompt_text(
+                    (
+                        "Generate one bounded implementation prompt for the single PR item below.\n"
+                        "Return only the implementation prompt text for Codex.\n\n"
+                        f"PR item id: {next_pr_id or f'pr-{next_pr_index}'}\n"
+                        f"PR item status: {_normalize_text(next_item.get('status'), default='pending')}\n"
+                        f"PR item summary: {item_summary or '(none)'}\n"
+                        f"PR item changed_files: {changed_hint}\n"
+                        f"PR item prompt_fingerprint: {candidate_prompt_fingerprint or '(none)'}\n"
+                        f"PR item blocked_reason: {item_blocked_reason or '(none)'}\n\n"
+                        "Constraints:\n"
+                        "- scope: this PR item only\n"
+                        "- no git commands, no commit/tag/push/merge/PR creation\n"
+                        "- concise and implementation-ready prompt"
+                    ),
+                    max_chars=12000,
+                )
+                if not selected_prompt_fingerprint:
+                    selected_prompt_fingerprint = hashlib.sha256(
+                        selected_prompt.encode("utf-8")
+                    ).hexdigest()
+        else:
+            status = "local_loop_blocked_missing_state"
+            next_action = "manual_review_required"
+            blocked_reason = "next_pr_index_out_of_range"
+            fix_recommendations = ["repair local pr_queue state next_pr_index/next_pr_id"]
+    elif review_decision == "revert":
+        status = "local_loop_ready_prepare_safe_revert"
+        next_action = "prepare_safe_revert"
+        blocked_reason = "none"
+        if review_revert_plan:
+            revert_plan = review_revert_plan
+        elif review_revert_reason:
+            revert_plan = f"Revert requested: {review_revert_reason}"
+        else:
+            status = "local_loop_blocked_missing_state"
+            next_action = "manual_review_required"
+            blocked_reason = "revert_plan_missing"
+            fix_recommendations = ["provide revert_reason or revert_plan in review response"]
+    elif review_decision == "fix" and review_fix_prompt:
+        status = "local_loop_ready_run_codex_fix"
+        next_action = "run_codex_fix"
+        blocked_reason = "none"
+        selected_prompt = _bound_prompt_text(review_fix_prompt, max_chars=12000)
+        selected_prompt_fingerprint = (
+            review_fix_prompt_fingerprint
+            if review_fix_prompt_fingerprint
+            else hashlib.sha256(selected_prompt.encode("utf-8")).hexdigest()
+        )
+    elif (
+        review_decision == "approve"
+        and review_status == "chatgpt_diff_review_decision_approved_for_commit_gate"
+        and commit_execution_status != "commit_tag_execution_committed_and_tagged"
+    ):
+        status = "local_loop_ready_prepare_commit_tag_gate"
+        next_action = "prepare_commit_tag_gate"
+        blocked_reason = "none"
+    elif (
+        commit_execution_status == "commit_tag_execution_committed_and_tagged"
+        and pr_queue_status
+        not in {"pr_queue_state_updated", "pr_queue_state_project_complete"}
+        and not queue_reflects_commit_execution
+    ):
+        status = "local_loop_decision_only"
+        next_action = "update_pr_queue_or_prepare_next_pr"
+        blocked_reason = "awaiting_pr_queue_state_update"
+    else:
+        implementation_prompt_text = ""
+        implementation_prompt_fingerprint = ""
+        if (
+            codex_gate_prompt_kind == "implementation"
+            and codex_gate_status
+            in {"codex_execution_gate_ready", "codex_execution_gate_decision_only"}
+            and codex_gate_prompt_path
+        ):
+            prompt_text, prompt_read_status = _read_text_bounded(codex_gate_prompt_path)
+            if prompt_read_status == "ready":
+                implementation_prompt_text = prompt_text
+                implementation_prompt_fingerprint = (
+                    codex_gate_prompt_fingerprint
+                    if codex_gate_prompt_fingerprint
+                    else hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+                )
+        if not implementation_prompt_text:
+            fallback_prompt = _normalize_text(
+                bounded_loop_state.get(
+                    "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt"
+                ),
+                default="",
+            )
+            fallback_fp = _normalize_text(
+                bounded_loop_state.get(
+                    "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt_fingerprint"
+                ),
+                default="",
+            )
+            if (
+                bounded_loop_status == "loop_ready_or_routed_to_codex"
+                and fallback_prompt
+            ):
+                implementation_prompt_text = fallback_prompt
+                implementation_prompt_fingerprint = (
+                    fallback_fp
+                    if fallback_fp
+                    else hashlib.sha256(fallback_prompt.encode("utf-8")).hexdigest()
+                )
+        if implementation_prompt_text:
+            status = "local_loop_ready_run_codex_implementation"
+            next_action = "run_codex_implementation"
+            blocked_reason = "none"
+            selected_prompt = _bound_prompt_text(implementation_prompt_text, max_chars=12000)
+            selected_prompt_fingerprint = implementation_prompt_fingerprint
+        else:
+            status = "local_loop_blocked_no_next_step"
+            next_action = "blocked_no_next_step"
+            blocked_reason = "no_routable_next_step_detected"
+            fix_recommendations = [
+                "supply missing normalized state for next step selection",
+                "perform manual review and set explicit next action",
+            ]
+
+    if selected_prompt:
+        selected_prompt = _bound_prompt_text(selected_prompt, max_chars=12000)
+    if selected_prompt and not selected_prompt_fingerprint:
+        selected_prompt_fingerprint = hashlib.sha256(selected_prompt.encode("utf-8")).hexdigest()
+
+    step_material = "|".join(
+        [
+            _normalize_text(next_action, default=""),
+            _normalize_text(selected_prompt_fingerprint, default=""),
+            _normalize_text(active_pr_id, default=""),
+            _normalize_text(next_pr_id, default=""),
+            _normalize_text(review_status, default=""),
+            _normalize_text(commit_execution_status, default=""),
+        ]
+    )
+    selected_step_fingerprint = (
+        hashlib.sha256(step_material.encode("utf-8")).hexdigest() if step_material else ""
+    )
+    prior_selected_step_fingerprint = _normalize_text(
+        prior_payload.get("project_browser_autonomous_local_loop_selected_step_fingerprint"),
+        default=_normalize_text(
+            approved_restart.get("project_browser_autonomous_local_loop_selected_step_fingerprint"),
+            default="",
+        ),
+    )
+    if (
+        selected_step_fingerprint
+        and prior_selected_step_fingerprint
+        and selected_step_fingerprint == prior_selected_step_fingerprint
+    ):
+        status = "local_loop_blocked_duplicate_step"
+        next_action = "manual_review_required"
+        blocked_reason = "duplicate_step_fingerprint"
+        fix_recommendations = [
+            "adjust local loop iteration or refresh input state",
+            "avoid dispatching the same prompt/step fingerprint",
+        ]
+
+    routed = False
+    if status.startswith("local_loop_ready_") and loop_route_enabled:
+        if selected_step_fingerprint and prior_selected_step_fingerprint and (
+            selected_step_fingerprint == prior_selected_step_fingerprint
+        ):
+            status = "local_loop_blocked_duplicate_step"
+            next_action = "manual_review_required"
+            blocked_reason = "duplicate_step_fingerprint"
+        elif selected_step_fingerprint and (
+            selected_step_fingerprint
+            == _normalize_text(
+                prior_payload.get("project_browser_autonomous_local_loop_selected_prompt_fingerprint"),
+                default="",
+            )
+        ):
+            status = "local_loop_blocked_duplicate_step"
+            next_action = "manual_review_required"
+            blocked_reason = "duplicate_step_fingerprint"
+    if status.startswith("local_loop_ready_") and loop_route_enabled:
+        if next_action == "run_codex_implementation":
+            if not selected_prompt:
+                status = "local_loop_blocked_missing_state"
+                next_action = "manual_review_required"
+                blocked_reason = "implementation_prompt_missing"
+            else:
+                route_ok, route_reason = _route_text(
+                    "/tmp/codex-local-runner-decision/generated_next_prompt.txt",
+                    selected_prompt,
+                )
+                if not route_ok:
+                    status = "local_loop_blocked_missing_state"
+                    next_action = "manual_review_required"
+                    blocked_reason = route_reason
+                else:
+                    routed = True
+        elif next_action == "run_codex_fix":
+            fix_path = "/tmp/codex-local-runner-decision/generated_fix_prompt.txt"
+            if not selected_prompt:
+                existing_fix_text, existing_fix_status = _read_text_bounded(fix_path)
+                if existing_fix_status == "ready":
+                    selected_prompt = existing_fix_text
+                    selected_prompt_fingerprint = hashlib.sha256(
+                        existing_fix_text.encode("utf-8")
+                    ).hexdigest()
+            if not selected_prompt:
+                status = "local_loop_blocked_missing_state"
+                next_action = "manual_review_required"
+                blocked_reason = "fix_prompt_missing"
+            else:
+                route_ok, route_reason = _route_text(fix_path, selected_prompt)
+                if not route_ok:
+                    status = "local_loop_blocked_missing_state"
+                    next_action = "manual_review_required"
+                    blocked_reason = route_reason
+                else:
+                    routed = True
+        elif next_action == "prepare_next_pr_prompt" and selected_prompt:
+            queue_write_mode = "generated_next_prompt"
+            if "Generate one bounded implementation prompt for the single PR item below." in selected_prompt:
+                queue_write_mode = "chatgpt_bridge_request"
+            if queue_write_mode == "generated_next_prompt":
+                route_ok, route_reason = _route_text(
+                    "/tmp/codex-local-runner-decision/generated_next_prompt.txt",
+                    selected_prompt,
+                )
+                if not route_ok:
+                    status = "local_loop_blocked_missing_state"
+                    next_action = "manual_review_required"
+                    blocked_reason = route_reason
+                else:
+                    routed = True
+            else:
+                duplicate_request_fingerprints = {
+                    _normalize_text(
+                        prior_payload.get("project_browser_autonomous_local_loop_selected_prompt_fingerprint"),
+                        default="",
+                    ),
+                    _normalize_text(
+                        prior_payload.get("project_browser_autonomous_local_loop_selected_step_fingerprint"),
+                        default="",
+                    ),
+                    _normalize_text(
+                        approved_restart.get(
+                            "project_browser_autonomous_local_loop_selected_prompt_fingerprint"
+                        ),
+                        default="",
+                    ),
+                    _normalize_text(
+                        approved_restart.get("project_browser_autonomous_local_loop_selected_step_fingerprint"),
+                        default="",
+                    ),
+                    _normalize_text(
+                        prior_payload.get(
+                            "project_browser_autonomous_chatgpt_diff_review_request_prompt_fingerprint"
+                        ),
+                        default="",
+                    ),
+                    _normalize_text(
+                        approved_restart.get(
+                            "project_browser_autonomous_chatgpt_diff_review_request_prompt_fingerprint"
+                        ),
+                        default="",
+                    ),
+                }
+                duplicate_request_fingerprints.discard("")
+                if selected_prompt_fingerprint and (
+                    selected_prompt_fingerprint in duplicate_request_fingerprints
+                ):
+                    status = "local_loop_blocked_duplicate_step"
+                    next_action = "manual_review_required"
+                    blocked_reason = "duplicate_next_pr_bridge_request_fingerprint"
+                elif len(selected_prompt.encode("utf-8")) > 32768:
+                    status = "local_loop_blocked_missing_state"
+                    next_action = "manual_review_required"
+                    blocked_reason = "bridge_request_prompt_too_large"
+                else:
+                    bridge_dir = Path("/tmp/codex-local-runner-chatgpt-bridge")
+                    request_path = bridge_dir / "request.md"
+                    response_path = bridge_dir / "response.md"
+                    status_path = bridge_dir / "status.json"
+                    if request_path.is_symlink():
+                        status = "local_loop_blocked_missing_state"
+                        next_action = "manual_review_required"
+                        blocked_reason = "bridge_request_path_symlink_blocked"
+                    else:
+                        try:
+                            bridge_dir.mkdir(parents=True, exist_ok=True)
+                            for stale_path in (response_path, status_path):
+                                if not stale_path.exists():
+                                    continue
+                                if not stale_path.is_file() and not stale_path.is_symlink():
+                                    raise OSError(f"stale_path_not_file:{stale_path}")
+                                stale_path.unlink()
+                            temp_path = request_path.with_name(f"{request_path.name}.tmp")
+                            temp_path.write_text(selected_prompt, encoding="utf-8")
+                            os.replace(temp_path, request_path)
+                        except OSError as exc:
+                            status = "local_loop_blocked_missing_state"
+                            next_action = "manual_review_required"
+                            blocked_reason = f"bridge_request_write_failed:{exc.__class__.__name__}"
+                        else:
+                            routed = True
+        if routed:
+            local_iteration_out = min(loop_max_iterations, local_iteration_out + 1)
+    elif status.startswith("local_loop_ready_") and not loop_route_enabled:
+        status = "local_loop_decision_only"
+        blocked_reason = "route_not_enabled"
+    elif status == "local_loop_project_complete":
+        local_iteration_out = _as_non_negative_int(loop_iteration, default=0)
+
+    return {
+        "project_browser_autonomous_local_loop_status": status,
+        "project_browser_autonomous_local_loop_next_action": next_action,
+        "project_browser_autonomous_local_loop_enabled": bool(loop_enabled),
+        "project_browser_autonomous_local_loop_route_enabled": bool(loop_route_enabled),
+        "project_browser_autonomous_local_loop_iteration": _as_non_negative_int(
+            local_iteration_out,
+            default=0,
+        ),
+        "project_browser_autonomous_local_loop_max_iterations": _as_non_negative_int(
+            loop_max_iterations,
+            default=3,
+        ),
+        "project_browser_autonomous_local_loop_active_pr_index": _as_int(active_pr_index, default=0),
+        "project_browser_autonomous_local_loop_active_pr_id": active_pr_id,
+        "project_browser_autonomous_local_loop_next_pr_index": _as_int(next_pr_index, default=-1),
+        "project_browser_autonomous_local_loop_next_pr_id": next_pr_id,
+        "project_browser_autonomous_local_loop_selected_prompt": selected_prompt,
+        "project_browser_autonomous_local_loop_selected_prompt_fingerprint": (
+            selected_prompt_fingerprint
+        ),
+        "project_browser_autonomous_local_loop_selected_step_fingerprint": selected_step_fingerprint,
+        "project_browser_autonomous_local_loop_revert_plan": revert_plan,
+        "project_browser_autonomous_local_loop_fix_recommendations": _normalize_string_list(
+            fix_recommendations
+        ),
+        "project_browser_autonomous_local_loop_blocked_reason": blocked_reason,
+    }
+
+
+def _build_project_browser_autonomous_codex_execution_connector_state(
+    *,
+    local_loop_state: Mapping[str, Any] | None,
+    codex_execution_gate_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    chrome_runner_bridge_bounded_loop_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    local_loop = dict(local_loop_state) if isinstance(local_loop_state, Mapping) else {}
+    codex_gate = (
+        dict(codex_execution_gate_state)
+        if isinstance(codex_execution_gate_state, Mapping)
+        else {}
+    )
+    codex_capture = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    bounded_loop = (
+        dict(chrome_runner_bridge_bounded_loop_state)
+        if isinstance(chrome_runner_bridge_bounded_loop_state, Mapping)
+        else {}
+    )
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_text_bounded(path_text: str, *, limit_bytes: int = 32768) -> tuple[str, str]:
+        path_obj = Path(path_text)
+        if not path_obj.exists():
+            return ("", "missing")
+        if not path_obj.is_file():
+            return ("", "not_file")
+        try:
+            with path_obj.open("rb") as file_obj:
+                raw = file_obj.read(limit_bytes)
+        except OSError as exc:
+            return ("", f"read_error:{exc.__class__.__name__}")
+        text = raw.decode("utf-8", errors="replace").strip()
+        if not text:
+            return ("", "empty")
+        return (text, "ready")
+
+    connector_enabled = _read_flag(
+        "project_browser_autonomous_codex_execution_connector_enabled",
+        default=False,
+    )
+    connector_execute_enabled = _read_flag(
+        "project_browser_autonomous_codex_execution_connector_execute_enabled",
+        default=False,
+    )
+
+    local_loop_status = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_status"),
+        default="",
+    )
+    local_loop_next_action = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_next_action"),
+        default="",
+    )
+    local_loop_prompt = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_selected_prompt"),
+        default="",
+    )
+    local_loop_prompt_fingerprint = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_selected_prompt_fingerprint"),
+        default="",
+    )
+
+    codex_gate_status = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_status"),
+        default="",
+    )
+    codex_gate_approved = bool(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_approved_for_execution", False)
+    )
+    codex_gate_prompt_kind = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_kind"),
+        default="",
+    )
+    codex_gate_prompt_path = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_path"),
+        default="",
+    )
+    codex_gate_prompt_fingerprint = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+        default="",
+    )
+    codex_gate_next_action = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_next_action"),
+        default="",
+    )
+
+    _ = _normalize_text(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_status"),
+        default="",
+    )
+    _ = _normalize_text(
+        bounded_loop.get("project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"),
+        default="",
+    )
+
+    status = "codex_execution_connector_not_requested"
+    next_action = "enable_codex_execution_connector"
+    executed = False
+    prompt_kind = ""
+    prompt_path = ""
+    prompt_fingerprint = ""
+    route_name = ""
+    output_preview = ""
+    blocked_reason = "connector_disabled"
+
+    if not connector_enabled:
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    if not connector_execute_enabled:
+        prompt_kind = (
+            "next"
+            if local_loop_next_action == "run_codex_implementation"
+            else ("fix" if local_loop_next_action == "run_codex_fix" else "")
+        )
+        prompt_path = _normalize_text(codex_gate_prompt_path, default="")
+        prompt_fingerprint = _normalize_text(codex_gate_prompt_fingerprint, default="")
+        if not prompt_fingerprint:
+            prompt_fingerprint = local_loop_prompt_fingerprint
+        status = "codex_execution_connector_decision_only"
+        next_action = "set_execute_enabled_for_single_codex_step"
+        blocked_reason = "execute_not_enabled"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    ready_local_loop = bool(
+        (
+            local_loop_status == "local_loop_ready_run_codex_implementation"
+            and local_loop_next_action == "run_codex_implementation"
+        )
+        or (
+            local_loop_status == "local_loop_ready_run_codex_fix"
+            and local_loop_next_action == "run_codex_fix"
+        )
+    )
+    if not ready_local_loop:
+        status = "codex_execution_connector_blocked_missing_local_loop"
+        next_action = "manual_review_required"
+        blocked_reason = "local_loop_not_ready_for_codex_execution"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    if not (codex_gate_status == "codex_execution_gate_ready" and codex_gate_approved):
+        status = "codex_execution_connector_blocked_missing_codex_gate"
+        next_action = "manual_review_required"
+        blocked_reason = "codex_execution_gate_not_ready_or_not_approved"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    expected_prompt_kind = (
+        "implementation" if local_loop_next_action == "run_codex_implementation" else "fix"
+    )
+    expected_gate_next_action = (
+        "run_existing_codex_implementation_step"
+        if expected_prompt_kind == "implementation"
+        else "run_existing_codex_fix_step"
+    )
+    route_available = bool(
+        expected_prompt_kind in {"implementation", "fix"}
+        and codex_gate_prompt_kind == expected_prompt_kind
+        and codex_gate_next_action == expected_gate_next_action
+        and codex_gate_prompt_path
+        and codex_gate_prompt_path
+        in {
+            "/tmp/codex-local-runner-decision/generated_next_prompt.txt",
+            "/tmp/codex-local-runner-decision/generated_fix_prompt.txt",
+        }
+    )
+    if not route_available:
+        status = "codex_execution_connector_blocked_no_existing_route"
+        next_action = "manual_review_required"
+        blocked_reason = "existing_safe_codex_invocation_route_not_available"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    prompt_path = codex_gate_prompt_path
+    prompt_text, prompt_read_status = _read_text_bounded(prompt_path, limit_bytes=32768)
+    if prompt_read_status != "ready":
+        status = "codex_execution_connector_blocked_missing_codex_gate"
+        next_action = "manual_review_required"
+        blocked_reason = f"prompt_read_status:{prompt_read_status}"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    prompt_kind = "next" if expected_prompt_kind == "implementation" else "fix"
+    prompt_fingerprint = (
+        codex_gate_prompt_fingerprint
+        if codex_gate_prompt_fingerprint
+        else hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+    )
+    if not prompt_fingerprint and local_loop_prompt_fingerprint:
+        prompt_fingerprint = local_loop_prompt_fingerprint
+    if not prompt_fingerprint and local_loop_prompt:
+        prompt_fingerprint = hashlib.sha256(local_loop_prompt.encode("utf-8")).hexdigest()
+
+    prior_dispatched_or_executed_fingerprints = {
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_codex_execution_connector_prompt_fingerprint"),
+            default="",
+        ),
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+            default="",
+        ),
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_local_loop_selected_prompt_fingerprint"),
+            default="",
+        ),
+    }
+    prior_dispatched_or_executed_fingerprints.discard("")
+    if prompt_fingerprint and prompt_fingerprint in prior_dispatched_or_executed_fingerprints:
+        status = "codex_execution_connector_blocked_duplicate_prompt"
+        next_action = "manual_review_required"
+        blocked_reason = "duplicate_prompt_fingerprint_against_prior_dispatch_or_execution"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    unsafe_tokens = (
+        "playwright",
+        "chatgpt api",
+        "openai api",
+        "captcha bypass",
+        "verify bypass",
+        "store cookie",
+        "store cookies",
+        "store token",
+        "store tokens",
+        "store session",
+        "store sessions",
+        "unbounded loop",
+        "infinite loop",
+        "daemon",
+        "scheduler",
+        "background queue",
+        "queue drain",
+        "new shell execution",
+        "new codex execution",
+        "auto commit",
+        "automatic commit",
+        "auto tag",
+        "automatic tag",
+        "auto pr",
+        "automatic pr",
+        "auto merge",
+        "automatic merge",
+        "rm -rf /",
+        "delete /",
+        "outside repo",
+    )
+    lower_prompt = prompt_text.lower()
+    if any(token in lower_prompt for token in unsafe_tokens):
+        status = "codex_execution_connector_blocked_unsafe_prompt"
+        next_action = "manual_review_required"
+        blocked_reason = "unsafe_prompt_detected"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    route_name = "existing_codex_invocation_execution_state"
+    invocation_state = _build_project_browser_autonomous_codex_invocation_execution_state(
+        repository_path=str(execution_repo_path),
+        readiness_status="ready_to_invoke_codex",
+        invocation_allowed=True,
+        selected_prompt_kind=prompt_kind,
+        selected_prompt_path=prompt_path,
+        selected_prompt_source="project_browser_autonomous_codex_execution_connector",
+        selected_prompt_ready=True,
+        selected_prompt_path_is_exact=True,
+        selected_prompt_path_exists=True,
+        selected_prompt_path_is_symlink=False,
+        selected_prompt_file_non_empty=True,
+        selected_prompt_file_too_large=False,
+        rollback_required=False,
+        human_review_required=False,
+        insufficient_truth=False,
+        max_invocations=1,
+        prior_invocation_attempted=bool(
+            prior_payload.get(
+                "project_browser_autonomous_codex_invocation_execution_invocation_attempted",
+                False,
+            )
+        ),
+        prior_invocation_completed=bool(
+            prior_payload.get(
+                "project_browser_autonomous_codex_invocation_execution_invocation_completed",
+                False,
+            )
+        ),
+    )
+    invocation_status = _normalize_text(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_status"),
+        default="",
+    )
+    invocation_completed = bool(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_invocation_completed", False)
+    )
+    invocation_exit_code = _as_int(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_invocation_exit_code"),
+        default=-1,
+    )
+    stdout_excerpt = _normalize_text(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_invocation_stdout_excerpt"),
+        default="",
+    )
+    stderr_excerpt = _normalize_text(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_invocation_stderr_excerpt"),
+        default="",
+    )
+    output_preview = _normalize_text(
+        "\n".join(
+            _serialize_required_signals(
+                [
+                    f"execution_status={invocation_status}",
+                    f"exit_code={invocation_exit_code}",
+                    f"stdout={stdout_excerpt[:300]}" if stdout_excerpt else "",
+                    f"stderr={stderr_excerpt[:300]}" if stderr_excerpt else "",
+                ]
+            )
+        ),
+        default="",
+    )
+
+    if invocation_status == "codex_invocation_completed" and invocation_completed and invocation_exit_code == 0:
+        status = "codex_execution_connector_executed"
+        next_action = "run_codex_capture_gate"
+        executed = True
+        blocked_reason = "none"
+    else:
+        status = "codex_execution_connector_blocked_execution_failed"
+        next_action = "manual_review_required"
+        blocked_reason = f"invocation_status:{invocation_status or 'unknown'}"
+
+    return {
+        "project_browser_autonomous_codex_execution_connector_status": status,
+        "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+        "project_browser_autonomous_codex_execution_connector_enabled": bool(connector_enabled),
+        "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+            connector_execute_enabled
+        ),
+        "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+        "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+        "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+        "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+            prompt_fingerprint
+        ),
+        "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+        "project_browser_autonomous_codex_execution_connector_output_preview": output_preview[:800],
+        "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+    }
+
+
+def _build_project_browser_autonomous_safe_revert_state(
+    *,
+    chatgpt_diff_review_decision_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    local_loop_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    review_state = (
+        dict(chatgpt_diff_review_decision_state)
+        if isinstance(chatgpt_diff_review_decision_state, Mapping)
+        else {}
+    )
+    capture_state = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    local_loop = dict(local_loop_state) if isinstance(local_loop_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _is_safe_changed_path(path_text: str) -> tuple[bool, str]:
+        path = _normalize_text(path_text, default="")
+        if not path:
+            return (False, "empty_path")
+        if Path(path).is_absolute() or path.startswith("/") or path.startswith("\\"):
+            return (False, f"absolute_path:{path}")
+        normalized = path.replace("\\", "/")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        if not normalized:
+            return (False, "malformed_path")
+        if ".." in normalized.split("/"):
+            return (False, f"parent_traversal:{path}")
+        if normalized == ".git" or normalized.startswith(".git/"):
+            return (False, f"git_internal:{path}")
+        if normalized.startswith("../") or "/../" in normalized:
+            return (False, f"outside_repo:{path}")
+        if " -> " in normalized:
+            return (False, f"ambiguous_path:{path}")
+        return (True, normalized)
+
+    def _parse_git_status_short(output: str) -> tuple[dict[str, str], list[str]]:
+        parsed: dict[str, str] = {}
+        ambiguous: list[str] = []
+        for raw_line in output.splitlines():
+            line = raw_line.rstrip("\n")
+            if not line.strip():
+                continue
+            if len(line) < 4 or line[2] != " ":
+                ambiguous.append(f"malformed_status_line:{line}")
+                continue
+            code = line[:2]
+            x, y = code[0], code[1]
+            path_text = line[3:].strip()
+            if not path_text or path_text.startswith('"') or " -> " in path_text:
+                ambiguous.append(f"ambiguous_path:{line}")
+                continue
+            if x in {"R", "C", "U"} or y in {"R", "C", "U"}:
+                ambiguous.append(f"unsupported_status:{line}")
+                continue
+            if x not in {" ", "M", "A", "D", "?"} or y not in {" ", "M", "A", "D", "?"}:
+                ambiguous.append(f"unsupported_status:{line}")
+                continue
+            path = path_text.replace("\\", "/")
+            if path in parsed:
+                ambiguous.append(f"duplicate_status_entry:{path}")
+                continue
+            parsed[path] = code
+        return parsed, ambiguous
+
+    safe_revert_enabled = _read_flag(
+        "project_browser_autonomous_safe_revert_enabled",
+        default=False,
+    )
+    safe_revert_execute_enabled = _read_flag(
+        "project_browser_autonomous_safe_revert_execute_enabled",
+        default=False,
+    )
+
+    review_decision = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision"),
+        default="",
+    )
+    review_revert_reason = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_revert_reason"),
+        default="",
+    )
+    review_revert_plan = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_revert_plan"),
+        default="",
+    )
+    local_loop_status = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_status"),
+        default="",
+    )
+    local_loop_next_action = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_next_action"),
+        default="",
+    )
+    local_loop_revert_plan = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_revert_plan"),
+        default="",
+    )
+    changed_files = _normalize_string_list(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+
+    status = "safe_revert_not_requested"
+    next_action = "enable_safe_revert"
+    reverted = False
+    pre_git_status_short = ""
+    post_git_status_short = ""
+    blocked_reason = "safe_revert_disabled"
+
+    revert_reason = review_revert_reason
+    revert_plan = review_revert_plan if review_revert_plan else local_loop_revert_plan
+
+    if not safe_revert_enabled:
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    review_revert_flow = bool(
+        review_decision == "revert" and (review_revert_reason or review_revert_plan)
+    )
+    local_loop_revert_flow = bool(
+        local_loop_next_action == "prepare_safe_revert"
+        and local_loop_status == "local_loop_ready_prepare_safe_revert"
+    )
+    if not review_revert_flow and not local_loop_revert_flow:
+        status = "safe_revert_blocked_missing_revert_decision"
+        next_action = "manual_review_required"
+        blocked_reason = "missing_revert_flow_signal"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    if not changed_files:
+        status = "safe_revert_blocked_missing_changed_files"
+        next_action = "manual_review_required"
+        blocked_reason = "changed_files_missing"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    safe_changed_files: list[str] = []
+    for path in changed_files:
+        safe, normalized_or_reason = _is_safe_changed_path(path)
+        if not safe:
+            status = "safe_revert_blocked_unsafe_paths"
+            next_action = "manual_review_required"
+            blocked_reason = normalized_or_reason
+            return {
+                "project_browser_autonomous_safe_revert_status": status,
+                "project_browser_autonomous_safe_revert_next_action": next_action,
+                "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+                "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                    safe_revert_execute_enabled
+                ),
+                "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+                "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                    changed_files
+                ),
+                "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+                "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+                "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+                "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+                "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+            }
+        safe_changed_files.append(normalized_or_reason)
+    safe_changed_files = _normalize_string_list(safe_changed_files)
+
+    max_changed_files = 25
+    large_change_approved = False
+    for key in (
+        "project_browser_autonomous_large_change_approved",
+        "project_browser_autonomous_commit_tag_large_change_approved",
+    ):
+        if key in approved_restart or key in prior_payload:
+            large_change_approved = _read_flag(key, default=False)
+            break
+    if len(safe_changed_files) > max_changed_files and not large_change_approved:
+        status = "safe_revert_blocked_large_change"
+        next_action = "manual_review_required"
+        blocked_reason = "changed_file_count_exceeds_limit"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    repo_path = _normalize_text(execution_repo_path, default="")
+    repo_obj = Path(repo_path) if repo_path else Path.cwd()
+    if not repo_obj.exists() or not repo_obj.is_dir():
+        status = "safe_revert_blocked_unsafe_paths"
+        next_action = "manual_review_required"
+        blocked_reason = "execution_repo_unavailable"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    try:
+        pre_status_cp = _run_git(str(repo_obj), ["status", "--short"], timeout_seconds=10.0)
+    except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_failed"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+    pre_git_status_short = _normalize_text(pre_status_cp.stdout, default="")
+    if pre_status_cp.returncode != 0:
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_nonzero"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    parsed_status, ambiguous_status = _parse_git_status_short(pre_git_status_short)
+    if ambiguous_status:
+        status = "safe_revert_blocked_ambiguous_status"
+        next_action = "manual_review_required"
+        blocked_reason = ambiguous_status[0]
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    status_paths = set(parsed_status.keys())
+    changed_files_set = set(safe_changed_files)
+    if status_paths != changed_files_set:
+        status = "safe_revert_blocked_unexpected_changes"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_paths_mismatch"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    untracked_changed_files: list[str] = []
+    for path in safe_changed_files:
+        code = parsed_status.get(path, "")
+        if code == "??":
+            untracked_changed_files.append(path)
+    if untracked_changed_files:
+        status = "safe_revert_blocked_untracked_files"
+        next_action = "manual_review_required"
+        blocked_reason = f"untracked_files_present:{untracked_changed_files[0]}"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    if not safe_revert_execute_enabled:
+        status = "safe_revert_decision_only"
+        next_action = "set_execute_enabled_for_safe_revert"
+        blocked_reason = "execution_not_enabled"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    try:
+        restore_staged_cp = _run_git(
+            str(repo_obj),
+            ["restore", "--staged", "--", *safe_changed_files],
+            timeout_seconds=30.0,
+        )
+    except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+        restore_staged_cp = None
+    if restore_staged_cp is None or restore_staged_cp.returncode != 0:
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_restore_staged_failed"
+        try:
+            post_status_cp = _run_git(str(repo_obj), ["status", "--short"], timeout_seconds=10.0)
+            post_git_status_short = _normalize_text(post_status_cp.stdout, default="")
+        except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+            post_git_status_short = ""
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    try:
+        restore_cp = _run_git(
+            str(repo_obj),
+            ["restore", "--", *safe_changed_files],
+            timeout_seconds=30.0,
+        )
+    except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+        restore_cp = None
+    if restore_cp is None or restore_cp.returncode != 0:
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_restore_failed"
+        try:
+            post_status_cp = _run_git(str(repo_obj), ["status", "--short"], timeout_seconds=10.0)
+            post_git_status_short = _normalize_text(post_status_cp.stdout, default="")
+        except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+            post_git_status_short = ""
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    try:
+        post_status_cp = _run_git(str(repo_obj), ["status", "--short"], timeout_seconds=10.0)
+    except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+        post_status_cp = None
+    if post_status_cp is None:
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_post_failed"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+    post_git_status_short = _normalize_text(post_status_cp.stdout, default="")
+
+    post_parsed_status, post_ambiguous_status = _parse_git_status_short(post_git_status_short)
+    if post_ambiguous_status:
+        status = "safe_revert_blocked_ambiguous_status"
+        next_action = "manual_review_required"
+        blocked_reason = post_ambiguous_status[0]
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    if any(path in post_parsed_status for path in safe_changed_files):
+        status = "safe_revert_blocked_post_status_not_clean"
+        next_action = "manual_review_required"
+        blocked_reason = "changed_files_still_present_after_restore"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    status = "safe_revert_reverted"
+    next_action = "regenerate_pr_prompt_or_continue_loop"
+    blocked_reason = "none"
+    reverted = True
+    return {
+        "project_browser_autonomous_safe_revert_status": status,
+        "project_browser_autonomous_safe_revert_next_action": next_action,
+        "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+        "project_browser_autonomous_safe_revert_execute_enabled": bool(
+            safe_revert_execute_enabled
+        ),
+        "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+        "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+            safe_changed_files
+        ),
+        "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+        "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+        "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+        "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+        "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+    }
+
+
+def _build_project_browser_autonomous_bounded_local_loop_coordinator_state(
+    *,
+    local_loop_state: Mapping[str, Any] | None,
+    codex_execution_connector_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    chatgpt_diff_review_request_state: Mapping[str, Any] | None,
+    chatgpt_diff_review_decision_state: Mapping[str, Any] | None,
+    safe_revert_state: Mapping[str, Any] | None,
+    commit_tag_gate_state: Mapping[str, Any] | None,
+    commit_tag_execution_state: Mapping[str, Any] | None,
+    pr_queue_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    local_loop = dict(local_loop_state) if isinstance(local_loop_state, Mapping) else {}
+    codex_connector = (
+        dict(codex_execution_connector_state)
+        if isinstance(codex_execution_connector_state, Mapping)
+        else {}
+    )
+    codex_capture = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    review_request = (
+        dict(chatgpt_diff_review_request_state)
+        if isinstance(chatgpt_diff_review_request_state, Mapping)
+        else {}
+    )
+    review_decision = (
+        dict(chatgpt_diff_review_decision_state)
+        if isinstance(chatgpt_diff_review_decision_state, Mapping)
+        else {}
+    )
+    safe_revert = dict(safe_revert_state) if isinstance(safe_revert_state, Mapping) else {}
+    commit_gate = dict(commit_tag_gate_state) if isinstance(commit_tag_gate_state, Mapping) else {}
+    commit_execution = (
+        dict(commit_tag_execution_state) if isinstance(commit_tag_execution_state, Mapping) else {}
+    )
+    pr_queue = dict(pr_queue_state) if isinstance(pr_queue_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_int(key: str, *, default: int) -> int:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        return _as_non_negative_int(value, default=default)
+
+    def _read_text(key: str, *, default: str = "") -> str:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        return _normalize_text(value, default=default)
+
+    def _is_blocked_or_manual(status: str, next_action: str) -> bool:
+        normalized_status = _normalize_text(status, default="")
+        normalized_next_action = _normalize_text(next_action, default="")
+        if normalized_next_action == "manual_review_required":
+            return True
+        if "blocked" in normalized_status:
+            return True
+        if "manual_review" in normalized_status:
+            return True
+        return False
+
+    loop_enabled = _read_flag(
+        "project_browser_autonomous_bounded_local_loop_enabled",
+        default=False,
+    )
+    continue_enabled = _read_flag(
+        "project_browser_autonomous_bounded_local_loop_continue_enabled",
+        default=False,
+    )
+    max_iterations = _read_int(
+        "project_browser_autonomous_bounded_local_loop_max_iterations",
+        default=3,
+    )
+    if max_iterations <= 0:
+        max_iterations = 3
+    iteration = _read_int(
+        "project_browser_autonomous_bounded_local_loop_iteration",
+        default=0,
+    )
+    max_consecutive_failures = _read_int(
+        "project_browser_autonomous_bounded_local_loop_max_consecutive_failures",
+        default=1,
+    )
+    if max_consecutive_failures <= 0:
+        max_consecutive_failures = 1
+    consecutive_failures = _read_int(
+        "project_browser_autonomous_bounded_local_loop_consecutive_failures",
+        default=0,
+    )
+    prior_progress_fingerprint = _read_text(
+        "project_browser_autonomous_bounded_local_loop_progress_fingerprint",
+        default="",
+    )
+
+    local_loop_status = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_status"),
+        default="",
+    )
+    local_loop_next_action = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_next_action"),
+        default="",
+    )
+    local_loop_selected_step_fingerprint = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_selected_step_fingerprint"),
+        default="",
+    )
+
+    codex_connector_status = _normalize_text(
+        codex_connector.get("project_browser_autonomous_codex_execution_connector_status"),
+        default="",
+    )
+    codex_connector_next_action = _normalize_text(
+        codex_connector.get("project_browser_autonomous_codex_execution_connector_next_action"),
+        default="",
+    )
+    codex_connector_prompt_fingerprint = _normalize_text(
+        codex_connector.get("project_browser_autonomous_codex_execution_connector_prompt_fingerprint"),
+        default="",
+    )
+
+    capture_status = _normalize_text(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_status"),
+        default="",
+    )
+    capture_next_action = _normalize_text(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_next_action"),
+        default="",
+    )
+    capture_changed_files = _normalize_string_list(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+    capture_diff_summary = _normalize_text(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_diff_summary"),
+        default="",
+    )
+
+    review_request_status = _normalize_text(
+        review_request.get("project_browser_autonomous_chatgpt_diff_review_request_status"),
+        default="",
+    )
+    review_request_next_action = _normalize_text(
+        review_request.get("project_browser_autonomous_chatgpt_diff_review_request_next_action"),
+        default="",
+    )
+    review_decision_status = _normalize_text(
+        review_decision.get("project_browser_autonomous_chatgpt_diff_review_decision_status"),
+        default="",
+    )
+    review_decision_next_action = _normalize_text(
+        review_decision.get("project_browser_autonomous_chatgpt_diff_review_decision_next_action"),
+        default="",
+    )
+    review_decision_value = _normalize_text(
+        review_decision.get("project_browser_autonomous_chatgpt_diff_review_decision"),
+        default="",
+    )
+
+    safe_revert_status = _normalize_text(
+        safe_revert.get("project_browser_autonomous_safe_revert_status"),
+        default="",
+    )
+    safe_revert_next_action = _normalize_text(
+        safe_revert.get("project_browser_autonomous_safe_revert_next_action"),
+        default="",
+    )
+
+    commit_gate_status = _normalize_text(
+        commit_gate.get("project_browser_autonomous_commit_tag_gate_status"),
+        default="",
+    )
+    commit_gate_next_action = _normalize_text(
+        commit_gate.get("project_browser_autonomous_commit_tag_gate_next_action"),
+        default="",
+    )
+    commit_execution_status = _normalize_text(
+        commit_execution.get("project_browser_autonomous_commit_tag_execution_status"),
+        default="",
+    )
+    commit_execution_next_action = _normalize_text(
+        commit_execution.get("project_browser_autonomous_commit_tag_execution_next_action"),
+        default="",
+    )
+    commit_execution_commit_sha = _normalize_text(
+        commit_execution.get("project_browser_autonomous_commit_tag_execution_commit_sha"),
+        default="",
+    )
+    commit_execution_tag_name = _normalize_text(
+        commit_execution.get("project_browser_autonomous_commit_tag_execution_tag_name"),
+        default="",
+    )
+
+    pr_queue_status = _normalize_text(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_status"),
+        default="",
+    )
+    pr_queue_next_action = _normalize_text(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_next_action"),
+        default="",
+    )
+    pr_queue_active_pr_id = _normalize_text(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_active_pr_id"),
+        default="",
+    )
+    pr_queue_next_pr_id = _normalize_text(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_next_pr_id"),
+        default="",
+    )
+    pr_queue_next_pr_index = _as_int(
+        pr_queue.get("project_browser_autonomous_pr_queue_state_next_pr_index"),
+        default=-1,
+    )
+
+    progress_signature_payload = {
+        "local_loop_selected_step_fingerprint": local_loop_selected_step_fingerprint,
+        "codex_connector_status": codex_connector_status,
+        "codex_connector_prompt_fingerprint": codex_connector_prompt_fingerprint,
+        "capture_changed_files": capture_changed_files,
+        "capture_diff_summary": capture_diff_summary,
+        "review_decision_status": review_decision_status,
+        "review_decision": review_decision_value,
+        "safe_revert_status": safe_revert_status,
+        "commit_sha": commit_execution_commit_sha,
+        "tag_name": commit_execution_tag_name,
+        "pr_queue_active_pr_id": pr_queue_active_pr_id,
+        "pr_queue_next_pr_id": pr_queue_next_pr_id,
+        "pr_queue_status": pr_queue_status,
+    }
+    progress_fingerprint = hashlib.sha256(
+        json.dumps(
+            progress_signature_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    progress_changed = bool(not prior_progress_fingerprint or prior_progress_fingerprint != progress_fingerprint)
+
+    selected_component = "bounded_local_loop_coordinator"
+    selected_component_status = "not_selected"
+    selected_component_next_action = ""
+    selected_next_action = "blocked_no_next_step"
+    blocked_reason = ""
+    fix_recommendations: list[str] = []
+    coordinator_status = "bounded_local_loop_not_requested"
+
+    if not loop_enabled:
+        coordinator_status = "bounded_local_loop_not_requested"
+        selected_next_action = "enable_bounded_local_loop"
+        blocked_reason = "bounded_local_loop_disabled"
+        fix_recommendations = ["enable bounded local loop when one local iteration is intended"]
+    else:
+        project_complete = bool(
+            pr_queue_status == "pr_queue_state_project_complete"
+            or local_loop_status == "local_loop_project_complete"
+        )
+        blocked_components = (
+            ("local_loop", local_loop_status, local_loop_next_action),
+            ("codex_execution_connector", codex_connector_status, codex_connector_next_action),
+            ("codex_capture_gate", capture_status, capture_next_action),
+            ("chatgpt_diff_review_request", review_request_status, review_request_next_action),
+            ("chatgpt_diff_review_decision", review_decision_status, review_decision_next_action),
+            ("safe_revert", safe_revert_status, safe_revert_next_action),
+            ("commit_tag_gate", commit_gate_status, commit_gate_next_action),
+            ("commit_tag_execution", commit_execution_status, commit_execution_next_action),
+            ("pr_queue_state", pr_queue_status, pr_queue_next_action),
+        )
+        first_blocked_component: tuple[str, str, str] | None = None
+        for component_name, component_status, component_next_action in blocked_components:
+            if _is_blocked_or_manual(component_status, component_next_action):
+                first_blocked_component = (
+                    component_name,
+                    component_status,
+                    component_next_action,
+                )
+                break
+
+        if project_complete:
+            selected_component = "pr_queue_state"
+            selected_component_status = pr_queue_status
+            selected_component_next_action = pr_queue_next_action
+            selected_next_action = "project_complete"
+            coordinator_status = "bounded_local_loop_project_complete"
+            blocked_reason = "none"
+        elif first_blocked_component is not None:
+            selected_component = first_blocked_component[0]
+            selected_component_status = first_blocked_component[1]
+            selected_component_next_action = first_blocked_component[2]
+            selected_next_action = "manual_review_required"
+            coordinator_status = "bounded_local_loop_blocked_manual_review"
+            blocked_reason = f"blocked_component:{selected_component}"
+            fix_recommendations = [
+                "resolve the blocked/manual-review state in the selected component",
+                "re-run bounded local loop coordinator after blocked reason is cleared",
+            ]
+        elif safe_revert_status == "safe_revert_reverted":
+            selected_component = "safe_revert"
+            selected_component_status = safe_revert_status
+            selected_component_next_action = safe_revert_next_action
+            selected_next_action = "regenerate_pr_prompt_or_continue_loop"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif codex_connector_status == "codex_execution_connector_executed":
+            selected_component = "codex_execution_connector"
+            selected_component_status = codex_connector_status
+            selected_component_next_action = codex_connector_next_action
+            selected_next_action = "run_codex_capture_gate"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif capture_status == "codex_capture_gate_captured":
+            selected_component = "codex_capture_gate"
+            selected_component_status = capture_status
+            selected_component_next_action = capture_next_action
+            selected_next_action = "prepare_chatgpt_diff_review_request"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif review_request_status in {
+            "chatgpt_diff_review_request_written",
+            "chatgpt_diff_review_request_ready",
+        }:
+            selected_component = "chatgpt_diff_review_request"
+            selected_component_status = review_request_status
+            selected_component_next_action = review_request_next_action
+            selected_next_action = "wait_for_chatgpt_diff_review_response"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            review_decision_status == "chatgpt_diff_review_decision_approved_for_commit_gate"
+            or review_decision_value == "approve"
+        ):
+            selected_component = "chatgpt_diff_review_decision"
+            selected_component_status = review_decision_status
+            selected_component_next_action = review_decision_next_action
+            selected_next_action = "prepare_commit_tag_gate"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif review_decision_value == "fix":
+            selected_component = "chatgpt_diff_review_decision"
+            selected_component_status = review_decision_status
+            selected_component_next_action = review_decision_next_action
+            selected_next_action = "run_codex_fix"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif review_decision_value == "revert":
+            selected_component = "chatgpt_diff_review_decision"
+            selected_component_status = review_decision_status
+            selected_component_next_action = review_decision_next_action
+            selected_next_action = "prepare_safe_revert"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif commit_gate_status == "commit_tag_gate_ready":
+            selected_component = "commit_tag_gate"
+            selected_component_status = commit_gate_status
+            selected_component_next_action = commit_gate_next_action
+            selected_next_action = "prepare_explicit_commit_tag_execution"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif commit_execution_status == "commit_tag_execution_committed_and_tagged":
+            selected_component = "commit_tag_execution"
+            selected_component_status = commit_execution_status
+            selected_component_next_action = commit_execution_next_action
+            selected_next_action = "update_pr_queue_or_prepare_next_pr"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            pr_queue_status == "pr_queue_state_updated"
+            and pr_queue_next_pr_index >= 0
+        ):
+            selected_component = "pr_queue_state"
+            selected_component_status = pr_queue_status
+            selected_component_next_action = pr_queue_next_action
+            selected_next_action = "prepare_next_pr_prompt"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            local_loop_status == "local_loop_ready_run_codex_implementation"
+            or local_loop_next_action == "run_codex_implementation"
+        ):
+            selected_component = "local_loop"
+            selected_component_status = local_loop_status
+            selected_component_next_action = local_loop_next_action
+            selected_next_action = "run_codex_implementation"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            local_loop_status == "local_loop_ready_run_codex_fix"
+            or local_loop_next_action == "run_codex_fix"
+        ):
+            selected_component = "local_loop"
+            selected_component_status = local_loop_status
+            selected_component_next_action = local_loop_next_action
+            selected_next_action = "run_codex_fix"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            local_loop_status == "local_loop_ready_prepare_safe_revert"
+            or local_loop_next_action == "prepare_safe_revert"
+        ):
+            selected_component = "local_loop"
+            selected_component_status = local_loop_status
+            selected_component_next_action = local_loop_next_action
+            selected_next_action = "prepare_safe_revert"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        elif (
+            local_loop_status == "local_loop_ready_prepare_next_pr_prompt"
+            or local_loop_next_action == "prepare_next_pr_prompt"
+        ):
+            selected_component = "local_loop"
+            selected_component_status = local_loop_status
+            selected_component_next_action = local_loop_next_action
+            selected_next_action = "prepare_next_pr_prompt"
+            coordinator_status = "bounded_local_loop_ready_continue"
+            blocked_reason = "none"
+        else:
+            selected_component = "bounded_local_loop_coordinator"
+            selected_component_status = "no_next_step"
+            selected_component_next_action = "blocked_no_next_step"
+            selected_next_action = "blocked_no_next_step"
+            coordinator_status = "bounded_local_loop_blocked_no_next_step"
+            blocked_reason = "no_next_step_available"
+            fix_recommendations = [
+                "refresh local loop and gate states to produce a routable next step",
+                "perform manual review if state progression signals are incomplete",
+            ]
+
+        selected_is_blocked = bool(
+            selected_next_action in {"manual_review_required", "blocked_no_next_step"}
+            or coordinator_status
+            in {
+                "bounded_local_loop_blocked_manual_review",
+                "bounded_local_loop_blocked_no_next_step",
+            }
+            or _is_blocked_or_manual(selected_component_status, selected_component_next_action)
+        )
+        updated_consecutive_failures = consecutive_failures
+        if selected_is_blocked:
+            updated_consecutive_failures = _as_non_negative_int(consecutive_failures, default=0) + 1
+        elif progress_changed:
+            updated_consecutive_failures = 0
+
+        if coordinator_status not in {"bounded_local_loop_project_complete"} and not continue_enabled:
+            coordinator_status = "bounded_local_loop_decision_only"
+            selected_next_action = "set_continue_enabled_for_next_local_step"
+            blocked_reason = "continue_not_enabled"
+            fix_recommendations = ["set bounded local loop continue flag for one local iteration"]
+        elif coordinator_status == "bounded_local_loop_project_complete":
+            pass
+        elif iteration >= max_iterations:
+            coordinator_status = "bounded_local_loop_blocked_iteration_limit"
+            selected_next_action = "manual_review_required"
+            blocked_reason = "max_iterations_reached"
+            fix_recommendations = [
+                "review outcomes and increase iteration budget only with explicit approval",
+            ]
+        elif _as_non_negative_int(updated_consecutive_failures, default=0) >= max_consecutive_failures:
+            coordinator_status = "bounded_local_loop_blocked_failure_limit"
+            selected_next_action = "manual_review_required"
+            blocked_reason = "max_consecutive_failures_reached"
+            fix_recommendations = ["resolve repeated blocked/manual state before continuing"]
+        elif not progress_changed:
+            coordinator_status = "bounded_local_loop_blocked_duplicate_or_no_progress"
+            selected_next_action = "manual_review_required"
+            blocked_reason = "duplicate_or_no_progress_fingerprint"
+            fix_recommendations = [
+                "change at least one progression state before requesting continue",
+                "avoid re-dispatching same local step without new evidence",
+            ]
+
+        routable_actions = {
+            "run_codex_implementation",
+            "run_codex_fix",
+            "run_codex_capture_gate",
+            "prepare_chatgpt_diff_review_request",
+            "wait_for_chatgpt_diff_review_response",
+            "prepare_safe_revert",
+            "regenerate_pr_prompt_or_continue_loop",
+            "prepare_commit_tag_gate",
+            "prepare_explicit_commit_tag_execution",
+            "update_pr_queue_or_prepare_next_pr",
+            "prepare_next_pr_prompt",
+        }
+        iteration_out = _as_non_negative_int(iteration, default=0)
+        if (
+            continue_enabled
+            and coordinator_status == "bounded_local_loop_ready_continue"
+            and selected_next_action in routable_actions
+            and progress_changed
+        ):
+            iteration_out = min(max_iterations, iteration_out + 1)
+        consecutive_failures = _as_non_negative_int(updated_consecutive_failures, default=0)
+        iteration = iteration_out
+
+    return {
+        "project_browser_autonomous_bounded_local_loop_status": coordinator_status,
+        "project_browser_autonomous_bounded_local_loop_next_action": selected_next_action,
+        "project_browser_autonomous_bounded_local_loop_enabled": bool(loop_enabled),
+        "project_browser_autonomous_bounded_local_loop_continue_enabled": bool(continue_enabled),
+        "project_browser_autonomous_bounded_local_loop_iteration": _as_non_negative_int(
+            iteration,
+            default=0,
+        ),
+        "project_browser_autonomous_bounded_local_loop_max_iterations": _as_non_negative_int(
+            max_iterations,
+            default=3,
+        ),
+        "project_browser_autonomous_bounded_local_loop_consecutive_failures": _as_non_negative_int(
+            consecutive_failures,
+            default=0,
+        ),
+        "project_browser_autonomous_bounded_local_loop_max_consecutive_failures": _as_non_negative_int(
+            max_consecutive_failures,
+            default=1,
+        ),
+        "project_browser_autonomous_bounded_local_loop_progress_fingerprint": progress_fingerprint,
+        "project_browser_autonomous_bounded_local_loop_selected_component": selected_component,
+        "project_browser_autonomous_bounded_local_loop_selected_component_status": (
+            selected_component_status
+        ),
+        "project_browser_autonomous_bounded_local_loop_selected_component_next_action": (
+            selected_component_next_action
+        ),
+        "project_browser_autonomous_bounded_local_loop_blocked_reason": blocked_reason,
+        "project_browser_autonomous_bounded_local_loop_fix_recommendations": _normalize_string_list(
+            fix_recommendations
+        ),
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -147446,6 +154276,1333 @@ def _build_approved_restart_execution_contract_surface(
             key
         ] = value
 
+    project_browser_autonomous_chrome_runner_bridge_one_shot_state = (
+        _build_project_browser_autonomous_chrome_runner_bridge_one_shot_state(
+            project_analysis_request_text=_normalize_text(
+                project_browser_autonomous_project_analysis_request_state_normalized.get(
+                    "project_browser_autonomous_project_analysis_request_text"
+                ),
+                default="",
+            ),
+            browser_prompt_payload=project_browser_prompt_payload_state,
+            browser_queue_handoff_payload=(
+                dict(project_pr_queue_state.get("queue_handoff_payload", {}))
+                if isinstance(project_pr_queue_state.get("queue_handoff_payload"), Mapping)
+                else {}
+            ),
+            prior_browser_state=prior_approved_restart_execution,
+            one_shot_execution_enabled=(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_chrome_runner_bridge_one_shot_execution_enabled"
+                )
+                if "project_browser_autonomous_chrome_runner_bridge_one_shot_execution_enabled"
+                in prior_approved_restart_execution
+                else approved_restart.get(
+                    "project_browser_autonomous_chrome_runner_bridge_one_shot_execution_enabled"
+                )
+            ),
+            one_shot_wait_enabled=(
+                prior_approved_restart_execution.get(
+                    "project_browser_autonomous_chrome_runner_bridge_one_shot_wait_enabled"
+                )
+                if "project_browser_autonomous_chrome_runner_bridge_one_shot_wait_enabled"
+                in prior_approved_restart_execution
+                else approved_restart.get(
+                    "project_browser_autonomous_chrome_runner_bridge_one_shot_wait_enabled"
+                )
+            ),
+            max_wait_seconds=600,
+            poll_interval_seconds=10,
+        )
+    )
+    chrome_runner_bridge_one_shot_allowed_statuses = {
+        "chrome_runner_bridge_one_shot_not_requested",
+        "chrome_runner_bridge_one_shot_blocked_missing_prompt",
+        "chrome_runner_bridge_one_shot_blocked_cleanup_failed",
+        "chrome_runner_bridge_one_shot_request_written_waiting_for_operator",
+        "chrome_runner_bridge_one_shot_waiting_for_response",
+        "chrome_runner_bridge_one_shot_blocked_by_extension_status",
+        "chrome_runner_bridge_one_shot_timeout",
+        "chrome_runner_bridge_one_shot_response_ready",
+        "chrome_runner_bridge_one_shot_response_transient",
+        "chrome_runner_bridge_one_shot_response_empty",
+        "chrome_runner_bridge_one_shot_response_read_error",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_one_shot_allowed_next_actions = {
+        "enable_chrome_runner_bridge_one_shot",
+        "provide_bridge_request_prompt",
+        "inspect_bridge_cleanup_error",
+        "click_chrome_runner_bridge_once",
+        "wait_for_chrome_runner_bridge_response",
+        "inspect_bridge_status_json",
+        "inspect_bridge_status_or_rerun_once",
+        "assimilate_bridge_response",
+        "wait_or_rerun_after_final_response",
+        "rerun_chrome_runner_bridge_once",
+        "inspect_bridge_response_read_error",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_one_shot_allowed_response_statuses = {
+        "chrome_runner_bridge_response_missing",
+        "chrome_runner_bridge_response_not_file",
+        "chrome_runner_bridge_response_empty",
+        "chrome_runner_bridge_response_transient",
+        "chrome_runner_bridge_response_ready",
+        "chrome_runner_bridge_response_read_error",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_one_shot_field_names = (
+        "one_shot_status",
+        "one_shot_next_action",
+        "base_dir",
+        "request_path",
+        "response_path",
+        "status_path",
+        "one_shot_execution_enabled",
+        "one_shot_wait_enabled",
+        "request_written",
+        "request_size_bytes",
+        "request_fingerprint",
+        "request_source",
+        "request_write_error",
+        "operator_action_required",
+        "operator_action_kind",
+        "operator_action",
+        "wait_attempted",
+        "wait_timeout_seconds",
+        "wait_poll_interval_seconds",
+        "wait_elapsed_seconds",
+        "wait_exit_reason",
+        "response_exists",
+        "response_is_file",
+        "response_size_bytes",
+        "response_read_attempted",
+        "response_read_completed",
+        "response_read_error",
+        "response_preview",
+        "response_fingerprint",
+        "response_transient_detected",
+        "response_status",
+        "status_json_exists",
+        "status_json_size_bytes",
+        "status_json_preview",
+        "status_json_parse_completed",
+        "status_json_parse_error",
+        "status_json_last_status",
+        "status_json_last_reason",
+        "status_json_last_step",
+        "cleanup_error",
+        "prompt_source_status",
+        "prompt_source_reason",
+    )
+    project_browser_autonomous_chrome_runner_bridge_one_shot_status = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_one_shot_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_one_shot_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_one_shot_status
+        not in chrome_runner_bridge_one_shot_allowed_statuses
+    ):
+        project_browser_autonomous_chrome_runner_bridge_one_shot_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_one_shot_next_action = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_one_shot_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_one_shot_next_action
+        not in chrome_runner_bridge_one_shot_allowed_next_actions
+    ):
+        project_browser_autonomous_chrome_runner_bridge_one_shot_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chrome_runner_bridge_one_shot_field_names:
+        key = f"project_browser_autonomous_chrome_runner_bridge_{field_name}"
+        value = project_browser_autonomous_chrome_runner_bridge_one_shot_state.get(key)
+        if field_name == "one_shot_status":
+            value = project_browser_autonomous_chrome_runner_bridge_one_shot_status
+        elif field_name == "one_shot_next_action":
+            value = project_browser_autonomous_chrome_runner_bridge_one_shot_next_action
+        elif field_name == "response_status":
+            value = _normalize_text(value, default="insufficient_truth")
+            if value not in chrome_runner_bridge_one_shot_allowed_response_statuses:
+                value = "insufficient_truth"
+        elif field_name in {
+            "one_shot_execution_enabled",
+            "one_shot_wait_enabled",
+            "request_written",
+            "operator_action_required",
+            "wait_attempted",
+            "response_exists",
+            "response_is_file",
+            "response_read_attempted",
+            "response_read_completed",
+            "response_transient_detected",
+            "status_json_exists",
+            "status_json_parse_completed",
+        }:
+            value = bool(value)
+        elif field_name in {
+            "request_size_bytes",
+            "wait_timeout_seconds",
+            "wait_poll_interval_seconds",
+            "wait_elapsed_seconds",
+            "response_size_bytes",
+            "status_json_size_bytes",
+        }:
+            value = _as_non_negative_int(value, default=0)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_chrome_runner_bridge_operator_action_required = bool(
+        project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized.get(
+            "project_browser_autonomous_chrome_runner_bridge_operator_action_required",
+            False,
+        )
+    )
+    project_browser_autonomous_chrome_runner_bridge_wait_exit_reason = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized.get(
+            "project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"
+        ),
+        default="",
+    )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_state = (
+        _build_project_browser_autonomous_chrome_runner_bridge_response_assimilation_state(
+            bridge_one_shot_state=project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized
+        )
+    )
+    chrome_runner_bridge_response_assimilation_allowed_statuses = {
+        "assimilated",
+        "not_assimilated",
+        "blocked",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_response_assimilation_allowed_kinds = {
+        "implementation_prompt",
+        "review_result",
+        "fix_prompt",
+        "completion_decision",
+        "blocked_or_manual_review",
+        "unclassified",
+    }
+    chrome_runner_bridge_response_assimilation_allowed_next_actions = {
+        "run_codex_with_assimilated_prompt",
+        "decide_fix_or_complete",
+        "run_codex_fix_prompt",
+        "prepare_commit_or_pr_gate",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_response_assimilation_field_names = (
+        "status",
+        "kind",
+        "next_action",
+        "summary",
+        "prompt",
+        "blocked_reason",
+        "source_task_status",
+        "source_runtime_status",
+        "source_runtime_reason",
+        "source_response_status",
+        "consume_status",
+        "consume_error",
+    )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_status = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_status
+        not in chrome_runner_bridge_response_assimilation_allowed_statuses
+    ):
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind"
+        ),
+        default="unclassified",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind
+        not in chrome_runner_bridge_response_assimilation_allowed_kinds
+    ):
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind = (
+            "unclassified"
+        )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action"
+        ),
+        default="manual_review_required",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
+        not in chrome_runner_bridge_response_assimilation_allowed_next_actions
+    ):
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chrome_runner_bridge_response_assimilation_field_names:
+        key = (
+            "project_browser_autonomous_chrome_runner_bridge_response_assimilation_"
+            f"{field_name}"
+        )
+        value = project_browser_autonomous_chrome_runner_bridge_response_assimilation_state.get(
+            key
+        )
+        if field_name == "status":
+            value = project_browser_autonomous_chrome_runner_bridge_response_assimilation_status
+        elif field_name == "kind":
+            value = project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind
+        elif field_name == "next_action":
+            value = (
+                project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
+            )
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized[
+            key
+        ] = value
+    project_browser_autonomous_chrome_runner_bridge_bounded_loop_state = (
+        _build_project_browser_autonomous_chrome_runner_bridge_bounded_loop_state(
+            response_assimilation_state=project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    chrome_runner_bridge_bounded_loop_allowed_statuses = {
+        "loop_not_requested",
+        "loop_decision_only",
+        "loop_ready_or_routed_to_codex",
+        "loop_ready_or_routed_to_codex_fix",
+        "loop_ready_to_decide_fix_or_complete",
+        "loop_ready_for_commit_or_pr_gate",
+        "loop_blocked_manual_review",
+        "loop_iteration_limit_reached",
+        "loop_blocked_missing_assimilation",
+        "loop_blocked_invalid_next_action",
+        "loop_blocked_duplicate_prompt",
+        "loop_blocked_unsafe_prompt",
+        "loop_blocked_no_existing_runner_route",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_bounded_loop_allowed_next_actions = {
+        "enable_bounded_loop",
+        "run_existing_codex_implementation_step",
+        "run_existing_codex_fix_step",
+        "decide_fix_or_complete",
+        "prepare_commit_or_pr_gate",
+        "manual_review_required",
+        "run_codex_with_assimilated_prompt",
+        "run_codex_fix_prompt",
+        "insufficient_truth",
+    }
+    chrome_runner_bridge_bounded_loop_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "iteration",
+        "current_iteration",
+        "max_iterations",
+        "stop_reason",
+        "selected_prompt",
+        "selected_prompt_fingerprint",
+        "decision_summary",
+        "routed",
+        "failure_count",
+        "max_consecutive_failures",
+        "runtime_posture",
+    )
+    project_browser_autonomous_chrome_runner_bridge_bounded_loop_status = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_status
+        not in chrome_runner_bridge_bounded_loop_allowed_statuses
+    ):
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action = _normalize_text(
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_state.get(
+            "project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action
+        not in chrome_runner_bridge_bounded_loop_allowed_next_actions
+    ):
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chrome_runner_bridge_bounded_loop_field_names:
+        key = f"project_browser_autonomous_chrome_runner_bridge_bounded_loop_{field_name}"
+        value = project_browser_autonomous_chrome_runner_bridge_bounded_loop_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_chrome_runner_bridge_bounded_loop_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action
+        elif field_name in {"enabled", "execute_enabled", "routed"}:
+            value = bool(value)
+        elif field_name in {
+            "iteration",
+            "current_iteration",
+            "max_iterations",
+            "failure_count",
+            "max_consecutive_failures",
+        }:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name == "runtime_posture":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized[
+            key
+        ] = value
+    project_browser_autonomous_codex_execution_gate_state = (
+        _build_project_browser_autonomous_codex_execution_gate_state(
+            bounded_loop_state=project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    codex_execution_gate_allowed_statuses = {
+        "codex_execution_gate_not_requested",
+        "codex_execution_gate_blocked_missing_routed_prompt",
+        "codex_execution_gate_blocked_duplicate_prompt",
+        "codex_execution_gate_blocked_unsafe_prompt",
+        "codex_execution_gate_blocked_threshold",
+        "codex_execution_gate_blocked_no_existing_codex_route",
+        "codex_execution_gate_ready",
+        "codex_execution_gate_decision_only",
+        "insufficient_truth",
+    }
+    codex_execution_gate_allowed_next_actions = {
+        "enable_codex_execution_gate",
+        "run_existing_codex_implementation_step",
+        "run_existing_codex_fix_step",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    codex_execution_gate_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "prompt_kind",
+        "prompt_path",
+        "prompt_size_bytes",
+        "prompt_fingerprint",
+        "prompt_preview",
+        "threshold_passed",
+        "approved_for_execution",
+        "blocked_reason",
+    )
+    project_browser_autonomous_codex_execution_gate_status = _normalize_text(
+        project_browser_autonomous_codex_execution_gate_state.get(
+            "project_browser_autonomous_codex_execution_gate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_execution_gate_status not in codex_execution_gate_allowed_statuses:
+        project_browser_autonomous_codex_execution_gate_status = "insufficient_truth"
+    project_browser_autonomous_codex_execution_gate_next_action = _normalize_text(
+        project_browser_autonomous_codex_execution_gate_state.get(
+            "project_browser_autonomous_codex_execution_gate_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_execution_gate_next_action not in codex_execution_gate_allowed_next_actions:
+        project_browser_autonomous_codex_execution_gate_next_action = "insufficient_truth"
+    project_browser_autonomous_codex_execution_gate_state_normalized: dict[str, Any] = {}
+    for field_name in codex_execution_gate_field_names:
+        key = f"project_browser_autonomous_codex_execution_gate_{field_name}"
+        value = project_browser_autonomous_codex_execution_gate_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_execution_gate_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_execution_gate_next_action
+        elif field_name in {"enabled", "execute_enabled", "threshold_passed", "approved_for_execution"}:
+            value = bool(value)
+        elif field_name == "prompt_size_bytes":
+            value = _as_non_negative_int(value, default=0)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_execution_gate_state_normalized[key] = value
+    project_browser_autonomous_codex_capture_gate_state = (
+        _build_project_browser_autonomous_codex_capture_gate_state(
+            codex_execution_gate_state=project_browser_autonomous_codex_execution_gate_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    codex_capture_gate_allowed_statuses = {
+        "codex_capture_gate_not_requested",
+        "codex_capture_gate_decision_only",
+        "codex_capture_gate_ready",
+        "codex_capture_gate_captured",
+        "codex_capture_gate_blocked_missing_execution_gate",
+        "codex_capture_gate_blocked_no_existing_codex_execution_route",
+        "codex_capture_gate_blocked_missing_capture_script",
+        "codex_capture_gate_blocked_capture_unavailable",
+        "codex_capture_gate_blocked_execution_or_capture_failed",
+        "insufficient_truth",
+    }
+    codex_capture_gate_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "prompt_kind",
+        "prompt_path",
+        "prompt_fingerprint",
+        "script_path",
+        "changed_files",
+        "diff_summary",
+        "validation_summary",
+        "codex_output_summary",
+        "capture_output_path",
+        "capture_artifact_paths",
+        "blocked_reason",
+    )
+    project_browser_autonomous_codex_capture_gate_status = _normalize_text(
+        project_browser_autonomous_codex_capture_gate_state.get(
+            "project_browser_autonomous_codex_capture_gate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_capture_gate_status not in codex_capture_gate_allowed_statuses:
+        project_browser_autonomous_codex_capture_gate_status = "insufficient_truth"
+    project_browser_autonomous_codex_capture_gate_next_action = _normalize_text(
+        project_browser_autonomous_codex_capture_gate_state.get(
+            "project_browser_autonomous_codex_capture_gate_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_codex_capture_gate_state_normalized: dict[str, Any] = {}
+    for field_name in codex_capture_gate_field_names:
+        key = f"project_browser_autonomous_codex_capture_gate_{field_name}"
+        value = project_browser_autonomous_codex_capture_gate_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_capture_gate_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_capture_gate_next_action
+        elif field_name in {"enabled", "execute_enabled"}:
+            value = bool(value)
+        elif field_name in {"changed_files", "capture_artifact_paths"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_capture_gate_state_normalized[key] = value
+    project_browser_autonomous_chatgpt_diff_review_request_state = (
+        _build_project_browser_autonomous_chatgpt_diff_review_request_state(
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    chatgpt_diff_review_request_allowed_statuses = {
+        "chatgpt_diff_review_request_not_requested",
+        "chatgpt_diff_review_request_decision_only",
+        "chatgpt_diff_review_request_ready",
+        "chatgpt_diff_review_request_written",
+        "chatgpt_diff_review_request_blocked_missing_capture",
+        "chatgpt_diff_review_request_blocked_empty_review_prompt",
+        "chatgpt_diff_review_request_blocked_duplicate_prompt",
+        "chatgpt_diff_review_request_blocked_write_failed",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_request_allowed_next_actions = {
+        "enable_chatgpt_diff_review_request",
+        "write_chatgpt_diff_review_request",
+        "wait_for_chatgpt_diff_review_response",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_request_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "write_enabled",
+        "prompt",
+        "prompt_fingerprint",
+        "changed_files",
+        "blocked_reason",
+    )
+    project_browser_autonomous_chatgpt_diff_review_request_status = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_request_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_request_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_request_status
+        not in chatgpt_diff_review_request_allowed_statuses
+    ):
+        project_browser_autonomous_chatgpt_diff_review_request_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_request_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_request_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_request_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_request_next_action
+        not in chatgpt_diff_review_request_allowed_next_actions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_request_next_action = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_request_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chatgpt_diff_review_request_field_names:
+        key = f"project_browser_autonomous_chatgpt_diff_review_request_{field_name}"
+        value = project_browser_autonomous_chatgpt_diff_review_request_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_chatgpt_diff_review_request_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_chatgpt_diff_review_request_next_action
+        elif field_name in {"enabled", "write_enabled"}:
+            value = bool(value)
+        elif field_name == "changed_files":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chatgpt_diff_review_request_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_chatgpt_diff_review_decision_state = (
+        _build_project_browser_autonomous_chatgpt_diff_review_decision_state(
+            chatgpt_diff_review_request_state=project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    chatgpt_diff_review_decision_allowed_statuses = {
+        "chatgpt_diff_review_decision_not_applicable",
+        "chatgpt_diff_review_decision_blocked_missing_response",
+        "chatgpt_diff_review_decision_blocked_parse_failed",
+        "chatgpt_diff_review_decision_manual_review",
+        "chatgpt_diff_review_decision_approved_for_commit_gate",
+        "chatgpt_diff_review_decision_fix_routed",
+        "chatgpt_diff_review_decision_revert_plan_ready",
+        "chatgpt_diff_review_decision_blocked_duplicate_fix_prompt",
+        "chatgpt_diff_review_decision_blocked_unsafe_fix_prompt",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_decision_allowed_next_actions = {
+        "wait_for_chatgpt_diff_review_response",
+        "manual_review_required",
+        "prepare_commit_or_pr_gate",
+        "run_existing_codex_fix_step",
+        "manual_revert_plan_review",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_decision_allowed_decisions = {
+        "approve",
+        "fix",
+        "revert",
+        "manual_review",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_decision_field_names = (
+        "status",
+        "next_action",
+        "decision",
+        "confidence",
+        "risk",
+        "blocking_issues",
+        "fix_prompt",
+        "fix_prompt_fingerprint",
+        "revert_reason",
+        "revert_plan",
+        "commit_recommendation",
+        "summary",
+        "blocked_reason",
+        "routed",
+        "response_status",
+        "response_size_bytes",
+        "response_preview",
+    )
+    project_browser_autonomous_chatgpt_diff_review_decision_status = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_decision_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_decision_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_decision_status
+        not in chatgpt_diff_review_decision_allowed_statuses
+    ):
+        project_browser_autonomous_chatgpt_diff_review_decision_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_decision_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_decision_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_decision_next_action
+        not in chatgpt_diff_review_decision_allowed_next_actions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_decision_next_action = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_decision = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_decision_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_decision"
+        ),
+        default="manual_review",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_decision
+        not in chatgpt_diff_review_decision_allowed_decisions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_decision = "manual_review"
+    project_browser_autonomous_chatgpt_diff_review_decision_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chatgpt_diff_review_decision_field_names:
+        key = f"project_browser_autonomous_chatgpt_diff_review_{field_name}"
+        value = project_browser_autonomous_chatgpt_diff_review_decision_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_chatgpt_diff_review_decision_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_chatgpt_diff_review_decision_next_action
+        elif field_name == "decision":
+            value = project_browser_autonomous_chatgpt_diff_review_decision
+        elif field_name in {"commit_recommendation", "routed"}:
+            value = bool(value)
+        elif field_name == "confidence":
+            value = float(value) if isinstance(value, (int, float)) else 0.0
+        elif field_name == "response_size_bytes":
+            value = _as_non_negative_int(value, default=0)
+        elif field_name == "blocking_issues":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chatgpt_diff_review_decision_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_commit_tag_gate_state = (
+        _build_project_browser_autonomous_commit_tag_gate_state(
+            chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    commit_tag_gate_allowed_statuses = {
+        "commit_tag_gate_not_requested",
+        "commit_tag_gate_blocked_missing_approval",
+        "commit_tag_gate_blocked_policy",
+        "commit_tag_gate_blocked_validation",
+        "commit_tag_gate_blocked_unsafe_paths",
+        "commit_tag_gate_ready",
+        "insufficient_truth",
+    }
+    commit_tag_gate_allowed_next_actions = {
+        "enable_commit_tag_gate",
+        "request_or_recheck_chatgpt_approve_decision",
+        "inspect_unsafe_changed_paths",
+        "rerun_validation_and_review",
+        "resolve_commit_tag_gate_policy_issues",
+        "prepare_explicit_commit_tag_execution_step",
+        "insufficient_truth",
+    }
+    commit_tag_gate_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "ready",
+        "commit_message",
+        "tag_name",
+        "changed_files",
+        "validation_summary",
+        "review_summary",
+        "blocked_reason",
+        "fix_recommendations",
+    )
+    project_browser_autonomous_commit_tag_gate_status = _normalize_text(
+        project_browser_autonomous_commit_tag_gate_state.get(
+            "project_browser_autonomous_commit_tag_gate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_commit_tag_gate_status not in commit_tag_gate_allowed_statuses:
+        project_browser_autonomous_commit_tag_gate_status = "insufficient_truth"
+    project_browser_autonomous_commit_tag_gate_next_action = _normalize_text(
+        project_browser_autonomous_commit_tag_gate_state.get(
+            "project_browser_autonomous_commit_tag_gate_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_commit_tag_gate_next_action not in commit_tag_gate_allowed_next_actions:
+        project_browser_autonomous_commit_tag_gate_next_action = "insufficient_truth"
+    project_browser_autonomous_commit_tag_gate_state_normalized: dict[str, Any] = {}
+    for field_name in commit_tag_gate_field_names:
+        key = f"project_browser_autonomous_commit_tag_gate_{field_name}"
+        value = project_browser_autonomous_commit_tag_gate_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_commit_tag_gate_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_commit_tag_gate_next_action
+        elif field_name in {"enabled", "ready"}:
+            value = bool(value)
+        elif field_name in {"changed_files", "fix_recommendations"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_commit_tag_gate_state_normalized[key] = value
+    project_browser_autonomous_commit_tag_execution_state_prompt276 = (
+        _build_project_browser_autonomous_commit_tag_execution_state_prompt276(
+            commit_tag_gate_state=project_browser_autonomous_commit_tag_gate_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    commit_tag_execution_prompt276_allowed_statuses = {
+        "commit_tag_execution_not_requested",
+        "commit_tag_execution_decision_only",
+        "commit_tag_execution_blocked_missing_gate",
+        "commit_tag_execution_blocked_preflight",
+        "commit_tag_execution_blocked_large_change",
+        "commit_tag_execution_blocked_unexpected_changes",
+        "commit_tag_execution_blocked_existing_tag",
+        "commit_tag_execution_blocked_git_failed",
+        "commit_tag_execution_committed_tag_failed",
+        "commit_tag_execution_committed_and_tagged",
+        "insufficient_truth",
+    }
+    commit_tag_execution_prompt276_allowed_next_actions = {
+        "enable_commit_tag_execution",
+        "run_commit_tag_execution_when_explicitly_enabled",
+        "manual_review_required",
+        "set_execute_enabled_to_run_local_commit_tag",
+        "update_pr_queue_or_prepare_next_pr",
+        "insufficient_truth",
+    }
+    commit_tag_execution_prompt276_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "commit_message",
+        "tag_name",
+        "changed_files",
+        "commit_sha",
+        "tag_created",
+        "git_status_short",
+        "post_git_status_short",
+        "blocked_reason",
+    )
+    project_browser_autonomous_commit_tag_execution_status = _normalize_text(
+        project_browser_autonomous_commit_tag_execution_state_prompt276.get(
+            "project_browser_autonomous_commit_tag_execution_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_commit_tag_execution_status
+        not in commit_tag_execution_prompt276_allowed_statuses
+    ):
+        project_browser_autonomous_commit_tag_execution_status = "insufficient_truth"
+    project_browser_autonomous_commit_tag_execution_next_action = _normalize_text(
+        project_browser_autonomous_commit_tag_execution_state_prompt276.get(
+            "project_browser_autonomous_commit_tag_execution_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_commit_tag_execution_next_action
+        not in commit_tag_execution_prompt276_allowed_next_actions
+    ):
+        project_browser_autonomous_commit_tag_execution_next_action = "insufficient_truth"
+    project_browser_autonomous_commit_tag_execution_state_normalized: dict[str, Any] = {}
+    for field_name in commit_tag_execution_prompt276_field_names:
+        key = f"project_browser_autonomous_commit_tag_execution_{field_name}"
+        value = project_browser_autonomous_commit_tag_execution_state_prompt276.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_commit_tag_execution_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_commit_tag_execution_next_action
+        elif field_name in {"enabled", "execute_enabled", "tag_created"}:
+            value = bool(value)
+        elif field_name == "changed_files":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_commit_tag_execution_state_normalized[key] = value
+    project_browser_autonomous_pr_queue_state_state = (
+        _build_project_browser_autonomous_pr_queue_state_state(
+            commit_tag_execution_state=project_browser_autonomous_commit_tag_execution_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    pr_queue_state_allowed_statuses = {
+        "pr_queue_state_not_requested",
+        "pr_queue_state_decision_only",
+        "pr_queue_state_blocked_missing_commit_tag_execution",
+        "pr_queue_state_blocked_missing_or_malformed_queue",
+        "pr_queue_state_blocked_duplicate_commit",
+        "pr_queue_state_updated",
+        "pr_queue_state_project_complete",
+        "insufficient_truth",
+    }
+    pr_queue_state_allowed_next_actions = {
+        "enable_pr_queue_state_management",
+        "manual_review_required",
+        "initialize_local_pr_queue_state",
+        "prepare_next_pr_prompt",
+        "project_local_queue_complete",
+        "apply_local_pr_queue_state_update",
+        "confirm_local_project_complete",
+        "insufficient_truth",
+    }
+    pr_queue_state_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "update_enabled",
+        "roadmap_id",
+        "active_pr_index",
+        "active_pr_id",
+        "active_pr_status",
+        "next_pr_index",
+        "next_pr_id",
+        "completed_commit_sha",
+        "completed_tag_name",
+        "queue_summary",
+        "blocked_reason",
+        "pr_queue",
+        "post_git_status_short",
+        "persistence_path",
+    )
+    project_browser_autonomous_pr_queue_state_status = _normalize_text(
+        project_browser_autonomous_pr_queue_state_state.get(
+            "project_browser_autonomous_pr_queue_state_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_pr_queue_state_status not in pr_queue_state_allowed_statuses:
+        project_browser_autonomous_pr_queue_state_status = "insufficient_truth"
+    project_browser_autonomous_pr_queue_state_next_action = _normalize_text(
+        project_browser_autonomous_pr_queue_state_state.get(
+            "project_browser_autonomous_pr_queue_state_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_pr_queue_state_next_action not in pr_queue_state_allowed_next_actions:
+        project_browser_autonomous_pr_queue_state_next_action = "insufficient_truth"
+    project_browser_autonomous_pr_queue_state_state_normalized: dict[str, Any] = {}
+    for field_name in pr_queue_state_field_names:
+        key = f"project_browser_autonomous_pr_queue_state_{field_name}"
+        value = project_browser_autonomous_pr_queue_state_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_pr_queue_state_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_pr_queue_state_next_action
+        elif field_name in {"enabled", "update_enabled"}:
+            value = bool(value)
+        elif field_name in {"active_pr_index", "next_pr_index"}:
+            default_index = 0 if field_name == "active_pr_index" else -1
+            value = _as_int(value, default=default_index)
+        elif field_name == "pr_queue":
+            normalized_queue: list[dict[str, Any]] = []
+            if isinstance(value, list):
+                for entry in value:
+                    if isinstance(entry, Mapping):
+                        normalized_queue.append(dict(entry))
+            value = normalized_queue
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_pr_queue_state_state_normalized[key] = value
+    project_browser_autonomous_local_loop_state = (
+        _build_project_browser_autonomous_local_loop_state(
+            chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+            commit_tag_gate_state=project_browser_autonomous_commit_tag_gate_state_normalized,
+            commit_tag_execution_state=project_browser_autonomous_commit_tag_execution_state_normalized,
+            pr_queue_state=project_browser_autonomous_pr_queue_state_state_normalized,
+            chrome_runner_bridge_bounded_loop_state=project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
+            codex_execution_gate_state=project_browser_autonomous_codex_execution_gate_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    local_loop_allowed_statuses = {
+        "local_loop_not_requested",
+        "local_loop_decision_only",
+        "local_loop_ready_run_codex_implementation",
+        "local_loop_ready_run_codex_fix",
+        "local_loop_ready_prepare_safe_revert",
+        "local_loop_ready_prepare_commit_tag_gate",
+        "local_loop_ready_prepare_next_pr_prompt",
+        "local_loop_project_complete",
+        "local_loop_blocked_iteration_limit",
+        "local_loop_blocked_duplicate_step",
+        "local_loop_blocked_missing_state",
+        "local_loop_blocked_manual_review",
+        "local_loop_blocked_no_next_step",
+        "insufficient_truth",
+    }
+    local_loop_allowed_next_actions = {
+        "enable_local_autonomous_loop",
+        "manual_review_required",
+        "prepare_safe_revert",
+        "run_codex_fix",
+        "prepare_commit_tag_gate",
+        "update_pr_queue_or_prepare_next_pr",
+        "prepare_next_pr_prompt",
+        "project_complete",
+        "run_codex_implementation",
+        "blocked_no_next_step",
+        "insufficient_truth",
+    }
+    local_loop_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "route_enabled",
+        "iteration",
+        "max_iterations",
+        "active_pr_index",
+        "active_pr_id",
+        "next_pr_index",
+        "next_pr_id",
+        "selected_prompt",
+        "selected_prompt_fingerprint",
+        "selected_step_fingerprint",
+        "revert_plan",
+        "fix_recommendations",
+        "blocked_reason",
+    )
+    project_browser_autonomous_local_loop_status = _normalize_text(
+        project_browser_autonomous_local_loop_state.get(
+            "project_browser_autonomous_local_loop_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_local_loop_status not in local_loop_allowed_statuses:
+        project_browser_autonomous_local_loop_status = "insufficient_truth"
+    project_browser_autonomous_local_loop_next_action = _normalize_text(
+        project_browser_autonomous_local_loop_state.get(
+            "project_browser_autonomous_local_loop_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_local_loop_next_action not in local_loop_allowed_next_actions:
+        project_browser_autonomous_local_loop_next_action = "insufficient_truth"
+    project_browser_autonomous_local_loop_state_normalized: dict[str, Any] = {}
+    for field_name in local_loop_field_names:
+        key = f"project_browser_autonomous_local_loop_{field_name}"
+        value = project_browser_autonomous_local_loop_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_local_loop_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_local_loop_next_action
+        elif field_name in {"enabled", "route_enabled"}:
+            value = bool(value)
+        elif field_name in {"iteration", "max_iterations"}:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name in {"active_pr_index", "next_pr_index"}:
+            default_index = 0 if field_name == "active_pr_index" else -1
+            value = _as_int(value, default=default_index)
+        elif field_name == "fix_recommendations":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_local_loop_state_normalized[key] = value
+    project_browser_autonomous_codex_execution_connector_state = (
+        _build_project_browser_autonomous_codex_execution_connector_state(
+            local_loop_state=project_browser_autonomous_local_loop_state_normalized,
+            codex_execution_gate_state=project_browser_autonomous_codex_execution_gate_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            chrome_runner_bridge_bounded_loop_state=project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    codex_execution_connector_allowed_statuses = {
+        "codex_execution_connector_not_requested",
+        "codex_execution_connector_decision_only",
+        "codex_execution_connector_blocked_missing_local_loop",
+        "codex_execution_connector_blocked_missing_codex_gate",
+        "codex_execution_connector_blocked_no_existing_route",
+        "codex_execution_connector_blocked_duplicate_prompt",
+        "codex_execution_connector_blocked_unsafe_prompt",
+        "codex_execution_connector_blocked_execution_failed",
+        "codex_execution_connector_executed",
+        "insufficient_truth",
+    }
+    codex_execution_connector_allowed_next_actions = {
+        "enable_codex_execution_connector",
+        "set_execute_enabled_for_single_codex_step",
+        "manual_review_required",
+        "run_codex_capture_gate",
+        "insufficient_truth",
+    }
+    codex_execution_connector_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "executed",
+        "prompt_kind",
+        "prompt_path",
+        "prompt_fingerprint",
+        "route_name",
+        "output_preview",
+        "blocked_reason",
+    )
+    project_browser_autonomous_codex_execution_connector_status = _normalize_text(
+        project_browser_autonomous_codex_execution_connector_state.get(
+            "project_browser_autonomous_codex_execution_connector_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_codex_execution_connector_status
+        not in codex_execution_connector_allowed_statuses
+    ):
+        project_browser_autonomous_codex_execution_connector_status = "insufficient_truth"
+    project_browser_autonomous_codex_execution_connector_next_action = _normalize_text(
+        project_browser_autonomous_codex_execution_connector_state.get(
+            "project_browser_autonomous_codex_execution_connector_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_codex_execution_connector_next_action
+        not in codex_execution_connector_allowed_next_actions
+    ):
+        project_browser_autonomous_codex_execution_connector_next_action = "insufficient_truth"
+    project_browser_autonomous_codex_execution_connector_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in codex_execution_connector_field_names:
+        key = f"project_browser_autonomous_codex_execution_connector_{field_name}"
+        value = project_browser_autonomous_codex_execution_connector_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_execution_connector_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_execution_connector_next_action
+        elif field_name in {"enabled", "execute_enabled", "executed"}:
+            value = bool(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_execution_connector_state_normalized[key] = value
+    project_browser_autonomous_safe_revert_state = (
+        _build_project_browser_autonomous_safe_revert_state(
+            chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            local_loop_state=project_browser_autonomous_local_loop_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    safe_revert_allowed_statuses = {
+        "safe_revert_not_requested",
+        "safe_revert_decision_only",
+        "safe_revert_blocked_missing_revert_decision",
+        "safe_revert_blocked_missing_changed_files",
+        "safe_revert_blocked_unsafe_paths",
+        "safe_revert_blocked_large_change",
+        "safe_revert_blocked_unexpected_changes",
+        "safe_revert_blocked_ambiguous_status",
+        "safe_revert_blocked_untracked_files",
+        "safe_revert_blocked_git_failed",
+        "safe_revert_blocked_post_status_not_clean",
+        "safe_revert_reverted",
+        "insufficient_truth",
+    }
+    safe_revert_allowed_next_actions = {
+        "enable_safe_revert",
+        "set_execute_enabled_for_safe_revert",
+        "manual_review_required",
+        "regenerate_pr_prompt_or_continue_loop",
+        "insufficient_truth",
+    }
+    safe_revert_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "reverted",
+        "changed_files",
+        "revert_reason",
+        "revert_plan",
+        "pre_git_status_short",
+        "post_git_status_short",
+        "blocked_reason",
+    )
+    project_browser_autonomous_safe_revert_status = _normalize_text(
+        project_browser_autonomous_safe_revert_state.get(
+            "project_browser_autonomous_safe_revert_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_safe_revert_status not in safe_revert_allowed_statuses:
+        project_browser_autonomous_safe_revert_status = "insufficient_truth"
+    project_browser_autonomous_safe_revert_next_action = _normalize_text(
+        project_browser_autonomous_safe_revert_state.get(
+            "project_browser_autonomous_safe_revert_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_safe_revert_next_action
+        not in safe_revert_allowed_next_actions
+    ):
+        project_browser_autonomous_safe_revert_next_action = "insufficient_truth"
+    project_browser_autonomous_safe_revert_state_normalized: dict[str, Any] = {}
+    for field_name in safe_revert_field_names:
+        key = f"project_browser_autonomous_safe_revert_{field_name}"
+        value = project_browser_autonomous_safe_revert_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_safe_revert_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_safe_revert_next_action
+        elif field_name in {"enabled", "execute_enabled", "reverted"}:
+            value = bool(value)
+        elif field_name == "changed_files":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_safe_revert_state_normalized[key] = value
+
+    project_browser_autonomous_bounded_local_loop_state = (
+        _build_project_browser_autonomous_bounded_local_loop_coordinator_state(
+            local_loop_state=project_browser_autonomous_local_loop_state_normalized,
+            codex_execution_connector_state=project_browser_autonomous_codex_execution_connector_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            chatgpt_diff_review_request_state=project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
+            chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+            safe_revert_state=project_browser_autonomous_safe_revert_state_normalized,
+            commit_tag_gate_state=project_browser_autonomous_commit_tag_gate_state_normalized,
+            commit_tag_execution_state=project_browser_autonomous_commit_tag_execution_state_normalized,
+            pr_queue_state=project_browser_autonomous_pr_queue_state_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    bounded_local_loop_allowed_statuses = {
+        "bounded_local_loop_not_requested",
+        "bounded_local_loop_decision_only",
+        "bounded_local_loop_ready_continue",
+        "bounded_local_loop_project_complete",
+        "bounded_local_loop_blocked_iteration_limit",
+        "bounded_local_loop_blocked_failure_limit",
+        "bounded_local_loop_blocked_duplicate_or_no_progress",
+        "bounded_local_loop_blocked_manual_review",
+        "bounded_local_loop_blocked_no_next_step",
+        "insufficient_truth",
+    }
+    bounded_local_loop_allowed_next_actions = {
+        "enable_bounded_local_loop",
+        "set_continue_enabled_for_next_local_step",
+        "run_codex_implementation",
+        "run_codex_fix",
+        "run_codex_capture_gate",
+        "prepare_chatgpt_diff_review_request",
+        "wait_for_chatgpt_diff_review_response",
+        "prepare_safe_revert",
+        "regenerate_pr_prompt_or_continue_loop",
+        "prepare_commit_tag_gate",
+        "prepare_explicit_commit_tag_execution",
+        "update_pr_queue_or_prepare_next_pr",
+        "prepare_next_pr_prompt",
+        "project_complete",
+        "manual_review_required",
+        "blocked_no_next_step",
+        "insufficient_truth",
+    }
+    bounded_local_loop_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "continue_enabled",
+        "iteration",
+        "max_iterations",
+        "consecutive_failures",
+        "max_consecutive_failures",
+        "progress_fingerprint",
+        "selected_component",
+        "selected_component_status",
+        "selected_component_next_action",
+        "blocked_reason",
+        "fix_recommendations",
+    )
+    project_browser_autonomous_bounded_local_loop_status = _normalize_text(
+        project_browser_autonomous_bounded_local_loop_state.get(
+            "project_browser_autonomous_bounded_local_loop_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_bounded_local_loop_status not in bounded_local_loop_allowed_statuses:
+        project_browser_autonomous_bounded_local_loop_status = "insufficient_truth"
+    project_browser_autonomous_bounded_local_loop_next_action = _normalize_text(
+        project_browser_autonomous_bounded_local_loop_state.get(
+            "project_browser_autonomous_bounded_local_loop_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_bounded_local_loop_next_action
+        not in bounded_local_loop_allowed_next_actions
+    ):
+        project_browser_autonomous_bounded_local_loop_next_action = "insufficient_truth"
+    project_browser_autonomous_bounded_local_loop_state_normalized: dict[str, Any] = {}
+    for field_name in bounded_local_loop_field_names:
+        key = f"project_browser_autonomous_bounded_local_loop_{field_name}"
+        value = project_browser_autonomous_bounded_local_loop_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_bounded_local_loop_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_bounded_local_loop_next_action
+        elif field_name in {"enabled", "continue_enabled"}:
+            value = bool(value)
+        elif field_name in {
+            "iteration",
+            "max_iterations",
+            "consecutive_failures",
+            "max_consecutive_failures",
+        }:
+            value = _as_non_negative_int(value, default=0)
+        elif field_name == "fix_recommendations":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_bounded_local_loop_state_normalized[key] = value
+
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
             selected_mode=project_browser_autonomous_mvp_scenario_mode_selected,
@@ -147958,6 +156115,183 @@ def _build_approved_restart_execution_contract_surface(
                 ),
                 "project_browser_autonomous_chatgpt_browser_runtime_enablement_next_action": (
                     project_browser_autonomous_chatgpt_browser_runtime_enablement_next_action
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_one_shot_status": (
+                    project_browser_autonomous_chrome_runner_bridge_one_shot_status
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_one_shot_next_action": (
+                    project_browser_autonomous_chrome_runner_bridge_one_shot_next_action
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_operator_action_required": (
+                    project_browser_autonomous_chrome_runner_bridge_operator_action_required
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_wait_exit_reason": (
+                    project_browser_autonomous_chrome_runner_bridge_wait_exit_reason
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_response_assimilation_status": (
+                    project_browser_autonomous_chrome_runner_bridge_response_assimilation_status
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind": (
+                    project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action": (
+                    project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_bounded_loop_status": (
+                    project_browser_autonomous_chrome_runner_bridge_bounded_loop_status
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action": (
+                    project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action
+                ),
+                "project_browser_autonomous_chrome_runner_bridge_bounded_loop_routed": bool(
+                    project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized.get(
+                        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_routed",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_codex_execution_gate_status": (
+                    project_browser_autonomous_codex_execution_gate_status
+                ),
+                "project_browser_autonomous_codex_execution_gate_next_action": (
+                    project_browser_autonomous_codex_execution_gate_next_action
+                ),
+                "project_browser_autonomous_codex_execution_gate_approved_for_execution": bool(
+                    project_browser_autonomous_codex_execution_gate_state_normalized.get(
+                        "project_browser_autonomous_codex_execution_gate_approved_for_execution",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_codex_capture_gate_status": (
+                    project_browser_autonomous_codex_capture_gate_status
+                ),
+                "project_browser_autonomous_codex_capture_gate_next_action": (
+                    project_browser_autonomous_codex_capture_gate_next_action
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_request_status": (
+                    project_browser_autonomous_chatgpt_diff_review_request_status
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_request_next_action": (
+                    project_browser_autonomous_chatgpt_diff_review_request_next_action
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_decision_status": (
+                    project_browser_autonomous_chatgpt_diff_review_decision_status
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_decision_next_action": (
+                    project_browser_autonomous_chatgpt_diff_review_decision_next_action
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_decision": (
+                    project_browser_autonomous_chatgpt_diff_review_decision
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_routed": bool(
+                    project_browser_autonomous_chatgpt_diff_review_decision_state_normalized.get(
+                        "project_browser_autonomous_chatgpt_diff_review_routed",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_commit_tag_gate_status": (
+                    project_browser_autonomous_commit_tag_gate_status
+                ),
+                "project_browser_autonomous_commit_tag_gate_next_action": (
+                    project_browser_autonomous_commit_tag_gate_next_action
+                ),
+                "project_browser_autonomous_commit_tag_gate_ready": bool(
+                    project_browser_autonomous_commit_tag_gate_state_normalized.get(
+                        "project_browser_autonomous_commit_tag_gate_ready",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_commit_tag_execution_status": (
+                    project_browser_autonomous_commit_tag_execution_status
+                ),
+                "project_browser_autonomous_commit_tag_execution_next_action": (
+                    project_browser_autonomous_commit_tag_execution_next_action
+                ),
+                "project_browser_autonomous_commit_tag_execution_tag_created": bool(
+                    project_browser_autonomous_commit_tag_execution_state_normalized.get(
+                        "project_browser_autonomous_commit_tag_execution_tag_created",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_pr_queue_state_status": (
+                    project_browser_autonomous_pr_queue_state_status
+                ),
+                "project_browser_autonomous_pr_queue_state_next_action": (
+                    project_browser_autonomous_pr_queue_state_next_action
+                ),
+                "project_browser_autonomous_pr_queue_state_active_pr_status": _normalize_text(
+                    project_browser_autonomous_pr_queue_state_state_normalized.get(
+                        "project_browser_autonomous_pr_queue_state_active_pr_status"
+                    ),
+                    default="",
+                ),
+                "project_browser_autonomous_local_loop_status": (
+                    project_browser_autonomous_local_loop_status
+                ),
+                "project_browser_autonomous_local_loop_next_action": (
+                    project_browser_autonomous_local_loop_next_action
+                ),
+                "project_browser_autonomous_local_loop_iteration": _as_non_negative_int(
+                    project_browser_autonomous_local_loop_state_normalized.get(
+                        "project_browser_autonomous_local_loop_iteration",
+                        0,
+                    ),
+                    default=0,
+                ),
+                "project_browser_autonomous_codex_execution_connector_status": (
+                    project_browser_autonomous_codex_execution_connector_status
+                ),
+                "project_browser_autonomous_codex_execution_connector_next_action": (
+                    project_browser_autonomous_codex_execution_connector_next_action
+                ),
+                "project_browser_autonomous_codex_execution_connector_executed": bool(
+                    project_browser_autonomous_codex_execution_connector_state_normalized.get(
+                        "project_browser_autonomous_codex_execution_connector_executed",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_safe_revert_status": (
+                    project_browser_autonomous_safe_revert_status
+                ),
+                "project_browser_autonomous_safe_revert_next_action": (
+                    project_browser_autonomous_safe_revert_next_action
+                ),
+                "project_browser_autonomous_safe_revert_reverted": bool(
+                    project_browser_autonomous_safe_revert_state_normalized.get(
+                        "project_browser_autonomous_safe_revert_reverted",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_bounded_local_loop_status": (
+                    project_browser_autonomous_bounded_local_loop_status
+                ),
+                "project_browser_autonomous_bounded_local_loop_next_action": (
+                    project_browser_autonomous_bounded_local_loop_next_action
+                ),
+                "project_browser_autonomous_bounded_local_loop_iteration": _as_non_negative_int(
+                    project_browser_autonomous_bounded_local_loop_state_normalized.get(
+                        "project_browser_autonomous_bounded_local_loop_iteration",
+                        0,
+                    ),
+                    default=0,
+                ),
+                "project_browser_autonomous_bounded_local_loop_consecutive_failures": _as_non_negative_int(
+                    project_browser_autonomous_bounded_local_loop_state_normalized.get(
+                        "project_browser_autonomous_bounded_local_loop_consecutive_failures",
+                        0,
+                    ),
+                    default=0,
+                ),
+                "project_browser_autonomous_bounded_local_loop_selected_component": _normalize_text(
+                    project_browser_autonomous_bounded_local_loop_state_normalized.get(
+                        "project_browser_autonomous_bounded_local_loop_selected_component"
+                    ),
+                    default="",
+                ),
+                "project_browser_autonomous_bounded_local_loop_selected_component_status": _normalize_text(
+                    project_browser_autonomous_bounded_local_loop_state_normalized.get(
+                        "project_browser_autonomous_bounded_local_loop_selected_component_status"
+                    ),
+                    default="",
                 ),
                 "project_browser_autonomous_dev_loop_pr_prompt_readiness_status": (
                     project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -152058,6 +160392,93 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chatgpt_browser_runtime_enablement_next_action"
             if project_browser_autonomous_chatgpt_browser_runtime_enablement_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_one_shot_status"
+            if project_browser_autonomous_chrome_runner_bridge_one_shot_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_one_shot_next_action"
+            if project_browser_autonomous_chrome_runner_bridge_one_shot_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_operator_action_required"
+            if project_browser_autonomous_chrome_runner_bridge_operator_action_required
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_wait_exit_reason"
+            if project_browser_autonomous_chrome_runner_bridge_wait_exit_reason
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_response_assimilation_status"
+            if project_browser_autonomous_chrome_runner_bridge_response_assimilation_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind"
+            if project_browser_autonomous_chrome_runner_bridge_response_assimilation_kind
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action"
+            if project_browser_autonomous_chrome_runner_bridge_response_assimilation_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"
+            if project_browser_autonomous_chrome_runner_bridge_bounded_loop_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action"
+            if project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_execution_gate_status"
+            if project_browser_autonomous_codex_execution_gate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_execution_gate_next_action"
+            if project_browser_autonomous_codex_execution_gate_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_capture_gate_status"
+            if project_browser_autonomous_codex_capture_gate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_capture_gate_next_action"
+            if project_browser_autonomous_codex_capture_gate_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_request_status"
+            if project_browser_autonomous_chatgpt_diff_review_request_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_request_next_action"
+            if project_browser_autonomous_chatgpt_diff_review_request_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_decision_status"
+            if project_browser_autonomous_chatgpt_diff_review_decision_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_decision_next_action"
+            if project_browser_autonomous_chatgpt_diff_review_decision_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_commit_tag_gate_status"
+            if project_browser_autonomous_commit_tag_gate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_commit_tag_gate_next_action"
+            if project_browser_autonomous_commit_tag_gate_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_pr_queue_state_status"
+            if project_browser_autonomous_pr_queue_state_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_pr_queue_state_next_action"
+            if project_browser_autonomous_pr_queue_state_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_local_loop_status"
+            if project_browser_autonomous_local_loop_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_local_loop_next_action"
+            if project_browser_autonomous_local_loop_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_execution_connector_status"
+            if project_browser_autonomous_codex_execution_connector_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_execution_connector_next_action"
+            if project_browser_autonomous_codex_execution_connector_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_safe_revert_status"
+            if project_browser_autonomous_safe_revert_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_safe_revert_next_action"
+            if project_browser_autonomous_safe_revert_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_bounded_local_loop_status"
+            if project_browser_autonomous_bounded_local_loop_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_bounded_local_loop_next_action"
+            if project_browser_autonomous_bounded_local_loop_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -158307,6 +166728,20 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_explicit_result_branch_validation_state_normalized,
         **project_browser_autonomous_chatgpt_browser_project_analysis_send_state_normalized,
         **project_browser_autonomous_chatgpt_browser_runtime_enablement_state_normalized,
+        **project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized,
+        **project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized,
+        **project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
+        **project_browser_autonomous_codex_execution_gate_state_normalized,
+        **project_browser_autonomous_codex_capture_gate_state_normalized,
+        **project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
+        **project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+        **project_browser_autonomous_commit_tag_gate_state_normalized,
+        **project_browser_autonomous_commit_tag_execution_state_normalized,
+        **project_browser_autonomous_pr_queue_state_state_normalized,
+        **project_browser_autonomous_local_loop_state_normalized,
+        **project_browser_autonomous_codex_execution_connector_state_normalized,
+        **project_browser_autonomous_safe_revert_state_normalized,
+        **project_browser_autonomous_bounded_local_loop_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -158350,6 +166785,50 @@ def _build_approved_restart_execution_contract_surface(
         "continuation_budget_objective_remaining": continuation_budget_objective_remaining,
         "continuation_budget_lane_remaining": continuation_budget_lane_remaining,
         "continuation_budget_branch_remaining": continuation_budget_branch_remaining,
+        "project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized": (
+            dict(project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized)
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized": (
+            dict(
+                project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized
+            )
+        ),
+        "project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized": (
+            dict(project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized)
+        ),
+        "project_browser_autonomous_codex_execution_gate_state_normalized": (
+            dict(project_browser_autonomous_codex_execution_gate_state_normalized)
+        ),
+        "project_browser_autonomous_codex_capture_gate_state_normalized": (
+            dict(project_browser_autonomous_codex_capture_gate_state_normalized)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_state_normalized": (
+            dict(project_browser_autonomous_chatgpt_diff_review_request_state_normalized)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_decision_state_normalized": (
+            dict(project_browser_autonomous_chatgpt_diff_review_decision_state_normalized)
+        ),
+        "project_browser_autonomous_commit_tag_gate_state_normalized": (
+            dict(project_browser_autonomous_commit_tag_gate_state_normalized)
+        ),
+        "project_browser_autonomous_commit_tag_execution_state_normalized": (
+            dict(project_browser_autonomous_commit_tag_execution_state_normalized)
+        ),
+        "project_browser_autonomous_pr_queue_state_state_normalized": (
+            dict(project_browser_autonomous_pr_queue_state_state_normalized)
+        ),
+        "project_browser_autonomous_local_loop_state_normalized": (
+            dict(project_browser_autonomous_local_loop_state_normalized)
+        ),
+        "project_browser_autonomous_codex_execution_connector_state_normalized": (
+            dict(project_browser_autonomous_codex_execution_connector_state_normalized)
+        ),
+        "project_browser_autonomous_safe_revert_state_normalized": (
+            dict(project_browser_autonomous_safe_revert_state_normalized)
+        ),
+        "project_browser_autonomous_bounded_local_loop_state_normalized": (
+            dict(project_browser_autonomous_bounded_local_loop_state_normalized)
+        ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
 

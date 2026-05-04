@@ -1,0 +1,29 @@
+== Prompt281 bounded loop smoke ==
+timestamp=20260504_150222
+
+== git head ==
+c5f38db (HEAD -> main, tag: prompt280-safe-revert-gate) Add safe revert gate
+bc74e71 (tag: prompt279-codex-execution-connector) Add existing Codex execution connector
+11c5e90 (tag: prompt278.5-local-loop-controller-hardening) Harden local autonomous loop controller
+
+== git status before smoke ==
+ M automation/orchestration/planned_execution_runner.py
+?? artifacts/runtime_commands/20260504_150222_prompt281_bounded_loop_smoke.log
+?? artifacts/runtime_commands/run_prompt281_bounded_loop_smoke.py
+
+== py_compile ==
+py_compile_exit=0
+
+== run smoke ==
+Traceback (most recent call last):
+  File "/home/rai/codex-local-runner/artifacts/runtime_commands/run_prompt281_bounded_loop_smoke.py", line 216, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/rai/codex-local-runner/artifacts/runtime_commands/run_prompt281_bounded_loop_smoke.py", line 21, in main
+    spec.loader.exec_module(mod)
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/home/rai/codex-local-runner/automation/orchestration/planned_execution_runner.py", line 21, in <module>
+    from automation.control.action_handoff import build_action_handoff_payload
+ModuleNotFoundError: No module named 'automation'
+SMOKE_EXCEPTION

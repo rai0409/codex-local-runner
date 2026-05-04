@@ -7,6 +7,8 @@ const DIAG_MARKER = "[BRIDGE_DIAGNOSE_ONLY]";
 
 let runInProgress = false;
 let runOverlay = null;
+let currentTaskId = "";
+let currentTaskFingerprint = "";
 const runHighlightCleanups = [];
 
 function sleep(ms) {
@@ -15,6 +17,17 @@ function sleep(ms) {
 
 function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function computeTaskFingerprint(text) {
+  const normalized = normalizeText(text);
+  let hash = 2166136261;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash ^= normalized.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const unsigned = hash >>> 0;
+  return `fnv1a:${normalized.length}:${unsigned.toString(16).padStart(8, "0")}`;
 }
 
 function compactPreview(value, maxLength = 160) {
@@ -504,6 +517,9 @@ async function postStatus(status, reason, extra = {}) {
     reason,
     page_url: window.location.href,
     timestamp: new Date().toISOString(),
+    task_id: currentTaskId || undefined,
+    request_fingerprint: currentTaskFingerprint || undefined,
+    task_fingerprint: currentTaskFingerprint || undefined,
     ...extra
   };
 
@@ -512,13 +528,25 @@ async function postStatus(status, reason, extra = {}) {
   } catch (error) {
     console.warn("Failed to POST /status", error);
   }
+
+  try {
+    await bridgeRelayRunResult(payload);
+  } catch (error) {
+    console.warn("Failed to relay run result to background", error);
+  }
 }
 
 async function fetchNextTask() {
   const data = await bridgeGetNextTask();
   return {
     hasTask: Boolean(data && data.has_task),
-    prompt: typeof data?.prompt === "string" ? data.prompt : ""
+    prompt: typeof data?.prompt === "string" ? data.prompt : "",
+    taskId: typeof data?.task_id === "string" ? data.task_id : "",
+    requestFingerprint: typeof data?.request_fingerprint === "string" ? data.request_fingerprint : "",
+    taskFingerprint: typeof data?.task_fingerprint === "string" ? data.task_fingerprint : "",
+    status: typeof data?.status === "string" ? data.status : "",
+    attemptCount: Number.isFinite(Number(data?.attempt_count)) ? Number(data.attempt_count) : 0,
+    createdAt: typeof data?.created_at === "string" ? data.created_at : ""
   };
 }
 
@@ -904,7 +932,13 @@ async function waitForStableAssistantResponse() {
 }
 
 async function postResult(responseText, metadata) {
-  await bridgePostResult({ response: responseText, metadata });
+  await bridgePostResult({
+    response: responseText,
+    metadata,
+    task_id: currentTaskId || undefined,
+    request_fingerprint: currentTaskFingerprint || undefined,
+    task_fingerprint: currentTaskFingerprint || undefined
+  });
 }
 
 function runtimeSendMessage(payload) {
@@ -960,6 +994,19 @@ async function bridgePostResult(payload) {
   return response.response || {};
 }
 
+async function bridgeRelayRunResult(payload) {
+  const response = await runtimeSendMessage({
+    type: "BRIDGE_RUN_RESULT",
+    payload
+  });
+  if (!response || response.ok !== true) {
+    throw createBridgeError("bridge_error", {
+      detail: `run_result_relay_failed:${response?.detail || response?.error || "unknown"}`
+    });
+  }
+  return response.state || {};
+}
+
 function mapFailureReason(error) {
   if (error && typeof error === "object" && typeof error.bridgeReason === "string") {
     return error.bridgeReason;
@@ -984,13 +1031,15 @@ function mapFailureReason(error) {
   return "bridge_error";
 }
 
-async function runChatGptBridgeOnce() {
+async function runChatGptBridgeOnce(options = {}) {
   if (runInProgress) {
-    await postStatus("blocked", "bridge_error", { detail: "run_in_progress" });
+    await postStatus("blocked", "run_in_progress", { detail: "run_in_progress" });
     return;
   }
 
   runInProgress = true;
+  currentTaskId = "";
+  currentTaskFingerprint = "";
 
   let composerCandidates = [];
   let selectedComposerCandidate = null;
@@ -1017,9 +1066,23 @@ async function runChatGptBridgeOnce() {
       promptToUse = task.prompt.replace(/^\s*\[BRIDGE_DIAGNOSE_ONLY\]\s*/u, "");
     }
 
+    currentTaskFingerprint =
+      (typeof options.request_fingerprint === "string" && options.request_fingerprint.trim()) ||
+      (typeof options.task_fingerprint === "string" && options.task_fingerprint.trim()) ||
+      (typeof task.requestFingerprint === "string" && task.requestFingerprint.trim()) ||
+      (typeof task.taskFingerprint === "string" && task.taskFingerprint.trim()) ||
+      computeTaskFingerprint(promptToUse);
+    currentTaskId =
+      (typeof options.task_id === "string" && options.task_id.trim()) ||
+      (typeof task.taskId === "string" && task.taskId.trim()) ||
+      "";
+
     await postStatus("running", "task_fetched", {
       step: "task_fetched",
-      prompt_length: normalizeText(promptToUse).length
+      prompt_length: normalizeText(promptToUse).length,
+      task_status: task.status || "",
+      attempt_count: task.attemptCount,
+      created_at: task.createdAt || undefined
     });
 
     composerCandidates = collectComposerCandidates();
@@ -1149,7 +1212,9 @@ async function runChatGptBridgeOnce() {
       response_length: response.text.length,
       response_selector_used: response.selector_used,
       stable_polls: response.stable_polls,
-      transient_candidate_seen: response.transient_candidate_seen
+      transient_candidate_seen: response.transient_candidate_seen,
+      task_id: currentTaskId || undefined,
+      request_fingerprint: currentTaskFingerprint || undefined
     };
 
     await postResult(response.text, metadata);
@@ -1171,11 +1236,13 @@ async function runChatGptBridgeOnce() {
   } finally {
     cleanupRunDiagnostics();
     runInProgress = false;
+    currentTaskId = "";
+    currentTaskFingerprint = "";
   }
 }
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message && message.type === "RUN_CHATGPT_BRIDGE_ONCE") {
-    void runChatGptBridgeOnce();
+    void runChatGptBridgeOnce(message);
   }
 });
