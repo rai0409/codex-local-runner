@@ -93514,6 +93514,225 @@ def _build_project_browser_autonomous_codex_capture_gate_state(
     }
 
 
+def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
+    *,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    capture_gate = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _compact_text(value: Any, *, max_chars: int = 600) -> str:
+        text = _normalize_text(value, default="")
+        if not text:
+            return ""
+        normalized = " ".join(text.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _render_list(items: list[str], *, max_items: int = 40, max_chars: int = 1600) -> str:
+        if not items:
+            return "(none)"
+        lines: list[str] = []
+        consumed = 0
+        for index, item in enumerate(items[:max_items], start=1):
+            line = f"{index}. {item}"
+            if consumed + len(line) + 1 > max_chars:
+                break
+            lines.append(line)
+            consumed += len(line) + 1
+        if len(items) > len(lines):
+            lines.append(f"... ({len(items) - len(lines)} more)")
+        return "\n".join(lines)
+
+    request_enabled = _read_flag(
+        "project_browser_autonomous_chatgpt_diff_review_request_enabled",
+        default=False,
+    )
+    request_write_enabled = _read_flag(
+        "project_browser_autonomous_chatgpt_diff_review_request_write_enabled",
+        default=False,
+    )
+    capture_status = _normalize_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_status"),
+        default="",
+    )
+    changed_files = _normalize_string_list(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+    diff_summary = _compact_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_diff_summary")
+    )
+    validation_summary = _compact_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_validation_summary")
+    )
+    codex_output_summary = _compact_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_codex_output_summary")
+    )
+    capture_output_path = _normalize_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_capture_output_path"),
+        default="",
+    )
+    capture_artifact_paths = _normalize_string_list(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_capture_artifact_paths")
+    )
+    prompt_kind = _normalize_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_prompt_kind"),
+        default="",
+    )
+    prompt_fingerprint = _normalize_text(
+        capture_gate.get("project_browser_autonomous_codex_capture_gate_prompt_fingerprint"),
+        default="",
+    )
+
+    review_prompt = ""
+    if capture_status == "codex_capture_gate_captured":
+        review_prompt = "\n".join(
+            [
+                "You are reviewing a bounded Codex change intake.",
+                "",
+                "Use only the structured evidence below. Do not assume missing context.",
+                "",
+                "## Capture Evidence",
+                f"- prompt_kind: {prompt_kind or '(unknown)'}",
+                f"- prompt_fingerprint: {prompt_fingerprint or '(missing)'}",
+                f"- capture_output_path: {capture_output_path or '(none)'}",
+                "- changed_files:",
+                _render_list(changed_files, max_items=60, max_chars=1800),
+                "- capture_artifact_paths:",
+                _render_list(capture_artifact_paths, max_items=20, max_chars=1200),
+                f"- diff_summary: {diff_summary or '(none)'}",
+                f"- validation_summary: {validation_summary or '(none)'}",
+                f"- codex_output_summary: {codex_output_summary or '(none)'}",
+                "",
+                "## Decision Policy",
+                "- approve only if scope is correct and validation is acceptable",
+                "- fix if direction is right but corrections are needed",
+                "- revert if unsafe, wrong-scope, or worse than baseline",
+                "- manual_review if unclear or high-risk",
+                "- commit_recommendation must be false for high risk or any blocking issue",
+                "",
+                "## Output Format (JSON object only)",
+                '{',
+                '  "decision": "approve | fix | revert | manual_review",',
+                '  "confidence": 0.0,',
+                '  "risk": "low | medium | high",',
+                '  "blocking_issues": ["..."],',
+                '  "fix_prompt": "...",',
+                '  "revert_reason": "...",',
+                '  "commit_recommendation": false,',
+                '  "summary": "..."',
+                '}',
+            ]
+        ).strip()
+    if len(review_prompt) > 8000:
+        review_prompt = review_prompt[:8000]
+    review_prompt_fingerprint = (
+        hashlib.sha256(review_prompt.encode("utf-8")).hexdigest() if review_prompt else ""
+    )
+
+    prior_prompt_fingerprints = {
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_chatgpt_diff_review_request_prompt_fingerprint"),
+            default="",
+        ),
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_chrome_runner_bridge_request_fingerprint"),
+            default="",
+        ),
+    }
+    prior_prompt_fingerprints.discard("")
+    duplicate_prompt = bool(
+        review_prompt_fingerprint and review_prompt_fingerprint in prior_prompt_fingerprints
+    )
+
+    status = "chatgpt_diff_review_request_not_requested"
+    next_action = "enable_chatgpt_diff_review_request"
+    blocked_reason = "review_request_disabled"
+
+    if request_enabled:
+        status = "chatgpt_diff_review_request_ready"
+        next_action = "write_chatgpt_diff_review_request"
+        blocked_reason = "none"
+        if capture_status != "codex_capture_gate_captured":
+            status = "chatgpt_diff_review_request_blocked_missing_capture"
+            next_action = "manual_review_required"
+            blocked_reason = "capture_gate_not_captured"
+        elif not review_prompt:
+            status = "chatgpt_diff_review_request_blocked_empty_review_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "empty_review_prompt"
+        elif duplicate_prompt:
+            status = "chatgpt_diff_review_request_blocked_duplicate_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "duplicate_review_prompt_fingerprint"
+        elif not request_write_enabled:
+            status = "chatgpt_diff_review_request_decision_only"
+            next_action = "write_chatgpt_diff_review_request"
+            blocked_reason = "write_not_enabled"
+        else:
+            bridge_dir = Path("/tmp/codex-local-runner-chatgpt-bridge")
+            request_path = bridge_dir / "request.md"
+            response_path = bridge_dir / "response.md"
+            status_path = bridge_dir / "status.json"
+            try:
+                bridge_dir.mkdir(parents=True, exist_ok=True)
+                for stale_path in (response_path, status_path):
+                    if not stale_path.exists():
+                        continue
+                    if not stale_path.is_file() and not stale_path.is_symlink():
+                        raise OSError(f"stale_path_not_file:{stale_path}")
+                    stale_path.unlink()
+                temp_path = request_path.with_name(f"{request_path.name}.tmp")
+                temp_path.write_text(review_prompt, encoding="utf-8")
+                os.replace(temp_path, request_path)
+            except OSError as exc:
+                status = "chatgpt_diff_review_request_blocked_write_failed"
+                next_action = "manual_review_required"
+                blocked_reason = f"write_failed:{exc.__class__.__name__}:{exc}"
+            else:
+                status = "chatgpt_diff_review_request_written"
+                next_action = "wait_for_chatgpt_diff_review_response"
+                blocked_reason = "none"
+
+    return {
+        "project_browser_autonomous_chatgpt_diff_review_request_status": status,
+        "project_browser_autonomous_chatgpt_diff_review_request_next_action": next_action,
+        "project_browser_autonomous_chatgpt_diff_review_request_enabled": bool(request_enabled),
+        "project_browser_autonomous_chatgpt_diff_review_request_write_enabled": bool(
+            request_write_enabled
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_prompt": review_prompt,
+        "project_browser_autonomous_chatgpt_diff_review_request_prompt_fingerprint": (
+            review_prompt_fingerprint
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_changed_files": (
+            _normalize_string_list(changed_files)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_blocked_reason": blocked_reason,
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -149816,6 +150035,82 @@ def _build_approved_restart_execution_contract_surface(
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_codex_capture_gate_state_normalized[key] = value
+    project_browser_autonomous_chatgpt_diff_review_request_state = (
+        _build_project_browser_autonomous_chatgpt_diff_review_request_state(
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    chatgpt_diff_review_request_allowed_statuses = {
+        "chatgpt_diff_review_request_not_requested",
+        "chatgpt_diff_review_request_decision_only",
+        "chatgpt_diff_review_request_ready",
+        "chatgpt_diff_review_request_written",
+        "chatgpt_diff_review_request_blocked_missing_capture",
+        "chatgpt_diff_review_request_blocked_empty_review_prompt",
+        "chatgpt_diff_review_request_blocked_duplicate_prompt",
+        "chatgpt_diff_review_request_blocked_write_failed",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_request_allowed_next_actions = {
+        "enable_chatgpt_diff_review_request",
+        "write_chatgpt_diff_review_request",
+        "wait_for_chatgpt_diff_review_response",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_request_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "write_enabled",
+        "prompt",
+        "prompt_fingerprint",
+        "changed_files",
+        "blocked_reason",
+    )
+    project_browser_autonomous_chatgpt_diff_review_request_status = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_request_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_request_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_request_status
+        not in chatgpt_diff_review_request_allowed_statuses
+    ):
+        project_browser_autonomous_chatgpt_diff_review_request_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_request_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_request_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_request_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_request_next_action
+        not in chatgpt_diff_review_request_allowed_next_actions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_request_next_action = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_request_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chatgpt_diff_review_request_field_names:
+        key = f"project_browser_autonomous_chatgpt_diff_review_request_{field_name}"
+        value = project_browser_autonomous_chatgpt_diff_review_request_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_chatgpt_diff_review_request_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_chatgpt_diff_review_request_next_action
+        elif field_name in {"enabled", "write_enabled"}:
+            value = bool(value)
+        elif field_name == "changed_files":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chatgpt_diff_review_request_state_normalized[key] = (
+            value
+        )
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -150380,6 +150675,12 @@ def _build_approved_restart_execution_contract_surface(
                 ),
                 "project_browser_autonomous_codex_capture_gate_next_action": (
                     project_browser_autonomous_codex_capture_gate_next_action
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_request_status": (
+                    project_browser_autonomous_chatgpt_diff_review_request_status
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_request_next_action": (
+                    project_browser_autonomous_chatgpt_diff_review_request_next_action
                 ),
                 "project_browser_autonomous_dev_loop_pr_prompt_readiness_status": (
                     project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -154519,6 +154820,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_codex_capture_gate_next_action"
             if project_browser_autonomous_codex_capture_gate_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_request_status"
+            if project_browser_autonomous_chatgpt_diff_review_request_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_request_next_action"
+            if project_browser_autonomous_chatgpt_diff_review_request_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -160773,6 +161080,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
         **project_browser_autonomous_codex_execution_gate_state_normalized,
         **project_browser_autonomous_codex_capture_gate_state_normalized,
+        **project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -160832,6 +161140,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_codex_capture_gate_state_normalized": (
             dict(project_browser_autonomous_codex_capture_gate_state_normalized)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_state_normalized": (
+            dict(project_browser_autonomous_chatgpt_diff_review_request_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
