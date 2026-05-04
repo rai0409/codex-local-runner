@@ -3434,6 +3434,16 @@ _BOUNDED_LOCAL_LOOP_CONTROL_KEYS: tuple[str, ...] = (
 )
 
 
+_BOUNDED_LOCAL_LOOP_LOCAL_LOOP_STATE_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_local_loop_status",
+    "project_browser_autonomous_local_loop_next_action",
+    "project_browser_autonomous_local_loop_selected_prompt_fingerprint",
+    "project_browser_autonomous_local_loop_selected_step_fingerprint",
+    "project_browser_autonomous_local_loop_active_pr_id",
+    "project_browser_autonomous_local_loop_next_pr_id",
+)
+
+
 def _merge_bounded_local_loop_controls_into_approved_restart_payload(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -3450,6 +3460,40 @@ def _merge_bounded_local_loop_controls_into_approved_restart_payload(
     for key in _BOUNDED_LOCAL_LOOP_CONTROL_KEYS:
         if key in retry_payload and retry_payload.get(key) is not None:
             merged[key] = retry_payload.get(key)
+    return merged
+
+
+def _merge_bounded_local_loop_local_loop_state_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    policy_snapshot: Mapping[str, Any] | None,
+    retry_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    policy_payload = dict(policy_snapshot) if isinstance(policy_snapshot, Mapping) else {}
+    retry_payload = dict(retry_context) if isinstance(retry_context, Mapping) else {}
+
+    for key in _BOUNDED_LOCAL_LOOP_LOCAL_LOOP_STATE_KEYS:
+        if key in policy_payload and policy_payload.get(key) is not None:
+            merged[key] = policy_payload.get(key)
+    for key in _BOUNDED_LOCAL_LOOP_LOCAL_LOOP_STATE_KEYS:
+        if key in retry_payload and retry_payload.get(key) is not None:
+            merged[key] = retry_payload.get(key)
+    return merged
+
+
+def _overlay_bounded_local_loop_local_loop_state_for_coordinator(
+    *,
+    local_loop_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(local_loop_state) if isinstance(local_loop_state, Mapping) else {}
+    approved_restart = (
+        dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    )
+    for key in _BOUNDED_LOCAL_LOOP_LOCAL_LOOP_STATE_KEYS:
+        if key in approved_restart and approved_restart.get(key) is not None:
+            merged[key] = approved_restart.get(key)
     return merged
 
 
@@ -155381,6 +155425,12 @@ def _build_approved_restart_execution_contract_surface(
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_local_loop_state_normalized[key] = value
+    project_browser_autonomous_local_loop_state_for_bounded_local_loop = (
+        _overlay_bounded_local_loop_local_loop_state_for_coordinator(
+            local_loop_state=project_browser_autonomous_local_loop_state_normalized,
+            approved_restart_payload=approved_restart,
+        )
+    )
     project_browser_autonomous_codex_execution_connector_state = (
         _build_project_browser_autonomous_codex_execution_connector_state(
             local_loop_state=project_browser_autonomous_local_loop_state_normalized,
@@ -155543,7 +155593,7 @@ def _build_approved_restart_execution_contract_surface(
 
     project_browser_autonomous_bounded_local_loop_state = (
         _build_project_browser_autonomous_bounded_local_loop_coordinator_state(
-            local_loop_state=project_browser_autonomous_local_loop_state_normalized,
+            local_loop_state=project_browser_autonomous_local_loop_state_for_bounded_local_loop,
             codex_execution_connector_state=project_browser_autonomous_codex_execution_connector_state_normalized,
             codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
             chatgpt_diff_review_request_state=project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
@@ -170572,6 +170622,13 @@ class PlannedExecutionRunner:
         approved_restart_payload_for_bounded_local_loop = (
             _merge_bounded_local_loop_controls_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_contract_payload,
+                policy_snapshot=policy_payload,
+                retry_context=effective_retry_context,
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_bounded_local_loop_local_loop_state_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 policy_snapshot=policy_payload,
                 retry_context=effective_retry_context,
             )
