@@ -7476,3 +7476,9 @@ Next:
 - Chrome extension route now supports background bridge fetch, visible composer diagnostics, send confirmation, transient thinking-text skip, and conservative final response polling.
 - E2E smoke reached response.md=OK.
 - Runbook: artifacts/runtime_commands/20260503_122150_prompt264_chrome_runner_bridge_e2e_success_runbook.md
+
+## Prompt282/282.5 bounded local loop real-runner diagnosis
+
+- Prompt282 confirmed real-runner output exposure of `project_browser_autonomous_bounded_local_loop_*` fields in `approved_restart_execution_contract.json`.
+- Prompt282.5 confirmed `--retry-context` and `--policy-snapshot` do not currently wire bounded local loop control keys into the `approved_restart` payload consumed by the bounded local loop coordinator.
+- Next: Prompt282.6 should add allowlist-only wiring for bounded local loop control keys; no daemon, no live Codex, no git/GitHub mutation.

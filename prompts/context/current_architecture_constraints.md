@@ -4690,3 +4690,7 @@ Next direction:
 - Confirmed visible composer and real send-button detection; selected submit candidate uses data-testid=send-button / aria_label=プロンプトを送信する.
 - Current conservative polling: RESPONSE_TIMEOUT_MS=600000, RESPONSE_POLL_INTERVAL_MS=10000, STABLE_POLLS_REQUIRED=3, USER_MESSAGE_CONFIRM_TIMEOUT_MS=30000, USER_MESSAGE_RETRY_INTERVAL_MS=10000.
 - Runbook: artifacts/runtime_commands/20260503_122150_prompt264_chrome_runner_bridge_e2e_success_runbook.md
+
+## Prompt282.6 constraint
+
+Bounded local loop controls may be wired from real-runner inputs only through an explicit allowlist. Do not merge arbitrary retry context or policy snapshot data into approved restart payloads. Preserve default-off behavior and avoid live Codex, git/GitHub mutation, daemon, scheduler, or unbounded loop behavior.
