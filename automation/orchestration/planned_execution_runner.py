@@ -93118,6 +93118,30 @@ def _build_project_browser_autonomous_codex_execution_gate_state(
     fix_prompt_path = "/tmp/codex-local-runner-decision/generated_fix_prompt.txt"
     next_prompt_snapshot = _read_prompt_snapshot(next_prompt_path)
     fix_prompt_snapshot = _read_prompt_snapshot(fix_prompt_path)
+    local_loop_overlay_state = (
+        _overlay_bounded_local_loop_local_loop_state_for_coordinator(
+            local_loop_state={},
+            approved_restart_payload=approved_restart,
+        )
+    )
+    local_loop_status = _normalize_text(
+        local_loop_overlay_state.get("project_browser_autonomous_local_loop_status"),
+        default="",
+    )
+    local_loop_next_action = _normalize_text(
+        local_loop_overlay_state.get("project_browser_autonomous_local_loop_next_action"),
+        default="",
+    )
+    local_loop_threshold_ready = bool(
+        (
+            local_loop_status == "local_loop_ready_run_codex_implementation"
+            and local_loop_next_action == "run_codex_implementation"
+        )
+        or (
+            local_loop_status == "local_loop_ready_run_codex_fix"
+            and local_loop_next_action == "run_codex_fix"
+        )
+    )
 
     prompt_kind = "none"
     prompt_path = ""
@@ -93136,6 +93160,14 @@ def _build_project_browser_autonomous_codex_execution_gate_state(
         prompt_path = next_prompt_path
         selected_snapshot = dict(next_prompt_snapshot)
     elif bounded_loop_status == "loop_ready_or_routed_to_codex_fix":
+        prompt_kind = "fix"
+        prompt_path = fix_prompt_path
+        selected_snapshot = dict(fix_prompt_snapshot)
+    elif local_loop_threshold_ready and local_loop_next_action == "run_codex_implementation":
+        prompt_kind = "implementation"
+        prompt_path = next_prompt_path
+        selected_snapshot = dict(next_prompt_snapshot)
+    elif local_loop_threshold_ready and local_loop_next_action == "run_codex_fix":
         prompt_kind = "fix"
         prompt_path = fix_prompt_path
         selected_snapshot = dict(fix_prompt_snapshot)
@@ -93199,6 +93231,9 @@ def _build_project_browser_autonomous_codex_execution_gate_state(
         "loop_ready_or_routed_to_codex",
         "loop_ready_or_routed_to_codex_fix",
     }
+    execution_route_threshold_ready = bool(
+        bounded_loop_threshold_ready or local_loop_threshold_ready
+    )
     prompt_exists = bool(selected_snapshot.get("exists", False))
     prompt_is_file = bool(selected_snapshot.get("is_file", False))
     prompt_non_empty = bool(selected_snapshot.get("non_empty", False))
@@ -93206,9 +93241,11 @@ def _build_project_browser_autonomous_codex_execution_gate_state(
     existing_safe_route = (
         (prompt_kind == "implementation" and bounded_loop_next_action == "run_existing_codex_implementation_step")
         or (prompt_kind == "fix" and bounded_loop_next_action == "run_existing_codex_fix_step")
+        or (prompt_kind == "implementation" and local_loop_next_action == "run_codex_implementation")
+        or (prompt_kind == "fix" and local_loop_next_action == "run_codex_fix")
     )
     threshold_passed = bool(
-        bounded_loop_threshold_ready
+        execution_route_threshold_ready
         and prompt_exists
         and prompt_is_file
         and prompt_non_empty
@@ -93226,10 +93263,10 @@ def _build_project_browser_autonomous_codex_execution_gate_state(
         status = "codex_execution_gate_decision_only"
         next_action = "manual_review_required"
         blocked_reason = "decision_only_execution_disabled"
-        if not bounded_loop_threshold_ready:
+        if not execution_route_threshold_ready:
             status = "codex_execution_gate_blocked_threshold"
             next_action = "manual_review_required"
-            blocked_reason = "bounded_loop_not_ready_for_codex_gate"
+            blocked_reason = "execution_route_not_ready_for_codex_gate"
         elif not prompt_exists or not prompt_is_file or not prompt_non_empty or prompt_read_error:
             status = "codex_execution_gate_blocked_missing_routed_prompt"
             next_action = "manual_review_required"
@@ -155433,7 +155470,7 @@ def _build_approved_restart_execution_contract_surface(
     )
     project_browser_autonomous_codex_execution_connector_state = (
         _build_project_browser_autonomous_codex_execution_connector_state(
-            local_loop_state=project_browser_autonomous_local_loop_state_normalized,
+            local_loop_state=project_browser_autonomous_local_loop_state_for_bounded_local_loop,
             codex_execution_gate_state=project_browser_autonomous_codex_execution_gate_state_normalized,
             codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
             chrome_runner_bridge_bounded_loop_state=project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,

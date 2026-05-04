@@ -7482,3 +7482,12 @@ Next:
 - Prompt282 confirmed real-runner output exposure of `project_browser_autonomous_bounded_local_loop_*` fields in `approved_restart_execution_contract.json`.
 - Prompt282.5 confirmed `--retry-context` and `--policy-snapshot` do not currently wire bounded local loop control keys into the `approved_restart` payload consumed by the bounded local loop coordinator.
 - Next: Prompt282.6 should add allowlist-only wiring for bounded local loop control keys; no daemon, no live Codex, no git/GitHub mutation.
+
+## Prompt284.5 Codex gate / connector local-loop wiring
+
+- Prompt284.5 resolved the Prompt284 local-loop blocker for Codex execution gate / connector.
+- Codex gate reached `codex_execution_gate_ready`.
+- Prompt path reached `/tmp/codex-local-runner-decision/generated_next_prompt.txt`.
+- Codex invocation reached `codex_invocation_completed` but failed with `exit_code=1`.
+- Remaining blocker: Codex session/thread initialization failed under read-only filesystem.
+- Next: Prompt284.6 should narrowly address Codex invocation runtime/session writable environment. Do not broaden into commit/tag/push/PR/merge/daemon behavior.

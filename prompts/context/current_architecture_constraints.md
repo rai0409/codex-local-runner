@@ -4694,3 +4694,7 @@ Next direction:
 ## Prompt282.6 constraint
 
 Bounded local loop controls may be wired from real-runner inputs only through an explicit allowlist. Do not merge arbitrary retry context or policy snapshot data into approved restart payloads. Preserve default-off behavior and avoid live Codex, git/GitHub mutation, daemon, scheduler, or unbounded loop behavior.
+
+## Prompt284.6 constraint
+
+Codex invocation runtime fixes must remain one-shot and bounded. Do not bypass Codex execution gates, create new live connector paths, widen live authorization broadly, auto-commit/tag, push, create PRs, merge, delete branches, start daemon/scheduler behavior, or run unbounded loops. Prefer a narrow writable session/temp path fix for the existing Codex invocation path.
