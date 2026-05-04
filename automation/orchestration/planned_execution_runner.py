@@ -93222,6 +93222,298 @@ def _build_project_browser_autonomous_codex_execution_gate_state(
     }
 
 
+def _build_project_browser_autonomous_codex_capture_gate_state(
+    *,
+    codex_execution_gate_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    codex_gate = dict(codex_execution_gate_state) if isinstance(codex_execution_gate_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_text_bounded(path_text: str, *, read_limit_bytes: int = 32768) -> str:
+        path_obj = Path(path_text)
+        if not path_obj.exists() or not path_obj.is_file():
+            return ""
+        try:
+            with path_obj.open("rb") as file_obj:
+                raw = file_obj.read(read_limit_bytes)
+        except OSError:
+            return ""
+        return raw.decode("utf-8", errors="replace")
+
+    def _parse_capture_stdout(stdout_text: str) -> tuple[str, str]:
+        report = ""
+        patch = ""
+        for raw_line in stdout_text.splitlines():
+            line = _normalize_text(raw_line, default="")
+            if line.startswith("REPORT="):
+                report = line.partition("=")[2].strip()
+            elif line.startswith("PATCH="):
+                patch = line.partition("=")[2].strip()
+        return report, patch
+
+    def _extract_changed_files(report_text: str) -> list[str]:
+        changed: list[str] = []
+        if not report_text:
+            return changed
+        capture = False
+        for raw_line in report_text.splitlines():
+            line = raw_line.rstrip("\n")
+            normalized = line.strip()
+            if normalized.startswith("## Diff name-status - unstaged tracked") or normalized.startswith(
+                "## Diff name-status - staged"
+            ):
+                capture = True
+                continue
+            if capture and normalized.startswith("## "):
+                capture = False
+            if not capture or not normalized:
+                continue
+            parts = normalized.split(None, 1)
+            if len(parts) != 2:
+                continue
+            status_code = parts[0]
+            file_path = parts[1].strip()
+            if status_code and status_code[0] in {"A", "C", "D", "M", "R", "T", "U"} and file_path:
+                changed.append(file_path)
+        return _normalize_string_list(changed, sort_items=True)
+
+    capture_enabled = _read_flag(
+        "project_browser_autonomous_codex_capture_gate_enabled",
+        default=False,
+    )
+    capture_execute_enabled = _read_flag(
+        "project_browser_autonomous_codex_capture_gate_execute_enabled",
+        default=False,
+    )
+    gate_status = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_status"),
+        default="",
+    )
+    gate_approved = bool(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_approved_for_execution", False)
+    )
+    prompt_kind = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_kind"),
+        default="none",
+    )
+    prompt_path = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_path"),
+        default="",
+    )
+    prompt_fingerprint = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+        default="",
+    )
+    codex_route_next_action = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_next_action"),
+        default="",
+    )
+    has_existing_codex_execution_route = codex_route_next_action in {
+        "run_existing_codex_implementation_step",
+        "run_existing_codex_fix_step",
+    }
+
+    script_path = "scripts/capture_prompt_diff.sh"
+    script_path_obj = Path(script_path)
+    script_exists = script_path_obj.exists() and script_path_obj.is_file() and not script_path_obj.is_symlink()
+    known_output_dir = Path("/tmp/codex-local-runner-diff-logs")
+
+    status = "codex_capture_gate_not_requested"
+    next_action = "enable_codex_capture_gate"
+    blocked_reason = "capture_gate_disabled"
+    changed_files: list[str] = []
+    diff_summary = ""
+    validation_summary = ""
+    codex_output_summary = ""
+    capture_output_path = ""
+    capture_artifact_paths: list[str] = []
+    capture_failure_count = 0
+
+    if capture_enabled:
+        if gate_status != "codex_execution_gate_ready" or not gate_approved:
+            status = "codex_capture_gate_blocked_missing_execution_gate"
+            next_action = "manual_review_required"
+            blocked_reason = "codex_execution_gate_not_ready_or_not_approved"
+        elif not has_existing_codex_execution_route:
+            status = "codex_capture_gate_blocked_no_existing_codex_execution_route"
+            next_action = "manual_review_required"
+            blocked_reason = "no_existing_codex_execution_route"
+        elif not script_exists:
+            status = "codex_capture_gate_blocked_missing_capture_script"
+            next_action = "manual_review_required"
+            blocked_reason = "capture_script_missing_or_unsafe_path"
+        elif not capture_execute_enabled:
+            status = "codex_capture_gate_decision_only"
+            next_action = "enable_codex_capture_execute"
+            blocked_reason = "execution_not_enabled"
+        else:
+            status = "codex_capture_gate_ready"
+            next_action = "capture_with_existing_script"
+            blocked_reason = "none"
+
+            repo_path_text = _normalize_text(execution_repo_path, default="")
+            repo_path_obj = Path(repo_path_text) if repo_path_text else Path.cwd()
+            if not repo_path_obj.exists() or not repo_path_obj.is_dir():
+                status = "codex_capture_gate_blocked_execution_or_capture_failed"
+                next_action = "manual_review_required"
+                blocked_reason = "execution_repo_path_unavailable"
+            else:
+                try:
+                    capture_run = subprocess.run(
+                        [script_path],
+                        cwd=str(repo_path_obj),
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        check=False,
+                    )
+                except (OSError, subprocess.SubprocessError):
+                    status = "codex_capture_gate_blocked_execution_or_capture_failed"
+                    next_action = "manual_review_required"
+                    blocked_reason = "capture_script_execution_failed"
+                else:
+                    if int(capture_run.returncode) != 0:
+                        status = "codex_capture_gate_blocked_execution_or_capture_failed"
+                        next_action = "manual_review_required"
+                        blocked_reason = "capture_script_nonzero_exit"
+                    report_path_text, patch_path_text = _parse_capture_stdout(
+                        _normalize_text(capture_run.stdout, default="")
+                    )
+                    candidate_artifacts: list[str] = []
+                    for path_text in (report_path_text, patch_path_text):
+                        if path_text:
+                            candidate_artifacts.append(path_text)
+                    if not candidate_artifacts and known_output_dir.exists() and known_output_dir.is_dir():
+                        report_candidates = sorted(
+                            known_output_dir.glob("*_diff_report.txt"),
+                            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+                            reverse=True,
+                        )
+                        patch_candidates = sorted(
+                            known_output_dir.glob("*_full.patch"),
+                            key=lambda path: path.stat().st_mtime if path.exists() else 0,
+                            reverse=True,
+                        )
+                        if report_candidates:
+                            candidate_artifacts.append(str(report_candidates[0]))
+                        if patch_candidates:
+                            candidate_artifacts.append(str(patch_candidates[0]))
+                    capture_artifact_paths = _normalize_string_list(candidate_artifacts, sort_items=False)
+                    report_text = ""
+                    patch_text = ""
+                    if capture_artifact_paths:
+                        for artifact_path in capture_artifact_paths:
+                            if artifact_path.endswith("_diff_report.txt"):
+                                report_text = _read_text_bounded(artifact_path, read_limit_bytes=32768)
+                                if report_text and not capture_output_path:
+                                    capture_output_path = artifact_path
+                            elif artifact_path.endswith("_full.patch"):
+                                patch_text = _read_text_bounded(artifact_path, read_limit_bytes=32768)
+                    changed_files = _extract_changed_files(report_text)
+                    if report_text:
+                        diff_summary = (
+                            f"capture report available; changed_files={len(changed_files)}; "
+                            f"report_chars={len(report_text)}"
+                        )
+                    elif patch_text:
+                        diff_summary = (
+                            f"capture patch available; changed_files={len(changed_files)}; "
+                            f"patch_chars={len(patch_text)}"
+                        )
+                    else:
+                        diff_summary = "capture output unavailable"
+                    if "Diff check" in report_text:
+                        if "error:" in report_text.lower():
+                            validation_summary = "diff_check_has_errors"
+                        else:
+                            validation_summary = "diff_check_present"
+                    else:
+                        validation_summary = "validation_not_available"
+                    codex_output_summary = (
+                        f"prompt_kind={prompt_kind}; prompt_fingerprint={prompt_fingerprint[:16]}; "
+                        f"capture_exit_code={int(capture_run.returncode)}"
+                    )
+                    if (
+                        status == "codex_capture_gate_ready"
+                        and not report_text
+                        and not patch_text
+                    ):
+                        status = "codex_capture_gate_blocked_capture_unavailable"
+                        next_action = "manual_review_required"
+                        blocked_reason = "capture_output_unavailable"
+                    elif status == "codex_capture_gate_ready":
+                        status = "codex_capture_gate_captured"
+                        next_action = "prepare_chatgpt_diff_review_request"
+                        blocked_reason = "none"
+
+    if status.startswith("codex_capture_gate_blocked_"):
+        capture_failure_count = 1
+
+    return {
+        "project_browser_autonomous_codex_capture_gate_status": status,
+        "project_browser_autonomous_codex_capture_gate_next_action": next_action,
+        "project_browser_autonomous_codex_capture_gate_enabled": bool(capture_enabled),
+        "project_browser_autonomous_codex_capture_gate_execute_enabled": bool(
+            capture_execute_enabled
+        ),
+        "project_browser_autonomous_codex_capture_gate_prompt_kind": prompt_kind,
+        "project_browser_autonomous_codex_capture_gate_prompt_path": prompt_path,
+        "project_browser_autonomous_codex_capture_gate_prompt_fingerprint": prompt_fingerprint,
+        "project_browser_autonomous_codex_capture_gate_script_path": script_path,
+        "project_browser_autonomous_codex_capture_gate_changed_files": _normalize_string_list(
+            changed_files
+        ),
+        "project_browser_autonomous_codex_capture_gate_diff_summary": _normalize_text(
+            diff_summary,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_validation_summary": _normalize_text(
+            validation_summary,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_codex_output_summary": _normalize_text(
+            codex_output_summary,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_capture_output_path": _normalize_text(
+            capture_output_path,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_capture_artifact_paths": (
+            _normalize_string_list(capture_artifact_paths)
+        ),
+        "project_browser_autonomous_codex_capture_gate_blocked_reason": _normalize_text(
+            blocked_reason,
+            default="",
+        ),
+        "project_browser_autonomous_codex_capture_gate_capture_failure_count": _as_non_negative_int(
+            capture_failure_count,
+            default=0,
+        ),
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -149458,6 +149750,72 @@ def _build_approved_restart_execution_contract_surface(
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_codex_execution_gate_state_normalized[key] = value
+    project_browser_autonomous_codex_capture_gate_state = (
+        _build_project_browser_autonomous_codex_capture_gate_state(
+            codex_execution_gate_state=project_browser_autonomous_codex_execution_gate_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    codex_capture_gate_allowed_statuses = {
+        "codex_capture_gate_not_requested",
+        "codex_capture_gate_decision_only",
+        "codex_capture_gate_ready",
+        "codex_capture_gate_captured",
+        "codex_capture_gate_blocked_missing_execution_gate",
+        "codex_capture_gate_blocked_no_existing_codex_execution_route",
+        "codex_capture_gate_blocked_missing_capture_script",
+        "codex_capture_gate_blocked_capture_unavailable",
+        "codex_capture_gate_blocked_execution_or_capture_failed",
+        "insufficient_truth",
+    }
+    codex_capture_gate_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "prompt_kind",
+        "prompt_path",
+        "prompt_fingerprint",
+        "script_path",
+        "changed_files",
+        "diff_summary",
+        "validation_summary",
+        "codex_output_summary",
+        "capture_output_path",
+        "capture_artifact_paths",
+        "blocked_reason",
+    )
+    project_browser_autonomous_codex_capture_gate_status = _normalize_text(
+        project_browser_autonomous_codex_capture_gate_state.get(
+            "project_browser_autonomous_codex_capture_gate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_capture_gate_status not in codex_capture_gate_allowed_statuses:
+        project_browser_autonomous_codex_capture_gate_status = "insufficient_truth"
+    project_browser_autonomous_codex_capture_gate_next_action = _normalize_text(
+        project_browser_autonomous_codex_capture_gate_state.get(
+            "project_browser_autonomous_codex_capture_gate_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    project_browser_autonomous_codex_capture_gate_state_normalized: dict[str, Any] = {}
+    for field_name in codex_capture_gate_field_names:
+        key = f"project_browser_autonomous_codex_capture_gate_{field_name}"
+        value = project_browser_autonomous_codex_capture_gate_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_capture_gate_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_capture_gate_next_action
+        elif field_name in {"enabled", "execute_enabled"}:
+            value = bool(value)
+        elif field_name in {"changed_files", "capture_artifact_paths"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_capture_gate_state_normalized[key] = value
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -150016,6 +150374,12 @@ def _build_approved_restart_execution_contract_surface(
                         "project_browser_autonomous_codex_execution_gate_approved_for_execution",
                         False,
                     )
+                ),
+                "project_browser_autonomous_codex_capture_gate_status": (
+                    project_browser_autonomous_codex_capture_gate_status
+                ),
+                "project_browser_autonomous_codex_capture_gate_next_action": (
+                    project_browser_autonomous_codex_capture_gate_next_action
                 ),
                 "project_browser_autonomous_dev_loop_pr_prompt_readiness_status": (
                     project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -154149,6 +154513,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_codex_execution_gate_next_action"
             if project_browser_autonomous_codex_execution_gate_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_capture_gate_status"
+            if project_browser_autonomous_codex_capture_gate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_capture_gate_next_action"
+            if project_browser_autonomous_codex_capture_gate_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -160402,6 +160772,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized,
         **project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
         **project_browser_autonomous_codex_execution_gate_state_normalized,
+        **project_browser_autonomous_codex_capture_gate_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -160458,6 +160829,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_codex_execution_gate_state_normalized": (
             dict(project_browser_autonomous_codex_execution_gate_state_normalized)
+        ),
+        "project_browser_autonomous_codex_capture_gate_state_normalized": (
+            dict(project_browser_autonomous_codex_capture_gate_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
