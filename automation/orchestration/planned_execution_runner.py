@@ -92958,6 +92958,270 @@ def _build_project_browser_autonomous_chrome_runner_bridge_bounded_loop_state(
     }
 
 
+def _build_project_browser_autonomous_codex_execution_gate_state(
+    *,
+    bounded_loop_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    bounded_loop = dict(bounded_loop_state) if isinstance(bounded_loop_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(
+        key: str,
+        *,
+        default: bool = False,
+    ) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_prompt_snapshot(path_text: str) -> dict[str, Any]:
+        path_obj = Path(path_text)
+        snapshot = {
+            "path": path_text,
+            "exists": False,
+            "is_file": False,
+            "size_bytes": 0,
+            "read_error": "",
+            "preview": "",
+            "fingerprint": "",
+            "text": "",
+            "non_empty": False,
+        }
+        if not path_obj.exists():
+            return snapshot
+        snapshot["exists"] = True
+        if not path_obj.is_file():
+            return snapshot
+        snapshot["is_file"] = True
+        try:
+            file_size = _as_non_negative_int(path_obj.stat().st_size, default=0)
+            with path_obj.open("rb") as file_obj:
+                raw = file_obj.read(32768)
+        except OSError as exc:
+            snapshot["read_error"] = f"{exc.__class__.__name__}:{exc}"
+            return snapshot
+        text = raw.decode("utf-8", errors="replace").strip()
+        snapshot["size_bytes"] = file_size
+        snapshot["text"] = text
+        snapshot["non_empty"] = bool(text)
+        snapshot["preview"] = (" ".join(text.split()))[:500] if text else ""
+        snapshot["fingerprint"] = (
+            hashlib.sha256(text.encode("utf-8")).hexdigest() if text else ""
+        )
+        return snapshot
+
+    gate_enabled = _read_flag(
+        "project_browser_autonomous_codex_execution_gate_enabled",
+        default=False,
+    )
+    gate_execute_enabled = _read_flag(
+        "project_browser_autonomous_codex_execution_gate_execute_enabled",
+        default=False,
+    )
+    bounded_loop_status = _normalize_text(
+        bounded_loop.get("project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"),
+        default="",
+    )
+    bounded_loop_next_action = _normalize_text(
+        bounded_loop.get("project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action"),
+        default="",
+    )
+    next_prompt_path = "/tmp/codex-local-runner-decision/generated_next_prompt.txt"
+    fix_prompt_path = "/tmp/codex-local-runner-decision/generated_fix_prompt.txt"
+    next_prompt_snapshot = _read_prompt_snapshot(next_prompt_path)
+    fix_prompt_snapshot = _read_prompt_snapshot(fix_prompt_path)
+
+    prompt_kind = "none"
+    prompt_path = ""
+    selected_snapshot = {
+        "size_bytes": 0,
+        "preview": "",
+        "fingerprint": "",
+        "text": "",
+        "exists": False,
+        "is_file": False,
+        "non_empty": False,
+        "read_error": "",
+    }
+    if bounded_loop_status == "loop_ready_or_routed_to_codex":
+        prompt_kind = "implementation"
+        prompt_path = next_prompt_path
+        selected_snapshot = dict(next_prompt_snapshot)
+    elif bounded_loop_status == "loop_ready_or_routed_to_codex_fix":
+        prompt_kind = "fix"
+        prompt_path = fix_prompt_path
+        selected_snapshot = dict(fix_prompt_snapshot)
+
+    prompt_fingerprint = _normalize_text(selected_snapshot.get("fingerprint"), default="")
+    prompt_preview = _normalize_text(selected_snapshot.get("preview"), default="")
+    prompt_text = _normalize_text(selected_snapshot.get("text"), default="")
+    prompt_size_bytes = _as_non_negative_int(selected_snapshot.get("size_bytes"), default=0)
+
+    prior_fingerprints = {
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+            default="",
+        ),
+        _normalize_text(
+            prior_payload.get(
+                "project_browser_autonomous_chrome_runner_bridge_bounded_loop_selected_prompt_fingerprint"
+            ),
+            default="",
+        ),
+    }
+    prior_fingerprints.discard("")
+    duplicate_prompt = bool(prompt_fingerprint and prompt_fingerprint in prior_fingerprints)
+
+    unsafe_tokens = (
+        "playwright",
+        "chatgpt api",
+        "openai api",
+        "captcha bypass",
+        "verify bypass",
+        "store cookie",
+        "store cookies",
+        "store token",
+        "store tokens",
+        "store session",
+        "store sessions",
+        "unbounded loop",
+        "infinite loop",
+        "daemon",
+        "scheduler",
+        "background queue",
+        "queue drain",
+        "new shell execution",
+        "new codex execution",
+        "auto commit",
+        "automatic commit",
+        "auto tag",
+        "automatic tag",
+        "auto pr",
+        "automatic pr",
+        "auto merge",
+        "automatic merge",
+        "rm -rf /",
+        "delete /",
+        "outside repo",
+    )
+    lower_prompt = prompt_text.lower()
+    unsafe_prompt = bool(prompt_text and any(token in lower_prompt for token in unsafe_tokens))
+
+    bounded_loop_threshold_ready = bounded_loop_status in {
+        "loop_ready_or_routed_to_codex",
+        "loop_ready_or_routed_to_codex_fix",
+    }
+    prompt_exists = bool(selected_snapshot.get("exists", False))
+    prompt_is_file = bool(selected_snapshot.get("is_file", False))
+    prompt_non_empty = bool(selected_snapshot.get("non_empty", False))
+    prompt_read_error = _normalize_text(selected_snapshot.get("read_error"), default="")
+    existing_safe_route = (
+        (prompt_kind == "implementation" and bounded_loop_next_action == "run_existing_codex_implementation_step")
+        or (prompt_kind == "fix" and bounded_loop_next_action == "run_existing_codex_fix_step")
+    )
+    threshold_passed = bool(
+        bounded_loop_threshold_ready
+        and prompt_exists
+        and prompt_is_file
+        and prompt_non_empty
+        and not prompt_read_error
+        and not unsafe_prompt
+        and not duplicate_prompt
+    )
+
+    status = "codex_execution_gate_not_requested"
+    next_action = "enable_codex_execution_gate"
+    blocked_reason = "gate_disabled"
+    approved_for_execution = False
+
+    if gate_enabled:
+        status = "codex_execution_gate_decision_only"
+        next_action = "manual_review_required"
+        blocked_reason = "decision_only_execution_disabled"
+        if not bounded_loop_threshold_ready:
+            status = "codex_execution_gate_blocked_threshold"
+            next_action = "manual_review_required"
+            blocked_reason = "bounded_loop_not_ready_for_codex_gate"
+        elif not prompt_exists or not prompt_is_file or not prompt_non_empty or prompt_read_error:
+            status = "codex_execution_gate_blocked_missing_routed_prompt"
+            next_action = "manual_review_required"
+            if prompt_read_error:
+                blocked_reason = "routed_prompt_read_error"
+            elif not prompt_exists:
+                blocked_reason = "routed_prompt_missing"
+            elif not prompt_is_file:
+                blocked_reason = "routed_prompt_not_file"
+            else:
+                blocked_reason = "routed_prompt_empty"
+        elif duplicate_prompt:
+            status = "codex_execution_gate_blocked_duplicate_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "duplicate_prompt_fingerprint"
+        elif unsafe_prompt:
+            status = "codex_execution_gate_blocked_unsafe_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "unsafe_prompt_detected"
+        elif not threshold_passed:
+            status = "codex_execution_gate_blocked_threshold"
+            next_action = "manual_review_required"
+            blocked_reason = "threshold_not_passed"
+        elif not existing_safe_route:
+            status = "codex_execution_gate_blocked_no_existing_codex_route"
+            next_action = "manual_review_required"
+            blocked_reason = "existing_safe_codex_route_not_detected"
+        elif not gate_execute_enabled:
+            status = "codex_execution_gate_decision_only"
+            next_action = (
+                "run_existing_codex_implementation_step"
+                if prompt_kind == "implementation"
+                else "run_existing_codex_fix_step"
+            )
+            blocked_reason = "execution_not_enabled"
+        else:
+            status = "codex_execution_gate_ready"
+            next_action = (
+                "run_existing_codex_implementation_step"
+                if prompt_kind == "implementation"
+                else "run_existing_codex_fix_step"
+            )
+            blocked_reason = "none"
+            approved_for_execution = True
+
+    return {
+        "project_browser_autonomous_codex_execution_gate_status": status,
+        "project_browser_autonomous_codex_execution_gate_next_action": next_action,
+        "project_browser_autonomous_codex_execution_gate_enabled": bool(gate_enabled),
+        "project_browser_autonomous_codex_execution_gate_execute_enabled": bool(
+            gate_execute_enabled
+        ),
+        "project_browser_autonomous_codex_execution_gate_prompt_kind": prompt_kind,
+        "project_browser_autonomous_codex_execution_gate_prompt_path": prompt_path,
+        "project_browser_autonomous_codex_execution_gate_prompt_size_bytes": prompt_size_bytes,
+        "project_browser_autonomous_codex_execution_gate_prompt_fingerprint": prompt_fingerprint,
+        "project_browser_autonomous_codex_execution_gate_prompt_preview": prompt_preview,
+        "project_browser_autonomous_codex_execution_gate_threshold_passed": bool(threshold_passed),
+        "project_browser_autonomous_codex_execution_gate_approved_for_execution": bool(
+            approved_for_execution
+        ),
+        "project_browser_autonomous_codex_execution_gate_blocked_reason": blocked_reason,
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -149124,6 +149388,76 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized[
             key
         ] = value
+    project_browser_autonomous_codex_execution_gate_state = (
+        _build_project_browser_autonomous_codex_execution_gate_state(
+            bounded_loop_state=project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    codex_execution_gate_allowed_statuses = {
+        "codex_execution_gate_not_requested",
+        "codex_execution_gate_blocked_missing_routed_prompt",
+        "codex_execution_gate_blocked_duplicate_prompt",
+        "codex_execution_gate_blocked_unsafe_prompt",
+        "codex_execution_gate_blocked_threshold",
+        "codex_execution_gate_blocked_no_existing_codex_route",
+        "codex_execution_gate_ready",
+        "codex_execution_gate_decision_only",
+        "insufficient_truth",
+    }
+    codex_execution_gate_allowed_next_actions = {
+        "enable_codex_execution_gate",
+        "run_existing_codex_implementation_step",
+        "run_existing_codex_fix_step",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    codex_execution_gate_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "prompt_kind",
+        "prompt_path",
+        "prompt_size_bytes",
+        "prompt_fingerprint",
+        "prompt_preview",
+        "threshold_passed",
+        "approved_for_execution",
+        "blocked_reason",
+    )
+    project_browser_autonomous_codex_execution_gate_status = _normalize_text(
+        project_browser_autonomous_codex_execution_gate_state.get(
+            "project_browser_autonomous_codex_execution_gate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_execution_gate_status not in codex_execution_gate_allowed_statuses:
+        project_browser_autonomous_codex_execution_gate_status = "insufficient_truth"
+    project_browser_autonomous_codex_execution_gate_next_action = _normalize_text(
+        project_browser_autonomous_codex_execution_gate_state.get(
+            "project_browser_autonomous_codex_execution_gate_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_codex_execution_gate_next_action not in codex_execution_gate_allowed_next_actions:
+        project_browser_autonomous_codex_execution_gate_next_action = "insufficient_truth"
+    project_browser_autonomous_codex_execution_gate_state_normalized: dict[str, Any] = {}
+    for field_name in codex_execution_gate_field_names:
+        key = f"project_browser_autonomous_codex_execution_gate_{field_name}"
+        value = project_browser_autonomous_codex_execution_gate_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_execution_gate_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_execution_gate_next_action
+        elif field_name in {"enabled", "execute_enabled", "threshold_passed", "approved_for_execution"}:
+            value = bool(value)
+        elif field_name == "prompt_size_bytes":
+            value = _as_non_negative_int(value, default=0)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_execution_gate_state_normalized[key] = value
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -149668,6 +150002,18 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_chrome_runner_bridge_bounded_loop_routed": bool(
                     project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized.get(
                         "project_browser_autonomous_chrome_runner_bridge_bounded_loop_routed",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_codex_execution_gate_status": (
+                    project_browser_autonomous_codex_execution_gate_status
+                ),
+                "project_browser_autonomous_codex_execution_gate_next_action": (
+                    project_browser_autonomous_codex_execution_gate_next_action
+                ),
+                "project_browser_autonomous_codex_execution_gate_approved_for_execution": bool(
+                    project_browser_autonomous_codex_execution_gate_state_normalized.get(
+                        "project_browser_autonomous_codex_execution_gate_approved_for_execution",
                         False,
                     )
                 ),
@@ -153797,6 +154143,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action"
             if project_browser_autonomous_chrome_runner_bridge_bounded_loop_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_execution_gate_status"
+            if project_browser_autonomous_codex_execution_gate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_execution_gate_next_action"
+            if project_browser_autonomous_codex_execution_gate_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -160049,6 +160401,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized,
         **project_browser_autonomous_chrome_runner_bridge_response_assimilation_state_normalized,
         **project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
+        **project_browser_autonomous_codex_execution_gate_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -160102,6 +160455,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized": (
             dict(project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized)
+        ),
+        "project_browser_autonomous_codex_execution_gate_state_normalized": (
+            dict(project_browser_autonomous_codex_execution_gate_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
