@@ -93733,6 +93733,850 @@ def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
     }
 
 
+def _build_project_browser_autonomous_chatgpt_diff_review_decision_state(
+    *,
+    chatgpt_diff_review_request_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    request_state = (
+        dict(chatgpt_diff_review_request_state)
+        if isinstance(chatgpt_diff_review_request_state, Mapping)
+        else {}
+    )
+    capture_state = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _clip_preview(text: str, *, max_chars: int = 500) -> str:
+        normalized = " ".join(text.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _looks_transient(text: str) -> bool:
+        normalized = _normalize_text(text, default="")
+        if not normalized:
+            return True
+        lower = normalized.lower()
+        exact_transients = {
+            "thinking",
+            "thinking...",
+            "generating",
+            "generating...",
+            "思考中",
+            "考え中",
+            "応答を生成しています",
+            "応答を生成しています...",
+            "...",
+        }
+        if lower in exact_transients or normalized in exact_transients:
+            return True
+        if len(normalized) <= 40:
+            tokens = ("thinking", "generating", "思考中", "考え中", "生成しています", "応答を生成")
+            if any(token in lower or token in normalized for token in tokens):
+                return True
+        return False
+
+    def _map_runtime_to_task_status(status: str, reason: str) -> str:
+        normalized_status = _normalize_text(status, default="").lower()
+        normalized_reason = _normalize_text(reason, default="").lower()
+        if normalized_status in {"response_saved", "result_saved"} or normalized_reason in {
+            "result_saved",
+            "response_saved",
+        }:
+            return "response_saved"
+        if normalized_status == "blocked":
+            return "blocked"
+        if normalized_status in {"running", "sent", "in_progress"}:
+            return "in_progress"
+        if normalized_status == "consumed":
+            return "consumed"
+        return "ready"
+
+    def _attempt_json_object_parse(text: str) -> dict[str, Any] | None:
+        bounded = _normalize_text(text, default="")
+        if not bounded:
+            return None
+        try:
+            parsed = json.loads(bounded)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, Mapping):
+            return dict(parsed)
+        if "```" in bounded:
+            fence_markers = ("```json", "```JSON", "```")
+            for marker in fence_markers:
+                start = bounded.find(marker)
+                if start < 0:
+                    continue
+                payload_start = bounded.find("\n", start)
+                if payload_start < 0:
+                    continue
+                end = bounded.find("```", payload_start + 1)
+                if end < 0:
+                    continue
+                candidate = bounded[payload_start + 1 : end].strip()
+                if not candidate:
+                    continue
+                try:
+                    parsed = json.loads(candidate)
+                except Exception:
+                    continue
+                if isinstance(parsed, Mapping):
+                    return dict(parsed)
+        first_brace = bounded.find("{")
+        if first_brace < 0:
+            return None
+        max_scan = min(len(bounded), 12000)
+        start = first_brace
+        while start >= 0 and start < max_scan:
+            depth = 0
+            in_string = False
+            escaped = False
+            for index in range(start, max_scan):
+                char = bounded[index]
+                if in_string:
+                    if escaped:
+                        escaped = False
+                    elif char == "\\":
+                        escaped = True
+                    elif char == '"':
+                        in_string = False
+                    continue
+                if char == '"':
+                    in_string = True
+                    continue
+                if char == "{":
+                    depth += 1
+                elif char == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = bounded[start : index + 1]
+                        try:
+                            parsed = json.loads(candidate)
+                        except Exception:
+                            break
+                        if isinstance(parsed, Mapping):
+                            return dict(parsed)
+                        break
+            start = bounded.find("{", start + 1, max_scan)
+        return None
+
+    def _extract_scalar_line_value(response_text: str, key: str) -> str:
+        key_patterns = (f'"{key}"', key)
+        for raw_line in response_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            lower_line = line.lower()
+            if not any(pattern.lower() in lower_line for pattern in key_patterns):
+                continue
+            if ":" not in line:
+                continue
+            _, raw_value = line.split(":", 1)
+            value = raw_value.strip().rstrip(",")
+            if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+                return value[1:-1].strip()
+            if value.startswith("'") and value.endswith("'") and len(value) >= 2:
+                return value[1:-1].strip()
+            return value.strip()
+        return ""
+
+    def _parse_blocking_issues_fallback(response_text: str) -> list[str]:
+        extracted: list[str] = []
+        for raw_line in response_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            lower_line = line.lower()
+            if "blocking_issues" in lower_line and "[" in line and "]" in line:
+                start = line.find("[")
+                end = line.rfind("]")
+                if start >= 0 and end > start:
+                    candidate = line[start : end + 1]
+                    try:
+                        parsed = json.loads(candidate)
+                    except Exception:
+                        continue
+                    if isinstance(parsed, list):
+                        extracted = _normalize_string_list(parsed)
+                        break
+            if line.startswith("- ") and extracted:
+                extracted.append(line[2:].strip())
+        return _normalize_string_list(extracted)
+
+    def _parse_review_fields(
+        response_text: str,
+    ) -> tuple[dict[str, Any], bool, str]:
+        bounded = response_text[:12000]
+        parsed_json = _attempt_json_object_parse(bounded)
+        if parsed_json is not None:
+            return (parsed_json, True, "json")
+
+        decision = _normalize_text(_extract_scalar_line_value(bounded, "decision"), default="").lower()
+        confidence_raw = _normalize_text(_extract_scalar_line_value(bounded, "confidence"), default="")
+        risk = _normalize_text(_extract_scalar_line_value(bounded, "risk"), default="").lower()
+        fix_prompt = _normalize_text(_extract_scalar_line_value(bounded, "fix_prompt"), default="")
+        revert_reason = _normalize_text(_extract_scalar_line_value(bounded, "revert_reason"), default="")
+        commit_recommendation_raw = _normalize_text(
+            _extract_scalar_line_value(bounded, "commit_recommendation"),
+            default="",
+        ).lower()
+        summary = _normalize_text(_extract_scalar_line_value(bounded, "summary"), default="")
+        blocking_issues = _parse_blocking_issues_fallback(bounded)
+
+        extracted: dict[str, Any] = {}
+        if decision:
+            extracted["decision"] = decision
+        if confidence_raw:
+            extracted["confidence"] = confidence_raw
+        if risk:
+            extracted["risk"] = risk
+        if blocking_issues:
+            extracted["blocking_issues"] = blocking_issues
+        if fix_prompt:
+            extracted["fix_prompt"] = fix_prompt
+        if revert_reason:
+            extracted["revert_reason"] = revert_reason
+        if commit_recommendation_raw:
+            extracted["commit_recommendation"] = commit_recommendation_raw
+        if summary:
+            extracted["summary"] = summary
+
+        if not extracted:
+            return ({}, False, "parse_failed")
+        return (extracted, False, "fallback_extracted")
+
+    def _normalize_decision(value: Any) -> str:
+        decision = _normalize_text(value, default="").lower()
+        if decision in {"approve", "fix", "revert", "manual_review"}:
+            return decision
+        return "manual_review"
+
+    def _normalize_confidence(value: Any) -> float:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return max(0.0, min(1.0, float(value)))
+        text = _normalize_text(value, default="")
+        if not text:
+            return 0.0
+        try:
+            parsed = float(text)
+        except ValueError:
+            return 0.0
+        return max(0.0, min(1.0, parsed))
+
+    def _normalize_risk(value: Any) -> str:
+        risk = _normalize_text(value, default="").lower()
+        if risk in {"low", "medium", "high"}:
+            return risk
+        return "high"
+
+    def _normalize_blocking_issues(value: Any) -> list[str]:
+        if isinstance(value, list):
+            return _normalize_string_list(value)
+        text = _normalize_text(value, default="")
+        if not text:
+            return []
+        return [text]
+
+    def _normalize_commit_recommendation(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        return text in {"1", "true", "yes", "on"}
+
+    request_status = _normalize_text(
+        request_state.get("project_browser_autonomous_chatgpt_diff_review_request_status"),
+        default="",
+    )
+    request_applicable = request_status in {
+        "chatgpt_diff_review_request_ready",
+        "chatgpt_diff_review_request_written",
+        "chatgpt_diff_review_request_decision_only",
+    }
+
+    changed_files = _normalize_string_list(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+    base_dir_path = Path("/tmp/codex-local-runner-chatgpt-bridge")
+    response_path = base_dir_path / "response.md"
+    status_path = base_dir_path / "status.json"
+    routed_fix_prompt_path = Path("/tmp/codex-local-runner-decision/generated_fix_prompt.txt")
+
+    status = "chatgpt_diff_review_decision_not_applicable"
+    next_action = "wait_for_chatgpt_diff_review_response"
+    decision = "manual_review"
+    confidence = 0.0
+    risk = "high"
+    blocking_issues: list[str] = []
+    fix_prompt = ""
+    fix_prompt_fingerprint = ""
+    revert_reason = ""
+    revert_plan = ""
+    commit_recommendation = False
+    summary = ""
+    blocked_reason = "not_applicable"
+    routed = False
+    response_status = "missing"
+    response_size_bytes = 0
+    response_preview = ""
+
+    if not request_applicable:
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    status = "chatgpt_diff_review_decision_blocked_missing_response"
+    next_action = "wait_for_chatgpt_diff_review_response"
+    blocked_reason = "status_json_missing"
+
+    if not status_path.exists() or not status_path.is_file():
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    try:
+        with status_path.open("rb") as file_obj:
+            raw_status = file_obj.read(8192)
+    except OSError as exc:
+        blocked_reason = f"status_json_read_error:{exc.__class__.__name__}"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    try:
+        parsed_status = json.loads(raw_status.decode("utf-8", errors="replace"))
+    except Exception as exc:  # pragma: no cover - defensive parse boundary
+        blocked_reason = f"status_json_parse_error:{exc.__class__.__name__}"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    if not isinstance(parsed_status, Mapping):
+        blocked_reason = "status_json_not_mapping"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    status_payload = dict(parsed_status)
+    runtime_status = _normalize_text(status_payload.get("status"), default="").lower()
+    runtime_reason = _normalize_text(status_payload.get("reason"), default="").lower()
+    task_status = _normalize_text(status_payload.get("task_status"), default="").lower()
+    if not task_status:
+        task_status = _map_runtime_to_task_status(runtime_status, runtime_reason)
+    if task_status != "response_saved":
+        blocked_reason = (
+            "response_not_saved"
+            if task_status == "ready"
+            else (
+                "response_in_progress"
+                if task_status == "in_progress"
+                else (
+                    "response_blocked"
+                    if task_status == "blocked"
+                    else (
+                        "response_already_consumed"
+                        if task_status == "consumed"
+                        else "response_not_available"
+                    )
+                )
+            )
+        )
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    if not response_path.exists() or not response_path.is_file():
+        blocked_reason = "response_missing"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    response_status = "read_attempted"
+    try:
+        response_size_bytes = _as_non_negative_int(response_path.stat().st_size, default=0)
+        with response_path.open("rb") as file_obj:
+            raw_response = file_obj.read(32768)
+    except OSError as exc:
+        blocked_reason = f"response_read_error:{exc.__class__.__name__}"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    response_text = raw_response.decode("utf-8", errors="replace").strip()
+    response_preview = _clip_preview(response_text, max_chars=500)
+    if not response_text:
+        blocked_reason = "response_empty"
+        response_status = "empty"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    if _looks_transient(response_text):
+        blocked_reason = "response_transient"
+        response_status = "transient"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+    response_status = "ready"
+
+    parsed_fields, parsed_as_json, parse_mode = _parse_review_fields(response_text)
+    if not parsed_fields:
+        status = "chatgpt_diff_review_decision_blocked_parse_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "review_response_parse_failed"
+        return {
+            "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+            "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+            "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+            "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+            "project_browser_autonomous_chatgpt_diff_review_blocking_issues": blocking_issues,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+            "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+                fix_prompt_fingerprint
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+            "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+            "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+                commit_recommendation
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+            "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+            "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+            "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+            "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": (
+                _as_non_negative_int(response_size_bytes, default=0)
+            ),
+            "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+        }
+
+    decision = _normalize_decision(parsed_fields.get("decision"))
+    confidence = _normalize_confidence(parsed_fields.get("confidence"))
+    risk = _normalize_risk(parsed_fields.get("risk"))
+    blocking_issues = _normalize_blocking_issues(parsed_fields.get("blocking_issues"))
+    fix_prompt = _normalize_text(parsed_fields.get("fix_prompt"), default="")
+    fix_prompt = fix_prompt[:6000] if fix_prompt else ""
+    fix_prompt_fingerprint = (
+        hashlib.sha256(fix_prompt.encode("utf-8")).hexdigest() if fix_prompt else ""
+    )
+    revert_reason = _normalize_text(parsed_fields.get("revert_reason"), default="")
+    commit_recommendation = _normalize_commit_recommendation(
+        parsed_fields.get("commit_recommendation")
+    )
+    summary = _normalize_text(parsed_fields.get("summary"), default="")
+    if not summary:
+        summary = (
+            "chatgpt diff review response parsed"
+            if parsed_as_json
+            else f"chatgpt diff review response parsed via {parse_mode}"
+        )
+    summary = summary[:600]
+
+    unsafe_tokens = (
+        "playwright",
+        "chatgpt api",
+        "openai api",
+        "captcha bypass",
+        "verify bypass",
+        "store cookie",
+        "store cookies",
+        "store token",
+        "store tokens",
+        "store session",
+        "store sessions",
+        "unbounded loop",
+        "infinite loop",
+        "daemon",
+        "scheduler",
+        "background queue",
+        "queue drain",
+        "new shell execution",
+        "new codex execution",
+        "auto commit",
+        "automatic commit",
+        "auto tag",
+        "automatic tag",
+        "auto pr",
+        "automatic pr",
+        "auto merge",
+        "automatic merge",
+        "rm -rf /",
+        "delete /",
+        "outside repo",
+    )
+    unsafe_fix_prompt = bool(
+        fix_prompt and any(token in fix_prompt.lower() for token in unsafe_tokens)
+    )
+
+    if decision == "approve":
+        approve_valid = bool(
+            confidence >= 0.80
+            and risk in {"low", "medium"}
+            and not blocking_issues
+            and commit_recommendation
+        )
+        if approve_valid:
+            status = "chatgpt_diff_review_decision_approved_for_commit_gate"
+            next_action = "prepare_commit_or_pr_gate"
+            blocked_reason = "none"
+            routed = True
+        else:
+            status = "chatgpt_diff_review_decision_manual_review"
+            next_action = "manual_review_required"
+            blocked_reason = "approve_policy_not_satisfied"
+    elif decision == "fix":
+        if unsafe_fix_prompt:
+            status = "chatgpt_diff_review_decision_blocked_unsafe_fix_prompt"
+            next_action = "manual_review_required"
+            blocked_reason = "unsafe_fix_prompt"
+        elif not fix_prompt:
+            status = "chatgpt_diff_review_decision_manual_review"
+            next_action = "manual_review_required"
+            blocked_reason = "missing_fix_prompt"
+        elif risk == "high" or blocking_issues or confidence < 0.80:
+            status = "chatgpt_diff_review_decision_manual_review"
+            next_action = "manual_review_required"
+            blocked_reason = "fix_requires_manual_review"
+        else:
+            prior_fix_fingerprints = {
+                _normalize_text(
+                    prior_payload.get("project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint"),
+                    default="",
+                ),
+                _normalize_text(
+                    prior_payload.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+                    default="",
+                ),
+            }
+            prior_fix_fingerprints.discard("")
+            existing_fix_fp = ""
+            if routed_fix_prompt_path.exists() and routed_fix_prompt_path.is_file():
+                try:
+                    with routed_fix_prompt_path.open("rb") as file_obj:
+                        existing_text = file_obj.read(32768).decode("utf-8", errors="replace").strip()
+                except OSError:
+                    existing_text = ""
+                if existing_text:
+                    existing_fix_fp = hashlib.sha256(existing_text.encode("utf-8")).hexdigest()
+            duplicate_fix_prompt = bool(
+                fix_prompt_fingerprint
+                and (
+                    fix_prompt_fingerprint in prior_fix_fingerprints
+                    or fix_prompt_fingerprint == existing_fix_fp
+                )
+            )
+            if duplicate_fix_prompt:
+                status = "chatgpt_diff_review_decision_blocked_duplicate_fix_prompt"
+                next_action = "manual_review_required"
+                blocked_reason = "duplicate_fix_prompt_fingerprint"
+            else:
+                try:
+                    routed_fix_prompt_path.parent.mkdir(parents=True, exist_ok=True)
+                    temp_path = routed_fix_prompt_path.with_name(
+                        f"{routed_fix_prompt_path.name}.tmp"
+                    )
+                    temp_path.write_text(fix_prompt, encoding="utf-8")
+                    os.replace(temp_path, routed_fix_prompt_path)
+                except OSError as exc:
+                    status = "chatgpt_diff_review_decision_manual_review"
+                    next_action = "manual_review_required"
+                    blocked_reason = f"fix_prompt_write_failed:{exc.__class__.__name__}"
+                else:
+                    status = "chatgpt_diff_review_decision_fix_routed"
+                    next_action = "run_existing_codex_fix_step"
+                    blocked_reason = "none"
+                    routed = True
+    elif decision == "revert":
+        if not revert_reason:
+            status = "chatgpt_diff_review_decision_manual_review"
+            next_action = "manual_review_required"
+            blocked_reason = "missing_revert_reason"
+        else:
+            status = "chatgpt_diff_review_decision_revert_plan_ready"
+            next_action = "manual_revert_plan_review"
+            blocked_reason = "none"
+            routed = True
+            changed_files_text = ", ".join(changed_files[:20]) if changed_files else "(none)"
+            revert_plan = (
+                "Revert plan only (no file mutation): "
+                f"{revert_reason}. Review captured changed files [{changed_files_text}], "
+                "identify exact hunks to revert, and apply safe/manual bounded rollback in a later step."
+            )[:1200]
+    else:
+        status = "chatgpt_diff_review_decision_manual_review"
+        next_action = "manual_review_required"
+        blocked_reason = "decision_manual_review_or_unrecognized"
+
+    if blocking_issues and status in {
+        "chatgpt_diff_review_decision_approved_for_commit_gate",
+        "chatgpt_diff_review_decision_fix_routed",
+    }:
+        status = "chatgpt_diff_review_decision_manual_review"
+        next_action = "manual_review_required"
+        blocked_reason = "blocking_issues_present"
+        routed = False
+    if risk == "high" and status in {
+        "chatgpt_diff_review_decision_approved_for_commit_gate",
+        "chatgpt_diff_review_decision_fix_routed",
+    }:
+        status = "chatgpt_diff_review_decision_manual_review"
+        next_action = "manual_review_required"
+        blocked_reason = "high_risk_requires_manual_review"
+        routed = False
+
+    return {
+        "project_browser_autonomous_chatgpt_diff_review_decision_status": status,
+        "project_browser_autonomous_chatgpt_diff_review_decision_next_action": next_action,
+        "project_browser_autonomous_chatgpt_diff_review_decision": decision,
+        "project_browser_autonomous_chatgpt_diff_review_confidence": confidence,
+        "project_browser_autonomous_chatgpt_diff_review_risk": risk,
+        "project_browser_autonomous_chatgpt_diff_review_blocking_issues": (
+            _normalize_string_list(blocking_issues)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_fix_prompt": fix_prompt,
+        "project_browser_autonomous_chatgpt_diff_review_fix_prompt_fingerprint": (
+            fix_prompt_fingerprint
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_revert_reason": revert_reason,
+        "project_browser_autonomous_chatgpt_diff_review_revert_plan": revert_plan,
+        "project_browser_autonomous_chatgpt_diff_review_commit_recommendation": bool(
+            commit_recommendation
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_summary": summary,
+        "project_browser_autonomous_chatgpt_diff_review_blocked_reason": blocked_reason,
+        "project_browser_autonomous_chatgpt_diff_review_routed": bool(routed),
+        "project_browser_autonomous_chatgpt_diff_review_response_status": response_status,
+        "project_browser_autonomous_chatgpt_diff_review_response_size_bytes": _as_non_negative_int(
+            response_size_bytes,
+            default=0,
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_response_preview": response_preview,
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -150111,6 +150955,117 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_chatgpt_diff_review_request_state_normalized[key] = (
             value
         )
+    project_browser_autonomous_chatgpt_diff_review_decision_state = (
+        _build_project_browser_autonomous_chatgpt_diff_review_decision_state(
+            chatgpt_diff_review_request_state=project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    chatgpt_diff_review_decision_allowed_statuses = {
+        "chatgpt_diff_review_decision_not_applicable",
+        "chatgpt_diff_review_decision_blocked_missing_response",
+        "chatgpt_diff_review_decision_blocked_parse_failed",
+        "chatgpt_diff_review_decision_manual_review",
+        "chatgpt_diff_review_decision_approved_for_commit_gate",
+        "chatgpt_diff_review_decision_fix_routed",
+        "chatgpt_diff_review_decision_revert_plan_ready",
+        "chatgpt_diff_review_decision_blocked_duplicate_fix_prompt",
+        "chatgpt_diff_review_decision_blocked_unsafe_fix_prompt",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_decision_allowed_next_actions = {
+        "wait_for_chatgpt_diff_review_response",
+        "manual_review_required",
+        "prepare_commit_or_pr_gate",
+        "run_existing_codex_fix_step",
+        "manual_revert_plan_review",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_decision_allowed_decisions = {
+        "approve",
+        "fix",
+        "revert",
+        "manual_review",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_decision_field_names = (
+        "status",
+        "next_action",
+        "decision",
+        "confidence",
+        "risk",
+        "blocking_issues",
+        "fix_prompt",
+        "fix_prompt_fingerprint",
+        "revert_reason",
+        "revert_plan",
+        "commit_recommendation",
+        "summary",
+        "blocked_reason",
+        "routed",
+        "response_status",
+        "response_size_bytes",
+        "response_preview",
+    )
+    project_browser_autonomous_chatgpt_diff_review_decision_status = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_decision_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_decision_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_decision_status
+        not in chatgpt_diff_review_decision_allowed_statuses
+    ):
+        project_browser_autonomous_chatgpt_diff_review_decision_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_decision_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_decision_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_decision_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_decision_next_action
+        not in chatgpt_diff_review_decision_allowed_next_actions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_decision_next_action = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_decision = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_decision_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_decision"
+        ),
+        default="manual_review",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_decision
+        not in chatgpt_diff_review_decision_allowed_decisions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_decision = "manual_review"
+    project_browser_autonomous_chatgpt_diff_review_decision_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chatgpt_diff_review_decision_field_names:
+        key = f"project_browser_autonomous_chatgpt_diff_review_{field_name}"
+        value = project_browser_autonomous_chatgpt_diff_review_decision_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_chatgpt_diff_review_decision_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_chatgpt_diff_review_decision_next_action
+        elif field_name == "decision":
+            value = project_browser_autonomous_chatgpt_diff_review_decision
+        elif field_name in {"commit_recommendation", "routed"}:
+            value = bool(value)
+        elif field_name == "confidence":
+            value = float(value) if isinstance(value, (int, float)) else 0.0
+        elif field_name == "response_size_bytes":
+            value = _as_non_negative_int(value, default=0)
+        elif field_name == "blocking_issues":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chatgpt_diff_review_decision_state_normalized[key] = (
+            value
+        )
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -150681,6 +151636,21 @@ def _build_approved_restart_execution_contract_surface(
                 ),
                 "project_browser_autonomous_chatgpt_diff_review_request_next_action": (
                     project_browser_autonomous_chatgpt_diff_review_request_next_action
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_decision_status": (
+                    project_browser_autonomous_chatgpt_diff_review_decision_status
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_decision_next_action": (
+                    project_browser_autonomous_chatgpt_diff_review_decision_next_action
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_decision": (
+                    project_browser_autonomous_chatgpt_diff_review_decision
+                ),
+                "project_browser_autonomous_chatgpt_diff_review_routed": bool(
+                    project_browser_autonomous_chatgpt_diff_review_decision_state_normalized.get(
+                        "project_browser_autonomous_chatgpt_diff_review_routed",
+                        False,
+                    )
                 ),
                 "project_browser_autonomous_dev_loop_pr_prompt_readiness_status": (
                     project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -154826,6 +155796,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_request_next_action"
             if project_browser_autonomous_chatgpt_diff_review_request_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_decision_status"
+            if project_browser_autonomous_chatgpt_diff_review_decision_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_decision_next_action"
+            if project_browser_autonomous_chatgpt_diff_review_decision_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -161081,6 +162057,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_codex_execution_gate_state_normalized,
         **project_browser_autonomous_codex_capture_gate_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
+        **project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -161143,6 +162120,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_chatgpt_diff_review_request_state_normalized": (
             dict(project_browser_autonomous_chatgpt_diff_review_request_state_normalized)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_decision_state_normalized": (
+            dict(project_browser_autonomous_chatgpt_diff_review_decision_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
