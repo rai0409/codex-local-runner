@@ -4698,3 +4698,7 @@ Bounded local loop controls may be wired from real-runner inputs only through an
 ## Prompt284.6 constraint
 
 Codex invocation runtime fixes must remain one-shot and bounded. Do not bypass Codex execution gates, create new live connector paths, widen live authorization broadly, auto-commit/tag, push, create PRs, merge, delete branches, start daemon/scheduler behavior, or run unbounded loops. Prefer a narrow writable session/temp path fix for the existing Codex invocation path.
+
+## Prompt284.8 constraint
+
+When Codex live invocation is classified as `network_denied`, automation must not repeatedly retry live Codex. Add only a deterministic stop/decision surface. Do not bypass network restrictions, create new connector paths, widen live authorization, auto-commit/tag, push, create PRs, merge, delete branches, start daemon/scheduler behavior, or run unbounded loops.

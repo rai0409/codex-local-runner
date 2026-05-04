@@ -97451,6 +97451,24 @@ def _build_project_browser_autonomous_codex_execution_connector_state(
         invocation_state.get("project_browser_autonomous_codex_invocation_execution_invocation_stderr_excerpt"),
         default="",
     )
+    invocation_blocker_class = _normalize_text(
+        invocation_state.get(
+            "project_browser_autonomous_codex_invocation_execution_blocker_class"
+        ),
+        default="none",
+    )
+    invocation_blocked_reason = _normalize_text(
+        invocation_state.get(
+            "project_browser_autonomous_codex_invocation_execution_blocked_reason"
+        ),
+        default="",
+    )
+    invocation_retry_likely_repeats = bool(
+        invocation_state.get(
+            "project_browser_autonomous_codex_invocation_execution_retry_likely_repeats",
+            False,
+        )
+    )
     output_preview = _normalize_text(
         "\n".join(
             _serialize_required_signals(
@@ -97473,7 +97491,11 @@ def _build_project_browser_autonomous_codex_execution_connector_state(
     else:
         status = "codex_execution_connector_blocked_execution_failed"
         next_action = "manual_review_required"
-        blocked_reason = f"invocation_status:{invocation_status or 'unknown'}"
+        blocked_reason = (
+            invocation_blocked_reason
+            if invocation_blocked_reason and invocation_blocked_reason != "none"
+            else f"invocation_status:{invocation_status or 'unknown'}"
+        )
 
     return {
         "project_browser_autonomous_codex_execution_connector_status": status,
@@ -97491,6 +97513,15 @@ def _build_project_browser_autonomous_codex_execution_connector_state(
         "project_browser_autonomous_codex_execution_connector_route_name": route_name,
         "project_browser_autonomous_codex_execution_connector_output_preview": output_preview[:800],
         "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        "project_browser_autonomous_codex_execution_connector_invocation_blocker_class": (
+            invocation_blocker_class
+        ),
+        "project_browser_autonomous_codex_execution_connector_invocation_blocked_reason": (
+            invocation_blocked_reason
+        ),
+        "project_browser_autonomous_codex_execution_connector_invocation_retry_likely_repeats": bool(
+            invocation_retry_likely_repeats
+        ),
     }
 
 
@@ -99959,6 +99990,7 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
     )
 
     invocation_command: list[str] = []
+    invocation_environment_overrides: dict[str, str] = {}
     invocation_attempted = bool(prior_invocation_attempted)
     invocation_completed = bool(prior_invocation_completed)
     invocation_exit_code = -1
@@ -99978,6 +100010,10 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
     result_failed = False
     result_timeout = False
     result_next_action = "insufficient_truth"
+    blocker_class = "none"
+    blocked_reason_classified = "none"
+    retry_likely_repeats = False
+    stderr_summary = ""
 
     def _write_text_file(path_text: str, content: str) -> None:
         path_obj = Path(path_text)
@@ -99998,6 +100034,10 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
             "timeout": bool(result_timeout),
             "next_action": result_next_action,
             "missing_inputs": _serialize_required_signals(missing_inputs),
+            "blocker_class": blocker_class,
+            "blocked_reason": blocked_reason_classified,
+            "retry_likely_repeats": bool(retry_likely_repeats),
+            "stderr_summary": _normalize_text(stderr_summary, default=""),
         }
         try:
             result_obj = Path(result_path)
@@ -100088,6 +100128,139 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
             block_reason = "codex_command_unavailable"
             next_action = "manual_codex_invocation_required"
         else:
+            runtime_root = Path("/tmp/codex-local-runner-decision/codex_runtime")
+            runtime_home = runtime_root / "home"
+            runtime_tmp = runtime_root / "tmp"
+            runtime_config = runtime_root / "config"
+            runtime_cache = runtime_root / "cache"
+            runtime_state = runtime_root / "state"
+            runtime_data = runtime_root / "data"
+            runtime_codex_home = runtime_root / "codex_home"
+            runtime_dirs = (
+                runtime_root,
+                runtime_home,
+                runtime_tmp,
+                runtime_config,
+                runtime_cache,
+                runtime_state,
+                runtime_data,
+                runtime_codex_home,
+            )
+            try:
+                for runtime_dir in runtime_dirs:
+                    runtime_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                status = "failed_execution_error"
+                source_status = "runtime_environment_prepare_failed"
+                block_reason = f"runtime_environment_prepare_failed:{type(exc).__name__}"
+                next_action = "manual_codex_invocation_required"
+                result_status = "failed_execution_error"
+                result_source_status = source_status
+                result_kind = "execution_error"
+                result_failed = True
+                result_timeout = False
+                result_next_action = "manual_codex_invocation_required"
+                missing_inputs.append("runtime_environment_writable_path")
+                _write_result_payload()
+                return {
+                    "project_browser_autonomous_codex_invocation_execution_status": status,
+                    "project_browser_autonomous_codex_invocation_execution_source_status": (
+                        source_status
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_block_reason": (
+                        block_reason
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_selected_prompt_kind": (
+                        normalized_prompt_kind
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_selected_prompt_path": (
+                        normalized_prompt_path
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_selected_prompt_source": (
+                        normalized_prompt_source
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_allowed": bool(
+                        invocation_allowed
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_attempted": bool(
+                        invocation_attempted
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_completed": bool(
+                        invocation_completed
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_exit_code": int(
+                        invocation_exit_code
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_timeout": bool(
+                        invocation_timeout
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_command": (
+                        invocation_command
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_stdout_path": (
+                        stdout_path
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_stderr_path": (
+                        stderr_path
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_stdout_excerpt": (
+                        invocation_stdout_excerpt
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_invocation_stderr_excerpt": (
+                        invocation_stderr_excerpt
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_max_invocations": int(
+                        normalized_max_invocations
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_next_action": next_action,
+                    "project_browser_autonomous_codex_invocation_execution_runtime_posture": (
+                        runtime_posture
+                    ),
+                    "project_browser_autonomous_codex_invocation_execution_missing_inputs": (
+                        _serialize_required_signals(missing_inputs)
+                    ),
+                    "project_browser_autonomous_codex_invocation_result_status": result_status,
+                    "project_browser_autonomous_codex_invocation_result_source_status": (
+                        result_source_status
+                    ),
+                    "project_browser_autonomous_codex_invocation_result_result_kind": result_kind,
+                    "project_browser_autonomous_codex_invocation_result_result_path": result_path,
+                    "project_browser_autonomous_codex_invocation_result_stdout_path": stdout_path,
+                    "project_browser_autonomous_codex_invocation_result_stderr_path": stderr_path,
+                    "project_browser_autonomous_codex_invocation_result_exit_code": int(
+                        invocation_exit_code
+                    ),
+                    "project_browser_autonomous_codex_invocation_result_completed": bool(
+                        result_completed
+                    ),
+                    "project_browser_autonomous_codex_invocation_result_failed": bool(
+                        result_failed
+                    ),
+                    "project_browser_autonomous_codex_invocation_result_timeout": bool(
+                        result_timeout
+                    ),
+                    "project_browser_autonomous_codex_invocation_result_next_action": (
+                        result_next_action
+                    ),
+                    "project_browser_autonomous_codex_invocation_result_runtime_posture": (
+                        runtime_posture
+                    ),
+                    "project_browser_autonomous_codex_invocation_result_missing_inputs": (
+                        _serialize_required_signals(missing_inputs)
+                    ),
+                }
+
+            invocation_environment = os.environ.copy()
+            invocation_environment_overrides = {
+                "HOME": str(runtime_home),
+                "TMPDIR": str(runtime_tmp),
+                "XDG_CONFIG_HOME": str(runtime_config),
+                "XDG_CACHE_HOME": str(runtime_cache),
+                "XDG_STATE_HOME": str(runtime_state),
+                "XDG_DATA_HOME": str(runtime_data),
+                "CODEX_HOME": str(runtime_codex_home),
+            }
+            invocation_environment.update(invocation_environment_overrides)
             invocation_command = [
                 codex_command,
                 "exec",
@@ -100119,6 +100292,7 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
                         capture_output=True,
                         timeout=timeout_seconds,
                         check=False,
+                        env=invocation_environment,
                     )
                     invocation_completed = True
                     invocation_exit_code = int(completed.returncode)
@@ -100206,6 +100380,96 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
             result_timeout = False
             result_next_action = next_action
 
+    lower_stderr = _normalize_text(invocation_stderr_excerpt, default="").lower()
+    lower_stdout = _normalize_text(invocation_stdout_excerpt, default="").lower()
+    combined_output = f"{lower_stderr}\n{lower_stdout}"
+    stderr_summary = _normalize_text(
+        invocation_stderr_excerpt or invocation_stdout_excerpt,
+        default="",
+    )[:400]
+    if status == "codex_invocation_completed" and invocation_exit_code == 0:
+        blocker_class = "none"
+        blocked_reason_classified = "none"
+        retry_likely_repeats = False
+    elif status == "blocked_codex_command_unavailable":
+        blocker_class = "command_unavailable"
+        blocked_reason_classified = "codex_invocation_blocked_command_unavailable"
+        retry_likely_repeats = True
+    elif status in {
+        "blocked_missing_prompt",
+        "blocked_prompt_path_unexpected",
+        "blocked_prompt_path_symlink",
+        "blocked_prompt_empty",
+        "blocked_prompt_too_large",
+    }:
+        blocker_class = "prompt_path_or_content"
+        blocked_reason_classified = "codex_invocation_blocked_prompt_path_or_content"
+        retry_likely_repeats = False
+    elif status == "blocked_timeout" or result_status == "completed_timeout":
+        blocker_class = "timeout"
+        blocked_reason_classified = "codex_invocation_blocked_timeout"
+        retry_likely_repeats = True
+    elif (
+        "failed to connect to websocket" in combined_output
+        or "wss://api.openai.com" in combined_output
+        or ("operation not permitted" in combined_output and "websocket" in combined_output)
+    ):
+        blocker_class = "network_denied"
+        blocked_reason_classified = "codex_invocation_blocked_network_denied"
+        retry_likely_repeats = True
+    elif (
+        "read-only file system" in combined_output
+        and (
+            "thread/start" in combined_output
+            or "failed to create session" in combined_output
+            or "initialize session" in combined_output
+        )
+    ):
+        blocker_class = "runtime_filesystem_readonly"
+        blocked_reason_classified = "codex_invocation_blocked_readonly_session_init"
+        retry_likely_repeats = True
+    elif (
+        "api key" in combined_output
+        or "not logged in" in combined_output
+        or "authentication" in combined_output
+        or "unauthorized" in combined_output
+        or "forbidden" in combined_output
+        or "credentials" in combined_output
+    ):
+        blocker_class = "auth_or_config_missing"
+        blocked_reason_classified = "codex_invocation_blocked_auth_or_config_missing"
+        retry_likely_repeats = False
+    elif "sandbox" in combined_output and (
+        "denied" in combined_output or "not permitted" in combined_output
+    ):
+        blocker_class = "sandbox_restriction"
+        blocked_reason_classified = "codex_invocation_blocked_sandbox_restriction"
+        retry_likely_repeats = True
+    elif status == "blocked_human_review_required":
+        blocker_class = "safety_gate"
+        blocked_reason_classified = "codex_invocation_blocked_human_review_required"
+        retry_likely_repeats = True
+    elif status == "blocked_insufficient_truth":
+        blocker_class = "safety_gate"
+        blocked_reason_classified = "codex_invocation_blocked_insufficient_truth"
+        retry_likely_repeats = True
+    elif status == "blocked_invocation_not_allowed":
+        blocker_class = "safety_gate"
+        blocked_reason_classified = "codex_invocation_blocked_invocation_not_allowed"
+        retry_likely_repeats = True
+    elif status == "failed_execution_error":
+        blocker_class = "command_or_runtime_error"
+        blocked_reason_classified = "codex_invocation_failed_execution_error"
+        retry_likely_repeats = True
+    else:
+        blocker_class = "none" if block_reason == "none" else "execution_failed_unknown"
+        blocked_reason_classified = (
+            "none"
+            if block_reason == "none"
+            else "codex_invocation_blocked_unknown_execution_error"
+        )
+        retry_likely_repeats = bool(status == "codex_invocation_completed" and invocation_exit_code != 0)
+
     if status not in allowed_execution_statuses:
         status = "insufficient_truth"
     if result_status not in allowed_result_statuses:
@@ -100224,6 +100488,16 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
         ),
         "project_browser_autonomous_codex_invocation_execution_block_reason": (
             block_reason
+        ),
+        "project_browser_autonomous_codex_invocation_execution_blocker_class": blocker_class,
+        "project_browser_autonomous_codex_invocation_execution_blocked_reason": (
+            blocked_reason_classified
+        ),
+        "project_browser_autonomous_codex_invocation_execution_retry_likely_repeats": bool(
+            retry_likely_repeats
+        ),
+        "project_browser_autonomous_codex_invocation_execution_stderr_summary": (
+            _normalize_text(stderr_summary, default="")
         ),
         "project_browser_autonomous_codex_invocation_execution_selected_prompt_kind": (
             normalized_prompt_kind
@@ -100279,6 +100553,10 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
             result_source_status
         ),
         "project_browser_autonomous_codex_invocation_result_result_kind": result_kind,
+        "project_browser_autonomous_codex_invocation_result_blocker_class": blocker_class,
+        "project_browser_autonomous_codex_invocation_result_blocked_reason": (
+            blocked_reason_classified
+        ),
         "project_browser_autonomous_codex_invocation_result_result_path": result_path,
         "project_browser_autonomous_codex_invocation_result_stdout_path": stdout_path,
         "project_browser_autonomous_codex_invocation_result_stderr_path": stderr_path,
@@ -122546,6 +122824,8 @@ def _build_approved_restart_execution_contract_surface(
         "status",
         "source_status",
         "block_reason",
+        "blocker_class",
+        "blocked_reason",
         "selected_prompt_kind",
         "selected_prompt_path",
         "selected_prompt_source",
@@ -122560,6 +122840,8 @@ def _build_approved_restart_execution_contract_surface(
         "invocation_stdout_excerpt",
         "invocation_stderr_excerpt",
         "max_invocations",
+        "retry_likely_repeats",
+        "stderr_summary",
         "next_action",
         "runtime_posture",
         "missing_inputs",
@@ -122568,6 +122850,8 @@ def _build_approved_restart_execution_contract_surface(
         "status",
         "source_status",
         "result_kind",
+        "blocker_class",
+        "blocked_reason",
         "result_path",
         "stdout_path",
         "stderr_path",
@@ -122618,6 +122902,7 @@ def _build_approved_restart_execution_contract_surface(
             "invocation_attempted",
             "invocation_completed",
             "invocation_timeout",
+            "retry_likely_repeats",
         }:
             value = bool(value)
         elif field_name in {"invocation_exit_code"}:
@@ -155510,6 +155795,9 @@ def _build_approved_restart_execution_contract_surface(
         "route_name",
         "output_preview",
         "blocked_reason",
+        "invocation_blocker_class",
+        "invocation_blocked_reason",
+        "invocation_retry_likely_repeats",
     )
     project_browser_autonomous_codex_execution_connector_status = _normalize_text(
         project_browser_autonomous_codex_execution_connector_state.get(
@@ -155543,7 +155831,7 @@ def _build_approved_restart_execution_contract_surface(
             value = project_browser_autonomous_codex_execution_connector_status
         elif field_name == "next_action":
             value = project_browser_autonomous_codex_execution_connector_next_action
-        elif field_name in {"enabled", "execute_enabled", "executed"}:
+        elif field_name in {"enabled", "execute_enabled", "executed", "invocation_retry_likely_repeats"}:
             value = bool(value)
         else:
             value = _normalize_text(value, default="")

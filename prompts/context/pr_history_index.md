@@ -7491,3 +7491,11 @@ Next:
 - Codex invocation reached `codex_invocation_completed` but failed with `exit_code=1`.
 - Remaining blocker: Codex session/thread initialization failed under read-only filesystem.
 - Next: Prompt284.6 should narrowly address Codex invocation runtime/session writable environment. Do not broaden into commit/tag/push/PR/merge/daemon behavior.
+
+## Prompt284.7 Codex network blocker classification
+
+- Prompt284.7 added deterministic classification for the current Codex live invocation failure.
+- Current blocker is classified as `network_denied` / `codex_invocation_blocked_network_denied`.
+- Receipt and connector surfaces expose `retry_likely_repeats=true`.
+- Prompt285 diff capture remains blocked because Codex produced no diff.
+- Next: Prompt284.8 should add a contract-level deterministic stop surface so automation does not repeatedly retry live Codex when network is denied.
