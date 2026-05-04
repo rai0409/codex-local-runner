@@ -97384,6 +97384,598 @@ def _build_project_browser_autonomous_codex_execution_connector_state(
     }
 
 
+def _build_project_browser_autonomous_safe_revert_state(
+    *,
+    chatgpt_diff_review_decision_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    local_loop_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    review_state = (
+        dict(chatgpt_diff_review_decision_state)
+        if isinstance(chatgpt_diff_review_decision_state, Mapping)
+        else {}
+    )
+    capture_state = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    local_loop = dict(local_loop_state) if isinstance(local_loop_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _is_safe_changed_path(path_text: str) -> tuple[bool, str]:
+        path = _normalize_text(path_text, default="")
+        if not path:
+            return (False, "empty_path")
+        if Path(path).is_absolute() or path.startswith("/") or path.startswith("\\"):
+            return (False, f"absolute_path:{path}")
+        normalized = path.replace("\\", "/")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        if not normalized:
+            return (False, "malformed_path")
+        if ".." in normalized.split("/"):
+            return (False, f"parent_traversal:{path}")
+        if normalized == ".git" or normalized.startswith(".git/"):
+            return (False, f"git_internal:{path}")
+        if normalized.startswith("../") or "/../" in normalized:
+            return (False, f"outside_repo:{path}")
+        if " -> " in normalized:
+            return (False, f"ambiguous_path:{path}")
+        return (True, normalized)
+
+    def _parse_git_status_short(output: str) -> tuple[dict[str, str], list[str]]:
+        parsed: dict[str, str] = {}
+        ambiguous: list[str] = []
+        for raw_line in output.splitlines():
+            line = raw_line.rstrip("\n")
+            if not line.strip():
+                continue
+            if len(line) < 4 or line[2] != " ":
+                ambiguous.append(f"malformed_status_line:{line}")
+                continue
+            code = line[:2]
+            x, y = code[0], code[1]
+            path_text = line[3:].strip()
+            if not path_text or path_text.startswith('"') or " -> " in path_text:
+                ambiguous.append(f"ambiguous_path:{line}")
+                continue
+            if x in {"R", "C", "U"} or y in {"R", "C", "U"}:
+                ambiguous.append(f"unsupported_status:{line}")
+                continue
+            if x not in {" ", "M", "A", "D", "?"} or y not in {" ", "M", "A", "D", "?"}:
+                ambiguous.append(f"unsupported_status:{line}")
+                continue
+            path = path_text.replace("\\", "/")
+            if path in parsed:
+                ambiguous.append(f"duplicate_status_entry:{path}")
+                continue
+            parsed[path] = code
+        return parsed, ambiguous
+
+    safe_revert_enabled = _read_flag(
+        "project_browser_autonomous_safe_revert_enabled",
+        default=False,
+    )
+    safe_revert_execute_enabled = _read_flag(
+        "project_browser_autonomous_safe_revert_execute_enabled",
+        default=False,
+    )
+
+    review_decision = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision"),
+        default="",
+    )
+    review_revert_reason = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_revert_reason"),
+        default="",
+    )
+    review_revert_plan = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_revert_plan"),
+        default="",
+    )
+    local_loop_status = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_status"),
+        default="",
+    )
+    local_loop_next_action = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_next_action"),
+        default="",
+    )
+    local_loop_revert_plan = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_revert_plan"),
+        default="",
+    )
+    changed_files = _normalize_string_list(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+
+    status = "safe_revert_not_requested"
+    next_action = "enable_safe_revert"
+    reverted = False
+    pre_git_status_short = ""
+    post_git_status_short = ""
+    blocked_reason = "safe_revert_disabled"
+
+    revert_reason = review_revert_reason
+    revert_plan = review_revert_plan if review_revert_plan else local_loop_revert_plan
+
+    if not safe_revert_enabled:
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    review_revert_flow = bool(
+        review_decision == "revert" and (review_revert_reason or review_revert_plan)
+    )
+    local_loop_revert_flow = bool(
+        local_loop_next_action == "prepare_safe_revert"
+        and local_loop_status == "local_loop_ready_prepare_safe_revert"
+    )
+    if not review_revert_flow and not local_loop_revert_flow:
+        status = "safe_revert_blocked_missing_revert_decision"
+        next_action = "manual_review_required"
+        blocked_reason = "missing_revert_flow_signal"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    if not changed_files:
+        status = "safe_revert_blocked_missing_changed_files"
+        next_action = "manual_review_required"
+        blocked_reason = "changed_files_missing"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    safe_changed_files: list[str] = []
+    for path in changed_files:
+        safe, normalized_or_reason = _is_safe_changed_path(path)
+        if not safe:
+            status = "safe_revert_blocked_unsafe_paths"
+            next_action = "manual_review_required"
+            blocked_reason = normalized_or_reason
+            return {
+                "project_browser_autonomous_safe_revert_status": status,
+                "project_browser_autonomous_safe_revert_next_action": next_action,
+                "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+                "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                    safe_revert_execute_enabled
+                ),
+                "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+                "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                    changed_files
+                ),
+                "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+                "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+                "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+                "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+                "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+            }
+        safe_changed_files.append(normalized_or_reason)
+    safe_changed_files = _normalize_string_list(safe_changed_files)
+
+    max_changed_files = 25
+    large_change_approved = False
+    for key in (
+        "project_browser_autonomous_large_change_approved",
+        "project_browser_autonomous_commit_tag_large_change_approved",
+    ):
+        if key in approved_restart or key in prior_payload:
+            large_change_approved = _read_flag(key, default=False)
+            break
+    if len(safe_changed_files) > max_changed_files and not large_change_approved:
+        status = "safe_revert_blocked_large_change"
+        next_action = "manual_review_required"
+        blocked_reason = "changed_file_count_exceeds_limit"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    repo_path = _normalize_text(execution_repo_path, default="")
+    repo_obj = Path(repo_path) if repo_path else Path.cwd()
+    if not repo_obj.exists() or not repo_obj.is_dir():
+        status = "safe_revert_blocked_unsafe_paths"
+        next_action = "manual_review_required"
+        blocked_reason = "execution_repo_unavailable"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    try:
+        pre_status_cp = _run_git(str(repo_obj), ["status", "--short"], timeout_seconds=10.0)
+    except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_failed"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+    pre_git_status_short = _normalize_text(pre_status_cp.stdout, default="")
+    if pre_status_cp.returncode != 0:
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_nonzero"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    parsed_status, ambiguous_status = _parse_git_status_short(pre_git_status_short)
+    if ambiguous_status:
+        status = "safe_revert_blocked_ambiguous_status"
+        next_action = "manual_review_required"
+        blocked_reason = ambiguous_status[0]
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    status_paths = set(parsed_status.keys())
+    changed_files_set = set(safe_changed_files)
+    if status_paths != changed_files_set:
+        status = "safe_revert_blocked_unexpected_changes"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_paths_mismatch"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    untracked_changed_files: list[str] = []
+    for path in safe_changed_files:
+        code = parsed_status.get(path, "")
+        if code == "??":
+            untracked_changed_files.append(path)
+    if untracked_changed_files:
+        status = "safe_revert_blocked_untracked_files"
+        next_action = "manual_review_required"
+        blocked_reason = f"untracked_files_present:{untracked_changed_files[0]}"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    if not safe_revert_execute_enabled:
+        status = "safe_revert_decision_only"
+        next_action = "set_execute_enabled_for_safe_revert"
+        blocked_reason = "execution_not_enabled"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    try:
+        restore_staged_cp = _run_git(
+            str(repo_obj),
+            ["restore", "--staged", "--", *safe_changed_files],
+            timeout_seconds=30.0,
+        )
+    except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+        restore_staged_cp = None
+    if restore_staged_cp is None or restore_staged_cp.returncode != 0:
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_restore_staged_failed"
+        try:
+            post_status_cp = _run_git(str(repo_obj), ["status", "--short"], timeout_seconds=10.0)
+            post_git_status_short = _normalize_text(post_status_cp.stdout, default="")
+        except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+            post_git_status_short = ""
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    try:
+        restore_cp = _run_git(
+            str(repo_obj),
+            ["restore", "--", *safe_changed_files],
+            timeout_seconds=30.0,
+        )
+    except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+        restore_cp = None
+    if restore_cp is None or restore_cp.returncode != 0:
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_restore_failed"
+        try:
+            post_status_cp = _run_git(str(repo_obj), ["status", "--short"], timeout_seconds=10.0)
+            post_git_status_short = _normalize_text(post_status_cp.stdout, default="")
+        except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+            post_git_status_short = ""
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    try:
+        post_status_cp = _run_git(str(repo_obj), ["status", "--short"], timeout_seconds=10.0)
+    except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+        post_status_cp = None
+    if post_status_cp is None:
+        status = "safe_revert_blocked_git_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "git_status_post_failed"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+    post_git_status_short = _normalize_text(post_status_cp.stdout, default="")
+
+    post_parsed_status, post_ambiguous_status = _parse_git_status_short(post_git_status_short)
+    if post_ambiguous_status:
+        status = "safe_revert_blocked_ambiguous_status"
+        next_action = "manual_review_required"
+        blocked_reason = post_ambiguous_status[0]
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    if any(path in post_parsed_status for path in safe_changed_files):
+        status = "safe_revert_blocked_post_status_not_clean"
+        next_action = "manual_review_required"
+        blocked_reason = "changed_files_still_present_after_restore"
+        return {
+            "project_browser_autonomous_safe_revert_status": status,
+            "project_browser_autonomous_safe_revert_next_action": next_action,
+            "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+            "project_browser_autonomous_safe_revert_execute_enabled": bool(
+                safe_revert_execute_enabled
+            ),
+            "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+            "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+                safe_changed_files
+            ),
+            "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+            "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+            "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+            "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+            "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+        }
+
+    status = "safe_revert_reverted"
+    next_action = "regenerate_pr_prompt_or_continue_loop"
+    blocked_reason = "none"
+    reverted = True
+    return {
+        "project_browser_autonomous_safe_revert_status": status,
+        "project_browser_autonomous_safe_revert_next_action": next_action,
+        "project_browser_autonomous_safe_revert_enabled": bool(safe_revert_enabled),
+        "project_browser_autonomous_safe_revert_execute_enabled": bool(
+            safe_revert_execute_enabled
+        ),
+        "project_browser_autonomous_safe_revert_reverted": bool(reverted),
+        "project_browser_autonomous_safe_revert_changed_files": _normalize_string_list(
+            safe_changed_files
+        ),
+        "project_browser_autonomous_safe_revert_revert_reason": revert_reason,
+        "project_browser_autonomous_safe_revert_revert_plan": revert_plan,
+        "project_browser_autonomous_safe_revert_pre_git_status_short": pre_git_status_short,
+        "project_browser_autonomous_safe_revert_post_git_status_short": post_git_status_short,
+        "project_browser_autonomous_safe_revert_blocked_reason": blocked_reason,
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -154284,6 +154876,85 @@ def _build_approved_restart_execution_contract_surface(
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_codex_execution_connector_state_normalized[key] = value
+    project_browser_autonomous_safe_revert_state = (
+        _build_project_browser_autonomous_safe_revert_state(
+            chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            local_loop_state=project_browser_autonomous_local_loop_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    safe_revert_allowed_statuses = {
+        "safe_revert_not_requested",
+        "safe_revert_decision_only",
+        "safe_revert_blocked_missing_revert_decision",
+        "safe_revert_blocked_missing_changed_files",
+        "safe_revert_blocked_unsafe_paths",
+        "safe_revert_blocked_large_change",
+        "safe_revert_blocked_unexpected_changes",
+        "safe_revert_blocked_ambiguous_status",
+        "safe_revert_blocked_untracked_files",
+        "safe_revert_blocked_git_failed",
+        "safe_revert_blocked_post_status_not_clean",
+        "safe_revert_reverted",
+        "insufficient_truth",
+    }
+    safe_revert_allowed_next_actions = {
+        "enable_safe_revert",
+        "set_execute_enabled_for_safe_revert",
+        "manual_review_required",
+        "regenerate_pr_prompt_or_continue_loop",
+        "insufficient_truth",
+    }
+    safe_revert_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "reverted",
+        "changed_files",
+        "revert_reason",
+        "revert_plan",
+        "pre_git_status_short",
+        "post_git_status_short",
+        "blocked_reason",
+    )
+    project_browser_autonomous_safe_revert_status = _normalize_text(
+        project_browser_autonomous_safe_revert_state.get(
+            "project_browser_autonomous_safe_revert_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_safe_revert_status not in safe_revert_allowed_statuses:
+        project_browser_autonomous_safe_revert_status = "insufficient_truth"
+    project_browser_autonomous_safe_revert_next_action = _normalize_text(
+        project_browser_autonomous_safe_revert_state.get(
+            "project_browser_autonomous_safe_revert_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_safe_revert_next_action
+        not in safe_revert_allowed_next_actions
+    ):
+        project_browser_autonomous_safe_revert_next_action = "insufficient_truth"
+    project_browser_autonomous_safe_revert_state_normalized: dict[str, Any] = {}
+    for field_name in safe_revert_field_names:
+        key = f"project_browser_autonomous_safe_revert_{field_name}"
+        value = project_browser_autonomous_safe_revert_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_safe_revert_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_safe_revert_next_action
+        elif field_name in {"enabled", "execute_enabled", "reverted"}:
+            value = bool(value)
+        elif field_name == "changed_files":
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_safe_revert_state_normalized[key] = value
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -154928,6 +155599,18 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_codex_execution_connector_executed": bool(
                     project_browser_autonomous_codex_execution_connector_state_normalized.get(
                         "project_browser_autonomous_codex_execution_connector_executed",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_safe_revert_status": (
+                    project_browser_autonomous_safe_revert_status
+                ),
+                "project_browser_autonomous_safe_revert_next_action": (
+                    project_browser_autonomous_safe_revert_next_action
+                ),
+                "project_browser_autonomous_safe_revert_reverted": bool(
+                    project_browser_autonomous_safe_revert_state_normalized.get(
+                        "project_browser_autonomous_safe_revert_reverted",
                         False,
                     )
                 ),
@@ -159105,6 +159788,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_codex_execution_connector_next_action"
             if project_browser_autonomous_codex_execution_connector_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_safe_revert_status"
+            if project_browser_autonomous_safe_revert_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_safe_revert_next_action"
+            if project_browser_autonomous_safe_revert_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -165366,6 +166055,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_pr_queue_state_state_normalized,
         **project_browser_autonomous_local_loop_state_normalized,
         **project_browser_autonomous_codex_execution_connector_state_normalized,
+        **project_browser_autonomous_safe_revert_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -165446,6 +166136,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_codex_execution_connector_state_normalized": (
             dict(project_browser_autonomous_codex_execution_connector_state_normalized)
+        ),
+        "project_browser_autonomous_safe_revert_state_normalized": (
+            dict(project_browser_autonomous_safe_revert_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
