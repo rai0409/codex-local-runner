@@ -96876,6 +96876,514 @@ def _build_project_browser_autonomous_local_loop_state(
     }
 
 
+def _build_project_browser_autonomous_codex_execution_connector_state(
+    *,
+    local_loop_state: Mapping[str, Any] | None,
+    codex_execution_gate_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    chrome_runner_bridge_bounded_loop_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    local_loop = dict(local_loop_state) if isinstance(local_loop_state, Mapping) else {}
+    codex_gate = (
+        dict(codex_execution_gate_state)
+        if isinstance(codex_execution_gate_state, Mapping)
+        else {}
+    )
+    codex_capture = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    bounded_loop = (
+        dict(chrome_runner_bridge_bounded_loop_state)
+        if isinstance(chrome_runner_bridge_bounded_loop_state, Mapping)
+        else {}
+    )
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_text_bounded(path_text: str, *, limit_bytes: int = 32768) -> tuple[str, str]:
+        path_obj = Path(path_text)
+        if not path_obj.exists():
+            return ("", "missing")
+        if not path_obj.is_file():
+            return ("", "not_file")
+        try:
+            with path_obj.open("rb") as file_obj:
+                raw = file_obj.read(limit_bytes)
+        except OSError as exc:
+            return ("", f"read_error:{exc.__class__.__name__}")
+        text = raw.decode("utf-8", errors="replace").strip()
+        if not text:
+            return ("", "empty")
+        return (text, "ready")
+
+    connector_enabled = _read_flag(
+        "project_browser_autonomous_codex_execution_connector_enabled",
+        default=False,
+    )
+    connector_execute_enabled = _read_flag(
+        "project_browser_autonomous_codex_execution_connector_execute_enabled",
+        default=False,
+    )
+
+    local_loop_status = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_status"),
+        default="",
+    )
+    local_loop_next_action = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_next_action"),
+        default="",
+    )
+    local_loop_prompt = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_selected_prompt"),
+        default="",
+    )
+    local_loop_prompt_fingerprint = _normalize_text(
+        local_loop.get("project_browser_autonomous_local_loop_selected_prompt_fingerprint"),
+        default="",
+    )
+
+    codex_gate_status = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_status"),
+        default="",
+    )
+    codex_gate_approved = bool(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_approved_for_execution", False)
+    )
+    codex_gate_prompt_kind = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_kind"),
+        default="",
+    )
+    codex_gate_prompt_path = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_path"),
+        default="",
+    )
+    codex_gate_prompt_fingerprint = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+        default="",
+    )
+    codex_gate_next_action = _normalize_text(
+        codex_gate.get("project_browser_autonomous_codex_execution_gate_next_action"),
+        default="",
+    )
+
+    _ = _normalize_text(
+        codex_capture.get("project_browser_autonomous_codex_capture_gate_status"),
+        default="",
+    )
+    _ = _normalize_text(
+        bounded_loop.get("project_browser_autonomous_chrome_runner_bridge_bounded_loop_status"),
+        default="",
+    )
+
+    status = "codex_execution_connector_not_requested"
+    next_action = "enable_codex_execution_connector"
+    executed = False
+    prompt_kind = ""
+    prompt_path = ""
+    prompt_fingerprint = ""
+    route_name = ""
+    output_preview = ""
+    blocked_reason = "connector_disabled"
+
+    if not connector_enabled:
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    if not connector_execute_enabled:
+        prompt_kind = (
+            "next"
+            if local_loop_next_action == "run_codex_implementation"
+            else ("fix" if local_loop_next_action == "run_codex_fix" else "")
+        )
+        prompt_path = _normalize_text(codex_gate_prompt_path, default="")
+        prompt_fingerprint = _normalize_text(codex_gate_prompt_fingerprint, default="")
+        if not prompt_fingerprint:
+            prompt_fingerprint = local_loop_prompt_fingerprint
+        status = "codex_execution_connector_decision_only"
+        next_action = "set_execute_enabled_for_single_codex_step"
+        blocked_reason = "execute_not_enabled"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    ready_local_loop = bool(
+        (
+            local_loop_status == "local_loop_ready_run_codex_implementation"
+            and local_loop_next_action == "run_codex_implementation"
+        )
+        or (
+            local_loop_status == "local_loop_ready_run_codex_fix"
+            and local_loop_next_action == "run_codex_fix"
+        )
+    )
+    if not ready_local_loop:
+        status = "codex_execution_connector_blocked_missing_local_loop"
+        next_action = "manual_review_required"
+        blocked_reason = "local_loop_not_ready_for_codex_execution"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    if not (codex_gate_status == "codex_execution_gate_ready" and codex_gate_approved):
+        status = "codex_execution_connector_blocked_missing_codex_gate"
+        next_action = "manual_review_required"
+        blocked_reason = "codex_execution_gate_not_ready_or_not_approved"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    expected_prompt_kind = (
+        "implementation" if local_loop_next_action == "run_codex_implementation" else "fix"
+    )
+    expected_gate_next_action = (
+        "run_existing_codex_implementation_step"
+        if expected_prompt_kind == "implementation"
+        else "run_existing_codex_fix_step"
+    )
+    route_available = bool(
+        expected_prompt_kind in {"implementation", "fix"}
+        and codex_gate_prompt_kind == expected_prompt_kind
+        and codex_gate_next_action == expected_gate_next_action
+        and codex_gate_prompt_path
+        and codex_gate_prompt_path
+        in {
+            "/tmp/codex-local-runner-decision/generated_next_prompt.txt",
+            "/tmp/codex-local-runner-decision/generated_fix_prompt.txt",
+        }
+    )
+    if not route_available:
+        status = "codex_execution_connector_blocked_no_existing_route"
+        next_action = "manual_review_required"
+        blocked_reason = "existing_safe_codex_invocation_route_not_available"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    prompt_path = codex_gate_prompt_path
+    prompt_text, prompt_read_status = _read_text_bounded(prompt_path, limit_bytes=32768)
+    if prompt_read_status != "ready":
+        status = "codex_execution_connector_blocked_missing_codex_gate"
+        next_action = "manual_review_required"
+        blocked_reason = f"prompt_read_status:{prompt_read_status}"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    prompt_kind = "next" if expected_prompt_kind == "implementation" else "fix"
+    prompt_fingerprint = (
+        codex_gate_prompt_fingerprint
+        if codex_gate_prompt_fingerprint
+        else hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+    )
+    if not prompt_fingerprint and local_loop_prompt_fingerprint:
+        prompt_fingerprint = local_loop_prompt_fingerprint
+    if not prompt_fingerprint and local_loop_prompt:
+        prompt_fingerprint = hashlib.sha256(local_loop_prompt.encode("utf-8")).hexdigest()
+
+    prior_dispatched_or_executed_fingerprints = {
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_codex_execution_connector_prompt_fingerprint"),
+            default="",
+        ),
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_codex_execution_gate_prompt_fingerprint"),
+            default="",
+        ),
+        _normalize_text(
+            prior_payload.get("project_browser_autonomous_local_loop_selected_prompt_fingerprint"),
+            default="",
+        ),
+    }
+    prior_dispatched_or_executed_fingerprints.discard("")
+    if prompt_fingerprint and prompt_fingerprint in prior_dispatched_or_executed_fingerprints:
+        status = "codex_execution_connector_blocked_duplicate_prompt"
+        next_action = "manual_review_required"
+        blocked_reason = "duplicate_prompt_fingerprint_against_prior_dispatch_or_execution"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    unsafe_tokens = (
+        "playwright",
+        "chatgpt api",
+        "openai api",
+        "captcha bypass",
+        "verify bypass",
+        "store cookie",
+        "store cookies",
+        "store token",
+        "store tokens",
+        "store session",
+        "store sessions",
+        "unbounded loop",
+        "infinite loop",
+        "daemon",
+        "scheduler",
+        "background queue",
+        "queue drain",
+        "new shell execution",
+        "new codex execution",
+        "auto commit",
+        "automatic commit",
+        "auto tag",
+        "automatic tag",
+        "auto pr",
+        "automatic pr",
+        "auto merge",
+        "automatic merge",
+        "rm -rf /",
+        "delete /",
+        "outside repo",
+    )
+    lower_prompt = prompt_text.lower()
+    if any(token in lower_prompt for token in unsafe_tokens):
+        status = "codex_execution_connector_blocked_unsafe_prompt"
+        next_action = "manual_review_required"
+        blocked_reason = "unsafe_prompt_detected"
+        return {
+            "project_browser_autonomous_codex_execution_connector_status": status,
+            "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+            "project_browser_autonomous_codex_execution_connector_enabled": bool(
+                connector_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+                connector_execute_enabled
+            ),
+            "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+            "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+            "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+            "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+                prompt_fingerprint
+            ),
+            "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+            "project_browser_autonomous_codex_execution_connector_output_preview": output_preview,
+            "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+        }
+
+    route_name = "existing_codex_invocation_execution_state"
+    invocation_state = _build_project_browser_autonomous_codex_invocation_execution_state(
+        repository_path=str(execution_repo_path),
+        readiness_status="ready_to_invoke_codex",
+        invocation_allowed=True,
+        selected_prompt_kind=prompt_kind,
+        selected_prompt_path=prompt_path,
+        selected_prompt_source="project_browser_autonomous_codex_execution_connector",
+        selected_prompt_ready=True,
+        selected_prompt_path_is_exact=True,
+        selected_prompt_path_exists=True,
+        selected_prompt_path_is_symlink=False,
+        selected_prompt_file_non_empty=True,
+        selected_prompt_file_too_large=False,
+        rollback_required=False,
+        human_review_required=False,
+        insufficient_truth=False,
+        max_invocations=1,
+        prior_invocation_attempted=bool(
+            prior_payload.get(
+                "project_browser_autonomous_codex_invocation_execution_invocation_attempted",
+                False,
+            )
+        ),
+        prior_invocation_completed=bool(
+            prior_payload.get(
+                "project_browser_autonomous_codex_invocation_execution_invocation_completed",
+                False,
+            )
+        ),
+    )
+    invocation_status = _normalize_text(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_status"),
+        default="",
+    )
+    invocation_completed = bool(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_invocation_completed", False)
+    )
+    invocation_exit_code = _as_int(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_invocation_exit_code"),
+        default=-1,
+    )
+    stdout_excerpt = _normalize_text(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_invocation_stdout_excerpt"),
+        default="",
+    )
+    stderr_excerpt = _normalize_text(
+        invocation_state.get("project_browser_autonomous_codex_invocation_execution_invocation_stderr_excerpt"),
+        default="",
+    )
+    output_preview = _normalize_text(
+        "\n".join(
+            _serialize_required_signals(
+                [
+                    f"execution_status={invocation_status}",
+                    f"exit_code={invocation_exit_code}",
+                    f"stdout={stdout_excerpt[:300]}" if stdout_excerpt else "",
+                    f"stderr={stderr_excerpt[:300]}" if stderr_excerpt else "",
+                ]
+            )
+        ),
+        default="",
+    )
+
+    if invocation_status == "codex_invocation_completed" and invocation_completed and invocation_exit_code == 0:
+        status = "codex_execution_connector_executed"
+        next_action = "run_codex_capture_gate"
+        executed = True
+        blocked_reason = "none"
+    else:
+        status = "codex_execution_connector_blocked_execution_failed"
+        next_action = "manual_review_required"
+        blocked_reason = f"invocation_status:{invocation_status or 'unknown'}"
+
+    return {
+        "project_browser_autonomous_codex_execution_connector_status": status,
+        "project_browser_autonomous_codex_execution_connector_next_action": next_action,
+        "project_browser_autonomous_codex_execution_connector_enabled": bool(connector_enabled),
+        "project_browser_autonomous_codex_execution_connector_execute_enabled": bool(
+            connector_execute_enabled
+        ),
+        "project_browser_autonomous_codex_execution_connector_executed": bool(executed),
+        "project_browser_autonomous_codex_execution_connector_prompt_kind": prompt_kind,
+        "project_browser_autonomous_codex_execution_connector_prompt_path": prompt_path,
+        "project_browser_autonomous_codex_execution_connector_prompt_fingerprint": (
+            prompt_fingerprint
+        ),
+        "project_browser_autonomous_codex_execution_connector_route_name": route_name,
+        "project_browser_autonomous_codex_execution_connector_output_preview": output_preview[:800],
+        "project_browser_autonomous_codex_execution_connector_blocked_reason": blocked_reason,
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -153696,6 +154204,86 @@ def _build_approved_restart_execution_contract_surface(
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_local_loop_state_normalized[key] = value
+    project_browser_autonomous_codex_execution_connector_state = (
+        _build_project_browser_autonomous_codex_execution_connector_state(
+            local_loop_state=project_browser_autonomous_local_loop_state_normalized,
+            codex_execution_gate_state=project_browser_autonomous_codex_execution_gate_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            chrome_runner_bridge_bounded_loop_state=project_browser_autonomous_chrome_runner_bridge_bounded_loop_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    codex_execution_connector_allowed_statuses = {
+        "codex_execution_connector_not_requested",
+        "codex_execution_connector_decision_only",
+        "codex_execution_connector_blocked_missing_local_loop",
+        "codex_execution_connector_blocked_missing_codex_gate",
+        "codex_execution_connector_blocked_no_existing_route",
+        "codex_execution_connector_blocked_duplicate_prompt",
+        "codex_execution_connector_blocked_unsafe_prompt",
+        "codex_execution_connector_blocked_execution_failed",
+        "codex_execution_connector_executed",
+        "insufficient_truth",
+    }
+    codex_execution_connector_allowed_next_actions = {
+        "enable_codex_execution_connector",
+        "set_execute_enabled_for_single_codex_step",
+        "manual_review_required",
+        "run_codex_capture_gate",
+        "insufficient_truth",
+    }
+    codex_execution_connector_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "execute_enabled",
+        "executed",
+        "prompt_kind",
+        "prompt_path",
+        "prompt_fingerprint",
+        "route_name",
+        "output_preview",
+        "blocked_reason",
+    )
+    project_browser_autonomous_codex_execution_connector_status = _normalize_text(
+        project_browser_autonomous_codex_execution_connector_state.get(
+            "project_browser_autonomous_codex_execution_connector_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_codex_execution_connector_status
+        not in codex_execution_connector_allowed_statuses
+    ):
+        project_browser_autonomous_codex_execution_connector_status = "insufficient_truth"
+    project_browser_autonomous_codex_execution_connector_next_action = _normalize_text(
+        project_browser_autonomous_codex_execution_connector_state.get(
+            "project_browser_autonomous_codex_execution_connector_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_codex_execution_connector_next_action
+        not in codex_execution_connector_allowed_next_actions
+    ):
+        project_browser_autonomous_codex_execution_connector_next_action = "insufficient_truth"
+    project_browser_autonomous_codex_execution_connector_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in codex_execution_connector_field_names:
+        key = f"project_browser_autonomous_codex_execution_connector_{field_name}"
+        value = project_browser_autonomous_codex_execution_connector_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_execution_connector_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_execution_connector_next_action
+        elif field_name in {"enabled", "execute_enabled", "executed"}:
+            value = bool(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_execution_connector_state_normalized[key] = value
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -154330,6 +154918,18 @@ def _build_approved_restart_execution_contract_surface(
                         0,
                     ),
                     default=0,
+                ),
+                "project_browser_autonomous_codex_execution_connector_status": (
+                    project_browser_autonomous_codex_execution_connector_status
+                ),
+                "project_browser_autonomous_codex_execution_connector_next_action": (
+                    project_browser_autonomous_codex_execution_connector_next_action
+                ),
+                "project_browser_autonomous_codex_execution_connector_executed": bool(
+                    project_browser_autonomous_codex_execution_connector_state_normalized.get(
+                        "project_browser_autonomous_codex_execution_connector_executed",
+                        False,
+                    )
                 ),
                 "project_browser_autonomous_dev_loop_pr_prompt_readiness_status": (
                     project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -158499,6 +159099,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_local_loop_next_action"
             if project_browser_autonomous_local_loop_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_execution_connector_status"
+            if project_browser_autonomous_codex_execution_connector_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_codex_execution_connector_next_action"
+            if project_browser_autonomous_codex_execution_connector_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -164759,6 +165365,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_commit_tag_execution_state_normalized,
         **project_browser_autonomous_pr_queue_state_state_normalized,
         **project_browser_autonomous_local_loop_state_normalized,
+        **project_browser_autonomous_codex_execution_connector_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -164836,6 +165443,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_local_loop_state_normalized": (
             dict(project_browser_autonomous_local_loop_state_normalized)
+        ),
+        "project_browser_autonomous_codex_execution_connector_state_normalized": (
+            dict(project_browser_autonomous_codex_execution_connector_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
