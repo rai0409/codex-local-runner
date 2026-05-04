@@ -94577,6 +94577,287 @@ def _build_project_browser_autonomous_chatgpt_diff_review_decision_state(
     }
 
 
+def _build_project_browser_autonomous_commit_tag_gate_state(
+    *,
+    chatgpt_diff_review_decision_state: Mapping[str, Any] | None,
+    codex_capture_gate_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    review_state = (
+        dict(chatgpt_diff_review_decision_state)
+        if isinstance(chatgpt_diff_review_decision_state, Mapping)
+        else {}
+    )
+    capture_state = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _compact(text: Any, *, max_chars: int = 240) -> str:
+        value = _normalize_text(text, default="")
+        if not value:
+            return ""
+        normalized = " ".join(value.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _is_unsafe_changed_path(path_text: str) -> tuple[bool, str]:
+        text = _normalize_text(path_text, default="")
+        if not text:
+            return (True, "empty_path")
+        if Path(text).is_absolute() or text.startswith("/") or text.startswith("\\"):
+            return (True, f"absolute_path:{text}")
+        if "://" in text:
+            return (True, f"malformed_path:{text}")
+        if ".." in text.split("/"):
+            return (True, f"parent_traversal:{text}")
+        normalized = text.replace("\\", "/")
+        if normalized == ".git" or normalized.startswith(".git/"):
+            return (True, f"git_internal_path:{text}")
+        if normalized.startswith("../") or "/../" in normalized:
+            return (True, f"outside_repo_path:{text}")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        if not normalized:
+            return (True, "malformed_path")
+        return (False, "")
+
+    gate_enabled = _read_flag(
+        "project_browser_autonomous_commit_tag_gate_enabled",
+        default=False,
+    )
+    allow_missing_validation = False
+    for key in (
+        "project_browser_autonomous_commit_tag_gate_allow_missing_validation",
+        "project_browser_autonomous_allow_missing_validation",
+    ):
+        if key in approved_restart or key in prior_payload:
+            allow_missing_validation = _read_flag(key, default=False)
+            break
+
+    review_status = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision_status"),
+        default="",
+    )
+    review_next_action = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision_next_action"),
+        default="",
+    )
+    review_decision = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_decision"),
+        default="",
+    )
+    review_confidence = 0.0
+    confidence_value = review_state.get("project_browser_autonomous_chatgpt_diff_review_confidence")
+    if isinstance(confidence_value, (int, float)) and not isinstance(confidence_value, bool):
+        review_confidence = max(0.0, min(1.0, float(confidence_value)))
+    review_risk = _normalize_text(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_risk"),
+        default="high",
+    ).lower()
+    review_blocking_issues = _normalize_string_list(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_blocking_issues")
+    )
+    review_commit_recommendation = bool(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_commit_recommendation", False)
+    )
+    review_summary = _compact(
+        review_state.get("project_browser_autonomous_chatgpt_diff_review_summary"),
+        max_chars=280,
+    )
+
+    changed_files = _normalize_string_list(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_changed_files")
+    )
+    diff_summary = _compact(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_diff_summary"),
+        max_chars=240,
+    )
+    validation_summary = _compact(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_validation_summary"),
+        max_chars=240,
+    )
+    codex_output_summary = _compact(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_codex_output_summary"),
+        max_chars=240,
+    )
+    capture_output_path = _normalize_text(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_capture_output_path"),
+        default="",
+    )
+    capture_artifact_paths = _normalize_string_list(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_capture_artifact_paths")
+    )
+    prompt_kind = _normalize_text(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_prompt_kind"),
+        default="",
+    )
+    prompt_fingerprint = _normalize_text(
+        capture_state.get("project_browser_autonomous_codex_capture_gate_prompt_fingerprint"),
+        default="",
+    )
+
+    status = "commit_tag_gate_not_requested"
+    next_action = "enable_commit_tag_gate"
+    ready = False
+    blocked_reason = "commit_tag_gate_disabled"
+    fix_recommendations: list[str] = []
+
+    approval_valid = bool(
+        review_status == "chatgpt_diff_review_decision_approved_for_commit_gate"
+        and review_decision == "approve"
+        and review_next_action == "prepare_commit_or_pr_gate"
+    )
+
+    unsafe_path_reasons: list[str] = []
+    safe_changed_files: list[str] = []
+    for path in changed_files:
+        unsafe, reason = _is_unsafe_changed_path(path)
+        if unsafe:
+            unsafe_path_reasons.append(reason)
+        else:
+            safe_changed_files.append(path)
+
+    validation_lower = validation_summary.lower()
+    validation_failing = any(
+        token in validation_lower for token in ("error", "failed", "failure", "diff_check_has_errors")
+    )
+    validation_missing = (not validation_summary) or any(
+        token in validation_lower for token in ("not_available", "unavailable", "missing")
+    )
+
+    policy_failed_reasons: list[str] = []
+    if review_confidence < 0.80:
+        policy_failed_reasons.append("confidence_below_threshold")
+    if review_risk not in {"low", "medium"}:
+        policy_failed_reasons.append("risk_not_allowed")
+    if review_blocking_issues:
+        policy_failed_reasons.append("blocking_issues_present")
+    if not review_commit_recommendation:
+        policy_failed_reasons.append("commit_recommendation_false")
+    if not safe_changed_files:
+        policy_failed_reasons.append("no_changed_files")
+
+    if gate_enabled:
+        if not approval_valid:
+            status = "commit_tag_gate_blocked_missing_approval"
+            next_action = "request_or_recheck_chatgpt_approve_decision"
+            blocked_reason = "review_approval_not_ready"
+            fix_recommendations = [
+                "regenerate diff review and require approve decision",
+                "request manual review if decision remains unclear",
+            ]
+        elif unsafe_path_reasons:
+            status = "commit_tag_gate_blocked_unsafe_paths"
+            next_action = "inspect_unsafe_changed_paths"
+            blocked_reason = unsafe_path_reasons[0]
+            fix_recommendations = [
+                "inspect unsafe changed paths",
+                "regenerate capture with repo-local relative paths only",
+            ]
+        elif validation_failing or (validation_missing and not allow_missing_validation):
+            status = "commit_tag_gate_blocked_validation"
+            next_action = "rerun_validation_and_review"
+            blocked_reason = (
+                "validation_failed"
+                if validation_failing
+                else "validation_missing_without_allowance"
+            )
+            fix_recommendations = [
+                "rerun validation",
+                "fix validation failures before commit/tag readiness",
+                "request manual review if validation cannot be produced",
+            ]
+        elif policy_failed_reasons:
+            status = "commit_tag_gate_blocked_policy"
+            next_action = "resolve_commit_tag_gate_policy_issues"
+            blocked_reason = policy_failed_reasons[0]
+            fix_recommendations = [
+                "fix blocking issues in review result",
+                "regenerate diff review with clearer evidence",
+                "request manual review",
+            ]
+        else:
+            status = "commit_tag_gate_ready"
+            next_action = "prepare_explicit_commit_tag_execution_step"
+            blocked_reason = "none"
+            ready = True
+
+    short_fp_source = prompt_fingerprint
+    if not short_fp_source:
+        short_fp_source = hashlib.sha256(
+            "|".join([review_summary, ",".join(safe_changed_files)]).encode("utf-8")
+        ).hexdigest()
+    short_fp = short_fp_source[:10]
+    file_count = len(safe_changed_files)
+    top_files = ", ".join(safe_changed_files[:3]) if safe_changed_files else "no-files"
+    prompt_label = prompt_kind if prompt_kind else "change"
+    commit_message = (
+        f"chore: {prompt_label} review-approved ({file_count} files) - {review_summary or top_files}"
+    )
+    commit_message = _compact(commit_message, max_chars=120)
+    tag_name = f"prompt275-commit-gate-{short_fp}"
+    tag_name = "".join(
+        char if (char.isalnum() or char in {"-", "_", "."}) else "-"
+        for char in tag_name
+    ).strip("-")
+    if not tag_name:
+        tag_name = "prompt275-commit-gate-unknown"
+
+    if not fix_recommendations and not ready:
+        fix_recommendations = [
+            "rerun validation",
+            "request manual review",
+            "regenerate diff review",
+        ]
+
+    readiness_summary = (
+        f"review={review_status or 'unknown'}; confidence={review_confidence:.2f}; "
+        f"risk={review_risk or 'unknown'}; changed_files={file_count}; "
+        f"validation={validation_summary or 'missing'}; diff={diff_summary or 'n/a'}; "
+        f"capture={capture_output_path or 'n/a'}; artifacts={len(capture_artifact_paths)}; "
+        f"codex={codex_output_summary or 'n/a'}"
+    )
+
+    return {
+        "project_browser_autonomous_commit_tag_gate_status": status,
+        "project_browser_autonomous_commit_tag_gate_next_action": next_action,
+        "project_browser_autonomous_commit_tag_gate_enabled": bool(gate_enabled),
+        "project_browser_autonomous_commit_tag_gate_ready": bool(ready),
+        "project_browser_autonomous_commit_tag_gate_commit_message": commit_message,
+        "project_browser_autonomous_commit_tag_gate_tag_name": tag_name,
+        "project_browser_autonomous_commit_tag_gate_changed_files": (
+            _normalize_string_list(safe_changed_files)
+        ),
+        "project_browser_autonomous_commit_tag_gate_validation_summary": validation_summary,
+        "project_browser_autonomous_commit_tag_gate_review_summary": (
+            _compact(f"{review_summary}; {readiness_summary}", max_chars=480)
+        ),
+        "project_browser_autonomous_commit_tag_gate_blocked_reason": blocked_reason,
+        "project_browser_autonomous_commit_tag_gate_fix_recommendations": (
+            _normalize_string_list(fix_recommendations)
+        ),
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -151066,6 +151347,76 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_chatgpt_diff_review_decision_state_normalized[key] = (
             value
         )
+    project_browser_autonomous_commit_tag_gate_state = (
+        _build_project_browser_autonomous_commit_tag_gate_state(
+            chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+            codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+        )
+    )
+    commit_tag_gate_allowed_statuses = {
+        "commit_tag_gate_not_requested",
+        "commit_tag_gate_blocked_missing_approval",
+        "commit_tag_gate_blocked_policy",
+        "commit_tag_gate_blocked_validation",
+        "commit_tag_gate_blocked_unsafe_paths",
+        "commit_tag_gate_ready",
+        "insufficient_truth",
+    }
+    commit_tag_gate_allowed_next_actions = {
+        "enable_commit_tag_gate",
+        "request_or_recheck_chatgpt_approve_decision",
+        "inspect_unsafe_changed_paths",
+        "rerun_validation_and_review",
+        "resolve_commit_tag_gate_policy_issues",
+        "prepare_explicit_commit_tag_execution_step",
+        "insufficient_truth",
+    }
+    commit_tag_gate_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "ready",
+        "commit_message",
+        "tag_name",
+        "changed_files",
+        "validation_summary",
+        "review_summary",
+        "blocked_reason",
+        "fix_recommendations",
+    )
+    project_browser_autonomous_commit_tag_gate_status = _normalize_text(
+        project_browser_autonomous_commit_tag_gate_state.get(
+            "project_browser_autonomous_commit_tag_gate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_commit_tag_gate_status not in commit_tag_gate_allowed_statuses:
+        project_browser_autonomous_commit_tag_gate_status = "insufficient_truth"
+    project_browser_autonomous_commit_tag_gate_next_action = _normalize_text(
+        project_browser_autonomous_commit_tag_gate_state.get(
+            "project_browser_autonomous_commit_tag_gate_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_commit_tag_gate_next_action not in commit_tag_gate_allowed_next_actions:
+        project_browser_autonomous_commit_tag_gate_next_action = "insufficient_truth"
+    project_browser_autonomous_commit_tag_gate_state_normalized: dict[str, Any] = {}
+    for field_name in commit_tag_gate_field_names:
+        key = f"project_browser_autonomous_commit_tag_gate_{field_name}"
+        value = project_browser_autonomous_commit_tag_gate_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_commit_tag_gate_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_commit_tag_gate_next_action
+        elif field_name in {"enabled", "ready"}:
+            value = bool(value)
+        elif field_name in {"changed_files", "fix_recommendations"}:
+            value = _normalize_string_list(value)
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_commit_tag_gate_state_normalized[key] = value
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -151649,6 +152000,18 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_chatgpt_diff_review_routed": bool(
                     project_browser_autonomous_chatgpt_diff_review_decision_state_normalized.get(
                         "project_browser_autonomous_chatgpt_diff_review_routed",
+                        False,
+                    )
+                ),
+                "project_browser_autonomous_commit_tag_gate_status": (
+                    project_browser_autonomous_commit_tag_gate_status
+                ),
+                "project_browser_autonomous_commit_tag_gate_next_action": (
+                    project_browser_autonomous_commit_tag_gate_next_action
+                ),
+                "project_browser_autonomous_commit_tag_gate_ready": bool(
+                    project_browser_autonomous_commit_tag_gate_state_normalized.get(
+                        "project_browser_autonomous_commit_tag_gate_ready",
                         False,
                     )
                 ),
@@ -155802,6 +156165,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_chatgpt_diff_review_decision_next_action"
             if project_browser_autonomous_chatgpt_diff_review_decision_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_commit_tag_gate_status"
+            if project_browser_autonomous_commit_tag_gate_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_commit_tag_gate_next_action"
+            if project_browser_autonomous_commit_tag_gate_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -162058,6 +162427,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_codex_capture_gate_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+        **project_browser_autonomous_commit_tag_gate_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -162123,6 +162493,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_chatgpt_diff_review_decision_state_normalized": (
             dict(project_browser_autonomous_chatgpt_diff_review_decision_state_normalized)
+        ),
+        "project_browser_autonomous_commit_tag_gate_state_normalized": (
+            dict(project_browser_autonomous_commit_tag_gate_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
