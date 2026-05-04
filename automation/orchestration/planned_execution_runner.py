@@ -95599,6 +95599,548 @@ def _build_project_browser_autonomous_commit_tag_execution_state_prompt276(
     }
 
 
+def _build_project_browser_autonomous_pr_queue_state_state(
+    *,
+    commit_tag_execution_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    execution_state = (
+        dict(commit_tag_execution_state)
+        if isinstance(commit_tag_execution_state, Mapping)
+        else {}
+    )
+    approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    allowed_item_statuses = {
+        "pending",
+        "prompt_ready",
+        "codex_running",
+        "reviewing",
+        "fixing",
+        "ready_to_commit",
+        "committed",
+        "blocked",
+    }
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _compact(value: Any, *, max_chars: int = 240) -> str:
+        text = _normalize_text(value, default="")
+        if not text:
+            return ""
+        normalized = " ".join(text.split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[:max_chars]
+
+    def _coerce_item_status(value: Any) -> str:
+        status = _normalize_text(value, default="").lower()
+        if status in allowed_item_statuses:
+            return status
+        if status in {"complete", "completed", "done"}:
+            return "committed"
+        if status in {"error", "failed"}:
+            return "blocked"
+        return "pending"
+
+    def _queue_candidates(payload: Mapping[str, Any]) -> list[list[dict[str, Any]]]:
+        candidates: list[list[dict[str, Any]]] = []
+        for key in (
+            "project_browser_autonomous_pr_queue_state_pr_queue",
+            "project_browser_autonomous_roadmap_pr_split_queue_pr_queue",
+            "project_browser_autonomous_dev_loop_input_roadmap_pr_queue",
+            "roadmap_pr_queue",
+        ):
+            value = payload.get(key)
+            if isinstance(value, list):
+                queue_items: list[dict[str, Any]] = []
+                for entry in value:
+                    if isinstance(entry, Mapping):
+                        queue_items.append(dict(entry))
+                if queue_items:
+                    candidates.append(queue_items)
+        return candidates
+
+    def _index_candidates(payload: Mapping[str, Any]) -> list[int]:
+        result: list[int] = []
+        for key in (
+            "project_browser_autonomous_pr_queue_state_active_pr_index",
+            "project_browser_autonomous_roadmap_pr_split_queue_active_pr_index",
+            "project_browser_autonomous_dev_loop_input_active_pr_index",
+            "active_pr_index",
+        ):
+            if key in payload:
+                result.append(_as_non_negative_int(payload.get(key), default=0))
+        return result
+
+    def _normalize_queue(raw_queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for idx, entry in enumerate(raw_queue):
+            item_id = _normalize_text(
+                entry.get("id"),
+                default=_normalize_text(
+                    entry.get("slice_id"),
+                    default=_normalize_text(entry.get("roadmap_item_id"), default=f"pr-{idx}"),
+                ),
+            )
+            if not item_id:
+                item_id = f"pr-{idx}"
+            normalized.append(
+                {
+                    "id": item_id,
+                    "status": _coerce_item_status(entry.get("status")),
+                    "prompt_fingerprint": _normalize_text(
+                        entry.get("prompt_fingerprint"),
+                        default="",
+                    ),
+                    "commit_sha": _normalize_text(entry.get("commit_sha"), default=""),
+                    "tag_name": _normalize_text(entry.get("tag_name"), default=""),
+                    "changed_files": _normalize_string_list(entry.get("changed_files")),
+                    "summary": _compact(entry.get("summary"), max_chars=240),
+                    "blocked_reason": _normalize_text(entry.get("blocked_reason"), default=""),
+                }
+            )
+        return normalized
+
+    def _resolve_persistence_path() -> str:
+        path_text = _normalize_text(
+            prior_payload.get("project_browser_autonomous_pr_queue_state_path"),
+            default=_normalize_text(
+                approved_restart.get("project_browser_autonomous_pr_queue_state_path"),
+                default="",
+            ),
+        )
+        if not path_text:
+            return ""
+        repo_root = Path(_normalize_text(execution_repo_path, default="") or ".").resolve()
+        try:
+            candidate = Path(path_text).resolve()
+        except OSError:
+            return ""
+        if not str(candidate).startswith(str(repo_root)):
+            return ""
+        relative_text = _normalize_text(str(candidate.relative_to(repo_root)), default="")
+        if not relative_text.startswith("artifacts/"):
+            return ""
+        return str(candidate)
+
+    state_enabled = _read_flag(
+        "project_browser_autonomous_pr_queue_state_enabled",
+        default=False,
+    )
+    state_update_enabled = _read_flag(
+        "project_browser_autonomous_pr_queue_state_update_enabled",
+        default=False,
+    )
+
+    execution_status = _normalize_text(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_status"),
+        default="",
+    )
+    execution_next_action = _normalize_text(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_next_action"),
+        default="",
+    )
+    commit_sha = _normalize_text(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_commit_sha"),
+        default="",
+    )
+    tag_name = _normalize_text(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_tag_name"),
+        default="",
+    )
+    tag_created = bool(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_tag_created", False)
+    )
+    changed_files = _normalize_string_list(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_changed_files")
+    )
+    commit_message = _compact(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_commit_message"),
+        max_chars=180,
+    )
+    post_git_status_short = _compact(
+        execution_state.get("project_browser_autonomous_commit_tag_execution_post_git_status_short"),
+        max_chars=180,
+    )
+
+    commit_success = bool(
+        execution_status == "commit_tag_execution_committed_and_tagged"
+        and tag_created
+        and bool(commit_sha)
+        and execution_next_action == "update_pr_queue_or_prepare_next_pr"
+    )
+
+    status = "pr_queue_state_not_requested"
+    next_action = "enable_pr_queue_state_management"
+    blocked_reason = "pr_queue_state_disabled"
+    roadmap_id = _normalize_text(
+        prior_payload.get("project_browser_autonomous_pr_queue_state_roadmap_id"),
+        default=_normalize_text(approved_restart.get("project_browser_autonomous_pr_queue_state_roadmap_id"), default=""),
+    )
+    active_pr_index = 0
+    active_pr_id = ""
+    active_pr_status = ""
+    next_pr_index = -1
+    next_pr_id = ""
+    queue_summary = ""
+
+    normalized_queue: list[dict[str, Any]] = []
+    queue_candidates = _queue_candidates(prior_payload) + _queue_candidates(approved_restart)
+    if queue_candidates:
+        normalized_queue = _normalize_queue(queue_candidates[0])
+    index_candidates = _index_candidates(prior_payload) + _index_candidates(approved_restart)
+    if index_candidates:
+        active_pr_index = index_candidates[0]
+    if active_pr_index < 0:
+        active_pr_index = 0
+    if normalized_queue and active_pr_index >= len(normalized_queue):
+        active_pr_index = len(normalized_queue) - 1
+    if not roadmap_id:
+        roadmap_id = _normalize_text(
+            prior_payload.get("project_browser_autonomous_roadmap_id"),
+            default=_normalize_text(approved_restart.get("project_browser_autonomous_roadmap_id"), default=""),
+        )
+    if not roadmap_id:
+        roadmap_id = "local-roadmap"
+
+    if not state_enabled:
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    if not commit_success:
+        status = "pr_queue_state_blocked_missing_commit_tag_execution"
+        next_action = "manual_review_required"
+        blocked_reason = "commit_tag_execution_not_successful"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    if not normalized_queue and not state_update_enabled:
+        status = "pr_queue_state_decision_only"
+        next_action = "initialize_local_pr_queue_state"
+        blocked_reason = "queue_initialization_required"
+        queue_summary = "queue missing; initialization required"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    if not normalized_queue:
+        normalized_queue = [
+            {
+                "id": "pr-0",
+                "status": "committed",
+                "prompt_fingerprint": "",
+                "commit_sha": commit_sha,
+                "tag_name": tag_name,
+                "changed_files": changed_files,
+                "summary": _compact(commit_message, max_chars=240),
+                "blocked_reason": "",
+            }
+        ]
+        active_pr_index = 0
+
+    if not isinstance(normalized_queue, list) or not normalized_queue:
+        status = "pr_queue_state_blocked_missing_or_malformed_queue"
+        next_action = "manual_review_required"
+        blocked_reason = "queue_missing_or_malformed"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": [],
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    if active_pr_index >= len(normalized_queue):
+        active_pr_index = len(normalized_queue) - 1
+    if active_pr_index < 0:
+        active_pr_index = 0
+
+    for idx, item in enumerate(normalized_queue):
+        existing_sha = _normalize_text(item.get("commit_sha"), default="")
+        if idx != active_pr_index and existing_sha and existing_sha == commit_sha:
+            status = "pr_queue_state_blocked_duplicate_commit"
+            next_action = "manual_review_required"
+            blocked_reason = "commit_sha_already_recorded_in_another_item"
+            return {
+                "project_browser_autonomous_pr_queue_state_status": status,
+                "project_browser_autonomous_pr_queue_state_next_action": next_action,
+                "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+                "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                    state_update_enabled
+                ),
+                "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+                "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                    active_pr_index,
+                    default=0,
+                ),
+                "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+                "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+                "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+                "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+                "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+                "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+                "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+                "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+                "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+                "project_browser_autonomous_pr_queue_state_post_git_status_short": (
+                    post_git_status_short
+                ),
+            }
+
+    active_item = dict(normalized_queue[active_pr_index])
+    existing_active_sha = _normalize_text(active_item.get("commit_sha"), default="")
+    existing_active_tag = _normalize_text(active_item.get("tag_name"), default="")
+    duplicate_already_recorded = bool(
+        existing_active_sha == commit_sha and existing_active_tag == tag_name
+    )
+
+    if not duplicate_already_recorded:
+        active_item["status"] = "committed"
+        active_item["commit_sha"] = commit_sha
+        active_item["tag_name"] = tag_name
+        active_item["changed_files"] = changed_files
+        active_item["summary"] = _compact(commit_message or active_item.get("summary"), max_chars=240)
+        active_item["blocked_reason"] = ""
+        normalized_queue[active_pr_index] = active_item
+
+    active_pr_id = _normalize_text(active_item.get("id"), default=f"pr-{active_pr_index}")
+    active_pr_status = _coerce_item_status(active_item.get("status"))
+
+    found_next = -1
+    for idx in range(active_pr_index + 1, len(normalized_queue)):
+        candidate_status = _coerce_item_status(normalized_queue[idx].get("status"))
+        if candidate_status in {"pending", "prompt_ready"}:
+            found_next = idx
+            break
+    next_pr_index = found_next
+    if next_pr_index >= 0:
+        next_pr_id = _normalize_text(
+            normalized_queue[next_pr_index].get("id"),
+            default=f"pr-{next_pr_index}",
+        )
+
+    queue_summary = (
+        f"queue_items={len(normalized_queue)}; active_index={active_pr_index}; "
+        f"active_status={active_pr_status}; next_index={next_pr_index}"
+    )
+
+    if next_pr_index >= 0:
+        status = "pr_queue_state_updated"
+        next_action = "prepare_next_pr_prompt"
+        blocked_reason = "none"
+    else:
+        status = "pr_queue_state_project_complete"
+        next_action = "project_local_queue_complete"
+        blocked_reason = "none"
+
+    if not state_update_enabled:
+        status = "pr_queue_state_decision_only"
+        next_action = (
+            "apply_local_pr_queue_state_update"
+            if next_pr_index >= 0
+            else "confirm_local_project_complete"
+        )
+        blocked_reason = "update_not_enabled"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    persistence_path_text = _resolve_persistence_path()
+    if not persistence_path_text:
+        status = "pr_queue_state_decision_only"
+        next_action = "manual_review_required"
+        blocked_reason = "queue_persistence_path_unavailable"
+        return {
+            "project_browser_autonomous_pr_queue_state_status": status,
+            "project_browser_autonomous_pr_queue_state_next_action": next_action,
+            "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+            "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+                state_update_enabled
+            ),
+            "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+                active_pr_index,
+                default=0,
+            ),
+            "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+            "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+            "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+            "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+            "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+            "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+            "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+            "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+            "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+            "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        }
+
+    persistence_payload = {
+        "roadmap_id": roadmap_id,
+        "active_pr_index": _as_non_negative_int(active_pr_index, default=0),
+        "pr_queue": normalized_queue,
+        "updated_at": _iso_now(),
+    }
+    try:
+        persistence_text = json.dumps(
+            persistence_payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        if len(persistence_text.encode("utf-8")) > 65536:
+            raise ValueError("queue_state_payload_too_large")
+        persistence_path = Path(persistence_path_text)
+        persistence_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = persistence_path.with_name(f"{persistence_path.name}.tmp")
+        temp_path.write_text(persistence_text, encoding="utf-8")
+        os.replace(temp_path, persistence_path)
+    except Exception as exc:
+        status = "pr_queue_state_decision_only"
+        next_action = "manual_review_required"
+        blocked_reason = f"queue_state_write_failed:{exc.__class__.__name__}"
+
+    return {
+        "project_browser_autonomous_pr_queue_state_status": status,
+        "project_browser_autonomous_pr_queue_state_next_action": next_action,
+        "project_browser_autonomous_pr_queue_state_enabled": bool(state_enabled),
+        "project_browser_autonomous_pr_queue_state_update_enabled": bool(
+            state_update_enabled
+        ),
+        "project_browser_autonomous_pr_queue_state_roadmap_id": roadmap_id,
+        "project_browser_autonomous_pr_queue_state_active_pr_index": _as_non_negative_int(
+            active_pr_index,
+            default=0,
+        ),
+        "project_browser_autonomous_pr_queue_state_active_pr_id": active_pr_id,
+        "project_browser_autonomous_pr_queue_state_active_pr_status": active_pr_status,
+        "project_browser_autonomous_pr_queue_state_next_pr_index": next_pr_index,
+        "project_browser_autonomous_pr_queue_state_next_pr_id": next_pr_id,
+        "project_browser_autonomous_pr_queue_state_completed_commit_sha": commit_sha,
+        "project_browser_autonomous_pr_queue_state_completed_tag_name": tag_name,
+        "project_browser_autonomous_pr_queue_state_queue_summary": queue_summary,
+        "project_browser_autonomous_pr_queue_state_blocked_reason": blocked_reason,
+        "project_browser_autonomous_pr_queue_state_pr_queue": normalized_queue,
+        "project_browser_autonomous_pr_queue_state_post_git_status_short": post_git_status_short,
+        "project_browser_autonomous_pr_queue_state_persistence_path": persistence_path_text,
+    }
+
+
 def _build_project_browser_autonomous_explicit_dev_loop_input_readiness_state(
     *,
     explicit_payload: Mapping[str, Any] | None,
@@ -152238,6 +152780,92 @@ def _build_approved_restart_execution_contract_surface(
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_commit_tag_execution_state_normalized[key] = value
+    project_browser_autonomous_pr_queue_state_state = (
+        _build_project_browser_autonomous_pr_queue_state_state(
+            commit_tag_execution_state=project_browser_autonomous_commit_tag_execution_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    pr_queue_state_allowed_statuses = {
+        "pr_queue_state_not_requested",
+        "pr_queue_state_decision_only",
+        "pr_queue_state_blocked_missing_commit_tag_execution",
+        "pr_queue_state_blocked_missing_or_malformed_queue",
+        "pr_queue_state_blocked_duplicate_commit",
+        "pr_queue_state_updated",
+        "pr_queue_state_project_complete",
+        "insufficient_truth",
+    }
+    pr_queue_state_allowed_next_actions = {
+        "enable_pr_queue_state_management",
+        "manual_review_required",
+        "initialize_local_pr_queue_state",
+        "prepare_next_pr_prompt",
+        "project_local_queue_complete",
+        "apply_local_pr_queue_state_update",
+        "confirm_local_project_complete",
+        "insufficient_truth",
+    }
+    pr_queue_state_field_names = (
+        "status",
+        "next_action",
+        "enabled",
+        "update_enabled",
+        "roadmap_id",
+        "active_pr_index",
+        "active_pr_id",
+        "active_pr_status",
+        "next_pr_index",
+        "next_pr_id",
+        "completed_commit_sha",
+        "completed_tag_name",
+        "queue_summary",
+        "blocked_reason",
+        "pr_queue",
+        "post_git_status_short",
+        "persistence_path",
+    )
+    project_browser_autonomous_pr_queue_state_status = _normalize_text(
+        project_browser_autonomous_pr_queue_state_state.get(
+            "project_browser_autonomous_pr_queue_state_status"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_pr_queue_state_status not in pr_queue_state_allowed_statuses:
+        project_browser_autonomous_pr_queue_state_status = "insufficient_truth"
+    project_browser_autonomous_pr_queue_state_next_action = _normalize_text(
+        project_browser_autonomous_pr_queue_state_state.get(
+            "project_browser_autonomous_pr_queue_state_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_pr_queue_state_next_action not in pr_queue_state_allowed_next_actions:
+        project_browser_autonomous_pr_queue_state_next_action = "insufficient_truth"
+    project_browser_autonomous_pr_queue_state_state_normalized: dict[str, Any] = {}
+    for field_name in pr_queue_state_field_names:
+        key = f"project_browser_autonomous_pr_queue_state_{field_name}"
+        value = project_browser_autonomous_pr_queue_state_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_pr_queue_state_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_pr_queue_state_next_action
+        elif field_name in {"enabled", "update_enabled"}:
+            value = bool(value)
+        elif field_name in {"active_pr_index", "next_pr_index"}:
+            default_index = 0 if field_name == "active_pr_index" else -1
+            value = _as_int(value, default=default_index)
+        elif field_name == "pr_queue":
+            normalized_queue: list[dict[str, Any]] = []
+            if isinstance(value, list):
+                for entry in value:
+                    if isinstance(entry, Mapping):
+                        normalized_queue.append(dict(entry))
+            value = normalized_queue
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_pr_queue_state_state_normalized[key] = value
 
     project_browser_autonomous_mvp_scenario_result_matrix_state = (
         _build_project_browser_autonomous_mvp_scenario_result_matrix_state(
@@ -152847,6 +153475,18 @@ def _build_approved_restart_execution_contract_surface(
                         "project_browser_autonomous_commit_tag_execution_tag_created",
                         False,
                     )
+                ),
+                "project_browser_autonomous_pr_queue_state_status": (
+                    project_browser_autonomous_pr_queue_state_status
+                ),
+                "project_browser_autonomous_pr_queue_state_next_action": (
+                    project_browser_autonomous_pr_queue_state_next_action
+                ),
+                "project_browser_autonomous_pr_queue_state_active_pr_status": _normalize_text(
+                    project_browser_autonomous_pr_queue_state_state_normalized.get(
+                        "project_browser_autonomous_pr_queue_state_active_pr_status"
+                    ),
+                    default="",
                 ),
                 "project_browser_autonomous_dev_loop_pr_prompt_readiness_status": (
                     project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -157004,6 +157644,12 @@ def _build_approved_restart_execution_contract_surface(
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_commit_tag_gate_next_action"
             if project_browser_autonomous_commit_tag_gate_next_action
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_pr_queue_state_status"
+            if project_browser_autonomous_pr_queue_state_status
+            else "",
+            "approved_restart_execution_contract.project_browser_autonomous_pr_queue_state_next_action"
+            if project_browser_autonomous_pr_queue_state_next_action
             else "",
             "approved_restart_execution_contract.project_browser_autonomous_dev_loop_pr_prompt_readiness_status"
             if project_browser_autonomous_dev_loop_pr_prompt_readiness_status
@@ -163262,6 +163908,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
         **project_browser_autonomous_commit_tag_gate_state_normalized,
         **project_browser_autonomous_commit_tag_execution_state_normalized,
+        **project_browser_autonomous_pr_queue_state_state_normalized,
         **project_browser_autonomous_codex_result_review_decision_state_normalized,
         **project_browser_autonomous_dev_loop_mvp_state_normalized,
         **project_browser_autonomous_bounded_artifact_existence_read_parse_gate_state_normalized,
@@ -163333,6 +163980,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_commit_tag_execution_state_normalized": (
             dict(project_browser_autonomous_commit_tag_execution_state_normalized)
+        ),
+        "project_browser_autonomous_pr_queue_state_state_normalized": (
+            dict(project_browser_autonomous_pr_queue_state_state_normalized)
         ),
         "supporting_compact_truth_refs": supporting_compact_truth_refs,
     }
