@@ -3473,6 +3473,12 @@ _CODEX_GATE_CONNECTOR_ENABLEMENT_KEYS: tuple[str, ...] = (
 )
 
 
+_CHATGPT_DIFF_REVIEW_REQUEST_CONTROL_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_chatgpt_diff_review_request_enabled",
+    "project_browser_autonomous_chatgpt_diff_review_request_write_enabled",
+)
+
+
 def _overlay_prompt_selection_for_explicit_one_shot_live_probe(
     *,
     prompt_selection_state: Mapping[str, Any] | None,
@@ -3646,6 +3652,25 @@ def _merge_codex_gate_connector_enablement_into_approved_restart_payload(
         if key in policy_payload and policy_payload.get(key) is not None:
             merged[key] = policy_payload.get(key)
     for key in _CODEX_GATE_CONNECTOR_ENABLEMENT_KEYS:
+        if key in retry_payload and retry_payload.get(key) is not None:
+            merged[key] = retry_payload.get(key)
+    return merged
+
+
+def _merge_chatgpt_diff_review_request_controls_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    policy_snapshot: Mapping[str, Any] | None,
+    retry_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    policy_payload = dict(policy_snapshot) if isinstance(policy_snapshot, Mapping) else {}
+    retry_payload = dict(retry_context) if isinstance(retry_context, Mapping) else {}
+
+    for key in _CHATGPT_DIFF_REVIEW_REQUEST_CONTROL_KEYS:
+        if key in policy_payload and policy_payload.get(key) is not None:
+            merged[key] = policy_payload.get(key)
+    for key in _CHATGPT_DIFF_REVIEW_REQUEST_CONTROL_KEYS:
         if key in retry_payload and retry_payload.get(key) is not None:
             merged[key] = retry_payload.get(key)
     return merged
@@ -93536,7 +93561,7 @@ def _build_project_browser_autonomous_codex_capture_gate_state(
     )
 
     def _read_flag(key: str, *, default: bool = False) -> bool:
-        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        value = approved_restart.get(key) if key in approved_restart else prior_payload.get(key)
         if isinstance(value, bool):
             return value
         if isinstance(value, int):
@@ -93815,10 +93840,16 @@ def _build_project_browser_autonomous_codex_capture_gate_state(
 def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
     *,
     codex_capture_gate_state: Mapping[str, Any] | None,
+    local_git_diff_capture_state: Mapping[str, Any] | None,
     approved_restart_payload: Mapping[str, Any] | None,
     prior_approved_restart_execution_payload: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     capture_gate = dict(codex_capture_gate_state) if isinstance(codex_capture_gate_state, Mapping) else {}
+    local_diff_capture = (
+        dict(local_git_diff_capture_state)
+        if isinstance(local_git_diff_capture_state, Mapping)
+        else {}
+    )
     approved_restart = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
     prior_payload = (
         dict(prior_approved_restart_execution_payload)
@@ -93875,12 +93906,63 @@ def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
         capture_gate.get("project_browser_autonomous_codex_capture_gate_status"),
         default="",
     )
+    local_diff_capture_status = _normalize_text(
+        local_diff_capture.get("project_browser_autonomous_local_git_diff_capture_status"),
+        default="",
+    )
+    local_diff_capture_artifact_paths_raw = local_diff_capture.get(
+        "project_browser_autonomous_local_git_diff_capture_artifact_paths"
+    )
+    local_diff_capture_artifact_paths: dict[str, str] = {}
+    if isinstance(local_diff_capture_artifact_paths_raw, Mapping):
+        for key, value in local_diff_capture_artifact_paths_raw.items():
+            normalized_key = _normalize_text(key, default="")
+            if not normalized_key:
+                continue
+            local_diff_capture_artifact_paths[normalized_key] = _normalize_text(
+                value,
+                default="",
+            )
     changed_files = _normalize_string_list(
-        capture_gate.get("project_browser_autonomous_codex_capture_gate_changed_files")
+        local_diff_capture.get("project_browser_autonomous_local_git_diff_capture_changed_files")
     )
-    diff_summary = _compact_text(
-        capture_gate.get("project_browser_autonomous_codex_capture_gate_diff_summary")
+    runtime_only_files = _normalize_string_list(
+        local_diff_capture.get(
+            "project_browser_autonomous_local_git_diff_capture_runtime_only_changed_files"
+        )
     )
+    diff_stat_summary = _normalize_text(
+        local_diff_capture.get("project_browser_autonomous_local_git_diff_capture_git_diff_stat"),
+        default="",
+    )
+    diff_name_status_summary = _normalize_text(
+        local_diff_capture.get(
+            "project_browser_autonomous_local_git_diff_capture_git_diff_name_status"
+        ),
+        default="",
+    )
+    runtime_artifacts_classified = bool(
+        local_diff_capture.get(
+            "project_browser_autonomous_local_git_diff_capture_runtime_artifacts_excluded_or_classified",
+            False,
+        )
+    )
+    reviewable_diff_available = bool(
+        local_diff_capture.get(
+            "project_browser_autonomous_local_git_diff_capture_reviewable_diff_available",
+            False,
+        )
+    )
+
+    reviewable_changed_files = [
+        path for path in changed_files if path and path not in set(runtime_only_files)
+    ]
+    probe_file_path = "tmp_runner_live_write_probe.txt"
+    probe_file_is_disposable = probe_file_path in changed_files
+    probe_file_classification = (
+        "probe_disposable_local_change" if probe_file_is_disposable else "not_present"
+    )
+    diff_summary = _compact_text(diff_stat_summary)
     validation_summary = _compact_text(
         capture_gate.get("project_browser_autonomous_codex_capture_gate_validation_summary")
     )
@@ -93894,6 +93976,45 @@ def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
     capture_artifact_paths = _normalize_string_list(
         capture_gate.get("project_browser_autonomous_codex_capture_gate_capture_artifact_paths")
     )
+    source_diff_capture_paths = {
+        "diff_capture_json": _normalize_text(
+            local_diff_capture_artifact_paths.get("diff_capture_json"),
+            default="",
+        ),
+        "diff_summary_md": _normalize_text(
+            local_diff_capture_artifact_paths.get("diff_summary_md"),
+            default="",
+        ),
+        "reviewable_diff_patch": _normalize_text(
+            local_diff_capture_artifact_paths.get("reviewable_diff_patch"),
+            default="",
+        ),
+        "changed_files_json": _normalize_text(
+            local_diff_capture_artifact_paths.get("changed_files_json"),
+            default="",
+        ),
+    }
+    source_diff_capture_paths_list = [
+        path
+        for path in source_diff_capture_paths.values()
+        if isinstance(path, str) and path
+    ]
+    reviewable_diff_patch_path = source_diff_capture_paths.get("reviewable_diff_patch", "")
+    local_diff_capture_artifacts_readable = bool(
+        source_diff_capture_paths_list
+        and all(
+            path and Path(path).exists() and Path(path).is_file()
+            for path in source_diff_capture_paths_list
+        )
+    )
+    changed_files_payload = _read_json_object_if_exists(Path(source_diff_capture_paths.get("changed_files_json", ""))) if source_diff_capture_paths.get("changed_files_json") else None
+    changed_files_entries: list[dict[str, Any]] = []
+    if isinstance(changed_files_payload, Mapping):
+        payload_entries = changed_files_payload.get("changed_files")
+        if isinstance(payload_entries, list):
+            for entry in payload_entries:
+                if isinstance(entry, Mapping):
+                    changed_files_entries.append(dict(entry))
     prompt_kind = _normalize_text(
         capture_gate.get("project_browser_autonomous_codex_capture_gate_prompt_kind"),
         default="",
@@ -93904,43 +94025,95 @@ def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
     )
 
     review_prompt = ""
-    if capture_status == "codex_capture_gate_captured":
+    review_request_payload: dict[str, Any] = {}
+    if local_diff_capture_status == "local_git_diff_capture_completed":
+        review_request_payload = {
+            "request_kind": "chatgpt_diff_review",
+            "source_of_truth": "local_git_diff_capture_artifacts",
+            "source_diff_capture_artifact_paths": source_diff_capture_paths,
+            "reviewable_diff_patch_path": reviewable_diff_patch_path,
+            "runtime_artifacts_excluded_or_classified": bool(runtime_artifacts_classified),
+            "reviewable_diff_available": bool(reviewable_diff_available),
+            "changed_files_count": len(changed_files),
+            "changed_files": reviewable_changed_files,
+            "runtime_only_changed_files": runtime_only_files,
+            "tmp_runner_live_write_probe_classification": probe_file_classification,
+            "diff_stat_summary": diff_stat_summary,
+            "diff_name_status_summary": diff_name_status_summary,
+            "validation_status_summary": validation_summary or "(none)",
+            "safety_constraints": [
+                "Use local git diff capture artifacts as authoritative inputs",
+                "Do not use Codex self-reported diff text as source of truth",
+                "Do not treat runtime artifacts under artifacts/runtime_commands as reviewable implementation changes",
+                "Identify tmp_runner_live_write_probe.txt as probe/disposable local change when present",
+            ],
+            "expected_review_response_schema": {
+                "decision": "approve | fix | revert | manual_review",
+                "confidence": "high | medium | low",
+                "safe_to_commit": "boolean",
+                "requires_fix": "boolean",
+                "requires_revert": "boolean",
+                "summary": "string",
+                "blocking_issues": ["string"],
+                "non_blocking_notes": ["string"],
+                "recommended_next_action": "string",
+            },
+        }
+
         review_prompt = "\n".join(
             [
-                "You are reviewing a bounded Codex change intake.",
+                "You are reviewing local git diff capture artifacts.",
                 "",
-                "Use only the structured evidence below. Do not assume missing context.",
+                "Use only the structured evidence below from local repository git capture.",
+                "Do not use Codex self-reported diff text as source of truth.",
                 "",
-                "## Capture Evidence",
+                "## Source Diff Capture Artifacts",
+                f"- diff_capture_json: {source_diff_capture_paths.get('diff_capture_json') or '(missing)'}",
+                f"- diff_summary_md: {source_diff_capture_paths.get('diff_summary_md') or '(missing)'}",
+                f"- reviewable_diff.patch: {reviewable_diff_patch_path or '(missing)'}",
+                f"- changed_files_json: {source_diff_capture_paths.get('changed_files_json') or '(missing)'}",
+                f"- local_git_diff_capture_status: {local_diff_capture_status or '(missing)'}",
+                "",
+                "## Diff Evidence",
+                f"- changed_files_count: {len(changed_files)}",
+                "- changed_files (reviewable):",
+                _render_list(reviewable_changed_files, max_items=80, max_chars=2200),
+                "- changed_files (runtime-only / non-reviewable):",
+                _render_list(runtime_only_files, max_items=80, max_chars=2200),
+                f"- diff_stat_summary: {diff_stat_summary or '(none)'}",
+                f"- diff_name_status_summary: {diff_name_status_summary or '(none)'}",
+                f"- runtime_artifacts_excluded_or_classified: {str(runtime_artifacts_classified).lower()}",
+                f"- tmp_runner_live_write_probe_classification: {probe_file_classification}",
+                "",
+                "## Additional Context",
                 f"- prompt_kind: {prompt_kind or '(unknown)'}",
                 f"- prompt_fingerprint: {prompt_fingerprint or '(missing)'}",
                 f"- capture_output_path: {capture_output_path or '(none)'}",
-                "- changed_files:",
-                _render_list(changed_files, max_items=60, max_chars=1800),
                 "- capture_artifact_paths:",
                 _render_list(capture_artifact_paths, max_items=20, max_chars=1200),
                 f"- diff_summary: {diff_summary or '(none)'}",
                 f"- validation_summary: {validation_summary or '(none)'}",
                 f"- codex_output_summary: {codex_output_summary or '(none)'}",
                 "",
-                "## Decision Policy",
-                "- approve only if scope is correct and validation is acceptable",
-                "- fix if direction is right but corrections are needed",
-                "- revert if unsafe, wrong-scope, or worse than baseline",
-                "- manual_review if unclear or high-risk",
-                "- commit_recommendation must be false for high risk or any blocking issue",
+                "## Safety Constraints",
+                "- Use only local git diff capture artifacts as authoritative inputs",
+                "- Do not treat artifacts/runtime_commands/* as reviewable implementation changes",
+                "- Treat tmp_runner_live_write_probe.txt as probe/disposable local change when present",
                 "",
-                "## Output Format (JSON object only)",
+                "## Required Review Response Schema (JSON object only)",
                 '{',
                 '  "decision": "approve | fix | revert | manual_review",',
-                '  "confidence": 0.0,',
-                '  "risk": "low | medium | high",',
+                '  "confidence": "high | medium | low",',
+                '  "safe_to_commit": true,',
+                '  "requires_fix": false,',
+                '  "requires_revert": false,',
+                '  "summary": "...",',
                 '  "blocking_issues": ["..."],',
-                '  "fix_prompt": "...",',
-                '  "revert_reason": "...",',
-                '  "commit_recommendation": false,',
-                '  "summary": "..."',
+                '  "non_blocking_notes": ["..."],',
+                '  "recommended_next_action": "..."',
                 '}',
+                "",
+                "Return only valid JSON matching the schema.",
             ]
         ).strip()
     if len(review_prompt) > 8000:
@@ -93972,10 +94145,18 @@ def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
         status = "chatgpt_diff_review_request_ready"
         next_action = "write_chatgpt_diff_review_request"
         blocked_reason = "none"
-        if capture_status != "codex_capture_gate_captured":
+        if local_diff_capture_status != "local_git_diff_capture_completed":
             status = "chatgpt_diff_review_request_blocked_missing_capture"
             next_action = "manual_review_required"
-            blocked_reason = "capture_gate_not_captured"
+            blocked_reason = "local_git_diff_capture_not_completed"
+        elif not local_diff_capture_artifacts_readable:
+            status = "chatgpt_diff_review_request_blocked_missing_capture"
+            next_action = "manual_review_required"
+            blocked_reason = "local_git_diff_capture_artifacts_unreadable"
+        elif not reviewable_diff_patch_path:
+            status = "chatgpt_diff_review_request_blocked_missing_capture"
+            next_action = "manual_review_required"
+            blocked_reason = "reviewable_diff_patch_path_missing"
         elif not review_prompt:
             status = "chatgpt_diff_review_request_blocked_empty_review_prompt"
             next_action = "manual_review_required"
@@ -93993,8 +94174,12 @@ def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
             request_path = bridge_dir / "request.md"
             response_path = bridge_dir / "response.md"
             status_path = bridge_dir / "status.json"
+            review_request_dir = Path("/tmp/codex-local-runner-decision/chatgpt_diff_review_request")
+            review_prompt_path = review_request_dir / "chatgpt_review_prompt.md"
+            review_request_json_path = review_request_dir / "chatgpt_review_request.json"
             try:
                 bridge_dir.mkdir(parents=True, exist_ok=True)
+                review_request_dir.mkdir(parents=True, exist_ok=True)
                 for stale_path in (response_path, status_path):
                     if not stale_path.exists():
                         continue
@@ -94004,6 +94189,26 @@ def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
                 temp_path = request_path.with_name(f"{request_path.name}.tmp")
                 temp_path.write_text(review_prompt, encoding="utf-8")
                 os.replace(temp_path, request_path)
+
+                temp_prompt_path = review_prompt_path.with_name(
+                    f"{review_prompt_path.name}.tmp"
+                )
+                temp_prompt_path.write_text(review_prompt, encoding="utf-8")
+                os.replace(temp_prompt_path, review_prompt_path)
+
+                request_json_payload = {
+                    **review_request_payload,
+                    "review_prompt_path": str(review_prompt_path),
+                    "created_from_capture_status": local_diff_capture_status,
+                }
+                temp_json_path = review_request_json_path.with_name(
+                    f"{review_request_json_path.name}.tmp"
+                )
+                temp_json_path.write_text(
+                    json.dumps(request_json_payload, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                os.replace(temp_json_path, review_request_json_path)
             except OSError as exc:
                 status = "chatgpt_diff_review_request_blocked_write_failed"
                 next_action = "manual_review_required"
@@ -94012,6 +94217,11 @@ def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
                 status = "chatgpt_diff_review_request_written"
                 next_action = "wait_for_chatgpt_diff_review_response"
                 blocked_reason = "none"
+
+    review_request_artifact_paths = {
+        "chatgpt_review_request_json": "/tmp/codex-local-runner-decision/chatgpt_diff_review_request/chatgpt_review_request.json",
+        "chatgpt_review_prompt_md": "/tmp/codex-local-runner-decision/chatgpt_diff_review_request/chatgpt_review_prompt.md",
+    }
 
     return {
         "project_browser_autonomous_chatgpt_diff_review_request_status": status,
@@ -94026,6 +94236,33 @@ def _build_project_browser_autonomous_chatgpt_diff_review_request_state(
         ),
         "project_browser_autonomous_chatgpt_diff_review_request_changed_files": (
             _normalize_string_list(changed_files)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_reviewable_changed_files": (
+            _normalize_string_list(reviewable_changed_files)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_runtime_only_changed_files": (
+            _normalize_string_list(runtime_only_files)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_diff_stat_summary": (
+            _normalize_text(diff_stat_summary, default="")
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_reviewable_diff_patch_path": (
+            _normalize_text(reviewable_diff_patch_path, default="")
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_runtime_artifacts_excluded_or_classified": bool(
+            runtime_artifacts_classified
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_tmp_runner_live_write_probe_classification": (
+            probe_file_classification
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_validation_status_summary": (
+            _normalize_text(validation_summary, default="")
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_source_diff_capture_artifact_paths": (
+            source_diff_capture_paths
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_request_artifact_paths": (
+            review_request_artifact_paths
         ),
         "project_browser_autonomous_chatgpt_diff_review_request_blocked_reason": blocked_reason,
     }
@@ -156178,6 +156415,7 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_chatgpt_diff_review_request_state = (
         _build_project_browser_autonomous_chatgpt_diff_review_request_state(
             codex_capture_gate_state=project_browser_autonomous_codex_capture_gate_state_normalized,
+            local_git_diff_capture_state=project_browser_autonomous_local_git_diff_capture_state_normalized,
             approved_restart_payload=approved_restart,
             prior_approved_restart_execution_payload=prior_approved_restart_execution,
         )
@@ -156208,6 +156446,15 @@ def _build_approved_restart_execution_contract_surface(
         "prompt",
         "prompt_fingerprint",
         "changed_files",
+        "reviewable_changed_files",
+        "runtime_only_changed_files",
+        "diff_stat_summary",
+        "reviewable_diff_patch_path",
+        "runtime_artifacts_excluded_or_classified",
+        "tmp_runner_live_write_probe_classification",
+        "validation_status_summary",
+        "source_diff_capture_artifact_paths",
+        "artifact_paths",
         "blocked_reason",
     )
     project_browser_autonomous_chatgpt_diff_review_request_status = _normalize_text(
@@ -156242,10 +156489,30 @@ def _build_approved_restart_execution_contract_surface(
             value = project_browser_autonomous_chatgpt_diff_review_request_status
         elif field_name == "next_action":
             value = project_browser_autonomous_chatgpt_diff_review_request_next_action
-        elif field_name in {"enabled", "write_enabled"}:
+        elif field_name in {
+            "enabled",
+            "write_enabled",
+            "runtime_artifacts_excluded_or_classified",
+        }:
             value = bool(value)
-        elif field_name == "changed_files":
+        elif field_name in {
+            "changed_files",
+            "reviewable_changed_files",
+            "runtime_only_changed_files",
+        }:
             value = _normalize_string_list(value)
+        elif field_name in {"source_diff_capture_artifact_paths", "artifact_paths"}:
+            normalized_paths: dict[str, str] = {}
+            if isinstance(value, Mapping):
+                for path_key, path_value in value.items():
+                    normalized_path_key = _normalize_text(path_key, default="")
+                    if not normalized_path_key:
+                        continue
+                    normalized_paths[normalized_path_key] = _normalize_text(
+                        path_value,
+                        default="",
+                    )
+            value = normalized_paths
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_chatgpt_diff_review_request_state_normalized[key] = (
@@ -172071,6 +172338,13 @@ class PlannedExecutionRunner:
         )
         approved_restart_payload_for_bounded_local_loop = (
             _merge_codex_gate_connector_enablement_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                policy_snapshot=policy_payload,
+                retry_context=effective_retry_context,
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_chatgpt_diff_review_request_controls_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 policy_snapshot=policy_payload,
                 retry_context=effective_retry_context,
