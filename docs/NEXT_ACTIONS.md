@@ -230,3 +230,19 @@ Still prohibited:
 - PR creation
 - merge
 - unbounded loop
+
+## Next after Prompt288-fix
+
+Current route:
+- selected_route=fix
+- next_action=prepare_codex_fix_prompt
+
+Next:
+- Generate a bounded Codex fix prompt that removes or explicitly excludes tmp_runner_live_write_probe.txt from commit/readiness path, or otherwise prepares the fix route without executing commit/tag/push/PR/merge.
+
+Still prohibited:
+- autonomous commit/tag execution
+- push
+- PR creation
+- merge
+- unbounded loop

@@ -316,3 +316,33 @@ Verified:
 
 Next:
 - Either replace review_decision.json with a real high/medium-confidence review decision and rerun Prompt288, or record the current manual_review state in Prompt289.
+
+## Prompt288-fix
+
+Result:
+- PASS
+
+Implemented:
+- Added authoritative probe-file approve guard to Prompt288 route preparation.
+- Uses:
+  - /tmp/codex-local-runner-decision/local_git_diff_capture/changed_files.json
+  - optional secondary signal from chatgpt_review_request.json
+- Exposes:
+  - project_browser_autonomous_chatgpt_diff_review_route_probe_file_present
+  - project_browser_autonomous_chatgpt_diff_review_route_probe_file_classification
+  - project_browser_autonomous_chatgpt_diff_review_route_probe_file_approve_guard
+
+Observed:
+- probe_file_present=true
+- probe_file_classification=probe_disposable_local_change
+- current fix decision preserved:
+  - selected_route=fix
+  - next_action=prepare_codex_fix_prompt
+  - blocked_reason=none
+
+Verified:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- No tests were run.
+
+Next:
+- Proceed to fix-route preparation / Codex fix prompt generation for the identified Prompt288 issue.
