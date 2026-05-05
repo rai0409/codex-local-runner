@@ -101015,6 +101015,417 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
     }
 
 
+def _build_project_browser_autonomous_local_git_diff_capture_state(
+    *,
+    repository_path: str,
+) -> dict[str, Any]:
+    runtime_posture = [
+        "local_git_truth_source_only",
+        "captures_worktree_tracked_and_untracked",
+        "runtime_artifacts_classified_non_reviewable",
+        "no_codex_invocation",
+        "no_patch_apply",
+        "no_git_mutation",
+    ]
+    capture_dir = Path("/tmp/codex-local-runner-decision/local_git_diff_capture")
+    diff_capture_path = capture_dir / "diff_capture.json"
+    diff_summary_path = capture_dir / "diff_summary.md"
+    reviewable_patch_path = capture_dir / "reviewable_diff.patch"
+    changed_files_path = capture_dir / "changed_files.json"
+    runtime_prefix = "artifacts/runtime_commands/"
+    status = "local_git_diff_capture_blocked_repository_path_missing"
+    next_action = "insufficient_truth"
+    changed_files_count = 0
+    reviewable_diff_available = False
+    runtime_artifacts_excluded_or_classified = False
+    changed_files: list[str] = []
+    runtime_only_changed_files: list[str] = []
+    git_status_short = ""
+    git_diff_stat = ""
+    git_diff_name_status = ""
+    git_diff_text = ""
+
+    artifact_paths = {
+        "diff_capture_json": str(diff_capture_path),
+        "diff_summary_md": str(diff_summary_path),
+        "reviewable_diff_patch": str(reviewable_patch_path),
+        "changed_files_json": str(changed_files_path),
+    }
+
+    normalized_repository_path = _normalize_text(repository_path, default="")
+    if not normalized_repository_path:
+        return {
+            "project_browser_autonomous_local_git_diff_capture_status": status,
+            "project_browser_autonomous_local_git_diff_capture_next_action": next_action,
+            "project_browser_autonomous_local_git_diff_capture_changed_files_count": int(
+                changed_files_count
+            ),
+            "project_browser_autonomous_local_git_diff_capture_reviewable_diff_available": bool(
+                reviewable_diff_available
+            ),
+            "project_browser_autonomous_local_git_diff_capture_artifact_paths": artifact_paths,
+            "project_browser_autonomous_local_git_diff_capture_runtime_artifacts_excluded_or_classified": bool(
+                runtime_artifacts_excluded_or_classified
+            ),
+            "project_browser_autonomous_local_git_diff_capture_changed_files": changed_files,
+            "project_browser_autonomous_local_git_diff_capture_runtime_only_changed_files": (
+                runtime_only_changed_files
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_status_short": (
+                git_status_short
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_diff_stat": git_diff_stat,
+            "project_browser_autonomous_local_git_diff_capture_git_diff_name_status": (
+                git_diff_name_status
+            ),
+            "project_browser_autonomous_local_git_diff_capture_runtime_posture": (
+                runtime_posture
+            ),
+        }
+
+    if not shutil.which("git"):
+        status = "local_git_diff_capture_blocked_git_unavailable"
+        next_action = "manual_review_required"
+        return {
+            "project_browser_autonomous_local_git_diff_capture_status": status,
+            "project_browser_autonomous_local_git_diff_capture_next_action": next_action,
+            "project_browser_autonomous_local_git_diff_capture_changed_files_count": int(
+                changed_files_count
+            ),
+            "project_browser_autonomous_local_git_diff_capture_reviewable_diff_available": bool(
+                reviewable_diff_available
+            ),
+            "project_browser_autonomous_local_git_diff_capture_artifact_paths": artifact_paths,
+            "project_browser_autonomous_local_git_diff_capture_runtime_artifacts_excluded_or_classified": bool(
+                runtime_artifacts_excluded_or_classified
+            ),
+            "project_browser_autonomous_local_git_diff_capture_changed_files": changed_files,
+            "project_browser_autonomous_local_git_diff_capture_runtime_only_changed_files": (
+                runtime_only_changed_files
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_status_short": (
+                git_status_short
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_diff_stat": git_diff_stat,
+            "project_browser_autonomous_local_git_diff_capture_git_diff_name_status": (
+                git_diff_name_status
+            ),
+            "project_browser_autonomous_local_git_diff_capture_runtime_posture": (
+                runtime_posture
+            ),
+        }
+
+    try:
+        capture_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        status = "local_git_diff_capture_blocked_runtime_error"
+        next_action = "manual_review_required"
+        return {
+            "project_browser_autonomous_local_git_diff_capture_status": status,
+            "project_browser_autonomous_local_git_diff_capture_next_action": next_action,
+            "project_browser_autonomous_local_git_diff_capture_changed_files_count": int(
+                changed_files_count
+            ),
+            "project_browser_autonomous_local_git_diff_capture_reviewable_diff_available": bool(
+                reviewable_diff_available
+            ),
+            "project_browser_autonomous_local_git_diff_capture_artifact_paths": artifact_paths,
+            "project_browser_autonomous_local_git_diff_capture_runtime_artifacts_excluded_or_classified": bool(
+                runtime_artifacts_excluded_or_classified
+            ),
+            "project_browser_autonomous_local_git_diff_capture_changed_files": changed_files,
+            "project_browser_autonomous_local_git_diff_capture_runtime_only_changed_files": (
+                runtime_only_changed_files
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_status_short": (
+                git_status_short
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_diff_stat": git_diff_stat,
+            "project_browser_autonomous_local_git_diff_capture_git_diff_name_status": (
+                git_diff_name_status
+            ),
+            "project_browser_autonomous_local_git_diff_capture_runtime_posture": (
+                runtime_posture
+            ),
+        }
+
+    try:
+        status_cp = _run_git(
+            normalized_repository_path,
+            ["status", "--short"],
+            timeout_seconds=20.0,
+        )
+        diff_stat_cp = _run_git(
+            normalized_repository_path,
+            ["diff", "--stat"],
+            timeout_seconds=20.0,
+        )
+        diff_name_status_cp = _run_git(
+            normalized_repository_path,
+            ["diff", "--name-status"],
+            timeout_seconds=20.0,
+        )
+        diff_cp = _run_git(
+            normalized_repository_path,
+            ["diff"],
+            timeout_seconds=20.0,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        status = "local_git_diff_capture_blocked_git_command_failed"
+        next_action = "manual_review_required"
+        return {
+            "project_browser_autonomous_local_git_diff_capture_status": status,
+            "project_browser_autonomous_local_git_diff_capture_next_action": next_action,
+            "project_browser_autonomous_local_git_diff_capture_changed_files_count": int(
+                changed_files_count
+            ),
+            "project_browser_autonomous_local_git_diff_capture_reviewable_diff_available": bool(
+                reviewable_diff_available
+            ),
+            "project_browser_autonomous_local_git_diff_capture_artifact_paths": artifact_paths,
+            "project_browser_autonomous_local_git_diff_capture_runtime_artifacts_excluded_or_classified": bool(
+                runtime_artifacts_excluded_or_classified
+            ),
+            "project_browser_autonomous_local_git_diff_capture_changed_files": changed_files,
+            "project_browser_autonomous_local_git_diff_capture_runtime_only_changed_files": (
+                runtime_only_changed_files
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_status_short": (
+                git_status_short
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_diff_stat": git_diff_stat,
+            "project_browser_autonomous_local_git_diff_capture_git_diff_name_status": (
+                git_diff_name_status
+            ),
+            "project_browser_autonomous_local_git_diff_capture_runtime_posture": (
+                runtime_posture
+            ),
+        }
+
+    if any(
+        cp.returncode != 0
+        for cp in (status_cp, diff_stat_cp, diff_name_status_cp, diff_cp)
+    ):
+        status = "local_git_diff_capture_blocked_git_command_failed"
+        next_action = "manual_review_required"
+        return {
+            "project_browser_autonomous_local_git_diff_capture_status": status,
+            "project_browser_autonomous_local_git_diff_capture_next_action": next_action,
+            "project_browser_autonomous_local_git_diff_capture_changed_files_count": int(
+                changed_files_count
+            ),
+            "project_browser_autonomous_local_git_diff_capture_reviewable_diff_available": bool(
+                reviewable_diff_available
+            ),
+            "project_browser_autonomous_local_git_diff_capture_artifact_paths": artifact_paths,
+            "project_browser_autonomous_local_git_diff_capture_runtime_artifacts_excluded_or_classified": bool(
+                runtime_artifacts_excluded_or_classified
+            ),
+            "project_browser_autonomous_local_git_diff_capture_changed_files": changed_files,
+            "project_browser_autonomous_local_git_diff_capture_runtime_only_changed_files": (
+                runtime_only_changed_files
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_status_short": (
+                git_status_short
+            ),
+            "project_browser_autonomous_local_git_diff_capture_git_diff_stat": git_diff_stat,
+            "project_browser_autonomous_local_git_diff_capture_git_diff_name_status": (
+                git_diff_name_status
+            ),
+            "project_browser_autonomous_local_git_diff_capture_runtime_posture": (
+                runtime_posture
+            ),
+        }
+
+    git_status_short = status_cp.stdout.rstrip("\n")
+    git_diff_stat = diff_stat_cp.stdout.rstrip("\n")
+    git_diff_name_status = diff_name_status_cp.stdout.rstrip("\n")
+    git_diff_text = diff_cp.stdout.rstrip("\n")
+
+    changed_file_entries: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
+    for raw_line in git_status_short.splitlines():
+        line = raw_line.rstrip("\n")
+        if not line:
+            continue
+        path = _parse_git_status_path(line)
+        if not path or path in seen_paths:
+            continue
+        seen_paths.add(path)
+        status_code = line[:2]
+        is_untracked = status_code == "??"
+        is_runtime_artifact = path.startswith(runtime_prefix)
+        is_reviewable = not is_runtime_artifact
+        changed_file_entries.append(
+            {
+                "path": path,
+                "status_short": status_code,
+                "tracked": bool(not is_untracked),
+                "untracked": bool(is_untracked),
+                "runtime_only": bool(is_runtime_artifact),
+                "reviewable": bool(is_reviewable),
+            }
+        )
+    changed_files = [str(entry.get("path", "")) for entry in changed_file_entries]
+    changed_files = [path for path in changed_files if path]
+    runtime_only_changed_files = [
+        str(entry.get("path", ""))
+        for entry in changed_file_entries
+        if bool(entry.get("runtime_only", False))
+    ]
+    runtime_only_changed_files = [path for path in runtime_only_changed_files if path]
+    reviewable_entries = [
+        entry for entry in changed_file_entries if bool(entry.get("reviewable", False))
+    ]
+    reviewable_patch_text = git_diff_text
+
+    # Include reviewable untracked files as patch hunks so local changes remain auditable.
+    for entry in reviewable_entries:
+        if not bool(entry.get("untracked", False)):
+            continue
+        path = _normalize_text(entry.get("path"), default="")
+        if not path:
+            continue
+        candidate_abs = Path(normalized_repository_path) / path
+        if not candidate_abs.exists() or candidate_abs.is_symlink():
+            continue
+        try:
+            no_index_cp = _run_git(
+                normalized_repository_path,
+                ["diff", "--no-index", "--", "/dev/null", path],
+                timeout_seconds=20.0,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            continue
+        if no_index_cp.returncode not in {0, 1}:
+            continue
+        patch_chunk = _normalize_text(no_index_cp.stdout, default="")
+        if patch_chunk:
+            reviewable_patch_text = (
+                f"{reviewable_patch_text}\n{patch_chunk}"
+                if reviewable_patch_text
+                else patch_chunk
+            )
+
+    changed_files_count = len(changed_file_entries)
+    reviewable_diff_available = bool(
+        reviewable_patch_text.strip()
+        or any(bool(entry.get("reviewable", False)) for entry in changed_file_entries)
+    )
+    runtime_artifacts_excluded_or_classified = True
+    status = "local_git_diff_capture_completed"
+    if changed_files_count > 0 and reviewable_diff_available:
+        next_action = "prepare_chatgpt_diff_review_request"
+    elif changed_files_count > 0:
+        next_action = "manual_review_required"
+    else:
+        next_action = "wait_for_more_truth"
+
+    changed_files_payload = {
+        "changed_files": changed_file_entries,
+        "changed_files_count": int(changed_files_count),
+        "reviewable_changed_files_count": int(len(reviewable_entries)),
+        "runtime_only_changed_files_count": int(len(runtime_only_changed_files)),
+        "runtime_only_changed_files": runtime_only_changed_files,
+    }
+    diff_capture_payload = {
+        "status": status,
+        "next_action": next_action,
+        "repository_path": normalized_repository_path,
+        "commands": {
+            "git_status_short": {
+                "command": "git status --short",
+                "stdout": git_status_short,
+            },
+            "git_diff_stat": {
+                "command": "git diff --stat",
+                "stdout": git_diff_stat,
+            },
+            "git_diff_name_status": {
+                "command": "git diff --name-status",
+                "stdout": git_diff_name_status,
+            },
+            "git_diff": {
+                "command": "git diff",
+                "stdout": git_diff_text,
+            },
+        },
+        "changed_files_count": int(changed_files_count),
+        "reviewable_diff_available": bool(reviewable_diff_available),
+        "runtime_artifacts_excluded_or_classified": bool(
+            runtime_artifacts_excluded_or_classified
+        ),
+        "artifact_paths": artifact_paths,
+    }
+
+    summary_lines = [
+        "# Local Git Diff Capture",
+        "",
+        f"- Status: `{status}`",
+        f"- Next action: `{next_action}`",
+        f"- Changed files count: `{changed_files_count}`",
+        f"- Reviewable diff available: `{str(reviewable_diff_available).lower()}`",
+        f"- Runtime artifacts classified: `{str(runtime_artifacts_excluded_or_classified).lower()}`",
+        "",
+        "## Commands Captured",
+        "- `git status --short`",
+        "- `git diff --stat`",
+        "- `git diff --name-status`",
+        "- `git diff`",
+        "",
+        "## Changed Files",
+    ]
+    if changed_file_entries:
+        for entry in changed_file_entries:
+            path = _normalize_text(entry.get("path"), default="")
+            status_code = _normalize_text(entry.get("status_short"), default="")
+            classification = "runtime-only" if bool(entry.get("runtime_only", False)) else "reviewable"
+            summary_lines.append(f"- `{status_code}` `{path}` ({classification})")
+    else:
+        summary_lines.append("- None")
+
+    try:
+        changed_files_path.write_text(
+            json.dumps(changed_files_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        diff_capture_path.write_text(
+            json.dumps(diff_capture_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        reviewable_patch_path.write_text(reviewable_patch_text, encoding="utf-8")
+        diff_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    except OSError:
+        status = "local_git_diff_capture_blocked_runtime_error"
+        next_action = "manual_review_required"
+        reviewable_diff_available = False
+
+    return {
+        "project_browser_autonomous_local_git_diff_capture_status": status,
+        "project_browser_autonomous_local_git_diff_capture_next_action": next_action,
+        "project_browser_autonomous_local_git_diff_capture_changed_files_count": int(
+            changed_files_count
+        ),
+        "project_browser_autonomous_local_git_diff_capture_reviewable_diff_available": bool(
+            reviewable_diff_available
+        ),
+        "project_browser_autonomous_local_git_diff_capture_artifact_paths": artifact_paths,
+        "project_browser_autonomous_local_git_diff_capture_runtime_artifacts_excluded_or_classified": bool(
+            runtime_artifacts_excluded_or_classified
+        ),
+        "project_browser_autonomous_local_git_diff_capture_changed_files": changed_files,
+        "project_browser_autonomous_local_git_diff_capture_runtime_only_changed_files": (
+            runtime_only_changed_files
+        ),
+        "project_browser_autonomous_local_git_diff_capture_git_status_short": git_status_short,
+        "project_browser_autonomous_local_git_diff_capture_git_diff_stat": git_diff_stat,
+        "project_browser_autonomous_local_git_diff_capture_git_diff_name_status": (
+            git_diff_name_status
+        ),
+        "project_browser_autonomous_local_git_diff_capture_runtime_posture": runtime_posture,
+    }
+
+
 def _build_project_browser_autonomous_smoke_prompt_override_state(
     *,
     repository_path: str,
@@ -124058,6 +124469,99 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_codex_write_invocation_result_state_normalized[
         "project_browser_autonomous_codex_write_invocation_result_next_action"
     ] = project_browser_autonomous_codex_write_invocation_result_next_action
+    project_browser_autonomous_local_git_diff_capture_state = (
+        _build_project_browser_autonomous_local_git_diff_capture_state(
+            repository_path=str(execution_repo_path),
+        )
+    )
+    local_git_diff_capture_allowed_statuses = {
+        "local_git_diff_capture_completed",
+        "local_git_diff_capture_blocked_repository_path_missing",
+        "local_git_diff_capture_blocked_git_unavailable",
+        "local_git_diff_capture_blocked_git_command_failed",
+        "local_git_diff_capture_blocked_runtime_error",
+        "insufficient_truth",
+    }
+    local_git_diff_capture_allowed_next_actions = {
+        "prepare_chatgpt_diff_review_request",
+        "wait_for_more_truth",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    local_git_diff_capture_field_names = (
+        "status",
+        "next_action",
+        "changed_files_count",
+        "reviewable_diff_available",
+        "artifact_paths",
+        "runtime_artifacts_excluded_or_classified",
+        "changed_files",
+        "runtime_only_changed_files",
+        "git_status_short",
+        "git_diff_stat",
+        "git_diff_name_status",
+        "runtime_posture",
+    )
+    project_browser_autonomous_local_git_diff_capture_status = _normalize_text(
+        project_browser_autonomous_local_git_diff_capture_state.get(
+            "project_browser_autonomous_local_git_diff_capture_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_local_git_diff_capture_status
+        not in local_git_diff_capture_allowed_statuses
+    ):
+        project_browser_autonomous_local_git_diff_capture_status = "insufficient_truth"
+    project_browser_autonomous_local_git_diff_capture_next_action = _normalize_text(
+        project_browser_autonomous_local_git_diff_capture_state.get(
+            "project_browser_autonomous_local_git_diff_capture_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_local_git_diff_capture_next_action
+        not in local_git_diff_capture_allowed_next_actions
+    ):
+        project_browser_autonomous_local_git_diff_capture_next_action = "insufficient_truth"
+    project_browser_autonomous_local_git_diff_capture_state_normalized: dict[str, Any] = {}
+    for field_name in local_git_diff_capture_field_names:
+        key = f"project_browser_autonomous_local_git_diff_capture_{field_name}"
+        value = project_browser_autonomous_local_git_diff_capture_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_local_git_diff_capture_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_local_git_diff_capture_next_action
+        elif field_name in {
+            "reviewable_diff_available",
+            "runtime_artifacts_excluded_or_classified",
+        }:
+            value = bool(value)
+        elif field_name == "changed_files_count":
+            value = _as_non_negative_int(value, default=0)
+        elif field_name in {"changed_files", "runtime_only_changed_files", "runtime_posture"}:
+            value = _normalize_string_list(value)
+        elif field_name == "artifact_paths":
+            normalized_paths: dict[str, str] = {}
+            if isinstance(value, Mapping):
+                for path_key, path_value in value.items():
+                    normalized_path_key = _normalize_text(path_key, default="")
+                    if not normalized_path_key:
+                        continue
+                    normalized_paths[normalized_path_key] = _normalize_text(
+                        path_value,
+                        default="",
+                    )
+            value = normalized_paths
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_local_git_diff_capture_state_normalized[key] = value
+    project_browser_autonomous_local_git_diff_capture_state_normalized[
+        "project_browser_autonomous_local_git_diff_capture_status"
+    ] = project_browser_autonomous_local_git_diff_capture_status
+    project_browser_autonomous_local_git_diff_capture_state_normalized[
+        "project_browser_autonomous_local_git_diff_capture_next_action"
+    ] = project_browser_autonomous_local_git_diff_capture_next_action
     project_browser_autonomous_codex_write_result_assimilation_state = (
         _build_project_browser_autonomous_codex_write_result_assimilation_state(
             write_invocation_status=project_browser_autonomous_codex_write_invocation_execution_status,
@@ -167628,6 +168132,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_codex_write_invocation_readiness_state_normalized,
         **project_browser_autonomous_codex_write_invocation_execution_state_normalized,
         **project_browser_autonomous_codex_write_invocation_result_state_normalized,
+        **project_browser_autonomous_local_git_diff_capture_state_normalized,
         **project_browser_autonomous_codex_write_result_assimilation_state_normalized,
         **project_browser_autonomous_post_write_validation_routing_state_normalized,
         **project_browser_autonomous_post_write_validation_execution_state_normalized,
