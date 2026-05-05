@@ -191,3 +191,26 @@ Still prohibited:
 - merge
 - daemon or unbounded loop
 - autonomous commit/tag automation
+
+## Next after Prompt287
+
+Run Prompt288 approve/fix/revert route preparation.
+
+Goal:
+- Read review_decision.json if available.
+- Route normalized decision into approve / fix / revert / manual_review preparation.
+- Do not execute commit, tag, fix, revert, push, PR, or merge.
+
+Expected behavior:
+- Missing review_decision.json -> wait_for_chatgpt_diff_review_response.
+- approve allowed only when safe_to_commit=true and requires_fix=false and requires_revert=false.
+- fix -> prepare_fix_route.
+- revert -> prepare_revert_route.
+- manual_review -> manual_review_required.
+
+Still prohibited:
+- autonomous commit/tag automation
+- push
+- PR creation
+- merge
+- daemon or unbounded loop

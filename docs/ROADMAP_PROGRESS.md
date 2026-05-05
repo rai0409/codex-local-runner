@@ -260,3 +260,32 @@ Verified:
 
 Next:
 - Prompt287 review response assimilation.
+
+## Prompt287
+
+Result:
+- BLOCKED as expected because chatgpt_review_response.json is missing.
+
+Implemented:
+- Added metadata-only ChatGPT review response assimilation.
+- Expected input:
+  - /tmp/codex-local-runner-decision/chatgpt_diff_review_response/chatgpt_review_response.json
+- Writes, when available:
+  - /tmp/codex-local-runner-decision/chatgpt_diff_review_response/review_decision.json
+  - /tmp/codex-local-runner-decision/chatgpt_diff_review_response/review_decision_summary.md
+- Safely normalizes review decisions into:
+  - approve
+  - fix
+  - revert
+  - manual_review
+- Missing review response blocks with:
+  - next_action=wait_for_chatgpt_diff_review_response
+  - blocked_reason=missing_response_artifact
+
+Verified:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- No tests were run.
+
+Next:
+- Prompt288 should implement approve/fix/revert route preparation from review_decision.json.
+- It must block safely if review_decision.json is missing or still waiting for review response.
