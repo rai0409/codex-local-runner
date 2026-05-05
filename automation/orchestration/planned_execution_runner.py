@@ -97235,6 +97235,269 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
     }
 
 
+def _build_project_browser_autonomous_codex_fix_prompt_generation_state() -> dict[str, Any]:
+    route_dir = Path("/tmp/codex-local-runner-decision/chatgpt_diff_review_route")
+    response_dir = Path("/tmp/codex-local-runner-decision/chatgpt_diff_review_response")
+    capture_dir = Path("/tmp/codex-local-runner-decision/local_git_diff_capture")
+    output_dir = Path("/tmp/codex-local-runner-decision/codex_fix_prompt")
+
+    route_decision_path = route_dir / "review_route_decision.json"
+    review_decision_path = response_dir / "review_decision.json"
+    changed_files_path = capture_dir / "changed_files.json"
+    fix_prompt_path = output_dir / "codex_fix_prompt.md"
+    fix_request_path = output_dir / "codex_fix_request.json"
+    fix_summary_path = output_dir / "codex_fix_summary.md"
+
+    status = "codex_fix_prompt_generation_blocked_missing_review_route"
+    next_action = "blocked_missing_review_route"
+    selected_route = "none"
+    blocked_reason = "missing_review_route_decision"
+    runtime_posture = [
+        "metadata_only_fix_prompt_generation",
+        "no_codex_invocation",
+        "no_fix_execution",
+        "no_commit_or_tag_execution",
+        "no_push_or_pr_or_merge",
+        "probe_file_disposable_guard_required",
+    ]
+
+    artifact_paths = {
+        "input_review_route_decision_json": str(route_decision_path),
+        "input_review_decision_json": str(review_decision_path),
+        "input_changed_files_json": str(changed_files_path),
+        "codex_fix_prompt_md": str(fix_prompt_path),
+        "codex_fix_request_json": str(fix_request_path),
+        "codex_fix_summary_md": str(fix_summary_path),
+    }
+
+    decision = "manual_review"
+    confidence = "low"
+    route_blocked_reason = "missing_review_route_decision"
+    probe_file_present = False
+    probe_file_classification = "unknown"
+    reviewable_changed_files: list[str] = []
+    blocking_issues: list[str] = []
+
+    route_payload: Mapping[str, Any] | None = None
+    if route_decision_path.exists():
+        try:
+            loaded = json.loads(route_decision_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            blocked_reason = "invalid_review_route_decision_json"
+        else:
+            if isinstance(loaded, Mapping):
+                route_payload = loaded
+            else:
+                blocked_reason = "review_route_decision_not_object"
+    else:
+        blocked_reason = "missing_review_route_decision"
+
+    if isinstance(route_payload, Mapping):
+        selected_route = _normalize_text(route_payload.get("selected_route"), default="none")
+        if selected_route not in {"approve", "fix", "revert", "manual_review", "none"}:
+            selected_route = "none"
+        decision = _normalize_text(route_payload.get("decision"), default="manual_review")
+        if decision not in {"approve", "fix", "revert", "manual_review"}:
+            decision = "manual_review"
+        confidence = _normalize_text(route_payload.get("confidence"), default="low").lower()
+        if confidence not in {"high", "medium", "low"}:
+            confidence = "low"
+        route_blocked_reason = _normalize_text(
+            route_payload.get("blocked_reason"),
+            default="none",
+        )
+        probe_file_present = bool(route_payload.get("probe_file_present", False))
+        probe_file_classification = _normalize_text(
+            route_payload.get("probe_file_classification"),
+            default="unknown",
+        )
+
+    if selected_route != "fix":
+        status = "codex_fix_prompt_generation_blocked_route_not_fix"
+        next_action = "blocked_route_not_fix"
+        blocked_reason = (
+            f"selected_route_not_fix:{selected_route}" if selected_route else "selected_route_not_fix:none"
+        )
+    elif not isinstance(route_payload, Mapping):
+        status = "codex_fix_prompt_generation_blocked_missing_review_route"
+        next_action = "blocked_missing_review_route"
+    else:
+        if changed_files_path.exists():
+            try:
+                changed_files_payload = json.loads(changed_files_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                changed_files_payload = None
+            if isinstance(changed_files_payload, Mapping):
+                entries = changed_files_payload.get("changed_files")
+                if isinstance(entries, list):
+                    for entry in entries:
+                        if not isinstance(entry, Mapping):
+                            continue
+                        path_text = _normalize_text(entry.get("path"), default="")
+                        if not path_text:
+                            continue
+                        if bool(entry.get("reviewable", False)):
+                            reviewable_changed_files.append(path_text)
+                        if path_text == "tmp_runner_live_write_probe.txt":
+                            probe_file_present = True
+                            if _normalize_text(
+                                probe_file_classification,
+                                default="",
+                            ).lower() in {"", "unknown", "present_unclassified"}:
+                                if bool(entry.get("runtime_only", False)):
+                                    probe_file_classification = "runtime_only"
+                                elif bool(entry.get("reviewable", False)):
+                                    probe_file_classification = "probe_disposable_local_change"
+                                else:
+                                    probe_file_classification = "present_unclassified"
+
+        if review_decision_path.exists():
+            try:
+                review_decision_payload = json.loads(
+                    review_decision_path.read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError):
+                review_decision_payload = None
+            if isinstance(review_decision_payload, Mapping):
+                blocking_issues = _normalize_string_list(
+                    review_decision_payload.get("blocking_issues")
+                )
+
+        fix_request_payload: dict[str, Any] = {
+            "status": "ready_for_bounded_codex_fix_invocation",
+            "selected_route": "fix",
+            "objective": (
+                "Apply the minimum metadata-only fix so tmp_runner_live_write_probe.txt is always "
+                "treated as disposable probe evidence and cannot enter product-code commit/readiness."
+            ),
+            "source_artifacts": artifact_paths,
+            "review_route_decision": {
+                "decision": decision,
+                "confidence": confidence,
+                "blocked_reason": route_blocked_reason,
+            },
+            "probe_file": {
+                "path": "tmp_runner_live_write_probe.txt",
+                "present": bool(probe_file_present),
+                "classification": _normalize_text(
+                    probe_file_classification,
+                    default="unknown",
+                ),
+            },
+            "reviewable_changed_files": sorted(set(reviewable_changed_files)),
+            "blocking_issues": _normalize_string_list(blocking_issues),
+            "constraints": {
+                "preserve_existing_behaviors": [
+                    "Prompt285-B",
+                    "Prompt286",
+                    "Prompt287",
+                    "Prompt288",
+                    "Prompt288-fix",
+                ],
+                "forbidden_actions": [
+                    "invoke_codex",
+                    "execute_fix_prompt",
+                    "commit_or_tag",
+                    "push_or_pr_or_merge",
+                    "daemon_or_scheduler",
+                    "unbounded_retry_or_polling_loop",
+                    "delete_runtime_artifacts",
+                ],
+                "tmp_runner_live_write_probe_handling": [
+                    "treat_as_disposable_probe_artifact",
+                    "prepare_exclusion_from_product_commit_readiness",
+                    "do_not_delete_in_this_step",
+                ],
+                "scope": ["automation/orchestration/planned_execution_runner.py"],
+            },
+            "next_action": "ready_for_bounded_codex_fix_invocation",
+            "runtime_posture": runtime_posture,
+        }
+        prompt_lines = [
+            "# Bounded Codex Fix Prompt",
+            "",
+            "Mode: Implement",
+            "",
+            "Goal:",
+            "- Apply the minimum metadata-only fix for the selected `fix` route.",
+            "- Ensure `tmp_runner_live_write_probe.txt` is always treated as disposable probe-only evidence and cannot be included in product-code commit/readiness.",
+            "",
+            "Allowed files:",
+            "- `automation/orchestration/planned_execution_runner.py`",
+            "",
+            "Forbidden actions:",
+            "- Do not invoke Codex from this step.",
+            "- Do not execute the generated fix.",
+            "- Do not commit/tag/push/create PR/merge/delete branches.",
+            "- Do not add daemon/scheduler/polling loops/unbounded retries.",
+            "- Do not rewrite unrelated review/capture surfaces.",
+            "- Do not delete runtime artifacts.",
+            "- Do not delete `tmp_runner_live_write_probe.txt` in this step.",
+            "",
+            "Required behavior:",
+            "- Keep Prompt285-B / Prompt286 / Prompt287 / Prompt288 / Prompt288-fix behavior intact.",
+            "- Address only the selected fix-route blocker with a bounded change.",
+            "- Prepare `tmp_runner_live_write_probe.txt` for exclusion from product-code commit/readiness while preserving it as disposable probe evidence.",
+            "",
+            "Validation allowed:",
+            "- `python -m py_compile automation/orchestration/planned_execution_runner.py`",
+            "",
+            "Expected output:",
+            "- Metadata-only fix readiness for the next bounded Codex fix invocation step.",
+        ]
+        if blocking_issues:
+            prompt_lines.extend(["", "Review blocking issues context:"])
+            for issue in blocking_issues:
+                prompt_lines.append(f"- {issue}")
+        prompt_body = "\n".join(prompt_lines) + "\n"
+
+        summary_lines = [
+            "# Codex Fix Prompt Generation",
+            "",
+            "- Status: `codex_fix_prompt_generation_completed`",
+            "- Next action: `ready_for_bounded_codex_fix_invocation`",
+            "- Selected route: `fix`",
+            f"- Source review route decision: `{str(route_decision_path)}`",
+            f"- Probe file present: `{str(bool(probe_file_present)).lower()}`",
+            f"- Probe file classification: `{_normalize_text(probe_file_classification, default='unknown')}`",
+            "- Codex execution invoked: `false`",
+        ]
+
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            fix_prompt_path.write_text(prompt_body, encoding="utf-8")
+            fix_request_path.write_text(
+                json.dumps(fix_request_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            fix_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+            status = "codex_fix_prompt_generation_completed"
+            next_action = "ready_for_bounded_codex_fix_invocation"
+            blocked_reason = "none"
+        except OSError:
+            status = "codex_fix_prompt_generation_blocked_write_failed"
+            next_action = "blocked_missing_review_route"
+            blocked_reason = "fix_prompt_artifact_write_failed"
+
+    return {
+        "project_browser_autonomous_codex_fix_prompt_generation_status": status,
+        "project_browser_autonomous_codex_fix_prompt_generation_next_action": next_action,
+        "project_browser_autonomous_codex_fix_prompt_generation_selected_route": selected_route,
+        "project_browser_autonomous_codex_fix_prompt_generation_fix_prompt_path": str(
+            fix_prompt_path
+        ),
+        "project_browser_autonomous_codex_fix_prompt_generation_fix_request_path": str(
+            fix_request_path
+        ),
+        "project_browser_autonomous_codex_fix_prompt_generation_fix_summary_path": str(
+            fix_summary_path
+        ),
+        "project_browser_autonomous_codex_fix_prompt_generation_blocked_reason": blocked_reason,
+        "project_browser_autonomous_codex_fix_prompt_generation_runtime_posture": runtime_posture,
+        "project_browser_autonomous_codex_fix_prompt_generation_artifact_paths": artifact_paths,
+    }
+
+
 def _build_project_browser_autonomous_local_loop_state(
     *,
     chatgpt_diff_review_decision_state: Mapping[str, Any] | None,
@@ -157469,6 +157732,111 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_chatgpt_diff_review_route_state_normalized[
         "project_browser_autonomous_chatgpt_diff_review_route_confidence"
     ] = project_browser_autonomous_chatgpt_diff_review_route_confidence
+    project_browser_autonomous_codex_fix_prompt_generation_state = (
+        _build_project_browser_autonomous_codex_fix_prompt_generation_state()
+    )
+    codex_fix_prompt_generation_allowed_statuses = {
+        "codex_fix_prompt_generation_blocked_missing_review_route",
+        "codex_fix_prompt_generation_blocked_route_not_fix",
+        "codex_fix_prompt_generation_blocked_write_failed",
+        "codex_fix_prompt_generation_completed",
+        "insufficient_truth",
+    }
+    codex_fix_prompt_generation_allowed_next_actions = {
+        "blocked_missing_review_route",
+        "blocked_route_not_fix",
+        "ready_for_bounded_codex_fix_invocation",
+        "insufficient_truth",
+    }
+    codex_fix_prompt_generation_field_names = (
+        "status",
+        "next_action",
+        "selected_route",
+        "fix_prompt_path",
+        "fix_request_path",
+        "fix_summary_path",
+        "blocked_reason",
+        "runtime_posture",
+        "artifact_paths",
+    )
+    project_browser_autonomous_codex_fix_prompt_generation_status = _normalize_text(
+        project_browser_autonomous_codex_fix_prompt_generation_state.get(
+            "project_browser_autonomous_codex_fix_prompt_generation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_codex_fix_prompt_generation_status
+        not in codex_fix_prompt_generation_allowed_statuses
+    ):
+        project_browser_autonomous_codex_fix_prompt_generation_status = "insufficient_truth"
+    project_browser_autonomous_codex_fix_prompt_generation_next_action = _normalize_text(
+        project_browser_autonomous_codex_fix_prompt_generation_state.get(
+            "project_browser_autonomous_codex_fix_prompt_generation_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_codex_fix_prompt_generation_next_action
+        not in codex_fix_prompt_generation_allowed_next_actions
+    ):
+        project_browser_autonomous_codex_fix_prompt_generation_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_codex_fix_prompt_generation_selected_route = _normalize_text(
+        project_browser_autonomous_codex_fix_prompt_generation_state.get(
+            "project_browser_autonomous_codex_fix_prompt_generation_selected_route"
+        ),
+        default="none",
+    )
+    if project_browser_autonomous_codex_fix_prompt_generation_selected_route not in {
+        "approve",
+        "fix",
+        "revert",
+        "manual_review",
+        "none",
+    }:
+        project_browser_autonomous_codex_fix_prompt_generation_selected_route = "none"
+    project_browser_autonomous_codex_fix_prompt_generation_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in codex_fix_prompt_generation_field_names:
+        key = f"project_browser_autonomous_codex_fix_prompt_generation_{field_name}"
+        value = project_browser_autonomous_codex_fix_prompt_generation_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_codex_fix_prompt_generation_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_codex_fix_prompt_generation_next_action
+        elif field_name == "selected_route":
+            value = project_browser_autonomous_codex_fix_prompt_generation_selected_route
+        elif field_name == "runtime_posture":
+            value = _normalize_string_list(value)
+        elif field_name == "artifact_paths":
+            normalized_paths: dict[str, str] = {}
+            if isinstance(value, Mapping):
+                for path_key, path_value in value.items():
+                    normalized_key = _normalize_text(path_key, default="")
+                    if not normalized_key:
+                        continue
+                    normalized_paths[normalized_key] = _normalize_text(
+                        path_value,
+                        default="",
+                    )
+            value = normalized_paths
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_codex_fix_prompt_generation_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_codex_fix_prompt_generation_state_normalized[
+        "project_browser_autonomous_codex_fix_prompt_generation_status"
+    ] = project_browser_autonomous_codex_fix_prompt_generation_status
+    project_browser_autonomous_codex_fix_prompt_generation_state_normalized[
+        "project_browser_autonomous_codex_fix_prompt_generation_next_action"
+    ] = project_browser_autonomous_codex_fix_prompt_generation_next_action
+    project_browser_autonomous_codex_fix_prompt_generation_state_normalized[
+        "project_browser_autonomous_codex_fix_prompt_generation_selected_route"
+    ] = project_browser_autonomous_codex_fix_prompt_generation_selected_route
     project_browser_autonomous_commit_tag_gate_state = (
         _build_project_browser_autonomous_commit_tag_gate_state(
             chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
@@ -169357,6 +169725,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_route_state_normalized,
+        **project_browser_autonomous_codex_fix_prompt_generation_state_normalized,
         **project_browser_autonomous_commit_tag_gate_state_normalized,
         **project_browser_autonomous_commit_tag_execution_state_normalized,
         **project_browser_autonomous_pr_queue_state_state_normalized,
@@ -169431,6 +169800,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_chatgpt_diff_review_decision_state_normalized": (
             dict(project_browser_autonomous_chatgpt_diff_review_decision_state_normalized)
+        ),
+        "project_browser_autonomous_codex_fix_prompt_generation_state_normalized": (
+            dict(project_browser_autonomous_codex_fix_prompt_generation_state_normalized)
         ),
         "project_browser_autonomous_commit_tag_gate_state_normalized": (
             dict(project_browser_autonomous_commit_tag_gate_state_normalized)
