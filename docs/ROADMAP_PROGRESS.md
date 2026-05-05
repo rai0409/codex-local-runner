@@ -289,3 +289,30 @@ Verified:
 Next:
 - Prompt288 should implement approve/fix/revert route preparation from review_decision.json.
 - It must block safely if review_decision.json is missing or still waiting for review response.
+
+## Prompt288
+
+Result:
+- PASS
+
+Implemented:
+- Added metadata-only ChatGPT review route preparation.
+- Reads:
+  - /tmp/codex-local-runner-decision/chatgpt_diff_review_response/review_decision.json
+- Writes:
+  - /tmp/codex-local-runner-decision/chatgpt_diff_review_route/review_route_decision.json
+  - /tmp/codex-local-runner-decision/chatgpt_diff_review_route/review_route_summary.md
+- Exposes project_browser_autonomous_chatgpt_diff_review_route_* fields in approved restart payload.
+
+Observed:
+- selected_route=manual_review
+- next_action=manual_review_required
+- blocked_reason=manual_review_required_by_safety
+- safety_downgrades included low_confidence_downgraded_to_manual_review
+
+Verified:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- No tests were run.
+
+Next:
+- Either replace review_decision.json with a real high/medium-confidence review decision and rerun Prompt288, or record the current manual_review state in Prompt289.

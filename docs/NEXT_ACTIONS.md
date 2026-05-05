@@ -214,3 +214,19 @@ Still prohibited:
 - PR creation
 - merge
 - daemon or unbounded loop
+
+## Next after Prompt288
+
+Current route:
+- manual_review_required
+
+Options:
+1. Replace review_decision.json with a real high/medium-confidence review decision and rerun Prompt288.
+2. If keeping manual_review, run Prompt289 to record PR queue state as manual_review/blocked.
+
+Still prohibited:
+- autonomous commit/tag execution
+- push
+- PR creation
+- merge
+- unbounded loop
