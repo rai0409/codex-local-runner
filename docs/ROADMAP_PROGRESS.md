@@ -48,3 +48,79 @@ Next:
 - Restore Codex CLI network/WebSocket access.
 - Rerun live Codex connector.
 - Proceed to Prompt285-B local git diff capture only after Codex can create local repository changes.
+
+## Codex CLI workspace-write confirmation
+
+Result:
+- PASS
+
+Confirmed:
+- Codex CLI can run with ChatGPT account using model `gpt-5.3-codex`.
+- `gpt-5.3` was not supported, but `gpt-5.3-codex` works.
+- Reasoning effort is high.
+- Approval policy is never.
+- Sandbox mode is workspace-write.
+- Codex successfully created a file in the repository root.
+
+Observed command behavior:
+- Created `tmp_codex_write_check.txt`
+- File content was exactly:
+  OK_WRITE
+- The file was then removed manually.
+
+Confirmed working Codex command shape:
+```bash
+codex exec - \
+  --cd ~/codex-local-runner \
+  --sandbox workspace-write \
+  -m gpt-5.3-codex \
+  -c 'model_reasoning_effort="high"' \
+  -c 'approval_policy="never"'
+
+Current git status:
+
+Only untracked runtime artifacts remain under artifacts/runtime_commands/.
+tmp_codex_write_check.txt was removed.
+Runtime artifacts are not intended for commit.
+
+Conclusion:
+
+Codex CLI network/WebSocket access is restored.
+Codex CLI can write inside the repository with workspace-write.
+gpt-5.3-codex high is usable for this ChatGPT account.
+The next implementation step should update the runner live Codex connector to use:
+--sandbox workspace-write
+-m gpt-5.3-codex
+-c 'model_reasoning_effort="high"'
+-c 'approval_policy="never"'
+
+Next:
+
+Generate and run a narrow prompt to update the runner live Codex connector command.
+Do not proceed to Prompt285-B until runner-driven Codex live execution can create local repository changes.
+
+## Prompt285-C
+
+Result:
+- PASS
+
+Implemented:
+- Updated the runner live Codex invocation command from read-only to workspace-write.
+- Set Codex model to gpt-5.3-codex.
+- Set model_reasoning_effort to high.
+- Set approval_policy to never via -c.
+- Did not use --ask-for-approval.
+- Did not use danger-full-access.
+
+Old command shape:
+- codex exec - --cd <repo> --sandbox read-only
+
+New command shape:
+- codex exec - --cd <repo> --sandbox workspace-write -m gpt-5.3-codex -c 'model_reasoning_effort="high"' -c 'approval_policy="never"'
+
+Validation:
+- python -m py_compile automation/orchestration/planned_execution_runner.py
+
+Next:
+- Run one runner-driven live Codex connector verification.
+- If runner-driven Codex creates local repository changes, proceed to Prompt285-B local git diff capture.

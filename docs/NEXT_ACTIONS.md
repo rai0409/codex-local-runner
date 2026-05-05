@@ -35,3 +35,50 @@ Still prohibited until later phases:
 - PR creation
 - merge
 - daemon or unbounded loop
+
+Next after Codex CLI write confirmation
+
+Current confirmed state:
+
+Codex CLI works with gpt-5.3-codex high.
+workspace-write allows repository writes.
+approval_policy="never" works via -c.
+--ask-for-approval is not a valid codex exec option in Codex CLI v0.128.0.
+
+Next required prompt:
+
+Update the runner live Codex connector so implementation steps use:
+--sandbox workspace-write
+-m gpt-5.3-codex
+-c 'model_reasoning_effort="high"'
+-c 'approval_policy="never"'
+
+Still prohibited:
+
+danger-full-access
+Prompt285-B local git diff capture before runner-driven local changes exist
+commit/tag automation
+push
+PR creation
+merge
+daemon or unbounded loop
+
+## Next after Prompt285-C
+
+Run runner-driven live Codex connector verification.
+
+Goal:
+- Confirm the runner now invokes Codex with workspace-write and gpt-5.3-codex high.
+- Confirm network_denied is cleared.
+- Confirm Codex can create local repository changes through the runner path.
+
+If local changes appear:
+- Proceed to Prompt285-B local git diff capture.
+
+Still prohibited:
+- Prompt285-B before runner-driven local changes exist
+- commit/tag automation
+- push
+- PR creation
+- merge
+- daemon or unbounded loop
