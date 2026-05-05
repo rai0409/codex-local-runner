@@ -96939,11 +96939,15 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
     requires_revert = False
     blocked_reason = "missing_review_decision"
     safety_downgrades: list[str] = []
+    probe_file_present = False
+    probe_file_classification = "unknown"
+    probe_file_approve_guard = "not_applicable"
     runtime_posture = [
         "metadata_only_route_preparation",
         "no_codex_invocation",
         "no_commit_or_tag_execution",
         "no_push_or_pr_or_merge",
+        "authoritative_probe_file_guard",
     ]
 
     def _coerce_bool(value: Any, *, default: bool = False) -> bool:
@@ -96986,6 +96990,60 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
     else:
         blocked_reason = "missing_review_decision"
 
+    authoritative_changed_files_path = Path(
+        "/tmp/codex-local-runner-decision/local_git_diff_capture/changed_files.json"
+    )
+    review_request_json_path = Path(
+        "/tmp/codex-local-runner-decision/chatgpt_diff_review_request/chatgpt_review_request.json"
+    )
+    authoritative_probe_detection_available = False
+    if authoritative_changed_files_path.exists():
+        try:
+            changed_files_payload = json.loads(
+                authoritative_changed_files_path.read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError):
+            changed_files_payload = None
+        if isinstance(changed_files_payload, Mapping):
+            authoritative_probe_detection_available = True
+            changed_files_list = _normalize_string_list(
+                changed_files_payload.get("changed_files")
+            )
+            probe_file_present = "tmp_runner_live_write_probe.txt" in changed_files_list
+            payload_entries = changed_files_payload.get("changed_files")
+            if isinstance(payload_entries, list):
+                for entry in payload_entries:
+                    if not isinstance(entry, Mapping):
+                        continue
+                    if _normalize_text(entry.get("path"), default="") != "tmp_runner_live_write_probe.txt":
+                        continue
+                    if bool(entry.get("runtime_only", False)):
+                        probe_file_classification = "runtime_only"
+                    elif bool(entry.get("reviewable", False)):
+                        probe_file_classification = "reviewable_probe_change"
+                    else:
+                        probe_file_classification = "present_unclassified"
+                    break
+    if review_request_json_path.exists():
+        try:
+            review_request_payload = json.loads(
+                review_request_json_path.read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError):
+            review_request_payload = None
+        if isinstance(review_request_payload, Mapping):
+            request_probe_classification = _normalize_text(
+                review_request_payload.get("tmp_runner_live_write_probe_classification"),
+                default="",
+            ).lower()
+            if request_probe_classification:
+                probe_file_classification = request_probe_classification
+            request_changed_files = _normalize_string_list(
+                review_request_payload.get("changed_files")
+            )
+            if "tmp_runner_live_write_probe.txt" in request_changed_files:
+                probe_file_present = True
+
     if isinstance(parsed, Mapping):
         decision = _normalize_decision(parsed.get("decision"))
         confidence = _normalize_confidence(parsed.get("confidence"))
@@ -96994,11 +97052,14 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
         requires_revert = _coerce_bool(parsed.get("requires_revert"), default=False)
 
         changed_files = _normalize_string_list(parsed.get("changed_files"))
+        if "tmp_runner_live_write_probe.txt" in changed_files:
+            probe_file_present = True
         probe_classification = _normalize_text(
             parsed.get("tmp_runner_live_write_probe_classification"),
             default="",
         ).lower()
-        probe_changed = "tmp_runner_live_write_probe.txt" in changed_files
+        if probe_classification:
+            probe_file_classification = probe_classification
 
         contradictory = False
         if requires_fix and requires_revert:
@@ -97016,18 +97077,31 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
         if confidence == "low":
             contradictory = True
             safety_downgrades.append("low_confidence_downgraded_to_manual_review")
-        if probe_changed and decision == "approve":
-            disposable_probe_values = {
-                "probe_disposable_local_change",
-                "probe_only",
-                "disposable",
-                "probe_disposable",
-            }
-            if probe_classification not in disposable_probe_values:
-                contradictory = True
-                safety_downgrades.append("probe_file_commit_approval_downgraded_to_manual_review")
+        approve_candidate = bool(
+            decision == "approve"
+            and safe_to_commit
+            and not requires_fix
+            and not requires_revert
+            and confidence in {"high", "medium"}
+        )
+        if approve_candidate and not authoritative_probe_detection_available:
+            status = "blocked_missing_authoritative_probe_signal"
+            selected_route = "none"
+            next_action = "wait_for_chatgpt_diff_review_response"
+            blocked_reason = "authoritative_probe_detection_unavailable"
+            probe_file_approve_guard = "blocked_missing_authoritative_probe_signal"
+        elif decision == "approve" and probe_file_present:
+            contradictory = True
+            safety_downgrades.append(
+                "probe_file_present_requires_exclusion_before_approve"
+            )
+            probe_file_approve_guard = "blocked_probe_file_present"
+        elif decision == "approve":
+            probe_file_approve_guard = "passed"
 
-        if contradictory or decision == "manual_review":
+        if status == "blocked_missing_authoritative_probe_signal":
+            pass
+        elif contradictory or decision == "manual_review":
             selected_route = "manual_review"
             next_action = "manual_review_required"
             status = (
@@ -97051,6 +97125,8 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
                 next_action = "prepare_commit_tag_readiness"
                 status = "chatgpt_diff_review_route_completed"
                 blocked_reason = "none"
+                if probe_file_approve_guard == "not_applicable":
+                    probe_file_approve_guard = "passed"
             else:
                 selected_route = "manual_review"
                 next_action = "manual_review_required"
@@ -97084,6 +97160,9 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
         "requires_fix": bool(requires_fix),
         "requires_revert": bool(requires_revert),
         "blocked_reason": blocked_reason,
+        "probe_file_present": bool(probe_file_present),
+        "probe_file_classification": probe_file_classification,
+        "probe_file_approve_guard": probe_file_approve_guard,
         "safety_downgrades": _normalize_string_list(safety_downgrades),
         "artifact_paths": artifact_paths,
     }
@@ -97099,6 +97178,9 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
         f"- Requires fix: `{str(bool(requires_fix)).lower()}`",
         f"- Requires revert: `{str(bool(requires_revert)).lower()}`",
         f"- Blocked reason: `{blocked_reason}`",
+        f"- Probe file present: `{str(bool(probe_file_present)).lower()}`",
+        f"- Probe file classification: `{probe_file_classification}`",
+        f"- Probe file approve guard: `{probe_file_approve_guard}`",
         "",
         "## Safety Downgrades",
     ]
@@ -97136,6 +97218,15 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
         ),
         "project_browser_autonomous_chatgpt_diff_review_route_selected_route": selected_route,
         "project_browser_autonomous_chatgpt_diff_review_route_blocked_reason": blocked_reason,
+        "project_browser_autonomous_chatgpt_diff_review_route_probe_file_present": bool(
+            probe_file_present
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_route_probe_file_classification": (
+            probe_file_classification
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_route_probe_file_approve_guard": (
+            probe_file_approve_guard
+        ),
         "project_browser_autonomous_chatgpt_diff_review_route_artifact_paths": artifact_paths,
         "project_browser_autonomous_chatgpt_diff_review_route_safety_downgrades": (
             _normalize_string_list(safety_downgrades)
@@ -157234,6 +157325,7 @@ def _build_approved_restart_execution_contract_surface(
     )
     chatgpt_diff_review_route_allowed_statuses = {
         "blocked_missing_review_decision",
+        "blocked_missing_authoritative_probe_signal",
         "chatgpt_diff_review_route_blocked_write_failed",
         "chatgpt_diff_review_route_completed",
         "chatgpt_diff_review_route_completed_with_downgrade",
@@ -157270,6 +157362,9 @@ def _build_approved_restart_execution_contract_surface(
         "requires_fix",
         "requires_revert",
         "selected_route",
+        "probe_file_present",
+        "probe_file_classification",
+        "probe_file_approve_guard",
         "blocked_reason",
         "artifact_paths",
         "safety_downgrades",
@@ -157336,7 +157431,12 @@ def _build_approved_restart_execution_contract_surface(
             value = project_browser_autonomous_chatgpt_diff_review_route_decision
         elif field_name == "confidence":
             value = project_browser_autonomous_chatgpt_diff_review_route_confidence
-        elif field_name in {"safe_to_commit", "requires_fix", "requires_revert"}:
+        elif field_name in {
+            "safe_to_commit",
+            "requires_fix",
+            "requires_revert",
+            "probe_file_present",
+        }:
             value = bool(value)
         elif field_name == "selected_route":
             normalized_route = _normalize_text(value, default="none")
