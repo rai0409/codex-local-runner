@@ -96134,6 +96134,247 @@ def _build_project_browser_autonomous_commit_tag_execution_state_prompt276(
     }
 
 
+def _build_project_browser_autonomous_chatgpt_diff_review_response_assimilation_state() -> dict[str, Any]:
+    response_dir = Path("/tmp/codex-local-runner-decision/chatgpt_diff_review_response")
+    expected_response_path = response_dir / "chatgpt_review_response.json"
+    decision_path = response_dir / "review_decision.json"
+    summary_path = response_dir / "review_decision_summary.md"
+    artifact_paths = {
+        "expected_response_json": str(expected_response_path),
+        "review_decision_json": str(decision_path),
+        "review_decision_summary_md": str(summary_path),
+    }
+    runtime_posture = [
+        "metadata_only_response_assimilation",
+        "no_codex_invocation",
+        "no_git_mutation",
+        "no_approve_fix_revert_execution",
+    ]
+
+    status = "chatgpt_diff_review_response_assimilation_blocked_missing_response"
+    next_action = "wait_for_chatgpt_diff_review_response"
+    decision = "manual_review"
+    confidence = "low"
+    safe_to_commit = False
+    requires_fix = False
+    requires_revert = False
+    summary = ""
+    blocking_issues: list[str] = []
+    non_blocking_notes: list[str] = []
+    recommended_next_action = ""
+    blocked_reason = "missing_response_artifact"
+    safety_downgrades: list[str] = []
+
+    def _coerce_bool(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on"}:
+            return True
+        if text in {"0", "false", "no", "off"}:
+            return False
+        return default
+
+    def _normalize_confidence(value: Any) -> str:
+        normalized = _normalize_text(value, default="").lower()
+        if normalized in {"high", "medium", "low"}:
+            return normalized
+        return "low"
+
+    def _normalize_decision(value: Any) -> str:
+        normalized = _normalize_text(value, default="").lower()
+        if normalized in {"approve", "fix", "revert", "manual_review"}:
+            return normalized
+        return "manual_review"
+
+    parsed_payload: Mapping[str, Any] | None = None
+    raw_response_text = ""
+    if expected_response_path.exists():
+        try:
+            raw_response_text = expected_response_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            blocked_reason = f"response_read_failed:{exc.__class__.__name__}"
+            safety_downgrades.append("response_read_failed_downgraded_to_manual_review")
+        else:
+            try:
+                loaded = json.loads(raw_response_text)
+            except json.JSONDecodeError:
+                blocked_reason = "invalid_response_json"
+                safety_downgrades.append("invalid_response_json_downgraded_to_manual_review")
+            else:
+                if not isinstance(loaded, Mapping):
+                    blocked_reason = "response_not_object"
+                    safety_downgrades.append("response_not_object_downgraded_to_manual_review")
+                else:
+                    parsed_payload = loaded
+    else:
+        blocked_reason = "missing_response_artifact"
+
+    if isinstance(parsed_payload, Mapping):
+        decision = _normalize_decision(parsed_payload.get("decision"))
+        confidence = _normalize_confidence(parsed_payload.get("confidence"))
+        safe_to_commit = _coerce_bool(parsed_payload.get("safe_to_commit"), default=False)
+        requires_fix = _coerce_bool(parsed_payload.get("requires_fix"), default=False)
+        requires_revert = _coerce_bool(parsed_payload.get("requires_revert"), default=False)
+        summary = _normalize_text(parsed_payload.get("summary"), default="")
+        blocking_issues = _normalize_string_list(parsed_payload.get("blocking_issues"))
+        non_blocking_notes = _normalize_string_list(parsed_payload.get("non_blocking_notes"))
+        recommended_next_action = _normalize_text(
+            parsed_payload.get("recommended_next_action"),
+            default="",
+        )
+
+        contradictory = False
+        if requires_fix and requires_revert:
+            contradictory = True
+            safety_downgrades.append("requires_fix_and_requires_revert_contradiction")
+        if decision == "approve" and requires_fix:
+            contradictory = True
+            safety_downgrades.append("approve_with_requires_fix_contradiction")
+        if decision == "approve" and requires_revert:
+            contradictory = True
+            safety_downgrades.append("approve_with_requires_revert_contradiction")
+        if decision == "approve" and not safe_to_commit:
+            contradictory = True
+            safety_downgrades.append("approve_with_safe_to_commit_false")
+
+        if confidence == "low":
+            decision = "manual_review"
+            safety_downgrades.append("low_confidence_downgraded_to_manual_review")
+        elif contradictory:
+            decision = "manual_review"
+            safe_to_commit = False
+            safety_downgrades.append("contradictory_fields_downgraded_to_manual_review")
+
+        if decision == "approve":
+            if (
+                not safe_to_commit
+                or requires_fix
+                or requires_revert
+                or confidence not in {"high", "medium"}
+            ):
+                decision = "manual_review"
+                safe_to_commit = False
+                safety_downgrades.append("unsafe_approve_downgraded_to_manual_review")
+
+        if decision == "revert" and safe_to_commit:
+            safe_to_commit = False
+            safety_downgrades.append("revert_forces_safe_to_commit_false")
+        if requires_revert:
+            safe_to_commit = False
+
+        if requires_revert and decision != "manual_review" and decision != "revert":
+            decision = "manual_review"
+            safety_downgrades.append("requires_revert_conflict_downgraded_to_manual_review")
+
+        if decision == "approve":
+            status = "chatgpt_diff_review_response_assimilation_completed"
+            next_action = "prepare_approve_route"
+            blocked_reason = "none"
+        elif decision == "fix":
+            status = "chatgpt_diff_review_response_assimilation_completed"
+            next_action = "prepare_fix_route"
+            blocked_reason = "none"
+        elif decision == "revert" or requires_revert:
+            status = "chatgpt_diff_review_response_assimilation_completed"
+            next_action = "prepare_revert_route"
+            blocked_reason = "none"
+        else:
+            status = (
+                "chatgpt_diff_review_response_assimilation_completed_with_downgrade"
+                if safety_downgrades
+                else "chatgpt_diff_review_response_assimilation_completed"
+            )
+            next_action = "manual_review_required"
+            blocked_reason = (
+                "manual_review_decision_or_safety_downgrade"
+                if safety_downgrades
+                else "manual_review_decision"
+            )
+
+    if not summary:
+        summary = _normalize_text(
+            recommended_next_action,
+            default="ChatGPT review response assimilation completed with safety normalization.",
+        )
+
+    decision_payload = {
+        "status": status,
+        "next_action": next_action,
+        "decision": decision,
+        "confidence": confidence,
+        "safe_to_commit": bool(safe_to_commit),
+        "requires_fix": bool(requires_fix),
+        "requires_revert": bool(requires_revert),
+        "summary": summary,
+        "blocking_issues": _normalize_string_list(blocking_issues),
+        "non_blocking_notes": _normalize_string_list(non_blocking_notes),
+        "recommended_next_action": recommended_next_action,
+        "blocked_reason": blocked_reason,
+        "safety_downgrades": _normalize_string_list(safety_downgrades),
+        "artifact_paths": artifact_paths,
+        "runtime_posture": runtime_posture,
+    }
+
+    summary_lines = [
+        "# ChatGPT Review Response Assimilation",
+        "",
+        f"- Status: `{status}`",
+        f"- Next action: `{next_action}`",
+        f"- Decision: `{decision}`",
+        f"- Confidence: `{confidence}`",
+        f"- Safe to commit: `{str(bool(safe_to_commit)).lower()}`",
+        f"- Requires fix: `{str(bool(requires_fix)).lower()}`",
+        f"- Requires revert: `{str(bool(requires_revert)).lower()}`",
+        f"- Blocked reason: `{blocked_reason}`",
+        "",
+        "## Safety Downgrades",
+    ]
+    if safety_downgrades:
+        for item in _normalize_string_list(safety_downgrades):
+            summary_lines.append(f"- {item}")
+    else:
+        summary_lines.append("- none")
+
+    try:
+        response_dir.mkdir(parents=True, exist_ok=True)
+        decision_path.write_text(
+            json.dumps(decision_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    except OSError:
+        status = "chatgpt_diff_review_response_assimilation_blocked_write_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "decision_artifact_write_failed"
+
+    return {
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_status": status,
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_next_action": next_action,
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_decision": decision,
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence": confidence,
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_safe_to_commit": bool(
+            safe_to_commit
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_requires_fix": bool(
+            requires_fix
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_requires_revert": bool(
+            requires_revert
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_artifact_paths": artifact_paths,
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_blocked_reason": blocked_reason,
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_safety_downgrades": (
+            _normalize_string_list(safety_downgrades)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_runtime_posture": (
+            runtime_posture
+        ),
+    }
+
+
 def _build_project_browser_autonomous_pr_queue_state_state(
     *,
     commit_tag_execution_state: Mapping[str, Any] | None,
@@ -156629,6 +156870,138 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_chatgpt_diff_review_decision_state_normalized[key] = (
             value
         )
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_state = (
+        _build_project_browser_autonomous_chatgpt_diff_review_response_assimilation_state()
+    )
+    chatgpt_diff_review_response_assimilation_allowed_statuses = {
+        "chatgpt_diff_review_response_assimilation_blocked_missing_response",
+        "chatgpt_diff_review_response_assimilation_blocked_write_failed",
+        "chatgpt_diff_review_response_assimilation_completed",
+        "chatgpt_diff_review_response_assimilation_completed_with_downgrade",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_response_assimilation_allowed_next_actions = {
+        "prepare_approve_route",
+        "prepare_fix_route",
+        "prepare_revert_route",
+        "manual_review_required",
+        "wait_for_chatgpt_diff_review_response",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_response_assimilation_allowed_decisions = {
+        "approve",
+        "fix",
+        "revert",
+        "manual_review",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_response_assimilation_field_names = (
+        "status",
+        "next_action",
+        "decision",
+        "confidence",
+        "safe_to_commit",
+        "requires_fix",
+        "requires_revert",
+        "artifact_paths",
+        "blocked_reason",
+        "safety_downgrades",
+        "runtime_posture",
+    )
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_status = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_response_assimilation_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_status
+        not in chatgpt_diff_review_response_assimilation_allowed_statuses
+    ):
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_response_assimilation_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_next_action
+        not in chatgpt_diff_review_response_assimilation_allowed_next_actions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_decision = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_response_assimilation_decision"
+        ),
+        default="manual_review",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_decision
+        not in chatgpt_diff_review_response_assimilation_allowed_decisions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_decision = "manual_review"
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence"
+        ),
+        default="low",
+    )
+    if project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence not in {
+        "high",
+        "medium",
+        "low",
+    }:
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence = "low"
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chatgpt_diff_review_response_assimilation_field_names:
+        key = (
+            "project_browser_autonomous_chatgpt_diff_review_response_assimilation_"
+            f"{field_name}"
+        )
+        value = project_browser_autonomous_chatgpt_diff_review_response_assimilation_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_chatgpt_diff_review_response_assimilation_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_chatgpt_diff_review_response_assimilation_next_action
+        elif field_name == "decision":
+            value = project_browser_autonomous_chatgpt_diff_review_response_assimilation_decision
+        elif field_name == "confidence":
+            value = project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence
+        elif field_name in {"safe_to_commit", "requires_fix", "requires_revert"}:
+            value = bool(value)
+        elif field_name in {"safety_downgrades", "runtime_posture"}:
+            value = _normalize_string_list(value)
+        elif field_name == "artifact_paths":
+            normalized_paths: dict[str, str] = {}
+            if isinstance(value, Mapping):
+                for path_key, path_value in value.items():
+                    normalized_key = _normalize_text(path_key, default="")
+                    if not normalized_key:
+                        continue
+                    normalized_paths[normalized_key] = _normalize_text(path_value, default="")
+            value = normalized_paths
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized[
+            key
+        ] = value
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized[
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_status"
+    ] = project_browser_autonomous_chatgpt_diff_review_response_assimilation_status
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized[
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_next_action"
+    ] = project_browser_autonomous_chatgpt_diff_review_response_assimilation_next_action
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized[
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_decision"
+    ] = project_browser_autonomous_chatgpt_diff_review_response_assimilation_decision
+    project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized[
+        "project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence"
+    ] = project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence
     project_browser_autonomous_commit_tag_gate_state = (
         _build_project_browser_autonomous_commit_tag_gate_state(
             chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
@@ -168515,6 +168888,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_codex_capture_gate_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
+        **project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized,
         **project_browser_autonomous_commit_tag_gate_state_normalized,
         **project_browser_autonomous_commit_tag_execution_state_normalized,
         **project_browser_autonomous_pr_queue_state_state_normalized,
