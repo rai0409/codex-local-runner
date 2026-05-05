@@ -110,3 +110,19 @@ Still prohibited:
 - PR creation
 - merge
 - daemon or unbounded loop
+
+## Next after Prompt285-D
+
+Run Prompt285-E.
+
+Goal:
+- Carry selected prompt metadata for /tmp/codex-local-runner-decision/generated_next_prompt.txt into invocation readiness.
+- Populate invocation_command with the Prompt285-C command shape.
+
+Still prohibited:
+- Prompt285-B local git diff capture before runner-driven local changes exist
+- commit/tag automation
+- push
+- PR creation
+- merge
+- daemon or unbounded loop

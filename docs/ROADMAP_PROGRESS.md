@@ -147,3 +147,16 @@ Conclusion:
 Next:
 - Prompt285-D should add a narrow metadata-only bridge for gate/connector enablement fields.
 - Do not proceed to Prompt285-B until runner-driven Codex invocation is reached and local repository changes can be produced.
+
+## Prompt285-D
+
+Result:
+- PASS for gate/connector enablement bridge.
+
+Confirmed:
+- gate_disabled and connector_disabled were cleared.
+- invocation_command remains empty because selected prompt metadata is not carried into invocation readiness.
+- generated_next_prompt.txt exists, is non-empty, is not a symlink, and is already in allowed_paths.
+
+Next:
+- Prompt285-E should bridge selected prompt metadata for generated_next_prompt.txt in explicit one-shot live probe context.
