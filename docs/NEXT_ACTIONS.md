@@ -126,3 +126,14 @@ Still prohibited:
 - PR creation
 - merge
 - daemon or unbounded loop
+
+## Next after Prompt285-F
+
+Run Prompt285-G.
+
+Goals:
+1. Fix invocation_command shape so approval_policy="never" is passed with its own -c.
+2. Compare direct shell Codex execution and runner subprocess execution using the exact same command/environment posture.
+3. Determine whether remaining WebSocket Operation not permitted is caused by command shape, subprocess invocation, inherited process restrictions, or external network policy.
+
+Do not proceed to Prompt285-B until runner-driven Codex exits 0 and creates tmp_runner_live_write_probe.txt.

@@ -160,3 +160,29 @@ Confirmed:
 
 Next:
 - Prompt285-E should bridge selected prompt metadata for generated_next_prompt.txt in explicit one-shot live probe context.
+
+## Prompt285-F
+
+Result:
+- BLOCKED.
+
+Implemented:
+- For explicit one-shot live probe only, runner Codex subprocess now inherits the user environment.
+- HOME/XDG/CODEX_HOME overrides are disabled only for selected_prompt_source=explicit_one_shot_live_probe.
+- Non-probe paths keep previous /tmp/codex_runtime override behavior.
+- Filesystem write scope was not broadened.
+
+Observed:
+- invocation_command is populated.
+- environment posture includes explicit_one_shot_live_probe_inherit_user_codex_environment.
+- Codex still exits nonzero with WebSocket Operation not permitted.
+- tmp_runner_live_write_probe.txt was not created.
+
+Remaining blocker:
+- runner-driven Codex live invocation still fails with:
+  failed to connect to websocket: IO error: Operation not permitted (os error 1)
+- Observed command shape still lacks a second -c before approval_policy="never".
+
+Conclusion:
+- Phase A is complete.
+- Phase B remains blocked by runner-process WebSocket/network execution context.
