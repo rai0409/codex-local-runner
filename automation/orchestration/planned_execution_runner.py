@@ -96939,6 +96939,7 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
     requires_revert = False
     blocked_reason = "missing_review_decision"
     safety_downgrades: list[str] = []
+    probe_file_path = "tmp_runner_live_write_probe.txt"
     probe_file_present = False
     probe_file_classification = "unknown"
     probe_file_approve_guard = "not_applicable"
@@ -97009,21 +97010,23 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
             changed_files_list = _normalize_string_list(
                 changed_files_payload.get("changed_files")
             )
-            probe_file_present = "tmp_runner_live_write_probe.txt" in changed_files_list
+            if probe_file_path in changed_files_list:
+                probe_file_present = True
+                probe_file_classification = "probe_disposable_local_change"
             payload_entries = changed_files_payload.get("changed_files")
             if isinstance(payload_entries, list):
                 for entry in payload_entries:
-                    if not isinstance(entry, Mapping):
-                        continue
-                    if _normalize_text(entry.get("path"), default="") != "tmp_runner_live_write_probe.txt":
-                        continue
-                    if bool(entry.get("runtime_only", False)):
-                        probe_file_classification = "runtime_only"
-                    elif bool(entry.get("reviewable", False)):
-                        probe_file_classification = "reviewable_probe_change"
-                    else:
-                        probe_file_classification = "present_unclassified"
-                    break
+                    if isinstance(entry, Mapping):
+                        if _normalize_text(entry.get("path"), default="") != probe_file_path:
+                            continue
+                        probe_file_present = True
+                        # Local diff capture is authoritative; normalize probe tagging to disposable.
+                        probe_file_classification = "probe_disposable_local_change"
+                        break
+                    if _normalize_text(entry, default="") == probe_file_path:
+                        probe_file_present = True
+                        probe_file_classification = "probe_disposable_local_change"
+                        break
     if review_request_json_path.exists():
         try:
             review_request_payload = json.loads(
@@ -97036,12 +97039,16 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
                 review_request_payload.get("tmp_runner_live_write_probe_classification"),
                 default="",
             ).lower()
+            if request_probe_classification or "changed_files" in review_request_payload:
+                authoritative_probe_detection_available = True
             if request_probe_classification:
                 probe_file_classification = request_probe_classification
+            if request_probe_classification == "probe_disposable_local_change":
+                probe_file_present = True
             request_changed_files = _normalize_string_list(
                 review_request_payload.get("changed_files")
             )
-            if "tmp_runner_live_write_probe.txt" in request_changed_files:
+            if probe_file_path in request_changed_files:
                 probe_file_present = True
 
     if isinstance(parsed, Mapping):
@@ -97050,16 +97057,6 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
         safe_to_commit = _coerce_bool(parsed.get("safe_to_commit"), default=False)
         requires_fix = _coerce_bool(parsed.get("requires_fix"), default=False)
         requires_revert = _coerce_bool(parsed.get("requires_revert"), default=False)
-
-        changed_files = _normalize_string_list(parsed.get("changed_files"))
-        if "tmp_runner_live_write_probe.txt" in changed_files:
-            probe_file_present = True
-        probe_classification = _normalize_text(
-            parsed.get("tmp_runner_live_write_probe_classification"),
-            default="",
-        ).lower()
-        if probe_classification:
-            probe_file_classification = probe_classification
 
         contradictory = False
         if requires_fix and requires_revert:
@@ -97095,7 +97092,7 @@ def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[
             safety_downgrades.append(
                 "probe_file_present_requires_exclusion_before_approve"
             )
-            probe_file_approve_guard = "blocked_probe_file_present"
+            probe_file_approve_guard = "blocked_probe_file_present_manual_exclusion_required"
         elif decision == "approve":
             probe_file_approve_guard = "passed"
 
@@ -97495,6 +97492,261 @@ def _build_project_browser_autonomous_codex_fix_prompt_generation_state() -> dic
         "project_browser_autonomous_codex_fix_prompt_generation_blocked_reason": blocked_reason,
         "project_browser_autonomous_codex_fix_prompt_generation_runtime_posture": runtime_posture,
         "project_browser_autonomous_codex_fix_prompt_generation_artifact_paths": artifact_paths,
+    }
+
+
+def _build_project_browser_autonomous_commit_tag_readiness_from_review_route_state(
+    *,
+    repository_path: str,
+) -> dict[str, Any]:
+    route_dir = Path("/tmp/codex-local-runner-decision/chatgpt_diff_review_route")
+    capture_dir = Path("/tmp/codex-local-runner-decision/local_git_diff_capture")
+    output_dir = Path("/tmp/codex-local-runner-decision/commit_tag_readiness")
+
+    route_decision_path = route_dir / "review_route_decision.json"
+    changed_files_path = capture_dir / "changed_files.json"
+    diff_summary_path = capture_dir / "diff_summary.md"
+    reviewable_patch_path = capture_dir / "reviewable_diff.patch"
+
+    readiness_json_path = output_dir / "commit_tag_readiness.json"
+    readiness_summary_path = output_dir / "commit_tag_readiness_summary.md"
+    commit_plan_path = output_dir / "commit_plan.sh"
+
+    status = "commit_tag_readiness_blocked_missing_review_route"
+    next_action = "blocked_route_not_approve"
+    blocked_reason = "missing_review_route_decision"
+    selected_route = "none"
+    safe_to_commit = False
+    probe_file_absent = False
+    commit_candidates: list[str] = []
+    excluded_runtime_artifacts: list[str] = []
+    runtime_artifacts_would_be_staged = False
+
+    runtime_posture = [
+        "metadata_only_commit_tag_readiness_preparation",
+        "no_commit_execution",
+        "no_tag_execution",
+        "no_push_or_pr_or_merge",
+        "runtime_artifacts_excluded_from_candidates",
+    ]
+    artifact_paths = {
+        "input_review_route_decision_json": str(route_decision_path),
+        "input_changed_files_json": str(changed_files_path),
+        "input_diff_summary_md": str(diff_summary_path),
+        "input_reviewable_diff_patch": str(reviewable_patch_path),
+        "commit_tag_readiness_json": str(readiness_json_path),
+        "commit_tag_readiness_summary_md": str(readiness_summary_path),
+        "commit_plan_sh": str(commit_plan_path),
+    }
+
+    route_payload: Mapping[str, Any] | None = None
+    if route_decision_path.exists():
+        try:
+            loaded = json.loads(route_decision_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            blocked_reason = "invalid_review_route_decision_json"
+        else:
+            if isinstance(loaded, Mapping):
+                route_payload = loaded
+            else:
+                blocked_reason = "review_route_decision_not_object"
+
+    route_safe_to_commit = False
+    route_requires_fix = True
+    route_requires_revert = True
+    route_probe_present = True
+    if isinstance(route_payload, Mapping):
+        selected_route = _normalize_text(
+            route_payload.get("selected_route"),
+            default="none",
+        )
+        route_safe_to_commit = bool(route_payload.get("safe_to_commit", False))
+        route_requires_fix = bool(route_payload.get("requires_fix", True))
+        route_requires_revert = bool(route_payload.get("requires_revert", True))
+        route_probe_present = bool(route_payload.get("probe_file_present", True))
+
+    changed_files_payload: Mapping[str, Any] | None = None
+    if changed_files_path.exists():
+        try:
+            loaded_changed_files = json.loads(changed_files_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded_changed_files = None
+        if isinstance(loaded_changed_files, Mapping):
+            changed_files_payload = loaded_changed_files
+
+    probe_file_present_in_capture = False
+    reviewable_paths_seen: list[str] = []
+    if isinstance(changed_files_payload, Mapping):
+        entries = changed_files_payload.get("changed_files")
+        if isinstance(entries, list):
+            for entry in entries:
+                if not isinstance(entry, Mapping):
+                    continue
+                path_text = _normalize_text(entry.get("path"), default="")
+                if not path_text:
+                    continue
+                normalized_path = path_text.replace("\\", "/")
+                is_runtime_artifact = bool(entry.get("runtime_only", False)) or normalized_path.startswith(
+                    "artifacts/runtime_commands/"
+                )
+                if normalized_path == "tmp_runner_live_write_probe.txt":
+                    probe_file_present_in_capture = True
+                if is_runtime_artifact:
+                    excluded_runtime_artifacts.append(normalized_path)
+                    continue
+                if normalized_path == "tmp_runner_live_write_probe.txt":
+                    continue
+                if not bool(entry.get("reviewable", False)):
+                    continue
+                if normalized_path.endswith("/"):
+                    continue
+                reviewable_paths_seen.append(normalized_path)
+
+    repository_probe_path = Path(repository_path) / "tmp_runner_live_write_probe.txt"
+    probe_file_absent = bool(
+        not route_probe_present
+        and not probe_file_present_in_capture
+        and not repository_probe_path.exists()
+    )
+    commit_candidates = sorted(set(reviewable_paths_seen))
+    runtime_artifacts_would_be_staged = any(
+        path.startswith("artifacts/runtime_commands/") for path in commit_candidates
+    )
+    safe_to_commit = bool(
+        selected_route == "approve"
+        and route_safe_to_commit
+        and not route_requires_fix
+        and not route_requires_revert
+    )
+
+    commit_message = "Prompt290 approved route commit readiness"
+    tag_name = "prompt290-approved-route-ready"
+    commit_stage_snippet = ""
+    def _quote_for_single_sh(value: str) -> str:
+        return "'" + value.replace("'", "'\"'\"'") + "'"
+    if commit_candidates:
+        quoted_paths = " ".join(_quote_for_single_sh(path) for path in commit_candidates)
+        commit_stage_snippet = f"git add -- {quoted_paths}"
+
+    if not isinstance(route_payload, Mapping):
+        status = "commit_tag_readiness_blocked_missing_review_route"
+        next_action = "blocked_route_not_approve"
+    elif selected_route != "approve":
+        status = "commit_tag_readiness_blocked_route_not_approve"
+        next_action = "blocked_route_not_approve"
+        blocked_reason = f"selected_route_not_approve:{selected_route or 'none'}"
+    elif not safe_to_commit:
+        status = "commit_tag_readiness_blocked_unsafe_candidates"
+        next_action = "manual_review_required"
+        blocked_reason = "route_not_safe_to_commit"
+    elif not probe_file_absent:
+        status = "commit_tag_readiness_blocked_unsafe_candidates"
+        next_action = "manual_review_required"
+        blocked_reason = "probe_file_present"
+    elif runtime_artifacts_would_be_staged:
+        status = "commit_tag_readiness_blocked_unsafe_candidates"
+        next_action = "manual_review_required"
+        blocked_reason = "runtime_artifacts_would_be_staged"
+    elif not isinstance(changed_files_payload, Mapping):
+        status = "commit_tag_readiness_blocked_unsafe_candidates"
+        next_action = "manual_review_required"
+        blocked_reason = "commit_candidates_not_determinable"
+    elif not commit_candidates:
+        status = "commit_tag_readiness_blocked_unsafe_candidates"
+        next_action = "manual_review_required"
+        blocked_reason = "no_reviewable_commit_candidates"
+    else:
+        status = "commit_tag_readiness_ready"
+        next_action = "ready_for_bounded_commit_tag_execution"
+        blocked_reason = "none"
+
+    readiness_payload = {
+        "status": status,
+        "next_action": next_action,
+        "selected_route": selected_route,
+        "safe_to_commit": bool(safe_to_commit),
+        "commit_candidates": commit_candidates,
+        "excluded_runtime_artifacts": sorted(set(excluded_runtime_artifacts)),
+        "excluded_runtime_artifact_count": len(sorted(set(excluded_runtime_artifacts))),
+        "probe_file_absent": bool(probe_file_absent),
+        "runtime_artifacts_would_be_staged": bool(runtime_artifacts_would_be_staged),
+        "commit_message": commit_message,
+        "tag_name": tag_name,
+        "blocked_reason": blocked_reason,
+        "artifact_paths": artifact_paths,
+    }
+    summary_lines = [
+        "# Commit/Tag Readiness",
+        "",
+        f"- Status: `{status}`",
+        f"- Next action: `{next_action}`",
+        f"- Selected route: `{selected_route}`",
+        f"- Safe to commit: `{str(bool(safe_to_commit)).lower()}`",
+        f"- Commit candidates: `{len(commit_candidates)}`",
+        f"- Excluded runtime artifacts: `{len(sorted(set(excluded_runtime_artifacts)))}`",
+        f"- Probe file absent: `{str(bool(probe_file_absent)).lower()}`",
+        f"- Blocked reason: `{blocked_reason}`",
+    ]
+    plan_lines = [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        "",
+        f"cd '{repository_path}'",
+        "",
+        "# Metadata-only plan prepared by Prompt290. Do not execute automatically.",
+        "# Stages only approved reviewable files; excludes runtime artifacts and probe file.",
+    ]
+    if commit_stage_snippet:
+        plan_lines.extend(
+            [
+                commit_stage_snippet,
+                f"git commit -m {_quote_for_single_sh(commit_message)}",
+                f"git tag -a {_quote_for_single_sh(tag_name)} -m {_quote_for_single_sh(tag_name)}",
+                "# Do not push in this plan.",
+            ]
+        )
+    else:
+        plan_lines.append("# No commit candidates available.")
+
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        readiness_json_path.write_text(
+            json.dumps(readiness_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        readiness_summary_path.write_text(
+            "\n".join(summary_lines) + "\n",
+            encoding="utf-8",
+        )
+        commit_plan_path.write_text("\n".join(plan_lines) + "\n", encoding="utf-8")
+    except OSError:
+        status = "commit_tag_readiness_blocked_write_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "commit_tag_readiness_artifact_write_failed"
+
+    return {
+        "project_browser_autonomous_commit_tag_readiness_status": status,
+        "project_browser_autonomous_commit_tag_readiness_next_action": next_action,
+        "project_browser_autonomous_commit_tag_readiness_selected_route": selected_route,
+        "project_browser_autonomous_commit_tag_readiness_safe_to_commit": bool(
+            safe_to_commit
+        ),
+        "project_browser_autonomous_commit_tag_readiness_commit_candidates": commit_candidates,
+        "project_browser_autonomous_commit_tag_readiness_excluded_runtime_artifacts": (
+            sorted(set(excluded_runtime_artifacts))
+        ),
+        "project_browser_autonomous_commit_tag_readiness_excluded_runtime_artifact_count": (
+            len(sorted(set(excluded_runtime_artifacts)))
+        ),
+        "project_browser_autonomous_commit_tag_readiness_probe_file_absent": bool(
+            probe_file_absent
+        ),
+        "project_browser_autonomous_commit_tag_readiness_commit_plan_path": str(
+            commit_plan_path
+        ),
+        "project_browser_autonomous_commit_tag_readiness_blocked_reason": blocked_reason,
+        "project_browser_autonomous_commit_tag_readiness_runtime_posture": runtime_posture,
+        "project_browser_autonomous_commit_tag_readiness_artifact_paths": artifact_paths,
     }
 
 
@@ -157837,6 +158089,106 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_codex_fix_prompt_generation_state_normalized[
         "project_browser_autonomous_codex_fix_prompt_generation_selected_route"
     ] = project_browser_autonomous_codex_fix_prompt_generation_selected_route
+    project_browser_autonomous_commit_tag_readiness_from_review_route_state = (
+        _build_project_browser_autonomous_commit_tag_readiness_from_review_route_state(
+            repository_path=execution_repo_path
+        )
+    )
+    commit_tag_readiness_from_review_route_allowed_statuses = {
+        "commit_tag_readiness_ready",
+        "commit_tag_readiness_blocked_missing_review_route",
+        "commit_tag_readiness_blocked_route_not_approve",
+        "commit_tag_readiness_blocked_unsafe_candidates",
+        "commit_tag_readiness_blocked_write_failed",
+        "insufficient_truth",
+    }
+    commit_tag_readiness_from_review_route_allowed_next_actions = {
+        "ready_for_bounded_commit_tag_execution",
+        "blocked_route_not_approve",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    commit_tag_readiness_from_review_route_field_names = (
+        "status",
+        "next_action",
+        "selected_route",
+        "safe_to_commit",
+        "commit_candidates",
+        "excluded_runtime_artifacts",
+        "excluded_runtime_artifact_count",
+        "probe_file_absent",
+        "commit_plan_path",
+        "blocked_reason",
+        "runtime_posture",
+        "artifact_paths",
+    )
+    project_browser_autonomous_commit_tag_readiness_from_review_route_status = _normalize_text(
+        project_browser_autonomous_commit_tag_readiness_from_review_route_state.get(
+            "project_browser_autonomous_commit_tag_readiness_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_commit_tag_readiness_from_review_route_status
+        not in commit_tag_readiness_from_review_route_allowed_statuses
+    ):
+        project_browser_autonomous_commit_tag_readiness_from_review_route_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_commit_tag_readiness_from_review_route_next_action = _normalize_text(
+        project_browser_autonomous_commit_tag_readiness_from_review_route_state.get(
+            "project_browser_autonomous_commit_tag_readiness_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_commit_tag_readiness_from_review_route_next_action
+        not in commit_tag_readiness_from_review_route_allowed_next_actions
+    ):
+        project_browser_autonomous_commit_tag_readiness_from_review_route_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_commit_tag_readiness_from_review_route_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in commit_tag_readiness_from_review_route_field_names:
+        key = f"project_browser_autonomous_commit_tag_readiness_{field_name}"
+        value = project_browser_autonomous_commit_tag_readiness_from_review_route_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_commit_tag_readiness_from_review_route_status
+        elif field_name == "next_action":
+            value = (
+                project_browser_autonomous_commit_tag_readiness_from_review_route_next_action
+            )
+        elif field_name in {"safe_to_commit", "probe_file_absent"}:
+            value = bool(value)
+        elif field_name in {"commit_candidates", "excluded_runtime_artifacts", "runtime_posture"}:
+            value = _normalize_string_list(value)
+        elif field_name == "excluded_runtime_artifact_count":
+            value = _as_non_negative_int(value, default=0)
+        elif field_name == "artifact_paths":
+            normalized_paths: dict[str, str] = {}
+            if isinstance(value, Mapping):
+                for path_key, path_value in value.items():
+                    normalized_key = _normalize_text(path_key, default="")
+                    if not normalized_key:
+                        continue
+                    normalized_paths[normalized_key] = _normalize_text(
+                        path_value,
+                        default="",
+                    )
+            value = normalized_paths
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_commit_tag_readiness_from_review_route_state_normalized[
+            key
+        ] = value
+    project_browser_autonomous_commit_tag_readiness_from_review_route_state_normalized[
+        "project_browser_autonomous_commit_tag_readiness_status"
+    ] = project_browser_autonomous_commit_tag_readiness_from_review_route_status
+    project_browser_autonomous_commit_tag_readiness_from_review_route_state_normalized[
+        "project_browser_autonomous_commit_tag_readiness_next_action"
+    ] = project_browser_autonomous_commit_tag_readiness_from_review_route_next_action
     project_browser_autonomous_commit_tag_gate_state = (
         _build_project_browser_autonomous_commit_tag_gate_state(
             chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
@@ -161801,6 +162153,7 @@ def _build_approved_restart_execution_contract_surface(
                 **project_browser_autonomous_post_rollback_fix_reentry_execution_state_normalized,
                 **project_browser_autonomous_post_rollback_fix_reentry_result_assimilation_state_normalized,
                 **project_browser_autonomous_commit_tag_readiness_state_normalized,
+                **project_browser_autonomous_commit_tag_readiness_from_review_route_state_normalized,
                 **project_browser_autonomous_commit_tag_execution_state_normalized,
                 **project_browser_autonomous_commit_tag_result_assimilation_state_normalized,
                 **project_browser_autonomous_multi_cycle_controller_state_normalized,
@@ -169726,6 +170079,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_route_state_normalized,
         **project_browser_autonomous_codex_fix_prompt_generation_state_normalized,
+        **project_browser_autonomous_commit_tag_readiness_from_review_route_state_normalized,
         **project_browser_autonomous_commit_tag_gate_state_normalized,
         **project_browser_autonomous_commit_tag_execution_state_normalized,
         **project_browser_autonomous_pr_queue_state_state_normalized,
@@ -169803,6 +170157,9 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_codex_fix_prompt_generation_state_normalized": (
             dict(project_browser_autonomous_codex_fix_prompt_generation_state_normalized)
+        ),
+        "project_browser_autonomous_commit_tag_readiness_from_review_route_state_normalized": (
+            dict(project_browser_autonomous_commit_tag_readiness_from_review_route_state_normalized)
         ),
         "project_browser_autonomous_commit_tag_gate_state_normalized": (
             dict(project_browser_autonomous_commit_tag_gate_state_normalized)
