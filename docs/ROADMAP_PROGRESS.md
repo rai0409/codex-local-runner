@@ -206,3 +206,31 @@ Completed:
 Remaining note:
 - Some stale live_network fields may still show older network_denied posture in the contract, but authoritative invocation result for this probe was exit_code=0 with blocker_class=none.
 - Next step is Prompt285-B local git diff capture.
+
+## Prompt285-B
+
+Result:
+- PASS
+
+Implemented:
+- Added local-git-authoritative diff capture.
+- Captures:
+  - git status --short
+  - git diff --stat
+  - git diff --name-status
+  - git diff
+- Writes:
+  - /tmp/codex-local-runner-decision/local_git_diff_capture/diff_capture.json
+  - /tmp/codex-local-runner-decision/local_git_diff_capture/diff_summary.md
+  - /tmp/codex-local-runner-decision/local_git_diff_capture/reviewable_diff.patch
+  - /tmp/codex-local-runner-decision/local_git_diff_capture/changed_files.json
+- Exposes capture status and artifact paths in the approved restart execution contract.
+
+Verified:
+- tmp_runner_live_write_probe.txt was captured.
+- artifacts/runtime_commands/* were classified as runtime-only / non-reviewable.
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- No tests were run.
+
+Next:
+- Prompt286 review request generation from captured local git diff artifacts.

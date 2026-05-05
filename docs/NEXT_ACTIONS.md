@@ -159,3 +159,19 @@ Still prohibited:
 - PR creation
 - merge
 - daemon or unbounded loop
+
+## Next after Prompt285-B
+
+Run Prompt286 review request generation.
+
+Goal:
+- Build a review request from local git diff capture artifacts.
+- Use diff_capture.json, diff_summary.md, reviewable_diff.patch, and changed_files.json as authoritative inputs.
+- Do not trust Codex self-reported diff text.
+
+Still prohibited:
+- push
+- PR creation
+- merge
+- daemon or unbounded loop
+- autonomous commit/tag automation
