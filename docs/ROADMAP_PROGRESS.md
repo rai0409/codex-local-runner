@@ -186,3 +186,23 @@ Remaining blocker:
 Conclusion:
 - Phase A is complete.
 - Phase B remains blocked by runner-process WebSocket/network execution context.
+
+## Phase B/C runner live Codex probe
+
+Result:
+- PASS
+
+Confirmed:
+- Direct Codex shell probe exited 0.
+- Runner-driven Codex probe exited 0.
+- approved_restart_execution_contract.json was produced.
+- tmp_runner_live_write_probe.txt was created in the repository root.
+- tmp_runner_live_write_probe.txt content was exactly RUNNER_LIVE_WRITE_OK.
+
+Completed:
+- Phase B: runner-driven Codex invocation can execute successfully.
+- Phase C: runner-driven Codex can create local repository changes.
+
+Remaining note:
+- Some stale live_network fields may still show older network_denied posture in the contract, but authoritative invocation result for this probe was exit_code=0 with blocker_class=none.
+- Next step is Prompt285-B local git diff capture.

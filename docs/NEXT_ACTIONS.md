@@ -137,3 +137,25 @@ Goals:
 3. Determine whether remaining WebSocket Operation not permitted is caused by command shape, subprocess invocation, inherited process restrictions, or external network policy.
 
 Do not proceed to Prompt285-B until runner-driven Codex exits 0 and creates tmp_runner_live_write_probe.txt.
+
+## Next after Phase B/C PASS
+
+Run Prompt285-B local git diff capture.
+
+Goal:
+- Capture local repository changes from git directly.
+- Do not trust Codex self-reported diff text.
+- Use tmp_runner_live_write_probe.txt as the current known local change for the first capture pass.
+
+Expected artifacts:
+- diff_capture.json
+- diff_summary.md
+- reviewable_diff.patch
+- changed_files.json
+
+Still prohibited:
+- commit/tag automation
+- push
+- PR creation
+- merge
+- daemon or unbounded loop
