@@ -3453,6 +3453,14 @@ _CODEX_LIVE_NETWORK_STOP_SURFACE_KEYS: tuple[str, ...] = (
 )
 
 
+_CODEX_GATE_CONNECTOR_ENABLEMENT_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_codex_execution_gate_enabled",
+    "project_browser_autonomous_codex_execution_gate_execute_enabled",
+    "project_browser_autonomous_codex_execution_connector_enabled",
+    "project_browser_autonomous_codex_execution_connector_execute_enabled",
+)
+
+
 def _merge_bounded_local_loop_controls_into_approved_restart_payload(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -3486,6 +3494,25 @@ def _merge_codex_live_network_stop_surface_into_approved_restart_payload(
         if key in policy_payload and policy_payload.get(key) is not None:
             merged[key] = policy_payload.get(key)
     for key in _CODEX_LIVE_NETWORK_STOP_SURFACE_KEYS:
+        if key in retry_payload and retry_payload.get(key) is not None:
+            merged[key] = retry_payload.get(key)
+    return merged
+
+
+def _merge_codex_gate_connector_enablement_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    policy_snapshot: Mapping[str, Any] | None,
+    retry_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    policy_payload = dict(policy_snapshot) if isinstance(policy_snapshot, Mapping) else {}
+    retry_payload = dict(retry_context) if isinstance(retry_context, Mapping) else {}
+
+    for key in _CODEX_GATE_CONNECTOR_ENABLEMENT_KEYS:
+        if key in policy_payload and policy_payload.get(key) is not None:
+            merged[key] = policy_payload.get(key)
+    for key in _CODEX_GATE_CONNECTOR_ENABLEMENT_KEYS:
         if key in retry_payload and retry_payload.get(key) is not None:
             merged[key] = retry_payload.get(key)
     return merged
@@ -171375,6 +171402,13 @@ class PlannedExecutionRunner:
         )
         approved_restart_payload_for_bounded_local_loop = (
             _merge_codex_live_network_stop_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                policy_snapshot=policy_payload,
+                retry_context=effective_retry_context,
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_codex_gate_connector_enablement_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 policy_snapshot=policy_payload,
                 retry_context=effective_retry_context,
