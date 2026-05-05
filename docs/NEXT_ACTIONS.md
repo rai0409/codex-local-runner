@@ -82,3 +82,31 @@ Still prohibited:
 - PR creation
 - merge
 - daemon or unbounded loop
+
+## Next after Prompt285-C live probe
+
+Run Prompt285-D.
+
+Goal:
+- Allow explicit one-shot retry-context enablement of:
+  - project_browser_autonomous_codex_execution_gate_enabled
+  - project_browser_autonomous_codex_execution_gate_execute_enabled
+  - project_browser_autonomous_codex_execution_connector_enabled
+  - project_browser_autonomous_codex_execution_connector_execute_enabled
+
+Expected:
+- gate_disabled should clear when explicitly enabled.
+- connector_disabled should clear when explicitly enabled.
+- If other readiness checks pass, invocation_command should be populated with the Prompt285-C command shape:
+  - --sandbox workspace-write
+  - -m gpt-5.3-codex
+  - -c 'model_reasoning_effort="high"'
+  - -c 'approval_policy="never"'
+
+Still prohibited:
+- Prompt285-B local git diff capture before runner-driven local changes exist
+- commit/tag automation
+- push
+- PR creation
+- merge
+- daemon or unbounded loop

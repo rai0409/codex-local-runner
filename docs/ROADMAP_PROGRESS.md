@@ -124,3 +124,26 @@ Validation:
 Next:
 - Run one runner-driven live Codex connector verification.
 - If runner-driven Codex creates local repository changes, proceed to Prompt285-B local git diff capture.
+
+## Prompt285-C live probe result
+
+Result:
+- Runner completed and produced approved_restart_execution_contract.json.
+- Codex invocation was not reached.
+
+Observed:
+- project_browser_autonomous_codex_execution_gate_status=codex_execution_gate_not_requested
+- project_browser_autonomous_codex_execution_gate_blocked_reason=gate_disabled
+- project_browser_autonomous_codex_execution_connector_status=codex_execution_connector_not_requested
+- project_browser_autonomous_codex_execution_connector_blocked_reason=connector_disabled
+- project_browser_autonomous_codex_invocation_execution_status=blocked_human_review_required
+- project_browser_autonomous_codex_invocation_execution_block_reason=human_review_required
+- project_browser_autonomous_codex_invocation_execution_invocation_command=[]
+
+Conclusion:
+- Prompt285-C command update is committed, but the runner does not reach the invocation command because gate and connector remain disabled.
+- The next required step is Prompt285-D: carry explicit one-shot gate/connector enablement from retry-context or approved restart payload into the current contract evaluation.
+
+Next:
+- Prompt285-D should add a narrow metadata-only bridge for gate/connector enablement fields.
+- Do not proceed to Prompt285-B until runner-driven Codex invocation is reached and local repository changes can be produced.
