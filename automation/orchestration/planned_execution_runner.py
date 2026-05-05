@@ -3444,6 +3444,15 @@ _BOUNDED_LOCAL_LOOP_LOCAL_LOOP_STATE_KEYS: tuple[str, ...] = (
 )
 
 
+_CODEX_LIVE_NETWORK_STOP_SURFACE_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_codex_live_network_blocker_class",
+    "project_browser_autonomous_codex_live_network_blocked_reason",
+    "project_browser_autonomous_codex_live_retry_allowed",
+    "project_browser_autonomous_codex_live_next_action",
+    "project_browser_autonomous_codex_live_retry_likely_repeats",
+)
+
+
 def _merge_bounded_local_loop_controls_into_approved_restart_payload(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -3458,6 +3467,25 @@ def _merge_bounded_local_loop_controls_into_approved_restart_payload(
         if key in policy_payload and policy_payload.get(key) is not None:
             merged[key] = policy_payload.get(key)
     for key in _BOUNDED_LOCAL_LOOP_CONTROL_KEYS:
+        if key in retry_payload and retry_payload.get(key) is not None:
+            merged[key] = retry_payload.get(key)
+    return merged
+
+
+def _merge_codex_live_network_stop_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    policy_snapshot: Mapping[str, Any] | None,
+    retry_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    policy_payload = dict(policy_snapshot) if isinstance(policy_snapshot, Mapping) else {}
+    retry_payload = dict(retry_context) if isinstance(retry_context, Mapping) else {}
+
+    for key in _CODEX_LIVE_NETWORK_STOP_SURFACE_KEYS:
+        if key in policy_payload and policy_payload.get(key) is not None:
+            merged[key] = policy_payload.get(key)
+    for key in _CODEX_LIVE_NETWORK_STOP_SURFACE_KEYS:
         if key in retry_payload and retry_payload.get(key) is not None:
             merged[key] = retry_payload.get(key)
     return merged
@@ -98122,6 +98150,8 @@ def _build_project_browser_autonomous_codex_live_network_state(
     codex_execution_connector_state: Mapping[str, Any] | None,
     codex_invocation_execution_state: Mapping[str, Any] | None,
     codex_invocation_result_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None = None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     connector = (
         dict(codex_execution_connector_state)
@@ -98138,6 +98168,71 @@ def _build_project_browser_autonomous_codex_live_network_state(
         if isinstance(codex_invocation_result_state, Mapping)
         else {}
     )
+    approved_restart = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_persisted_value(key: str) -> Any:
+        if key in approved_restart and approved_restart.get(key) is not None:
+            return approved_restart.get(key)
+        if key in prior_payload:
+            return prior_payload.get(key)
+        return None
+
+    persisted_blocker_class = _normalize_text(
+        _read_persisted_value(
+            "project_browser_autonomous_codex_live_network_blocker_class"
+        ),
+        default="",
+    )
+    persisted_blocked_reason = _normalize_text(
+        _read_persisted_value(
+            "project_browser_autonomous_codex_live_network_blocked_reason"
+        ),
+        default="",
+    )
+    persisted_retry_allowed = _read_persisted_value(
+        "project_browser_autonomous_codex_live_retry_allowed"
+    )
+    persisted_next_action = _normalize_text(
+        _read_persisted_value("project_browser_autonomous_codex_live_next_action"),
+        default="",
+    )
+    persisted_retry_likely_repeats = bool(
+        _read_persisted_value(
+            "project_browser_autonomous_codex_live_retry_likely_repeats"
+        )
+    )
+    persisted_non_retryable_network_denied = bool(
+        persisted_blocker_class == "network_denied"
+        and persisted_blocked_reason == "codex_invocation_blocked_network_denied"
+        and persisted_next_action == "stop_live_network_unavailable"
+        and not bool(persisted_retry_allowed)
+    )
+
+    if persisted_non_retryable_network_denied:
+        return {
+            "project_browser_autonomous_codex_live_network_status": "blocked",
+            "project_browser_autonomous_codex_live_network_blocker_class": (
+                "network_denied"
+            ),
+            "project_browser_autonomous_codex_live_network_blocked_reason": (
+                "codex_invocation_blocked_network_denied"
+            ),
+            "project_browser_autonomous_codex_live_retry_allowed": False,
+            "project_browser_autonomous_codex_live_retry_likely_repeats": True,
+            "project_browser_autonomous_codex_live_next_action": (
+                "stop_live_network_unavailable"
+            ),
+            "project_browser_autonomous_codex_live_manual_action_required": True,
+        }
 
     blocker_class = _normalize_text(
         connector.get(
@@ -155998,6 +156093,8 @@ def _build_approved_restart_execution_contract_surface(
             codex_execution_connector_state=project_browser_autonomous_codex_execution_connector_state_normalized,
             codex_invocation_execution_state=project_browser_autonomous_codex_invocation_execution_state_normalized,
             codex_invocation_result_state=project_browser_autonomous_codex_invocation_result_state_normalized,
+            approved_restart_payload=approved_restart,
+            prior_approved_restart_execution_payload=prior_approved_restart_execution,
         )
     )
     codex_live_network_allowed_statuses = {"available", "blocked", "insufficient_truth"}
@@ -171265,6 +171362,13 @@ class PlannedExecutionRunner:
         )
         approved_restart_payload_for_bounded_local_loop = (
             _merge_bounded_local_loop_local_loop_state_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                policy_snapshot=policy_payload,
+                retry_context=effective_retry_context,
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_codex_live_network_stop_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 policy_snapshot=policy_payload,
                 retry_context=effective_retry_context,
