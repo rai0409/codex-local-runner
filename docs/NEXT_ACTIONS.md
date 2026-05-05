@@ -175,3 +175,19 @@ Still prohibited:
 - merge
 - daemon or unbounded loop
 - autonomous commit/tag automation
+
+## Next after Prompt286
+
+Run Prompt287 review response assimilation.
+
+Goal:
+- Read a ChatGPT review response artifact.
+- Normalize the review decision into approve / fix / revert / manual_review.
+- Enforce safety rules before any approve/fix/revert routing.
+
+Still prohibited:
+- push
+- PR creation
+- merge
+- daemon or unbounded loop
+- autonomous commit/tag automation
