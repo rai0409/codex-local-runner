@@ -263,3 +263,18 @@ Still prohibited:
 - PR creation
 - merge
 - unbounded loop
+
+## Next after Prompt288 approval route
+
+Run Prompt290 commit/tag readiness preparation.
+
+Goal:
+- Consume selected_route=approve.
+- Build commit/tag readiness metadata.
+- Generate a commit plan without executing commit/tag.
+- Exclude runtime artifacts.
+- Confirm tmp_runner_live_write_probe.txt is absent.
+- Do not push, PR, merge, or execute commit/tag yet.
+
+Expected next_action:
+- ready_for_bounded_commit_tag_execution
