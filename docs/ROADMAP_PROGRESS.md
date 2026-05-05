@@ -346,3 +346,30 @@ Verified:
 
 Next:
 - Proceed to fix-route preparation / Codex fix prompt generation for the identified Prompt288 issue.
+
+## Prompt288-fix-followup
+
+Result:
+- PASS
+
+Implemented:
+- Added metadata-only Codex fix prompt generation from selected review route.
+- Reads:
+  - /tmp/codex-local-runner-decision/chatgpt_diff_review_route/review_route_decision.json
+- Writes:
+  - /tmp/codex-local-runner-decision/codex_fix_prompt/codex_fix_prompt.md
+  - /tmp/codex-local-runner-decision/codex_fix_prompt/codex_fix_request.json
+  - /tmp/codex-local-runner-decision/codex_fix_prompt/codex_fix_summary.md
+- Exposes project_browser_autonomous_codex_fix_prompt_generation_* fields in approved restart payload.
+
+Observed:
+- selected_route=fix
+- next_action=ready_for_bounded_codex_fix_invocation
+- blocked_reason=none
+
+Verified:
+- python -m py_compile automation/orchestration/planned_execution_runner.py passed.
+- No tests were run.
+
+Next:
+- Run bounded Codex fix invocation using the generated codex_fix_prompt.md.

@@ -246,3 +246,20 @@ Still prohibited:
 - PR creation
 - merge
 - unbounded loop
+
+## Next after Prompt288-fix-followup
+
+Current state:
+- selected_route=fix
+- next_action=ready_for_bounded_codex_fix_invocation
+
+Next:
+- Run a single bounded Codex fix invocation using:
+  /tmp/codex-local-runner-decision/codex_fix_prompt/codex_fix_prompt.md
+
+Still prohibited:
+- autonomous commit/tag execution
+- push
+- PR creation
+- merge
+- unbounded loop
