@@ -3461,6 +3461,127 @@ _CODEX_GATE_CONNECTOR_ENABLEMENT_KEYS: tuple[str, ...] = (
 )
 
 
+def _overlay_prompt_selection_for_explicit_one_shot_live_probe(
+    *,
+    prompt_selection_state: Mapping[str, Any] | None,
+    approved_restart_payload: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any], bool]:
+    merged = dict(prompt_selection_state) if isinstance(prompt_selection_state, Mapping) else {}
+    approved_restart = (
+        dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    probe_enabled = bool(
+        _read_flag("project_browser_autonomous_codex_execution_gate_enabled", default=False)
+        and _read_flag(
+            "project_browser_autonomous_codex_execution_gate_execute_enabled",
+            default=False,
+        )
+        and _read_flag(
+            "project_browser_autonomous_codex_execution_connector_enabled",
+            default=False,
+        )
+        and _read_flag(
+            "project_browser_autonomous_codex_execution_connector_execute_enabled",
+            default=False,
+        )
+    )
+    if not probe_enabled:
+        return (merged, False)
+
+    local_loop_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_local_loop_status"),
+        default="",
+    )
+    local_loop_next_action = _normalize_text(
+        approved_restart.get("project_browser_autonomous_local_loop_next_action"),
+        default="",
+    )
+    if not (
+        local_loop_status == "local_loop_ready_run_codex_implementation"
+        and local_loop_next_action == "run_codex_implementation"
+    ):
+        return (merged, False)
+
+    prompt_path = "/tmp/codex-local-runner-decision/generated_next_prompt.txt"
+    prompt_obj = Path(prompt_path)
+    path_exists = prompt_obj.exists()
+    path_is_file = prompt_obj.is_file() if path_exists else False
+    path_is_symlink = prompt_obj.is_symlink() if path_exists else False
+    if not path_exists or not path_is_file or path_is_symlink:
+        return (merged, False)
+
+    prompt_size_bytes = 0
+    try:
+        prompt_size_bytes = max(0, int(prompt_obj.stat().st_size))
+    except OSError:
+        return (merged, False)
+    prompt_non_empty = prompt_size_bytes > 0
+    prompt_too_large = prompt_size_bytes > 20000
+    if not prompt_non_empty or prompt_too_large:
+        return (merged, False)
+
+    if bool(
+        merged.get("project_browser_autonomous_prompt_selection_selected_prompt_ready", False)
+    ):
+        return (merged, False)
+
+    merged["project_browser_autonomous_prompt_selection_status"] = "selected_next_prompt"
+    merged["project_browser_autonomous_prompt_selection_source_status"] = (
+        "explicit_one_shot_live_probe_selected_next_prompt"
+    )
+    merged["project_browser_autonomous_prompt_selection_block_reason"] = "none"
+    merged["project_browser_autonomous_prompt_selection_selected_prompt_kind"] = "next"
+    merged["project_browser_autonomous_prompt_selection_selected_prompt_path"] = prompt_path
+    merged["project_browser_autonomous_prompt_selection_selected_prompt_source"] = (
+        "explicit_one_shot_live_probe"
+    )
+    merged["project_browser_autonomous_prompt_selection_selected_prompt_ready"] = True
+    merged["project_browser_autonomous_prompt_selection_selected_prompt_body_available"] = True
+    merged[
+        "project_browser_autonomous_prompt_selection_selected_prompt_handoff_write_completed"
+    ] = True
+    merged["project_browser_autonomous_prompt_selection_selected_prompt_handoff_write_failed"] = (
+        False
+    )
+    merged["project_browser_autonomous_prompt_selection_selected_prompt_path_is_exact"] = True
+    merged["project_browser_autonomous_prompt_selection_selected_prompt_path_exists"] = True
+    merged["project_browser_autonomous_prompt_selection_selected_prompt_path_is_symlink"] = (
+        False
+    )
+    merged["project_browser_autonomous_prompt_selection_next_prompt_status"] = (
+        "prompt_generated"
+    )
+    merged["project_browser_autonomous_prompt_selection_next_prompt_generated"] = True
+    merged["project_browser_autonomous_prompt_selection_next_prompt_handoff_path"] = (
+        prompt_path
+    )
+    merged[
+        "project_browser_autonomous_prompt_selection_next_prompt_handoff_write_completed"
+    ] = True
+    merged["project_browser_autonomous_prompt_selection_next_prompt_handoff_write_failed"] = (
+        False
+    )
+    merged["project_browser_autonomous_prompt_selection_human_review_required"] = False
+    merged["project_browser_autonomous_prompt_selection_next_action"] = (
+        "check_codex_invocation_readiness_later"
+    )
+    return (merged, True)
+
+
 def _merge_bounded_local_loop_controls_into_approved_restart_payload(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -100264,6 +100385,14 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
     normalized_prompt_kind = _normalize_text(selected_prompt_kind, default="none")
     normalized_prompt_path = _normalize_text(selected_prompt_path, default="")
     normalized_prompt_source = _normalize_text(selected_prompt_source, default="")
+    explicit_one_shot_live_probe_prompt_path = (
+        "/tmp/codex-local-runner-decision/generated_next_prompt.txt"
+    )
+    explicit_one_shot_live_probe_selected = bool(
+        normalized_prompt_source == "explicit_one_shot_live_probe"
+        and normalized_prompt_kind == "next"
+        and normalized_prompt_path == explicit_one_shot_live_probe_prompt_path
+    )
     normalized_max_invocations = (
         1 if _as_non_negative_int(max_invocations, default=1) != 1 else 1
     )
@@ -100407,138 +100536,143 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
             block_reason = "codex_command_unavailable"
             next_action = "manual_codex_invocation_required"
         else:
-            runtime_root = Path("/tmp/codex-local-runner-decision/codex_runtime")
-            runtime_home = runtime_root / "home"
-            runtime_tmp = runtime_root / "tmp"
-            runtime_config = runtime_root / "config"
-            runtime_cache = runtime_root / "cache"
-            runtime_state = runtime_root / "state"
-            runtime_data = runtime_root / "data"
-            runtime_codex_home = runtime_root / "codex_home"
-            runtime_dirs = (
-                runtime_root,
-                runtime_home,
-                runtime_tmp,
-                runtime_config,
-                runtime_cache,
-                runtime_state,
-                runtime_data,
-                runtime_codex_home,
-            )
-            try:
-                for runtime_dir in runtime_dirs:
-                    runtime_dir.mkdir(parents=True, exist_ok=True)
-            except OSError as exc:
-                status = "failed_execution_error"
-                source_status = "runtime_environment_prepare_failed"
-                block_reason = f"runtime_environment_prepare_failed:{type(exc).__name__}"
-                next_action = "manual_codex_invocation_required"
-                result_status = "failed_execution_error"
-                result_source_status = source_status
-                result_kind = "execution_error"
-                result_failed = True
-                result_timeout = False
-                result_next_action = "manual_codex_invocation_required"
-                missing_inputs.append("runtime_environment_writable_path")
-                _write_result_payload()
-                return {
-                    "project_browser_autonomous_codex_invocation_execution_status": status,
-                    "project_browser_autonomous_codex_invocation_execution_source_status": (
-                        source_status
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_block_reason": (
-                        block_reason
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_selected_prompt_kind": (
-                        normalized_prompt_kind
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_selected_prompt_path": (
-                        normalized_prompt_path
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_selected_prompt_source": (
-                        normalized_prompt_source
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_allowed": bool(
-                        invocation_allowed
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_attempted": bool(
-                        invocation_attempted
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_completed": bool(
-                        invocation_completed
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_exit_code": int(
-                        invocation_exit_code
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_timeout": bool(
-                        invocation_timeout
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_command": (
-                        invocation_command
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_stdout_path": (
-                        stdout_path
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_stderr_path": (
-                        stderr_path
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_stdout_excerpt": (
-                        invocation_stdout_excerpt
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_invocation_stderr_excerpt": (
-                        invocation_stderr_excerpt
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_max_invocations": int(
-                        normalized_max_invocations
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_next_action": next_action,
-                    "project_browser_autonomous_codex_invocation_execution_runtime_posture": (
-                        runtime_posture
-                    ),
-                    "project_browser_autonomous_codex_invocation_execution_missing_inputs": (
-                        _serialize_required_signals(missing_inputs)
-                    ),
-                    "project_browser_autonomous_codex_invocation_result_status": result_status,
-                    "project_browser_autonomous_codex_invocation_result_source_status": (
-                        result_source_status
-                    ),
-                    "project_browser_autonomous_codex_invocation_result_result_kind": result_kind,
-                    "project_browser_autonomous_codex_invocation_result_result_path": result_path,
-                    "project_browser_autonomous_codex_invocation_result_stdout_path": stdout_path,
-                    "project_browser_autonomous_codex_invocation_result_stderr_path": stderr_path,
-                    "project_browser_autonomous_codex_invocation_result_exit_code": int(
-                        invocation_exit_code
-                    ),
-                    "project_browser_autonomous_codex_invocation_result_completed": bool(
-                        result_completed
-                    ),
-                    "project_browser_autonomous_codex_invocation_result_failed": bool(
-                        result_failed
-                    ),
-                    "project_browser_autonomous_codex_invocation_result_timeout": bool(
-                        result_timeout
-                    ),
-                    "project_browser_autonomous_codex_invocation_result_next_action": (
-                        result_next_action
-                    ),
-                    "project_browser_autonomous_codex_invocation_result_runtime_posture": (
-                        runtime_posture
-                    ),
-                    "project_browser_autonomous_codex_invocation_result_missing_inputs": (
-                        _serialize_required_signals(missing_inputs)
-                    ),
-                }
-
             invocation_environment = os.environ.copy()
-            invocation_environment_overrides = {
-                "HOME": str(runtime_home),
-                "TMPDIR": str(runtime_tmp),
-                "XDG_CONFIG_HOME": str(runtime_config),
-                "XDG_CACHE_HOME": str(runtime_cache),
-                "XDG_STATE_HOME": str(runtime_state),
-                "XDG_DATA_HOME": str(runtime_data),
-                "CODEX_HOME": str(runtime_codex_home),
-            }
+            if explicit_one_shot_live_probe_selected:
+                runtime_posture.append(
+                    "explicit_one_shot_live_probe_inherit_user_codex_environment"
+                )
+                invocation_environment_overrides = {}
+            else:
+                runtime_root = Path("/tmp/codex-local-runner-decision/codex_runtime")
+                runtime_home = runtime_root / "home"
+                runtime_tmp = runtime_root / "tmp"
+                runtime_config = runtime_root / "config"
+                runtime_cache = runtime_root / "cache"
+                runtime_state = runtime_root / "state"
+                runtime_data = runtime_root / "data"
+                runtime_codex_home = runtime_root / "codex_home"
+                runtime_dirs = (
+                    runtime_root,
+                    runtime_home,
+                    runtime_tmp,
+                    runtime_config,
+                    runtime_cache,
+                    runtime_state,
+                    runtime_data,
+                    runtime_codex_home,
+                )
+                try:
+                    for runtime_dir in runtime_dirs:
+                        runtime_dir.mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    status = "failed_execution_error"
+                    source_status = "runtime_environment_prepare_failed"
+                    block_reason = f"runtime_environment_prepare_failed:{type(exc).__name__}"
+                    next_action = "manual_codex_invocation_required"
+                    result_status = "failed_execution_error"
+                    result_source_status = source_status
+                    result_kind = "execution_error"
+                    result_failed = True
+                    result_timeout = False
+                    result_next_action = "manual_codex_invocation_required"
+                    missing_inputs.append("runtime_environment_writable_path")
+                    _write_result_payload()
+                    return {
+                        "project_browser_autonomous_codex_invocation_execution_status": status,
+                        "project_browser_autonomous_codex_invocation_execution_source_status": (
+                            source_status
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_block_reason": (
+                            block_reason
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_selected_prompt_kind": (
+                            normalized_prompt_kind
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_selected_prompt_path": (
+                            normalized_prompt_path
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_selected_prompt_source": (
+                            normalized_prompt_source
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_allowed": bool(
+                            invocation_allowed
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_attempted": bool(
+                            invocation_attempted
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_completed": bool(
+                            invocation_completed
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_exit_code": int(
+                            invocation_exit_code
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_timeout": bool(
+                            invocation_timeout
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_command": (
+                            invocation_command
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_stdout_path": (
+                            stdout_path
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_stderr_path": (
+                            stderr_path
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_stdout_excerpt": (
+                            invocation_stdout_excerpt
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_invocation_stderr_excerpt": (
+                            invocation_stderr_excerpt
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_max_invocations": int(
+                            normalized_max_invocations
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_next_action": next_action,
+                        "project_browser_autonomous_codex_invocation_execution_runtime_posture": (
+                            runtime_posture
+                        ),
+                        "project_browser_autonomous_codex_invocation_execution_missing_inputs": (
+                            _serialize_required_signals(missing_inputs)
+                        ),
+                        "project_browser_autonomous_codex_invocation_result_status": result_status,
+                        "project_browser_autonomous_codex_invocation_result_source_status": (
+                            result_source_status
+                        ),
+                        "project_browser_autonomous_codex_invocation_result_result_kind": result_kind,
+                        "project_browser_autonomous_codex_invocation_result_result_path": result_path,
+                        "project_browser_autonomous_codex_invocation_result_stdout_path": stdout_path,
+                        "project_browser_autonomous_codex_invocation_result_stderr_path": stderr_path,
+                        "project_browser_autonomous_codex_invocation_result_exit_code": int(
+                            invocation_exit_code
+                        ),
+                        "project_browser_autonomous_codex_invocation_result_completed": bool(
+                            result_completed
+                        ),
+                        "project_browser_autonomous_codex_invocation_result_failed": bool(
+                            result_failed
+                        ),
+                        "project_browser_autonomous_codex_invocation_result_timeout": bool(
+                            result_timeout
+                        ),
+                        "project_browser_autonomous_codex_invocation_result_next_action": (
+                            result_next_action
+                        ),
+                        "project_browser_autonomous_codex_invocation_result_runtime_posture": (
+                            runtime_posture
+                        ),
+                        "project_browser_autonomous_codex_invocation_result_missing_inputs": (
+                            _serialize_required_signals(missing_inputs)
+                        ),
+                    }
+                invocation_environment_overrides = {
+                    "HOME": str(runtime_home),
+                    "TMPDIR": str(runtime_tmp),
+                    "XDG_CONFIG_HOME": str(runtime_config),
+                    "XDG_CACHE_HOME": str(runtime_cache),
+                    "XDG_STATE_HOME": str(runtime_state),
+                    "XDG_DATA_HOME": str(runtime_data),
+                    "CODEX_HOME": str(runtime_codex_home),
+                }
             invocation_environment.update(invocation_environment_overrides)
             invocation_command = [
                 codex_command,
@@ -122658,6 +122792,13 @@ def _build_approved_restart_execution_contract_surface(
                 )
             ),
         )
+    )
+    (
+        project_browser_autonomous_prompt_selection_state,
+        _,
+    ) = _overlay_prompt_selection_for_explicit_one_shot_live_probe(
+        prompt_selection_state=project_browser_autonomous_prompt_selection_state,
+        approved_restart_payload=approved_restart,
     )
     prompt_selection_allowed_statuses = {
         "selected_fix_prompt",
