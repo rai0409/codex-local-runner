@@ -404,3 +404,36 @@ Important completed steps:
 
 Next:
 - Prompt290 commit/tag readiness preparation.
+
+## Prompt296 / Prompt296-fix: next development slice generation
+
+Result:
+- PASS
+
+Implemented:
+- Added metadata-only next development slice generation.
+- Reads:
+  - /tmp/codex-local-runner-decision/post_push_queue_state/post_push_queue_state.json
+  - /tmp/codex-local-runner-decision/post_push_queue_state/post_push_queue_summary.md
+- Writes:
+  - /tmp/codex-local-runner-decision/next_dev_slice/next_dev_slice.json
+  - /tmp/codex-local-runner-decision/next_dev_slice/next_dev_slice_summary.md
+- Exposes project_browser_autonomous_next_dev_slice_* fields in approved_restart_execution_contract.json.
+
+Observed:
+- project_browser_autonomous_next_dev_slice_status=next_dev_slice_generated
+- project_browser_autonomous_next_dev_slice_next_action=prepare_next_local_codex_prompt
+- project_browser_autonomous_next_dev_slice_id=next-local-codex-prompt-from-next-dev-slice
+- project_browser_autonomous_next_dev_slice_goal=Generate next local Codex implementation prompt from next_dev_slice.
+- project_browser_autonomous_next_dev_slice_scope=metadata_only_prompt_generation
+- project_browser_autonomous_next_dev_slice_blocked_reason=none
+- project_browser_autonomous_next_dev_slice_selected_count=1
+
+Safety:
+- No Codex recursive execution inside runner.
+- No generated slice execution.
+- No commit/tag/push/PR/merge performed by Prompt296.
+- Runtime artifacts remain untracked and non-reviewable.
+
+Next:
+- Prompt297: generate a local Codex implementation prompt from next_dev_slice.

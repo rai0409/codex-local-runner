@@ -3478,6 +3478,18 @@ _CHATGPT_DIFF_REVIEW_REQUEST_CONTROL_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_chatgpt_diff_review_request_write_enabled",
 )
 
+_NEXT_DEV_SLICE_SURFACE_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_next_dev_slice_status",
+    "project_browser_autonomous_next_dev_slice_next_action",
+    "project_browser_autonomous_next_dev_slice_id",
+    "project_browser_autonomous_next_dev_slice_goal",
+    "project_browser_autonomous_next_dev_slice_scope",
+    "project_browser_autonomous_next_dev_slice_artifact_paths",
+    "project_browser_autonomous_next_dev_slice_blocked_reason",
+    "project_browser_autonomous_next_dev_slice_runtime_posture",
+    "project_browser_autonomous_next_dev_slice_selected_count",
+)
+
 
 def _overlay_prompt_selection_for_explicit_one_shot_live_probe(
     *,
@@ -3693,6 +3705,164 @@ def _merge_bounded_local_loop_local_loop_state_into_approved_restart_payload(
         if key in retry_payload and retry_payload.get(key) is not None:
             merged[key] = retry_payload.get(key)
     return merged
+
+
+def _merge_next_dev_slice_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    next_dev_slice_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = dict(next_dev_slice_state) if isinstance(next_dev_slice_state, Mapping) else {}
+    for key in _NEXT_DEV_SLICE_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _build_project_browser_autonomous_next_dev_slice_state() -> dict[str, Any]:
+    post_push_dir = Path("/tmp/codex-local-runner-decision/post_push_queue_state")
+    next_dev_slice_dir = Path("/tmp/codex-local-runner-decision/next_dev_slice")
+
+    input_state_path = post_push_dir / "post_push_queue_state.json"
+    input_summary_path = post_push_dir / "post_push_queue_summary.md"
+    output_json_path = next_dev_slice_dir / "next_dev_slice.json"
+    output_summary_path = next_dev_slice_dir / "next_dev_slice_summary.md"
+
+    artifact_paths = {
+        "input_post_push_queue_state_json": str(input_state_path),
+        "input_post_push_queue_summary_md": str(input_summary_path),
+        "output_next_dev_slice_json": str(output_json_path),
+        "output_next_dev_slice_summary_md": str(output_summary_path),
+    }
+    runtime_posture = [
+        "metadata_only_prompt_generation",
+        "no_codex_invocation",
+        "no_next_slice_execution",
+        "no_commit_tag_push_pr_merge",
+    ]
+
+    status = "next_dev_slice_blocked_missing_post_push_state"
+    next_action = "manual_review_required"
+    selected_slice_id = ""
+    selected_slice_goal = ""
+    selected_slice_scope = "metadata_only_prompt_generation"
+    blocked_reason = "missing_post_push_queue_state"
+    selected_count = 0
+    selected_slices: list[dict[str, Any]] = []
+
+    post_push_payload: Mapping[str, Any] | None = None
+    if input_state_path.exists():
+        try:
+            loaded_payload = json.loads(input_state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            blocked_reason = "invalid_post_push_queue_state_json"
+        else:
+            if isinstance(loaded_payload, Mapping):
+                post_push_payload = loaded_payload
+            else:
+                blocked_reason = "post_push_queue_state_not_object"
+
+    if isinstance(post_push_payload, Mapping):
+        status_value = _normalize_text(post_push_payload.get("status"), default="")
+        action_value = _normalize_text(post_push_payload.get("next_action"), default="")
+        ready_value = bool(post_push_payload.get("ready_for_next_local_codex_cycle", False))
+
+        if status_value != "post_push_queue_state_updated":
+            blocked_reason = "post_push_status_not_updated"
+        elif action_value != "prepare_next_development_slice":
+            blocked_reason = "post_push_next_action_not_prepare_next_development_slice"
+        elif not ready_value:
+            blocked_reason = "post_push_not_ready_for_next_local_codex_cycle"
+        else:
+            selected_slice_id = "next-local-codex-prompt-from-next-dev-slice"
+            selected_slice_goal = "Generate next local Codex implementation prompt from next_dev_slice."
+            selected_slice_scope = "metadata_only_prompt_generation"
+            selected_count = 1
+            selected_slices = [
+                {
+                    "slice_id": selected_slice_id,
+                    "goal": selected_slice_goal,
+                    "scope": selected_slice_scope,
+                    "execution_status": "not_started",
+                    "codex_invocation_status": "not_started",
+                    "review_status": "not_started",
+                    "commit_tag_status": "not_started",
+                    "push_status": "not_started",
+                    "do_not_invoke_codex_from_runner": True,
+                    "do_not_execute_generated_slice": True,
+                }
+            ]
+            status = "next_dev_slice_generated"
+            next_action = "prepare_next_local_codex_prompt"
+            blocked_reason = "none"
+
+    next_dev_slice_payload = {
+        "status": status,
+        "next_action": next_action,
+        "blocked_reason": blocked_reason,
+        "selected_slice_count": int(selected_count),
+        "selected_slices": selected_slices,
+        "artifact_paths": artifact_paths,
+        "runtime_posture": runtime_posture,
+    }
+    summary_lines = [
+        "# Next Development Slice",
+        "",
+        f"- Status: `{status}`",
+        f"- Next action: `{next_action}`",
+        f"- Selected slice count: `{selected_count}`",
+        f"- Selected slice id: `{selected_slice_id or 'none'}`",
+        f"- Selected slice goal: `{selected_slice_goal or 'none'}`",
+        f"- Selected slice scope: `{selected_slice_scope}`",
+        f"- Blocked reason: `{blocked_reason}`",
+        "",
+        "## Artifact Paths",
+        f"- Input state JSON: `{artifact_paths['input_post_push_queue_state_json']}`",
+        f"- Input summary MD: `{artifact_paths['input_post_push_queue_summary_md']}`",
+        f"- Output next-dev-slice JSON: `{artifact_paths['output_next_dev_slice_json']}`",
+        f"- Output next-dev-slice summary MD: `{artifact_paths['output_next_dev_slice_summary_md']}`",
+    ]
+
+    if blocked_reason == "none":
+        summary_lines.extend(
+            [
+                "",
+                "## Selected Slice",
+                f"- `slice_id`: `{selected_slice_id}`",
+                f"- `goal`: `{selected_slice_goal}`",
+                "- `scope`: `metadata_only_prompt_generation`",
+                "- `execution_status`: `not_started`",
+                "- `codex_invocation_status`: `not_started`",
+                "- `review_status`: `not_started`",
+                "- `commit_tag_status`: `not_started`",
+                "- `push_status`: `not_started`",
+            ]
+        )
+
+    try:
+        next_dev_slice_dir.mkdir(parents=True, exist_ok=True)
+        output_json_path.write_text(
+            json.dumps(next_dev_slice_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        output_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    except OSError:
+        status = "next_dev_slice_blocked_write_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "next_dev_slice_artifact_write_failed"
+
+    return {
+        "project_browser_autonomous_next_dev_slice_status": status,
+        "project_browser_autonomous_next_dev_slice_next_action": next_action,
+        "project_browser_autonomous_next_dev_slice_id": selected_slice_id,
+        "project_browser_autonomous_next_dev_slice_goal": selected_slice_goal,
+        "project_browser_autonomous_next_dev_slice_scope": selected_slice_scope,
+        "project_browser_autonomous_next_dev_slice_artifact_paths": artifact_paths,
+        "project_browser_autonomous_next_dev_slice_blocked_reason": blocked_reason,
+        "project_browser_autonomous_next_dev_slice_runtime_posture": runtime_posture,
+        "project_browser_autonomous_next_dev_slice_selected_count": int(selected_count),
+    }
 
 
 def _overlay_bounded_local_loop_local_loop_state_for_coordinator(
@@ -158526,6 +158696,84 @@ def _build_approved_restart_execution_contract_surface(
             approved_restart_payload=approved_restart,
         )
     )
+    next_dev_slice_allowed_statuses = {
+        "next_dev_slice_generated",
+        "next_dev_slice_blocked_missing_post_push_state",
+        "next_dev_slice_blocked_write_failed",
+        "insufficient_truth",
+    }
+    next_dev_slice_allowed_next_actions = {
+        "prepare_next_local_codex_prompt",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    project_browser_autonomous_next_dev_slice_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_next_dev_slice_status"),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_next_dev_slice_status not in next_dev_slice_allowed_statuses:
+        project_browser_autonomous_next_dev_slice_status = "insufficient_truth"
+    project_browser_autonomous_next_dev_slice_next_action = _normalize_text(
+        approved_restart.get("project_browser_autonomous_next_dev_slice_next_action"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_next_dev_slice_next_action
+        not in next_dev_slice_allowed_next_actions
+    ):
+        project_browser_autonomous_next_dev_slice_next_action = "insufficient_truth"
+    project_browser_autonomous_next_dev_slice_artifact_paths = (
+        dict(
+            approved_restart.get(
+                "project_browser_autonomous_next_dev_slice_artifact_paths",
+                {},
+            )
+        )
+        if isinstance(
+            approved_restart.get(
+                "project_browser_autonomous_next_dev_slice_artifact_paths",
+                {},
+            ),
+            Mapping,
+        )
+        else {}
+    )
+    project_browser_autonomous_next_dev_slice_state_normalized: dict[str, Any] = {
+        "project_browser_autonomous_next_dev_slice_status": (
+            project_browser_autonomous_next_dev_slice_status
+        ),
+        "project_browser_autonomous_next_dev_slice_next_action": (
+            project_browser_autonomous_next_dev_slice_next_action
+        ),
+        "project_browser_autonomous_next_dev_slice_id": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_dev_slice_id"),
+            default="",
+        ),
+        "project_browser_autonomous_next_dev_slice_goal": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_dev_slice_goal"),
+            default="",
+        ),
+        "project_browser_autonomous_next_dev_slice_scope": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_dev_slice_scope"),
+            default="",
+        ),
+        "project_browser_autonomous_next_dev_slice_artifact_paths": (
+            project_browser_autonomous_next_dev_slice_artifact_paths
+        ),
+        "project_browser_autonomous_next_dev_slice_blocked_reason": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_dev_slice_blocked_reason"),
+            default="",
+        ),
+        "project_browser_autonomous_next_dev_slice_runtime_posture": (
+            _normalize_string_list(
+                approved_restart.get("project_browser_autonomous_next_dev_slice_runtime_posture")
+            )
+        ),
+        "project_browser_autonomous_next_dev_slice_selected_count": _as_non_negative_int(
+            approved_restart.get("project_browser_autonomous_next_dev_slice_selected_count"),
+            default=0,
+        ),
+    }
     project_browser_autonomous_codex_execution_connector_state = (
         _build_project_browser_autonomous_codex_execution_connector_state(
             local_loop_state=project_browser_autonomous_local_loop_state_for_bounded_local_loop,
@@ -170084,6 +170332,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_commit_tag_execution_state_normalized,
         **project_browser_autonomous_pr_queue_state_state_normalized,
         **project_browser_autonomous_local_loop_state_normalized,
+        **project_browser_autonomous_next_dev_slice_state_normalized,
         **project_browser_autonomous_codex_execution_connector_state_normalized,
         **project_browser_autonomous_codex_live_network_state_normalized,
         **project_browser_autonomous_codex_live_continuation_guard_state_normalized,
@@ -173919,6 +174168,15 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 policy_snapshot=policy_payload,
                 retry_context=effective_retry_context,
+            )
+        )
+        project_browser_autonomous_next_dev_slice_state = (
+            _build_project_browser_autonomous_next_dev_slice_state()
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_next_dev_slice_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                next_dev_slice_state=project_browser_autonomous_next_dev_slice_state,
             )
         )
         approved_restart_execution_contract_payload = (

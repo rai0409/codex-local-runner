@@ -278,3 +278,17 @@ Goal:
 
 Expected next_action:
 - ready_for_bounded_commit_tag_execution
+
+## Next after Prompt296 / Prompt296-fix
+
+Run Prompt297.
+
+Goal:
+- Read /tmp/codex-local-runner-decision/next_dev_slice/next_dev_slice.json.
+- Generate local Codex implementation prompt artifacts.
+- Do not invoke Codex from inside runner.
+- Do not execute the generated implementation prompt yet.
+- Do not commit/tag/push/PR/merge.
+
+Expected next_action:
+- ready_for_bounded_local_codex_implementation
