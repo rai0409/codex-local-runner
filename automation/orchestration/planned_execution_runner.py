@@ -3381,6 +3381,18 @@ def _normalize_string_list(value: Any, *, sort_items: bool = False) -> list[str]
     return result
 
 
+def _normalize_string_sequence(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if not text:
+            continue
+        result.append(text)
+    return result
+
+
 def _as_optional_int(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
@@ -123335,8 +123347,10 @@ def _build_approved_restart_execution_contract_surface(
             value = int(_as_int(value, default=-1))
         elif field_name in {"max_invocations"}:
             value = _as_non_negative_int(value, default=1)
-        elif field_name in {"invocation_command", "runtime_posture", "missing_inputs"}:
+        elif field_name in {"runtime_posture", "missing_inputs"}:
             value = _normalize_string_list(value)
+        elif field_name == "invocation_command":
+            value = _normalize_string_sequence(value)
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_codex_invocation_execution_state_normalized[key] = (
@@ -123975,8 +123989,10 @@ def _build_approved_restart_execution_contract_surface(
             value = int(_as_int(value, default=-1))
         elif field_name in {"max_invocations"}:
             value = _as_non_negative_int(value, default=1)
-        elif field_name in {"invocation_command", "runtime_posture", "missing_inputs"}:
+        elif field_name in {"runtime_posture", "missing_inputs"}:
             value = _normalize_string_list(value)
+        elif field_name == "invocation_command":
+            value = _normalize_string_sequence(value)
         else:
             value = _normalize_text(value, default="")
         project_browser_autonomous_codex_write_invocation_execution_state_normalized[key] = (
