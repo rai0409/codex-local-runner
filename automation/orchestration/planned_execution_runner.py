@@ -96917,6 +96917,233 @@ def _build_project_browser_autonomous_pr_queue_state_state(
     }
 
 
+def _build_project_browser_autonomous_chatgpt_diff_review_route_state() -> dict[str, Any]:
+    response_dir = Path("/tmp/codex-local-runner-decision/chatgpt_diff_review_response")
+    route_dir = Path("/tmp/codex-local-runner-decision/chatgpt_diff_review_route")
+    review_decision_path = response_dir / "review_decision.json"
+    route_decision_path = route_dir / "review_route_decision.json"
+    route_summary_path = route_dir / "review_route_summary.md"
+    artifact_paths = {
+        "expected_review_decision_json": str(review_decision_path),
+        "review_route_decision_json": str(route_decision_path),
+        "review_route_summary_md": str(route_summary_path),
+    }
+
+    status = "blocked_missing_review_decision"
+    next_action = "wait_for_chatgpt_diff_review_response"
+    selected_route = "none"
+    decision = "manual_review"
+    confidence = "low"
+    safe_to_commit = False
+    requires_fix = False
+    requires_revert = False
+    blocked_reason = "missing_review_decision"
+    safety_downgrades: list[str] = []
+    runtime_posture = [
+        "metadata_only_route_preparation",
+        "no_codex_invocation",
+        "no_commit_or_tag_execution",
+        "no_push_or_pr_or_merge",
+    ]
+
+    def _coerce_bool(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on"}:
+            return True
+        if text in {"0", "false", "no", "off"}:
+            return False
+        return default
+
+    def _normalize_confidence(value: Any) -> str:
+        normalized = _normalize_text(value, default="").lower()
+        if normalized in {"high", "medium", "low"}:
+            return normalized
+        return "low"
+
+    def _normalize_decision(value: Any) -> str:
+        normalized = _normalize_text(value, default="").lower()
+        if normalized in {"approve", "fix", "revert", "manual_review"}:
+            return normalized
+        return "manual_review"
+
+    parsed: Mapping[str, Any] | None = None
+    if review_decision_path.exists():
+        try:
+            loaded = json.loads(review_decision_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            blocked_reason = "invalid_review_decision_json"
+            safety_downgrades.append("invalid_review_decision_json_downgraded_to_manual_review")
+        else:
+            if isinstance(loaded, Mapping):
+                parsed = loaded
+            else:
+                blocked_reason = "review_decision_not_object"
+                safety_downgrades.append("review_decision_not_object_downgraded_to_manual_review")
+    else:
+        blocked_reason = "missing_review_decision"
+
+    if isinstance(parsed, Mapping):
+        decision = _normalize_decision(parsed.get("decision"))
+        confidence = _normalize_confidence(parsed.get("confidence"))
+        safe_to_commit = _coerce_bool(parsed.get("safe_to_commit"), default=False)
+        requires_fix = _coerce_bool(parsed.get("requires_fix"), default=False)
+        requires_revert = _coerce_bool(parsed.get("requires_revert"), default=False)
+
+        changed_files = _normalize_string_list(parsed.get("changed_files"))
+        probe_classification = _normalize_text(
+            parsed.get("tmp_runner_live_write_probe_classification"),
+            default="",
+        ).lower()
+        probe_changed = "tmp_runner_live_write_probe.txt" in changed_files
+
+        contradictory = False
+        if requires_fix and requires_revert:
+            contradictory = True
+            safety_downgrades.append("requires_fix_and_requires_revert_contradiction")
+        if decision == "approve" and requires_fix:
+            contradictory = True
+            safety_downgrades.append("approve_with_requires_fix_contradiction")
+        if decision == "approve" and requires_revert:
+            contradictory = True
+            safety_downgrades.append("approve_with_requires_revert_contradiction")
+        if decision == "approve" and not safe_to_commit:
+            contradictory = True
+            safety_downgrades.append("approve_with_safe_to_commit_false")
+        if confidence == "low":
+            contradictory = True
+            safety_downgrades.append("low_confidence_downgraded_to_manual_review")
+        if probe_changed and decision == "approve":
+            disposable_probe_values = {
+                "probe_disposable_local_change",
+                "probe_only",
+                "disposable",
+                "probe_disposable",
+            }
+            if probe_classification not in disposable_probe_values:
+                contradictory = True
+                safety_downgrades.append("probe_file_commit_approval_downgraded_to_manual_review")
+
+        if contradictory or decision == "manual_review":
+            selected_route = "manual_review"
+            next_action = "manual_review_required"
+            status = (
+                "chatgpt_diff_review_route_completed_with_downgrade"
+                if safety_downgrades
+                else "chatgpt_diff_review_route_completed"
+            )
+            blocked_reason = (
+                "manual_review_required_by_safety"
+                if safety_downgrades
+                else "manual_review_decision"
+            )
+        elif decision == "approve":
+            if (
+                safe_to_commit
+                and not requires_fix
+                and not requires_revert
+                and confidence in {"high", "medium"}
+            ):
+                selected_route = "approve"
+                next_action = "prepare_commit_tag_readiness"
+                status = "chatgpt_diff_review_route_completed"
+                blocked_reason = "none"
+            else:
+                selected_route = "manual_review"
+                next_action = "manual_review_required"
+                status = "chatgpt_diff_review_route_completed_with_downgrade"
+                blocked_reason = "unsafe_approve"
+                safety_downgrades.append("unsafe_approve_downgraded_to_manual_review")
+        elif decision == "fix":
+            selected_route = "fix"
+            next_action = "prepare_codex_fix_prompt"
+            status = "chatgpt_diff_review_route_completed"
+            blocked_reason = "none"
+        elif decision == "revert" or requires_revert:
+            selected_route = "revert"
+            next_action = "prepare_safe_revert_route"
+            status = "chatgpt_diff_review_route_completed"
+            blocked_reason = "none"
+        else:
+            selected_route = "manual_review"
+            next_action = "manual_review_required"
+            status = "chatgpt_diff_review_route_completed_with_downgrade"
+            blocked_reason = "unknown_or_invalid_decision"
+            safety_downgrades.append("unknown_decision_downgraded_to_manual_review")
+
+    route_payload = {
+        "status": status,
+        "next_action": next_action,
+        "selected_route": selected_route,
+        "decision": decision,
+        "confidence": confidence,
+        "safe_to_commit": bool(safe_to_commit),
+        "requires_fix": bool(requires_fix),
+        "requires_revert": bool(requires_revert),
+        "blocked_reason": blocked_reason,
+        "safety_downgrades": _normalize_string_list(safety_downgrades),
+        "artifact_paths": artifact_paths,
+    }
+    summary_lines = [
+        "# ChatGPT Diff Review Route",
+        "",
+        f"- Status: `{status}`",
+        f"- Next action: `{next_action}`",
+        f"- Selected route: `{selected_route}`",
+        f"- Decision: `{decision}`",
+        f"- Confidence: `{confidence}`",
+        f"- Safe to commit: `{str(bool(safe_to_commit)).lower()}`",
+        f"- Requires fix: `{str(bool(requires_fix)).lower()}`",
+        f"- Requires revert: `{str(bool(requires_revert)).lower()}`",
+        f"- Blocked reason: `{blocked_reason}`",
+        "",
+        "## Safety Downgrades",
+    ]
+    if safety_downgrades:
+        for item in _normalize_string_list(safety_downgrades):
+            summary_lines.append(f"- {item}")
+    else:
+        summary_lines.append("- none")
+
+    try:
+        route_dir.mkdir(parents=True, exist_ok=True)
+        route_decision_path.write_text(
+            json.dumps(route_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        route_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    except OSError:
+        status = "chatgpt_diff_review_route_blocked_write_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "review_route_artifact_write_failed"
+
+    return {
+        "project_browser_autonomous_chatgpt_diff_review_route_status": status,
+        "project_browser_autonomous_chatgpt_diff_review_route_next_action": next_action,
+        "project_browser_autonomous_chatgpt_diff_review_route_decision": decision,
+        "project_browser_autonomous_chatgpt_diff_review_route_confidence": confidence,
+        "project_browser_autonomous_chatgpt_diff_review_route_safe_to_commit": bool(
+            safe_to_commit
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_route_requires_fix": bool(
+            requires_fix
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_route_requires_revert": bool(
+            requires_revert
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_route_selected_route": selected_route,
+        "project_browser_autonomous_chatgpt_diff_review_route_blocked_reason": blocked_reason,
+        "project_browser_autonomous_chatgpt_diff_review_route_artifact_paths": artifact_paths,
+        "project_browser_autonomous_chatgpt_diff_review_route_safety_downgrades": (
+            _normalize_string_list(safety_downgrades)
+        ),
+        "project_browser_autonomous_chatgpt_diff_review_route_runtime_posture": runtime_posture,
+    }
+
+
 def _build_project_browser_autonomous_local_loop_state(
     *,
     chatgpt_diff_review_decision_state: Mapping[str, Any] | None,
@@ -157002,6 +157229,146 @@ def _build_approved_restart_execution_contract_surface(
     project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized[
         "project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence"
     ] = project_browser_autonomous_chatgpt_diff_review_response_assimilation_confidence
+    project_browser_autonomous_chatgpt_diff_review_route_state = (
+        _build_project_browser_autonomous_chatgpt_diff_review_route_state()
+    )
+    chatgpt_diff_review_route_allowed_statuses = {
+        "blocked_missing_review_decision",
+        "chatgpt_diff_review_route_blocked_write_failed",
+        "chatgpt_diff_review_route_completed",
+        "chatgpt_diff_review_route_completed_with_downgrade",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_route_allowed_next_actions = {
+        "prepare_commit_tag_readiness",
+        "prepare_codex_fix_prompt",
+        "prepare_safe_revert_route",
+        "manual_review_required",
+        "wait_for_chatgpt_diff_review_response",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_route_allowed_decisions = {
+        "approve",
+        "fix",
+        "revert",
+        "manual_review",
+        "insufficient_truth",
+    }
+    chatgpt_diff_review_route_allowed_routes = {
+        "approve",
+        "fix",
+        "revert",
+        "manual_review",
+        "none",
+    }
+    chatgpt_diff_review_route_field_names = (
+        "status",
+        "next_action",
+        "decision",
+        "confidence",
+        "safe_to_commit",
+        "requires_fix",
+        "requires_revert",
+        "selected_route",
+        "blocked_reason",
+        "artifact_paths",
+        "safety_downgrades",
+        "runtime_posture",
+    )
+    project_browser_autonomous_chatgpt_diff_review_route_status = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_route_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_route_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_route_status
+        not in chatgpt_diff_review_route_allowed_statuses
+    ):
+        project_browser_autonomous_chatgpt_diff_review_route_status = "insufficient_truth"
+    project_browser_autonomous_chatgpt_diff_review_route_next_action = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_route_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_route_next_action"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_route_next_action
+        not in chatgpt_diff_review_route_allowed_next_actions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_route_next_action = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_chatgpt_diff_review_route_decision = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_route_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_route_decision"
+        ),
+        default="manual_review",
+    )
+    if (
+        project_browser_autonomous_chatgpt_diff_review_route_decision
+        not in chatgpt_diff_review_route_allowed_decisions
+    ):
+        project_browser_autonomous_chatgpt_diff_review_route_decision = "manual_review"
+    project_browser_autonomous_chatgpt_diff_review_route_confidence = _normalize_text(
+        project_browser_autonomous_chatgpt_diff_review_route_state.get(
+            "project_browser_autonomous_chatgpt_diff_review_route_confidence"
+        ),
+        default="low",
+    )
+    if project_browser_autonomous_chatgpt_diff_review_route_confidence not in {
+        "high",
+        "medium",
+        "low",
+    }:
+        project_browser_autonomous_chatgpt_diff_review_route_confidence = "low"
+    project_browser_autonomous_chatgpt_diff_review_route_state_normalized: dict[
+        str, Any
+    ] = {}
+    for field_name in chatgpt_diff_review_route_field_names:
+        key = f"project_browser_autonomous_chatgpt_diff_review_route_{field_name}"
+        value = project_browser_autonomous_chatgpt_diff_review_route_state.get(key)
+        if field_name == "status":
+            value = project_browser_autonomous_chatgpt_diff_review_route_status
+        elif field_name == "next_action":
+            value = project_browser_autonomous_chatgpt_diff_review_route_next_action
+        elif field_name == "decision":
+            value = project_browser_autonomous_chatgpt_diff_review_route_decision
+        elif field_name == "confidence":
+            value = project_browser_autonomous_chatgpt_diff_review_route_confidence
+        elif field_name in {"safe_to_commit", "requires_fix", "requires_revert"}:
+            value = bool(value)
+        elif field_name == "selected_route":
+            normalized_route = _normalize_text(value, default="none")
+            value = normalized_route if normalized_route in chatgpt_diff_review_route_allowed_routes else "none"
+        elif field_name in {"safety_downgrades", "runtime_posture"}:
+            value = _normalize_string_list(value)
+        elif field_name == "artifact_paths":
+            normalized_paths: dict[str, str] = {}
+            if isinstance(value, Mapping):
+                for path_key, path_value in value.items():
+                    normalized_key = _normalize_text(path_key, default="")
+                    if not normalized_key:
+                        continue
+                    normalized_paths[normalized_key] = _normalize_text(path_value, default="")
+            value = normalized_paths
+        else:
+            value = _normalize_text(value, default="")
+        project_browser_autonomous_chatgpt_diff_review_route_state_normalized[key] = (
+            value
+        )
+    project_browser_autonomous_chatgpt_diff_review_route_state_normalized[
+        "project_browser_autonomous_chatgpt_diff_review_route_status"
+    ] = project_browser_autonomous_chatgpt_diff_review_route_status
+    project_browser_autonomous_chatgpt_diff_review_route_state_normalized[
+        "project_browser_autonomous_chatgpt_diff_review_route_next_action"
+    ] = project_browser_autonomous_chatgpt_diff_review_route_next_action
+    project_browser_autonomous_chatgpt_diff_review_route_state_normalized[
+        "project_browser_autonomous_chatgpt_diff_review_route_decision"
+    ] = project_browser_autonomous_chatgpt_diff_review_route_decision
+    project_browser_autonomous_chatgpt_diff_review_route_state_normalized[
+        "project_browser_autonomous_chatgpt_diff_review_route_confidence"
+    ] = project_browser_autonomous_chatgpt_diff_review_route_confidence
     project_browser_autonomous_commit_tag_gate_state = (
         _build_project_browser_autonomous_commit_tag_gate_state(
             chatgpt_diff_review_decision_state=project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
@@ -168889,6 +169256,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_chatgpt_diff_review_request_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_decision_state_normalized,
         **project_browser_autonomous_chatgpt_diff_review_response_assimilation_state_normalized,
+        **project_browser_autonomous_chatgpt_diff_review_route_state_normalized,
         **project_browser_autonomous_commit_tag_gate_state_normalized,
         **project_browser_autonomous_commit_tag_execution_state_normalized,
         **project_browser_autonomous_pr_queue_state_state_normalized,
