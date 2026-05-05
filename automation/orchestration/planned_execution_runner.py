@@ -100520,7 +100520,13 @@ def _build_project_browser_autonomous_codex_invocation_execution_state(
                 "--cd",
                 normalized_repository_path,
                 "--sandbox",
-                "read-only",
+                "workspace-write",
+                "-m",
+                "gpt-5.3-codex",
+                "-c",
+                'model_reasoning_effort="high"',
+                "-c",
+                'approval_policy="never"',
             ]
             prompt_text = ""
             try:
