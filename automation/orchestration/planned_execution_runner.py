@@ -3530,12 +3530,44 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_runtime_posture",
     "project_browser_autonomous_one_cycle_controller_enabled",
     "project_browser_autonomous_one_cycle_controller_execute_enabled",
+    "project_browser_autonomous_one_cycle_controller_exec_plan_path",
+    "project_browser_autonomous_one_cycle_controller_exec_plan_safety_status",
+    "project_browser_autonomous_one_cycle_controller_exec_plan_blocked_reason",
+    "project_browser_autonomous_one_cycle_controller_exec_plan_required_fragments_present",
+    "project_browser_autonomous_one_cycle_controller_exec_plan_banned_fragments_present",
+    "project_browser_autonomous_one_cycle_controller_exec_plan_execution_status",
 )
 
 _LOCAL_CODEX_EXEC_PLAN_COMMAND = (
     "cat /tmp/codex-local-runner-decision/next_codex_prompt/codex_implementation_prompt.md | "
     "codex exec - --cd /home/rai/codex-local-runner --sandbox workspace-write -m gpt-5.3-codex "
     "-c 'model_reasoning_effort=\"high\"' -c 'approval_policy=\"never\"'"
+)
+
+_ONE_CYCLE_CONTROLLER_EXEC_PLAN_REQUIRED_FRAGMENTS: tuple[str, ...] = (
+    "codex exec -",
+    "--sandbox workspace-write",
+    "-m gpt-5.3-codex",
+)
+
+_ONE_CYCLE_CONTROLLER_EXEC_PLAN_APPROVAL_POLICY_ALLOWED_FRAGMENTS: tuple[str, ...] = (
+    'approval_policy="never"',
+    'approval_policy=\\"never\\"',
+)
+
+_ONE_CYCLE_CONTROLLER_EXEC_PLAN_BANNED_FRAGMENTS: tuple[str, ...] = (
+    "git commit",
+    "git tag",
+    "git push",
+    "gh pr",
+    "git merge",
+    "git rebase",
+    "danger-full-access",
+    "--sandbox danger-full-access",
+    "while true",
+    "polling loop",
+    "queue drain",
+    "unbounded retry",
 )
 
 _LOCAL_CODEX_EXECUTION_READINESS_BANNED_PROMPT_FRAGMENTS: tuple[str, ...] = (
@@ -4557,10 +4589,100 @@ def _build_project_browser_autonomous_local_codex_execution_readiness_state() ->
     }
 
 
+def _evaluate_one_cycle_controller_exec_plan_safety(*, exec_plan_path: Path) -> dict[str, Any]:
+    required_fragments_present: list[str] = []
+    banned_fragments_present: list[str] = []
+
+    if not exec_plan_path.exists():
+        return {
+            "exec_plan_safety_status": "blocked",
+            "exec_plan_blocked_reason": "exec_plan_missing",
+            "exec_plan_required_fragments_present": required_fragments_present,
+            "exec_plan_banned_fragments_present": banned_fragments_present,
+        }
+    if exec_plan_path.is_symlink():
+        return {
+            "exec_plan_safety_status": "blocked",
+            "exec_plan_blocked_reason": "exec_plan_symlink",
+            "exec_plan_required_fragments_present": required_fragments_present,
+            "exec_plan_banned_fragments_present": banned_fragments_present,
+        }
+
+    try:
+        exec_plan_text = exec_plan_path.read_text(encoding="utf-8")
+    except OSError:
+        return {
+            "exec_plan_safety_status": "blocked",
+            "exec_plan_blocked_reason": "exec_plan_read_error",
+            "exec_plan_required_fragments_present": required_fragments_present,
+            "exec_plan_banned_fragments_present": banned_fragments_present,
+        }
+
+    if not exec_plan_text:
+        return {
+            "exec_plan_safety_status": "blocked",
+            "exec_plan_blocked_reason": "exec_plan_empty",
+            "exec_plan_required_fragments_present": required_fragments_present,
+            "exec_plan_banned_fragments_present": banned_fragments_present,
+        }
+
+    exec_plan_lines = exec_plan_text.splitlines()
+    if len(exec_plan_lines) < 2 or exec_plan_lines[0] != "#!/usr/bin/env bash" or exec_plan_lines[1] != "set -euo pipefail":
+        return {
+            "exec_plan_safety_status": "blocked",
+            "exec_plan_blocked_reason": "exec_plan_invalid_strict_header",
+            "exec_plan_required_fragments_present": required_fragments_present,
+            "exec_plan_banned_fragments_present": banned_fragments_present,
+        }
+
+    for fragment in _ONE_CYCLE_CONTROLLER_EXEC_PLAN_REQUIRED_FRAGMENTS:
+        if fragment in exec_plan_text:
+            required_fragments_present.append(fragment)
+    approval_policy_fragment_present = ""
+    for fragment in _ONE_CYCLE_CONTROLLER_EXEC_PLAN_APPROVAL_POLICY_ALLOWED_FRAGMENTS:
+        if fragment in exec_plan_text:
+            approval_policy_fragment_present = fragment
+            break
+    if approval_policy_fragment_present:
+        required_fragments_present.append(approval_policy_fragment_present)
+    required_fragments_ok = (
+        len(required_fragments_present)
+        == len(_ONE_CYCLE_CONTROLLER_EXEC_PLAN_REQUIRED_FRAGMENTS) + 1
+    )
+    if not required_fragments_ok:
+        return {
+            "exec_plan_safety_status": "blocked",
+            "exec_plan_blocked_reason": "exec_plan_required_fragment_missing",
+            "exec_plan_required_fragments_present": required_fragments_present,
+            "exec_plan_banned_fragments_present": banned_fragments_present,
+        }
+
+    for fragment in _ONE_CYCLE_CONTROLLER_EXEC_PLAN_BANNED_FRAGMENTS:
+        if fragment in exec_plan_text:
+            banned_fragments_present.append(fragment)
+    if banned_fragments_present:
+        return {
+            "exec_plan_safety_status": "blocked",
+            "exec_plan_blocked_reason": "exec_plan_banned_fragment_present",
+            "exec_plan_required_fragments_present": required_fragments_present,
+            "exec_plan_banned_fragments_present": banned_fragments_present,
+        }
+
+    return {
+        "exec_plan_safety_status": "safe",
+        "exec_plan_blocked_reason": "none",
+        "exec_plan_required_fragments_present": required_fragments_present,
+        "exec_plan_banned_fragments_present": banned_fragments_present,
+    }
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, Any]:
     one_cycle_controller_dir = Path("/tmp/codex-local-runner-decision/one_cycle_controller")
     output_json_path = one_cycle_controller_dir / "one_cycle_controller_result.json"
     output_summary_path = one_cycle_controller_dir / "one_cycle_controller_summary.md"
+    exec_plan_path = Path(
+        "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
+    )
 
     status = "one_cycle_controller_ready"
     next_action = "enable_one_cycle_controller_execution"
@@ -4572,6 +4694,24 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
     stop_reason = "execution_not_enabled"
     enabled = False
     execute_enabled = False
+    exec_plan_execution_status = "not_executed"
+    exec_plan_safety = _evaluate_one_cycle_controller_exec_plan_safety(
+        exec_plan_path=exec_plan_path
+    )
+    exec_plan_safety_status = _normalize_text(
+        exec_plan_safety.get("exec_plan_safety_status"),
+        default="blocked",
+    )
+    exec_plan_blocked_reason = _normalize_text(
+        exec_plan_safety.get("exec_plan_blocked_reason"),
+        default="exec_plan_read_error",
+    )
+    exec_plan_required_fragments_present = _normalize_string_list(
+        exec_plan_safety.get("exec_plan_required_fragments_present")
+    )
+    exec_plan_banned_fragments_present = _normalize_string_list(
+        exec_plan_safety.get("exec_plan_banned_fragments_present")
+    )
     runtime_posture = [
         "readiness_only",
         "single_cycle_only",
@@ -4588,6 +4728,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
     artifact_paths = {
         "one_cycle_controller_result_json": str(output_json_path),
         "one_cycle_controller_summary_md": str(output_summary_path),
+        "local_codex_exec_plan_sh": str(exec_plan_path),
     }
 
     result_payload = {
@@ -4601,6 +4742,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
         "stop_reason": stop_reason,
         "enabled": enabled,
         "execute_enabled": execute_enabled,
+        "exec_plan_path": str(exec_plan_path),
+        "exec_plan_safety_status": exec_plan_safety_status,
+        "exec_plan_blocked_reason": exec_plan_blocked_reason,
+        "exec_plan_required_fragments_present": exec_plan_required_fragments_present,
+        "exec_plan_banned_fragments_present": exec_plan_banned_fragments_present,
+        "exec_plan_execution_status": exec_plan_execution_status,
         "artifact_paths": artifact_paths,
         "runtime_posture": runtime_posture,
     }
@@ -4617,10 +4764,23 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
         f"- Stop reason: `{stop_reason}`",
         f"- Enabled: `{str(enabled).lower()}`",
         f"- Execute enabled: `{str(execute_enabled).lower()}`",
+        f"- Exec plan path: `{exec_plan_path}`",
+        f"- Exec plan safety status: `{exec_plan_safety_status}`",
+        f"- Exec plan blocked reason: `{exec_plan_blocked_reason}`",
+        (
+            "- Exec plan required fragments present: "
+            f"`{', '.join(exec_plan_required_fragments_present) if exec_plan_required_fragments_present else 'none'}`"
+        ),
+        (
+            "- Exec plan banned fragments present: "
+            f"`{', '.join(exec_plan_banned_fragments_present) if exec_plan_banned_fragments_present else 'none'}`"
+        ),
+        f"- Exec plan execution status: `{exec_plan_execution_status}`",
         "",
         "## Output Artifacts",
         f"- one_cycle_controller_result.json: `{output_json_path}`",
         f"- one_cycle_controller_summary.md: `{output_summary_path}`",
+        f"- local_codex_exec_plan.sh: `{exec_plan_path}`",
     ]
 
     try:
@@ -4641,6 +4801,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
         stop_reason = "execution_not_enabled"
         enabled = False
         execute_enabled = False
+        exec_plan_execution_status = "not_executed"
 
     return {
         "project_browser_autonomous_one_cycle_controller_status": status,
@@ -4661,6 +4822,22 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
         "project_browser_autonomous_one_cycle_controller_runtime_posture": runtime_posture,
         "project_browser_autonomous_one_cycle_controller_enabled": enabled,
         "project_browser_autonomous_one_cycle_controller_execute_enabled": execute_enabled,
+        "project_browser_autonomous_one_cycle_controller_exec_plan_path": str(exec_plan_path),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_safety_status": (
+            exec_plan_safety_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_blocked_reason": (
+            exec_plan_blocked_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_required_fragments_present": (
+            exec_plan_required_fragments_present
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_banned_fragments_present": (
+            exec_plan_banned_fragments_present
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_execution_status": (
+            exec_plan_execution_status
+        ),
     }
 
 
@@ -159747,6 +159924,26 @@ def _build_approved_restart_execution_contract_surface(
         "execution_not_enabled",
         "insufficient_truth",
     }
+    one_cycle_controller_allowed_exec_plan_safety_statuses = {
+        "safe",
+        "blocked",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_exec_plan_blocked_reasons = {
+        "none",
+        "exec_plan_missing",
+        "exec_plan_empty",
+        "exec_plan_symlink",
+        "exec_plan_invalid_strict_header",
+        "exec_plan_required_fragment_missing",
+        "exec_plan_banned_fragment_present",
+        "exec_plan_read_error",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_exec_plan_execution_statuses = {
+        "not_executed",
+        "insufficient_truth",
+    }
     project_browser_autonomous_one_cycle_controller_status = _normalize_text(
         approved_restart.get("project_browser_autonomous_one_cycle_controller_status"),
         default="insufficient_truth",
@@ -159804,6 +160001,45 @@ def _build_approved_restart_execution_contract_surface(
         not in one_cycle_controller_allowed_stop_reasons
     ):
         project_browser_autonomous_one_cycle_controller_stop_reason = "insufficient_truth"
+    project_browser_autonomous_one_cycle_controller_exec_plan_safety_status = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_one_cycle_controller_exec_plan_safety_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_exec_plan_safety_status
+        not in one_cycle_controller_allowed_exec_plan_safety_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_exec_plan_safety_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_exec_plan_blocked_reason = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_one_cycle_controller_exec_plan_blocked_reason"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_exec_plan_blocked_reason
+        not in one_cycle_controller_allowed_exec_plan_blocked_reasons
+    ):
+        project_browser_autonomous_one_cycle_controller_exec_plan_blocked_reason = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_exec_plan_execution_status = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_one_cycle_controller_exec_plan_execution_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_exec_plan_execution_status
+        not in one_cycle_controller_allowed_exec_plan_execution_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_exec_plan_execution_status = (
+            "insufficient_truth"
+        )
     project_browser_autonomous_one_cycle_controller_artifact_paths = (
         dict(
             approved_restart.get(
@@ -159840,6 +160076,33 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_one_cycle_controller_stop_reason": (
             project_browser_autonomous_one_cycle_controller_stop_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_one_cycle_controller_exec_plan_path"),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_safety_status": (
+            project_browser_autonomous_one_cycle_controller_exec_plan_safety_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_blocked_reason": (
+            project_browser_autonomous_one_cycle_controller_exec_plan_blocked_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_required_fragments_present": (
+            _normalize_string_list(
+                approved_restart.get(
+                    "project_browser_autonomous_one_cycle_controller_exec_plan_required_fragments_present"
+                )
+            )
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_banned_fragments_present": (
+            _normalize_string_list(
+                approved_restart.get(
+                    "project_browser_autonomous_one_cycle_controller_exec_plan_banned_fragments_present"
+                )
+            )
+        ),
+        "project_browser_autonomous_one_cycle_controller_exec_plan_execution_status": (
+            project_browser_autonomous_one_cycle_controller_exec_plan_execution_status
         ),
         "project_browser_autonomous_one_cycle_controller_artifact_paths": (
             project_browser_autonomous_one_cycle_controller_artifact_paths
