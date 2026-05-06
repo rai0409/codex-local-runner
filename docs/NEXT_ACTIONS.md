@@ -278,3 +278,42 @@ Goal:
 
 Expected next_action:
 - ready_for_bounded_commit_tag_execution
+
+## Next after Prompt296 / Prompt296-fix
+
+Run Prompt297.
+
+Goal:
+- Read /tmp/codex-local-runner-decision/next_dev_slice/next_dev_slice.json.
+- Generate local Codex implementation prompt artifacts.
+- Do not invoke Codex from inside runner.
+- Do not execute the generated implementation prompt yet.
+- Do not commit/tag/push/PR/merge.
+
+Expected next_action:
+- ready_for_bounded_local_codex_implementation
+
+## Next after Prompt297 readiness
+
+Run Prompt298.
+
+Goal:
+- Confirm local_codex_exec_plan.sh is present and safe.
+- Execute local Codex once from local shell using the generated plan.
+- Do not commit/tag/push/PR/merge.
+- After execution, run syntax check and return to local git diff capture/review flow.
+
+Expected after Prompt298:
+- local Codex has produced repo changes, or no-op with a clear result.
+- Next action returns to local_git_diff_capture.
+
+## Next after Prompt298 / Prompt298-fix
+
+Run Prompt299.
+
+Goal:
+- Implement one-cycle local autonomous controller v1.
+- max_cycles=1.
+- Connect readiness -> one bounded local Codex execution -> diff capture -> review request.
+- Stop at wait_for_chatgpt_diff_review_response.
+- Do not commit/tag/push/PR/merge automatically.
