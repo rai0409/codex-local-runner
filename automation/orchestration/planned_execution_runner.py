@@ -3575,6 +3575,15 @@ _MULTI_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_multi_cycle_controller_cycle_history_status",
     "project_browser_autonomous_multi_cycle_controller_blocked_reason",
     "project_browser_autonomous_multi_cycle_controller_stop_reason",
+    "project_browser_autonomous_multi_cycle_controller_can_continue",
+    "project_browser_autonomous_multi_cycle_controller_remaining_cycle_count",
+    "project_browser_autonomous_multi_cycle_controller_last_cycle_status",
+    "project_browser_autonomous_multi_cycle_controller_last_cycle_next_action",
+    "project_browser_autonomous_multi_cycle_controller_last_cycle_review_request_status",
+    "project_browser_autonomous_multi_cycle_controller_last_cycle_diff_capture_status",
+    "project_browser_autonomous_multi_cycle_controller_next_cycle_allowed",
+    "project_browser_autonomous_multi_cycle_controller_next_cycle_blocked_reason",
+    "project_browser_autonomous_multi_cycle_controller_should_invoke_codex",
     "project_browser_autonomous_multi_cycle_controller_readiness_summary_path",
 )
 
@@ -5661,10 +5670,251 @@ def _read_json_object_if_exists(path: Path) -> dict[str, Any] | None:
     return dict(payload)
 
 
+def _build_default_multi_cycle_history_payload(*, max_cycles_allowed: int) -> dict[str, Any]:
+    return {
+        "status": "not_started",
+        "max_cycles_allowed": int(max_cycles_allowed),
+        "completed_cycle_count": 0,
+        "current_cycle_index": 0,
+        "cycles": [],
+    }
+
+
+def _read_multi_cycle_history(
+    *, cycle_history_path: Path, max_cycles_allowed: int
+) -> tuple[dict[str, Any], bool]:
+    default_payload = _build_default_multi_cycle_history_payload(
+        max_cycles_allowed=max_cycles_allowed
+    )
+    if not cycle_history_path.exists():
+        return default_payload, False
+    try:
+        payload = json.loads(cycle_history_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return default_payload, True
+    if not isinstance(payload, Mapping):
+        return default_payload, True
+
+    cycles_source = payload.get("cycles")
+    cycles_list: list[dict[str, Any]] = []
+    if isinstance(cycles_source, list):
+        for item in cycles_source:
+            if isinstance(item, Mapping):
+                cycles_list.append(dict(item))
+    else:
+        return default_payload, True
+
+    completed_cycle_count = _as_non_negative_int(
+        payload.get("completed_cycle_count"),
+        default=len(cycles_list),
+    )
+    current_cycle_index = _as_non_negative_int(
+        payload.get("current_cycle_index"),
+        default=completed_cycle_count,
+    )
+    max_allowed = _as_non_negative_int(
+        payload.get("max_cycles_allowed"),
+        default=max_cycles_allowed,
+    )
+    if max_allowed != int(max_cycles_allowed):
+        max_allowed = int(max_cycles_allowed)
+    completed_cycle_count = min(completed_cycle_count, len(cycles_list))
+    current_cycle_index = min(current_cycle_index, max(completed_cycle_count, len(cycles_list)))
+    status = _normalize_text(payload.get("status"), default="not_started")
+    if status not in {"not_started", "in_progress", "completed"}:
+        status = "not_started"
+
+    normalized_payload = {
+        "status": status,
+        "max_cycles_allowed": int(max_allowed),
+        "completed_cycle_count": int(completed_cycle_count),
+        "current_cycle_index": int(current_cycle_index),
+        "cycles": cycles_list,
+    }
+    if not cycles_list:
+        normalized_payload["status"] = "not_started"
+        normalized_payload["completed_cycle_count"] = 0
+        normalized_payload["current_cycle_index"] = 0
+    return normalized_payload, False
+
+
+def _write_multi_cycle_history(*, cycle_history_path: Path, payload: Mapping[str, Any]) -> None:
+    cycle_history_path.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _record_one_cycle_result_into_multi_cycle_history(
+    *,
+    history_payload: Mapping[str, Any],
+    one_cycle_state: Mapping[str, Any],
+    max_cycles_allowed: int,
+) -> tuple[dict[str, Any], bool]:
+    current_payload = (
+        dict(history_payload) if isinstance(history_payload, Mapping) else {}
+    )
+    cycles: list[dict[str, Any]] = []
+    for item in current_payload.get("cycles", []):
+        if isinstance(item, Mapping):
+            cycles.append(dict(item))
+
+    one_cycle_status = _normalize_text(
+        one_cycle_state.get("project_browser_autonomous_one_cycle_controller_status"),
+        default="",
+    )
+    if one_cycle_status != "one_cycle_controller_completed":
+        normalized_count = _as_non_negative_int(
+            current_payload.get("completed_cycle_count"),
+            default=len(cycles),
+        )
+        normalized_index = _as_non_negative_int(
+            current_payload.get("current_cycle_index"),
+            default=normalized_count,
+        )
+        return {
+            "status": (
+                "completed"
+                if normalized_count >= int(max_cycles_allowed)
+                else ("in_progress" if normalized_count > 0 else "not_started")
+            ),
+            "max_cycles_allowed": int(max_cycles_allowed),
+            "completed_cycle_count": int(normalized_count),
+            "current_cycle_index": int(normalized_index),
+            "cycles": cycles,
+        }, False
+
+    completed_cycle_count = _as_non_negative_int(
+        current_payload.get("completed_cycle_count"),
+        default=len(cycles),
+    )
+    cycle_index = max(1, completed_cycle_count + 1)
+    result_path = _normalize_text(
+        one_cycle_state.get(
+            "project_browser_autonomous_one_cycle_controller_completed_result_source_path"
+        ),
+        default="",
+    )
+    review_request_path = _normalize_text(
+        one_cycle_state.get("project_browser_autonomous_one_cycle_controller_review_request_path"),
+        default="",
+    )
+    tracked_diff_present: bool | None = None
+    review_handoff_path = _normalize_text(
+        one_cycle_state.get("project_browser_autonomous_one_cycle_controller_review_handoff_path"),
+        default="",
+    )
+    fixed_review_handoff_path = (
+        "/tmp/codex-local-runner-decision/one_cycle_controller/one_cycle_controller_review_handoff.json"
+    )
+    if review_handoff_path == fixed_review_handoff_path:
+        try:
+            review_handoff_payload = _read_json_object_if_exists(Path(review_handoff_path))
+        except (OSError, json.JSONDecodeError, ValueError):
+            review_handoff_payload = None
+        if isinstance(review_handoff_payload, Mapping):
+            if "tracked_diff_present" in review_handoff_payload:
+                tracked_diff_present = bool(review_handoff_payload.get("tracked_diff_present"))
+
+    new_entry: dict[str, Any] = {
+        "cycle_index": int(cycle_index),
+        "one_cycle_status": one_cycle_status,
+        "one_cycle_next_action": _normalize_text(
+            one_cycle_state.get("project_browser_autonomous_one_cycle_controller_next_action"),
+            default="",
+        ),
+        "execution_attempted": bool(
+            one_cycle_state.get("project_browser_autonomous_one_cycle_controller_execution_attempted")
+        ),
+        "execution_exit_code": _as_int(
+            one_cycle_state.get("project_browser_autonomous_one_cycle_controller_execution_exit_code"),
+            default=-1,
+        ),
+        "exec_plan_execution_status": _normalize_text(
+            one_cycle_state.get(
+                "project_browser_autonomous_one_cycle_controller_exec_plan_execution_status"
+            ),
+            default="",
+        ),
+        "diff_capture_status": _normalize_text(
+            one_cycle_state.get("project_browser_autonomous_one_cycle_controller_diff_capture_status"),
+            default="",
+        ),
+        "review_request_status": _normalize_text(
+            one_cycle_state.get("project_browser_autonomous_one_cycle_controller_review_request_status"),
+            default="",
+        ),
+        "result_path": result_path,
+        "review_request_path": review_request_path,
+        "recorded_at": _iso_now(datetime.now),
+    }
+    if tracked_diff_present is not None:
+        new_entry["tracked_diff_present"] = bool(tracked_diff_present)
+
+    duplicate_found = False
+    for existing in cycles:
+        existing_result_path = _normalize_text(existing.get("result_path"), default="")
+        if result_path:
+            if existing_result_path == result_path:
+                duplicate_found = True
+                break
+            continue
+        existing_dedupe_key = (
+            _as_non_negative_int(existing.get("cycle_index"), default=0),
+            _as_int(existing.get("execution_exit_code"), default=-1),
+            _normalize_text(existing.get("exec_plan_execution_status"), default=""),
+            _normalize_text(existing.get("review_request_path"), default=""),
+        )
+        new_dedupe_key = (
+            int(cycle_index),
+            _as_int(new_entry.get("execution_exit_code"), default=-1),
+            _normalize_text(new_entry.get("exec_plan_execution_status"), default=""),
+            review_request_path,
+        )
+        if existing_dedupe_key == new_dedupe_key:
+            duplicate_found = True
+            break
+
+    if duplicate_found:
+        normalized_count = _as_non_negative_int(
+            current_payload.get("completed_cycle_count"),
+            default=len(cycles),
+        )
+        normalized_index = _as_non_negative_int(
+            current_payload.get("current_cycle_index"),
+            default=normalized_count,
+        )
+        return {
+            "status": (
+                "completed"
+                if normalized_count >= int(max_cycles_allowed)
+                else ("in_progress" if normalized_count > 0 else "not_started")
+            ),
+            "max_cycles_allowed": int(max_cycles_allowed),
+            "completed_cycle_count": int(normalized_count),
+            "current_cycle_index": int(normalized_index),
+            "cycles": cycles,
+        }, False
+
+    cycles.append(new_entry)
+    updated_completed_count = min(len(cycles), int(max_cycles_allowed))
+    updated_status = (
+        "completed" if updated_completed_count >= int(max_cycles_allowed) else "in_progress"
+    )
+    return {
+        "status": updated_status,
+        "max_cycles_allowed": int(max_cycles_allowed),
+        "completed_cycle_count": int(updated_completed_count),
+        "current_cycle_index": int(updated_completed_count),
+        "cycles": cycles[: int(max_cycles_allowed)],
+    }, True
+
+
 def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
     prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    dry_run: bool,
 ) -> dict[str, Any]:
     approved_restart = (
         dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
@@ -5724,10 +5974,104 @@ def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
         _read_value("project_browser_autonomous_one_cycle_controller_status"),
         default="",
     )
+    one_cycle_next_action = _normalize_text(
+        _read_value("project_browser_autonomous_one_cycle_controller_next_action"),
+        default="",
+    )
+    one_cycle_stop_reason = _normalize_text(
+        _read_value("project_browser_autonomous_one_cycle_controller_stop_reason"),
+        default="",
+    )
+    one_cycle_execution_gate_status = _normalize_text(
+        _read_value("project_browser_autonomous_one_cycle_controller_execution_gate_status"),
+        default="",
+    )
+    one_cycle_execution_blocked_reason = _normalize_text(
+        _read_value("project_browser_autonomous_one_cycle_controller_execution_blocked_reason"),
+        default="",
+    )
+    one_cycle_enabled = _read_strict_flag(
+        "project_browser_autonomous_one_cycle_controller_enabled",
+        default=False,
+    )
+    one_cycle_execute_enabled = _read_strict_flag(
+        "project_browser_autonomous_one_cycle_controller_execute_enabled",
+        default=False,
+    )
 
-    current_cycle_index = 0
-    completed_cycle_count = 0
-    cycle_history_status = "not_started"
+    cycle_history_payload, history_invalid = _read_multi_cycle_history(
+        cycle_history_path=cycle_history_path,
+        max_cycles_allowed=max_cycles_allowed,
+    )
+    cycle_history_payload, _history_appended = _record_one_cycle_result_into_multi_cycle_history(
+        history_payload=cycle_history_payload,
+        one_cycle_state={
+            "project_browser_autonomous_one_cycle_controller_status": one_cycle_status,
+            "project_browser_autonomous_one_cycle_controller_next_action": one_cycle_next_action,
+            "project_browser_autonomous_one_cycle_controller_execution_attempted": bool(
+                _read_value("project_browser_autonomous_one_cycle_controller_execution_attempted")
+            ),
+            "project_browser_autonomous_one_cycle_controller_execution_exit_code": _read_value(
+                "project_browser_autonomous_one_cycle_controller_execution_exit_code"
+            ),
+            "project_browser_autonomous_one_cycle_controller_exec_plan_execution_status": (
+                _read_value("project_browser_autonomous_one_cycle_controller_exec_plan_execution_status")
+            ),
+            "project_browser_autonomous_one_cycle_controller_diff_capture_status": _read_value(
+                "project_browser_autonomous_one_cycle_controller_diff_capture_status"
+            ),
+            "project_browser_autonomous_one_cycle_controller_review_request_status": _read_value(
+                "project_browser_autonomous_one_cycle_controller_review_request_status"
+            ),
+            "project_browser_autonomous_one_cycle_controller_completed_result_source_path": (
+                _read_value("project_browser_autonomous_one_cycle_controller_completed_result_source_path")
+            ),
+            "project_browser_autonomous_one_cycle_controller_review_request_path": _read_value(
+                "project_browser_autonomous_one_cycle_controller_review_request_path"
+            ),
+            "project_browser_autonomous_one_cycle_controller_review_handoff_path": _read_value(
+                "project_browser_autonomous_one_cycle_controller_review_handoff_path"
+            ),
+        },
+        max_cycles_allowed=max_cycles_allowed,
+    )
+
+    cycles = (
+        list(cycle_history_payload.get("cycles", []))
+        if isinstance(cycle_history_payload.get("cycles"), list)
+        else []
+    )
+    completed_cycle_count = min(
+        _as_non_negative_int(
+            cycle_history_payload.get("completed_cycle_count"),
+            default=len(cycles),
+        ),
+        max_cycles_allowed,
+    )
+    current_cycle_index = min(
+        _as_non_negative_int(
+            cycle_history_payload.get("current_cycle_index"),
+            default=completed_cycle_count,
+        ),
+        max_cycles_allowed,
+    )
+    cycle_history_status = _normalize_text(
+        cycle_history_payload.get("status"),
+        default="not_started",
+    )
+    if cycle_history_status not in {"not_started", "in_progress", "completed"}:
+        cycle_history_status = "not_started"
+    if not cycles:
+        cycle_history_status = "not_started"
+
+    remaining_cycle_count = max(
+        0,
+        min(max_cycles_requested, max_cycles_allowed) - completed_cycle_count,
+    )
+    can_continue = bool(enabled and execute_enabled and remaining_cycle_count > 0)
+    next_cycle_allowed = False
+    next_cycle_blocked_reason = "none"
+    should_invoke_codex = False
     status = "multi_cycle_controller_ready"
     next_action = "enable_multi_cycle_controller"
     blocked_reason = "execution_not_enabled"
@@ -5738,24 +6082,171 @@ def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
         next_action = "manual_review_required"
         blocked_reason = "max_cycles_not_allowed"
         stop_reason = "max_cycles_not_allowed"
-    elif enabled and execute_enabled:
-        if not one_cycle_status or one_cycle_status == "insufficient_truth":
-            status = "multi_cycle_controller_blocked"
-            next_action = "manual_review_required"
-            blocked_reason = "one_cycle_surface_missing"
-            stop_reason = "one_cycle_surface_missing"
-        else:
-            status = "multi_cycle_controller_ready"
-            next_action = "prepare_bounded_two_cycle_execution"
-            blocked_reason = "none"
-            stop_reason = "none"
+        can_continue = False
+        next_cycle_blocked_reason = "max_cycles_not_allowed"
+    elif not enabled:
+        status = "multi_cycle_controller_ready"
+        next_action = "enable_multi_cycle_controller"
+        blocked_reason = "execution_not_enabled"
+        stop_reason = "execution_not_enabled"
+        can_continue = False
+        next_cycle_blocked_reason = "execution_not_enabled"
+    elif not execute_enabled:
+        status = "multi_cycle_controller_ready"
+        next_action = "enable_multi_cycle_controller_execution"
+        blocked_reason = "execution_not_enabled"
+        stop_reason = "execution_not_enabled"
+        can_continue = False
+        next_cycle_blocked_reason = "execution_not_enabled"
+    elif completed_cycle_count >= max_cycles_allowed or remaining_cycle_count <= 0:
+        status = "multi_cycle_controller_completed"
+        next_action = "manual_review_required"
+        blocked_reason = "cycle_limit_reached"
+        stop_reason = "cycle_limit_reached"
+        can_continue = False
+        next_cycle_blocked_reason = "cycle_limit_reached"
+    elif completed_cycle_count > 0:
+        status = "multi_cycle_controller_waiting_for_review"
+        next_action = "wait_for_chatgpt_diff_review_response"
+        blocked_reason = "none"
+        stop_reason = "review_required_before_next_cycle"
+        can_continue = False
+        next_cycle_blocked_reason = "review_required_before_next_cycle"
+    elif dry_run:
+        status = "multi_cycle_controller_ready"
+        next_action = "prepare_bounded_two_cycle_execution"
+        blocked_reason = "dry_run_execution_suppressed"
+        stop_reason = "dry_run_execution_suppressed"
+        can_continue = remaining_cycle_count > 0
+        next_cycle_blocked_reason = "dry_run_execution_suppressed"
+    elif not one_cycle_status or one_cycle_status == "insufficient_truth":
+        status = "multi_cycle_controller_blocked"
+        next_action = "manual_review_required"
+        blocked_reason = "one_cycle_surface_missing"
+        stop_reason = "one_cycle_surface_missing"
+        can_continue = False
+        next_cycle_blocked_reason = "one_cycle_surface_missing"
+    elif one_cycle_status == "one_cycle_controller_blocked":
+        status = "multi_cycle_controller_blocked"
+        next_action = "manual_review_required"
+        blocked_reason = (
+            one_cycle_stop_reason
+            if one_cycle_stop_reason in {
+                "manual_review_required",
+                "exec_plan_execution_failed",
+                "exec_plan_not_safe",
+                "exec_plan_missing",
+                "staged_changes_present",
+                "unstaged_changes_present",
+            }
+            else "manual_review_required"
+        )
+        stop_reason = blocked_reason
+        can_continue = False
+        next_cycle_blocked_reason = blocked_reason
+    elif one_cycle_status == "one_cycle_controller_ready":
+        status = "multi_cycle_controller_running"
+        next_action = "run_next_bounded_cycle"
+        blocked_reason = "none"
+        stop_reason = "none"
+        can_continue = remaining_cycle_count > 0
+        next_cycle_allowed = bool(can_continue)
+        next_cycle_blocked_reason = "none" if next_cycle_allowed else "cycle_limit_reached"
+        should_invoke_codex = bool(
+            can_continue
+            and one_cycle_enabled
+            and one_cycle_execute_enabled
+            and one_cycle_execution_gate_status == "ready_for_single_execution"
+            and one_cycle_execution_blocked_reason == "none"
+        )
+    elif one_cycle_status == "one_cycle_controller_completed":
+        status = "multi_cycle_controller_waiting_for_review"
+        next_action = "wait_for_chatgpt_diff_review_response"
+        blocked_reason = "none"
+        stop_reason = "review_required_before_next_cycle"
+        can_continue = False
+        next_cycle_blocked_reason = "review_required_before_next_cycle"
+    else:
+        status = "insufficient_truth"
+        next_action = "insufficient_truth"
+        blocked_reason = "insufficient_truth"
+        stop_reason = "insufficient_truth"
+        can_continue = False
+        next_cycle_blocked_reason = "insufficient_truth"
+
+    if dry_run:
+        should_invoke_codex = False
 
     cycle_history_payload = {
-        "status": "not_started",
+        "status": (
+            "completed"
+            if completed_cycle_count >= int(max_cycles_allowed)
+            else ("in_progress" if completed_cycle_count > 0 else "not_started")
+        ),
         "max_cycles_allowed": int(max_cycles_allowed),
         "completed_cycle_count": int(completed_cycle_count),
-        "cycles": [],
+        "current_cycle_index": int(current_cycle_index),
+        "cycles": cycles[: int(max_cycles_allowed)],
     }
+    if not cycles:
+        cycle_history_payload["status"] = "not_started"
+    cycle_history_status = _normalize_text(
+        cycle_history_payload.get("status"),
+        default=cycle_history_status,
+    )
+
+    if history_invalid:
+        next_cycle_allowed = False
+
+    history_write_failed = False
+    try:
+        multi_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+        _write_multi_cycle_history(
+            cycle_history_path=cycle_history_path,
+            payload=cycle_history_payload,
+        )
+    except OSError:
+        history_write_failed = True
+        status = "multi_cycle_controller_blocked"
+        next_action = "manual_review_required"
+        blocked_reason = "cycle_history_write_failed"
+        stop_reason = "cycle_history_write_failed"
+        can_continue = False
+        next_cycle_allowed = False
+        next_cycle_blocked_reason = "cycle_history_write_failed"
+        should_invoke_codex = False
+
+    last_cycle = cycles[-1] if cycles else {}
+    last_cycle_status = _normalize_text(last_cycle.get("one_cycle_status"), default="")
+    last_cycle_next_action = _normalize_text(last_cycle.get("one_cycle_next_action"), default="")
+    last_cycle_review_request_status = _normalize_text(
+        last_cycle.get("review_request_status"),
+        default="",
+    )
+    last_cycle_diff_capture_status = _normalize_text(
+        last_cycle.get("diff_capture_status"),
+        default="",
+    )
+
+    controller_allowed = bool(
+        enabled
+        and execute_enabled
+        and can_continue
+        and status in {"multi_cycle_controller_ready", "multi_cycle_controller_running"}
+    )
+    should_stop = stop_reason != "none"
+    runtime_posture = [
+        "prompt301_bounded_two_cycle_controller",
+        "single_invocation_single_cycle_execution_cap",
+        "bounded_max_cycles_2",
+        "no_implicit_second_cycle_execution",
+        "review_handoff_required_before_next_cycle",
+        "no_codex_direct_execution_path_added",
+        "no_exec_plan_direct_execution_path_added",
+        "no_commit_tag_push_pr_merge",
+    ]
+    remaining_cycles = int(remaining_cycle_count)
+
     summary_lines = [
         "# Multi Cycle Controller Readiness",
         "",
@@ -5765,9 +6256,14 @@ def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
         f"- Execute enabled: `{str(execute_enabled).lower()}`",
         f"- Current cycle index: `{current_cycle_index}`",
         f"- Completed cycle count: `{completed_cycle_count}`",
+        f"- Remaining cycle count: `{remaining_cycle_count}`",
         f"- Max cycles requested: `{max_cycles_requested}`",
         f"- Max cycles allowed: `{max_cycles_allowed}`",
+        f"- Can continue: `{str(can_continue).lower()}`",
         f"- Cycle history status: `{cycle_history_status}`",
+        f"- Next cycle allowed: `{str(next_cycle_allowed).lower()}`",
+        f"- Next cycle blocked reason: `{next_cycle_blocked_reason}`",
+        f"- Should invoke codex: `{str(should_invoke_codex).lower()}`",
         f"- Blocked reason: `{blocked_reason}`",
         f"- Stop reason: `{stop_reason}`",
         "",
@@ -5776,35 +6272,18 @@ def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
         f"- multi_cycle_cycle_history.json: `{cycle_history_path}`",
     ]
 
-    try:
-        multi_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
-        cycle_history_path.write_text(
-            json.dumps(cycle_history_payload, ensure_ascii=False, separators=(",", ":")) + "\n",
-            encoding="utf-8",
-        )
-        readiness_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
-    except OSError:
-        status = "multi_cycle_controller_blocked"
-        next_action = "manual_review_required"
-        blocked_reason = "cycle_history_write_failed"
-        stop_reason = "cycle_history_write_failed"
-        cycle_history_status = "not_started"
-
-    controller_allowed = bool(
-        status == "multi_cycle_controller_ready"
-        and next_action == "prepare_bounded_two_cycle_execution"
-    )
-    should_stop = stop_reason != "none"
-    runtime_posture = [
-        "prompt300_multi_cycle_readiness_surface",
-        "metadata_only_controller",
-        "two_cycle_max_prepared",
-        "execution_explicitly_disabled_by_default",
-        "no_codex_invocation",
-        "no_exec_plan_execution",
-        "no_commit_tag_push_pr_merge",
-    ]
-    remaining_cycles = max(0, max_cycles_allowed - completed_cycle_count)
+    if not history_write_failed:
+        try:
+            readiness_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+        except OSError:
+            status = "multi_cycle_controller_blocked"
+            next_action = "manual_review_required"
+            blocked_reason = "cycle_history_write_failed"
+            stop_reason = "cycle_history_write_failed"
+            can_continue = False
+            next_cycle_allowed = False
+            next_cycle_blocked_reason = "cycle_history_write_failed"
+            should_invoke_codex = False
 
     return {
         "project_browser_autonomous_multi_cycle_controller_status": status,
@@ -5833,6 +6312,31 @@ def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
         ),
         "project_browser_autonomous_multi_cycle_controller_blocked_reason": blocked_reason,
         "project_browser_autonomous_multi_cycle_controller_stop_reason": stop_reason,
+        "project_browser_autonomous_multi_cycle_controller_can_continue": bool(can_continue),
+        "project_browser_autonomous_multi_cycle_controller_remaining_cycle_count": int(
+            remaining_cycle_count
+        ),
+        "project_browser_autonomous_multi_cycle_controller_last_cycle_status": (
+            last_cycle_status
+        ),
+        "project_browser_autonomous_multi_cycle_controller_last_cycle_next_action": (
+            last_cycle_next_action
+        ),
+        "project_browser_autonomous_multi_cycle_controller_last_cycle_review_request_status": (
+            last_cycle_review_request_status
+        ),
+        "project_browser_autonomous_multi_cycle_controller_last_cycle_diff_capture_status": (
+            last_cycle_diff_capture_status
+        ),
+        "project_browser_autonomous_multi_cycle_controller_next_cycle_allowed": bool(
+            next_cycle_allowed
+        ),
+        "project_browser_autonomous_multi_cycle_controller_next_cycle_blocked_reason": (
+            next_cycle_blocked_reason
+        ),
+        "project_browser_autonomous_multi_cycle_controller_should_invoke_codex": bool(
+            should_invoke_codex
+        ),
         "project_browser_autonomous_multi_cycle_controller_readiness_summary_path": str(
             readiness_summary_path
         ),
@@ -5843,7 +6347,7 @@ def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
             blocked_reason if blocked_reason != "none" else ""
         ),
         "project_browser_autonomous_multi_cycle_controller_controller_source": (
-            "prompt300_multi_cycle_readiness_surface"
+            "prompt301_bounded_two_cycle_controller"
         ),
         "project_browser_autonomous_multi_cycle_controller_latest_authoritative_stage": (
             "one_cycle_controller_surface"
@@ -5881,9 +6385,6 @@ def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
         "project_browser_autonomous_multi_cycle_controller_max_commits": 1,
         "project_browser_autonomous_multi_cycle_controller_remaining_commits": 1,
         "project_browser_autonomous_multi_cycle_controller_next_prompt_kind": "none",
-        "project_browser_autonomous_multi_cycle_controller_next_cycle_allowed": bool(
-            controller_allowed
-        ),
         "project_browser_autonomous_multi_cycle_controller_fix_continuation_allowed": False,
         "project_browser_autonomous_multi_cycle_controller_rollback_path_allowed": False,
         "project_browser_autonomous_multi_cycle_controller_github_handoff_allowed": False,
@@ -5892,7 +6393,6 @@ def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
         ),
         "project_browser_autonomous_multi_cycle_controller_should_generate_next_prompt": False,
         "project_browser_autonomous_multi_cycle_controller_should_generate_fix_prompt": False,
-        "project_browser_autonomous_multi_cycle_controller_should_invoke_codex": False,
         "project_browser_autonomous_multi_cycle_controller_should_validate": False,
         "project_browser_autonomous_multi_cycle_controller_should_prepare_rollback": False,
         "project_browser_autonomous_multi_cycle_controller_should_execute_rollback": False,
@@ -135968,6 +136468,9 @@ def _build_approved_restart_execution_contract_surface(
             )
     multi_cycle_controller_allowed_statuses = {
         "multi_cycle_controller_ready",
+        "multi_cycle_controller_running",
+        "multi_cycle_controller_waiting_for_review",
+        "multi_cycle_controller_completed",
         "multi_cycle_controller_blocked",
         "multi_cycle_controller_next_cycle_ready",
         "multi_cycle_controller_completed_cycle_budget_exhausted",
@@ -135984,7 +136487,11 @@ def _build_approved_restart_execution_contract_surface(
     }
     multi_cycle_controller_allowed_next_actions = {
         "enable_multi_cycle_controller",
+        "enable_multi_cycle_controller_execution",
         "prepare_bounded_two_cycle_execution",
+        "run_next_bounded_cycle",
+        "wait_for_chatgpt_diff_review_response",
+        "prepare_next_cycle_after_review",
         "generate_next_prompt",
         "generate_fix_prompt",
         "prepare_rollback_readiness",
@@ -136006,6 +136513,13 @@ def _build_approved_restart_execution_contract_surface(
         "cycle_history_path",
         "cycle_history_status",
         "blocked_reason",
+        "can_continue",
+        "remaining_cycle_count",
+        "last_cycle_status",
+        "last_cycle_next_action",
+        "last_cycle_review_request_status",
+        "last_cycle_diff_capture_status",
+        "next_cycle_blocked_reason",
         "readiness_summary_path",
         "controller_allowed",
         "controller_block_reason",
@@ -136086,6 +136600,7 @@ def _build_approved_restart_execution_contract_surface(
         elif field_name in {
             "enabled",
             "execute_enabled",
+            "can_continue",
             "controller_allowed",
             "latest_validation_passed",
             "latest_human_review_required",
@@ -136110,6 +136625,7 @@ def _build_approved_restart_execution_contract_surface(
         elif field_name in {
             "current_cycle_index",
             "completed_cycle_count",
+            "remaining_cycle_count",
             "max_cycles_requested",
             "max_cycles_allowed",
             "cycle_index",
@@ -176868,6 +177384,7 @@ class PlannedExecutionRunner:
                 prior_approved_restart_execution_payload=(
                     prior_approved_restart_execution_contract_payload
                 ),
+                dry_run=bool(dry_run),
             )
         )
         approved_restart_payload_for_bounded_local_loop = (
