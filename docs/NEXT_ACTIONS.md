@@ -306,3 +306,14 @@ Goal:
 Expected after Prompt298:
 - local Codex has produced repo changes, or no-op with a clear result.
 - Next action returns to local_git_diff_capture.
+
+## Next after Prompt298 / Prompt298-fix
+
+Run Prompt299.
+
+Goal:
+- Implement one-cycle local autonomous controller v1.
+- max_cycles=1.
+- Connect readiness -> one bounded local Codex execution -> diff capture -> review request.
+- Stop at wait_for_chatgpt_diff_review_response.
+- Do not commit/tag/push/PR/merge automatically.

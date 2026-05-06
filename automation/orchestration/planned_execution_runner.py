@@ -4327,6 +4327,7 @@ def _build_project_browser_autonomous_local_codex_execution_readiness_state() ->
 
     request_payload: Mapping[str, Any] | None = None
     prompt_text = ""
+    summary_text = ""
 
     input_artifacts = {
         "codex_implementation_prompt_md": str(input_prompt_path),
@@ -4352,6 +4353,7 @@ def _build_project_browser_autonomous_local_codex_execution_readiness_state() ->
         try:
             loaded_request_payload = json.loads(input_request_path.read_text(encoding="utf-8"))
             prompt_text = input_prompt_path.read_text(encoding="utf-8")
+            summary_text = input_summary_path.read_text(encoding="utf-8")
         except (OSError, json.JSONDecodeError):
             blocked_reason = "next_codex_prompt_invalid"
             status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
@@ -4367,6 +4369,7 @@ def _build_project_browser_autonomous_local_codex_execution_readiness_state() ->
                     request_payload.get("blocked_reason"),
                     default="",
                 )
+                summary_readable = bool(summary_text.strip())
 
                 prompt_exists = input_prompt_path.is_file()
                 prompt_non_empty = bool(prompt_text.strip())
@@ -4401,6 +4404,9 @@ def _build_project_browser_autonomous_local_codex_execution_readiness_state() ->
                     status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
                 elif request_blocked_reason != "none":
                     blocked_reason = "next_codex_prompt_blocked_reason_not_none"
+                    status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
+                elif not summary_readable:
+                    blocked_reason = "next_codex_prompt_summary_empty"
                     status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
                 elif not prompt_exists:
                     blocked_reason = "next_codex_prompt_prompt_not_file"
@@ -4481,9 +4487,12 @@ def _build_project_browser_autonomous_local_codex_execution_readiness_state() ->
         )
         output_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
         output_exec_plan_path.write_text(
-            "#!/usr/bin/env bash\n"
-            "set -euo pipefail\n\n"
-            f"{_LOCAL_CODEX_EXEC_PLAN_COMMAND}\n",
+            (
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "\n"
+                f"{_LOCAL_CODEX_EXEC_PLAN_COMMAND}\n"
+            ),
             encoding="utf-8",
         )
         try:
