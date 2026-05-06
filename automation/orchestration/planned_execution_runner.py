@@ -3530,7 +3530,16 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_max_cycles",
     "project_browser_autonomous_one_cycle_controller_codex_execution_status",
     "project_browser_autonomous_one_cycle_controller_diff_capture_status",
+    "project_browser_autonomous_one_cycle_controller_diff_capture_blocked_reason",
+    "project_browser_autonomous_one_cycle_controller_diff_stat_path",
+    "project_browser_autonomous_one_cycle_controller_diff_name_status_path",
+    "project_browser_autonomous_one_cycle_controller_diff_patch_path",
     "project_browser_autonomous_one_cycle_controller_review_request_status",
+    "project_browser_autonomous_one_cycle_controller_review_request_blocked_reason",
+    "project_browser_autonomous_one_cycle_controller_review_request_path",
+    "project_browser_autonomous_one_cycle_controller_review_handoff_path",
+    "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
+    "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
     "project_browser_autonomous_one_cycle_controller_artifact_paths",
     "project_browser_autonomous_one_cycle_controller_runtime_posture",
@@ -4786,6 +4795,273 @@ def _evaluate_one_cycle_controller_exec_plan_safety(*, exec_plan_path: Path) -> 
     }
 
 
+def _read_one_cycle_completed_result_source(
+    *, result_path: Path
+) -> tuple[str, dict[str, Any]]:
+    def _read_flag(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return False
+
+    if not result_path.exists():
+        return "missing", {}
+
+    try:
+        result_payload_raw = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "invalid", {}
+
+    if not isinstance(result_payload_raw, Mapping):
+        return "invalid", {}
+
+    result_payload = dict(result_payload_raw)
+    result_status = _normalize_text(result_payload.get("status"), default="")
+    stop_reason = _normalize_text(result_payload.get("stop_reason"), default="")
+    execution_attempted = _read_flag(result_payload.get("execution_attempted", False))
+    execution_exit_code = _as_int(result_payload.get("execution_exit_code"), default=-1)
+    exec_plan_execution_status = _normalize_text(
+        result_payload.get("exec_plan_execution_status"),
+        default="",
+    )
+    if (
+        result_status == "one_cycle_controller_completed"
+        and stop_reason == "review_response_required"
+        and execution_attempted
+        and execution_exit_code == 0
+        and exec_plan_execution_status == "completed"
+    ):
+        return "available", result_payload
+    return "not_completed", result_payload
+
+
+def _build_one_cycle_post_execution_handoff(
+    *,
+    execution_repo_path: str,
+    status: str,
+    stop_reason: str,
+    next_action: str,
+    execution_attempted: bool,
+    execution_exit_code: int,
+    exec_plan_execution_status: str,
+    one_cycle_controller_dir: Path,
+    completed_result_source_path: Path,
+) -> dict[str, Any]:
+    def _read_flag(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return False
+
+    diff_stat_path = one_cycle_controller_dir / "one_cycle_controller_diff_stat.txt"
+    diff_name_status_path = one_cycle_controller_dir / "one_cycle_controller_diff_name_status.txt"
+    diff_patch_path = one_cycle_controller_dir / "one_cycle_controller_diff.patch"
+    review_request_path = one_cycle_controller_dir / "one_cycle_controller_review_request.md"
+    review_handoff_path = one_cycle_controller_dir / "one_cycle_controller_review_handoff.json"
+
+    diff_capture_status = "not_started"
+    diff_capture_blocked_reason = "one_cycle_not_completed"
+    review_request_status = "not_started"
+    review_request_blocked_reason = "one_cycle_not_completed"
+    completed_result_source_status = "not_completed"
+
+    current_run_completed = (
+        status == "one_cycle_controller_completed"
+        and stop_reason == "review_response_required"
+        and execution_attempted
+        and execution_exit_code == 0
+        and exec_plan_execution_status == "completed"
+    )
+    source_payload: dict[str, Any] = {}
+    if current_run_completed:
+        completed_result_source_status = "available"
+    else:
+        completed_result_source_status, source_payload = _read_one_cycle_completed_result_source(
+            result_path=completed_result_source_path
+        )
+
+    handoff_eligible = current_run_completed or completed_result_source_status == "available"
+    effective_next_action = next_action
+    if handoff_eligible:
+        effective_next_action = "wait_for_chatgpt_diff_review_response"
+        diff_stat_result = _run_git(
+            execution_repo_path,
+            ["diff", "--stat"],
+            timeout_seconds=15,
+        )
+        diff_name_status_result = _run_git(
+            execution_repo_path,
+            ["diff", "--name-status"],
+            timeout_seconds=15,
+        )
+        diff_patch_result = _run_git(
+            execution_repo_path,
+            ["diff"],
+            timeout_seconds=30,
+        )
+        if (
+            diff_stat_result.returncode != 0
+            or diff_name_status_result.returncode != 0
+            or diff_patch_result.returncode != 0
+        ):
+            diff_capture_status = "blocked"
+            diff_capture_blocked_reason = "diff_capture_failed"
+            review_request_status = "blocked"
+            review_request_blocked_reason = "diff_capture_failed"
+            effective_next_action = "manual_review_required"
+        else:
+            diff_stat_text = (diff_stat_result.stdout or "").strip()
+            diff_name_status_text = (diff_name_status_result.stdout or "").strip()
+            diff_patch_text = diff_patch_result.stdout or ""
+            try:
+                one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+                diff_stat_path.write_text(
+                    (diff_stat_text + "\n") if diff_stat_text else "",
+                    encoding="utf-8",
+                )
+                diff_name_status_path.write_text(
+                    (diff_name_status_text + "\n") if diff_name_status_text else "",
+                    encoding="utf-8",
+                )
+                diff_patch_path.write_text(diff_patch_text, encoding="utf-8")
+            except OSError:
+                diff_capture_status = "blocked"
+                diff_capture_blocked_reason = "diff_capture_failed"
+                review_request_status = "blocked"
+                review_request_blocked_reason = "diff_capture_failed"
+                effective_next_action = "manual_review_required"
+            else:
+                diff_capture_status = "completed"
+                diff_capture_blocked_reason = "none"
+                source_execution_attempted = (
+                    execution_attempted
+                    if current_run_completed
+                    else _read_flag(source_payload.get("execution_attempted", False))
+                )
+                source_execution_exit_code = (
+                    execution_exit_code
+                    if current_run_completed
+                    else _as_int(source_payload.get("execution_exit_code"), default=-1)
+                )
+                source_exec_plan_execution_status = (
+                    exec_plan_execution_status
+                    if current_run_completed
+                    else _normalize_text(source_payload.get("exec_plan_execution_status"), default="")
+                )
+                source_status = (
+                    status
+                    if current_run_completed
+                    else _normalize_text(source_payload.get("status"), default=status)
+                )
+                source_stop_reason = (
+                    stop_reason
+                    if current_run_completed
+                    else _normalize_text(source_payload.get("stop_reason"), default=stop_reason)
+                )
+                has_tracked_diff = bool(diff_patch_text.strip())
+                review_lines = [
+                    "# One Cycle Controller Diff Review Request",
+                    "",
+                    "## One-Cycle Status Summary",
+                    f"- status: `{source_status}`",
+                    f"- next_action: `{effective_next_action}`",
+                    f"- stop_reason: `{source_stop_reason}`",
+                    f"- completed_result_source_path: `{completed_result_source_path}`",
+                    f"- completed_result_source_status: `{completed_result_source_status}`",
+                    f"- execution_attempted: `{str(source_execution_attempted).lower()}`",
+                    f"- execution_exit_code: `{source_execution_exit_code}`",
+                    f"- exec_plan_execution_status: `{source_exec_plan_execution_status or 'unknown'}`",
+                    "",
+                    "## Diff Stat (tracked only)",
+                    "```text",
+                    diff_stat_text or "(no tracked diff present)",
+                    "```",
+                    "",
+                    "## Diff Name-Status (tracked only)",
+                    "```text",
+                    diff_name_status_text or "(no tracked diff present)",
+                    "```",
+                    "",
+                    f"- patch_path: `{diff_patch_path}`",
+                    (
+                        "- tracked_diff_presence: `present`"
+                        if has_tracked_diff
+                        else "- tracked_diff_presence: `none`"
+                    ),
+                    "",
+                    "## Review Instructions",
+                    "- Approve the diff.",
+                    "- Reject the diff.",
+                    "- Request a targeted fix.",
+                    (
+                        "- No tracked diff is present; confirm whether to proceed anyway."
+                        if not has_tracked_diff
+                        else "- Review the tracked diff patch and respond with one of the three decisions."
+                    ),
+                    "",
+                    "## Safety Statements",
+                    "- No commit/tag/push/PR/merge has been performed.",
+                    "- Codex was not executed by this handoff layer.",
+                    "- local_codex_exec_plan.sh was not executed by this handoff layer.",
+                    "- Tracked diff only was captured.",
+                    "- Untracked files are not part of this review request.",
+                ]
+                review_handoff_payload = {
+                    "status": "ready",
+                    "review_request_status": "ready",
+                    "review_request_blocked_reason": "none",
+                    "diff_capture_status": diff_capture_status,
+                    "diff_capture_blocked_reason": diff_capture_blocked_reason,
+                    "completed_result_source_path": str(completed_result_source_path),
+                    "completed_result_source_status": completed_result_source_status,
+                    "diff_stat_path": str(diff_stat_path),
+                    "diff_name_status_path": str(diff_name_status_path),
+                    "diff_patch_path": str(diff_patch_path),
+                    "review_request_path": str(review_request_path),
+                    "tracked_diff_present": has_tracked_diff,
+                }
+                try:
+                    review_request_path.write_text("\n".join(review_lines) + "\n", encoding="utf-8")
+                    review_handoff_path.write_text(
+                        json.dumps(review_handoff_payload, ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                except OSError:
+                    review_request_status = "blocked"
+                    review_request_blocked_reason = "review_request_write_failed"
+                    effective_next_action = "manual_review_required"
+                else:
+                    review_request_status = "ready"
+                    review_request_blocked_reason = "none"
+
+    return {
+        "next_action": effective_next_action,
+        "diff_capture_status": diff_capture_status,
+        "diff_capture_blocked_reason": diff_capture_blocked_reason,
+        "diff_stat_path": str(diff_stat_path),
+        "diff_name_status_path": str(diff_name_status_path),
+        "diff_patch_path": str(diff_patch_path),
+        "review_request_status": review_request_status,
+        "review_request_blocked_reason": review_request_blocked_reason,
+        "review_request_path": str(review_request_path),
+        "review_handoff_path": str(review_handoff_path),
+        "completed_result_source_path": str(completed_result_source_path),
+        "completed_result_source_status": completed_result_source_status,
+    }
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -4821,6 +5097,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     execution_stdout_path = one_cycle_controller_dir / "one_cycle_controller_exec_stdout.log"
     execution_stderr_path = one_cycle_controller_dir / "one_cycle_controller_exec_stderr.log"
     execution_runlog_path = one_cycle_controller_dir / "one_cycle_controller_runlog.md"
+    diff_stat_path = one_cycle_controller_dir / "one_cycle_controller_diff_stat.txt"
+    diff_name_status_path = one_cycle_controller_dir / "one_cycle_controller_diff_name_status.txt"
+    diff_patch_path = one_cycle_controller_dir / "one_cycle_controller_diff.patch"
+    review_request_path = one_cycle_controller_dir / "one_cycle_controller_review_request.md"
+    review_handoff_path = one_cycle_controller_dir / "one_cycle_controller_review_handoff.json"
+    completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
     )
@@ -4831,7 +5113,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     max_cycles = 1
     codex_execution_status = "not_executed"
     diff_capture_status = "not_started"
+    diff_capture_blocked_reason = "one_cycle_not_completed"
     review_request_status = "not_started"
+    review_request_blocked_reason = "one_cycle_not_completed"
+    completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
         "project_browser_autonomous_one_cycle_controller_enabled",
@@ -4878,8 +5163,8 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "single_execution_path_available",
         "single_cycle_only",
         "execution_explicitly_gated",
-        "no_local_git_diff_capture",
-        "no_chatgpt_review_request_generation",
+        "post_execution_handoff_local_tracked_diff_only",
+        "post_execution_handoff_review_request_artifact_only",
         "no_commit_tag_push_pr_merge",
         "no_daemon_no_polling_no_unbounded_retry",
     ]
@@ -4891,6 +5176,11 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_exec_stdout_log": str(execution_stdout_path),
         "one_cycle_controller_exec_stderr_log": str(execution_stderr_path),
         "one_cycle_controller_runlog_md": str(execution_runlog_path),
+        "one_cycle_controller_diff_stat_txt": str(diff_stat_path),
+        "one_cycle_controller_diff_name_status_txt": str(diff_name_status_path),
+        "one_cycle_controller_diff_patch": str(diff_patch_path),
+        "one_cycle_controller_review_request_md": str(review_request_path),
+        "one_cycle_controller_review_handoff_json": str(review_handoff_path),
     }
 
     requested_execution = enabled and execute_enabled and (not dry_run)
@@ -5034,6 +5324,39 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
                         execution_blocked_reason = "exec_plan_execution_failed"
                         execution_gate_status = "ready_for_single_execution"
 
+    post_execution_handoff = _build_one_cycle_post_execution_handoff(
+        execution_repo_path=execution_repo_path,
+        status=status,
+        stop_reason=stop_reason,
+        next_action=next_action,
+        execution_attempted=execution_attempted,
+        execution_exit_code=execution_exit_code,
+        exec_plan_execution_status=exec_plan_execution_status,
+        one_cycle_controller_dir=one_cycle_controller_dir,
+        completed_result_source_path=completed_result_source_path,
+    )
+    next_action = _normalize_text(post_execution_handoff.get("next_action"), default=next_action)
+    diff_capture_status = _normalize_text(
+        post_execution_handoff.get("diff_capture_status"),
+        default=diff_capture_status,
+    )
+    diff_capture_blocked_reason = _normalize_text(
+        post_execution_handoff.get("diff_capture_blocked_reason"),
+        default=diff_capture_blocked_reason,
+    )
+    review_request_status = _normalize_text(
+        post_execution_handoff.get("review_request_status"),
+        default=review_request_status,
+    )
+    review_request_blocked_reason = _normalize_text(
+        post_execution_handoff.get("review_request_blocked_reason"),
+        default=review_request_blocked_reason,
+    )
+    completed_result_source_status = _normalize_text(
+        post_execution_handoff.get("completed_result_source_status"),
+        default=completed_result_source_status,
+    )
+
     result_payload = {
         "status": status,
         "next_action": next_action,
@@ -5041,7 +5364,16 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "max_cycles": max_cycles,
         "codex_execution_status": codex_execution_status,
         "diff_capture_status": diff_capture_status,
+        "diff_capture_blocked_reason": diff_capture_blocked_reason,
+        "diff_stat_path": str(diff_stat_path),
+        "diff_name_status_path": str(diff_name_status_path),
+        "diff_patch_path": str(diff_patch_path),
         "review_request_status": review_request_status,
+        "review_request_blocked_reason": review_request_blocked_reason,
+        "review_request_path": str(review_request_path),
+        "review_handoff_path": str(review_handoff_path),
+        "completed_result_source_path": str(completed_result_source_path),
+        "completed_result_source_status": completed_result_source_status,
         "stop_reason": stop_reason,
         "enabled": enabled,
         "execute_enabled": execute_enabled,
@@ -5072,7 +5404,11 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- Max cycles: `{max_cycles}`",
         f"- Codex execution status: `{codex_execution_status}`",
         f"- Diff capture status: `{diff_capture_status}`",
+        f"- Diff capture blocked reason: `{diff_capture_blocked_reason}`",
         f"- Review request status: `{review_request_status}`",
+        f"- Review request blocked reason: `{review_request_blocked_reason}`",
+        f"- Completed result source path: `{completed_result_source_path}`",
+        f"- Completed result source status: `{completed_result_source_status}`",
         f"- Stop reason: `{stop_reason}`",
         f"- Enabled: `{str(enabled).lower()}`",
         f"- Execute enabled: `{str(execute_enabled).lower()}`",
@@ -5102,6 +5438,11 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- one_cycle_controller_exec_stdout.log: `{execution_stdout_path}`",
         f"- one_cycle_controller_exec_stderr.log: `{execution_stderr_path}`",
         f"- one_cycle_controller_runlog.md: `{execution_runlog_path}`",
+        f"- one_cycle_controller_diff_stat.txt: `{diff_stat_path}`",
+        f"- one_cycle_controller_diff_name_status.txt: `{diff_name_status_path}`",
+        f"- one_cycle_controller_diff.patch: `{diff_patch_path}`",
+        f"- one_cycle_controller_review_request.md: `{review_request_path}`",
+        f"- one_cycle_controller_review_handoff.json: `{review_handoff_path}`",
     ]
 
     try:
@@ -5118,7 +5459,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         max_cycles = 1
         codex_execution_status = "not_executed"
         diff_capture_status = "not_started"
+        diff_capture_blocked_reason = "one_cycle_not_completed"
         review_request_status = "not_started"
+        review_request_blocked_reason = "one_cycle_not_completed"
+        completed_result_source_status = "not_completed"
         stop_reason = (
             "dry_run_execution_suppressed"
             if enabled and execute_enabled and dry_run
@@ -5157,8 +5501,31 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "project_browser_autonomous_one_cycle_controller_diff_capture_status": (
             diff_capture_status
         ),
+        "project_browser_autonomous_one_cycle_controller_diff_capture_blocked_reason": (
+            diff_capture_blocked_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_diff_stat_path": str(diff_stat_path),
+        "project_browser_autonomous_one_cycle_controller_diff_name_status_path": str(
+            diff_name_status_path
+        ),
+        "project_browser_autonomous_one_cycle_controller_diff_patch_path": str(diff_patch_path),
         "project_browser_autonomous_one_cycle_controller_review_request_status": (
             review_request_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_request_blocked_reason": (
+            review_request_blocked_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_request_path": str(
+            review_request_path
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_handoff_path": str(
+            review_handoff_path
+        ),
+        "project_browser_autonomous_one_cycle_controller_completed_result_source_path": str(
+            completed_result_source_path
+        ),
+        "project_browser_autonomous_one_cycle_controller_completed_result_source_status": (
+            completed_result_source_status
         ),
         "project_browser_autonomous_one_cycle_controller_stop_reason": stop_reason,
         "project_browser_autonomous_one_cycle_controller_artifact_paths": artifact_paths,
@@ -160292,8 +160659,36 @@ def _build_approved_restart_execution_contract_surface(
         "failed",
         "insufficient_truth",
     }
-    one_cycle_controller_allowed_stage_statuses = {
+    one_cycle_controller_allowed_diff_capture_statuses = {
         "not_started",
+        "completed",
+        "blocked",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_diff_capture_blocked_reasons = {
+        "none",
+        "diff_capture_failed",
+        "one_cycle_not_completed",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_review_request_statuses = {
+        "not_started",
+        "ready",
+        "blocked",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_review_request_blocked_reasons = {
+        "none",
+        "diff_capture_failed",
+        "one_cycle_not_completed",
+        "review_request_write_failed",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_completed_result_source_statuses = {
+        "available",
+        "missing",
+        "invalid",
+        "not_completed",
         "insufficient_truth",
     }
     one_cycle_controller_allowed_stop_reasons = {
@@ -160399,9 +160794,22 @@ def _build_approved_restart_execution_contract_surface(
     )
     if (
         project_browser_autonomous_one_cycle_controller_diff_capture_status
-        not in one_cycle_controller_allowed_stage_statuses
+        not in one_cycle_controller_allowed_diff_capture_statuses
     ):
         project_browser_autonomous_one_cycle_controller_diff_capture_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_diff_capture_blocked_reason = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_one_cycle_controller_diff_capture_blocked_reason"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_diff_capture_blocked_reason
+        not in one_cycle_controller_allowed_diff_capture_blocked_reasons
+    ):
+        project_browser_autonomous_one_cycle_controller_diff_capture_blocked_reason = (
             "insufficient_truth"
         )
     project_browser_autonomous_one_cycle_controller_review_request_status = _normalize_text(
@@ -160410,9 +160818,35 @@ def _build_approved_restart_execution_contract_surface(
     )
     if (
         project_browser_autonomous_one_cycle_controller_review_request_status
-        not in one_cycle_controller_allowed_stage_statuses
+        not in one_cycle_controller_allowed_review_request_statuses
     ):
         project_browser_autonomous_one_cycle_controller_review_request_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_review_request_blocked_reason = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_one_cycle_controller_review_request_blocked_reason"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_review_request_blocked_reason
+        not in one_cycle_controller_allowed_review_request_blocked_reasons
+    ):
+        project_browser_autonomous_one_cycle_controller_review_request_blocked_reason = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_completed_result_source_status = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_one_cycle_controller_completed_result_source_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_completed_result_source_status
+        not in one_cycle_controller_allowed_completed_result_source_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_completed_result_source_status = (
             "insufficient_truth"
         )
     project_browser_autonomous_one_cycle_controller_stop_reason = _normalize_text(
@@ -160530,8 +160964,45 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_one_cycle_controller_diff_capture_status": (
             project_browser_autonomous_one_cycle_controller_diff_capture_status
         ),
+        "project_browser_autonomous_one_cycle_controller_diff_capture_blocked_reason": (
+            project_browser_autonomous_one_cycle_controller_diff_capture_blocked_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_diff_stat_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_one_cycle_controller_diff_stat_path"),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_diff_name_status_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_diff_name_status_path"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_diff_patch_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_one_cycle_controller_diff_patch_path"),
+            default="",
+        ),
         "project_browser_autonomous_one_cycle_controller_review_request_status": (
             project_browser_autonomous_one_cycle_controller_review_request_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_request_blocked_reason": (
+            project_browser_autonomous_one_cycle_controller_review_request_blocked_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_request_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_one_cycle_controller_review_request_path"),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_handoff_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_one_cycle_controller_review_handoff_path"),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_completed_result_source_path"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_completed_result_source_status": (
+            project_browser_autonomous_one_cycle_controller_completed_result_source_status
         ),
         "project_browser_autonomous_one_cycle_controller_stop_reason": (
             project_browser_autonomous_one_cycle_controller_stop_reason
