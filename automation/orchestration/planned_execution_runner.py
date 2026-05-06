@@ -3490,6 +3490,117 @@ _NEXT_DEV_SLICE_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_next_dev_slice_selected_count",
 )
 
+_NEXT_LOCAL_CODEX_PROMPT_SURFACE_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_next_local_codex_prompt_status",
+    "project_browser_autonomous_next_local_codex_prompt_next_action",
+    "project_browser_autonomous_next_local_codex_prompt_source_slice_id",
+    "project_browser_autonomous_next_local_codex_prompt_path",
+    "project_browser_autonomous_next_local_codex_prompt_request_path",
+    "project_browser_autonomous_next_local_codex_prompt_summary_path",
+    "project_browser_autonomous_next_local_codex_prompt_blocked_reason",
+    "project_browser_autonomous_next_local_codex_prompt_runtime_posture",
+    "project_browser_autonomous_next_local_codex_prompt_execution_status",
+    "project_browser_autonomous_next_local_codex_prompt_codex_invocation_status",
+    "project_browser_autonomous_next_local_codex_prompt_review_status",
+    "project_browser_autonomous_next_local_codex_prompt_commit_tag_status",
+    "project_browser_autonomous_next_local_codex_prompt_push_status",
+)
+
+_LOCAL_CODEX_EXECUTION_READINESS_SURFACE_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_local_codex_execution_readiness_status",
+    "project_browser_autonomous_local_codex_execution_readiness_next_action",
+    "project_browser_autonomous_local_codex_execution_readiness_prompt_path",
+    "project_browser_autonomous_local_codex_execution_readiness_json_path",
+    "project_browser_autonomous_local_codex_execution_readiness_summary_path",
+    "project_browser_autonomous_local_codex_execution_readiness_exec_plan_path",
+    "project_browser_autonomous_local_codex_execution_readiness_blocked_reason",
+    "project_browser_autonomous_local_codex_execution_readiness_runtime_posture",
+)
+
+_LOCAL_CODEX_EXEC_PLAN_COMMAND = (
+    "cat /tmp/codex-local-runner-decision/next_codex_prompt/codex_implementation_prompt.md | "
+    "codex exec - --cd /home/rai/codex-local-runner --sandbox workspace-write -m gpt-5.3-codex "
+    "-c 'model_reasoning_effort=\"high\"' -c 'approval_policy=\"never\"'"
+)
+
+_LOCAL_CODEX_EXECUTION_READINESS_BANNED_PROMPT_FRAGMENTS: tuple[str, ...] = (
+    "git commit",
+    "git tag",
+    "git push",
+    "pr creation",
+    "merge",
+    "daemon",
+    "polling loop",
+    "sleep loop",
+    "queue drain",
+    "unbounded retry",
+)
+
+_LOCAL_CODEX_EXECUTION_READINESS_DISALLOW_CONTEXT_FRAGMENTS: tuple[str, ...] = (
+    "do not",
+    "must not",
+    "forbidden",
+    "out of scope",
+    "not execute",
+    "not run",
+    "no commit",
+    "no push",
+    "does not request",
+)
+
+
+def _line_has_local_codex_execution_readiness_disallow_context(line_text_lower: str) -> bool:
+    return any(
+        fragment in line_text_lower
+        for fragment in _LOCAL_CODEX_EXECUTION_READINESS_DISALLOW_CONTEXT_FRAGMENTS
+    )
+
+
+def _line_is_local_codex_execution_readiness_disallow_heading(
+    stripped_line_text_lower: str,
+) -> bool:
+    if not stripped_line_text_lower.startswith("#"):
+        return False
+    return "out of scope" in stripped_line_text_lower or "forbidden" in stripped_line_text_lower
+
+
+def _collect_local_codex_execution_readiness_banned_prompt_fragments(
+    prompt_text_lower: str,
+) -> list[str]:
+    prompt_lines = prompt_text_lower.splitlines()
+    line_has_disallow_context: list[bool] = []
+    disallow_section_active = False
+    for line_text_lower in prompt_lines:
+        stripped_line_text_lower = line_text_lower.strip()
+        if not stripped_line_text_lower:
+            disallow_section_active = False
+        elif _line_is_local_codex_execution_readiness_disallow_heading(
+            stripped_line_text_lower
+        ):
+            disallow_section_active = True
+        elif stripped_line_text_lower.startswith("#"):
+            disallow_section_active = False
+        line_has_disallow_context.append(
+            _line_has_local_codex_execution_readiness_disallow_context(line_text_lower)
+            or disallow_section_active
+        )
+
+    banned_fragments_detected: list[str] = []
+    for fragment in _LOCAL_CODEX_EXECUTION_READINESS_BANNED_PROMPT_FRAGMENTS:
+        fragment_detected = False
+        for line_text_lower, has_disallow_context in zip(
+            prompt_lines, line_has_disallow_context
+        ):
+            if fragment not in line_text_lower:
+                continue
+            if has_disallow_context:
+                continue
+            fragment_detected = True
+            break
+        if fragment_detected:
+            banned_fragments_detected.append(fragment)
+    return banned_fragments_detected
+
 
 def _overlay_prompt_selection_for_explicit_one_shot_live_probe(
     *,
@@ -3720,6 +3831,69 @@ def _merge_next_dev_slice_surface_into_approved_restart_payload(
     return merged
 
 
+def _merge_next_local_codex_prompt_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    next_local_codex_prompt_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(next_local_codex_prompt_state)
+        if isinstance(next_local_codex_prompt_state, Mapping)
+        else {}
+    )
+    for key in _NEXT_LOCAL_CODEX_PROMPT_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_local_codex_execution_readiness_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    local_codex_execution_readiness_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(local_codex_execution_readiness_state)
+        if isinstance(local_codex_execution_readiness_state, Mapping)
+        else {}
+    )
+    for key in _LOCAL_CODEX_EXECUTION_READINESS_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _is_abstract_or_self_referential_next_dev_slice_goal(goal: str) -> bool:
+    normalized_goal = _normalize_text(goal, default="").lower()
+    if not normalized_goal:
+        return True
+    if "next-local-codex-prompt" in normalized_goal:
+        return True
+    if "generate next local codex implementation prompt" in normalized_goal:
+        return True
+    if "from next_dev_slice" in normalized_goal:
+        return True
+    if "prompt generation" in normalized_goal and "codex implementation prompt" in normalized_goal:
+        return True
+    return False
+
+
+def _build_concrete_prompt298_goal_from_next_dev_slice(goal: str) -> str:
+    default_goal = (
+        "Implement bounded local Codex implementation execution readiness metadata from "
+        "`next_codex_prompt` artifacts without invoking Codex."
+    )
+    normalized_goal = _normalize_text(goal, default="")
+    if _is_abstract_or_self_referential_next_dev_slice_goal(normalized_goal):
+        return default_goal
+    lowered = normalized_goal.lower()
+    if "local codex" in lowered and "execution readiness" in lowered:
+        return normalized_goal
+    return default_goal
+
+
 def _build_project_browser_autonomous_next_dev_slice_state() -> dict[str, Any]:
     post_push_dir = Path("/tmp/codex-local-runner-decision/post_push_queue_state")
     next_dev_slice_dir = Path("/tmp/codex-local-runner-decision/next_dev_slice")
@@ -3862,6 +4036,483 @@ def _build_project_browser_autonomous_next_dev_slice_state() -> dict[str, Any]:
         "project_browser_autonomous_next_dev_slice_blocked_reason": blocked_reason,
         "project_browser_autonomous_next_dev_slice_runtime_posture": runtime_posture,
         "project_browser_autonomous_next_dev_slice_selected_count": int(selected_count),
+    }
+
+
+def _build_project_browser_autonomous_next_local_codex_prompt_state() -> dict[str, Any]:
+    next_dev_slice_dir = Path("/tmp/codex-local-runner-decision/next_dev_slice")
+    next_codex_prompt_dir = Path("/tmp/codex-local-runner-decision/next_codex_prompt")
+
+    input_next_dev_slice_json = next_dev_slice_dir / "next_dev_slice.json"
+    input_next_dev_slice_summary = next_dev_slice_dir / "next_dev_slice_summary.md"
+    output_prompt_path = next_codex_prompt_dir / "codex_implementation_prompt.md"
+    output_request_path = next_codex_prompt_dir / "codex_implementation_request.json"
+    output_summary_path = next_codex_prompt_dir / "codex_implementation_summary.md"
+
+    runtime_posture = [
+        "metadata_only_prompt_generation",
+        "no_codex_invocation",
+        "no_prompt_execution",
+        "no_commit_tag_push_pr_merge",
+        "no_daemon_loop_no_unbounded_retry",
+    ]
+
+    status = "next_local_codex_prompt_blocked_missing_next_dev_slice"
+    next_action = "manual_review_required"
+    blocked_reason = "next_dev_slice_missing"
+    source_slice_id = ""
+    execution_status = "not_started"
+    codex_invocation_status = "not_started"
+    review_status = "not_started"
+    commit_tag_status = "not_started"
+    push_status = "not_started"
+    selected_slice_goal = ""
+    selected_slice_scope = ""
+    concrete_prompt298_goal = ""
+
+    request_payload: dict[str, Any] = {
+        "status": status,
+        "next_action": next_action,
+        "blocked_reason": blocked_reason,
+        "source_slice_id": source_slice_id,
+        "execution_status": execution_status,
+        "codex_invocation_status": codex_invocation_status,
+        "review_status": review_status,
+        "commit_tag_status": commit_tag_status,
+        "push_status": push_status,
+        "input_artifacts": {
+            "next_dev_slice_json": str(input_next_dev_slice_json),
+            "next_dev_slice_summary_md": str(input_next_dev_slice_summary),
+        },
+        "output_artifacts": {
+            "codex_implementation_prompt_md": str(output_prompt_path),
+            "codex_implementation_request_json": str(output_request_path),
+            "codex_implementation_summary_md": str(output_summary_path),
+        },
+        "runtime_posture": runtime_posture,
+    }
+
+    prompt_lines: list[str] = [
+        "# Local Codex Implement Prompt (Bounded Metadata-Only)",
+        "",
+        "- Mode: `Implement`",
+        "- Goal: blocked because `next_dev_slice` input is missing or invalid.",
+    ]
+
+    if not input_next_dev_slice_json.exists():
+        blocked_reason = "next_dev_slice_missing"
+        status = "next_local_codex_prompt_blocked_missing_next_dev_slice"
+    elif not input_next_dev_slice_summary.exists():
+        blocked_reason = "next_dev_slice_summary_missing"
+        status = "next_local_codex_prompt_blocked_missing_next_dev_slice_summary"
+    else:
+        try:
+            next_dev_slice_payload = json.loads(input_next_dev_slice_json.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            blocked_reason = "next_dev_slice_invalid_json"
+            status = "next_local_codex_prompt_blocked_invalid_next_dev_slice"
+        else:
+            if not isinstance(next_dev_slice_payload, Mapping):
+                blocked_reason = "next_dev_slice_not_object"
+                status = "next_local_codex_prompt_blocked_invalid_next_dev_slice"
+            else:
+                slice_status = _normalize_text(next_dev_slice_payload.get("status"), default="")
+                slice_next_action = _normalize_text(next_dev_slice_payload.get("next_action"), default="")
+                selected_slice_count = _as_non_negative_int(
+                    next_dev_slice_payload.get("selected_slice_count"),
+                    default=0,
+                )
+                selected_slices = (
+                    list(next_dev_slice_payload.get("selected_slices", []))
+                    if isinstance(next_dev_slice_payload.get("selected_slices"), list)
+                    else []
+                )
+                selected_slice = selected_slices[0] if selected_slices else {}
+                if not isinstance(selected_slice, Mapping):
+                    selected_slice = {}
+                source_slice_id = _normalize_text(selected_slice.get("slice_id"), default="")
+                selected_slice_goal = _normalize_text(selected_slice.get("goal"), default="")
+                selected_slice_scope = _normalize_text(selected_slice.get("scope"), default="")
+                concrete_prompt298_goal = _build_concrete_prompt298_goal_from_next_dev_slice(
+                    selected_slice_goal
+                )
+
+                if slice_status != "next_dev_slice_generated":
+                    blocked_reason = "next_dev_slice_status_not_generated"
+                    status = "next_local_codex_prompt_blocked_invalid_next_dev_slice"
+                elif slice_next_action != "prepare_next_local_codex_prompt":
+                    blocked_reason = "next_dev_slice_next_action_not_prepare_next_local_codex_prompt"
+                    status = "next_local_codex_prompt_blocked_invalid_next_dev_slice"
+                elif selected_slice_count != 1:
+                    blocked_reason = "next_dev_slice_selected_count_not_one"
+                    status = "next_local_codex_prompt_blocked_invalid_next_dev_slice"
+                elif source_slice_id != "next-local-codex-prompt-from-next-dev-slice":
+                    blocked_reason = "next_dev_slice_id_mismatch"
+                    status = "next_local_codex_prompt_blocked_invalid_next_dev_slice"
+                else:
+                    blocked_reason = "none"
+                    status = "next_local_codex_prompt_generated"
+                    next_action = "ready_for_bounded_local_codex_implementation"
+                    prompt_lines = [
+                        "# Prompt298: Implement Local Codex Execution Readiness (Metadata-Only)",
+                        "",
+                        "- Mode: `Implement`",
+                        "",
+                        "## Goal",
+                        concrete_prompt298_goal,
+                        "",
+                        "## Allowed Files",
+                        "- `automation/orchestration/planned_execution_runner.py`",
+                        "- If absolutely necessary, only files required to keep this path syntactically valid.",
+                        "",
+                        "## Forbidden Files",
+                        "- Any file outside the allowed scope unless absolutely necessary for imports or strict runtime safety.",
+                        "",
+                        "## Required Input",
+                        f"- `{output_prompt_path}`",
+                        f"- `{output_request_path}`",
+                        f"- `{output_summary_path}`",
+                        "",
+                        "## Expected Artifacts",
+                        "- `/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_execution_readiness.json`",
+                        "- `/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_execution_summary.md`",
+                        "- `/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh`",
+                        "",
+                        "## Required Behavior",
+                        "- Read the three `next_codex_prompt` artifacts and verify:",
+                        "  - request `status=next_local_codex_prompt_generated`",
+                        "  - request `next_action=ready_for_bounded_local_codex_implementation`",
+                        "  - request `blocked_reason=none`",
+                        "- Confirm `codex_implementation_prompt.md` exists and is non-empty.",
+                        "- Confirm the prompt is intended for a later local codex exec run only.",
+                        "- Confirm the prompt does not request: git commit, git tag, git push, PR creation, merge, daemon, polling loop, sleep loop, queue drain, or unbounded retry.",
+                        f"- Write `local_codex_exec_plan.sh` with this exact bounded command: `{_LOCAL_CODEX_EXEC_PLAN_COMMAND}`",
+                        "- Do not execute `local_codex_exec_plan.sh`.",
+                        "- Do not invoke Codex from inside the runner.",
+                        "- Do not execute `codex_implementation_prompt.md`.",
+                        "- Do not commit, tag, push, open PR, or merge.",
+                        "",
+                        "## Required Contract Fields",
+                        "- `project_browser_autonomous_local_codex_execution_readiness_status`",
+                        "- `project_browser_autonomous_local_codex_execution_readiness_next_action`",
+                        "- `project_browser_autonomous_local_codex_execution_readiness_prompt_path`",
+                        "- `project_browser_autonomous_local_codex_execution_readiness_exec_plan_path`",
+                        "- `project_browser_autonomous_local_codex_execution_readiness_blocked_reason`",
+                        "- `project_browser_autonomous_local_codex_execution_readiness_runtime_posture`",
+                        "",
+                        "## Next Action Mapping",
+                        "- Readiness artifacts written -> `ready_for_local_codex_exec_command`",
+                        "- `next_codex_prompt` missing/invalid -> `manual_review_required`",
+                        "- Unsafe/self-referential prompt -> `manual_review_required`",
+                        "",
+                        "## Validation Commands",
+                        "- `python -m py_compile automation/orchestration/planned_execution_runner.py`",
+                        "- `python scripts/run_planned_execution.py --artifacts-dir /tmp/codex-local-runner-decision/artifacts --out-dir /tmp/codex-local-runner-decision/out --job-id planned-execution --transport-mode dry-run --json`",
+                        "- Run one dry-run verification command only (no repeated retries).",
+                        "",
+                        "## Out Of Scope",
+                        "- Running Codex from inside the runner.",
+                        "- Executing local Codex commands inside this Prompt298 run.",
+                        "- Executing `local_codex_exec_plan.sh`.",
+                        "- Executing the generated implementation prompt.",
+                        "- Tests beyond the requested syntax check.",
+                        "- Commit/tag/push/PR/merge operations.",
+                        "- Deleting existing runtime artifacts.",
+                    ]
+
+    request_payload.update(
+        {
+            "status": status,
+            "next_action": next_action,
+            "blocked_reason": blocked_reason,
+            "source_slice_id": source_slice_id,
+            "source_slice_goal": selected_slice_goal,
+            "source_slice_scope": selected_slice_scope,
+            "execution_status": execution_status,
+            "codex_invocation_status": codex_invocation_status,
+            "review_status": review_status,
+            "commit_tag_status": commit_tag_status,
+            "push_status": push_status,
+            "do_not_invoke_codex_from_runner": True,
+            "do_not_execute_generated_implementation_prompt": True,
+            "do_not_commit_tag_push_pr_merge": True,
+        }
+    )
+
+    summary_lines = [
+        "# Next Local Codex Prompt Generation",
+        "",
+        f"- Status: `{status}`",
+        f"- Next action: `{next_action}`",
+        f"- Source slice id: `{source_slice_id or 'none'}`",
+        f"- Blocked reason: `{blocked_reason}`",
+        "- execution_status: `not_started`",
+        "- codex_invocation_status: `not_started`",
+        "- review_status: `not_started`",
+        "- commit_tag_status: `not_started`",
+        "- push_status: `not_started`",
+        "",
+        "## Input Artifacts",
+        f"- next_dev_slice.json: `{input_next_dev_slice_json}`",
+        f"- next_dev_slice_summary.md: `{input_next_dev_slice_summary}`",
+        "",
+        "## Output Artifacts",
+        f"- codex_implementation_prompt.md: `{output_prompt_path}`",
+        f"- codex_implementation_request.json: `{output_request_path}`",
+        f"- codex_implementation_summary.md: `{output_summary_path}`",
+    ]
+
+    try:
+        next_codex_prompt_dir.mkdir(parents=True, exist_ok=True)
+        output_prompt_path.write_text("\n".join(prompt_lines).rstrip() + "\n", encoding="utf-8")
+        output_request_path.write_text(
+            json.dumps(request_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        output_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    except OSError:
+        status = "next_local_codex_prompt_blocked_write_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "next_local_codex_prompt_artifact_write_failed"
+
+    return {
+        "project_browser_autonomous_next_local_codex_prompt_status": status,
+        "project_browser_autonomous_next_local_codex_prompt_next_action": next_action,
+        "project_browser_autonomous_next_local_codex_prompt_source_slice_id": source_slice_id,
+        "project_browser_autonomous_next_local_codex_prompt_path": str(output_prompt_path),
+        "project_browser_autonomous_next_local_codex_prompt_request_path": str(output_request_path),
+        "project_browser_autonomous_next_local_codex_prompt_summary_path": str(output_summary_path),
+        "project_browser_autonomous_next_local_codex_prompt_blocked_reason": blocked_reason,
+        "project_browser_autonomous_next_local_codex_prompt_runtime_posture": runtime_posture,
+        "project_browser_autonomous_next_local_codex_prompt_execution_status": execution_status,
+        "project_browser_autonomous_next_local_codex_prompt_codex_invocation_status": (
+            codex_invocation_status
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_review_status": review_status,
+        "project_browser_autonomous_next_local_codex_prompt_commit_tag_status": commit_tag_status,
+        "project_browser_autonomous_next_local_codex_prompt_push_status": push_status,
+    }
+
+
+def _build_project_browser_autonomous_local_codex_execution_readiness_state() -> dict[str, Any]:
+    next_codex_prompt_dir = Path("/tmp/codex-local-runner-decision/next_codex_prompt")
+    readiness_dir = Path("/tmp/codex-local-runner-decision/local_codex_execution_readiness")
+
+    input_prompt_path = next_codex_prompt_dir / "codex_implementation_prompt.md"
+    input_request_path = next_codex_prompt_dir / "codex_implementation_request.json"
+    input_summary_path = next_codex_prompt_dir / "codex_implementation_summary.md"
+
+    output_json_path = readiness_dir / "local_codex_execution_readiness.json"
+    output_summary_path = readiness_dir / "local_codex_execution_summary.md"
+    output_exec_plan_path = readiness_dir / "local_codex_exec_plan.sh"
+
+    runtime_posture = [
+        "metadata_only_readiness",
+        "no_codex_invocation",
+        "no_prompt_execution",
+        "no_exec_plan_execution",
+        "no_commit_tag_push_pr_merge",
+        "no_daemon_loop_no_unbounded_retry",
+    ]
+
+    status = "local_codex_execution_readiness_blocked_missing_next_codex_prompt"
+    next_action = "manual_review_required"
+    blocked_reason = "next_codex_prompt_missing"
+    prompt_exists = False
+    prompt_non_empty = False
+    prompt_intended_for_later_exec_only = False
+    prompt_safe = False
+    prompt_self_referential = False
+    banned_requests_detected: list[str] = []
+
+    request_payload: Mapping[str, Any] | None = None
+    prompt_text = ""
+
+    input_artifacts = {
+        "codex_implementation_prompt_md": str(input_prompt_path),
+        "codex_implementation_request_json": str(input_request_path),
+        "codex_implementation_summary_md": str(input_summary_path),
+    }
+    output_artifacts = {
+        "local_codex_execution_readiness_json": str(output_json_path),
+        "local_codex_execution_summary_md": str(output_summary_path),
+        "local_codex_exec_plan_sh": str(output_exec_plan_path),
+    }
+
+    if not input_prompt_path.exists():
+        blocked_reason = "next_codex_prompt_prompt_missing"
+        status = "local_codex_execution_readiness_blocked_missing_next_codex_prompt"
+    elif not input_request_path.exists():
+        blocked_reason = "next_codex_prompt_request_missing"
+        status = "local_codex_execution_readiness_blocked_missing_next_codex_prompt"
+    elif not input_summary_path.exists():
+        blocked_reason = "next_codex_prompt_summary_missing"
+        status = "local_codex_execution_readiness_blocked_missing_next_codex_prompt"
+    else:
+        try:
+            loaded_request_payload = json.loads(input_request_path.read_text(encoding="utf-8"))
+            prompt_text = input_prompt_path.read_text(encoding="utf-8")
+        except (OSError, json.JSONDecodeError):
+            blocked_reason = "next_codex_prompt_invalid"
+            status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
+        else:
+            if not isinstance(loaded_request_payload, Mapping):
+                blocked_reason = "next_codex_prompt_request_not_object"
+                status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
+            else:
+                request_payload = loaded_request_payload
+                request_status = _normalize_text(request_payload.get("status"), default="")
+                request_next_action = _normalize_text(request_payload.get("next_action"), default="")
+                request_blocked_reason = _normalize_text(
+                    request_payload.get("blocked_reason"),
+                    default="",
+                )
+
+                prompt_exists = input_prompt_path.is_file()
+                prompt_non_empty = bool(prompt_text.strip())
+                prompt_text_lower = prompt_text.lower()
+                prompt_intended_for_later_exec_only = (
+                    "later local codex exec run only" in prompt_text_lower
+                    or (
+                        "local codex execution readiness" in prompt_text_lower
+                        and "do not execute `local_codex_exec_plan.sh`" in prompt_text_lower
+                    )
+                )
+                prompt_self_referential = (
+                    "generate next local codex implementation request from next_dev_slice"
+                    in prompt_text_lower
+                    or "bounded metadata-only local prompt generation from `next_dev_slice`"
+                    in prompt_text_lower
+                )
+                banned_requests_detected = (
+                    _collect_local_codex_execution_readiness_banned_prompt_fragments(
+                        prompt_text_lower
+                    )
+                )
+                prompt_safe = not prompt_self_referential and not banned_requests_detected
+
+                if request_status != "next_local_codex_prompt_generated":
+                    blocked_reason = "next_codex_prompt_status_not_generated"
+                    status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
+                elif request_next_action != "ready_for_bounded_local_codex_implementation":
+                    blocked_reason = (
+                        "next_codex_prompt_next_action_not_ready_for_bounded_local_codex_implementation"
+                    )
+                    status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
+                elif request_blocked_reason != "none":
+                    blocked_reason = "next_codex_prompt_blocked_reason_not_none"
+                    status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
+                elif not prompt_exists:
+                    blocked_reason = "next_codex_prompt_prompt_not_file"
+                    status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
+                elif not prompt_non_empty:
+                    blocked_reason = "next_codex_prompt_prompt_empty"
+                    status = "local_codex_execution_readiness_blocked_invalid_next_codex_prompt"
+                elif not prompt_intended_for_later_exec_only:
+                    blocked_reason = "prompt_not_intended_for_later_local_codex_exec_run_only"
+                    status = "local_codex_execution_readiness_blocked_prompt_unsafe_or_self_referential"
+                elif prompt_self_referential:
+                    blocked_reason = "prompt_self_referential"
+                    status = "local_codex_execution_readiness_blocked_prompt_unsafe_or_self_referential"
+                elif banned_requests_detected:
+                    blocked_reason = "prompt_requests_disallowed_operations"
+                    status = "local_codex_execution_readiness_blocked_prompt_unsafe_or_self_referential"
+                else:
+                    blocked_reason = "none"
+                    status = "local_codex_execution_readiness_generated"
+                    next_action = "ready_for_local_codex_exec_command"
+
+    readiness_payload: dict[str, Any] = {
+        "status": status,
+        "next_action": next_action,
+        "blocked_reason": blocked_reason,
+        "prompt_path": str(input_prompt_path),
+        "prompt_exists": prompt_exists,
+        "prompt_non_empty": prompt_non_empty,
+        "prompt_intended_for_later_local_codex_exec_run_only": prompt_intended_for_later_exec_only,
+        "prompt_safe": prompt_safe,
+        "prompt_self_referential": prompt_self_referential,
+        "prompt_banned_requests_detected": banned_requests_detected,
+        "exact_bounded_exec_command": _LOCAL_CODEX_EXEC_PLAN_COMMAND,
+        "do_not_execute_local_codex_exec_plan": True,
+        "do_not_invoke_codex_from_runner": True,
+        "do_not_execute_generated_implementation_prompt": True,
+        "do_not_commit_tag_push_pr_merge": True,
+        "input_artifacts": input_artifacts,
+        "output_artifacts": output_artifacts,
+        "runtime_posture": runtime_posture,
+    }
+
+    summary_lines = [
+        "# Local Codex Execution Readiness",
+        "",
+        f"- Status: `{status}`",
+        f"- Next action: `{next_action}`",
+        f"- Blocked reason: `{blocked_reason}`",
+        f"- Prompt exists: `{str(prompt_exists).lower()}`",
+        f"- Prompt non-empty: `{str(prompt_non_empty).lower()}`",
+        (
+            "- Prompt intended for later local codex exec run only: "
+            f"`{str(prompt_intended_for_later_exec_only).lower()}`"
+        ),
+        f"- Prompt safe: `{str(prompt_safe).lower()}`",
+        f"- Prompt self-referential: `{str(prompt_self_referential).lower()}`",
+        f"- Banned requests detected: `{', '.join(banned_requests_detected) if banned_requests_detected else 'none'}`",
+        "",
+        "## Input Artifacts",
+        f"- codex_implementation_prompt.md: `{input_prompt_path}`",
+        f"- codex_implementation_request.json: `{input_request_path}`",
+        f"- codex_implementation_summary.md: `{input_summary_path}`",
+        "",
+        "## Output Artifacts",
+        f"- local_codex_execution_readiness.json: `{output_json_path}`",
+        f"- local_codex_execution_summary.md: `{output_summary_path}`",
+        f"- local_codex_exec_plan.sh: `{output_exec_plan_path}`",
+        "",
+        "## Bounded Exec Command",
+        f"- `{_LOCAL_CODEX_EXEC_PLAN_COMMAND}`",
+    ]
+
+    try:
+        readiness_dir.mkdir(parents=True, exist_ok=True)
+        output_json_path.write_text(
+            json.dumps(readiness_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        output_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+        output_exec_plan_path.write_text(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n\n"
+            f"{_LOCAL_CODEX_EXEC_PLAN_COMMAND}\n",
+            encoding="utf-8",
+        )
+        try:
+            current_mode = output_exec_plan_path.stat().st_mode
+            output_exec_plan_path.chmod(current_mode | 0o111)
+        except OSError:
+            pass
+    except OSError:
+        status = "local_codex_execution_readiness_blocked_write_failed"
+        next_action = "manual_review_required"
+        blocked_reason = "local_codex_execution_readiness_artifact_write_failed"
+
+    return {
+        "project_browser_autonomous_local_codex_execution_readiness_status": status,
+        "project_browser_autonomous_local_codex_execution_readiness_next_action": next_action,
+        "project_browser_autonomous_local_codex_execution_readiness_prompt_path": str(
+            input_prompt_path
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_json_path": str(
+            output_json_path
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_summary_path": str(
+            output_summary_path
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_exec_plan_path": str(
+            output_exec_plan_path
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_blocked_reason": blocked_reason,
+        "project_browser_autonomous_local_codex_execution_readiness_runtime_posture": runtime_posture,
     }
 
 
@@ -158774,6 +159425,160 @@ def _build_approved_restart_execution_contract_surface(
             default=0,
         ),
     }
+    next_local_codex_prompt_allowed_statuses = {
+        "next_local_codex_prompt_generated",
+        "next_local_codex_prompt_blocked_missing_next_dev_slice",
+        "next_local_codex_prompt_blocked_missing_next_dev_slice_summary",
+        "next_local_codex_prompt_blocked_invalid_next_dev_slice",
+        "next_local_codex_prompt_blocked_write_failed",
+        "insufficient_truth",
+    }
+    next_local_codex_prompt_allowed_next_actions = {
+        "ready_for_bounded_local_codex_implementation",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    project_browser_autonomous_next_local_codex_prompt_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_next_local_codex_prompt_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_next_local_codex_prompt_status
+        not in next_local_codex_prompt_allowed_statuses
+    ):
+        project_browser_autonomous_next_local_codex_prompt_status = "insufficient_truth"
+    project_browser_autonomous_next_local_codex_prompt_next_action = _normalize_text(
+        approved_restart.get("project_browser_autonomous_next_local_codex_prompt_next_action"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_next_local_codex_prompt_next_action
+        not in next_local_codex_prompt_allowed_next_actions
+    ):
+        project_browser_autonomous_next_local_codex_prompt_next_action = "insufficient_truth"
+    project_browser_autonomous_next_local_codex_prompt_state_normalized: dict[str, Any] = {
+        "project_browser_autonomous_next_local_codex_prompt_status": (
+            project_browser_autonomous_next_local_codex_prompt_status
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_next_action": (
+            project_browser_autonomous_next_local_codex_prompt_next_action
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_source_slice_id": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_source_slice_id"),
+            default="",
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_path"),
+            default="",
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_request_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_request_path"),
+            default="",
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_summary_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_summary_path"),
+            default="",
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_blocked_reason": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_blocked_reason"),
+            default="",
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_runtime_posture": _normalize_string_list(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_runtime_posture")
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_execution_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_execution_status"),
+            default="not_started",
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_codex_invocation_status": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_next_local_codex_prompt_codex_invocation_status"
+            ),
+            default="not_started",
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_review_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_review_status"),
+            default="not_started",
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_commit_tag_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_commit_tag_status"),
+            default="not_started",
+        ),
+        "project_browser_autonomous_next_local_codex_prompt_push_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_next_local_codex_prompt_push_status"),
+            default="not_started",
+        ),
+    }
+    local_codex_execution_readiness_allowed_statuses = {
+        "local_codex_execution_readiness_generated",
+        "local_codex_execution_readiness_blocked_missing_next_codex_prompt",
+        "local_codex_execution_readiness_blocked_invalid_next_codex_prompt",
+        "local_codex_execution_readiness_blocked_prompt_unsafe_or_self_referential",
+        "local_codex_execution_readiness_blocked_write_failed",
+        "insufficient_truth",
+    }
+    local_codex_execution_readiness_allowed_next_actions = {
+        "ready_for_local_codex_exec_command",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    project_browser_autonomous_local_codex_execution_readiness_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_local_codex_execution_readiness_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_local_codex_execution_readiness_status
+        not in local_codex_execution_readiness_allowed_statuses
+    ):
+        project_browser_autonomous_local_codex_execution_readiness_status = "insufficient_truth"
+    project_browser_autonomous_local_codex_execution_readiness_next_action = _normalize_text(
+        approved_restart.get("project_browser_autonomous_local_codex_execution_readiness_next_action"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_local_codex_execution_readiness_next_action
+        not in local_codex_execution_readiness_allowed_next_actions
+    ):
+        project_browser_autonomous_local_codex_execution_readiness_next_action = "insufficient_truth"
+    project_browser_autonomous_local_codex_execution_readiness_state_normalized: dict[str, Any] = {
+        "project_browser_autonomous_local_codex_execution_readiness_status": (
+            project_browser_autonomous_local_codex_execution_readiness_status
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_next_action": (
+            project_browser_autonomous_local_codex_execution_readiness_next_action
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_prompt_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_codex_execution_readiness_prompt_path"),
+            default="",
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_json_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_codex_execution_readiness_json_path"),
+            default="",
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_summary_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_codex_execution_readiness_summary_path"),
+            default="",
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_exec_plan_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_codex_execution_readiness_exec_plan_path"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_blocked_reason": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_codex_execution_readiness_blocked_reason"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_local_codex_execution_readiness_runtime_posture": (
+            _normalize_string_list(
+                approved_restart.get(
+                    "project_browser_autonomous_local_codex_execution_readiness_runtime_posture"
+                )
+            )
+        ),
+    }
     project_browser_autonomous_codex_execution_connector_state = (
         _build_project_browser_autonomous_codex_execution_connector_state(
             local_loop_state=project_browser_autonomous_local_loop_state_for_bounded_local_loop,
@@ -170333,6 +171138,8 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_pr_queue_state_state_normalized,
         **project_browser_autonomous_local_loop_state_normalized,
         **project_browser_autonomous_next_dev_slice_state_normalized,
+        **project_browser_autonomous_next_local_codex_prompt_state_normalized,
+        **project_browser_autonomous_local_codex_execution_readiness_state_normalized,
         **project_browser_autonomous_codex_execution_connector_state_normalized,
         **project_browser_autonomous_codex_live_network_state_normalized,
         **project_browser_autonomous_codex_live_continuation_guard_state_normalized,
@@ -174177,6 +174984,26 @@ class PlannedExecutionRunner:
             _merge_next_dev_slice_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 next_dev_slice_state=project_browser_autonomous_next_dev_slice_state,
+            )
+        )
+        project_browser_autonomous_next_local_codex_prompt_state = (
+            _build_project_browser_autonomous_next_local_codex_prompt_state()
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_next_local_codex_prompt_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                next_local_codex_prompt_state=project_browser_autonomous_next_local_codex_prompt_state,
+            )
+        )
+        project_browser_autonomous_local_codex_execution_readiness_state = (
+            _build_project_browser_autonomous_local_codex_execution_readiness_state()
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_local_codex_execution_readiness_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                local_codex_execution_readiness_state=(
+                    project_browser_autonomous_local_codex_execution_readiness_state
+                ),
             )
         )
         approved_restart_execution_contract_payload = (

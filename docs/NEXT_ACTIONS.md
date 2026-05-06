@@ -292,3 +292,17 @@ Goal:
 
 Expected next_action:
 - ready_for_bounded_local_codex_implementation
+
+## Next after Prompt297 readiness
+
+Run Prompt298.
+
+Goal:
+- Confirm local_codex_exec_plan.sh is present and safe.
+- Execute local Codex once from local shell using the generated plan.
+- Do not commit/tag/push/PR/merge.
+- After execution, run syntax check and return to local git diff capture/review flow.
+
+Expected after Prompt298:
+- local Codex has produced repo changes, or no-op with a clear result.
+- Next action returns to local_git_diff_capture.

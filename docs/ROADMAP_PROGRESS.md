@@ -437,3 +437,42 @@ Safety:
 
 Next:
 - Prompt297: generate a local Codex implementation prompt from next_dev_slice.
+
+## Prompt297 / Prompt297-fix / Prompt297-fix-guard: local Codex execution readiness
+
+Result:
+- PASS
+
+Implemented:
+- Added next local Codex implementation prompt generation from next_dev_slice.
+- Fixed self-referential generated prompt behavior.
+- Regenerated the target as Prompt298 local Codex execution readiness.
+- Added local Codex execution readiness artifact generation.
+- Added context-aware banned prompt fragment detection.
+
+Artifacts:
+- /tmp/codex-local-runner-decision/next_codex_prompt/codex_implementation_prompt.md
+- /tmp/codex-local-runner-decision/next_codex_prompt/codex_implementation_request.json
+- /tmp/codex-local-runner-decision/next_codex_prompt/codex_implementation_summary.md
+- /tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_execution_readiness.json
+- /tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_execution_summary.md
+- /tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh
+
+Observed:
+- project_browser_autonomous_local_codex_execution_readiness_status=local_codex_execution_readiness_generated
+- project_browser_autonomous_local_codex_execution_readiness_next_action=ready_for_local_codex_exec_command
+- project_browser_autonomous_local_codex_execution_readiness_blocked_reason=none
+- project_browser_autonomous_next_local_codex_prompt_execution_status=not_started
+- project_browser_autonomous_next_local_codex_prompt_codex_invocation_status=not_started
+- project_browser_autonomous_next_local_codex_prompt_commit_tag_status=not_started
+- project_browser_autonomous_next_local_codex_prompt_push_status=not_started
+
+Safety:
+- Runner does not invoke Codex internally.
+- local_codex_exec_plan.sh is written but not executed by runner.
+- No generated prompt execution by runner.
+- No commit/tag/push/PR/merge performed by Prompt297.
+- Runtime artifacts remain untracked and non-reviewable.
+
+Next:
+- Prompt298: execute the prepared local Codex exec plan once from local shell, then return to diff capture and review flow.
