@@ -3536,6 +3536,9 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_exec_plan_required_fragments_present",
     "project_browser_autonomous_one_cycle_controller_exec_plan_banned_fragments_present",
     "project_browser_autonomous_one_cycle_controller_exec_plan_execution_status",
+    "project_browser_autonomous_one_cycle_controller_execution_attempted",
+    "project_browser_autonomous_one_cycle_controller_execution_blocked_reason",
+    "project_browser_autonomous_one_cycle_controller_execution_gate_status",
 )
 
 _LOCAL_CODEX_EXEC_PLAN_COMMAND = (
@@ -4676,7 +4679,34 @@ def _evaluate_one_cycle_controller_exec_plan_safety(*, exec_plan_path: Path) -> 
     }
 
 
-def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, Any]:
+def _build_project_browser_autonomous_one_cycle_controller_state(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    dry_run: bool,
+) -> dict[str, Any]:
+    approved_restart = (
+        dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    )
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_flag(key: str, *, default: bool = False) -> bool:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
     one_cycle_controller_dir = Path("/tmp/codex-local-runner-decision/one_cycle_controller")
     output_json_path = one_cycle_controller_dir / "one_cycle_controller_result.json"
     output_summary_path = one_cycle_controller_dir / "one_cycle_controller_summary.md"
@@ -4692,9 +4722,27 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
     diff_capture_status = "not_started"
     review_request_status = "not_started"
     stop_reason = "execution_not_enabled"
-    enabled = False
-    execute_enabled = False
+    enabled = _read_flag(
+        "project_browser_autonomous_one_cycle_controller_enabled",
+        default=False,
+    )
+    execute_enabled = _read_flag(
+        "project_browser_autonomous_one_cycle_controller_execute_enabled",
+        default=False,
+    )
     exec_plan_execution_status = "not_executed"
+    execution_attempted = False
+    execution_blocked_reason = "execution_not_enabled"
+    execution_gate_status = "execution_not_enabled"
+    if enabled and execute_enabled:
+        if dry_run:
+            stop_reason = "dry_run_execution_suppressed"
+            execution_blocked_reason = "dry_run_execution_suppressed"
+            execution_gate_status = "dry_run_suppressed"
+        else:
+            stop_reason = "none"
+            execution_blocked_reason = "none"
+            execution_gate_status = "ready_for_single_execution"
     exec_plan_safety = _evaluate_one_cycle_controller_exec_plan_safety(
         exec_plan_path=exec_plan_path
     )
@@ -4748,6 +4796,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
         "exec_plan_required_fragments_present": exec_plan_required_fragments_present,
         "exec_plan_banned_fragments_present": exec_plan_banned_fragments_present,
         "exec_plan_execution_status": exec_plan_execution_status,
+        "execution_attempted": execution_attempted,
+        "execution_blocked_reason": execution_blocked_reason,
+        "execution_gate_status": execution_gate_status,
         "artifact_paths": artifact_paths,
         "runtime_posture": runtime_posture,
     }
@@ -4776,6 +4827,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
             f"`{', '.join(exec_plan_banned_fragments_present) if exec_plan_banned_fragments_present else 'none'}`"
         ),
         f"- Exec plan execution status: `{exec_plan_execution_status}`",
+        f"- Execution attempted: `{str(execution_attempted).lower()}`",
+        f"- Execution blocked reason: `{execution_blocked_reason}`",
+        f"- Execution gate status: `{execution_gate_status}`",
         "",
         "## Output Artifacts",
         f"- one_cycle_controller_result.json: `{output_json_path}`",
@@ -4798,10 +4852,29 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
         codex_execution_status = "not_executed"
         diff_capture_status = "not_started"
         review_request_status = "not_started"
-        stop_reason = "execution_not_enabled"
-        enabled = False
-        execute_enabled = False
+        stop_reason = (
+            "dry_run_execution_suppressed"
+            if enabled and execute_enabled and dry_run
+            else ("none" if enabled and execute_enabled and not dry_run else "execution_not_enabled")
+        )
+        enabled = bool(enabled)
+        execute_enabled = bool(execute_enabled)
         exec_plan_execution_status = "not_executed"
+        execution_attempted = False
+        execution_blocked_reason = (
+            "dry_run_execution_suppressed"
+            if enabled and execute_enabled and dry_run
+            else ("none" if enabled and execute_enabled and not dry_run else "execution_not_enabled")
+        )
+        execution_gate_status = (
+            "dry_run_suppressed"
+            if enabled and execute_enabled and dry_run
+            else (
+                "ready_for_single_execution"
+                if enabled and execute_enabled and not dry_run
+                else "execution_not_enabled"
+            )
+        )
 
     return {
         "project_browser_autonomous_one_cycle_controller_status": status,
@@ -4837,6 +4910,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, 
         ),
         "project_browser_autonomous_one_cycle_controller_exec_plan_execution_status": (
             exec_plan_execution_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_attempted": (
+            execution_attempted
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_blocked_reason": (
+            execution_blocked_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_gate_status": (
+            execution_gate_status
         ),
     }
 
@@ -159922,6 +160004,8 @@ def _build_approved_restart_execution_contract_surface(
     }
     one_cycle_controller_allowed_stop_reasons = {
         "execution_not_enabled",
+        "dry_run_execution_suppressed",
+        "none",
         "insufficient_truth",
     }
     one_cycle_controller_allowed_exec_plan_safety_statuses = {
@@ -159944,6 +160028,36 @@ def _build_approved_restart_execution_contract_surface(
         "not_executed",
         "insufficient_truth",
     }
+    one_cycle_controller_allowed_execution_gate_statuses = {
+        "execution_not_enabled",
+        "dry_run_suppressed",
+        "ready_for_single_execution",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_execution_blocked_reasons = {
+        "execution_not_enabled",
+        "dry_run_execution_suppressed",
+        "none",
+        "insufficient_truth",
+    }
+
+    def _read_one_cycle_controller_flag(key: str, *, default: bool = False) -> bool:
+        value = (
+            prior_approved_restart_execution.get(key)
+            if key in prior_approved_restart_execution
+            else approved_restart.get(key)
+        )
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
     project_browser_autonomous_one_cycle_controller_status = _normalize_text(
         approved_restart.get("project_browser_autonomous_one_cycle_controller_status"),
         default="insufficient_truth",
@@ -160040,6 +160154,30 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_one_cycle_controller_exec_plan_execution_status = (
             "insufficient_truth"
         )
+    project_browser_autonomous_one_cycle_controller_execution_gate_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_execution_gate_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_execution_gate_status
+        not in one_cycle_controller_allowed_execution_gate_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_execution_gate_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_execution_blocked_reason = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_one_cycle_controller_execution_blocked_reason"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_execution_blocked_reason
+        not in one_cycle_controller_allowed_execution_blocked_reasons
+    ):
+        project_browser_autonomous_one_cycle_controller_execution_blocked_reason = (
+            "insufficient_truth"
+        )
     project_browser_autonomous_one_cycle_controller_artifact_paths = (
         dict(
             approved_restart.get(
@@ -160114,14 +160252,25 @@ def _build_approved_restart_execution_contract_surface(
                 )
             )
         ),
-        "project_browser_autonomous_one_cycle_controller_enabled": bool(
-            approved_restart.get("project_browser_autonomous_one_cycle_controller_enabled", False)
+        "project_browser_autonomous_one_cycle_controller_enabled": _read_one_cycle_controller_flag(
+            "project_browser_autonomous_one_cycle_controller_enabled",
+            default=False,
         ),
-        "project_browser_autonomous_one_cycle_controller_execute_enabled": bool(
-            approved_restart.get(
-                "project_browser_autonomous_one_cycle_controller_execute_enabled",
-                False,
+        "project_browser_autonomous_one_cycle_controller_execute_enabled": _read_one_cycle_controller_flag(
+            "project_browser_autonomous_one_cycle_controller_execute_enabled",
+            default=False,
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_attempted": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_one_cycle_controller_execution_attempted",
+                default=False,
             )
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_blocked_reason": (
+            project_browser_autonomous_one_cycle_controller_execution_blocked_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_gate_status": (
+            project_browser_autonomous_one_cycle_controller_execution_gate_status
         ),
     }
     project_browser_autonomous_codex_execution_connector_state = (
@@ -175553,7 +175702,13 @@ class PlannedExecutionRunner:
             )
         )
         project_browser_autonomous_one_cycle_controller_state = (
-            _build_project_browser_autonomous_one_cycle_controller_state()
+            _build_project_browser_autonomous_one_cycle_controller_state(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prior_approved_restart_execution_payload=(
+                    prior_approved_restart_execution_contract_payload
+                ),
+                dry_run=bool(dry_run),
+            )
         )
         approved_restart_payload_for_bounded_local_loop = (
             _merge_one_cycle_controller_surface_into_approved_restart_payload(
