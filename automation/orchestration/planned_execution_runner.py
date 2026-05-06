@@ -3562,6 +3562,22 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_execution_finished_at",
 )
 
+_MULTI_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_multi_cycle_controller_status",
+    "project_browser_autonomous_multi_cycle_controller_next_action",
+    "project_browser_autonomous_multi_cycle_controller_enabled",
+    "project_browser_autonomous_multi_cycle_controller_execute_enabled",
+    "project_browser_autonomous_multi_cycle_controller_current_cycle_index",
+    "project_browser_autonomous_multi_cycle_controller_completed_cycle_count",
+    "project_browser_autonomous_multi_cycle_controller_max_cycles_requested",
+    "project_browser_autonomous_multi_cycle_controller_max_cycles_allowed",
+    "project_browser_autonomous_multi_cycle_controller_cycle_history_path",
+    "project_browser_autonomous_multi_cycle_controller_cycle_history_status",
+    "project_browser_autonomous_multi_cycle_controller_blocked_reason",
+    "project_browser_autonomous_multi_cycle_controller_stop_reason",
+    "project_browser_autonomous_multi_cycle_controller_readiness_summary_path",
+)
+
 _LOCAL_CODEX_EXEC_PLAN_COMMAND = (
     "cat /tmp/codex-local-runner-decision/next_codex_prompt/codex_implementation_prompt.md | "
     "codex exec - --cd /home/rai/codex-local-runner --sandbox workspace-write -m gpt-5.3-codex "
@@ -4043,6 +4059,23 @@ def _merge_one_cycle_controller_surface_into_approved_restart_payload(
         else {}
     )
     for key in _ONE_CYCLE_CONTROLLER_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_multi_cycle_controller_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    multi_cycle_controller_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(multi_cycle_controller_state)
+        if isinstance(multi_cycle_controller_state, Mapping)
+        else {}
+    )
+    for key in _MULTI_CYCLE_CONTROLLER_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -5626,6 +5659,253 @@ def _read_json_object_if_exists(path: Path) -> dict[str, Any] | None:
     if not isinstance(payload, Mapping):
         return None
     return dict(payload)
+
+
+def _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    approved_restart = (
+        dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    )
+    prior_payload = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+
+    def _read_value(key: str) -> Any:
+        if key in prior_payload:
+            return prior_payload.get(key)
+        return approved_restart.get(key)
+
+    def _read_strict_flag(key: str, *, default: bool = False) -> bool:
+        value = _read_value(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    multi_cycle_controller_dir = Path("/tmp/codex-local-runner-decision/multi_cycle_controller")
+    cycle_history_path = multi_cycle_controller_dir / "multi_cycle_cycle_history.json"
+    readiness_summary_path = (
+        multi_cycle_controller_dir / "multi_cycle_controller_readiness_summary.md"
+    )
+
+    max_cycles_allowed = 2
+    requested_cycles_value = _read_value(
+        "project_browser_autonomous_multi_cycle_controller_max_cycles_requested"
+    )
+    if requested_cycles_value is None:
+        requested_cycles_value = _read_value(
+            "project_browser_autonomous_multi_cycle_controller_max_cycles"
+        )
+    max_cycles_requested = _as_optional_int(requested_cycles_value)
+    if max_cycles_requested is None:
+        max_cycles_requested = 2
+    max_cycles_requested = max(0, int(max_cycles_requested))
+
+    enabled = _read_strict_flag(
+        "project_browser_autonomous_multi_cycle_controller_enabled",
+        default=False,
+    )
+    execute_enabled = _read_strict_flag(
+        "project_browser_autonomous_multi_cycle_controller_execute_enabled",
+        default=False,
+    )
+    one_cycle_status = _normalize_text(
+        _read_value("project_browser_autonomous_one_cycle_controller_status"),
+        default="",
+    )
+
+    current_cycle_index = 0
+    completed_cycle_count = 0
+    cycle_history_status = "not_started"
+    status = "multi_cycle_controller_ready"
+    next_action = "enable_multi_cycle_controller"
+    blocked_reason = "execution_not_enabled"
+    stop_reason = "execution_not_enabled"
+
+    if max_cycles_requested > max_cycles_allowed:
+        status = "multi_cycle_controller_blocked"
+        next_action = "manual_review_required"
+        blocked_reason = "max_cycles_not_allowed"
+        stop_reason = "max_cycles_not_allowed"
+    elif enabled and execute_enabled:
+        if not one_cycle_status or one_cycle_status == "insufficient_truth":
+            status = "multi_cycle_controller_blocked"
+            next_action = "manual_review_required"
+            blocked_reason = "one_cycle_surface_missing"
+            stop_reason = "one_cycle_surface_missing"
+        else:
+            status = "multi_cycle_controller_ready"
+            next_action = "prepare_bounded_two_cycle_execution"
+            blocked_reason = "none"
+            stop_reason = "none"
+
+    cycle_history_payload = {
+        "status": "not_started",
+        "max_cycles_allowed": int(max_cycles_allowed),
+        "completed_cycle_count": int(completed_cycle_count),
+        "cycles": [],
+    }
+    summary_lines = [
+        "# Multi Cycle Controller Readiness",
+        "",
+        f"- Status: `{status}`",
+        f"- Next action: `{next_action}`",
+        f"- Enabled: `{str(enabled).lower()}`",
+        f"- Execute enabled: `{str(execute_enabled).lower()}`",
+        f"- Current cycle index: `{current_cycle_index}`",
+        f"- Completed cycle count: `{completed_cycle_count}`",
+        f"- Max cycles requested: `{max_cycles_requested}`",
+        f"- Max cycles allowed: `{max_cycles_allowed}`",
+        f"- Cycle history status: `{cycle_history_status}`",
+        f"- Blocked reason: `{blocked_reason}`",
+        f"- Stop reason: `{stop_reason}`",
+        "",
+        "## Output Artifacts",
+        f"- multi_cycle_controller_readiness_summary.md: `{readiness_summary_path}`",
+        f"- multi_cycle_cycle_history.json: `{cycle_history_path}`",
+    ]
+
+    try:
+        multi_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+        cycle_history_path.write_text(
+            json.dumps(cycle_history_payload, ensure_ascii=False, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        readiness_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    except OSError:
+        status = "multi_cycle_controller_blocked"
+        next_action = "manual_review_required"
+        blocked_reason = "cycle_history_write_failed"
+        stop_reason = "cycle_history_write_failed"
+        cycle_history_status = "not_started"
+
+    controller_allowed = bool(
+        status == "multi_cycle_controller_ready"
+        and next_action == "prepare_bounded_two_cycle_execution"
+    )
+    should_stop = stop_reason != "none"
+    runtime_posture = [
+        "prompt300_multi_cycle_readiness_surface",
+        "metadata_only_controller",
+        "two_cycle_max_prepared",
+        "execution_explicitly_disabled_by_default",
+        "no_codex_invocation",
+        "no_exec_plan_execution",
+        "no_commit_tag_push_pr_merge",
+    ]
+    remaining_cycles = max(0, max_cycles_allowed - completed_cycle_count)
+
+    return {
+        "project_browser_autonomous_multi_cycle_controller_status": status,
+        "project_browser_autonomous_multi_cycle_controller_next_action": next_action,
+        "project_browser_autonomous_multi_cycle_controller_enabled": enabled,
+        "project_browser_autonomous_multi_cycle_controller_execute_enabled": (
+            execute_enabled
+        ),
+        "project_browser_autonomous_multi_cycle_controller_current_cycle_index": int(
+            current_cycle_index
+        ),
+        "project_browser_autonomous_multi_cycle_controller_completed_cycle_count": int(
+            completed_cycle_count
+        ),
+        "project_browser_autonomous_multi_cycle_controller_max_cycles_requested": int(
+            max_cycles_requested
+        ),
+        "project_browser_autonomous_multi_cycle_controller_max_cycles_allowed": int(
+            max_cycles_allowed
+        ),
+        "project_browser_autonomous_multi_cycle_controller_cycle_history_path": str(
+            cycle_history_path
+        ),
+        "project_browser_autonomous_multi_cycle_controller_cycle_history_status": (
+            cycle_history_status
+        ),
+        "project_browser_autonomous_multi_cycle_controller_blocked_reason": blocked_reason,
+        "project_browser_autonomous_multi_cycle_controller_stop_reason": stop_reason,
+        "project_browser_autonomous_multi_cycle_controller_readiness_summary_path": str(
+            readiness_summary_path
+        ),
+        "project_browser_autonomous_multi_cycle_controller_controller_allowed": bool(
+            controller_allowed
+        ),
+        "project_browser_autonomous_multi_cycle_controller_controller_block_reason": (
+            blocked_reason if blocked_reason != "none" else ""
+        ),
+        "project_browser_autonomous_multi_cycle_controller_controller_source": (
+            "prompt300_multi_cycle_readiness_surface"
+        ),
+        "project_browser_autonomous_multi_cycle_controller_latest_authoritative_stage": (
+            "one_cycle_controller_surface"
+        ),
+        "project_browser_autonomous_multi_cycle_controller_latest_cycle_status": (
+            _normalize_text(one_cycle_status, default="insufficient_truth")
+        ),
+        "project_browser_autonomous_multi_cycle_controller_latest_validation_passed": False,
+        "project_browser_autonomous_multi_cycle_controller_latest_commit_tag_status": (
+            "insufficient_truth"
+        ),
+        "project_browser_autonomous_multi_cycle_controller_latest_rollback_status": (
+            "insufficient_truth"
+        ),
+        "project_browser_autonomous_multi_cycle_controller_latest_human_review_required": bool(
+            next_action == "manual_review_required"
+        ),
+        "project_browser_autonomous_multi_cycle_controller_cycle_index": int(
+            current_cycle_index
+        ),
+        "project_browser_autonomous_multi_cycle_controller_max_cycles": int(max_cycles_allowed),
+        "project_browser_autonomous_multi_cycle_controller_remaining_cycles": int(
+            remaining_cycles
+        ),
+        "project_browser_autonomous_multi_cycle_controller_fix_attempt_index": 0,
+        "project_browser_autonomous_multi_cycle_controller_max_fix_attempts": 1,
+        "project_browser_autonomous_multi_cycle_controller_remaining_fix_attempts": 1,
+        "project_browser_autonomous_multi_cycle_controller_rollback_attempt_index": 0,
+        "project_browser_autonomous_multi_cycle_controller_max_rollback_attempts": 1,
+        "project_browser_autonomous_multi_cycle_controller_remaining_rollback_attempts": 1,
+        "project_browser_autonomous_multi_cycle_controller_codex_invocation_count": 0,
+        "project_browser_autonomous_multi_cycle_controller_max_codex_invocations": 3,
+        "project_browser_autonomous_multi_cycle_controller_remaining_codex_invocations": 3,
+        "project_browser_autonomous_multi_cycle_controller_commit_count": 0,
+        "project_browser_autonomous_multi_cycle_controller_max_commits": 1,
+        "project_browser_autonomous_multi_cycle_controller_remaining_commits": 1,
+        "project_browser_autonomous_multi_cycle_controller_next_prompt_kind": "none",
+        "project_browser_autonomous_multi_cycle_controller_next_cycle_allowed": bool(
+            controller_allowed
+        ),
+        "project_browser_autonomous_multi_cycle_controller_fix_continuation_allowed": False,
+        "project_browser_autonomous_multi_cycle_controller_rollback_path_allowed": False,
+        "project_browser_autonomous_multi_cycle_controller_github_handoff_allowed": False,
+        "project_browser_autonomous_multi_cycle_controller_manual_review_required": bool(
+            next_action == "manual_review_required"
+        ),
+        "project_browser_autonomous_multi_cycle_controller_should_generate_next_prompt": False,
+        "project_browser_autonomous_multi_cycle_controller_should_generate_fix_prompt": False,
+        "project_browser_autonomous_multi_cycle_controller_should_invoke_codex": False,
+        "project_browser_autonomous_multi_cycle_controller_should_validate": False,
+        "project_browser_autonomous_multi_cycle_controller_should_prepare_rollback": False,
+        "project_browser_autonomous_multi_cycle_controller_should_execute_rollback": False,
+        "project_browser_autonomous_multi_cycle_controller_should_prepare_commit": False,
+        "project_browser_autonomous_multi_cycle_controller_should_execute_commit": False,
+        "project_browser_autonomous_multi_cycle_controller_should_prepare_github_handoff": (
+            False
+        ),
+        "project_browser_autonomous_multi_cycle_controller_should_push": False,
+        "project_browser_autonomous_multi_cycle_controller_should_stop": bool(should_stop),
+        "project_browser_autonomous_multi_cycle_controller_runtime_posture": runtime_posture,
+        "project_browser_autonomous_multi_cycle_controller_missing_inputs": [],
+    }
 
 
 def _unit_is_failure(*, execution_status: str, dry_run: bool) -> bool:
@@ -135681,7 +135961,14 @@ def _build_approved_restart_execution_contract_surface(
             ),
         )
     )
+    for key in _MULTI_CYCLE_CONTROLLER_SURFACE_KEYS:
+        if key in approved_restart and approved_restart.get(key) is not None:
+            project_browser_autonomous_multi_cycle_controller_state[key] = approved_restart.get(
+                key
+            )
     multi_cycle_controller_allowed_statuses = {
+        "multi_cycle_controller_ready",
+        "multi_cycle_controller_blocked",
         "multi_cycle_controller_next_cycle_ready",
         "multi_cycle_controller_completed_cycle_budget_exhausted",
         "multi_cycle_controller_blocked_commit_tag_result",
@@ -135696,6 +135983,8 @@ def _build_approved_restart_execution_contract_surface(
         "insufficient_truth",
     }
     multi_cycle_controller_allowed_next_actions = {
+        "enable_multi_cycle_controller",
+        "prepare_bounded_two_cycle_execution",
         "generate_next_prompt",
         "generate_fix_prompt",
         "prepare_rollback_readiness",
@@ -135708,6 +135997,16 @@ def _build_approved_restart_execution_contract_surface(
     }
     multi_cycle_controller_field_names = (
         "status",
+        "enabled",
+        "execute_enabled",
+        "current_cycle_index",
+        "completed_cycle_count",
+        "max_cycles_requested",
+        "max_cycles_allowed",
+        "cycle_history_path",
+        "cycle_history_status",
+        "blocked_reason",
+        "readiness_summary_path",
         "controller_allowed",
         "controller_block_reason",
         "controller_source",
@@ -135785,6 +136084,8 @@ def _build_approved_restart_execution_contract_surface(
         elif field_name == "next_action":
             value = project_browser_autonomous_multi_cycle_controller_next_action
         elif field_name in {
+            "enabled",
+            "execute_enabled",
             "controller_allowed",
             "latest_validation_passed",
             "latest_human_review_required",
@@ -135807,6 +136108,10 @@ def _build_approved_restart_execution_contract_surface(
         }:
             value = bool(value)
         elif field_name in {
+            "current_cycle_index",
+            "completed_cycle_count",
+            "max_cycles_requested",
+            "max_cycles_allowed",
             "cycle_index",
             "max_cycles",
             "remaining_cycles",
@@ -176555,6 +176860,22 @@ class PlannedExecutionRunner:
             _merge_one_cycle_controller_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 one_cycle_controller_state=project_browser_autonomous_one_cycle_controller_state,
+            )
+        )
+        project_browser_autonomous_multi_cycle_controller_state = (
+            _build_project_browser_autonomous_multi_cycle_controller_readiness_state(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prior_approved_restart_execution_payload=(
+                    prior_approved_restart_execution_contract_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_multi_cycle_controller_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                multi_cycle_controller_state=(
+                    project_browser_autonomous_multi_cycle_controller_state
+                ),
             )
         )
         approved_restart_execution_contract_payload = (
