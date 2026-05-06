@@ -3473,6 +3473,12 @@ _CODEX_GATE_CONNECTOR_ENABLEMENT_KEYS: tuple[str, ...] = (
 )
 
 
+_ONE_CYCLE_CONTROLLER_ENABLEMENT_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_one_cycle_controller_enabled",
+    "project_browser_autonomous_one_cycle_controller_execute_enabled",
+)
+
+
 _CHATGPT_DIFF_REVIEW_REQUEST_CONTROL_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_chatgpt_diff_review_request_enabled",
     "project_browser_autonomous_chatgpt_diff_review_request_write_enabled",
@@ -3852,6 +3858,101 @@ def _merge_chatgpt_diff_review_request_controls_into_approved_restart_payload(
     for key in _CHATGPT_DIFF_REVIEW_REQUEST_CONTROL_KEYS:
         if key in retry_payload and retry_payload.get(key) is not None:
             merged[key] = retry_payload.get(key)
+    return merged
+
+
+def _collect_one_cycle_controller_enablement_overrides_from_retry_context(
+    retry_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    retry_payload = dict(retry_context) if isinstance(retry_context, Mapping) else {}
+    carrier_payload = (
+        dict(retry_payload.get("retry_context"))
+        if isinstance(retry_payload.get("retry_context"), Mapping)
+        else {}
+    )
+    contexts_payload = (
+        dict(retry_payload.get("contexts"))
+        if isinstance(retry_payload.get("contexts"), Mapping)
+        else {}
+    )
+    planned_execution_payload = (
+        dict(contexts_payload.get("planned-execution"))
+        if isinstance(contexts_payload.get("planned-execution"), Mapping)
+        else {}
+    )
+    persisted_retry_context_payload = (
+        dict(planned_execution_payload.get("retry_context"))
+        if isinstance(planned_execution_payload.get("retry_context"), Mapping)
+        else {}
+    )
+
+    retry_context_candidates = (
+        retry_payload,
+        carrier_payload,
+        persisted_retry_context_payload,
+    )
+    overrides: dict[str, Any] = {}
+    for candidate in retry_context_candidates:
+        approved_restart_payload = (
+            dict(candidate.get("approved_restart"))
+            if isinstance(candidate.get("approved_restart"), Mapping)
+            else {}
+        )
+        approved_restart_execution_payload = (
+            dict(candidate.get("approved_restart_execution"))
+            if isinstance(candidate.get("approved_restart_execution"), Mapping)
+            else {}
+        )
+        for key in _ONE_CYCLE_CONTROLLER_ENABLEMENT_KEYS:
+            if key in candidate and candidate.get(key) is not None:
+                overrides[key] = candidate.get(key)
+            if key in approved_restart_payload and approved_restart_payload.get(key) is not None:
+                overrides[key] = approved_restart_payload.get(key)
+            if (
+                key in approved_restart_execution_payload
+                and approved_restart_execution_payload.get(key) is not None
+            ):
+                overrides[key] = approved_restart_execution_payload.get(key)
+    return overrides
+
+
+def _merge_one_cycle_controller_enablement_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    policy_snapshot: Mapping[str, Any] | None,
+    retry_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    policy_payload = dict(policy_snapshot) if isinstance(policy_snapshot, Mapping) else {}
+    retry_overrides = _collect_one_cycle_controller_enablement_overrides_from_retry_context(
+        retry_context
+    )
+
+    for key in _ONE_CYCLE_CONTROLLER_ENABLEMENT_KEYS:
+        if key in policy_payload and policy_payload.get(key) is not None:
+            merged[key] = policy_payload.get(key)
+    for key in _ONE_CYCLE_CONTROLLER_ENABLEMENT_KEYS:
+        if key in retry_overrides and retry_overrides.get(key) is not None:
+            merged[key] = retry_overrides.get(key)
+    return merged
+
+
+def _merge_one_cycle_controller_enablement_into_prior_execution_payload(
+    *,
+    prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    retry_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(prior_approved_restart_execution_payload)
+        if isinstance(prior_approved_restart_execution_payload, Mapping)
+        else {}
+    )
+    retry_overrides = _collect_one_cycle_controller_enablement_overrides_from_retry_context(
+        retry_context
+    )
+    for key in _ONE_CYCLE_CONTROLLER_ENABLEMENT_KEYS:
+        if key in retry_overrides and retry_overrides.get(key) is not None:
+            merged[key] = retry_overrides.get(key)
     return merged
 
 
@@ -175925,6 +176026,21 @@ class PlannedExecutionRunner:
                 retry_context=effective_retry_context,
             )
         )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_one_cycle_controller_enablement_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                policy_snapshot=policy_payload,
+                retry_context=effective_retry_context,
+            )
+        )
+        prior_approved_restart_execution_payload_for_one_cycle_controller = (
+            _merge_one_cycle_controller_enablement_into_prior_execution_payload(
+                prior_approved_restart_execution_payload=(
+                    prior_approved_restart_execution_contract_payload
+                ),
+                retry_context=effective_retry_context,
+            )
+        )
         project_browser_autonomous_next_dev_slice_state = (
             _build_project_browser_autonomous_next_dev_slice_state()
         )
@@ -175958,7 +176074,7 @@ class PlannedExecutionRunner:
             _build_project_browser_autonomous_one_cycle_controller_state(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prior_approved_restart_execution_payload=(
-                    prior_approved_restart_execution_contract_payload
+                    prior_approved_restart_execution_payload_for_one_cycle_controller
                 ),
                 execution_repo_path=resolved_execution_repo_path,
                 dry_run=bool(dry_run),
