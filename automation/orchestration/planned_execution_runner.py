@@ -3517,6 +3517,21 @@ _LOCAL_CODEX_EXECUTION_READINESS_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_codex_execution_readiness_runtime_posture",
 )
 
+_ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
+    "project_browser_autonomous_one_cycle_controller_status",
+    "project_browser_autonomous_one_cycle_controller_next_action",
+    "project_browser_autonomous_one_cycle_controller_cycle_count",
+    "project_browser_autonomous_one_cycle_controller_max_cycles",
+    "project_browser_autonomous_one_cycle_controller_codex_execution_status",
+    "project_browser_autonomous_one_cycle_controller_diff_capture_status",
+    "project_browser_autonomous_one_cycle_controller_review_request_status",
+    "project_browser_autonomous_one_cycle_controller_stop_reason",
+    "project_browser_autonomous_one_cycle_controller_artifact_paths",
+    "project_browser_autonomous_one_cycle_controller_runtime_posture",
+    "project_browser_autonomous_one_cycle_controller_enabled",
+    "project_browser_autonomous_one_cycle_controller_execute_enabled",
+)
+
 _LOCAL_CODEX_EXEC_PLAN_COMMAND = (
     "cat /tmp/codex-local-runner-decision/next_codex_prompt/codex_implementation_prompt.md | "
     "codex exec - --cd /home/rai/codex-local-runner --sandbox workspace-write -m gpt-5.3-codex "
@@ -3860,6 +3875,23 @@ def _merge_local_codex_execution_readiness_surface_into_approved_restart_payload
         else {}
     )
     for key in _LOCAL_CODEX_EXECUTION_READINESS_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_one_cycle_controller_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    one_cycle_controller_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(one_cycle_controller_state)
+        if isinstance(one_cycle_controller_state, Mapping)
+        else {}
+    )
+    for key in _ONE_CYCLE_CONTROLLER_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -4522,6 +4554,113 @@ def _build_project_browser_autonomous_local_codex_execution_readiness_state() ->
         ),
         "project_browser_autonomous_local_codex_execution_readiness_blocked_reason": blocked_reason,
         "project_browser_autonomous_local_codex_execution_readiness_runtime_posture": runtime_posture,
+    }
+
+
+def _build_project_browser_autonomous_one_cycle_controller_state() -> dict[str, Any]:
+    one_cycle_controller_dir = Path("/tmp/codex-local-runner-decision/one_cycle_controller")
+    output_json_path = one_cycle_controller_dir / "one_cycle_controller_result.json"
+    output_summary_path = one_cycle_controller_dir / "one_cycle_controller_summary.md"
+
+    status = "one_cycle_controller_ready"
+    next_action = "enable_one_cycle_controller_execution"
+    cycle_count = 0
+    max_cycles = 1
+    codex_execution_status = "not_executed"
+    diff_capture_status = "not_started"
+    review_request_status = "not_started"
+    stop_reason = "execution_not_enabled"
+    enabled = False
+    execute_enabled = False
+    runtime_posture = [
+        "readiness_only",
+        "single_cycle_only",
+        "execution_disabled",
+        "no_codex_execution_path",
+        "no_local_codex_exec_plan_execution",
+        "no_subprocess_exec_plan_invocation",
+        "no_local_git_diff_capture",
+        "no_chatgpt_review_request_generation",
+        "no_commit_tag_push_pr_merge",
+        "no_daemon_no_polling_no_unbounded_retry",
+    ]
+
+    artifact_paths = {
+        "one_cycle_controller_result_json": str(output_json_path),
+        "one_cycle_controller_summary_md": str(output_summary_path),
+    }
+
+    result_payload = {
+        "status": status,
+        "next_action": next_action,
+        "cycle_count": cycle_count,
+        "max_cycles": max_cycles,
+        "codex_execution_status": codex_execution_status,
+        "diff_capture_status": diff_capture_status,
+        "review_request_status": review_request_status,
+        "stop_reason": stop_reason,
+        "enabled": enabled,
+        "execute_enabled": execute_enabled,
+        "artifact_paths": artifact_paths,
+        "runtime_posture": runtime_posture,
+    }
+    summary_lines = [
+        "# One Cycle Controller Readiness",
+        "",
+        f"- Status: `{status}`",
+        f"- Next action: `{next_action}`",
+        f"- Cycle count: `{cycle_count}`",
+        f"- Max cycles: `{max_cycles}`",
+        f"- Codex execution status: `{codex_execution_status}`",
+        f"- Diff capture status: `{diff_capture_status}`",
+        f"- Review request status: `{review_request_status}`",
+        f"- Stop reason: `{stop_reason}`",
+        f"- Enabled: `{str(enabled).lower()}`",
+        f"- Execute enabled: `{str(execute_enabled).lower()}`",
+        "",
+        "## Output Artifacts",
+        f"- one_cycle_controller_result.json: `{output_json_path}`",
+        f"- one_cycle_controller_summary.md: `{output_summary_path}`",
+    ]
+
+    try:
+        one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+        output_json_path.write_text(
+            json.dumps(result_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        output_summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    except OSError:
+        status = "one_cycle_controller_ready"
+        next_action = "enable_one_cycle_controller_execution"
+        cycle_count = 0
+        max_cycles = 1
+        codex_execution_status = "not_executed"
+        diff_capture_status = "not_started"
+        review_request_status = "not_started"
+        stop_reason = "execution_not_enabled"
+        enabled = False
+        execute_enabled = False
+
+    return {
+        "project_browser_autonomous_one_cycle_controller_status": status,
+        "project_browser_autonomous_one_cycle_controller_next_action": next_action,
+        "project_browser_autonomous_one_cycle_controller_cycle_count": cycle_count,
+        "project_browser_autonomous_one_cycle_controller_max_cycles": max_cycles,
+        "project_browser_autonomous_one_cycle_controller_codex_execution_status": (
+            codex_execution_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_diff_capture_status": (
+            diff_capture_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_request_status": (
+            review_request_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_stop_reason": stop_reason,
+        "project_browser_autonomous_one_cycle_controller_artifact_paths": artifact_paths,
+        "project_browser_autonomous_one_cycle_controller_runtime_posture": runtime_posture,
+        "project_browser_autonomous_one_cycle_controller_enabled": enabled,
+        "project_browser_autonomous_one_cycle_controller_execute_enabled": execute_enabled,
     }
 
 
@@ -159588,6 +159727,140 @@ def _build_approved_restart_execution_contract_surface(
             )
         ),
     }
+    one_cycle_controller_allowed_statuses = {
+        "one_cycle_controller_ready",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_next_actions = {
+        "enable_one_cycle_controller_execution",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_codex_execution_statuses = {
+        "not_executed",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_stage_statuses = {
+        "not_started",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_stop_reasons = {
+        "execution_not_enabled",
+        "insufficient_truth",
+    }
+    project_browser_autonomous_one_cycle_controller_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_status"),
+        default="insufficient_truth",
+    )
+    if project_browser_autonomous_one_cycle_controller_status not in one_cycle_controller_allowed_statuses:
+        project_browser_autonomous_one_cycle_controller_status = "insufficient_truth"
+    project_browser_autonomous_one_cycle_controller_next_action = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_next_action"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_next_action
+        not in one_cycle_controller_allowed_next_actions
+    ):
+        project_browser_autonomous_one_cycle_controller_next_action = "insufficient_truth"
+    project_browser_autonomous_one_cycle_controller_codex_execution_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_codex_execution_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_codex_execution_status
+        not in one_cycle_controller_allowed_codex_execution_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_codex_execution_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_diff_capture_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_diff_capture_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_diff_capture_status
+        not in one_cycle_controller_allowed_stage_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_diff_capture_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_review_request_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_review_request_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_review_request_status
+        not in one_cycle_controller_allowed_stage_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_review_request_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_stop_reason = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_stop_reason"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_stop_reason
+        not in one_cycle_controller_allowed_stop_reasons
+    ):
+        project_browser_autonomous_one_cycle_controller_stop_reason = "insufficient_truth"
+    project_browser_autonomous_one_cycle_controller_artifact_paths = (
+        dict(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_artifact_paths",
+                {},
+            )
+        )
+        if isinstance(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_artifact_paths",
+                {},
+            ),
+            Mapping,
+        )
+        else {}
+    )
+    project_browser_autonomous_one_cycle_controller_state_normalized: dict[str, Any] = {
+        "project_browser_autonomous_one_cycle_controller_status": (
+            project_browser_autonomous_one_cycle_controller_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_next_action": (
+            project_browser_autonomous_one_cycle_controller_next_action
+        ),
+        "project_browser_autonomous_one_cycle_controller_cycle_count": 0,
+        "project_browser_autonomous_one_cycle_controller_max_cycles": 1,
+        "project_browser_autonomous_one_cycle_controller_codex_execution_status": (
+            project_browser_autonomous_one_cycle_controller_codex_execution_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_diff_capture_status": (
+            project_browser_autonomous_one_cycle_controller_diff_capture_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_request_status": (
+            project_browser_autonomous_one_cycle_controller_review_request_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_stop_reason": (
+            project_browser_autonomous_one_cycle_controller_stop_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_artifact_paths": (
+            project_browser_autonomous_one_cycle_controller_artifact_paths
+        ),
+        "project_browser_autonomous_one_cycle_controller_runtime_posture": (
+            _normalize_string_list(
+                approved_restart.get(
+                    "project_browser_autonomous_one_cycle_controller_runtime_posture"
+                )
+            )
+        ),
+        "project_browser_autonomous_one_cycle_controller_enabled": bool(
+            approved_restart.get("project_browser_autonomous_one_cycle_controller_enabled", False)
+        ),
+        "project_browser_autonomous_one_cycle_controller_execute_enabled": bool(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_execute_enabled",
+                False,
+            )
+        ),
+    }
     project_browser_autonomous_codex_execution_connector_state = (
         _build_project_browser_autonomous_codex_execution_connector_state(
             local_loop_state=project_browser_autonomous_local_loop_state_for_bounded_local_loop,
@@ -171149,6 +171422,7 @@ def _build_approved_restart_execution_contract_surface(
         **project_browser_autonomous_next_dev_slice_state_normalized,
         **project_browser_autonomous_next_local_codex_prompt_state_normalized,
         **project_browser_autonomous_local_codex_execution_readiness_state_normalized,
+        **project_browser_autonomous_one_cycle_controller_state_normalized,
         **project_browser_autonomous_codex_execution_connector_state_normalized,
         **project_browser_autonomous_codex_live_network_state_normalized,
         **project_browser_autonomous_codex_live_continuation_guard_state_normalized,
@@ -175013,6 +175287,15 @@ class PlannedExecutionRunner:
                 local_codex_execution_readiness_state=(
                     project_browser_autonomous_local_codex_execution_readiness_state
                 ),
+            )
+        )
+        project_browser_autonomous_one_cycle_controller_state = (
+            _build_project_browser_autonomous_one_cycle_controller_state()
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_one_cycle_controller_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                one_cycle_controller_state=project_browser_autonomous_one_cycle_controller_state,
             )
         )
         approved_restart_execution_contract_payload = (
