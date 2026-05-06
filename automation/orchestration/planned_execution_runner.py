@@ -3539,6 +3539,12 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_execution_attempted",
     "project_browser_autonomous_one_cycle_controller_execution_blocked_reason",
     "project_browser_autonomous_one_cycle_controller_execution_gate_status",
+    "project_browser_autonomous_one_cycle_controller_execution_exit_code",
+    "project_browser_autonomous_one_cycle_controller_execution_stdout_path",
+    "project_browser_autonomous_one_cycle_controller_execution_stderr_path",
+    "project_browser_autonomous_one_cycle_controller_execution_runlog_path",
+    "project_browser_autonomous_one_cycle_controller_execution_started_at",
+    "project_browser_autonomous_one_cycle_controller_execution_finished_at",
 )
 
 _LOCAL_CODEX_EXEC_PLAN_COMMAND = (
@@ -4683,6 +4689,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
     prior_approved_restart_execution_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
     dry_run: bool,
 ) -> dict[str, Any]:
     approved_restart = (
@@ -4710,6 +4717,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     one_cycle_controller_dir = Path("/tmp/codex-local-runner-decision/one_cycle_controller")
     output_json_path = one_cycle_controller_dir / "one_cycle_controller_result.json"
     output_summary_path = one_cycle_controller_dir / "one_cycle_controller_summary.md"
+    execution_stdout_path = one_cycle_controller_dir / "one_cycle_controller_exec_stdout.log"
+    execution_stderr_path = one_cycle_controller_dir / "one_cycle_controller_exec_stderr.log"
+    execution_runlog_path = one_cycle_controller_dir / "one_cycle_controller_runlog.md"
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
     )
@@ -4734,6 +4744,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     execution_attempted = False
     execution_blocked_reason = "execution_not_enabled"
     execution_gate_status = "execution_not_enabled"
+    execution_exit_code = -1
+    execution_started_at = ""
+    execution_finished_at = ""
     if enabled and execute_enabled:
         if dry_run:
             stop_reason = "dry_run_execution_suppressed"
@@ -4761,12 +4774,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         exec_plan_safety.get("exec_plan_banned_fragments_present")
     )
     runtime_posture = [
-        "readiness_only",
+        "single_execution_path_available",
         "single_cycle_only",
-        "execution_disabled",
-        "no_codex_execution_path",
-        "no_local_codex_exec_plan_execution",
-        "no_subprocess_exec_plan_invocation",
+        "execution_explicitly_gated",
         "no_local_git_diff_capture",
         "no_chatgpt_review_request_generation",
         "no_commit_tag_push_pr_merge",
@@ -4777,7 +4787,151 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_result_json": str(output_json_path),
         "one_cycle_controller_summary_md": str(output_summary_path),
         "local_codex_exec_plan_sh": str(exec_plan_path),
+        "one_cycle_controller_exec_stdout_log": str(execution_stdout_path),
+        "one_cycle_controller_exec_stderr_log": str(execution_stderr_path),
+        "one_cycle_controller_runlog_md": str(execution_runlog_path),
     }
+
+    requested_execution = enabled and execute_enabled and (not dry_run)
+    if requested_execution:
+        if max_cycles != 1:
+            status = "one_cycle_controller_blocked"
+            next_action = "manual_review_required"
+            stop_reason = "manual_review_required"
+            execution_blocked_reason = "manual_review_required"
+            execution_gate_status = "ready_for_single_execution"
+        elif cycle_count != 0:
+            status = "one_cycle_controller_blocked"
+            next_action = "manual_review_required"
+            stop_reason = "manual_review_required"
+            execution_blocked_reason = "manual_review_required"
+            execution_gate_status = "ready_for_single_execution"
+        elif exec_plan_safety_status != "safe" or exec_plan_blocked_reason != "none":
+            status = "one_cycle_controller_blocked"
+            next_action = "manual_review_required"
+            stop_reason = (
+                "exec_plan_missing"
+                if exec_plan_blocked_reason == "exec_plan_missing"
+                else "exec_plan_not_safe"
+            )
+            execution_blocked_reason = stop_reason
+            execution_gate_status = "ready_for_single_execution"
+        else:
+            staged_check = _run_git(
+                execution_repo_path,
+                ["diff", "--cached", "--quiet"],
+                timeout_seconds=10,
+            )
+            if staged_check.returncode == 1:
+                status = "one_cycle_controller_blocked"
+                next_action = "manual_review_required"
+                stop_reason = "staged_changes_present"
+                execution_blocked_reason = "staged_changes_present"
+                execution_gate_status = "ready_for_single_execution"
+            elif staged_check.returncode != 0:
+                status = "one_cycle_controller_blocked"
+                next_action = "manual_review_required"
+                stop_reason = "manual_review_required"
+                execution_blocked_reason = "manual_review_required"
+                execution_gate_status = "ready_for_single_execution"
+            else:
+                unstaged_check = _run_git(
+                    execution_repo_path,
+                    ["diff", "--quiet"],
+                    timeout_seconds=10,
+                )
+                if unstaged_check.returncode == 1:
+                    status = "one_cycle_controller_blocked"
+                    next_action = "manual_review_required"
+                    stop_reason = "unstaged_changes_present"
+                    execution_blocked_reason = "unstaged_changes_present"
+                    execution_gate_status = "ready_for_single_execution"
+                elif unstaged_check.returncode != 0:
+                    status = "one_cycle_controller_blocked"
+                    next_action = "manual_review_required"
+                    stop_reason = "manual_review_required"
+                    execution_blocked_reason = "manual_review_required"
+                    execution_gate_status = "ready_for_single_execution"
+                else:
+                    execution_attempted = True
+                    execution_started_at = _iso_now(datetime.now)
+                    try:
+                        completed = subprocess.run(
+                            [str(exec_plan_path)],
+                            text=True,
+                            capture_output=True,
+                            timeout=1800,
+                            check=False,
+                            cwd=execution_repo_path,
+                        )
+                        execution_exit_code = int(completed.returncode)
+                        stdout_text = completed.stdout or ""
+                        stderr_text = completed.stderr or ""
+                    except subprocess.TimeoutExpired as exc:
+                        execution_exit_code = 124
+                        stdout_text = (
+                            exc.stdout
+                            if isinstance(exc.stdout, str)
+                            else (
+                                exc.stdout.decode("utf-8", errors="replace")
+                                if isinstance(exc.stdout, bytes)
+                                else ""
+                            )
+                        )
+                        stderr_text = (
+                            exc.stderr
+                            if isinstance(exc.stderr, str)
+                            else (
+                                exc.stderr.decode("utf-8", errors="replace")
+                                if isinstance(exc.stderr, bytes)
+                                else ""
+                            )
+                        )
+                    except OSError as exc:
+                        execution_exit_code = 126
+                        stdout_text = ""
+                        stderr_text = str(exc).strip()
+                    execution_finished_at = _iso_now(datetime.now)
+                    try:
+                        one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+                        execution_stdout_path.write_text(stdout_text, encoding="utf-8")
+                        execution_stderr_path.write_text(stderr_text, encoding="utf-8")
+                        execution_runlog_path.write_text(
+                            "\n".join(
+                                [
+                                    "# One Cycle Controller Runlog",
+                                    "",
+                                    f"- Exec plan path: `{exec_plan_path}`",
+                                    f"- Started at: `{execution_started_at}`",
+                                    f"- Finished at: `{execution_finished_at}`",
+                                    f"- Exit code: `{execution_exit_code}`",
+                                    f"- Stdout path: `{execution_stdout_path}`",
+                                    f"- Stderr path: `{execution_stderr_path}`",
+                                ]
+                            )
+                            + "\n",
+                            encoding="utf-8",
+                        )
+                    except OSError:
+                        pass
+                    if execution_exit_code == 0:
+                        status = "one_cycle_controller_completed"
+                        next_action = "wait_for_chatgpt_diff_review_response"
+                        cycle_count = 1
+                        codex_execution_status = "completed"
+                        exec_plan_execution_status = "completed"
+                        stop_reason = "review_response_required"
+                        execution_blocked_reason = "none"
+                        execution_gate_status = "ready_for_single_execution"
+                    else:
+                        status = "one_cycle_controller_blocked"
+                        next_action = "manual_review_required"
+                        cycle_count = 1
+                        codex_execution_status = "failed"
+                        exec_plan_execution_status = "failed"
+                        stop_reason = "exec_plan_execution_failed"
+                        execution_blocked_reason = "exec_plan_execution_failed"
+                        execution_gate_status = "ready_for_single_execution"
 
     result_payload = {
         "status": status,
@@ -4799,6 +4953,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "execution_attempted": execution_attempted,
         "execution_blocked_reason": execution_blocked_reason,
         "execution_gate_status": execution_gate_status,
+        "execution_exit_code": execution_exit_code,
+        "execution_stdout_path": str(execution_stdout_path),
+        "execution_stderr_path": str(execution_stderr_path),
+        "execution_runlog_path": str(execution_runlog_path),
+        "execution_started_at": execution_started_at,
+        "execution_finished_at": execution_finished_at,
         "artifact_paths": artifact_paths,
         "runtime_posture": runtime_posture,
     }
@@ -4830,11 +4990,17 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- Execution attempted: `{str(execution_attempted).lower()}`",
         f"- Execution blocked reason: `{execution_blocked_reason}`",
         f"- Execution gate status: `{execution_gate_status}`",
+        f"- Execution exit code: `{execution_exit_code}`",
+        f"- Execution started at: `{execution_started_at or 'none'}`",
+        f"- Execution finished at: `{execution_finished_at or 'none'}`",
         "",
         "## Output Artifacts",
         f"- one_cycle_controller_result.json: `{output_json_path}`",
         f"- one_cycle_controller_summary.md: `{output_summary_path}`",
         f"- local_codex_exec_plan.sh: `{exec_plan_path}`",
+        f"- one_cycle_controller_exec_stdout.log: `{execution_stdout_path}`",
+        f"- one_cycle_controller_exec_stderr.log: `{execution_stderr_path}`",
+        f"- one_cycle_controller_runlog.md: `{execution_runlog_path}`",
     ]
 
     try:
@@ -4861,6 +5027,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         execute_enabled = bool(execute_enabled)
         exec_plan_execution_status = "not_executed"
         execution_attempted = False
+        execution_exit_code = -1
+        execution_started_at = ""
+        execution_finished_at = ""
         execution_blocked_reason = (
             "dry_run_execution_suppressed"
             if enabled and execute_enabled and dry_run
@@ -4919,6 +5088,24 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_one_cycle_controller_execution_gate_status": (
             execution_gate_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_exit_code": (
+            execution_exit_code
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_stdout_path": str(
+            execution_stdout_path
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_stderr_path": str(
+            execution_stderr_path
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_runlog_path": str(
+            execution_runlog_path
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_started_at": (
+            execution_started_at
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_finished_at": (
+            execution_finished_at
         ),
     }
 
@@ -159988,14 +160175,20 @@ def _build_approved_restart_execution_contract_surface(
     }
     one_cycle_controller_allowed_statuses = {
         "one_cycle_controller_ready",
+        "one_cycle_controller_completed",
+        "one_cycle_controller_blocked",
         "insufficient_truth",
     }
     one_cycle_controller_allowed_next_actions = {
         "enable_one_cycle_controller_execution",
+        "wait_for_chatgpt_diff_review_response",
+        "manual_review_required",
         "insufficient_truth",
     }
     one_cycle_controller_allowed_codex_execution_statuses = {
         "not_executed",
+        "completed",
+        "failed",
         "insufficient_truth",
     }
     one_cycle_controller_allowed_stage_statuses = {
@@ -160005,6 +160198,13 @@ def _build_approved_restart_execution_contract_surface(
     one_cycle_controller_allowed_stop_reasons = {
         "execution_not_enabled",
         "dry_run_execution_suppressed",
+        "exec_plan_not_safe",
+        "staged_changes_present",
+        "unstaged_changes_present",
+        "exec_plan_missing",
+        "exec_plan_execution_failed",
+        "review_response_required",
+        "manual_review_required",
         "none",
         "insufficient_truth",
     }
@@ -160026,6 +160226,8 @@ def _build_approved_restart_execution_contract_surface(
     }
     one_cycle_controller_allowed_exec_plan_execution_statuses = {
         "not_executed",
+        "completed",
+        "failed",
         "insufficient_truth",
     }
     one_cycle_controller_allowed_execution_gate_statuses = {
@@ -160037,6 +160239,12 @@ def _build_approved_restart_execution_contract_surface(
     one_cycle_controller_allowed_execution_blocked_reasons = {
         "execution_not_enabled",
         "dry_run_execution_suppressed",
+        "exec_plan_not_safe",
+        "staged_changes_present",
+        "unstaged_changes_present",
+        "exec_plan_missing",
+        "exec_plan_execution_failed",
+        "manual_review_required",
         "none",
         "insufficient_truth",
     }
@@ -160194,6 +160402,16 @@ def _build_approved_restart_execution_contract_surface(
         )
         else {}
     )
+    project_browser_autonomous_one_cycle_controller_execution_exit_code = _as_int(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_execution_exit_code"),
+        default=-1,
+    )
+    project_browser_autonomous_one_cycle_controller_cycle_count = _as_non_negative_int(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_cycle_count"),
+        default=0,
+    )
+    if project_browser_autonomous_one_cycle_controller_cycle_count > 1:
+        project_browser_autonomous_one_cycle_controller_cycle_count = 1
     project_browser_autonomous_one_cycle_controller_state_normalized: dict[str, Any] = {
         "project_browser_autonomous_one_cycle_controller_status": (
             project_browser_autonomous_one_cycle_controller_status
@@ -160201,7 +160419,9 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_one_cycle_controller_next_action": (
             project_browser_autonomous_one_cycle_controller_next_action
         ),
-        "project_browser_autonomous_one_cycle_controller_cycle_count": 0,
+        "project_browser_autonomous_one_cycle_controller_cycle_count": (
+            project_browser_autonomous_one_cycle_controller_cycle_count
+        ),
         "project_browser_autonomous_one_cycle_controller_max_cycles": 1,
         "project_browser_autonomous_one_cycle_controller_codex_execution_status": (
             project_browser_autonomous_one_cycle_controller_codex_execution_status
@@ -160271,6 +160491,39 @@ def _build_approved_restart_execution_contract_surface(
         ),
         "project_browser_autonomous_one_cycle_controller_execution_gate_status": (
             project_browser_autonomous_one_cycle_controller_execution_gate_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_exit_code": (
+            project_browser_autonomous_one_cycle_controller_execution_exit_code
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_stdout_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_execution_stdout_path"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_stderr_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_execution_stderr_path"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_runlog_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_execution_runlog_path"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_started_at": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_execution_started_at"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_execution_finished_at": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_execution_finished_at"
+            ),
+            default="",
         ),
     }
     project_browser_autonomous_codex_execution_connector_state = (
@@ -175707,6 +175960,7 @@ class PlannedExecutionRunner:
                 prior_approved_restart_execution_payload=(
                     prior_approved_restart_execution_contract_payload
                 ),
+                execution_repo_path=resolved_execution_repo_path,
                 dry_run=bool(dry_run),
             )
         )
