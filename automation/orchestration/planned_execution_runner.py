@@ -180459,5 +180459,3 @@ class PlannedExecutionRunner:
         manifest["retry_context_store_path"] = str(retry_context_store_path)
         _write_json(manifest_path, manifest)
         return manifest
-
-# Prompt308 live approve commit/tag verification marker
