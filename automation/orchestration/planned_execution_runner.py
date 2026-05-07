@@ -3571,6 +3571,18 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_targeted_fix_boundary_codex_prompt_path",
     "project_browser_autonomous_targeted_fix_boundary_prompt_ready",
     "project_browser_autonomous_targeted_fix_boundary_should_execute_codex",
+    "project_browser_autonomous_approve_commit_tag_boundary_status",
+    "project_browser_autonomous_approve_commit_tag_boundary_decision",
+    "project_browser_autonomous_approve_commit_tag_boundary_reason",
+    "project_browser_autonomous_approve_commit_tag_boundary_next_action",
+    "project_browser_autonomous_approve_commit_tag_boundary_blocked_reason",
+    "project_browser_autonomous_approve_commit_tag_boundary_commit_message",
+    "project_browser_autonomous_approve_commit_tag_boundary_tag_name",
+    "project_browser_autonomous_approve_commit_tag_boundary_commands_path",
+    "project_browser_autonomous_approve_commit_tag_boundary_metadata_path",
+    "project_browser_autonomous_approve_commit_tag_boundary_should_execute_commit",
+    "project_browser_autonomous_approve_commit_tag_boundary_should_execute_tag",
+    "project_browser_autonomous_approve_commit_tag_boundary_ready",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -5590,6 +5602,226 @@ def _build_targeted_fix_prompt_boundary_state(
     }
 
 
+def _build_approve_commit_tag_boundary_state(
+    *,
+    review_route_status: str,
+    review_route_decision: str,
+    review_route_next_action: str,
+    review_route_should_prepare_commit: bool,
+    review_response_status: str,
+    review_response_decision: str,
+    review_response_reason: str,
+    one_cycle_controller_status: str,
+    one_cycle_controller_diff_capture_status: str,
+    one_cycle_controller_review_request_status: str,
+    one_cycle_controller_review_handoff_decision_status: str,
+    one_cycle_controller_tracked_diff_status: str,
+    approve_commit_tag_boundary_metadata_path: Path,
+    approve_commit_tag_boundary_commands_path: Path,
+) -> dict[str, Any]:
+    deterministic_commit_message = "Add approved autonomous runner slice"
+    deterministic_tag_name = "prompt306-approve-commit-tag-boundary-ready"
+
+    base_state: dict[str, Any] = {
+        "approve_commit_tag_boundary_status": "insufficient_truth",
+        "approve_commit_tag_boundary_decision": "insufficient_truth",
+        "approve_commit_tag_boundary_reason": "insufficient_truth",
+        "approve_commit_tag_boundary_next_action": "insufficient_truth",
+        "approve_commit_tag_boundary_blocked_reason": "insufficient_truth",
+        "approve_commit_tag_boundary_commit_message": "",
+        "approve_commit_tag_boundary_tag_name": "",
+        "approve_commit_tag_boundary_commands_path": "",
+        "approve_commit_tag_boundary_metadata_path": "",
+        "approve_commit_tag_boundary_should_execute_commit": False,
+        "approve_commit_tag_boundary_should_execute_tag": False,
+        "approve_commit_tag_boundary_ready": False,
+    }
+    if review_route_decision != "approve":
+        return {
+            "approve_commit_tag_boundary_status": "not_applicable",
+            "approve_commit_tag_boundary_decision": "none",
+            "approve_commit_tag_boundary_reason": "route_not_approve",
+            "approve_commit_tag_boundary_next_action": "none",
+            "approve_commit_tag_boundary_blocked_reason": "route_not_approve",
+            "approve_commit_tag_boundary_commit_message": "",
+            "approve_commit_tag_boundary_tag_name": "",
+            "approve_commit_tag_boundary_commands_path": "",
+            "approve_commit_tag_boundary_metadata_path": "",
+            "approve_commit_tag_boundary_should_execute_commit": False,
+            "approve_commit_tag_boundary_should_execute_tag": False,
+            "approve_commit_tag_boundary_ready": False,
+        }
+    if review_route_status != "route_ready":
+        return {
+            "approve_commit_tag_boundary_status": "blocked",
+            "approve_commit_tag_boundary_decision": "approve",
+            "approve_commit_tag_boundary_reason": "route_not_ready",
+            "approve_commit_tag_boundary_next_action": "manual_review_required",
+            "approve_commit_tag_boundary_blocked_reason": "route_not_ready",
+            "approve_commit_tag_boundary_commit_message": "",
+            "approve_commit_tag_boundary_tag_name": "",
+            "approve_commit_tag_boundary_commands_path": "",
+            "approve_commit_tag_boundary_metadata_path": "",
+            "approve_commit_tag_boundary_should_execute_commit": False,
+            "approve_commit_tag_boundary_should_execute_tag": False,
+            "approve_commit_tag_boundary_ready": False,
+        }
+    if not review_route_should_prepare_commit:
+        return {
+            "approve_commit_tag_boundary_status": "blocked",
+            "approve_commit_tag_boundary_decision": "approve",
+            "approve_commit_tag_boundary_reason": "approve_commit_not_requested",
+            "approve_commit_tag_boundary_next_action": "manual_review_required",
+            "approve_commit_tag_boundary_blocked_reason": "approve_commit_not_requested",
+            "approve_commit_tag_boundary_commit_message": "",
+            "approve_commit_tag_boundary_tag_name": "",
+            "approve_commit_tag_boundary_commands_path": "",
+            "approve_commit_tag_boundary_metadata_path": "",
+            "approve_commit_tag_boundary_should_execute_commit": False,
+            "approve_commit_tag_boundary_should_execute_tag": False,
+            "approve_commit_tag_boundary_ready": False,
+        }
+    if review_response_status != "available" or review_response_decision != "approve":
+        return {
+            "approve_commit_tag_boundary_status": "blocked",
+            "approve_commit_tag_boundary_decision": "approve",
+            "approve_commit_tag_boundary_reason": "review_response_not_approve",
+            "approve_commit_tag_boundary_next_action": "manual_review_required",
+            "approve_commit_tag_boundary_blocked_reason": "review_response_not_approve",
+            "approve_commit_tag_boundary_commit_message": "",
+            "approve_commit_tag_boundary_tag_name": "",
+            "approve_commit_tag_boundary_commands_path": "",
+            "approve_commit_tag_boundary_metadata_path": "",
+            "approve_commit_tag_boundary_should_execute_commit": False,
+            "approve_commit_tag_boundary_should_execute_tag": False,
+            "approve_commit_tag_boundary_ready": False,
+        }
+
+    commands_text = "\n".join(
+        [
+            "#!/usr/bin/env bash",
+            "set -euo pipefail",
+            "",
+            "# Prompt306 draft-only boundary commands.",
+            "# These commands are generated for manual review and are not auto-executed by Prompt306.",
+            "cd /home/rai/codex-local-runner",
+            "git status --short --untracked-files=no",
+            "git diff --stat",
+            "python -m py_compile automation/orchestration/planned_execution_runner.py",
+            "git add automation/orchestration/planned_execution_runner.py",
+            'git commit -m "Add approved autonomous runner slice"',
+            "git tag prompt306-approve-commit-tag-boundary-ready",
+            "git log --oneline --decorate -n 12",
+            "git tag --points-at HEAD",
+            "git status --short --untracked-files=no",
+        ]
+    ).rstrip() + "\n"
+    metadata_payload = {
+        "status": "boundary_ready",
+        "decision": "approve",
+        "reason": "approve_commit_tag_boundary_ready",
+        "next_action": "prepare_approve_commit_tag_execution_gate",
+        "blocked_reason": "none",
+        "commit_message": deterministic_commit_message,
+        "tag_name": deterministic_tag_name,
+        "commands_path": str(approve_commit_tag_boundary_commands_path),
+        "metadata_path": str(approve_commit_tag_boundary_metadata_path),
+        "should_execute_commit": False,
+        "should_execute_tag": False,
+        "source_review_route": {
+            "project_browser_autonomous_review_route_status": review_route_status,
+            "project_browser_autonomous_review_route_decision": review_route_decision,
+            "project_browser_autonomous_review_route_next_action": review_route_next_action,
+            "project_browser_autonomous_review_route_should_prepare_commit": bool(
+                review_route_should_prepare_commit
+            ),
+        },
+        "source_review_response": {
+            "project_browser_autonomous_review_response_status": review_response_status,
+            "project_browser_autonomous_review_response_decision": review_response_decision,
+            "project_browser_autonomous_review_response_reason": review_response_reason,
+        },
+        "source_one_cycle_controller": {
+            "project_browser_autonomous_one_cycle_controller_status": (
+                one_cycle_controller_status
+            ),
+            "project_browser_autonomous_one_cycle_controller_diff_capture_status": (
+                one_cycle_controller_diff_capture_status
+            ),
+            "project_browser_autonomous_one_cycle_controller_review_request_status": (
+                one_cycle_controller_review_request_status
+            ),
+            "project_browser_autonomous_one_cycle_controller_review_handoff_decision_status": (
+                one_cycle_controller_review_handoff_decision_status
+            ),
+            "project_browser_autonomous_one_cycle_controller_tracked_diff_status": (
+                one_cycle_controller_tracked_diff_status
+            ),
+        },
+    }
+
+    try:
+        approve_commit_tag_boundary_commands_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return base_state
+
+    try:
+        approve_commit_tag_boundary_commands_path.write_text(commands_text, encoding="utf-8")
+    except OSError:
+        return {
+            "approve_commit_tag_boundary_status": "blocked",
+            "approve_commit_tag_boundary_decision": "approve",
+            "approve_commit_tag_boundary_reason": "commands_write_failed",
+            "approve_commit_tag_boundary_next_action": "manual_review_required",
+            "approve_commit_tag_boundary_blocked_reason": "commands_write_failed",
+            "approve_commit_tag_boundary_commit_message": deterministic_commit_message,
+            "approve_commit_tag_boundary_tag_name": deterministic_tag_name,
+            "approve_commit_tag_boundary_commands_path": "",
+            "approve_commit_tag_boundary_metadata_path": "",
+            "approve_commit_tag_boundary_should_execute_commit": False,
+            "approve_commit_tag_boundary_should_execute_tag": False,
+            "approve_commit_tag_boundary_ready": False,
+        }
+    try:
+        approve_commit_tag_boundary_metadata_path.write_text(
+            json.dumps(metadata_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        try:
+            approve_commit_tag_boundary_commands_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return {
+            "approve_commit_tag_boundary_status": "blocked",
+            "approve_commit_tag_boundary_decision": "approve",
+            "approve_commit_tag_boundary_reason": "metadata_write_failed",
+            "approve_commit_tag_boundary_next_action": "manual_review_required",
+            "approve_commit_tag_boundary_blocked_reason": "metadata_write_failed",
+            "approve_commit_tag_boundary_commit_message": deterministic_commit_message,
+            "approve_commit_tag_boundary_tag_name": deterministic_tag_name,
+            "approve_commit_tag_boundary_commands_path": "",
+            "approve_commit_tag_boundary_metadata_path": "",
+            "approve_commit_tag_boundary_should_execute_commit": False,
+            "approve_commit_tag_boundary_should_execute_tag": False,
+            "approve_commit_tag_boundary_ready": False,
+        }
+    return {
+        "approve_commit_tag_boundary_status": "boundary_ready",
+        "approve_commit_tag_boundary_decision": "approve",
+        "approve_commit_tag_boundary_reason": "approve_commit_tag_boundary_ready",
+        "approve_commit_tag_boundary_next_action": "prepare_approve_commit_tag_execution_gate",
+        "approve_commit_tag_boundary_blocked_reason": "none",
+        "approve_commit_tag_boundary_commit_message": deterministic_commit_message,
+        "approve_commit_tag_boundary_tag_name": deterministic_tag_name,
+        "approve_commit_tag_boundary_commands_path": str(approve_commit_tag_boundary_commands_path),
+        "approve_commit_tag_boundary_metadata_path": str(approve_commit_tag_boundary_metadata_path),
+        "approve_commit_tag_boundary_should_execute_commit": False,
+        "approve_commit_tag_boundary_should_execute_tag": False,
+        "approve_commit_tag_boundary_ready": True,
+    }
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -5633,6 +5865,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     review_response_path = one_cycle_controller_dir / "review_response.json"
     targeted_fix_prompt_path = one_cycle_controller_dir / "targeted_fix_prompt.md"
     targeted_fix_codex_prompt_path = one_cycle_controller_dir / "targeted_fix_codex_prompt.md"
+    approve_commit_tag_boundary_metadata_path = (
+        one_cycle_controller_dir / "approve_commit_tag_boundary.json"
+    )
+    approve_commit_tag_boundary_commands_path = (
+        one_cycle_controller_dir / "approve_commit_tag_commands.sh"
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -5679,6 +5917,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_boundary_codex_prompt_path = ""
     targeted_fix_boundary_prompt_ready = False
     targeted_fix_boundary_should_execute_codex = False
+    approve_commit_tag_boundary_status = "not_applicable"
+    approve_commit_tag_boundary_decision = "none"
+    approve_commit_tag_boundary_reason = "route_not_approve"
+    approve_commit_tag_boundary_next_action = "none"
+    approve_commit_tag_boundary_blocked_reason = "route_not_approve"
+    approve_commit_tag_boundary_commit_message = ""
+    approve_commit_tag_boundary_tag_name = ""
+    approve_commit_tag_boundary_commands_resolved_path = ""
+    approve_commit_tag_boundary_metadata_resolved_path = ""
+    approve_commit_tag_boundary_should_execute_commit = False
+    approve_commit_tag_boundary_should_execute_tag = False
+    approve_commit_tag_boundary_ready = False
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -5747,6 +5997,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_review_response_json": str(review_response_path),
         "one_cycle_controller_targeted_fix_prompt_md": str(targeted_fix_prompt_path),
         "one_cycle_controller_targeted_fix_codex_prompt_md": str(targeted_fix_codex_prompt_path),
+        "one_cycle_controller_approve_commit_tag_boundary_json": str(
+            approve_commit_tag_boundary_metadata_path
+        ),
+        "one_cycle_controller_approve_commit_tag_commands_sh": str(
+            approve_commit_tag_boundary_commands_path
+        ),
     }
 
     requested_execution = enabled and execute_enabled and (not dry_run)
@@ -6071,6 +6327,66 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         )
     )
     targeted_fix_boundary_should_execute_codex = False
+    approve_commit_tag_boundary_state = _build_approve_commit_tag_boundary_state(
+        review_route_status=review_route_status,
+        review_route_decision=review_route_decision,
+        review_route_next_action=review_route_next_action,
+        review_route_should_prepare_commit=review_route_should_prepare_commit,
+        review_response_status=review_response_status,
+        review_response_decision=review_response_decision,
+        review_response_reason=review_response_reason,
+        one_cycle_controller_status=status,
+        one_cycle_controller_diff_capture_status=diff_capture_status,
+        one_cycle_controller_review_request_status=review_request_status,
+        one_cycle_controller_review_handoff_decision_status=review_handoff_decision_status,
+        one_cycle_controller_tracked_diff_status=tracked_diff_status,
+        approve_commit_tag_boundary_metadata_path=approve_commit_tag_boundary_metadata_path,
+        approve_commit_tag_boundary_commands_path=approve_commit_tag_boundary_commands_path,
+    )
+    approve_commit_tag_boundary_status = _normalize_text(
+        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_status"),
+        default=approve_commit_tag_boundary_status,
+    )
+    approve_commit_tag_boundary_decision = _normalize_text(
+        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_decision"),
+        default=approve_commit_tag_boundary_decision,
+    )
+    approve_commit_tag_boundary_reason = _normalize_text(
+        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_reason"),
+        default=approve_commit_tag_boundary_reason,
+    )
+    approve_commit_tag_boundary_next_action = _normalize_text(
+        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_next_action"),
+        default=approve_commit_tag_boundary_next_action,
+    )
+    approve_commit_tag_boundary_blocked_reason = _normalize_text(
+        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_blocked_reason"),
+        default=approve_commit_tag_boundary_blocked_reason,
+    )
+    approve_commit_tag_boundary_commit_message = _normalize_text(
+        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_commit_message"),
+        default=approve_commit_tag_boundary_commit_message,
+    )
+    approve_commit_tag_boundary_tag_name = _normalize_text(
+        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_tag_name"),
+        default=approve_commit_tag_boundary_tag_name,
+    )
+    approve_commit_tag_boundary_commands_resolved_path = _normalize_text(
+        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_commands_path"),
+        default=approve_commit_tag_boundary_commands_resolved_path,
+    )
+    approve_commit_tag_boundary_metadata_resolved_path = _normalize_text(
+        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_metadata_path"),
+        default=approve_commit_tag_boundary_metadata_resolved_path,
+    )
+    approve_commit_tag_boundary_should_execute_commit = False
+    approve_commit_tag_boundary_should_execute_tag = False
+    approve_commit_tag_boundary_ready = bool(
+        approve_commit_tag_boundary_state.get(
+            "approve_commit_tag_boundary_ready",
+            approve_commit_tag_boundary_ready,
+        )
+    )
 
     result_payload = {
         "status": status,
@@ -6120,6 +6436,26 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "targeted_fix_boundary_codex_prompt_path": targeted_fix_boundary_codex_prompt_path,
         "targeted_fix_boundary_prompt_ready": targeted_fix_boundary_prompt_ready,
         "targeted_fix_boundary_should_execute_codex": targeted_fix_boundary_should_execute_codex,
+        "approve_commit_tag_boundary_status": approve_commit_tag_boundary_status,
+        "approve_commit_tag_boundary_decision": approve_commit_tag_boundary_decision,
+        "approve_commit_tag_boundary_reason": approve_commit_tag_boundary_reason,
+        "approve_commit_tag_boundary_next_action": approve_commit_tag_boundary_next_action,
+        "approve_commit_tag_boundary_blocked_reason": approve_commit_tag_boundary_blocked_reason,
+        "approve_commit_tag_boundary_commit_message": approve_commit_tag_boundary_commit_message,
+        "approve_commit_tag_boundary_tag_name": approve_commit_tag_boundary_tag_name,
+        "approve_commit_tag_boundary_commands_path": (
+            approve_commit_tag_boundary_commands_resolved_path
+        ),
+        "approve_commit_tag_boundary_metadata_path": (
+            approve_commit_tag_boundary_metadata_resolved_path
+        ),
+        "approve_commit_tag_boundary_should_execute_commit": (
+            approve_commit_tag_boundary_should_execute_commit
+        ),
+        "approve_commit_tag_boundary_should_execute_tag": (
+            approve_commit_tag_boundary_should_execute_tag
+        ),
+        "approve_commit_tag_boundary_ready": approve_commit_tag_boundary_ready,
         "completed_result_source_path": str(completed_result_source_path),
         "completed_result_source_status": completed_result_source_status,
         "stop_reason": stop_reason,
@@ -6198,6 +6534,30 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- Targeted-fix boundary should execute codex: "
             f"`{str(targeted_fix_boundary_should_execute_codex).lower()}`"
         ),
+        f"- Approve boundary status: `{approve_commit_tag_boundary_status}`",
+        f"- Approve boundary decision: `{approve_commit_tag_boundary_decision}`",
+        f"- Approve boundary reason: `{approve_commit_tag_boundary_reason}`",
+        f"- Approve boundary next action: `{approve_commit_tag_boundary_next_action}`",
+        f"- Approve boundary blocked reason: `{approve_commit_tag_boundary_blocked_reason}`",
+        f"- Approve boundary commit message: `{approve_commit_tag_boundary_commit_message or 'none'}`",
+        f"- Approve boundary tag name: `{approve_commit_tag_boundary_tag_name or 'none'}`",
+        (
+            "- Approve boundary commands path: "
+            f"`{approve_commit_tag_boundary_commands_resolved_path or 'none'}`"
+        ),
+        (
+            "- Approve boundary metadata path: "
+            f"`{approve_commit_tag_boundary_metadata_resolved_path or 'none'}`"
+        ),
+        (
+            "- Approve boundary should execute commit: "
+            f"`{str(approve_commit_tag_boundary_should_execute_commit).lower()}`"
+        ),
+        (
+            "- Approve boundary should execute tag: "
+            f"`{str(approve_commit_tag_boundary_should_execute_tag).lower()}`"
+        ),
+        f"- Approve boundary ready: `{str(approve_commit_tag_boundary_ready).lower()}`",
         f"- Completed result source path: `{completed_result_source_path}`",
         f"- Completed result source status: `{completed_result_source_status}`",
         f"- Stop reason: `{stop_reason}`",
@@ -6237,6 +6597,8 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- review_response.json: `{review_response_path}`",
         f"- targeted_fix_prompt.md: `{targeted_fix_prompt_path}`",
         f"- targeted_fix_codex_prompt.md: `{targeted_fix_codex_prompt_path}`",
+        f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
+        f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
     ]
 
     try:
@@ -6288,6 +6650,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_boundary_codex_prompt_path = ""
         targeted_fix_boundary_prompt_ready = False
         targeted_fix_boundary_should_execute_codex = False
+        approve_commit_tag_boundary_status = "not_applicable"
+        approve_commit_tag_boundary_decision = "none"
+        approve_commit_tag_boundary_reason = "route_not_approve"
+        approve_commit_tag_boundary_next_action = "none"
+        approve_commit_tag_boundary_blocked_reason = "route_not_approve"
+        approve_commit_tag_boundary_commit_message = ""
+        approve_commit_tag_boundary_tag_name = ""
+        approve_commit_tag_boundary_commands_resolved_path = ""
+        approve_commit_tag_boundary_metadata_resolved_path = ""
+        approve_commit_tag_boundary_should_execute_commit = False
+        approve_commit_tag_boundary_should_execute_tag = False
+        approve_commit_tag_boundary_ready = False
         completed_result_source_status = "not_completed"
         stop_reason = (
             "dry_run_execution_suppressed"
@@ -6415,6 +6789,42 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_targeted_fix_boundary_should_execute_codex": (
             targeted_fix_boundary_should_execute_codex
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_status": (
+            approve_commit_tag_boundary_status
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_decision": (
+            approve_commit_tag_boundary_decision
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_reason": (
+            approve_commit_tag_boundary_reason
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_next_action": (
+            approve_commit_tag_boundary_next_action
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_blocked_reason": (
+            approve_commit_tag_boundary_blocked_reason
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_commit_message": (
+            approve_commit_tag_boundary_commit_message
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_tag_name": (
+            approve_commit_tag_boundary_tag_name
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_commands_path": (
+            approve_commit_tag_boundary_commands_resolved_path
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_metadata_path": (
+            approve_commit_tag_boundary_metadata_resolved_path
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_should_execute_commit": (
+            approve_commit_tag_boundary_should_execute_commit
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_should_execute_tag": (
+            approve_commit_tag_boundary_should_execute_tag
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_ready": (
+            approve_commit_tag_boundary_ready
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": str(
             completed_result_source_path
@@ -162554,6 +162964,45 @@ def _build_approved_restart_execution_contract_surface(
         "manual_review_required",
         "insufficient_truth",
     }
+    one_cycle_controller_allowed_approve_commit_tag_boundary_statuses = {
+        "not_applicable",
+        "boundary_ready",
+        "blocked",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_approve_commit_tag_boundary_decisions = {
+        "none",
+        "approve",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_approve_commit_tag_boundary_reasons = {
+        "route_not_approve",
+        "route_not_ready",
+        "approve_commit_not_requested",
+        "review_response_not_approve",
+        "approve_commit_tag_boundary_ready",
+        "metadata_write_failed",
+        "commands_write_failed",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_approve_commit_tag_boundary_next_actions = {
+        "none",
+        "prepare_approve_commit_tag_execution_gate",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_approve_commit_tag_boundary_blocked_reasons = {
+        "none",
+        "route_not_approve",
+        "route_not_ready",
+        "approve_commit_not_requested",
+        "review_response_not_approve",
+        "metadata_write_failed",
+        "commands_write_failed",
+        "manual_review_required",
+        "insufficient_truth",
+    }
 
     def _read_one_cycle_controller_flag(key: str, *, default: bool = False) -> bool:
         value = (
@@ -162916,6 +163365,53 @@ def _build_approved_restart_execution_contract_surface(
         not in one_cycle_controller_allowed_targeted_fix_boundary_blocked_reasons
     ):
         project_browser_autonomous_targeted_fix_boundary_blocked_reason = "insufficient_truth"
+    project_browser_autonomous_approve_commit_tag_boundary_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_approve_commit_tag_boundary_status
+        not in one_cycle_controller_allowed_approve_commit_tag_boundary_statuses
+    ):
+        project_browser_autonomous_approve_commit_tag_boundary_status = "insufficient_truth"
+    project_browser_autonomous_approve_commit_tag_boundary_decision = _normalize_text(
+        approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_decision"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_approve_commit_tag_boundary_decision
+        not in one_cycle_controller_allowed_approve_commit_tag_boundary_decisions
+    ):
+        project_browser_autonomous_approve_commit_tag_boundary_decision = "insufficient_truth"
+    project_browser_autonomous_approve_commit_tag_boundary_reason = _normalize_text(
+        approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_reason"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_approve_commit_tag_boundary_reason
+        not in one_cycle_controller_allowed_approve_commit_tag_boundary_reasons
+    ):
+        project_browser_autonomous_approve_commit_tag_boundary_reason = "insufficient_truth"
+    project_browser_autonomous_approve_commit_tag_boundary_next_action = _normalize_text(
+        approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_next_action"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_approve_commit_tag_boundary_next_action
+        not in one_cycle_controller_allowed_approve_commit_tag_boundary_next_actions
+    ):
+        project_browser_autonomous_approve_commit_tag_boundary_next_action = "insufficient_truth"
+    project_browser_autonomous_approve_commit_tag_boundary_blocked_reason = _normalize_text(
+        approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_blocked_reason"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_approve_commit_tag_boundary_blocked_reason
+        not in one_cycle_controller_allowed_approve_commit_tag_boundary_blocked_reasons
+    ):
+        project_browser_autonomous_approve_commit_tag_boundary_blocked_reason = (
+            "insufficient_truth"
+        )
     project_browser_autonomous_one_cycle_controller_artifact_paths = (
         dict(
             approved_restart.get(
@@ -163109,6 +163605,42 @@ def _build_approved_restart_execution_contract_surface(
             approved_restart.get("project_browser_autonomous_targeted_fix_boundary_prompt_ready", False)
         ),
         "project_browser_autonomous_targeted_fix_boundary_should_execute_codex": False,
+        "project_browser_autonomous_approve_commit_tag_boundary_status": (
+            project_browser_autonomous_approve_commit_tag_boundary_status
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_decision": (
+            project_browser_autonomous_approve_commit_tag_boundary_decision
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_reason": (
+            project_browser_autonomous_approve_commit_tag_boundary_reason
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_next_action": (
+            project_browser_autonomous_approve_commit_tag_boundary_next_action
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_blocked_reason": (
+            project_browser_autonomous_approve_commit_tag_boundary_blocked_reason
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_commit_message": _normalize_text(
+            approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_commit_message"),
+            default="",
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_tag_name": _normalize_text(
+            approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_tag_name"),
+            default="",
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_commands_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_commands_path"),
+            default="",
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_metadata_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_metadata_path"),
+            default="",
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_should_execute_commit": False,
+        "project_browser_autonomous_approve_commit_tag_boundary_should_execute_tag": False,
+        "project_browser_autonomous_approve_commit_tag_boundary_ready": bool(
+            approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_ready", False)
+        ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
                 "project_browser_autonomous_one_cycle_controller_completed_result_source_path"
