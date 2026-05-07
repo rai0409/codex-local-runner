@@ -3562,6 +3562,15 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_review_route_should_prepare_commit",
     "project_browser_autonomous_review_route_should_prepare_targeted_fix",
     "project_browser_autonomous_review_route_should_prepare_reject",
+    "project_browser_autonomous_targeted_fix_boundary_status",
+    "project_browser_autonomous_targeted_fix_boundary_decision",
+    "project_browser_autonomous_targeted_fix_boundary_reason",
+    "project_browser_autonomous_targeted_fix_boundary_next_action",
+    "project_browser_autonomous_targeted_fix_boundary_blocked_reason",
+    "project_browser_autonomous_targeted_fix_boundary_source_prompt_path",
+    "project_browser_autonomous_targeted_fix_boundary_codex_prompt_path",
+    "project_browser_autonomous_targeted_fix_boundary_prompt_ready",
+    "project_browser_autonomous_targeted_fix_boundary_should_execute_codex",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -5434,6 +5443,153 @@ def _build_review_route_decision_state(
     return default_state
 
 
+def _build_targeted_fix_prompt_boundary_state(
+    *,
+    review_route_status: str,
+    review_route_decision: str,
+    review_route_should_prepare_targeted_fix: bool,
+    review_route_targeted_fix_prompt_path: str,
+    targeted_fix_prompt_path: str,
+    targeted_fix_codex_prompt_path: Path,
+) -> dict[str, Any]:
+    source_prompt_path = _normalize_text(
+        review_route_targeted_fix_prompt_path,
+        default=_normalize_text(targeted_fix_prompt_path, default=""),
+    )
+    default_state: dict[str, Any] = {
+        "targeted_fix_boundary_status": "insufficient_truth",
+        "targeted_fix_boundary_decision": "insufficient_truth",
+        "targeted_fix_boundary_reason": "insufficient_truth",
+        "targeted_fix_boundary_next_action": "insufficient_truth",
+        "targeted_fix_boundary_blocked_reason": "insufficient_truth",
+        "targeted_fix_boundary_source_prompt_path": source_prompt_path,
+        "targeted_fix_boundary_codex_prompt_path": "",
+        "targeted_fix_boundary_prompt_ready": False,
+        "targeted_fix_boundary_should_execute_codex": False,
+    }
+    if review_route_decision != "targeted_fix":
+        return {
+            "targeted_fix_boundary_status": "not_applicable",
+            "targeted_fix_boundary_decision": "none",
+            "targeted_fix_boundary_reason": "route_not_targeted_fix",
+            "targeted_fix_boundary_next_action": "none",
+            "targeted_fix_boundary_blocked_reason": "route_not_targeted_fix",
+            "targeted_fix_boundary_source_prompt_path": source_prompt_path,
+            "targeted_fix_boundary_codex_prompt_path": "",
+            "targeted_fix_boundary_prompt_ready": False,
+            "targeted_fix_boundary_should_execute_codex": False,
+        }
+    if review_route_status != "route_ready":
+        return {
+            "targeted_fix_boundary_status": "blocked",
+            "targeted_fix_boundary_decision": "targeted_fix",
+            "targeted_fix_boundary_reason": "route_not_ready",
+            "targeted_fix_boundary_next_action": "manual_review_required",
+            "targeted_fix_boundary_blocked_reason": "route_not_ready",
+            "targeted_fix_boundary_source_prompt_path": source_prompt_path,
+            "targeted_fix_boundary_codex_prompt_path": "",
+            "targeted_fix_boundary_prompt_ready": False,
+            "targeted_fix_boundary_should_execute_codex": False,
+        }
+    if not review_route_should_prepare_targeted_fix:
+        return {
+            "targeted_fix_boundary_status": "blocked",
+            "targeted_fix_boundary_decision": "targeted_fix",
+            "targeted_fix_boundary_reason": "route_not_ready",
+            "targeted_fix_boundary_next_action": "manual_review_required",
+            "targeted_fix_boundary_blocked_reason": "route_not_ready",
+            "targeted_fix_boundary_source_prompt_path": source_prompt_path,
+            "targeted_fix_boundary_codex_prompt_path": "",
+            "targeted_fix_boundary_prompt_ready": False,
+            "targeted_fix_boundary_should_execute_codex": False,
+        }
+    if not source_prompt_path:
+        return {
+            "targeted_fix_boundary_status": "blocked",
+            "targeted_fix_boundary_decision": "targeted_fix",
+            "targeted_fix_boundary_reason": "targeted_fix_prompt_missing",
+            "targeted_fix_boundary_next_action": "manual_review_required",
+            "targeted_fix_boundary_blocked_reason": "targeted_fix_prompt_missing",
+            "targeted_fix_boundary_source_prompt_path": source_prompt_path,
+            "targeted_fix_boundary_codex_prompt_path": "",
+            "targeted_fix_boundary_prompt_ready": False,
+            "targeted_fix_boundary_should_execute_codex": False,
+        }
+
+    source_prompt = Path(source_prompt_path)
+    try:
+        source_text = source_prompt.read_text(encoding="utf-8")
+    except OSError:
+        return {
+            "targeted_fix_boundary_status": "blocked",
+            "targeted_fix_boundary_decision": "targeted_fix",
+            "targeted_fix_boundary_reason": "targeted_fix_prompt_unreadable",
+            "targeted_fix_boundary_next_action": "manual_review_required",
+            "targeted_fix_boundary_blocked_reason": "targeted_fix_prompt_unreadable",
+            "targeted_fix_boundary_source_prompt_path": source_prompt_path,
+            "targeted_fix_boundary_codex_prompt_path": "",
+            "targeted_fix_boundary_prompt_ready": False,
+            "targeted_fix_boundary_should_execute_codex": False,
+        }
+    source_text = source_text.replace("\r\n", "\n").replace("\r", "\n")
+    normalized_source_text = _normalize_text(source_text, default="")
+    if not normalized_source_text:
+        return {
+            "targeted_fix_boundary_status": "blocked",
+            "targeted_fix_boundary_decision": "targeted_fix",
+            "targeted_fix_boundary_reason": "targeted_fix_prompt_empty",
+            "targeted_fix_boundary_next_action": "manual_review_required",
+            "targeted_fix_boundary_blocked_reason": "targeted_fix_prompt_empty",
+            "targeted_fix_boundary_source_prompt_path": source_prompt_path,
+            "targeted_fix_boundary_codex_prompt_path": "",
+            "targeted_fix_boundary_prompt_ready": False,
+            "targeted_fix_boundary_should_execute_codex": False,
+        }
+
+    codex_prompt_lines = [
+        "# Targeted fix Codex prompt",
+        "",
+        "## Original targeted_fix_prompt",
+        normalized_source_text,
+        "",
+        "## Safety constraints",
+        "- apply only the requested targeted fix",
+        "- do not change unrelated behavior",
+        "- do not run git add/commit/tag/push/merge/rebase",
+        "- do not execute local_codex_exec_plan.sh",
+        "- do not start any autonomous loop",
+        "- do not alter approve/reject route behavior",
+        (
+            "- do not alter multi-cycle progression behavior unless explicitly requested by the"
+            " targeted fix"
+        ),
+        "",
+        "## Return requirements",
+        "- changed files",
+        "- summary",
+        "- validation performed",
+        "- whether any unsafe operation was attempted",
+        "- PASS/BLOCKED/FAIL",
+    ]
+    codex_prompt_text = "\n".join(codex_prompt_lines).rstrip() + "\n"
+    try:
+        targeted_fix_codex_prompt_path.parent.mkdir(parents=True, exist_ok=True)
+        targeted_fix_codex_prompt_path.write_text(codex_prompt_text, encoding="utf-8")
+    except OSError:
+        return default_state
+    return {
+        "targeted_fix_boundary_status": "boundary_ready",
+        "targeted_fix_boundary_decision": "targeted_fix",
+        "targeted_fix_boundary_reason": "targeted_fix_prompt_boundary_ready",
+        "targeted_fix_boundary_next_action": "prepare_targeted_fix_codex_execution_gate",
+        "targeted_fix_boundary_blocked_reason": "none",
+        "targeted_fix_boundary_source_prompt_path": source_prompt_path,
+        "targeted_fix_boundary_codex_prompt_path": str(targeted_fix_codex_prompt_path),
+        "targeted_fix_boundary_prompt_ready": True,
+        "targeted_fix_boundary_should_execute_codex": False,
+    }
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -5476,6 +5632,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     review_handoff_path = one_cycle_controller_dir / "one_cycle_controller_review_handoff.json"
     review_response_path = one_cycle_controller_dir / "review_response.json"
     targeted_fix_prompt_path = one_cycle_controller_dir / "targeted_fix_prompt.md"
+    targeted_fix_codex_prompt_path = one_cycle_controller_dir / "targeted_fix_codex_prompt.md"
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -5513,6 +5670,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     review_route_should_prepare_commit = False
     review_route_should_prepare_targeted_fix = False
     review_route_should_prepare_reject = False
+    targeted_fix_boundary_status = "not_applicable"
+    targeted_fix_boundary_decision = "none"
+    targeted_fix_boundary_reason = "route_not_targeted_fix"
+    targeted_fix_boundary_next_action = "none"
+    targeted_fix_boundary_blocked_reason = "route_not_targeted_fix"
+    targeted_fix_boundary_source_prompt_path = ""
+    targeted_fix_boundary_codex_prompt_path = ""
+    targeted_fix_boundary_prompt_ready = False
+    targeted_fix_boundary_should_execute_codex = False
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -5580,6 +5746,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_review_handoff_json": str(review_handoff_path),
         "one_cycle_controller_review_response_json": str(review_response_path),
         "one_cycle_controller_targeted_fix_prompt_md": str(targeted_fix_prompt_path),
+        "one_cycle_controller_targeted_fix_codex_prompt_md": str(targeted_fix_codex_prompt_path),
     }
 
     requested_execution = enabled and execute_enabled and (not dry_run)
@@ -5861,6 +6028,49 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     review_route_should_prepare_reject = bool(
         review_route_decision_state.get("review_route_should_prepare_reject", False)
     )
+    targeted_fix_prompt_boundary_state = _build_targeted_fix_prompt_boundary_state(
+        review_route_status=review_route_status,
+        review_route_decision=review_route_decision,
+        review_route_should_prepare_targeted_fix=review_route_should_prepare_targeted_fix,
+        review_route_targeted_fix_prompt_path=review_route_targeted_fix_prompt_path,
+        targeted_fix_prompt_path=targeted_fix_prompt_resolved_path,
+        targeted_fix_codex_prompt_path=targeted_fix_codex_prompt_path,
+    )
+    targeted_fix_boundary_status = _normalize_text(
+        targeted_fix_prompt_boundary_state.get("targeted_fix_boundary_status"),
+        default=targeted_fix_boundary_status,
+    )
+    targeted_fix_boundary_decision = _normalize_text(
+        targeted_fix_prompt_boundary_state.get("targeted_fix_boundary_decision"),
+        default=targeted_fix_boundary_decision,
+    )
+    targeted_fix_boundary_reason = _normalize_text(
+        targeted_fix_prompt_boundary_state.get("targeted_fix_boundary_reason"),
+        default=targeted_fix_boundary_reason,
+    )
+    targeted_fix_boundary_next_action = _normalize_text(
+        targeted_fix_prompt_boundary_state.get("targeted_fix_boundary_next_action"),
+        default=targeted_fix_boundary_next_action,
+    )
+    targeted_fix_boundary_blocked_reason = _normalize_text(
+        targeted_fix_prompt_boundary_state.get("targeted_fix_boundary_blocked_reason"),
+        default=targeted_fix_boundary_blocked_reason,
+    )
+    targeted_fix_boundary_source_prompt_path = _normalize_text(
+        targeted_fix_prompt_boundary_state.get("targeted_fix_boundary_source_prompt_path"),
+        default=targeted_fix_boundary_source_prompt_path,
+    )
+    targeted_fix_boundary_codex_prompt_path = _normalize_text(
+        targeted_fix_prompt_boundary_state.get("targeted_fix_boundary_codex_prompt_path"),
+        default=targeted_fix_boundary_codex_prompt_path,
+    )
+    targeted_fix_boundary_prompt_ready = bool(
+        targeted_fix_prompt_boundary_state.get(
+            "targeted_fix_boundary_prompt_ready",
+            targeted_fix_boundary_prompt_ready,
+        )
+    )
+    targeted_fix_boundary_should_execute_codex = False
 
     result_payload = {
         "status": status,
@@ -5901,6 +6111,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "review_route_should_prepare_commit": review_route_should_prepare_commit,
         "review_route_should_prepare_targeted_fix": review_route_should_prepare_targeted_fix,
         "review_route_should_prepare_reject": review_route_should_prepare_reject,
+        "targeted_fix_boundary_status": targeted_fix_boundary_status,
+        "targeted_fix_boundary_decision": targeted_fix_boundary_decision,
+        "targeted_fix_boundary_reason": targeted_fix_boundary_reason,
+        "targeted_fix_boundary_next_action": targeted_fix_boundary_next_action,
+        "targeted_fix_boundary_blocked_reason": targeted_fix_boundary_blocked_reason,
+        "targeted_fix_boundary_source_prompt_path": targeted_fix_boundary_source_prompt_path,
+        "targeted_fix_boundary_codex_prompt_path": targeted_fix_boundary_codex_prompt_path,
+        "targeted_fix_boundary_prompt_ready": targeted_fix_boundary_prompt_ready,
+        "targeted_fix_boundary_should_execute_codex": targeted_fix_boundary_should_execute_codex,
         "completed_result_source_path": str(completed_result_source_path),
         "completed_result_source_status": completed_result_source_status,
         "stop_reason": stop_reason,
@@ -5961,6 +6180,24 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             f"`{str(review_route_should_prepare_targeted_fix).lower()}`"
         ),
         f"- Review route should prepare reject: `{str(review_route_should_prepare_reject).lower()}`",
+        f"- Targeted-fix boundary status: `{targeted_fix_boundary_status}`",
+        f"- Targeted-fix boundary decision: `{targeted_fix_boundary_decision}`",
+        f"- Targeted-fix boundary reason: `{targeted_fix_boundary_reason}`",
+        f"- Targeted-fix boundary next action: `{targeted_fix_boundary_next_action}`",
+        f"- Targeted-fix boundary blocked reason: `{targeted_fix_boundary_blocked_reason}`",
+        (
+            "- Targeted-fix boundary source prompt path: "
+            f"`{targeted_fix_boundary_source_prompt_path or 'none'}`"
+        ),
+        (
+            "- Targeted-fix boundary codex prompt path: "
+            f"`{targeted_fix_boundary_codex_prompt_path or 'none'}`"
+        ),
+        f"- Targeted-fix boundary prompt ready: `{str(targeted_fix_boundary_prompt_ready).lower()}`",
+        (
+            "- Targeted-fix boundary should execute codex: "
+            f"`{str(targeted_fix_boundary_should_execute_codex).lower()}`"
+        ),
         f"- Completed result source path: `{completed_result_source_path}`",
         f"- Completed result source status: `{completed_result_source_status}`",
         f"- Stop reason: `{stop_reason}`",
@@ -5999,6 +6236,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- one_cycle_controller_review_handoff.json: `{review_handoff_path}`",
         f"- review_response.json: `{review_response_path}`",
         f"- targeted_fix_prompt.md: `{targeted_fix_prompt_path}`",
+        f"- targeted_fix_codex_prompt.md: `{targeted_fix_codex_prompt_path}`",
     ]
 
     try:
@@ -6041,6 +6279,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         review_route_should_prepare_commit = False
         review_route_should_prepare_targeted_fix = False
         review_route_should_prepare_reject = False
+        targeted_fix_boundary_status = "not_applicable"
+        targeted_fix_boundary_decision = "none"
+        targeted_fix_boundary_reason = "route_not_targeted_fix"
+        targeted_fix_boundary_next_action = "none"
+        targeted_fix_boundary_blocked_reason = "route_not_targeted_fix"
+        targeted_fix_boundary_source_prompt_path = ""
+        targeted_fix_boundary_codex_prompt_path = ""
+        targeted_fix_boundary_prompt_ready = False
+        targeted_fix_boundary_should_execute_codex = False
         completed_result_source_status = "not_completed"
         stop_reason = (
             "dry_run_execution_suppressed"
@@ -6141,6 +6388,33 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_review_route_should_prepare_reject": (
             review_route_should_prepare_reject
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_status": (
+            targeted_fix_boundary_status
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_decision": (
+            targeted_fix_boundary_decision
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_reason": (
+            targeted_fix_boundary_reason
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_next_action": (
+            targeted_fix_boundary_next_action
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_blocked_reason": (
+            targeted_fix_boundary_blocked_reason
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_source_prompt_path": (
+            targeted_fix_boundary_source_prompt_path
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_codex_prompt_path": (
+            targeted_fix_boundary_codex_prompt_path
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_prompt_ready": (
+            targeted_fix_boundary_prompt_ready
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_should_execute_codex": (
+            targeted_fix_boundary_should_execute_codex
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": str(
             completed_result_source_path
@@ -162243,6 +162517,43 @@ def _build_approved_restart_execution_contract_surface(
         "manual_review_required",
         "insufficient_truth",
     }
+    one_cycle_controller_allowed_targeted_fix_boundary_statuses = {
+        "not_applicable",
+        "boundary_ready",
+        "blocked",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_targeted_fix_boundary_decisions = {
+        "none",
+        "targeted_fix",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_targeted_fix_boundary_reasons = {
+        "route_not_targeted_fix",
+        "route_not_ready",
+        "targeted_fix_prompt_missing",
+        "targeted_fix_prompt_unreadable",
+        "targeted_fix_prompt_empty",
+        "targeted_fix_prompt_boundary_ready",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_targeted_fix_boundary_next_actions = {
+        "none",
+        "prepare_targeted_fix_codex_execution_gate",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_targeted_fix_boundary_blocked_reasons = {
+        "none",
+        "route_not_targeted_fix",
+        "targeted_fix_prompt_missing",
+        "targeted_fix_prompt_unreadable",
+        "targeted_fix_prompt_empty",
+        "route_not_ready",
+        "manual_review_required",
+        "insufficient_truth",
+    }
 
     def _read_one_cycle_controller_flag(key: str, *, default: bool = False) -> bool:
         value = (
@@ -162560,6 +162871,51 @@ def _build_approved_restart_execution_contract_surface(
         not in one_cycle_controller_allowed_review_route_blocked_reasons
     ):
         project_browser_autonomous_review_route_blocked_reason = "insufficient_truth"
+    project_browser_autonomous_targeted_fix_boundary_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_targeted_fix_boundary_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_targeted_fix_boundary_status
+        not in one_cycle_controller_allowed_targeted_fix_boundary_statuses
+    ):
+        project_browser_autonomous_targeted_fix_boundary_status = "insufficient_truth"
+    project_browser_autonomous_targeted_fix_boundary_decision = _normalize_text(
+        approved_restart.get("project_browser_autonomous_targeted_fix_boundary_decision"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_targeted_fix_boundary_decision
+        not in one_cycle_controller_allowed_targeted_fix_boundary_decisions
+    ):
+        project_browser_autonomous_targeted_fix_boundary_decision = "insufficient_truth"
+    project_browser_autonomous_targeted_fix_boundary_reason = _normalize_text(
+        approved_restart.get("project_browser_autonomous_targeted_fix_boundary_reason"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_targeted_fix_boundary_reason
+        not in one_cycle_controller_allowed_targeted_fix_boundary_reasons
+    ):
+        project_browser_autonomous_targeted_fix_boundary_reason = "insufficient_truth"
+    project_browser_autonomous_targeted_fix_boundary_next_action = _normalize_text(
+        approved_restart.get("project_browser_autonomous_targeted_fix_boundary_next_action"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_targeted_fix_boundary_next_action
+        not in one_cycle_controller_allowed_targeted_fix_boundary_next_actions
+    ):
+        project_browser_autonomous_targeted_fix_boundary_next_action = "insufficient_truth"
+    project_browser_autonomous_targeted_fix_boundary_blocked_reason = _normalize_text(
+        approved_restart.get("project_browser_autonomous_targeted_fix_boundary_blocked_reason"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_targeted_fix_boundary_blocked_reason
+        not in one_cycle_controller_allowed_targeted_fix_boundary_blocked_reasons
+    ):
+        project_browser_autonomous_targeted_fix_boundary_blocked_reason = "insufficient_truth"
     project_browser_autonomous_one_cycle_controller_artifact_paths = (
         dict(
             approved_restart.get(
@@ -162726,6 +163082,33 @@ def _build_approved_restart_execution_contract_surface(
                 False,
             )
         ),
+        "project_browser_autonomous_targeted_fix_boundary_status": (
+            project_browser_autonomous_targeted_fix_boundary_status
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_decision": (
+            project_browser_autonomous_targeted_fix_boundary_decision
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_reason": (
+            project_browser_autonomous_targeted_fix_boundary_reason
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_next_action": (
+            project_browser_autonomous_targeted_fix_boundary_next_action
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_blocked_reason": (
+            project_browser_autonomous_targeted_fix_boundary_blocked_reason
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_source_prompt_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_targeted_fix_boundary_source_prompt_path"),
+            default="",
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_codex_prompt_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_targeted_fix_boundary_codex_prompt_path"),
+            default="",
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_prompt_ready": bool(
+            approved_restart.get("project_browser_autonomous_targeted_fix_boundary_prompt_ready", False)
+        ),
+        "project_browser_autonomous_targeted_fix_boundary_should_execute_codex": False,
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
                 "project_browser_autonomous_one_cycle_controller_completed_result_source_path"
