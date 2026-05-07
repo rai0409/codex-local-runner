@@ -3711,6 +3711,27 @@ _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
 _TARGETED_FIX_REENTRY_EXECUTION_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_reentry_execution_receipt.json"
 )
+_TARGETED_FIX_REENTRY_EXECUTION_STDOUT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_reentry_execution_stdout.txt"
+)
+_TARGETED_FIX_REENTRY_EXECUTION_STDERR_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_reentry_execution_stderr.txt"
+)
+_TARGETED_FIX_REENTRY_EXECUTION_COMMAND: tuple[str, ...] = (
+    "codex",
+    "exec",
+    "-",
+    "--cd",
+    "/home/rai/codex-local-runner",
+    "--sandbox",
+    "workspace-write",
+    "-m",
+    "gpt-5.3-codex",
+    "-c",
+    'model_reasoning_effort="high"',
+    "-c",
+    'approval_policy="never"',
+)
 
 _LOCAL_CODEX_EXECUTION_READINESS_BANNED_PROMPT_FRAGMENTS: tuple[str, ...] = (
     "git commit",
@@ -6582,7 +6603,88 @@ def _run_targeted_fix_reentry_execution_if_enabled(
         "execution_should_execute_codex": bool(
             state.get("execution_should_execute_codex", False)
         ),
+        "codex_command": " ".join(_TARGETED_FIX_REENTRY_EXECUTION_COMMAND),
+        "stdout_path": _TARGETED_FIX_REENTRY_EXECUTION_STDOUT_PATH,
+        "stderr_path": _TARGETED_FIX_REENTRY_EXECUTION_STDERR_PATH,
     }
+
+    def _run_targeted_fix_codex_prompt_file_once(
+        *,
+        prompt_path: str,
+    ) -> dict[str, Any]:
+        normalized_prompt_path = _normalize_text(
+            prompt_path,
+            default=_TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH,
+        )
+        try:
+            prompt_text = Path(normalized_prompt_path).read_text(encoding="utf-8")
+        except OSError:
+            return {
+                "execution_gate_status": "blocked",
+                "execution_status": "blocked",
+                "execution_attempted": False,
+                "execution_exit_code": 0,
+                "execution_blocked_reason": "targeted_fix_prompt_missing",
+                "execution_prompt_path": normalized_prompt_path,
+                "execution_should_execute_codex": False,
+            }
+        if not prompt_text.strip():
+            return {
+                "execution_gate_status": "blocked",
+                "execution_status": "blocked",
+                "execution_attempted": False,
+                "execution_exit_code": 0,
+                "execution_blocked_reason": "targeted_fix_prompt_missing",
+                "execution_prompt_path": normalized_prompt_path,
+                "execution_should_execute_codex": False,
+            }
+        try:
+            completed = subprocess.run(
+                list(_TARGETED_FIX_REENTRY_EXECUTION_COMMAND),
+                input=prompt_text,
+                shell=False,
+                cwd="/home/rai/codex-local-runner",
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            completed_stdout = ""
+            completed_stderr = ""
+            execution_exit_code = 1
+            execution_gate_status = "failed"
+            execution_status = "failed"
+            execution_blocked_reason = "codex_execution_failed"
+        else:
+            completed_stdout = _normalize_text(completed.stdout, default="")
+            completed_stderr = _normalize_text(completed.stderr, default="")
+            execution_exit_code = int(completed.returncode)
+            if execution_exit_code == 0:
+                execution_gate_status = "executed"
+                execution_status = "completed"
+                execution_blocked_reason = "none"
+            else:
+                execution_gate_status = "failed"
+                execution_status = "failed"
+                execution_blocked_reason = "codex_execution_failed"
+        stdout_path = Path(_TARGETED_FIX_REENTRY_EXECUTION_STDOUT_PATH)
+        stderr_path = Path(_TARGETED_FIX_REENTRY_EXECUTION_STDERR_PATH)
+        try:
+            stdout_path.parent.mkdir(parents=True, exist_ok=True)
+            stdout_path.write_text(completed_stdout, encoding="utf-8")
+            stderr_path.parent.mkdir(parents=True, exist_ok=True)
+            stderr_path.write_text(completed_stderr, encoding="utf-8")
+        except OSError:
+            pass
+        return {
+            "execution_gate_status": execution_gate_status,
+            "execution_status": execution_status,
+            "execution_attempted": True,
+            "execution_exit_code": execution_exit_code,
+            "execution_blocked_reason": execution_blocked_reason,
+            "execution_prompt_path": normalized_prompt_path,
+            "execution_should_execute_codex": True,
+        }
 
     def _write_receipt() -> dict[str, Any]:
         receipt_payload["status"] = _normalize_text(state.get("execution_status"), default="")
@@ -6619,6 +6721,18 @@ def _run_targeted_fix_reentry_execution_if_enabled(
                 }
             )
         return state
+
+    if _normalize_text(state.get("execution_blocked_reason"), default="") == (
+        "targeted_fix_prompt_execution_adapter_missing"
+    ):
+        state.update(
+            _run_targeted_fix_codex_prompt_file_once(
+                prompt_path=_normalize_text(
+                    state.get("execution_prompt_path"),
+                    default=_TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH,
+                )
+            )
+        )
 
     return _write_receipt()
 
@@ -164201,6 +164315,7 @@ def _build_approved_restart_execution_contract_surface(
         "dry_run_suppressed",
         "boundary_not_ready",
         "blocked",
+        "executed",
         "failed",
         "insufficient_truth",
     }
@@ -164208,6 +164323,7 @@ def _build_approved_restart_execution_contract_surface(
         "not_executed",
         "dry_run_suppressed",
         "blocked",
+        "completed",
         "failed",
         "insufficient_truth",
     }
@@ -164218,6 +164334,8 @@ def _build_approved_restart_execution_contract_surface(
         "dry_run_execution_suppressed",
         "boundary_not_ready",
         "targeted_fix_prompt_execution_adapter_missing",
+        "targeted_fix_prompt_missing",
+        "codex_execution_failed",
         "receipt_write_failed",
         "insufficient_truth",
     }
