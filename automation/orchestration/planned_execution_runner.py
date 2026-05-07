@@ -3538,6 +3538,12 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_review_request_blocked_reason",
     "project_browser_autonomous_one_cycle_controller_review_request_path",
     "project_browser_autonomous_one_cycle_controller_review_handoff_path",
+    "project_browser_autonomous_one_cycle_controller_review_handoff_decision_status",
+    "project_browser_autonomous_one_cycle_controller_tracked_diff_status",
+    "project_browser_autonomous_one_cycle_controller_no_diff_review_status",
+    "project_browser_autonomous_one_cycle_controller_no_diff_reason",
+    "project_browser_autonomous_one_cycle_controller_review_handoff_decision_source_path",
+    "project_browser_autonomous_one_cycle_controller_review_handoff_decision_next_action",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -5104,6 +5110,53 @@ def _build_one_cycle_post_execution_handoff(
     }
 
 
+def _build_one_cycle_review_handoff_decision_state(
+    *,
+    review_handoff_path: Path,
+) -> dict[str, str]:
+    default_state = {
+        "review_handoff_decision_status": "manual_review_required",
+        "tracked_diff_status": "unknown",
+        "no_diff_review_status": "blocked",
+        "no_diff_reason": "review_handoff_missing_or_invalid",
+        "review_handoff_decision_source_path": str(review_handoff_path),
+        "review_handoff_decision_next_action": "manual_review_required",
+    }
+    if not review_handoff_path.exists():
+        return default_state
+    try:
+        payload = json.loads(review_handoff_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return default_state
+    if not isinstance(payload, Mapping):
+        return default_state
+    status = _normalize_text(payload.get("status"), default="")
+    review_request_status = _normalize_text(payload.get("review_request_status"), default="")
+    diff_capture_status = _normalize_text(payload.get("diff_capture_status"), default="")
+    if status != "ready" or review_request_status != "ready" or diff_capture_status != "completed":
+        return default_state
+    tracked_diff_present = payload.get("tracked_diff_present")
+    if tracked_diff_present is True:
+        return {
+            "review_handoff_decision_status": "awaiting_diff_review_response",
+            "tracked_diff_status": "present",
+            "no_diff_review_status": "not_applicable",
+            "no_diff_reason": "tracked_diff_present",
+            "review_handoff_decision_source_path": str(review_handoff_path),
+            "review_handoff_decision_next_action": "wait_for_chatgpt_diff_review_response",
+        }
+    if tracked_diff_present is False:
+        return {
+            "review_handoff_decision_status": "no_diff_pending_decision",
+            "tracked_diff_status": "absent",
+            "no_diff_review_status": "ready",
+            "no_diff_reason": "no_tracked_diff_present",
+            "review_handoff_decision_source_path": str(review_handoff_path),
+            "review_handoff_decision_next_action": "prepare_next_codex_prompt_or_manual_decision",
+        }
+    return default_state
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -5158,6 +5211,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     diff_capture_blocked_reason = "one_cycle_not_completed"
     review_request_status = "not_started"
     review_request_blocked_reason = "one_cycle_not_completed"
+    review_handoff_decision_status = "manual_review_required"
+    tracked_diff_status = "unknown"
+    no_diff_review_status = "blocked"
+    no_diff_reason = "review_handoff_missing_or_invalid"
+    review_handoff_decision_source_path = str(review_handoff_path)
+    review_handoff_decision_next_action = "manual_review_required"
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -5398,6 +5457,33 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         post_execution_handoff.get("completed_result_source_status"),
         default=completed_result_source_status,
     )
+    review_handoff_decision_state = _build_one_cycle_review_handoff_decision_state(
+        review_handoff_path=review_handoff_path
+    )
+    review_handoff_decision_status = _normalize_text(
+        review_handoff_decision_state.get("review_handoff_decision_status"),
+        default=review_handoff_decision_status,
+    )
+    tracked_diff_status = _normalize_text(
+        review_handoff_decision_state.get("tracked_diff_status"),
+        default=tracked_diff_status,
+    )
+    no_diff_review_status = _normalize_text(
+        review_handoff_decision_state.get("no_diff_review_status"),
+        default=no_diff_review_status,
+    )
+    no_diff_reason = _normalize_text(
+        review_handoff_decision_state.get("no_diff_reason"),
+        default=no_diff_reason,
+    )
+    review_handoff_decision_source_path = _normalize_text(
+        review_handoff_decision_state.get("review_handoff_decision_source_path"),
+        default=review_handoff_decision_source_path,
+    )
+    review_handoff_decision_next_action = _normalize_text(
+        review_handoff_decision_state.get("review_handoff_decision_next_action"),
+        default=review_handoff_decision_next_action,
+    )
 
     result_payload = {
         "status": status,
@@ -5414,6 +5500,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "review_request_blocked_reason": review_request_blocked_reason,
         "review_request_path": str(review_request_path),
         "review_handoff_path": str(review_handoff_path),
+        "review_handoff_decision_status": review_handoff_decision_status,
+        "tracked_diff_status": tracked_diff_status,
+        "no_diff_review_status": no_diff_review_status,
+        "no_diff_reason": no_diff_reason,
+        "review_handoff_decision_source_path": review_handoff_decision_source_path,
+        "review_handoff_decision_next_action": review_handoff_decision_next_action,
         "completed_result_source_path": str(completed_result_source_path),
         "completed_result_source_status": completed_result_source_status,
         "stop_reason": stop_reason,
@@ -5449,6 +5541,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- Diff capture blocked reason: `{diff_capture_blocked_reason}`",
         f"- Review request status: `{review_request_status}`",
         f"- Review request blocked reason: `{review_request_blocked_reason}`",
+        f"- Review handoff decision status: `{review_handoff_decision_status}`",
+        f"- Tracked diff status: `{tracked_diff_status}`",
+        f"- No-diff review status: `{no_diff_review_status}`",
+        f"- No-diff reason: `{no_diff_reason}`",
+        f"- Review handoff decision source path: `{review_handoff_decision_source_path}`",
+        f"- Review handoff decision next action: `{review_handoff_decision_next_action}`",
         f"- Completed result source path: `{completed_result_source_path}`",
         f"- Completed result source status: `{completed_result_source_status}`",
         f"- Stop reason: `{stop_reason}`",
@@ -5504,6 +5602,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         diff_capture_blocked_reason = "one_cycle_not_completed"
         review_request_status = "not_started"
         review_request_blocked_reason = "one_cycle_not_completed"
+        review_handoff_decision_status = "manual_review_required"
+        tracked_diff_status = "unknown"
+        no_diff_review_status = "blocked"
+        no_diff_reason = "review_handoff_missing_or_invalid"
+        review_handoff_decision_source_path = str(review_handoff_path)
+        review_handoff_decision_next_action = "manual_review_required"
         completed_result_source_status = "not_completed"
         stop_reason = (
             "dry_run_execution_suppressed"
@@ -5562,6 +5666,22 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_one_cycle_controller_review_handoff_path": str(
             review_handoff_path
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_handoff_decision_status": (
+            review_handoff_decision_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_tracked_diff_status": (
+            tracked_diff_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_no_diff_review_status": (
+            no_diff_review_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_no_diff_reason": no_diff_reason,
+        "project_browser_autonomous_one_cycle_controller_review_handoff_decision_source_path": (
+            review_handoff_decision_source_path
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_handoff_decision_next_action": (
+            review_handoff_decision_next_action
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": str(
             completed_result_source_path
@@ -161565,6 +161685,36 @@ def _build_approved_restart_execution_contract_surface(
         "none",
         "insufficient_truth",
     }
+    one_cycle_controller_allowed_review_handoff_decision_statuses = {
+        "awaiting_diff_review_response",
+        "no_diff_pending_decision",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_tracked_diff_statuses = {
+        "present",
+        "absent",
+        "unknown",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_no_diff_review_statuses = {
+        "ready",
+        "not_applicable",
+        "blocked",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_no_diff_reasons = {
+        "no_tracked_diff_present",
+        "tracked_diff_present",
+        "review_handoff_missing_or_invalid",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_review_handoff_decision_next_actions = {
+        "wait_for_chatgpt_diff_review_response",
+        "prepare_next_codex_prompt_or_manual_decision",
+        "manual_review_required",
+        "insufficient_truth",
+    }
 
     def _read_one_cycle_controller_flag(key: str, *, default: bool = False) -> bool:
         value = (
@@ -161742,6 +161892,65 @@ def _build_approved_restart_execution_contract_surface(
         project_browser_autonomous_one_cycle_controller_execution_blocked_reason = (
             "insufficient_truth"
         )
+    project_browser_autonomous_one_cycle_controller_review_handoff_decision_status = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_one_cycle_controller_review_handoff_decision_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_review_handoff_decision_status
+        not in one_cycle_controller_allowed_review_handoff_decision_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_review_handoff_decision_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_tracked_diff_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_tracked_diff_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_tracked_diff_status
+        not in one_cycle_controller_allowed_tracked_diff_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_tracked_diff_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_no_diff_review_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_no_diff_review_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_no_diff_review_status
+        not in one_cycle_controller_allowed_no_diff_review_statuses
+    ):
+        project_browser_autonomous_one_cycle_controller_no_diff_review_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_one_cycle_controller_no_diff_reason = _normalize_text(
+        approved_restart.get("project_browser_autonomous_one_cycle_controller_no_diff_reason"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_no_diff_reason
+        not in one_cycle_controller_allowed_no_diff_reasons
+    ):
+        project_browser_autonomous_one_cycle_controller_no_diff_reason = "insufficient_truth"
+    project_browser_autonomous_one_cycle_controller_review_handoff_decision_next_action = (
+        _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_review_handoff_decision_next_action"
+            ),
+            default="insufficient_truth",
+        )
+    )
+    if (
+        project_browser_autonomous_one_cycle_controller_review_handoff_decision_next_action
+        not in one_cycle_controller_allowed_review_handoff_decision_next_actions
+    ):
+        project_browser_autonomous_one_cycle_controller_review_handoff_decision_next_action = (
+            "insufficient_truth"
+        )
     project_browser_autonomous_one_cycle_controller_artifact_paths = (
         dict(
             approved_restart.get(
@@ -161815,6 +162024,27 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_one_cycle_controller_review_handoff_path": _normalize_text(
             approved_restart.get("project_browser_autonomous_one_cycle_controller_review_handoff_path"),
             default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_handoff_decision_status": (
+            project_browser_autonomous_one_cycle_controller_review_handoff_decision_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_tracked_diff_status": (
+            project_browser_autonomous_one_cycle_controller_tracked_diff_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_no_diff_review_status": (
+            project_browser_autonomous_one_cycle_controller_no_diff_review_status
+        ),
+        "project_browser_autonomous_one_cycle_controller_no_diff_reason": (
+            project_browser_autonomous_one_cycle_controller_no_diff_reason
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_handoff_decision_source_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_one_cycle_controller_review_handoff_decision_source_path"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_one_cycle_controller_review_handoff_decision_next_action": (
+            project_browser_autonomous_one_cycle_controller_review_handoff_decision_next_action
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
