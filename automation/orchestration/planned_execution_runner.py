@@ -3592,6 +3592,17 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_targeted_fix_post_reentry_diff_changed_file_count",
     "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_status",
     "project_browser_autonomous_targeted_fix_post_reentry_review_required",
+    "project_browser_autonomous_targeted_fix_post_reentry_review_assimilation_status",
+    "project_browser_autonomous_targeted_fix_post_reentry_review_assimilation_blocked_reason",
+    "project_browser_autonomous_targeted_fix_post_reentry_review_decision",
+    "project_browser_autonomous_targeted_fix_post_reentry_route_status",
+    "project_browser_autonomous_targeted_fix_post_reentry_route_decision",
+    "project_browser_autonomous_targeted_fix_post_reentry_next_action",
+    "project_browser_autonomous_targeted_fix_post_reentry_manual_review_required",
+    "project_browser_autonomous_targeted_fix_post_reentry_targeted_fix_required",
+    "project_browser_autonomous_targeted_fix_post_reentry_review_assimilation_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_route_decision_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_review_response_path",
     "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_path",
     "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_path",
     "project_browser_autonomous_targeted_fix_post_reentry_diff_patch_path",
@@ -3741,6 +3752,15 @@ _TARGETED_FIX_POST_REENTRY_DIFF_NAME_STATUS_PATH = (
 )
 _TARGETED_FIX_POST_REENTRY_REVIEW_HANDOFF_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_review_handoff.json"
+)
+_TARGETED_FIX_POST_REENTRY_REVIEW_RESPONSE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_review_response.json"
+)
+_TARGETED_FIX_POST_REENTRY_REVIEW_ASSIMILATION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_review_assimilation.json"
+)
+_TARGETED_FIX_POST_REENTRY_ROUTE_DECISION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_route_decision.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
@@ -7047,6 +7067,333 @@ def _build_targeted_fix_post_reentry_review_handoff_state(
     return state
 
 
+def _build_targeted_fix_post_reentry_review_assimilation_state(
+    *,
+    review_handoff_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    handoff_state = (
+        dict(review_handoff_state) if isinstance(review_handoff_state, Mapping) else {}
+    )
+    review_response_path = _TARGETED_FIX_POST_REENTRY_REVIEW_RESPONSE_PATH
+    review_handoff_path = _TARGETED_FIX_POST_REENTRY_REVIEW_HANDOFF_PATH
+    review_assimilation_path = _TARGETED_FIX_POST_REENTRY_REVIEW_ASSIMILATION_PATH
+    handoff_status = _normalize_text(handoff_state.get("handoff_status"), default="not_applicable")
+    review_required = bool(handoff_state.get("review_required", False))
+    state: dict[str, Any] = {
+        "status": "not_applicable",
+        "assimilation_status": "not_applicable",
+        "blocked_reason": "review_handoff_not_ready",
+        "attempted": False,
+        "source": "targeted_fix_post_reentry_review_handoff",
+        "review_response_path": review_response_path,
+        "review_handoff_path": review_handoff_path,
+        "handoff_status": handoff_status,
+        "review_required": review_required,
+        "decision": "none",
+        "normalized_decision": "none",
+        "reason": "",
+        "summary": "",
+        "targeted_fix_prompt_present": False,
+        "targeted_fix_prompt_length": 0,
+    }
+    if handoff_status == "ready_no_diff" and not review_required:
+        state.update(
+            {
+                "status": "ready",
+                "assimilation_status": "no_review_required",
+                "blocked_reason": "none",
+                "attempted": True,
+                "decision": "no_action",
+                "normalized_decision": "no_action",
+                "reason": "no_review_required",
+                "summary": _normalize_text(
+                    handoff_state.get("summary"),
+                    default="Post-reentry no-diff handoff does not require review response.",
+                ),
+                "targeted_fix_prompt_present": False,
+                "targeted_fix_prompt_length": 0,
+            }
+        )
+    elif handoff_status == "ready" and review_required:
+        state["attempted"] = True
+        response_path = Path(review_response_path)
+        if not response_path.exists():
+            state.update(
+                {
+                    "status": "blocked",
+                    "assimilation_status": "blocked",
+                    "blocked_reason": "post_reentry_review_response_missing",
+                }
+            )
+        else:
+            try:
+                payload = json.loads(response_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, ValueError):
+                state.update(
+                    {
+                        "status": "blocked",
+                        "assimilation_status": "blocked",
+                        "blocked_reason": "post_reentry_review_response_invalid_json",
+                    }
+                )
+            else:
+                if not isinstance(payload, Mapping):
+                    state.update(
+                        {
+                            "status": "blocked",
+                            "assimilation_status": "blocked",
+                            "blocked_reason": "post_reentry_review_response_invalid_json",
+                        }
+                    )
+                else:
+                    decision = _normalize_text(payload.get("decision"), default="")
+                    normalized_decision = decision.lower()
+                    reason = _normalize_text(payload.get("reason"), default="")
+                    summary = _normalize_text(payload.get("summary"), default="")
+                    targeted_fix_prompt = _normalize_text(
+                        payload.get("targeted_fix_prompt"),
+                        default="",
+                    )
+                    targeted_fix_prompt_present = bool(targeted_fix_prompt)
+                    targeted_fix_prompt_length = len(targeted_fix_prompt)
+                    state.update(
+                        {
+                            "decision": decision or "none",
+                            "normalized_decision": normalized_decision or "none",
+                            "reason": reason,
+                            "summary": summary,
+                            "targeted_fix_prompt_present": targeted_fix_prompt_present,
+                            "targeted_fix_prompt_length": targeted_fix_prompt_length,
+                        }
+                    )
+                    if normalized_decision not in {
+                        "approve",
+                        "reject",
+                        "targeted_fix",
+                        "no_action",
+                    }:
+                        state.update(
+                            {
+                                "status": "blocked",
+                                "assimilation_status": "blocked",
+                                "blocked_reason": "unsupported_post_reentry_review_decision",
+                            }
+                        )
+                    elif normalized_decision == "targeted_fix" and not targeted_fix_prompt_present:
+                        state.update(
+                            {
+                                "status": "blocked",
+                                "assimilation_status": "blocked",
+                                "blocked_reason": "post_reentry_targeted_fix_prompt_missing",
+                            }
+                        )
+                    else:
+                        state.update(
+                            {
+                                "status": "ready",
+                                "assimilation_status": "assimilated",
+                                "blocked_reason": "none",
+                            }
+                        )
+    try:
+        Path(review_assimilation_path).parent.mkdir(parents=True, exist_ok=True)
+        _write_json(Path(review_assimilation_path), state)
+    except OSError:
+        pass
+    return state
+
+
+def _build_targeted_fix_post_reentry_route_decision_state(
+    *,
+    review_assimilation_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    assimilation_state = (
+        dict(review_assimilation_state)
+        if isinstance(review_assimilation_state, Mapping)
+        else {}
+    )
+    review_response_path = _TARGETED_FIX_POST_REENTRY_REVIEW_RESPONSE_PATH
+    review_handoff_path = _TARGETED_FIX_POST_REENTRY_REVIEW_HANDOFF_PATH
+    review_assimilation_path = _TARGETED_FIX_POST_REENTRY_REVIEW_ASSIMILATION_PATH
+    route_decision_path = _TARGETED_FIX_POST_REENTRY_ROUTE_DECISION_PATH
+    normalized_decision = _normalize_text(
+        assimilation_state.get("normalized_decision"),
+        default="none",
+    )
+    assimilation_status = _normalize_text(
+        assimilation_state.get("assimilation_status"),
+        default="not_applicable",
+    )
+    blocked_reason = _normalize_text(
+        assimilation_state.get("blocked_reason"),
+        default="review_handoff_not_ready",
+    )
+    targeted_fix_prompt_present = bool(
+        assimilation_state.get("targeted_fix_prompt_present", False)
+    )
+    summary = _normalize_text(assimilation_state.get("summary"), default="")
+    state: dict[str, Any] = {
+        "status": "blocked",
+        "route_status": "blocked",
+        "blocked_reason": "manual_review_required",
+        "source": "targeted_fix_post_reentry_review_assimilation",
+        "review_response_path": review_response_path,
+        "review_assimilation_path": review_assimilation_path,
+        "review_handoff_path": review_handoff_path,
+        "route_decision": "manual_review_required",
+        "next_action": "manual_review_required",
+        "manual_review_required": True,
+        "targeted_fix_required": False,
+        "approve_allowed": False,
+        "reject_allowed": False,
+        "no_action_allowed": False,
+        "targeted_fix_prompt_present": targeted_fix_prompt_present,
+        "summary": summary,
+    }
+    if assimilation_status == "no_review_required" and normalized_decision == "no_action":
+        state.update(
+            {
+                "status": "ready",
+                "route_status": "ready",
+                "blocked_reason": "none",
+                "route_decision": "completed_no_diff",
+                "next_action": "complete_post_reentry_no_diff",
+                "manual_review_required": False,
+                "targeted_fix_required": False,
+                "approve_allowed": False,
+                "reject_allowed": False,
+                "no_action_allowed": True,
+                "targeted_fix_prompt_present": False,
+                "summary": summary or "No post-reentry diff; no review response required.",
+            }
+        )
+    elif assimilation_status == "blocked":
+        if blocked_reason == "post_reentry_review_response_missing":
+            state.update(
+                {
+                    "status": "blocked",
+                    "route_status": "blocked",
+                    "blocked_reason": "post_reentry_review_response_missing",
+                    "route_decision": "await_review_response",
+                    "next_action": "provide_post_reentry_review_response",
+                    "manual_review_required": False,
+                    "summary": summary or "Post-reentry review response file is missing.",
+                }
+            )
+        elif blocked_reason == "post_reentry_review_response_invalid_json":
+            state.update(
+                {
+                    "status": "blocked",
+                    "route_status": "blocked",
+                    "blocked_reason": "post_reentry_review_response_invalid_json",
+                    "route_decision": "await_valid_review_response",
+                    "next_action": "provide_valid_post_reentry_review_response",
+                    "manual_review_required": False,
+                    "summary": summary or "Post-reentry review response JSON is invalid.",
+                }
+            )
+        elif blocked_reason == "unsupported_post_reentry_review_decision":
+            state.update(
+                {
+                    "status": "blocked",
+                    "route_status": "blocked",
+                    "blocked_reason": "unsupported_post_reentry_review_decision",
+                    "route_decision": "manual_review_required",
+                    "next_action": "manual_review_required",
+                    "manual_review_required": True,
+                    "summary": summary or "Post-reentry review decision is unsupported.",
+                }
+            )
+        elif blocked_reason == "post_reentry_targeted_fix_prompt_missing":
+            state.update(
+                {
+                    "status": "blocked",
+                    "route_status": "blocked",
+                    "blocked_reason": "post_reentry_targeted_fix_prompt_missing",
+                    "route_decision": "targeted_fix_blocked",
+                    "next_action": "provide_post_reentry_targeted_fix_prompt",
+                    "manual_review_required": False,
+                    "targeted_fix_required": True,
+                    "summary": summary or "Targeted-fix decision requires non-empty prompt.",
+                }
+            )
+    elif assimilation_status == "assimilated":
+        if normalized_decision == "approve":
+            state.update(
+                {
+                    "status": "ready",
+                    "route_status": "ready",
+                    "blocked_reason": "none",
+                    "route_decision": "approve",
+                    "next_action": "prepare_post_reentry_approve_boundary",
+                    "manual_review_required": False,
+                    "targeted_fix_required": False,
+                    "approve_allowed": True,
+                    "reject_allowed": False,
+                    "no_action_allowed": False,
+                    "targeted_fix_prompt_present": False,
+                    "summary": summary or "Post-reentry review approved.",
+                }
+            )
+        elif normalized_decision == "reject":
+            state.update(
+                {
+                    "status": "ready",
+                    "route_status": "ready",
+                    "blocked_reason": "none",
+                    "route_decision": "reject",
+                    "next_action": "prepare_post_reentry_reject_boundary",
+                    "manual_review_required": False,
+                    "targeted_fix_required": False,
+                    "approve_allowed": False,
+                    "reject_allowed": True,
+                    "no_action_allowed": False,
+                    "targeted_fix_prompt_present": False,
+                    "summary": summary or "Post-reentry review rejected.",
+                }
+            )
+        elif normalized_decision == "targeted_fix":
+            state.update(
+                {
+                    "status": "ready",
+                    "route_status": "ready",
+                    "blocked_reason": "none",
+                    "route_decision": "targeted_fix",
+                    "next_action": "prepare_post_reentry_targeted_fix_prompt",
+                    "manual_review_required": False,
+                    "targeted_fix_required": True,
+                    "approve_allowed": False,
+                    "reject_allowed": False,
+                    "no_action_allowed": False,
+                    "targeted_fix_prompt_present": targeted_fix_prompt_present,
+                    "summary": summary or "Post-reentry follow-up targeted fix requested.",
+                }
+            )
+        elif normalized_decision == "no_action":
+            state.update(
+                {
+                    "status": "ready",
+                    "route_status": "ready",
+                    "blocked_reason": "none",
+                    "route_decision": "no_action",
+                    "next_action": "complete_post_reentry_no_action",
+                    "manual_review_required": False,
+                    "targeted_fix_required": False,
+                    "approve_allowed": False,
+                    "reject_allowed": False,
+                    "no_action_allowed": True,
+                    "targeted_fix_prompt_present": False,
+                    "summary": summary or "Post-reentry review indicates no action.",
+                }
+            )
+    try:
+        Path(route_decision_path).parent.mkdir(parents=True, exist_ok=True)
+        _write_json(Path(route_decision_path), state)
+    except OSError:
+        pass
+    return state
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -7107,6 +7454,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     )
     targeted_fix_post_reentry_review_handoff_path = (
         one_cycle_controller_dir / "targeted_fix_post_reentry_review_handoff.json"
+    )
+    targeted_fix_post_reentry_review_response_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_review_response.json"
+    )
+    targeted_fix_post_reentry_review_assimilation_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_review_assimilation.json"
+    )
+    targeted_fix_post_reentry_route_decision_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_route_decision.json"
     )
     approve_commit_tag_boundary_metadata_path = (
         one_cycle_controller_dir / "approve_commit_tag_boundary.json"
@@ -7185,6 +7541,14 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_post_reentry_diff_changed_file_count = 0
     targeted_fix_post_reentry_review_handoff_status = "not_applicable"
     targeted_fix_post_reentry_review_required = False
+    targeted_fix_post_reentry_review_assimilation_status = "not_applicable"
+    targeted_fix_post_reentry_review_assimilation_blocked_reason = "review_handoff_not_ready"
+    targeted_fix_post_reentry_review_decision = "none"
+    targeted_fix_post_reentry_route_status = "blocked"
+    targeted_fix_post_reentry_route_decision = "manual_review_required"
+    targeted_fix_post_reentry_next_action = "manual_review_required"
+    targeted_fix_post_reentry_manual_review_required = True
+    targeted_fix_post_reentry_targeted_fix_required = False
     approve_commit_tag_boundary_status = "not_applicable"
     approve_commit_tag_boundary_decision = "none"
     approve_commit_tag_boundary_reason = "route_not_approve"
@@ -7299,6 +7663,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_targeted_fix_post_reentry_review_handoff_json": str(
             targeted_fix_post_reentry_review_handoff_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_review_response_json": str(
+            targeted_fix_post_reentry_review_response_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_review_assimilation_json": str(
+            targeted_fix_post_reentry_review_assimilation_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_route_decision_json": str(
+            targeted_fix_post_reentry_route_decision_path
         ),
         "one_cycle_controller_approve_commit_tag_boundary_json": str(
             approve_commit_tag_boundary_metadata_path
@@ -7734,6 +8107,52 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             targeted_fix_post_reentry_review_required,
         )
     )
+    targeted_fix_post_reentry_review_assimilation_state = (
+        _build_targeted_fix_post_reentry_review_assimilation_state(
+            review_handoff_state=targeted_fix_post_reentry_review_handoff_state
+        )
+    )
+    targeted_fix_post_reentry_route_decision_state = (
+        _build_targeted_fix_post_reentry_route_decision_state(
+            review_assimilation_state=targeted_fix_post_reentry_review_assimilation_state
+        )
+    )
+    targeted_fix_post_reentry_review_assimilation_status = _normalize_text(
+        targeted_fix_post_reentry_review_assimilation_state.get("assimilation_status"),
+        default=targeted_fix_post_reentry_review_assimilation_status,
+    )
+    targeted_fix_post_reentry_review_assimilation_blocked_reason = _normalize_text(
+        targeted_fix_post_reentry_review_assimilation_state.get("blocked_reason"),
+        default=targeted_fix_post_reentry_review_assimilation_blocked_reason,
+    )
+    targeted_fix_post_reentry_review_decision = _normalize_text(
+        targeted_fix_post_reentry_review_assimilation_state.get("normalized_decision"),
+        default=targeted_fix_post_reentry_review_decision,
+    )
+    targeted_fix_post_reentry_route_status = _normalize_text(
+        targeted_fix_post_reentry_route_decision_state.get("route_status"),
+        default=targeted_fix_post_reentry_route_status,
+    )
+    targeted_fix_post_reentry_route_decision = _normalize_text(
+        targeted_fix_post_reentry_route_decision_state.get("route_decision"),
+        default=targeted_fix_post_reentry_route_decision,
+    )
+    targeted_fix_post_reentry_next_action = _normalize_text(
+        targeted_fix_post_reentry_route_decision_state.get("next_action"),
+        default=targeted_fix_post_reentry_next_action,
+    )
+    targeted_fix_post_reentry_manual_review_required = bool(
+        targeted_fix_post_reentry_route_decision_state.get(
+            "manual_review_required",
+            targeted_fix_post_reentry_manual_review_required,
+        )
+    )
+    targeted_fix_post_reentry_targeted_fix_required = bool(
+        targeted_fix_post_reentry_route_decision_state.get(
+            "targeted_fix_required",
+            targeted_fix_post_reentry_targeted_fix_required,
+        )
+    )
     approve_commit_tag_boundary_state = _build_approve_commit_tag_boundary_state(
         review_route_status=review_route_status,
         review_route_decision=review_route_decision,
@@ -7955,6 +8374,35 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "targeted_fix_post_reentry_review_required": (
             targeted_fix_post_reentry_review_required
         ),
+        "targeted_fix_post_reentry_review_assimilation_status": (
+            targeted_fix_post_reentry_review_assimilation_status
+        ),
+        "targeted_fix_post_reentry_review_assimilation_blocked_reason": (
+            targeted_fix_post_reentry_review_assimilation_blocked_reason
+        ),
+        "targeted_fix_post_reentry_review_decision": (
+            targeted_fix_post_reentry_review_decision
+        ),
+        "targeted_fix_post_reentry_route_status": targeted_fix_post_reentry_route_status,
+        "targeted_fix_post_reentry_route_decision": (
+            targeted_fix_post_reentry_route_decision
+        ),
+        "targeted_fix_post_reentry_next_action": targeted_fix_post_reentry_next_action,
+        "targeted_fix_post_reentry_manual_review_required": (
+            targeted_fix_post_reentry_manual_review_required
+        ),
+        "targeted_fix_post_reentry_targeted_fix_required": (
+            targeted_fix_post_reentry_targeted_fix_required
+        ),
+        "targeted_fix_post_reentry_review_response_path": str(
+            targeted_fix_post_reentry_review_response_path
+        ),
+        "targeted_fix_post_reentry_review_assimilation_path": str(
+            targeted_fix_post_reentry_review_assimilation_path
+        ),
+        "targeted_fix_post_reentry_route_decision_path": str(
+            targeted_fix_post_reentry_route_decision_path
+        ),
         "targeted_fix_post_reentry_diff_capture_path": str(
             targeted_fix_post_reentry_diff_capture_path
         ),
@@ -8153,6 +8601,38 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- Targeted-fix post-reentry review required: "
             f"`{str(targeted_fix_post_reentry_review_required).lower()}`"
         ),
+        (
+            "- Targeted-fix post-reentry review assimilation status: "
+            f"`{targeted_fix_post_reentry_review_assimilation_status}`"
+        ),
+        (
+            "- Targeted-fix post-reentry review assimilation blocked reason: "
+            f"`{targeted_fix_post_reentry_review_assimilation_blocked_reason}`"
+        ),
+        (
+            "- Targeted-fix post-reentry review decision: "
+            f"`{targeted_fix_post_reentry_review_decision}`"
+        ),
+        (
+            "- Targeted-fix post-reentry route status: "
+            f"`{targeted_fix_post_reentry_route_status}`"
+        ),
+        (
+            "- Targeted-fix post-reentry route decision: "
+            f"`{targeted_fix_post_reentry_route_decision}`"
+        ),
+        (
+            "- Targeted-fix post-reentry next action: "
+            f"`{targeted_fix_post_reentry_next_action}`"
+        ),
+        (
+            "- Targeted-fix post-reentry manual review required: "
+            f"`{str(targeted_fix_post_reentry_manual_review_required).lower()}`"
+        ),
+        (
+            "- Targeted-fix post-reentry targeted-fix required: "
+            f"`{str(targeted_fix_post_reentry_targeted_fix_required).lower()}`"
+        ),
         f"- Approve boundary status: `{approve_commit_tag_boundary_status}`",
         f"- Approve boundary decision: `{approve_commit_tag_boundary_decision}`",
         f"- Approve boundary reason: `{approve_commit_tag_boundary_reason}`",
@@ -8279,6 +8759,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- targeted_fix_post_reentry_review_handoff.json: "
             f"`{targeted_fix_post_reentry_review_handoff_path}`"
         ),
+        (
+            "- targeted_fix_post_reentry_review_response.json: "
+            f"`{targeted_fix_post_reentry_review_response_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_review_assimilation.json: "
+            f"`{targeted_fix_post_reentry_review_assimilation_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_route_decision.json: "
+            f"`{targeted_fix_post_reentry_route_decision_path}`"
+        ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
@@ -8379,6 +8871,16 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_post_reentry_diff_changed_file_count = 0
         targeted_fix_post_reentry_review_handoff_status = "not_applicable"
         targeted_fix_post_reentry_review_required = False
+        targeted_fix_post_reentry_review_assimilation_status = "not_applicable"
+        targeted_fix_post_reentry_review_assimilation_blocked_reason = (
+            "review_handoff_not_ready"
+        )
+        targeted_fix_post_reentry_review_decision = "none"
+        targeted_fix_post_reentry_route_status = "blocked"
+        targeted_fix_post_reentry_route_decision = "manual_review_required"
+        targeted_fix_post_reentry_next_action = "manual_review_required"
+        targeted_fix_post_reentry_manual_review_required = True
+        targeted_fix_post_reentry_targeted_fix_required = False
         approve_commit_tag_boundary_status = "not_applicable"
         approve_commit_tag_boundary_decision = "none"
         approve_commit_tag_boundary_reason = "route_not_approve"
@@ -8599,6 +9101,39 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_review_required": (
             targeted_fix_post_reentry_review_required
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_review_assimilation_status": (
+            targeted_fix_post_reentry_review_assimilation_status
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_review_assimilation_blocked_reason": (
+            targeted_fix_post_reentry_review_assimilation_blocked_reason
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_review_decision": (
+            targeted_fix_post_reentry_review_decision
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_route_status": (
+            targeted_fix_post_reentry_route_status
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_route_decision": (
+            targeted_fix_post_reentry_route_decision
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_next_action": (
+            targeted_fix_post_reentry_next_action
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_manual_review_required": (
+            targeted_fix_post_reentry_manual_review_required
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_targeted_fix_required": (
+            targeted_fix_post_reentry_targeted_fix_required
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_review_response_path": str(
+            targeted_fix_post_reentry_review_response_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_review_assimilation_path": str(
+            targeted_fix_post_reentry_review_assimilation_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_route_decision_path": str(
+            targeted_fix_post_reentry_route_decision_path
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_path": str(
             targeted_fix_post_reentry_review_handoff_path
