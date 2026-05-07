@@ -3585,6 +3585,16 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_targeted_fix_reentry_execution_prompt_path",
     "project_browser_autonomous_targeted_fix_reentry_execution_receipt_path",
     "project_browser_autonomous_targeted_fix_reentry_execution_should_execute_codex",
+    "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_status",
+    "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_attempted",
+    "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_blocked_reason",
+    "project_browser_autonomous_targeted_fix_post_reentry_diff_has_diff",
+    "project_browser_autonomous_targeted_fix_post_reentry_diff_changed_file_count",
+    "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_status",
+    "project_browser_autonomous_targeted_fix_post_reentry_review_required",
+    "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_diff_patch_path",
     "project_browser_autonomous_approve_commit_tag_boundary_status",
     "project_browser_autonomous_approve_commit_tag_boundary_decision",
     "project_browser_autonomous_approve_commit_tag_boundary_reason",
@@ -3716,6 +3726,21 @@ _TARGETED_FIX_REENTRY_EXECUTION_STDOUT_PATH = (
 )
 _TARGETED_FIX_REENTRY_EXECUTION_STDERR_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_reentry_execution_stderr.txt"
+)
+_TARGETED_FIX_POST_REENTRY_DIFF_CAPTURE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_diff_capture.json"
+)
+_TARGETED_FIX_POST_REENTRY_DIFF_PATCH_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_diff.patch"
+)
+_TARGETED_FIX_POST_REENTRY_DIFF_STAT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_diff_stat.txt"
+)
+_TARGETED_FIX_POST_REENTRY_DIFF_NAME_STATUS_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_diff_name_status.txt"
+)
+_TARGETED_FIX_POST_REENTRY_REVIEW_HANDOFF_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_review_handoff.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
@@ -6737,6 +6762,291 @@ def _run_targeted_fix_reentry_execution_if_enabled(
     return _write_receipt()
 
 
+def _capture_targeted_fix_post_reentry_diff_state(
+    *,
+    targeted_fix_reentry_execution_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    reentry_state = (
+        dict(targeted_fix_reentry_execution_state)
+        if isinstance(targeted_fix_reentry_execution_state, Mapping)
+        else {}
+    )
+    repo_path = _APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH
+    reentry_receipt_path = _normalize_text(
+        reentry_state.get("execution_receipt_path"),
+        default=_TARGETED_FIX_REENTRY_EXECUTION_RECEIPT_PATH,
+    )
+    diff_capture_path = _TARGETED_FIX_POST_REENTRY_DIFF_CAPTURE_PATH
+    diff_patch_path = _TARGETED_FIX_POST_REENTRY_DIFF_PATCH_PATH
+    diff_stat_path = _TARGETED_FIX_POST_REENTRY_DIFF_STAT_PATH
+    diff_name_status_path = _TARGETED_FIX_POST_REENTRY_DIFF_NAME_STATUS_PATH
+    git_commands = {
+        "diff_name_status": ["git", "diff", "--name-status"],
+        "diff_stat": ["git", "diff", "--stat"],
+        "diff_patch": ["git", "diff"],
+        "cached_diff_name_status": ["git", "diff", "--cached", "--name-status"],
+        "cached_diff_stat": ["git", "diff", "--cached", "--stat"],
+        "cached_diff_patch": ["git", "diff", "--cached"],
+    }
+    state: dict[str, Any] = {
+        "status": "not_applicable",
+        "capture_status": "not_applicable",
+        "blocked_reason": "reentry_not_completed",
+        "attempted": False,
+        "source": "targeted_fix_reentry_execution_state",
+        "repo_path": repo_path,
+        "reentry_receipt_path": reentry_receipt_path,
+        "diff_capture_path": diff_capture_path,
+        "diff_patch_path": diff_patch_path,
+        "diff_stat_path": diff_stat_path,
+        "diff_name_status_path": diff_name_status_path,
+        "changed_files": [],
+        "changed_file_count": 0,
+        "has_diff": False,
+        "has_staged_diff": False,
+        "git_commands": {
+            command_key: list(command)
+            for command_key, command in git_commands.items()
+        },
+        "command_exit_codes": {},
+    }
+    is_completed_reentry = (
+        _normalize_text(reentry_state.get("execution_gate_status"), default="") == "executed"
+        and _normalize_text(reentry_state.get("execution_status"), default="") == "completed"
+        and bool(reentry_state.get("execution_attempted", False))
+        and _as_int(reentry_state.get("execution_exit_code"), default=-1) == 0
+        and _normalize_text(reentry_state.get("execution_blocked_reason"), default="") == "none"
+    )
+    if not is_completed_reentry:
+        try:
+            Path(diff_capture_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(diff_patch_path).write_text("", encoding="utf-8")
+            Path(diff_stat_path).write_text("", encoding="utf-8")
+            Path(diff_name_status_path).write_text("", encoding="utf-8")
+            _write_json(Path(diff_capture_path), state)
+        except OSError:
+            pass
+        return state
+
+    command_outputs: dict[str, str] = {}
+    command_exit_codes: dict[str, int] = {}
+    for command_key, command in git_commands.items():
+        completed = subprocess.run(
+            list(command),
+            shell=False,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        command_exit_codes[command_key] = int(completed.returncode)
+        command_outputs[command_key] = completed.stdout or ""
+    state["attempted"] = True
+    state["command_exit_codes"] = dict(command_exit_codes)
+    state["git_commands"] = {
+        command_key: list(command) for command_key, command in git_commands.items()
+    }
+    if any(exit_code != 0 for exit_code in command_exit_codes.values()):
+        state.update(
+            {
+                "status": "blocked",
+                "capture_status": "blocked",
+                "blocked_reason": "diff_capture_failed",
+            }
+        )
+        try:
+            Path(diff_capture_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(diff_patch_path).write_text("", encoding="utf-8")
+            Path(diff_stat_path).write_text("", encoding="utf-8")
+            Path(diff_name_status_path).write_text("", encoding="utf-8")
+            _write_json(Path(diff_capture_path), state)
+        except OSError:
+            pass
+        return state
+
+    diff_patch_text = command_outputs.get("diff_patch", "")
+    cached_diff_patch_text = command_outputs.get("cached_diff_patch", "")
+    diff_stat_text = (command_outputs.get("diff_stat", "") or "").strip()
+    cached_diff_stat_text = (command_outputs.get("cached_diff_stat", "") or "").strip()
+    diff_name_status_text = (command_outputs.get("diff_name_status", "") or "").strip()
+    cached_diff_name_status_text = (
+        command_outputs.get("cached_diff_name_status", "") or ""
+    ).strip()
+
+    combined_patch_sections = [
+        "# git diff",
+        diff_patch_text.rstrip("\n"),
+        "",
+        "# git diff --cached",
+        cached_diff_patch_text.rstrip("\n"),
+        "",
+    ]
+    combined_stat_sections = [
+        "# git diff --stat",
+        diff_stat_text or "(no unstaged tracked diff)",
+        "",
+        "# git diff --cached --stat",
+        cached_diff_stat_text or "(no staged tracked diff)",
+        "",
+    ]
+    combined_name_status_sections = [
+        "# git diff --name-status",
+        diff_name_status_text or "(no unstaged tracked diff)",
+        "",
+        "# git diff --cached --name-status",
+        cached_diff_name_status_text or "(no staged tracked diff)",
+        "",
+    ]
+
+    changed_files: set[str] = set()
+
+    def _collect_paths(name_status_text: str) -> None:
+        for raw_line in name_status_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            parts = [segment.strip() for segment in line.split("\t") if segment.strip()]
+            if len(parts) >= 3:
+                changed_files.add(parts[-1])
+            elif len(parts) >= 2:
+                changed_files.add(parts[1])
+
+    _collect_paths(diff_name_status_text)
+    _collect_paths(cached_diff_name_status_text)
+    changed_files_list = sorted(changed_files)
+    has_unstaged_diff = bool(diff_patch_text.strip())
+    has_staged_diff = bool(cached_diff_patch_text.strip())
+    has_diff = bool(has_unstaged_diff or has_staged_diff)
+    state.update(
+        {
+            "status": "captured" if has_diff else "captured_no_diff",
+            "capture_status": "captured" if has_diff else "captured_no_diff",
+            "blocked_reason": "none",
+            "changed_files": changed_files_list,
+            "changed_file_count": len(changed_files_list),
+            "has_diff": has_diff,
+            "has_staged_diff": has_staged_diff,
+        }
+    )
+    try:
+        Path(diff_capture_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(diff_patch_path).write_text("\n".join(combined_patch_sections), encoding="utf-8")
+        Path(diff_stat_path).write_text("\n".join(combined_stat_sections), encoding="utf-8")
+        Path(diff_name_status_path).write_text(
+            "\n".join(combined_name_status_sections),
+            encoding="utf-8",
+        )
+        _write_json(Path(diff_capture_path), state)
+    except OSError:
+        state.update(
+            {
+                "status": "blocked",
+                "capture_status": "blocked",
+                "blocked_reason": "diff_capture_write_failed",
+            }
+        )
+        try:
+            _write_json(Path(diff_capture_path), state)
+        except OSError:
+            pass
+    return state
+
+
+def _build_targeted_fix_post_reentry_review_handoff_state(
+    *,
+    diff_capture_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    capture_state = dict(diff_capture_state) if isinstance(diff_capture_state, Mapping) else {}
+    review_handoff_path = _TARGETED_FIX_POST_REENTRY_REVIEW_HANDOFF_PATH
+    state: dict[str, Any] = {
+        "status": "not_applicable",
+        "handoff_status": "not_applicable",
+        "blocked_reason": "reentry_not_completed",
+        "review_required": False,
+        "review_kind": "not_applicable",
+        "source": "targeted_fix_post_reentry_diff_capture",
+        "reentry_receipt_path": _normalize_text(
+            capture_state.get("reentry_receipt_path"),
+            default=_TARGETED_FIX_REENTRY_EXECUTION_RECEIPT_PATH,
+        ),
+        "diff_capture_path": _normalize_text(
+            capture_state.get("diff_capture_path"),
+            default=_TARGETED_FIX_POST_REENTRY_DIFF_CAPTURE_PATH,
+        ),
+        "diff_patch_path": _normalize_text(
+            capture_state.get("diff_patch_path"),
+            default=_TARGETED_FIX_POST_REENTRY_DIFF_PATCH_PATH,
+        ),
+        "diff_stat_path": _normalize_text(
+            capture_state.get("diff_stat_path"),
+            default=_TARGETED_FIX_POST_REENTRY_DIFF_STAT_PATH,
+        ),
+        "diff_name_status_path": _normalize_text(
+            capture_state.get("diff_name_status_path"),
+            default=_TARGETED_FIX_POST_REENTRY_DIFF_NAME_STATUS_PATH,
+        ),
+        "review_handoff_path": review_handoff_path,
+        "changed_files": [],
+        "changed_file_count": 0,
+        "has_diff": False,
+        "summary": "Post-reentry review handoff not applicable because reentry did not complete.",
+    }
+    capture_status = _normalize_text(capture_state.get("capture_status"), default="not_applicable")
+    capture_blocked_reason = _normalize_text(
+        capture_state.get("blocked_reason"),
+        default="reentry_not_completed",
+    )
+    if capture_status == "captured":
+        state.update(
+            {
+                "status": "ready",
+                "handoff_status": "ready",
+                "blocked_reason": "none",
+                "review_required": True,
+                "review_kind": "targeted_fix_post_reentry_review",
+                "changed_files": _normalize_string_list(capture_state.get("changed_files")),
+                "changed_file_count": _as_non_negative_int(
+                    capture_state.get("changed_file_count"),
+                    default=0,
+                ),
+                "has_diff": bool(capture_state.get("has_diff", False)),
+                "summary": "Post-reentry diff captured; targeted fix review is required.",
+            }
+        )
+    elif capture_status == "captured_no_diff":
+        state.update(
+            {
+                "status": "ready_no_diff",
+                "handoff_status": "ready_no_diff",
+                "blocked_reason": "none",
+                "review_required": False,
+                "review_kind": "targeted_fix_post_reentry_no_diff_review",
+                "changed_files": [],
+                "changed_file_count": 0,
+                "has_diff": False,
+                "summary": "Post-reentry completed with no tracked/staged diff.",
+            }
+        )
+    elif capture_status == "blocked":
+        state.update(
+            {
+                "status": "blocked",
+                "handoff_status": "blocked",
+                "blocked_reason": capture_blocked_reason or "diff_capture_failed",
+                "review_required": False,
+                "review_kind": "targeted_fix_post_reentry_review_blocked",
+                "summary": "Post-reentry diff capture was blocked.",
+            }
+        )
+
+    try:
+        Path(review_handoff_path).parent.mkdir(parents=True, exist_ok=True)
+        _write_json(Path(review_handoff_path), state)
+    except OSError:
+        pass
+    return state
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -6782,6 +7092,21 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_codex_prompt_path = one_cycle_controller_dir / "targeted_fix_codex_prompt.md"
     targeted_fix_reentry_execution_receipt_path = (
         one_cycle_controller_dir / "targeted_fix_reentry_execution_receipt.json"
+    )
+    targeted_fix_post_reentry_diff_capture_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_diff_capture.json"
+    )
+    targeted_fix_post_reentry_diff_patch_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_diff.patch"
+    )
+    targeted_fix_post_reentry_diff_stat_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_diff_stat.txt"
+    )
+    targeted_fix_post_reentry_diff_name_status_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_diff_name_status.txt"
+    )
+    targeted_fix_post_reentry_review_handoff_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_review_handoff.json"
     )
     approve_commit_tag_boundary_metadata_path = (
         one_cycle_controller_dir / "approve_commit_tag_boundary.json"
@@ -6853,6 +7178,13 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_reentry_execution_blocked_reason = "route_not_targeted_fix"
     targeted_fix_reentry_execution_prompt_path = str(targeted_fix_codex_prompt_path)
     targeted_fix_reentry_execution_should_execute_codex = False
+    targeted_fix_post_reentry_diff_capture_status = "not_applicable"
+    targeted_fix_post_reentry_diff_capture_attempted = False
+    targeted_fix_post_reentry_diff_capture_blocked_reason = "reentry_not_completed"
+    targeted_fix_post_reentry_diff_has_diff = False
+    targeted_fix_post_reentry_diff_changed_file_count = 0
+    targeted_fix_post_reentry_review_handoff_status = "not_applicable"
+    targeted_fix_post_reentry_review_required = False
     approve_commit_tag_boundary_status = "not_applicable"
     approve_commit_tag_boundary_decision = "none"
     approve_commit_tag_boundary_reason = "route_not_approve"
@@ -6952,6 +7284,21 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_targeted_fix_codex_prompt_md": str(targeted_fix_codex_prompt_path),
         "one_cycle_controller_targeted_fix_reentry_execution_receipt_json": str(
             targeted_fix_reentry_execution_receipt_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_diff_capture_json": str(
+            targeted_fix_post_reentry_diff_capture_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_diff_patch": str(
+            targeted_fix_post_reentry_diff_patch_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_diff_stat_txt": str(
+            targeted_fix_post_reentry_diff_stat_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_diff_name_status_txt": str(
+            targeted_fix_post_reentry_diff_name_status_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_review_handoff_json": str(
+            targeted_fix_post_reentry_review_handoff_path
         ),
         "one_cycle_controller_approve_commit_tag_boundary_json": str(
             approve_commit_tag_boundary_metadata_path
@@ -7299,6 +7646,16 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         execution_confirmed=targeted_fix_reentry_execution_confirmed,
         execution_receipt_path=targeted_fix_reentry_execution_receipt_path,
     )
+    targeted_fix_post_reentry_diff_capture_state = (
+        _capture_targeted_fix_post_reentry_diff_state(
+            targeted_fix_reentry_execution_state=targeted_fix_reentry_execution_state
+        )
+    )
+    targeted_fix_post_reentry_review_handoff_state = (
+        _build_targeted_fix_post_reentry_review_handoff_state(
+            diff_capture_state=targeted_fix_post_reentry_diff_capture_state
+        )
+    )
     targeted_fix_reentry_execution_enabled = bool(
         targeted_fix_reentry_execution_state.get(
             "execution_enabled",
@@ -7341,6 +7698,40 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_reentry_execution_state.get(
             "execution_should_execute_codex",
             targeted_fix_reentry_execution_should_execute_codex,
+        )
+    )
+    targeted_fix_post_reentry_diff_capture_status = _normalize_text(
+        targeted_fix_post_reentry_diff_capture_state.get("capture_status"),
+        default=targeted_fix_post_reentry_diff_capture_status,
+    )
+    targeted_fix_post_reentry_diff_capture_attempted = bool(
+        targeted_fix_post_reentry_diff_capture_state.get(
+            "attempted",
+            targeted_fix_post_reentry_diff_capture_attempted,
+        )
+    )
+    targeted_fix_post_reentry_diff_capture_blocked_reason = _normalize_text(
+        targeted_fix_post_reentry_diff_capture_state.get("blocked_reason"),
+        default=targeted_fix_post_reentry_diff_capture_blocked_reason,
+    )
+    targeted_fix_post_reentry_diff_has_diff = bool(
+        targeted_fix_post_reentry_diff_capture_state.get(
+            "has_diff",
+            targeted_fix_post_reentry_diff_has_diff,
+        )
+    )
+    targeted_fix_post_reentry_diff_changed_file_count = _as_non_negative_int(
+        targeted_fix_post_reentry_diff_capture_state.get("changed_file_count"),
+        default=targeted_fix_post_reentry_diff_changed_file_count,
+    )
+    targeted_fix_post_reentry_review_handoff_status = _normalize_text(
+        targeted_fix_post_reentry_review_handoff_state.get("handoff_status"),
+        default=targeted_fix_post_reentry_review_handoff_status,
+    )
+    targeted_fix_post_reentry_review_required = bool(
+        targeted_fix_post_reentry_review_handoff_state.get(
+            "review_required",
+            targeted_fix_post_reentry_review_required,
         )
     )
     approve_commit_tag_boundary_state = _build_approve_commit_tag_boundary_state(
@@ -7545,6 +7936,40 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "targeted_fix_reentry_execution_should_execute_codex": (
             targeted_fix_reentry_execution_should_execute_codex
         ),
+        "targeted_fix_post_reentry_diff_capture_status": (
+            targeted_fix_post_reentry_diff_capture_status
+        ),
+        "targeted_fix_post_reentry_diff_capture_attempted": (
+            targeted_fix_post_reentry_diff_capture_attempted
+        ),
+        "targeted_fix_post_reentry_diff_capture_blocked_reason": (
+            targeted_fix_post_reentry_diff_capture_blocked_reason
+        ),
+        "targeted_fix_post_reentry_diff_has_diff": targeted_fix_post_reentry_diff_has_diff,
+        "targeted_fix_post_reentry_diff_changed_file_count": (
+            targeted_fix_post_reentry_diff_changed_file_count
+        ),
+        "targeted_fix_post_reentry_review_handoff_status": (
+            targeted_fix_post_reentry_review_handoff_status
+        ),
+        "targeted_fix_post_reentry_review_required": (
+            targeted_fix_post_reentry_review_required
+        ),
+        "targeted_fix_post_reentry_diff_capture_path": str(
+            targeted_fix_post_reentry_diff_capture_path
+        ),
+        "targeted_fix_post_reentry_diff_patch_path": str(
+            targeted_fix_post_reentry_diff_patch_path
+        ),
+        "targeted_fix_post_reentry_diff_stat_path": str(
+            targeted_fix_post_reentry_diff_stat_path
+        ),
+        "targeted_fix_post_reentry_diff_name_status_path": str(
+            targeted_fix_post_reentry_diff_name_status_path
+        ),
+        "targeted_fix_post_reentry_review_handoff_path": str(
+            targeted_fix_post_reentry_review_handoff_path
+        ),
         "approve_commit_tag_boundary_status": approve_commit_tag_boundary_status,
         "approve_commit_tag_boundary_decision": approve_commit_tag_boundary_decision,
         "approve_commit_tag_boundary_reason": approve_commit_tag_boundary_reason,
@@ -7700,6 +8125,34 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- Targeted-fix reentry execution should execute codex: "
             f"`{str(targeted_fix_reentry_execution_should_execute_codex).lower()}`"
         ),
+        (
+            "- Targeted-fix post-reentry diff capture status: "
+            f"`{targeted_fix_post_reentry_diff_capture_status}`"
+        ),
+        (
+            "- Targeted-fix post-reentry diff capture attempted: "
+            f"`{str(targeted_fix_post_reentry_diff_capture_attempted).lower()}`"
+        ),
+        (
+            "- Targeted-fix post-reentry diff capture blocked reason: "
+            f"`{targeted_fix_post_reentry_diff_capture_blocked_reason}`"
+        ),
+        (
+            "- Targeted-fix post-reentry diff has diff: "
+            f"`{str(targeted_fix_post_reentry_diff_has_diff).lower()}`"
+        ),
+        (
+            "- Targeted-fix post-reentry changed file count: "
+            f"`{targeted_fix_post_reentry_diff_changed_file_count}`"
+        ),
+        (
+            "- Targeted-fix post-reentry review handoff status: "
+            f"`{targeted_fix_post_reentry_review_handoff_status}`"
+        ),
+        (
+            "- Targeted-fix post-reentry review required: "
+            f"`{str(targeted_fix_post_reentry_review_required).lower()}`"
+        ),
         f"- Approve boundary status: `{approve_commit_tag_boundary_status}`",
         f"- Approve boundary decision: `{approve_commit_tag_boundary_decision}`",
         f"- Approve boundary reason: `{approve_commit_tag_boundary_reason}`",
@@ -7806,6 +8259,26 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- targeted_fix_reentry_execution_receipt.json: "
             f"`{targeted_fix_reentry_execution_receipt_path}`"
         ),
+        (
+            "- targeted_fix_post_reentry_diff_capture.json: "
+            f"`{targeted_fix_post_reentry_diff_capture_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_diff.patch: "
+            f"`{targeted_fix_post_reentry_diff_patch_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_diff_stat.txt: "
+            f"`{targeted_fix_post_reentry_diff_stat_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_diff_name_status.txt: "
+            f"`{targeted_fix_post_reentry_diff_name_status_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_review_handoff.json: "
+            f"`{targeted_fix_post_reentry_review_handoff_path}`"
+        ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
@@ -7899,6 +8372,13 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             )
             targeted_fix_reentry_execution_should_execute_codex = False
         targeted_fix_reentry_execution_prompt_path = str(targeted_fix_codex_prompt_path)
+        targeted_fix_post_reentry_diff_capture_status = "not_applicable"
+        targeted_fix_post_reentry_diff_capture_attempted = False
+        targeted_fix_post_reentry_diff_capture_blocked_reason = "reentry_not_completed"
+        targeted_fix_post_reentry_diff_has_diff = False
+        targeted_fix_post_reentry_diff_changed_file_count = 0
+        targeted_fix_post_reentry_review_handoff_status = "not_applicable"
+        targeted_fix_post_reentry_review_required = False
         approve_commit_tag_boundary_status = "not_applicable"
         approve_commit_tag_boundary_decision = "none"
         approve_commit_tag_boundary_reason = "route_not_approve"
@@ -8098,6 +8578,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_targeted_fix_reentry_execution_should_execute_codex": (
             targeted_fix_reentry_execution_should_execute_codex
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_status": (
+            targeted_fix_post_reentry_diff_capture_status
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_attempted": (
+            targeted_fix_post_reentry_diff_capture_attempted
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_blocked_reason": (
+            targeted_fix_post_reentry_diff_capture_blocked_reason
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_diff_has_diff": (
+            targeted_fix_post_reentry_diff_has_diff
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_diff_changed_file_count": (
+            targeted_fix_post_reentry_diff_changed_file_count
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_status": (
+            targeted_fix_post_reentry_review_handoff_status
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_review_required": (
+            targeted_fix_post_reentry_review_required
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_path": str(
+            targeted_fix_post_reentry_review_handoff_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_path": str(
+            targeted_fix_post_reentry_diff_capture_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_diff_patch_path": str(
+            targeted_fix_post_reentry_diff_patch_path
         ),
         "project_browser_autonomous_approve_commit_tag_boundary_status": (
             approve_commit_tag_boundary_status
