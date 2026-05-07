@@ -3552,6 +3552,16 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_targeted_fix_prompt_status",
     "project_browser_autonomous_targeted_fix_prompt_text",
     "project_browser_autonomous_targeted_fix_prompt_path",
+    "project_browser_autonomous_review_route_status",
+    "project_browser_autonomous_review_route_decision",
+    "project_browser_autonomous_review_route_reason",
+    "project_browser_autonomous_review_route_next_action",
+    "project_browser_autonomous_review_route_blocked_reason",
+    "project_browser_autonomous_review_route_source",
+    "project_browser_autonomous_review_route_targeted_fix_prompt_path",
+    "project_browser_autonomous_review_route_should_prepare_commit",
+    "project_browser_autonomous_review_route_should_prepare_targeted_fix",
+    "project_browser_autonomous_review_route_should_prepare_reject",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -5283,6 +5293,147 @@ def _build_review_response_assimilation_state(
     }
 
 
+def _build_review_route_decision_state(
+    *,
+    review_response_status: str,
+    review_response_decision: str,
+    review_response_next_action: str,
+    targeted_fix_prompt_status: str,
+    targeted_fix_prompt_path: str,
+    review_handoff_decision_status: str,
+    tracked_diff_status: str,
+    review_handoff_decision_next_action: str,
+) -> dict[str, Any]:
+    source = (
+        "review_response_status="
+        f"{review_response_status};"
+        "review_response_decision="
+        f"{review_response_decision};"
+        "review_response_next_action="
+        f"{review_response_next_action};"
+        "targeted_fix_prompt_status="
+        f"{targeted_fix_prompt_status};"
+        "targeted_fix_prompt_path="
+        f"{targeted_fix_prompt_path};"
+        "review_handoff_decision_status="
+        f"{review_handoff_decision_status};"
+        "tracked_diff_status="
+        f"{tracked_diff_status};"
+        "review_handoff_decision_next_action="
+        f"{review_handoff_decision_next_action}"
+    )
+    default_state: dict[str, Any] = {
+        "review_route_status": "insufficient_truth",
+        "review_route_decision": "insufficient_truth",
+        "review_route_reason": "insufficient_truth",
+        "review_route_next_action": "insufficient_truth",
+        "review_route_blocked_reason": "insufficient_truth",
+        "review_route_source": source,
+        "review_route_targeted_fix_prompt_path": "",
+        "review_route_should_prepare_commit": False,
+        "review_route_should_prepare_targeted_fix": False,
+        "review_route_should_prepare_reject": False,
+    }
+
+    if review_response_status == "missing":
+        return {
+            "review_route_status": "waiting_for_review_response",
+            "review_route_decision": "none",
+            "review_route_reason": "review_response_missing",
+            "review_route_next_action": "wait_for_chatgpt_diff_review_response",
+            "review_route_blocked_reason": "review_response_missing",
+            "review_route_source": source,
+            "review_route_targeted_fix_prompt_path": "",
+            "review_route_should_prepare_commit": False,
+            "review_route_should_prepare_targeted_fix": False,
+            "review_route_should_prepare_reject": False,
+        }
+    if review_response_status == "invalid":
+        return {
+            "review_route_status": "blocked",
+            "review_route_decision": (
+                "targeted_fix" if review_response_decision == "targeted_fix" else "none"
+            ),
+            "review_route_reason": "review_response_invalid",
+            "review_route_next_action": "manual_review_required",
+            "review_route_blocked_reason": "review_response_invalid",
+            "review_route_source": source,
+            "review_route_targeted_fix_prompt_path": "",
+            "review_route_should_prepare_commit": False,
+            "review_route_should_prepare_targeted_fix": False,
+            "review_route_should_prepare_reject": False,
+        }
+    if review_response_status == "unsupported":
+        return {
+            "review_route_status": "blocked",
+            "review_route_decision": "none",
+            "review_route_reason": "review_response_unsupported",
+            "review_route_next_action": "manual_review_required",
+            "review_route_blocked_reason": "review_response_unsupported",
+            "review_route_source": source,
+            "review_route_targeted_fix_prompt_path": "",
+            "review_route_should_prepare_commit": False,
+            "review_route_should_prepare_targeted_fix": False,
+            "review_route_should_prepare_reject": False,
+        }
+    if review_response_status != "available":
+        return default_state
+    if review_response_decision == "approve":
+        return {
+            "review_route_status": "route_ready",
+            "review_route_decision": "approve",
+            "review_route_reason": "approve_review_response_available",
+            "review_route_next_action": "prepare_approve_commit_tag_boundary",
+            "review_route_blocked_reason": "none",
+            "review_route_source": source,
+            "review_route_targeted_fix_prompt_path": "",
+            "review_route_should_prepare_commit": True,
+            "review_route_should_prepare_targeted_fix": False,
+            "review_route_should_prepare_reject": False,
+        }
+    if review_response_decision == "reject":
+        return {
+            "review_route_status": "route_ready",
+            "review_route_decision": "reject",
+            "review_route_reason": "reject_review_response_available",
+            "review_route_next_action": "prepare_reject_boundary",
+            "review_route_blocked_reason": "none",
+            "review_route_source": source,
+            "review_route_targeted_fix_prompt_path": "",
+            "review_route_should_prepare_commit": False,
+            "review_route_should_prepare_targeted_fix": False,
+            "review_route_should_prepare_reject": True,
+        }
+    if review_response_decision == "targeted_fix":
+        normalized_path = _normalize_text(targeted_fix_prompt_path, default="")
+        if targeted_fix_prompt_status == "ready" and normalized_path:
+            return {
+                "review_route_status": "route_ready",
+                "review_route_decision": "targeted_fix",
+                "review_route_reason": "targeted_fix_review_response_available",
+                "review_route_next_action": "prepare_targeted_fix_prompt_boundary",
+                "review_route_blocked_reason": "none",
+                "review_route_source": source,
+                "review_route_targeted_fix_prompt_path": normalized_path,
+                "review_route_should_prepare_commit": False,
+                "review_route_should_prepare_targeted_fix": True,
+                "review_route_should_prepare_reject": False,
+            }
+        return {
+            "review_route_status": "blocked",
+            "review_route_decision": "targeted_fix",
+            "review_route_reason": "targeted_fix_prompt_not_ready",
+            "review_route_next_action": "manual_review_required",
+            "review_route_blocked_reason": "targeted_fix_prompt_not_ready",
+            "review_route_source": source,
+            "review_route_targeted_fix_prompt_path": "",
+            "review_route_should_prepare_commit": False,
+            "review_route_should_prepare_targeted_fix": False,
+            "review_route_should_prepare_reject": False,
+        }
+    return default_state
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -5352,6 +5503,16 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_prompt_status = "not_applicable"
     targeted_fix_prompt_text = ""
     targeted_fix_prompt_resolved_path = ""
+    review_route_status = "waiting_for_review_response"
+    review_route_decision = "none"
+    review_route_reason = "review_response_missing"
+    review_route_next_action = "wait_for_chatgpt_diff_review_response"
+    review_route_blocked_reason = "review_response_missing"
+    review_route_source = ""
+    review_route_targeted_fix_prompt_path = ""
+    review_route_should_prepare_commit = False
+    review_route_should_prepare_targeted_fix = False
+    review_route_should_prepare_reject = False
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -5653,6 +5814,53 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         review_response_assimilation_state.get("targeted_fix_prompt_path"),
         default=targeted_fix_prompt_resolved_path,
     )
+    review_route_decision_state = _build_review_route_decision_state(
+        review_response_status=review_response_status,
+        review_response_decision=review_response_decision,
+        review_response_next_action=review_response_next_action,
+        targeted_fix_prompt_status=targeted_fix_prompt_status,
+        targeted_fix_prompt_path=targeted_fix_prompt_resolved_path,
+        review_handoff_decision_status=review_handoff_decision_status,
+        tracked_diff_status=tracked_diff_status,
+        review_handoff_decision_next_action=review_handoff_decision_next_action,
+    )
+    review_route_status = _normalize_text(
+        review_route_decision_state.get("review_route_status"),
+        default=review_route_status,
+    )
+    review_route_decision = _normalize_text(
+        review_route_decision_state.get("review_route_decision"),
+        default=review_route_decision,
+    )
+    review_route_reason = _normalize_text(
+        review_route_decision_state.get("review_route_reason"),
+        default=review_route_reason,
+    )
+    review_route_next_action = _normalize_text(
+        review_route_decision_state.get("review_route_next_action"),
+        default=review_route_next_action,
+    )
+    review_route_blocked_reason = _normalize_text(
+        review_route_decision_state.get("review_route_blocked_reason"),
+        default=review_route_blocked_reason,
+    )
+    review_route_source = _normalize_text(
+        review_route_decision_state.get("review_route_source"),
+        default=review_route_source,
+    )
+    review_route_targeted_fix_prompt_path = _normalize_text(
+        review_route_decision_state.get("review_route_targeted_fix_prompt_path"),
+        default=review_route_targeted_fix_prompt_path,
+    )
+    review_route_should_prepare_commit = bool(
+        review_route_decision_state.get("review_route_should_prepare_commit", False)
+    )
+    review_route_should_prepare_targeted_fix = bool(
+        review_route_decision_state.get("review_route_should_prepare_targeted_fix", False)
+    )
+    review_route_should_prepare_reject = bool(
+        review_route_decision_state.get("review_route_should_prepare_reject", False)
+    )
 
     result_payload = {
         "status": status,
@@ -5683,6 +5891,16 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "targeted_fix_prompt_status": targeted_fix_prompt_status,
         "targeted_fix_prompt_text": targeted_fix_prompt_text,
         "targeted_fix_prompt_path": targeted_fix_prompt_resolved_path,
+        "review_route_status": review_route_status,
+        "review_route_decision": review_route_decision,
+        "review_route_reason": review_route_reason,
+        "review_route_next_action": review_route_next_action,
+        "review_route_blocked_reason": review_route_blocked_reason,
+        "review_route_source": review_route_source,
+        "review_route_targeted_fix_prompt_path": review_route_targeted_fix_prompt_path,
+        "review_route_should_prepare_commit": review_route_should_prepare_commit,
+        "review_route_should_prepare_targeted_fix": review_route_should_prepare_targeted_fix,
+        "review_route_should_prepare_reject": review_route_should_prepare_reject,
         "completed_result_source_path": str(completed_result_source_path),
         "completed_result_source_status": completed_result_source_status,
         "stop_reason": stop_reason,
@@ -5731,6 +5949,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- Review response next action: `{review_response_next_action}`",
         f"- Targeted fix prompt status: `{targeted_fix_prompt_status}`",
         f"- Targeted fix prompt path: `{targeted_fix_prompt_resolved_path or 'none'}`",
+        f"- Review route status: `{review_route_status}`",
+        f"- Review route decision: `{review_route_decision}`",
+        f"- Review route reason: `{review_route_reason}`",
+        f"- Review route next action: `{review_route_next_action}`",
+        f"- Review route blocked reason: `{review_route_blocked_reason}`",
+        f"- Review route targeted-fix path: `{review_route_targeted_fix_prompt_path or 'none'}`",
+        f"- Review route should prepare commit: `{str(review_route_should_prepare_commit).lower()}`",
+        (
+            "- Review route should prepare targeted fix: "
+            f"`{str(review_route_should_prepare_targeted_fix).lower()}`"
+        ),
+        f"- Review route should prepare reject: `{str(review_route_should_prepare_reject).lower()}`",
         f"- Completed result source path: `{completed_result_source_path}`",
         f"- Completed result source status: `{completed_result_source_status}`",
         f"- Stop reason: `{stop_reason}`",
@@ -5801,6 +6031,16 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_prompt_status = "not_applicable"
         targeted_fix_prompt_text = ""
         targeted_fix_prompt_resolved_path = ""
+        review_route_status = "waiting_for_review_response"
+        review_route_decision = "none"
+        review_route_reason = "review_response_missing"
+        review_route_next_action = "wait_for_chatgpt_diff_review_response"
+        review_route_blocked_reason = "review_response_missing"
+        review_route_source = ""
+        review_route_targeted_fix_prompt_path = ""
+        review_route_should_prepare_commit = False
+        review_route_should_prepare_targeted_fix = False
+        review_route_should_prepare_reject = False
         completed_result_source_status = "not_completed"
         stop_reason = (
             "dry_run_execution_suppressed"
@@ -5884,6 +6124,24 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "project_browser_autonomous_targeted_fix_prompt_status": targeted_fix_prompt_status,
         "project_browser_autonomous_targeted_fix_prompt_text": targeted_fix_prompt_text,
         "project_browser_autonomous_targeted_fix_prompt_path": targeted_fix_prompt_resolved_path,
+        "project_browser_autonomous_review_route_status": review_route_status,
+        "project_browser_autonomous_review_route_decision": review_route_decision,
+        "project_browser_autonomous_review_route_reason": review_route_reason,
+        "project_browser_autonomous_review_route_next_action": review_route_next_action,
+        "project_browser_autonomous_review_route_blocked_reason": review_route_blocked_reason,
+        "project_browser_autonomous_review_route_source": review_route_source,
+        "project_browser_autonomous_review_route_targeted_fix_prompt_path": (
+            review_route_targeted_fix_prompt_path
+        ),
+        "project_browser_autonomous_review_route_should_prepare_commit": (
+            review_route_should_prepare_commit
+        ),
+        "project_browser_autonomous_review_route_should_prepare_targeted_fix": (
+            review_route_should_prepare_targeted_fix
+        ),
+        "project_browser_autonomous_review_route_should_prepare_reject": (
+            review_route_should_prepare_reject
+        ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": str(
             completed_result_source_path
         ),
@@ -161944,6 +162202,47 @@ def _build_approved_restart_execution_contract_surface(
         "blocked",
         "insufficient_truth",
     }
+    one_cycle_controller_allowed_review_route_statuses = {
+        "waiting_for_review_response",
+        "route_ready",
+        "blocked",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_review_route_decisions = {
+        "none",
+        "approve",
+        "reject",
+        "targeted_fix",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_review_route_reasons = {
+        "review_response_missing",
+        "review_response_invalid",
+        "review_response_unsupported",
+        "approve_review_response_available",
+        "reject_review_response_available",
+        "targeted_fix_review_response_available",
+        "targeted_fix_prompt_not_ready",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_review_route_next_actions = {
+        "wait_for_chatgpt_diff_review_response",
+        "prepare_approve_commit_tag_boundary",
+        "prepare_targeted_fix_prompt_boundary",
+        "prepare_reject_boundary",
+        "manual_review_required",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_review_route_blocked_reasons = {
+        "none",
+        "review_response_missing",
+        "review_response_invalid",
+        "review_response_unsupported",
+        "targeted_fix_prompt_not_ready",
+        "handoff_not_ready",
+        "manual_review_required",
+        "insufficient_truth",
+    }
 
     def _read_one_cycle_controller_flag(key: str, *, default: bool = False) -> bool:
         value = (
@@ -162216,6 +162515,51 @@ def _build_approved_restart_execution_contract_surface(
         not in one_cycle_controller_allowed_targeted_fix_prompt_statuses
     ):
         project_browser_autonomous_targeted_fix_prompt_status = "insufficient_truth"
+    project_browser_autonomous_review_route_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_review_route_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_review_route_status
+        not in one_cycle_controller_allowed_review_route_statuses
+    ):
+        project_browser_autonomous_review_route_status = "insufficient_truth"
+    project_browser_autonomous_review_route_decision = _normalize_text(
+        approved_restart.get("project_browser_autonomous_review_route_decision"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_review_route_decision
+        not in one_cycle_controller_allowed_review_route_decisions
+    ):
+        project_browser_autonomous_review_route_decision = "insufficient_truth"
+    project_browser_autonomous_review_route_reason = _normalize_text(
+        approved_restart.get("project_browser_autonomous_review_route_reason"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_review_route_reason
+        not in one_cycle_controller_allowed_review_route_reasons
+    ):
+        project_browser_autonomous_review_route_reason = "insufficient_truth"
+    project_browser_autonomous_review_route_next_action = _normalize_text(
+        approved_restart.get("project_browser_autonomous_review_route_next_action"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_review_route_next_action
+        not in one_cycle_controller_allowed_review_route_next_actions
+    ):
+        project_browser_autonomous_review_route_next_action = "insufficient_truth"
+    project_browser_autonomous_review_route_blocked_reason = _normalize_text(
+        approved_restart.get("project_browser_autonomous_review_route_blocked_reason"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_review_route_blocked_reason
+        not in one_cycle_controller_allowed_review_route_blocked_reasons
+    ):
+        project_browser_autonomous_review_route_blocked_reason = "insufficient_truth"
     project_browser_autonomous_one_cycle_controller_artifact_paths = (
         dict(
             approved_restart.get(
@@ -162338,6 +162682,49 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_targeted_fix_prompt_path": _normalize_text(
             approved_restart.get("project_browser_autonomous_targeted_fix_prompt_path"),
             default="",
+        ),
+        "project_browser_autonomous_review_route_status": (
+            project_browser_autonomous_review_route_status
+        ),
+        "project_browser_autonomous_review_route_decision": (
+            project_browser_autonomous_review_route_decision
+        ),
+        "project_browser_autonomous_review_route_reason": (
+            project_browser_autonomous_review_route_reason
+        ),
+        "project_browser_autonomous_review_route_next_action": (
+            project_browser_autonomous_review_route_next_action
+        ),
+        "project_browser_autonomous_review_route_blocked_reason": (
+            project_browser_autonomous_review_route_blocked_reason
+        ),
+        "project_browser_autonomous_review_route_source": _normalize_text(
+            approved_restart.get("project_browser_autonomous_review_route_source"),
+            default="",
+        ),
+        "project_browser_autonomous_review_route_targeted_fix_prompt_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_review_route_targeted_fix_prompt_path"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_review_route_should_prepare_commit": bool(
+            approved_restart.get(
+                "project_browser_autonomous_review_route_should_prepare_commit",
+                False,
+            )
+        ),
+        "project_browser_autonomous_review_route_should_prepare_targeted_fix": bool(
+            approved_restart.get(
+                "project_browser_autonomous_review_route_should_prepare_targeted_fix",
+                False,
+            )
+        ),
+        "project_browser_autonomous_review_route_should_prepare_reject": bool(
+            approved_restart.get(
+                "project_browser_autonomous_review_route_should_prepare_reject",
+                False,
+            )
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
