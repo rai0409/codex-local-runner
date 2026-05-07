@@ -3478,6 +3478,8 @@ _ONE_CYCLE_CONTROLLER_ENABLEMENT_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_execute_enabled",
     "project_browser_autonomous_approve_commit_tag_execution_enabled",
     "project_browser_autonomous_approve_commit_tag_execution_confirmed",
+    "project_browser_autonomous_targeted_fix_reentry_execution_enabled",
+    "project_browser_autonomous_targeted_fix_reentry_execution_confirmed",
 )
 
 
@@ -3573,6 +3575,16 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_targeted_fix_boundary_codex_prompt_path",
     "project_browser_autonomous_targeted_fix_boundary_prompt_ready",
     "project_browser_autonomous_targeted_fix_boundary_should_execute_codex",
+    "project_browser_autonomous_targeted_fix_reentry_execution_enabled",
+    "project_browser_autonomous_targeted_fix_reentry_execution_confirmed",
+    "project_browser_autonomous_targeted_fix_reentry_execution_gate_status",
+    "project_browser_autonomous_targeted_fix_reentry_execution_status",
+    "project_browser_autonomous_targeted_fix_reentry_execution_attempted",
+    "project_browser_autonomous_targeted_fix_reentry_execution_exit_code",
+    "project_browser_autonomous_targeted_fix_reentry_execution_blocked_reason",
+    "project_browser_autonomous_targeted_fix_reentry_execution_prompt_path",
+    "project_browser_autonomous_targeted_fix_reentry_execution_receipt_path",
+    "project_browser_autonomous_targeted_fix_reentry_execution_should_execute_codex",
     "project_browser_autonomous_approve_commit_tag_boundary_status",
     "project_browser_autonomous_approve_commit_tag_boundary_decision",
     "project_browser_autonomous_approve_commit_tag_boundary_reason",
@@ -3692,6 +3704,12 @@ _APPROVE_COMMIT_TAG_BOUNDARY_METADATA_PATH = (
 )
 _APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/approve_commit_tag_execution_receipt.json"
+)
+_TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_codex_prompt.md"
+)
+_TARGETED_FIX_REENTRY_EXECUTION_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_reentry_execution_receipt.json"
 )
 
 _LOCAL_CODEX_EXECUTION_READINESS_BANNED_PROMPT_FRAGMENTS: tuple[str, ...] = (
@@ -6430,6 +6448,181 @@ def _run_approve_commit_tag_execution_if_enabled(
     return _write_receipt()
 
 
+def _build_targeted_fix_reentry_execution_gate_state(
+    *,
+    execution_enabled: bool,
+    execution_confirmed: bool,
+    dry_run: bool,
+    review_route_status: str,
+    review_route_decision: str,
+    review_route_should_prepare_targeted_fix: bool,
+    targeted_fix_boundary_status: str,
+    targeted_fix_boundary_decision: str,
+    targeted_fix_boundary_prompt_ready: bool,
+    targeted_fix_boundary_codex_prompt_path: str,
+    receipt_path: str,
+) -> dict[str, Any]:
+    normalized_prompt_path = _normalize_text(
+        targeted_fix_boundary_codex_prompt_path,
+        default=_TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH,
+    )
+    state: dict[str, Any] = {
+        "execution_enabled": bool(execution_enabled),
+        "execution_confirmed": bool(execution_confirmed),
+        "execution_gate_status": "not_applicable",
+        "execution_status": "not_executed",
+        "execution_attempted": False,
+        "execution_exit_code": 0,
+        "execution_blocked_reason": "route_not_targeted_fix",
+        "execution_prompt_path": normalized_prompt_path,
+        "execution_receipt_path": _normalize_text(
+            receipt_path,
+            default=_TARGETED_FIX_REENTRY_EXECUTION_RECEIPT_PATH,
+        ),
+        "execution_should_execute_codex": False,
+    }
+    if review_route_decision != "targeted_fix":
+        return state
+    state.update(
+        {
+            "execution_gate_status": "execution_not_enabled",
+            "execution_status": "not_executed",
+            "execution_attempted": False,
+            "execution_exit_code": 0,
+            "execution_blocked_reason": "execution_not_enabled",
+            "execution_should_execute_codex": False,
+        }
+    )
+    if not execution_enabled or not execution_confirmed:
+        return state
+    if dry_run:
+        state.update(
+            {
+                "execution_gate_status": "dry_run_suppressed",
+                "execution_status": "dry_run_suppressed",
+                "execution_attempted": False,
+                "execution_exit_code": 0,
+                "execution_blocked_reason": "dry_run_execution_suppressed",
+                "execution_should_execute_codex": False,
+            }
+        )
+        return state
+    boundary_ready = (
+        review_route_status == "route_ready"
+        and bool(review_route_should_prepare_targeted_fix)
+        and targeted_fix_boundary_status == "boundary_ready"
+        and targeted_fix_boundary_decision == "targeted_fix"
+        and bool(targeted_fix_boundary_prompt_ready)
+        and normalized_prompt_path == _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH
+    )
+    if not boundary_ready:
+        state.update(
+            {
+                "execution_gate_status": "boundary_not_ready",
+                "execution_status": "blocked",
+                "execution_attempted": False,
+                "execution_exit_code": 0,
+                "execution_blocked_reason": "boundary_not_ready",
+                "execution_should_execute_codex": False,
+            }
+        )
+        return state
+    state.update(
+        {
+            "execution_gate_status": "blocked",
+            "execution_status": "blocked",
+            "execution_attempted": False,
+            "execution_exit_code": 0,
+            "execution_blocked_reason": "targeted_fix_prompt_execution_adapter_missing",
+            "execution_should_execute_codex": False,
+        }
+    )
+    return state
+
+
+def _run_targeted_fix_reentry_execution_if_enabled(
+    *,
+    dry_run: bool,
+    review_route_status: str,
+    review_route_decision: str,
+    review_route_should_prepare_targeted_fix: bool,
+    targeted_fix_boundary_status: str,
+    targeted_fix_boundary_decision: str,
+    targeted_fix_boundary_prompt_ready: bool,
+    targeted_fix_boundary_codex_prompt_path: str,
+    execution_enabled: bool,
+    execution_confirmed: bool,
+    execution_receipt_path: Path,
+) -> dict[str, Any]:
+    state = _build_targeted_fix_reentry_execution_gate_state(
+        execution_enabled=execution_enabled,
+        execution_confirmed=execution_confirmed,
+        dry_run=dry_run,
+        review_route_status=review_route_status,
+        review_route_decision=review_route_decision,
+        review_route_should_prepare_targeted_fix=review_route_should_prepare_targeted_fix,
+        targeted_fix_boundary_status=targeted_fix_boundary_status,
+        targeted_fix_boundary_decision=targeted_fix_boundary_decision,
+        targeted_fix_boundary_prompt_ready=targeted_fix_boundary_prompt_ready,
+        targeted_fix_boundary_codex_prompt_path=targeted_fix_boundary_codex_prompt_path,
+        receipt_path=str(execution_receipt_path),
+    )
+    receipt_payload: dict[str, Any] = {
+        "status": state.get("execution_status"),
+        "gate_status": state.get("execution_gate_status"),
+        "blocked_reason": state.get("execution_blocked_reason"),
+        "attempted": bool(state.get("execution_attempted", False)),
+        "exit_code": _as_int(state.get("execution_exit_code"), default=0),
+        "execution_enabled": bool(state.get("execution_enabled", False)),
+        "execution_confirmed": bool(state.get("execution_confirmed", False)),
+        "execution_prompt_path": _normalize_text(
+            state.get("execution_prompt_path"),
+            default=_TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH,
+        ),
+        "execution_should_execute_codex": bool(
+            state.get("execution_should_execute_codex", False)
+        ),
+    }
+
+    def _write_receipt() -> dict[str, Any]:
+        receipt_payload["status"] = _normalize_text(state.get("execution_status"), default="")
+        receipt_payload["gate_status"] = _normalize_text(
+            state.get("execution_gate_status"),
+            default="",
+        )
+        receipt_payload["blocked_reason"] = _normalize_text(
+            state.get("execution_blocked_reason"),
+            default="",
+        )
+        receipt_payload["attempted"] = bool(state.get("execution_attempted", False))
+        receipt_payload["exit_code"] = _as_int(state.get("execution_exit_code"), default=0)
+        receipt_payload["execution_should_execute_codex"] = bool(
+            state.get("execution_should_execute_codex", False)
+        )
+        try:
+            execution_receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            execution_receipt_path.write_text(
+                json.dumps(receipt_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            state.update(
+                {
+                    "execution_gate_status": "failed",
+                    "execution_status": "failed",
+                    "execution_attempted": bool(state.get("execution_attempted", False)),
+                    "execution_exit_code": (
+                        _as_int(state.get("execution_exit_code"), default=1) or 1
+                    ),
+                    "execution_blocked_reason": "receipt_write_failed",
+                    "execution_should_execute_codex": False,
+                }
+            )
+        return state
+
+    return _write_receipt()
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -6473,6 +6666,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     review_response_path = one_cycle_controller_dir / "review_response.json"
     targeted_fix_prompt_path = one_cycle_controller_dir / "targeted_fix_prompt.md"
     targeted_fix_codex_prompt_path = one_cycle_controller_dir / "targeted_fix_codex_prompt.md"
+    targeted_fix_reentry_execution_receipt_path = (
+        one_cycle_controller_dir / "targeted_fix_reentry_execution_receipt.json"
+    )
     approve_commit_tag_boundary_metadata_path = (
         one_cycle_controller_dir / "approve_commit_tag_boundary.json"
     )
@@ -6528,6 +6724,21 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_boundary_codex_prompt_path = ""
     targeted_fix_boundary_prompt_ready = False
     targeted_fix_boundary_should_execute_codex = False
+    targeted_fix_reentry_execution_enabled = _read_flag(
+        "project_browser_autonomous_targeted_fix_reentry_execution_enabled",
+        default=False,
+    )
+    targeted_fix_reentry_execution_confirmed = _read_flag(
+        "project_browser_autonomous_targeted_fix_reentry_execution_confirmed",
+        default=False,
+    )
+    targeted_fix_reentry_execution_gate_status = "not_applicable"
+    targeted_fix_reentry_execution_status = "not_executed"
+    targeted_fix_reentry_execution_attempted = False
+    targeted_fix_reentry_execution_exit_code = 0
+    targeted_fix_reentry_execution_blocked_reason = "route_not_targeted_fix"
+    targeted_fix_reentry_execution_prompt_path = str(targeted_fix_codex_prompt_path)
+    targeted_fix_reentry_execution_should_execute_codex = False
     approve_commit_tag_boundary_status = "not_applicable"
     approve_commit_tag_boundary_decision = "none"
     approve_commit_tag_boundary_reason = "route_not_approve"
@@ -6625,6 +6836,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_review_response_json": str(review_response_path),
         "one_cycle_controller_targeted_fix_prompt_md": str(targeted_fix_prompt_path),
         "one_cycle_controller_targeted_fix_codex_prompt_md": str(targeted_fix_codex_prompt_path),
+        "one_cycle_controller_targeted_fix_reentry_execution_receipt_json": str(
+            targeted_fix_reentry_execution_receipt_path
+        ),
         "one_cycle_controller_approve_commit_tag_boundary_json": str(
             approve_commit_tag_boundary_metadata_path
         ),
@@ -6958,6 +7172,63 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         )
     )
     targeted_fix_boundary_should_execute_codex = False
+    targeted_fix_reentry_execution_state = _run_targeted_fix_reentry_execution_if_enabled(
+        dry_run=bool(dry_run),
+        review_route_status=review_route_status,
+        review_route_decision=review_route_decision,
+        review_route_should_prepare_targeted_fix=review_route_should_prepare_targeted_fix,
+        targeted_fix_boundary_status=targeted_fix_boundary_status,
+        targeted_fix_boundary_decision=targeted_fix_boundary_decision,
+        targeted_fix_boundary_prompt_ready=targeted_fix_boundary_prompt_ready,
+        targeted_fix_boundary_codex_prompt_path=targeted_fix_boundary_codex_prompt_path,
+        execution_enabled=targeted_fix_reentry_execution_enabled,
+        execution_confirmed=targeted_fix_reentry_execution_confirmed,
+        execution_receipt_path=targeted_fix_reentry_execution_receipt_path,
+    )
+    targeted_fix_reentry_execution_enabled = bool(
+        targeted_fix_reentry_execution_state.get(
+            "execution_enabled",
+            targeted_fix_reentry_execution_enabled,
+        )
+    )
+    targeted_fix_reentry_execution_confirmed = bool(
+        targeted_fix_reentry_execution_state.get(
+            "execution_confirmed",
+            targeted_fix_reentry_execution_confirmed,
+        )
+    )
+    targeted_fix_reentry_execution_gate_status = _normalize_text(
+        targeted_fix_reentry_execution_state.get("execution_gate_status"),
+        default=targeted_fix_reentry_execution_gate_status,
+    )
+    targeted_fix_reentry_execution_status = _normalize_text(
+        targeted_fix_reentry_execution_state.get("execution_status"),
+        default=targeted_fix_reentry_execution_status,
+    )
+    targeted_fix_reentry_execution_attempted = bool(
+        targeted_fix_reentry_execution_state.get(
+            "execution_attempted",
+            targeted_fix_reentry_execution_attempted,
+        )
+    )
+    targeted_fix_reentry_execution_exit_code = _as_int(
+        targeted_fix_reentry_execution_state.get("execution_exit_code"),
+        default=targeted_fix_reentry_execution_exit_code,
+    )
+    targeted_fix_reentry_execution_blocked_reason = _normalize_text(
+        targeted_fix_reentry_execution_state.get("execution_blocked_reason"),
+        default=targeted_fix_reentry_execution_blocked_reason,
+    )
+    targeted_fix_reentry_execution_prompt_path = _normalize_text(
+        targeted_fix_reentry_execution_state.get("execution_prompt_path"),
+        default=targeted_fix_reentry_execution_prompt_path,
+    )
+    targeted_fix_reentry_execution_should_execute_codex = bool(
+        targeted_fix_reentry_execution_state.get(
+            "execution_should_execute_codex",
+            targeted_fix_reentry_execution_should_execute_codex,
+        )
+    )
     approve_commit_tag_boundary_state = _build_approve_commit_tag_boundary_state(
         review_route_status=review_route_status,
         review_route_decision=review_route_decision,
@@ -7144,6 +7415,22 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "targeted_fix_boundary_codex_prompt_path": targeted_fix_boundary_codex_prompt_path,
         "targeted_fix_boundary_prompt_ready": targeted_fix_boundary_prompt_ready,
         "targeted_fix_boundary_should_execute_codex": targeted_fix_boundary_should_execute_codex,
+        "targeted_fix_reentry_execution_enabled": targeted_fix_reentry_execution_enabled,
+        "targeted_fix_reentry_execution_confirmed": targeted_fix_reentry_execution_confirmed,
+        "targeted_fix_reentry_execution_gate_status": targeted_fix_reentry_execution_gate_status,
+        "targeted_fix_reentry_execution_status": targeted_fix_reentry_execution_status,
+        "targeted_fix_reentry_execution_attempted": targeted_fix_reentry_execution_attempted,
+        "targeted_fix_reentry_execution_exit_code": targeted_fix_reentry_execution_exit_code,
+        "targeted_fix_reentry_execution_blocked_reason": (
+            targeted_fix_reentry_execution_blocked_reason
+        ),
+        "targeted_fix_reentry_execution_prompt_path": targeted_fix_reentry_execution_prompt_path,
+        "targeted_fix_reentry_execution_receipt_path": str(
+            targeted_fix_reentry_execution_receipt_path
+        ),
+        "targeted_fix_reentry_execution_should_execute_codex": (
+            targeted_fix_reentry_execution_should_execute_codex
+        ),
         "approve_commit_tag_boundary_status": approve_commit_tag_boundary_status,
         "approve_commit_tag_boundary_decision": approve_commit_tag_boundary_decision,
         "approve_commit_tag_boundary_reason": approve_commit_tag_boundary_reason,
@@ -7262,6 +7549,43 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- Targeted-fix boundary should execute codex: "
             f"`{str(targeted_fix_boundary_should_execute_codex).lower()}`"
         ),
+        (
+            "- Targeted-fix reentry execution enabled: "
+            f"`{str(targeted_fix_reentry_execution_enabled).lower()}`"
+        ),
+        (
+            "- Targeted-fix reentry execution confirmed: "
+            f"`{str(targeted_fix_reentry_execution_confirmed).lower()}`"
+        ),
+        (
+            "- Targeted-fix reentry execution gate status: "
+            f"`{targeted_fix_reentry_execution_gate_status}`"
+        ),
+        f"- Targeted-fix reentry execution status: `{targeted_fix_reentry_execution_status}`",
+        (
+            "- Targeted-fix reentry execution attempted: "
+            f"`{str(targeted_fix_reentry_execution_attempted).lower()}`"
+        ),
+        (
+            "- Targeted-fix reentry execution exit code: "
+            f"`{targeted_fix_reentry_execution_exit_code}`"
+        ),
+        (
+            "- Targeted-fix reentry execution blocked reason: "
+            f"`{targeted_fix_reentry_execution_blocked_reason}`"
+        ),
+        (
+            "- Targeted-fix reentry execution prompt path: "
+            f"`{targeted_fix_reentry_execution_prompt_path or 'none'}`"
+        ),
+        (
+            "- Targeted-fix reentry execution receipt path: "
+            f"`{targeted_fix_reentry_execution_receipt_path}`"
+        ),
+        (
+            "- Targeted-fix reentry execution should execute codex: "
+            f"`{str(targeted_fix_reentry_execution_should_execute_codex).lower()}`"
+        ),
         f"- Approve boundary status: `{approve_commit_tag_boundary_status}`",
         f"- Approve boundary decision: `{approve_commit_tag_boundary_decision}`",
         f"- Approve boundary reason: `{approve_commit_tag_boundary_reason}`",
@@ -7364,6 +7688,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- review_response.json: `{review_response_path}`",
         f"- targeted_fix_prompt.md: `{targeted_fix_prompt_path}`",
         f"- targeted_fix_codex_prompt.md: `{targeted_fix_codex_prompt_path}`",
+        (
+            "- targeted_fix_reentry_execution_receipt.json: "
+            f"`{targeted_fix_reentry_execution_receipt_path}`"
+        ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
@@ -7418,6 +7746,45 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_boundary_codex_prompt_path = ""
         targeted_fix_boundary_prompt_ready = False
         targeted_fix_boundary_should_execute_codex = False
+        targeted_fix_reentry_execution_enabled = bool(
+            targeted_fix_reentry_execution_enabled
+        )
+        targeted_fix_reentry_execution_confirmed = bool(
+            targeted_fix_reentry_execution_confirmed
+        )
+        if review_route_decision != "targeted_fix":
+            targeted_fix_reentry_execution_gate_status = "not_applicable"
+            targeted_fix_reentry_execution_status = "not_executed"
+            targeted_fix_reentry_execution_attempted = False
+            targeted_fix_reentry_execution_exit_code = 0
+            targeted_fix_reentry_execution_blocked_reason = "route_not_targeted_fix"
+            targeted_fix_reentry_execution_should_execute_codex = False
+        elif not (
+            targeted_fix_reentry_execution_enabled and targeted_fix_reentry_execution_confirmed
+        ):
+            targeted_fix_reentry_execution_gate_status = "execution_not_enabled"
+            targeted_fix_reentry_execution_status = "not_executed"
+            targeted_fix_reentry_execution_attempted = False
+            targeted_fix_reentry_execution_exit_code = 0
+            targeted_fix_reentry_execution_blocked_reason = "execution_not_enabled"
+            targeted_fix_reentry_execution_should_execute_codex = False
+        elif dry_run:
+            targeted_fix_reentry_execution_gate_status = "dry_run_suppressed"
+            targeted_fix_reentry_execution_status = "dry_run_suppressed"
+            targeted_fix_reentry_execution_attempted = False
+            targeted_fix_reentry_execution_exit_code = 0
+            targeted_fix_reentry_execution_blocked_reason = "dry_run_execution_suppressed"
+            targeted_fix_reentry_execution_should_execute_codex = False
+        else:
+            targeted_fix_reentry_execution_gate_status = "blocked"
+            targeted_fix_reentry_execution_status = "blocked"
+            targeted_fix_reentry_execution_attempted = False
+            targeted_fix_reentry_execution_exit_code = 0
+            targeted_fix_reentry_execution_blocked_reason = (
+                "targeted_fix_prompt_execution_adapter_missing"
+            )
+            targeted_fix_reentry_execution_should_execute_codex = False
+        targeted_fix_reentry_execution_prompt_path = str(targeted_fix_codex_prompt_path)
         approve_commit_tag_boundary_status = "not_applicable"
         approve_commit_tag_boundary_decision = "none"
         approve_commit_tag_boundary_reason = "route_not_approve"
@@ -7587,6 +7954,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_targeted_fix_boundary_should_execute_codex": (
             targeted_fix_boundary_should_execute_codex
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_enabled": (
+            targeted_fix_reentry_execution_enabled
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_confirmed": (
+            targeted_fix_reentry_execution_confirmed
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_gate_status": (
+            targeted_fix_reentry_execution_gate_status
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_status": (
+            targeted_fix_reentry_execution_status
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_attempted": (
+            targeted_fix_reentry_execution_attempted
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_exit_code": (
+            targeted_fix_reentry_execution_exit_code
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_blocked_reason": (
+            targeted_fix_reentry_execution_blocked_reason
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_prompt_path": (
+            targeted_fix_reentry_execution_prompt_path
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_receipt_path": str(
+            targeted_fix_reentry_execution_receipt_path
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_should_execute_codex": (
+            targeted_fix_reentry_execution_should_execute_codex
         ),
         "project_browser_autonomous_approve_commit_tag_boundary_status": (
             approve_commit_tag_boundary_status
@@ -163798,6 +164195,32 @@ def _build_approved_restart_execution_contract_surface(
         "manual_review_required",
         "insufficient_truth",
     }
+    one_cycle_controller_allowed_targeted_fix_reentry_execution_gate_statuses = {
+        "not_applicable",
+        "execution_not_enabled",
+        "dry_run_suppressed",
+        "boundary_not_ready",
+        "blocked",
+        "failed",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_targeted_fix_reentry_execution_statuses = {
+        "not_executed",
+        "dry_run_suppressed",
+        "blocked",
+        "failed",
+        "insufficient_truth",
+    }
+    one_cycle_controller_allowed_targeted_fix_reentry_execution_blocked_reasons = {
+        "none",
+        "route_not_targeted_fix",
+        "execution_not_enabled",
+        "dry_run_execution_suppressed",
+        "boundary_not_ready",
+        "targeted_fix_prompt_execution_adapter_missing",
+        "receipt_write_failed",
+        "insufficient_truth",
+    }
     one_cycle_controller_allowed_approve_commit_tag_boundary_statuses = {
         "not_applicable",
         "boundary_ready",
@@ -164236,6 +164659,45 @@ def _build_approved_restart_execution_contract_surface(
         not in one_cycle_controller_allowed_targeted_fix_boundary_blocked_reasons
     ):
         project_browser_autonomous_targeted_fix_boundary_blocked_reason = "insufficient_truth"
+    project_browser_autonomous_targeted_fix_reentry_execution_gate_status = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_targeted_fix_reentry_execution_gate_status"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_targeted_fix_reentry_execution_gate_status
+        not in one_cycle_controller_allowed_targeted_fix_reentry_execution_gate_statuses
+    ):
+        project_browser_autonomous_targeted_fix_reentry_execution_gate_status = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_targeted_fix_reentry_execution_status = _normalize_text(
+        approved_restart.get("project_browser_autonomous_targeted_fix_reentry_execution_status"),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_targeted_fix_reentry_execution_status
+        not in one_cycle_controller_allowed_targeted_fix_reentry_execution_statuses
+    ):
+        project_browser_autonomous_targeted_fix_reentry_execution_status = "insufficient_truth"
+    project_browser_autonomous_targeted_fix_reentry_execution_blocked_reason = _normalize_text(
+        approved_restart.get(
+            "project_browser_autonomous_targeted_fix_reentry_execution_blocked_reason"
+        ),
+        default="insufficient_truth",
+    )
+    if (
+        project_browser_autonomous_targeted_fix_reentry_execution_blocked_reason
+        not in one_cycle_controller_allowed_targeted_fix_reentry_execution_blocked_reasons
+    ):
+        project_browser_autonomous_targeted_fix_reentry_execution_blocked_reason = (
+            "insufficient_truth"
+        )
+    project_browser_autonomous_targeted_fix_reentry_execution_exit_code = _as_int(
+        approved_restart.get("project_browser_autonomous_targeted_fix_reentry_execution_exit_code"),
+        default=0,
+    )
     project_browser_autonomous_approve_commit_tag_boundary_status = _normalize_text(
         approved_restart.get("project_browser_autonomous_approve_commit_tag_boundary_status"),
         default="insufficient_truth",
@@ -164509,6 +164971,54 @@ def _build_approved_restart_execution_contract_surface(
             approved_restart.get("project_browser_autonomous_targeted_fix_boundary_prompt_ready", False)
         ),
         "project_browser_autonomous_targeted_fix_boundary_should_execute_codex": False,
+        "project_browser_autonomous_targeted_fix_reentry_execution_enabled": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_targeted_fix_reentry_execution_enabled",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_confirmed": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_targeted_fix_reentry_execution_confirmed",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_gate_status": (
+            project_browser_autonomous_targeted_fix_reentry_execution_gate_status
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_status": (
+            project_browser_autonomous_targeted_fix_reentry_execution_status
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_attempted": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_targeted_fix_reentry_execution_attempted",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_exit_code": (
+            project_browser_autonomous_targeted_fix_reentry_execution_exit_code
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_blocked_reason": (
+            project_browser_autonomous_targeted_fix_reentry_execution_blocked_reason
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_prompt_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_targeted_fix_reentry_execution_prompt_path"
+            ),
+            default=_TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH,
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_receipt_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_targeted_fix_reentry_execution_receipt_path"
+            ),
+            default=_TARGETED_FIX_REENTRY_EXECUTION_RECEIPT_PATH,
+        ),
+        "project_browser_autonomous_targeted_fix_reentry_execution_should_execute_codex": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_targeted_fix_reentry_execution_should_execute_codex",
+                default=False,
+            )
+        ),
         "project_browser_autonomous_approve_commit_tag_boundary_status": (
             project_browser_autonomous_approve_commit_tag_boundary_status
         ),
