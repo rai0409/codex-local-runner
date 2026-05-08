@@ -9136,11 +9136,43 @@ def _build_selected_step_execution_adapter_state(
         cwd=normalized_repo_path,
         shell=False,
     )
+    expected_head_tag_exists_cmd = subprocess.run(
+        ["git", "tag", "--list", expected_head_tag],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    expected_head_tag_exists = False
+    expected_head_tag_ancestor_of_head = False
+    expected_tag_ancestor_cmd: subprocess.CompletedProcess[str] | None = None
+    if expected_head_tag_exists_cmd.returncode == 0:
+        expected_head_tag_exists = expected_head_tag in {
+            line.strip()
+            for line in (expected_head_tag_exists_cmd.stdout or "").splitlines()
+            if line.strip()
+        }
+        if expected_head_tag_exists:
+            expected_tag_ancestor_cmd = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", expected_head_tag, "HEAD"],
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            expected_head_tag_ancestor_of_head = expected_tag_ancestor_cmd.returncode == 0
     metadata_collection_ok = (
         status_short_cmd.returncode == 0
         and current_branch_cmd.returncode == 0
         and head_short_cmd.returncode == 0
         and head_tags_cmd.returncode == 0
+        and expected_head_tag_exists_cmd.returncode == 0
+        and (
+            expected_tag_ancestor_cmd is None
+            or expected_tag_ancestor_cmd.returncode in {0, 1}
+        )
     )
     changed_tracked_files = (
         [
@@ -9173,7 +9205,9 @@ def _build_selected_step_execution_adapter_state(
         if metadata_collection_ok
         else []
     )
-    expected_head_tag_present = expected_head_tag in set(head_tags)
+    expected_head_tag_present = bool(
+        expected_head_tag_exists and expected_head_tag_ancestor_of_head
+    )
 
     bounded_loop_state = _read_json_object_if_exists(bounded_loop_state_path) or {}
     bounded_loop_decision = _read_json_object_if_exists(bounded_loop_decision_path) or {}
@@ -9323,11 +9357,17 @@ def _build_selected_step_execution_adapter_state(
         blocked_reason = "tracked_changes_present_before_selected_step_execution_adapter"
         next_action = "commit_or_reconcile_tracked_changes_before_selected_step_execution_adapter"
         summary = "Selected-step execution adapter is blocked by tracked changes in the worktree."
-    elif not expected_head_tag_present:
-        blocked_reason = "expected_prompt326_head_tag_missing"
+    elif not expected_head_tag_exists:
+        blocked_reason = "expected_prompt326_tag_missing"
         next_action = "commit_and_tag_prompt326_before_selected_step_execution_adapter"
         summary = (
-            "Selected-step execution adapter is blocked because expected Prompt326 head tag is missing."
+            "Selected-step execution adapter is blocked because expected Prompt326 tag is missing."
+        )
+    elif not expected_head_tag_ancestor_of_head:
+        blocked_reason = "expected_prompt326_tag_not_ancestor_of_head"
+        next_action = "checkout_or_merge_history_where_prompt326_tag_is_ancestor_of_head"
+        summary = (
+            "Selected-step execution adapter is blocked because the expected Prompt326 tag is not an ancestor of HEAD."
         )
     elif not bounded_artifacts_exist:
         blocked_reason = "bounded_local_loop_artifacts_missing"
@@ -9384,6 +9424,8 @@ def _build_selected_step_execution_adapter_state(
         "head_short": head_short,
         "head_tags": head_tags,
         "expected_head_tag": expected_head_tag,
+        "expected_head_tag_exists": expected_head_tag_exists,
+        "expected_head_tag_ancestor_of_head": expected_head_tag_ancestor_of_head,
         "expected_head_tag_present": expected_head_tag_present,
         "worktree_clean": worktree_clean,
         "changed_tracked_files": changed_tracked_files,
