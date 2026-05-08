@@ -3716,6 +3716,18 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_remote_readiness_next_action",
     "project_browser_autonomous_remote_readiness_boundary_path",
     "project_browser_autonomous_remote_readiness_plan_path",
+    "project_browser_autonomous_local_end_to_end_readiness_status",
+    "project_browser_autonomous_local_end_to_end_readiness_blocked_reason",
+    "project_browser_autonomous_local_end_to_end_ready",
+    "project_browser_autonomous_local_components_ready",
+    "project_browser_autonomous_integrated_local_runner_ready",
+    "project_browser_autonomous_implementation_prompt_generation_status",
+    "project_browser_autonomous_github_deferred",
+    "project_browser_autonomous_remote_required",
+    "project_browser_autonomous_local_end_to_end_next_action",
+    "project_browser_autonomous_local_end_to_end_component_matrix_path",
+    "project_browser_autonomous_local_end_to_end_readiness_boundary_path",
+    "project_browser_autonomous_local_end_to_end_gap_report_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -3839,6 +3851,20 @@ _REMOTE_READINESS_BOUNDARY_METADATA_PATH = (
 )
 _REMOTE_READINESS_PLAN_METADATA_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/remote_readiness_plan.json"
+)
+_LOCAL_END_TO_END_CONTROLLER_EXPECTED_BRANCH = _REMOTE_READINESS_EXPECTED_BRANCH
+_LOCAL_END_TO_END_CONTROLLER_EXPECTED_HEAD_TAG = "prompt322-remote-readiness-boundary"
+_LOCAL_END_TO_END_CONTROLLER_COMPONENT_MATRIX_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_end_to_end_controller_component_matrix.json"
+)
+_LOCAL_END_TO_END_CONTROLLER_READINESS_BOUNDARY_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_end_to_end_controller_readiness_boundary.json"
+)
+_LOCAL_END_TO_END_CONTROLLER_GAP_REPORT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_end_to_end_controller_gap_report.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_codex_prompt.md"
@@ -6748,6 +6774,709 @@ def _build_remote_readiness_plan_state(
         "execution_performed": False,
         "next_action": next_action,
         "summary": summary,
+    }
+
+
+def _build_local_end_to_end_controller_component_matrix_state(
+    *,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    _ = execution_repo_path
+    normalized_repo_path = _APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH
+    expected_branch = _LOCAL_END_TO_END_CONTROLLER_EXPECTED_BRANCH
+    expected_head_tag = _LOCAL_END_TO_END_CONTROLLER_EXPECTED_HEAD_TAG
+    one_cycle_controller_dir = Path("/tmp/codex-local-runner-decision/one_cycle_controller")
+    targeted_fix_post_reentry_prompt_emission_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_prompt_emission.json"
+    )
+    targeted_fix_post_reentry_prompt_emission_receipt_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_prompt_emission_receipt.json"
+    )
+    targeted_fix_post_reentry_codex_reentry_execution_receipt_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_codex_reentry_execution_receipt.json"
+    )
+    targeted_fix_post_reentry_diff_capture_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_diff_capture.json"
+    )
+    targeted_fix_post_reentry_review_handoff_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_review_handoff.json"
+    )
+    targeted_fix_post_reentry_review_assimilation_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_review_assimilation.json"
+    )
+    targeted_fix_post_reentry_route_decision_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_route_decision.json"
+    )
+    targeted_fix_post_reentry_route_executor_boundary_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_route_executor_boundary.json"
+    )
+    targeted_fix_post_reentry_next_step_handoff_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_next_step_handoff.json"
+    )
+    targeted_fix_post_reentry_bounded_cycle_state_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_bounded_cycle_state.json"
+    )
+    targeted_fix_post_reentry_bounded_cycle_decision_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_bounded_cycle_decision.json"
+    )
+    targeted_fix_post_reentry_bounded_cycle_receipt_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_bounded_cycle_receipt.json"
+    )
+    approve_commit_tag_artifact_reconciliation_receipt_path = (
+        one_cycle_controller_dir / "approve_commit_tag_artifact_reconciliation_receipt.json"
+    )
+    approve_commit_tag_boundary_path = one_cycle_controller_dir / "approve_commit_tag_boundary.json"
+    approve_commit_tag_plan_path = one_cycle_controller_dir / "approve_commit_tag_plan.json"
+    remote_readiness_boundary_path = one_cycle_controller_dir / "remote_readiness_boundary.json"
+    remote_readiness_plan_path = one_cycle_controller_dir / "remote_readiness_plan.json"
+    approve_commit_tag_command_path = one_cycle_controller_dir / "approve_commit_tag_commands.sh"
+
+    status_short_cmd = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=no"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    current_branch_cmd = subprocess.run(
+        ["git", "branch", "--show-current"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    head_short_cmd = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    head_tags_cmd = subprocess.run(
+        ["git", "tag", "--points-at", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+
+    metadata_collection_ok = (
+        status_short_cmd.returncode == 0
+        and current_branch_cmd.returncode == 0
+        and head_short_cmd.returncode == 0
+        and head_tags_cmd.returncode == 0
+    )
+    changed_tracked_files = (
+        [
+            line.rstrip()
+            for line in (status_short_cmd.stdout or "").splitlines()
+            if line.strip()
+        ]
+        if metadata_collection_ok
+        else []
+    )
+    worktree_clean = bool(metadata_collection_ok and (not changed_tracked_files))
+    current_branch = (
+        _normalize_text(current_branch_cmd.stdout, default="") if metadata_collection_ok else ""
+    )
+    head_short = _normalize_text(head_short_cmd.stdout, default="") if metadata_collection_ok else ""
+    head_tags = (
+        sorted(
+            {
+                line.strip()
+                for line in (head_tags_cmd.stdout or "").splitlines()
+                if line.strip()
+            }
+        )
+        if metadata_collection_ok
+        else []
+    )
+    expected_head_tag_present = expected_head_tag in set(head_tags)
+
+    approve_reconciliation_receipt = _read_json_object_if_exists(
+        approve_commit_tag_artifact_reconciliation_receipt_path
+    ) or {}
+    approve_reconciliation_completed = (
+        _normalize_text(approve_reconciliation_receipt.get("status"), default="") == "completed"
+        and _normalize_text(
+            approve_reconciliation_receipt.get("reconciliation_status"), default=""
+        )
+        == "completed"
+        and _normalize_text(approve_reconciliation_receipt.get("blocked_reason"), default="")
+        == "none"
+        and bool(approve_reconciliation_receipt.get("already_committed", False))
+        and bool(approve_reconciliation_receipt.get("already_tagged", False))
+    )
+    command_file_has_noop_text = False
+    command_file_has_dangerous_commands = False
+    if approve_commit_tag_command_path.exists():
+        try:
+            command_file_text = approve_commit_tag_command_path.read_text(encoding="utf-8")
+            command_file_has_noop_text = (
+                "No approve commit/tag execution is required." in command_file_text
+            )
+            command_file_has_dangerous_commands = (
+                ("git commit" in command_file_text) or ("git tag" in command_file_text)
+            )
+        except OSError:
+            command_file_has_noop_text = False
+            command_file_has_dangerous_commands = True
+    approve_command_safe = command_file_has_noop_text and (not command_file_has_dangerous_commands)
+
+    component_entries: list[dict[str, Any]] = []
+
+    def _append_component(
+        *,
+        component: str,
+        status: str,
+        required_for_local_end_to_end: bool,
+        artifact_paths: list[Path],
+        reason: str,
+        next_action: str,
+    ) -> None:
+        present_artifacts = [str(path) for path in artifact_paths if path.exists()]
+        missing_artifacts = [str(path) for path in artifact_paths if not path.exists()]
+        component_entries.append(
+            {
+                "component": component,
+                "status": status,
+                "required_for_local_end_to_end": required_for_local_end_to_end,
+                "artifact_paths": [str(path) for path in artifact_paths],
+                "present_artifacts": present_artifacts,
+                "missing_artifacts": missing_artifacts,
+                "reason": reason,
+                "next_action": next_action,
+            }
+        )
+
+    prompt_generation_artifact_paths = [
+        targeted_fix_post_reentry_prompt_emission_path,
+        targeted_fix_post_reentry_prompt_emission_receipt_path,
+        targeted_fix_post_reentry_next_step_handoff_path,
+    ]
+    prompt_generation_present_count = sum(1 for path in prompt_generation_artifact_paths if path.exists())
+    implementation_prompt_generation_status = (
+        "mostly_ready" if prompt_generation_present_count > 0 else "missing"
+    )
+    implementation_prompt_generation_reason = (
+        "Prompt generation is substantially implemented, but not fully complete because a single "
+        "integrated runner does not yet choose, generate, execute, review, and continue without human intervention."
+    )
+    _append_component(
+        component="implementation_prompt_generation",
+        status=implementation_prompt_generation_status,
+        required_for_local_end_to_end=True,
+        artifact_paths=prompt_generation_artifact_paths,
+        reason=implementation_prompt_generation_reason,
+        next_action=(
+            "prepare_local_end_to_end_dry_run_plan"
+            if implementation_prompt_generation_status == "mostly_ready"
+            else "restore_prompt_generation_artifacts"
+        ),
+    )
+
+    codex_execution_gate_artifact_paths = [
+        targeted_fix_post_reentry_codex_reentry_execution_receipt_path
+    ]
+    codex_execution_gate_ready = all(path.exists() for path in codex_execution_gate_artifact_paths)
+    _append_component(
+        component="codex_execution_gate",
+        status="ready" if codex_execution_gate_ready else "missing",
+        required_for_local_end_to_end=True,
+        artifact_paths=codex_execution_gate_artifact_paths,
+        reason=(
+            "Codex reentry execution receipts confirm bounded gate surfaces are present."
+            if codex_execution_gate_ready
+            else "Codex reentry execution receipt is missing."
+        ),
+        next_action=(
+            "confirm_prompt323_metadata_only_no_codex_invocation"
+            if codex_execution_gate_ready
+            else "restore_codex_execution_gate_artifact"
+        ),
+    )
+
+    diff_capture_artifact_paths = [targeted_fix_post_reentry_diff_capture_path]
+    diff_capture_ready = all(path.exists() for path in diff_capture_artifact_paths)
+    _append_component(
+        component="diff_capture",
+        status="ready" if diff_capture_ready else "missing",
+        required_for_local_end_to_end=True,
+        artifact_paths=diff_capture_artifact_paths,
+        reason=(
+            "Post-reentry diff capture artifact is present."
+            if diff_capture_ready
+            else "Post-reentry diff capture artifact is missing."
+        ),
+        next_action=(
+            "retain_metadata_only_readiness_flow"
+            if diff_capture_ready
+            else "restore_post_reentry_diff_capture_artifact"
+        ),
+    )
+
+    review_handoff_artifact_paths = [targeted_fix_post_reentry_review_handoff_path]
+    review_handoff_ready = all(path.exists() for path in review_handoff_artifact_paths)
+    _append_component(
+        component="review_handoff",
+        status="ready" if review_handoff_ready else "missing",
+        required_for_local_end_to_end=True,
+        artifact_paths=review_handoff_artifact_paths,
+        reason=(
+            "Review handoff artifact is present."
+            if review_handoff_ready
+            else "Review handoff artifact is missing."
+        ),
+        next_action=(
+            "retain_review_handoff_metadata_path"
+            if review_handoff_ready
+            else "restore_review_handoff_artifact"
+        ),
+    )
+
+    review_assimilation_artifact_paths = [targeted_fix_post_reentry_review_assimilation_path]
+    review_assimilation_ready = all(path.exists() for path in review_assimilation_artifact_paths)
+    _append_component(
+        component="review_assimilation",
+        status="ready" if review_assimilation_ready else "missing",
+        required_for_local_end_to_end=True,
+        artifact_paths=review_assimilation_artifact_paths,
+        reason=(
+            "Review assimilation artifact is present."
+            if review_assimilation_ready
+            else "Review assimilation artifact is missing."
+        ),
+        next_action=(
+            "retain_review_assimilation_metadata_path"
+            if review_assimilation_ready
+            else "restore_review_assimilation_artifact"
+        ),
+    )
+
+    route_decision_artifact_paths = [
+        targeted_fix_post_reentry_route_decision_path,
+        targeted_fix_post_reentry_route_executor_boundary_path,
+    ]
+    route_decision_present_count = sum(1 for path in route_decision_artifact_paths if path.exists())
+    if route_decision_present_count == len(route_decision_artifact_paths):
+        route_decision_status = "ready"
+    elif route_decision_present_count > 0:
+        route_decision_status = "mostly_ready"
+    else:
+        route_decision_status = "missing"
+    _append_component(
+        component="route_decision",
+        status=route_decision_status,
+        required_for_local_end_to_end=True,
+        artifact_paths=route_decision_artifact_paths,
+        reason=(
+            "Route decision and executor boundary artifacts are present."
+            if route_decision_status == "ready"
+            else (
+                "Route decision artifacts are partially present."
+                if route_decision_status == "mostly_ready"
+                else "Route decision artifacts are missing."
+            )
+        ),
+        next_action=(
+            "retain_route_decision_metadata_path"
+            if route_decision_status in {"ready", "mostly_ready"}
+            else "restore_route_decision_artifacts"
+        ),
+    )
+
+    targeted_fix_loop_artifact_paths = [
+        targeted_fix_post_reentry_prompt_emission_path,
+        targeted_fix_post_reentry_prompt_emission_receipt_path,
+        targeted_fix_post_reentry_codex_reentry_execution_receipt_path,
+        targeted_fix_post_reentry_diff_capture_path,
+        targeted_fix_post_reentry_route_decision_path,
+    ]
+    targeted_fix_loop_core_ready = (
+        targeted_fix_post_reentry_prompt_emission_path.exists()
+        and targeted_fix_post_reentry_prompt_emission_receipt_path.exists()
+        and targeted_fix_post_reentry_codex_reentry_execution_receipt_path.exists()
+    )
+    targeted_fix_loop_present_count = sum(1 for path in targeted_fix_loop_artifact_paths if path.exists())
+    if targeted_fix_loop_core_ready:
+        targeted_fix_loop_status = "ready"
+    elif targeted_fix_loop_present_count > 0:
+        targeted_fix_loop_status = "mostly_ready"
+    else:
+        targeted_fix_loop_status = "missing"
+    _append_component(
+        component="targeted_fix_loop",
+        status=targeted_fix_loop_status,
+        required_for_local_end_to_end=True,
+        artifact_paths=targeted_fix_loop_artifact_paths,
+        reason=(
+            "Targeted-fix loop artifacts for emission, reentry gate, and reroute are present."
+            if targeted_fix_loop_status == "ready"
+            else (
+                "Targeted-fix loop artifacts are partially present."
+                if targeted_fix_loop_status == "mostly_ready"
+                else "Targeted-fix loop artifacts are missing."
+            )
+        ),
+        next_action=(
+            "retain_targeted_fix_loop_metadata_path"
+            if targeted_fix_loop_status in {"ready", "mostly_ready"}
+            else "restore_targeted_fix_loop_artifacts"
+        ),
+    )
+
+    bounded_cycle_artifact_paths = [
+        targeted_fix_post_reentry_bounded_cycle_state_path,
+        targeted_fix_post_reentry_bounded_cycle_decision_path,
+        targeted_fix_post_reentry_bounded_cycle_receipt_path,
+    ]
+    bounded_cycle_present_count = sum(1 for path in bounded_cycle_artifact_paths if path.exists())
+    if bounded_cycle_present_count == len(bounded_cycle_artifact_paths):
+        bounded_cycle_status = "ready"
+    elif bounded_cycle_present_count > 0:
+        bounded_cycle_status = "mostly_ready"
+    else:
+        bounded_cycle_status = "missing"
+    _append_component(
+        component="bounded_cycle_control",
+        status=bounded_cycle_status,
+        required_for_local_end_to_end=True,
+        artifact_paths=bounded_cycle_artifact_paths,
+        reason=(
+            "Bounded cycle state, decision, and receipt artifacts are present."
+            if bounded_cycle_status == "ready"
+            else (
+                "Bounded cycle artifacts are partially present."
+                if bounded_cycle_status == "mostly_ready"
+                else "Bounded cycle artifacts are missing."
+            )
+        ),
+        next_action=(
+            "retain_bounded_cycle_control_metadata_path"
+            if bounded_cycle_status in {"ready", "mostly_ready"}
+            else "restore_bounded_cycle_control_artifacts"
+        ),
+    )
+
+    local_commit_tag_control_artifact_paths = [
+        approve_commit_tag_artifact_reconciliation_receipt_path,
+        approve_commit_tag_boundary_path,
+        approve_commit_tag_plan_path,
+    ]
+    local_commit_tag_control_ready = (
+        approve_reconciliation_completed
+        and approve_commit_tag_boundary_path.exists()
+        and approve_commit_tag_plan_path.exists()
+        and approve_command_safe
+    )
+    if local_commit_tag_control_ready:
+        local_commit_tag_control_status = "ready"
+    elif any(path.exists() for path in local_commit_tag_control_artifact_paths):
+        local_commit_tag_control_status = "mostly_ready"
+    else:
+        local_commit_tag_control_status = "missing"
+    _append_component(
+        component="local_commit_tag_control",
+        status=local_commit_tag_control_status,
+        required_for_local_end_to_end=True,
+        artifact_paths=local_commit_tag_control_artifact_paths,
+        reason=(
+            "Approve commit/tag reconciliation is completed and stale executable commands are removed."
+            if local_commit_tag_control_status == "ready"
+            else (
+                "Approve commit/tag control artifacts are present but reconciliation is not fully confirmed."
+                if local_commit_tag_control_status == "mostly_ready"
+                else "Approve commit/tag control artifacts are missing."
+            )
+        ),
+        next_action=(
+            "retain_local_commit_tag_control_metadata_path"
+            if local_commit_tag_control_status == "ready"
+            else "complete_approve_commit_tag_reconciliation"
+        ),
+    )
+
+    remote_operations_artifact_paths = [remote_readiness_boundary_path, remote_readiness_plan_path]
+    _append_component(
+        component="remote_operations",
+        status="deferred",
+        required_for_local_end_to_end=False,
+        artifact_paths=remote_operations_artifact_paths,
+        reason="Remote push/PR/merge remains intentionally deferred for local-only readiness.",
+        next_action="defer_remote_operations",
+    )
+
+    _append_component(
+        component="integrated_local_runner",
+        status="not_ready",
+        required_for_local_end_to_end=False,
+        artifact_paths=[],
+        reason=(
+            "A single integrated local runner does not yet choose the next prompt, execute Codex, "
+            "review results, route decisions, and continue without human intervention."
+        ),
+        next_action="prepare_local_end_to_end_dry_run_plan",
+    )
+
+    ready_components = sorted(
+        [entry["component"] for entry in component_entries if entry.get("status") == "ready"]
+    )
+    mostly_ready_components = sorted(
+        [entry["component"] for entry in component_entries if entry.get("status") == "mostly_ready"]
+    )
+    partial_components = sorted(
+        [entry["component"] for entry in component_entries if entry.get("status") == "partial"]
+    )
+    missing_components = sorted(
+        [entry["component"] for entry in component_entries if entry.get("status") == "missing"]
+    )
+    deferred_components = sorted(
+        [entry["component"] for entry in component_entries if entry.get("status") == "deferred"]
+    )
+    required_component_entries = [
+        entry
+        for entry in component_entries
+        if bool(entry.get("required_for_local_end_to_end", False))
+    ]
+    local_components_ready = bool(required_component_entries) and all(
+        _normalize_text(entry.get("status"), default="missing") in {"ready", "mostly_ready"}
+        for entry in required_component_entries
+    )
+    integrated_runner_ready = any(
+        entry.get("component") == "integrated_local_runner"
+        and _normalize_text(entry.get("status"), default="not_ready") == "ready"
+        for entry in component_entries
+    )
+
+    status = "ready" if (metadata_collection_ok and local_components_ready) else "blocked"
+    summary = (
+        "Local-only controller components are sufficiently ready for dry-run planning; integrated runner remains the next local gap."
+        if status == "ready"
+        else (
+            "Local-only controller component readiness is blocked by missing metadata."
+            if not metadata_collection_ok
+            else "Local-only controller component readiness is blocked by missing required components."
+        )
+    )
+
+    return {
+        "status": status,
+        "source": "local_end_to_end_controller_component_matrix",
+        "current_branch": current_branch,
+        "head_short": head_short,
+        "head_tags": head_tags,
+        "expected_head_tag": expected_head_tag,
+        "expected_head_tag_present": expected_head_tag_present,
+        "worktree_clean": worktree_clean,
+        "changed_tracked_files": changed_tracked_files,
+        "expected_branch": expected_branch,
+        "components": component_entries,
+        "ready_components": ready_components,
+        "mostly_ready_components": mostly_ready_components,
+        "partial_components": partial_components,
+        "missing_components": missing_components,
+        "deferred_components": deferred_components,
+        "local_components_ready": local_components_ready,
+        "integrated_runner_ready": integrated_runner_ready,
+        "remote_required": False,
+        "github_deferred": True,
+        "summary": summary,
+    }
+
+
+def _build_local_end_to_end_controller_readiness_boundary_state(
+    *,
+    component_matrix_state: Mapping[str, Any] | None,
+    reconciliation_receipt_path: Path,
+    remote_readiness_boundary_path: Path,
+) -> dict[str, Any]:
+    component_matrix = (
+        dict(component_matrix_state) if isinstance(component_matrix_state, Mapping) else {}
+    )
+    components_raw = component_matrix.get("components")
+    components: list[dict[str, Any]] = []
+    if isinstance(components_raw, list):
+        for item in components_raw:
+            if isinstance(item, Mapping):
+                components.append(dict(item))
+    implementation_prompt_generation_status = "mostly_ready"
+    implementation_prompt_generation_reason = (
+        "Prompt generation is substantially implemented, but not fully complete because a single integrated runner does not yet choose, generate, execute, review, and continue without human intervention."
+    )
+    for entry in components:
+        if _normalize_text(entry.get("component"), default="") != "implementation_prompt_generation":
+            continue
+        implementation_prompt_generation_status = _normalize_text(
+            entry.get("status"),
+            default=implementation_prompt_generation_status,
+        )
+        implementation_prompt_generation_reason = _normalize_text(
+            entry.get("reason"),
+            default=implementation_prompt_generation_reason,
+        )
+        break
+
+    remote_readiness_artifact = _read_json_object_if_exists(remote_readiness_boundary_path) or {}
+    remote_readiness_artifact_status = _normalize_text(
+        remote_readiness_artifact.get("boundary_status"),
+        default=_normalize_text(remote_readiness_artifact.get("status"), default="missing"),
+    )
+
+    reconciliation_receipt = _read_json_object_if_exists(reconciliation_receipt_path) or {}
+    reconciliation_completed = (
+        _normalize_text(reconciliation_receipt.get("status"), default="") == "completed"
+        and _normalize_text(reconciliation_receipt.get("reconciliation_status"), default="")
+        == "completed"
+        and _normalize_text(reconciliation_receipt.get("blocked_reason"), default="")
+        == "none"
+        and bool(reconciliation_receipt.get("already_committed", False))
+        and bool(reconciliation_receipt.get("already_tagged", False))
+    )
+
+    current_branch = _normalize_text(component_matrix.get("current_branch"), default="")
+    head_short = _normalize_text(component_matrix.get("head_short"), default="")
+    head_tags = _normalize_string_list(component_matrix.get("head_tags"))
+    expected_branch = _LOCAL_END_TO_END_CONTROLLER_EXPECTED_BRANCH
+    expected_head_tag = _LOCAL_END_TO_END_CONTROLLER_EXPECTED_HEAD_TAG
+    expected_head_tag_present = bool(component_matrix.get("expected_head_tag_present", False))
+    changed_tracked_files = _normalize_string_list(component_matrix.get("changed_tracked_files"))
+    worktree_clean = bool(component_matrix.get("worktree_clean", False))
+    local_components_ready = bool(component_matrix.get("local_components_ready", False))
+    integrated_runner_ready = bool(component_matrix.get("integrated_runner_ready", False))
+    missing_components = _normalize_string_list(component_matrix.get("missing_components"))
+
+    status = "blocked"
+    boundary_status = "blocked"
+    blocked_reason = "none"
+    next_action = "manual_review_required"
+    local_end_to_end_ready = False
+
+    if not worktree_clean:
+        blocked_reason = "tracked_changes_present_before_local_end_to_end_readiness"
+        next_action = "commit_or_reconcile_tracked_changes_before_local_readiness"
+    elif not expected_head_tag_present:
+        blocked_reason = "expected_prompt322_head_tag_missing"
+        next_action = "commit_and_tag_prompt322_before_local_readiness"
+    elif not reconciliation_completed:
+        blocked_reason = "approve_commit_tag_reconciliation_not_completed"
+        next_action = "complete_approve_commit_tag_reconciliation"
+    elif not local_components_ready:
+        blocked_reason = "local_controller_required_components_missing"
+        next_action = "implement_missing_local_controller_components"
+    else:
+        status = "ready"
+        boundary_status = "ready"
+        blocked_reason = "none"
+        next_action = "prepare_local_end_to_end_dry_run_plan"
+        local_end_to_end_ready = True
+
+    readiness_state = {
+        "status": status,
+        "boundary_status": boundary_status,
+        "blocked_reason": blocked_reason,
+        "source": "local_end_to_end_controller_readiness_boundary",
+        "current_branch": current_branch,
+        "expected_branch": expected_branch,
+        "head_short": head_short,
+        "head_tags": head_tags,
+        "expected_head_tag": expected_head_tag,
+        "expected_head_tag_present": expected_head_tag_present,
+        "worktree_clean": worktree_clean,
+        "changed_tracked_files": changed_tracked_files,
+        "local_end_to_end_ready": local_end_to_end_ready,
+        "local_components_ready": local_components_ready,
+        "integrated_runner_ready": integrated_runner_ready,
+        "implementation_prompt_generation_status": implementation_prompt_generation_status,
+        "implementation_prompt_generation_reason": implementation_prompt_generation_reason,
+        "remote_required": False,
+        "github_deferred": True,
+        "remote_readiness_artifact_status": remote_readiness_artifact_status,
+        "execution_allowed": False,
+        "execution_performed": False,
+        "codex_invoked": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "next_action": next_action,
+        "summary": (
+            "Local-only end-to-end controller readiness is ready for dry-run planning; integrated runner implementation remains the next local gap."
+            if local_end_to_end_ready
+            else (
+                "Local-only end-to-end controller readiness is blocked by tracked changes in the worktree."
+                if blocked_reason == "tracked_changes_present_before_local_end_to_end_readiness"
+                else (
+                    "Local-only end-to-end controller readiness is blocked because expected Prompt322 tag is missing."
+                    if blocked_reason == "expected_prompt322_head_tag_missing"
+                    else (
+                        "Local-only end-to-end controller readiness is blocked because approve commit/tag reconciliation is not completed."
+                        if blocked_reason == "approve_commit_tag_reconciliation_not_completed"
+                        else "Local-only end-to-end controller readiness is blocked because required local controller components are missing."
+                    )
+                )
+            )
+        ),
+    }
+    if blocked_reason == "local_controller_required_components_missing":
+        readiness_state["missing_components"] = missing_components
+    return readiness_state
+
+
+def _build_local_end_to_end_controller_gap_report_state(
+    *,
+    component_matrix_state: Mapping[str, Any] | None,
+    readiness_boundary_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    component_matrix = (
+        dict(component_matrix_state) if isinstance(component_matrix_state, Mapping) else {}
+    )
+    readiness_boundary = (
+        dict(readiness_boundary_state) if isinstance(readiness_boundary_state, Mapping) else {}
+    )
+    readiness_status = _normalize_text(readiness_boundary.get("boundary_status"), default="blocked")
+    next_action = "prepare_local_end_to_end_dry_run_plan"
+    return {
+        "status": "ready" if readiness_status == "ready" else "blocked",
+        "source": "local_end_to_end_controller_gap_report",
+        "primary_gap": "integrated_local_runner_missing",
+        "secondary_gaps": [
+            "next_prompt_selection_not_fully_automated",
+            "prompt_generation_not_fully_auto_adopted",
+            "end_to_end_execution_sequence_not_yet_unified",
+        ],
+        "completed_capabilities": [
+            "codex_execution_gate",
+            "diff_capture",
+            "review_handoff",
+            "review_assimilation",
+            "route_decision",
+            "targeted_fix_loop",
+            "bounded_cycle_control",
+            "local_commit_tag_control",
+            "approve_artifact_reconciliation",
+            "remote_readiness_boundary_metadata_only",
+        ],
+        "deferred_capabilities": [
+            "remote_push",
+            "pr_create",
+            "pr_merge",
+            "remote_rollback",
+        ],
+        "next_prompt_id_recommendation": "Prompt324-local",
+        "next_prompt_title_recommendation": "local-only end-to-end dry-run plan builder",
+        "next_action": next_action,
+        "summary": (
+            "Integrated local runner remains the primary local-only gap; existing controller components are ready for dry-run planning."
+            if readiness_status == "ready"
+            else "Integrated local runner remains the primary local-only gap; readiness boundary is blocked pending prerequisite conditions."
+        ),
+        "local_components_ready": bool(component_matrix.get("local_components_ready", False)),
+        "integrated_runner_ready": bool(component_matrix.get("integrated_runner_ready", False)),
     }
 
 
@@ -10017,6 +10746,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     remote_readiness_plan_metadata_path = (
         one_cycle_controller_dir / "remote_readiness_plan.json"
     )
+    local_end_to_end_controller_readiness_boundary_path = (
+        one_cycle_controller_dir / "local_end_to_end_controller_readiness_boundary.json"
+    )
+    local_end_to_end_controller_component_matrix_path = (
+        one_cycle_controller_dir / "local_end_to_end_controller_component_matrix.json"
+    )
+    local_end_to_end_controller_gap_report_path = (
+        one_cycle_controller_dir / "local_end_to_end_controller_gap_report.json"
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -10207,6 +10945,22 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     remote_readiness_next_action = "complete_approve_commit_tag_reconciliation"
     remote_readiness_boundary_path = str(remote_readiness_boundary_metadata_path)
     remote_readiness_plan_path = str(remote_readiness_plan_metadata_path)
+    local_end_to_end_readiness_status = "blocked"
+    local_end_to_end_readiness_blocked_reason = "approve_commit_tag_reconciliation_not_completed"
+    local_end_to_end_ready = False
+    local_components_ready = False
+    integrated_local_runner_ready = False
+    implementation_prompt_generation_status = "mostly_ready"
+    github_deferred = True
+    remote_required = False
+    local_end_to_end_next_action = "complete_approve_commit_tag_reconciliation"
+    local_end_to_end_component_matrix_surface_path = str(
+        local_end_to_end_controller_component_matrix_path
+    )
+    local_end_to_end_readiness_boundary_surface_path = str(
+        local_end_to_end_controller_readiness_boundary_path
+    )
+    local_end_to_end_gap_report_surface_path = str(local_end_to_end_controller_gap_report_path)
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -10358,6 +11112,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_remote_readiness_plan_json": str(
             remote_readiness_plan_metadata_path
+        ),
+        "one_cycle_controller_local_end_to_end_controller_component_matrix_json": str(
+            local_end_to_end_controller_component_matrix_path
+        ),
+        "one_cycle_controller_local_end_to_end_controller_readiness_boundary_json": str(
+            local_end_to_end_controller_readiness_boundary_path
+        ),
+        "one_cycle_controller_local_end_to_end_controller_gap_report_json": str(
+            local_end_to_end_controller_gap_report_path
         ),
     }
 
@@ -11489,6 +12252,96 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     )
     remote_readiness_boundary_path = str(remote_readiness_boundary_metadata_path)
     remote_readiness_plan_path = str(remote_readiness_plan_metadata_path)
+    local_end_to_end_controller_component_matrix_state = (
+        _build_local_end_to_end_controller_component_matrix_state(
+            execution_repo_path=execution_repo_path,
+        )
+    )
+    local_end_to_end_controller_readiness_boundary_state = (
+        _build_local_end_to_end_controller_readiness_boundary_state(
+            component_matrix_state=local_end_to_end_controller_component_matrix_state,
+            reconciliation_receipt_path=approve_commit_tag_artifact_reconciliation_receipt_file_path,
+            remote_readiness_boundary_path=remote_readiness_boundary_metadata_path,
+        )
+    )
+    local_end_to_end_controller_gap_report_state = _build_local_end_to_end_controller_gap_report_state(
+        component_matrix_state=local_end_to_end_controller_component_matrix_state,
+        readiness_boundary_state=local_end_to_end_controller_readiness_boundary_state,
+    )
+    try:
+        local_end_to_end_controller_component_matrix_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        _write_json(
+            local_end_to_end_controller_component_matrix_path,
+            local_end_to_end_controller_component_matrix_state,
+        )
+        _write_json(
+            local_end_to_end_controller_readiness_boundary_path,
+            local_end_to_end_controller_readiness_boundary_state,
+        )
+        _write_json(
+            local_end_to_end_controller_gap_report_path,
+            local_end_to_end_controller_gap_report_state,
+        )
+    except OSError:
+        pass
+    local_end_to_end_readiness_status = _normalize_text(
+        local_end_to_end_controller_readiness_boundary_state.get("boundary_status"),
+        default=local_end_to_end_readiness_status,
+    )
+    local_end_to_end_readiness_blocked_reason = _normalize_text(
+        local_end_to_end_controller_readiness_boundary_state.get("blocked_reason"),
+        default=local_end_to_end_readiness_blocked_reason,
+    )
+    local_end_to_end_ready = bool(
+        local_end_to_end_controller_readiness_boundary_state.get(
+            "local_end_to_end_ready",
+            local_end_to_end_ready,
+        )
+    )
+    local_components_ready = bool(
+        local_end_to_end_controller_readiness_boundary_state.get(
+            "local_components_ready",
+            local_components_ready,
+        )
+    )
+    integrated_local_runner_ready = bool(
+        local_end_to_end_controller_readiness_boundary_state.get(
+            "integrated_runner_ready",
+            integrated_local_runner_ready,
+        )
+    )
+    implementation_prompt_generation_status = _normalize_text(
+        local_end_to_end_controller_readiness_boundary_state.get(
+            "implementation_prompt_generation_status"
+        ),
+        default=implementation_prompt_generation_status,
+    )
+    github_deferred = bool(
+        local_end_to_end_controller_readiness_boundary_state.get(
+            "github_deferred",
+            github_deferred,
+        )
+    )
+    remote_required = bool(
+        local_end_to_end_controller_readiness_boundary_state.get(
+            "remote_required",
+            remote_required,
+        )
+    )
+    local_end_to_end_next_action = _normalize_text(
+        local_end_to_end_controller_readiness_boundary_state.get("next_action"),
+        default=local_end_to_end_next_action,
+    )
+    local_end_to_end_component_matrix_surface_path = str(
+        local_end_to_end_controller_component_matrix_path
+    )
+    local_end_to_end_readiness_boundary_surface_path = str(
+        local_end_to_end_controller_readiness_boundary_path
+    )
+    local_end_to_end_gap_report_surface_path = str(local_end_to_end_controller_gap_report_path)
 
     result_payload = {
         "status": status,
@@ -11843,6 +12696,20 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "remote_readiness_next_action": remote_readiness_next_action,
         "remote_readiness_boundary_path": remote_readiness_boundary_path,
         "remote_readiness_plan_path": remote_readiness_plan_path,
+        "local_end_to_end_readiness_status": local_end_to_end_readiness_status,
+        "local_end_to_end_readiness_blocked_reason": local_end_to_end_readiness_blocked_reason,
+        "local_end_to_end_ready": local_end_to_end_ready,
+        "local_components_ready": local_components_ready,
+        "integrated_local_runner_ready": integrated_local_runner_ready,
+        "implementation_prompt_generation_status": implementation_prompt_generation_status,
+        "github_deferred": github_deferred,
+        "remote_required": remote_required,
+        "local_end_to_end_next_action": local_end_to_end_next_action,
+        "local_end_to_end_component_matrix_path": local_end_to_end_component_matrix_surface_path,
+        "local_end_to_end_readiness_boundary_path": (
+            local_end_to_end_readiness_boundary_surface_path
+        ),
+        "local_end_to_end_gap_report_path": local_end_to_end_gap_report_surface_path,
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -12244,6 +13111,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- Remote readiness next action: `{remote_readiness_next_action}`",
         f"- Remote readiness boundary path: `{remote_readiness_boundary_path}`",
         f"- Remote readiness plan path: `{remote_readiness_plan_path}`",
+        f"- Local end-to-end readiness status: `{local_end_to_end_readiness_status}`",
+        (
+            "- Local end-to-end readiness blocked reason: "
+            f"`{local_end_to_end_readiness_blocked_reason}`"
+        ),
+        f"- Local end-to-end ready: `{str(local_end_to_end_ready).lower()}`",
+        f"- Local components ready: `{str(local_components_ready).lower()}`",
+        (
+            "- Integrated local runner ready: "
+            f"`{str(integrated_local_runner_ready).lower()}`"
+        ),
+        (
+            "- Implementation prompt generation status: "
+            f"`{implementation_prompt_generation_status}`"
+        ),
+        f"- GitHub deferred: `{str(github_deferred).lower()}`",
+        f"- Remote required: `{str(remote_required).lower()}`",
+        f"- Local end-to-end next action: `{local_end_to_end_next_action}`",
+        (
+            "- Local end-to-end component matrix path: "
+            f"`{local_end_to_end_component_matrix_surface_path}`"
+        ),
+        (
+            "- Local end-to-end readiness boundary path: "
+            f"`{local_end_to_end_readiness_boundary_surface_path}`"
+        ),
+        (
+            "- Local end-to-end gap report path: "
+            f"`{local_end_to_end_gap_report_surface_path}`"
+        ),
         f"- Completed result source path: `{completed_result_source_path}`",
         f"- Completed result source status: `{completed_result_source_status}`",
         f"- Stop reason: `{stop_reason}`",
@@ -12369,6 +13266,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
         f"- remote_readiness_boundary.json: `{remote_readiness_boundary_metadata_path}`",
         f"- remote_readiness_plan.json: `{remote_readiness_plan_metadata_path}`",
+        (
+            "- local_end_to_end_controller_component_matrix.json: "
+            f"`{local_end_to_end_controller_component_matrix_path}`"
+        ),
+        (
+            "- local_end_to_end_controller_readiness_boundary.json: "
+            f"`{local_end_to_end_controller_readiness_boundary_path}`"
+        ),
+        (
+            "- local_end_to_end_controller_gap_report.json: "
+            f"`{local_end_to_end_controller_gap_report_path}`"
+        ),
     ]
 
     try:
@@ -13096,6 +14005,34 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_remote_readiness_plan_path": (
             remote_readiness_plan_path
+        ),
+        "project_browser_autonomous_local_end_to_end_readiness_status": (
+            local_end_to_end_readiness_status
+        ),
+        "project_browser_autonomous_local_end_to_end_readiness_blocked_reason": (
+            local_end_to_end_readiness_blocked_reason
+        ),
+        "project_browser_autonomous_local_end_to_end_ready": local_end_to_end_ready,
+        "project_browser_autonomous_local_components_ready": local_components_ready,
+        "project_browser_autonomous_integrated_local_runner_ready": (
+            integrated_local_runner_ready
+        ),
+        "project_browser_autonomous_implementation_prompt_generation_status": (
+            implementation_prompt_generation_status
+        ),
+        "project_browser_autonomous_github_deferred": github_deferred,
+        "project_browser_autonomous_remote_required": remote_required,
+        "project_browser_autonomous_local_end_to_end_next_action": (
+            local_end_to_end_next_action
+        ),
+        "project_browser_autonomous_local_end_to_end_component_matrix_path": (
+            local_end_to_end_component_matrix_surface_path
+        ),
+        "project_browser_autonomous_local_end_to_end_readiness_boundary_path": (
+            local_end_to_end_readiness_boundary_surface_path
+        ),
+        "project_browser_autonomous_local_end_to_end_gap_report_path": (
+            local_end_to_end_gap_report_surface_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
@@ -170307,6 +171244,62 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_remote_readiness_plan_path": _normalize_text(
             approved_restart.get("project_browser_autonomous_remote_readiness_plan_path"),
             default=_REMOTE_READINESS_PLAN_METADATA_PATH,
+        ),
+        "project_browser_autonomous_local_end_to_end_readiness_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_end_to_end_readiness_status"),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_end_to_end_readiness_blocked_reason": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_end_to_end_readiness_blocked_reason"
+            ),
+            default="approve_commit_tag_reconciliation_not_completed",
+        ),
+        "project_browser_autonomous_local_end_to_end_ready": _read_one_cycle_controller_flag(
+            "project_browser_autonomous_local_end_to_end_ready",
+            default=False,
+        ),
+        "project_browser_autonomous_local_components_ready": _read_one_cycle_controller_flag(
+            "project_browser_autonomous_local_components_ready",
+            default=False,
+        ),
+        "project_browser_autonomous_integrated_local_runner_ready": _read_one_cycle_controller_flag(
+            "project_browser_autonomous_integrated_local_runner_ready",
+            default=False,
+        ),
+        "project_browser_autonomous_implementation_prompt_generation_status": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_implementation_prompt_generation_status"
+            ),
+            default="mostly_ready",
+        ),
+        "project_browser_autonomous_github_deferred": _read_one_cycle_controller_flag(
+            "project_browser_autonomous_github_deferred",
+            default=True,
+        ),
+        "project_browser_autonomous_remote_required": _read_one_cycle_controller_flag(
+            "project_browser_autonomous_remote_required",
+            default=False,
+        ),
+        "project_browser_autonomous_local_end_to_end_next_action": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_end_to_end_next_action"),
+            default="prepare_local_end_to_end_dry_run_plan",
+        ),
+        "project_browser_autonomous_local_end_to_end_component_matrix_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_end_to_end_component_matrix_path"
+            ),
+            default=_LOCAL_END_TO_END_CONTROLLER_COMPONENT_MATRIX_PATH,
+        ),
+        "project_browser_autonomous_local_end_to_end_readiness_boundary_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_end_to_end_readiness_boundary_path"
+            ),
+            default=_LOCAL_END_TO_END_CONTROLLER_READINESS_BOUNDARY_PATH,
+        ),
+        "project_browser_autonomous_local_end_to_end_gap_report_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_end_to_end_gap_report_path"),
+            default=_LOCAL_END_TO_END_CONTROLLER_GAP_REPORT_PATH,
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
