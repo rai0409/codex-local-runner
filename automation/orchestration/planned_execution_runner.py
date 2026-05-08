@@ -3619,6 +3619,15 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_path",
     "project_browser_autonomous_targeted_fix_post_reentry_diff_capture_path",
     "project_browser_autonomous_targeted_fix_post_reentry_diff_patch_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_cycle_closure_status",
+    "project_browser_autonomous_targeted_fix_post_reentry_terminal_state",
+    "project_browser_autonomous_targeted_fix_post_reentry_cycle_closed",
+    "project_browser_autonomous_targeted_fix_post_reentry_safe_to_stop",
+    "project_browser_autonomous_targeted_fix_post_reentry_safe_to_commit_prompt_changes",
+    "project_browser_autonomous_targeted_fix_post_reentry_requires_codex_reentry",
+    "project_browser_autonomous_targeted_fix_post_reentry_requires_manual_review",
+    "project_browser_autonomous_targeted_fix_post_reentry_cycle_closure_result_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_terminal_summary_path",
     "project_browser_autonomous_approve_commit_tag_boundary_status",
     "project_browser_autonomous_approve_commit_tag_boundary_decision",
     "project_browser_autonomous_approve_commit_tag_boundary_reason",
@@ -3780,6 +3789,12 @@ _TARGETED_FIX_POST_REENTRY_ROUTE_EXECUTOR_BOUNDARY_PATH = (
 )
 _TARGETED_FIX_POST_REENTRY_NEXT_STEP_HANDOFF_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_next_step_handoff.json"
+)
+_TARGETED_FIX_POST_REENTRY_CYCLE_CLOSURE_RESULT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_cycle_closure_result.json"
+)
+_TARGETED_FIX_POST_REENTRY_TERMINAL_SUMMARY_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_terminal_summary.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
@@ -7724,6 +7739,245 @@ def _build_targeted_fix_post_reentry_next_step_handoff_state(
     return state
 
 
+def _build_targeted_fix_post_reentry_cycle_closure_result_state(
+    *,
+    next_step_handoff_path: Path,
+    route_executor_boundary_path: Path,
+    route_decision_path: Path,
+    diff_capture_path: Path,
+    review_handoff_path: Path,
+) -> dict[str, Any]:
+    normalized_next_step_handoff_path = _normalize_text(
+        str(next_step_handoff_path),
+        default=_TARGETED_FIX_POST_REENTRY_NEXT_STEP_HANDOFF_PATH,
+    )
+    normalized_route_executor_boundary_path = _normalize_text(
+        str(route_executor_boundary_path),
+        default=_TARGETED_FIX_POST_REENTRY_ROUTE_EXECUTOR_BOUNDARY_PATH,
+    )
+    normalized_route_decision_path = _normalize_text(
+        str(route_decision_path),
+        default=_TARGETED_FIX_POST_REENTRY_ROUTE_DECISION_PATH,
+    )
+    normalized_diff_capture_path = _normalize_text(
+        str(diff_capture_path),
+        default=_TARGETED_FIX_POST_REENTRY_DIFF_CAPTURE_PATH,
+    )
+    normalized_review_handoff_path = _normalize_text(
+        str(review_handoff_path),
+        default=_TARGETED_FIX_POST_REENTRY_REVIEW_HANDOFF_PATH,
+    )
+    cycle_closure_result_path = _TARGETED_FIX_POST_REENTRY_CYCLE_CLOSURE_RESULT_PATH
+    route_decision_payload: dict[str, Any] = {}
+    try:
+        loaded_route_decision_payload = _read_json_object_if_exists(
+            Path(normalized_route_decision_path)
+        )
+    except (OSError, ValueError, json.JSONDecodeError):
+        loaded_route_decision_payload = None
+    if isinstance(loaded_route_decision_payload, Mapping):
+        route_decision_payload = dict(loaded_route_decision_payload)
+    handoff_payload: dict[str, Any] = {}
+    try:
+        loaded_handoff_payload = _read_json_object_if_exists(Path(normalized_next_step_handoff_path))
+    except (OSError, ValueError, json.JSONDecodeError):
+        loaded_handoff_payload = None
+    if isinstance(loaded_handoff_payload, Mapping):
+        handoff_payload = dict(loaded_handoff_payload)
+
+    route_decision = _normalize_text(
+        handoff_payload.get("route_decision"),
+        default=_normalize_text(route_decision_payload.get("route_decision"), default=""),
+    )
+    handoff_status = _normalize_text(handoff_payload.get("handoff_status"), default="blocked")
+    handoff_kind = _normalize_text(handoff_payload.get("handoff_kind"), default="")
+    next_action = _normalize_text(
+        handoff_payload.get("next_action"),
+        default="manual_review_required",
+    )
+    action_consumable = bool(handoff_payload.get("action_consumable", False))
+    execution_allowed = bool(handoff_payload.get("execution_allowed", False))
+    manual_review_required = bool(handoff_payload.get("manual_review_required", True))
+    state: dict[str, Any] = {
+        "status": "blocked",
+        "closure_status": "blocked",
+        "blocked_reason": "post_reentry_next_step_handoff_not_ready",
+        "source": "targeted_fix_post_reentry_next_step_handoff",
+        "next_step_handoff_path": normalized_next_step_handoff_path,
+        "route_executor_boundary_path": normalized_route_executor_boundary_path,
+        "route_decision_path": normalized_route_decision_path,
+        "diff_capture_path": normalized_diff_capture_path,
+        "review_handoff_path": normalized_review_handoff_path,
+        "cycle_closure_result_path": cycle_closure_result_path,
+        "handoff_status": handoff_status,
+        "handoff_kind": handoff_kind,
+        "route_decision": route_decision,
+        "terminal_state": "blocked",
+        "cycle_closed": False,
+        "no_diff_close": False,
+        "no_action_close": False,
+        "approval_required": False,
+        "targeted_fix_required": False,
+        "codex_reentry_required": False,
+        "manual_review_required": True,
+        "execution_performed": False,
+        "next_action": "manual_review_required",
+        "summary": "Post-reentry next-step handoff is not ready for deterministic cycle closure.",
+    }
+    if handoff_status != "ready":
+        pass
+    elif handoff_kind != "cycle_closure":
+        state.update(
+            {
+                "status": "not_applicable",
+                "closure_status": "not_applicable",
+                "terminal_state": "not_closed",
+                "blocked_reason": "handoff_not_cycle_closure",
+                "cycle_closed": False,
+                "manual_review_required": False,
+                "next_action": next_action,
+                "summary": "Next-step handoff is ready but not cycle_closure; cycle close result is not applicable.",
+            }
+        )
+    else:
+        activation_ready = (
+            action_consumable
+            and not execution_allowed
+            and not manual_review_required
+            and next_action
+            in {
+                "complete_post_reentry_no_diff",
+                "complete_post_reentry_no_action",
+            }
+        )
+        if activation_ready and next_action == "complete_post_reentry_no_diff":
+            state.update(
+                {
+                    "status": "completed",
+                    "closure_status": "completed",
+                    "blocked_reason": "none",
+                    "terminal_state": "completed_no_diff",
+                    "cycle_closed": True,
+                    "no_diff_close": True,
+                    "no_action_close": False,
+                    "approval_required": False,
+                    "targeted_fix_required": False,
+                    "codex_reentry_required": False,
+                    "manual_review_required": False,
+                    "execution_performed": False,
+                    "next_action": "none",
+                    "summary": "Post-reentry cycle closed with completed_no_diff and no execution.",
+                }
+            )
+        elif activation_ready and next_action == "complete_post_reentry_no_action":
+            state.update(
+                {
+                    "status": "completed",
+                    "closure_status": "completed",
+                    "blocked_reason": "none",
+                    "terminal_state": "completed_no_action",
+                    "cycle_closed": True,
+                    "no_diff_close": False,
+                    "no_action_close": True,
+                    "approval_required": False,
+                    "targeted_fix_required": False,
+                    "codex_reentry_required": False,
+                    "manual_review_required": False,
+                    "execution_performed": False,
+                    "next_action": "none",
+                    "summary": "Post-reentry cycle closed with completed_no_action and no execution.",
+                }
+            )
+    try:
+        Path(cycle_closure_result_path).parent.mkdir(parents=True, exist_ok=True)
+        _write_json(Path(cycle_closure_result_path), state)
+    except OSError:
+        pass
+    return state
+
+
+def _build_targeted_fix_post_reentry_terminal_summary_state(
+    *,
+    cycle_closure_result_state: Mapping[str, Any] | None,
+    cycle_closure_result_path: Path,
+) -> dict[str, Any]:
+    result_state = (
+        dict(cycle_closure_result_state)
+        if isinstance(cycle_closure_result_state, Mapping)
+        else {}
+    )
+    terminal_summary_path = _TARGETED_FIX_POST_REENTRY_TERMINAL_SUMMARY_PATH
+    cycle_closure_status = _normalize_text(result_state.get("closure_status"), default="blocked")
+    terminal_state = _normalize_text(result_state.get("terminal_state"), default="blocked")
+    blocked_reason = _normalize_text(
+        result_state.get("blocked_reason"),
+        default="post_reentry_next_step_handoff_not_ready",
+    )
+    route_decision = _normalize_text(result_state.get("route_decision"), default="")
+    final_next_action = _normalize_text(result_state.get("next_action"), default="manual_review_required")
+    cycle_closed = bool(result_state.get("cycle_closed", False))
+    requires_codex_reentry = bool(result_state.get("codex_reentry_required", False))
+    requires_manual_review = bool(result_state.get("manual_review_required", True))
+    state: dict[str, Any] = {
+        "status": "blocked",
+        "terminal_status": "blocked",
+        "blocked_reason": blocked_reason,
+        "source": "targeted_fix_post_reentry_cycle_closure_result",
+        "cycle_closure_result_path": _normalize_text(
+            str(cycle_closure_result_path),
+            default=_TARGETED_FIX_POST_REENTRY_CYCLE_CLOSURE_RESULT_PATH,
+        ),
+        "terminal_summary_path": terminal_summary_path,
+        "terminal_state": terminal_state,
+        "cycle_closed": cycle_closed,
+        "route_decision": route_decision,
+        "final_next_action": final_next_action,
+        "safe_to_stop": False,
+        "safe_to_commit_prompt_changes": False,
+        "requires_codex_reentry": requires_codex_reentry,
+        "requires_manual_review": requires_manual_review,
+        "summary": "Post-reentry terminal summary is blocked pending manual review.",
+    }
+    if cycle_closure_status == "completed" and terminal_state in {
+        "completed_no_diff",
+        "completed_no_action",
+    }:
+        state.update(
+            {
+                "status": "completed",
+                "terminal_status": "completed",
+                "blocked_reason": "none",
+                "cycle_closed": True,
+                "final_next_action": "none",
+                "safe_to_stop": True,
+                "safe_to_commit_prompt_changes": True,
+                "requires_codex_reentry": False,
+                "requires_manual_review": False,
+                "summary": (
+                    "Post-reentry cycle closure reached terminal completion with no further execution."
+                ),
+            }
+        )
+    elif cycle_closure_status == "not_applicable":
+        state.update(
+            {
+                "status": "not_applicable",
+                "terminal_status": "not_applicable",
+                "safe_to_stop": False,
+                "safe_to_commit_prompt_changes": False,
+                "requires_codex_reentry": False,
+                "requires_manual_review": False,
+                "summary": "Post-reentry terminal summary is not applicable for non-cycle handoff.",
+            }
+        )
+    try:
+        Path(terminal_summary_path).parent.mkdir(parents=True, exist_ok=True)
+        _write_json(Path(terminal_summary_path), state)
+    except OSError:
+        pass
+    return state
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -7799,6 +8053,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     )
     targeted_fix_post_reentry_next_step_handoff_path = (
         one_cycle_controller_dir / "targeted_fix_post_reentry_next_step_handoff.json"
+    )
+    targeted_fix_post_reentry_cycle_closure_result_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_cycle_closure_result.json"
+    )
+    targeted_fix_post_reentry_terminal_summary_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_terminal_summary.json"
     )
     approve_commit_tag_boundary_metadata_path = (
         one_cycle_controller_dir / "approve_commit_tag_boundary.json"
@@ -7896,6 +8156,13 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_post_reentry_targeted_fix_prompt_emission_allowed = False
     targeted_fix_post_reentry_codex_reentry_allowed = False
     targeted_fix_post_reentry_next_step_handoff_status = "blocked"
+    targeted_fix_post_reentry_cycle_closure_status = "blocked"
+    targeted_fix_post_reentry_terminal_state = "blocked"
+    targeted_fix_post_reentry_cycle_closed = False
+    targeted_fix_post_reentry_safe_to_stop = False
+    targeted_fix_post_reentry_safe_to_commit_prompt_changes = False
+    targeted_fix_post_reentry_requires_codex_reentry = False
+    targeted_fix_post_reentry_requires_manual_review = True
     approve_commit_tag_boundary_status = "not_applicable"
     approve_commit_tag_boundary_decision = "none"
     approve_commit_tag_boundary_reason = "route_not_approve"
@@ -8025,6 +8292,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_targeted_fix_post_reentry_next_step_handoff_json": str(
             targeted_fix_post_reentry_next_step_handoff_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_cycle_closure_result_json": str(
+            targeted_fix_post_reentry_cycle_closure_result_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_terminal_summary_json": str(
+            targeted_fix_post_reentry_terminal_summary_path
         ),
         "one_cycle_controller_approve_commit_tag_boundary_json": str(
             approve_commit_tag_boundary_metadata_path
@@ -8576,6 +8849,59 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_post_reentry_next_step_handoff_state.get("handoff_status"),
         default=targeted_fix_post_reentry_next_step_handoff_status,
     )
+    targeted_fix_post_reentry_cycle_closure_result_state = (
+        _build_targeted_fix_post_reentry_cycle_closure_result_state(
+            next_step_handoff_path=targeted_fix_post_reentry_next_step_handoff_path,
+            route_executor_boundary_path=targeted_fix_post_reentry_route_executor_boundary_path,
+            route_decision_path=targeted_fix_post_reentry_route_decision_path,
+            diff_capture_path=targeted_fix_post_reentry_diff_capture_path,
+            review_handoff_path=targeted_fix_post_reentry_review_handoff_path,
+        )
+    )
+    targeted_fix_post_reentry_terminal_summary_state = (
+        _build_targeted_fix_post_reentry_terminal_summary_state(
+            cycle_closure_result_state=targeted_fix_post_reentry_cycle_closure_result_state,
+            cycle_closure_result_path=targeted_fix_post_reentry_cycle_closure_result_path,
+        )
+    )
+    targeted_fix_post_reentry_cycle_closure_status = _normalize_text(
+        targeted_fix_post_reentry_cycle_closure_result_state.get("closure_status"),
+        default=targeted_fix_post_reentry_cycle_closure_status,
+    )
+    targeted_fix_post_reentry_terminal_state = _normalize_text(
+        targeted_fix_post_reentry_terminal_summary_state.get("terminal_state"),
+        default=targeted_fix_post_reentry_terminal_state,
+    )
+    targeted_fix_post_reentry_cycle_closed = bool(
+        targeted_fix_post_reentry_terminal_summary_state.get(
+            "cycle_closed",
+            targeted_fix_post_reentry_cycle_closed,
+        )
+    )
+    targeted_fix_post_reentry_safe_to_stop = bool(
+        targeted_fix_post_reentry_terminal_summary_state.get(
+            "safe_to_stop",
+            targeted_fix_post_reentry_safe_to_stop,
+        )
+    )
+    targeted_fix_post_reentry_safe_to_commit_prompt_changes = bool(
+        targeted_fix_post_reentry_terminal_summary_state.get(
+            "safe_to_commit_prompt_changes",
+            targeted_fix_post_reentry_safe_to_commit_prompt_changes,
+        )
+    )
+    targeted_fix_post_reentry_requires_codex_reentry = bool(
+        targeted_fix_post_reentry_terminal_summary_state.get(
+            "requires_codex_reentry",
+            targeted_fix_post_reentry_requires_codex_reentry,
+        )
+    )
+    targeted_fix_post_reentry_requires_manual_review = bool(
+        targeted_fix_post_reentry_terminal_summary_state.get(
+            "requires_manual_review",
+            targeted_fix_post_reentry_requires_manual_review,
+        )
+    )
     approve_commit_tag_boundary_state = _build_approve_commit_tag_boundary_state(
         review_route_status=review_route_status,
         review_route_decision=review_route_decision,
@@ -8850,6 +9176,21 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "targeted_fix_post_reentry_next_step_handoff_status": (
             targeted_fix_post_reentry_next_step_handoff_status
         ),
+        "targeted_fix_post_reentry_cycle_closure_status": (
+            targeted_fix_post_reentry_cycle_closure_status
+        ),
+        "targeted_fix_post_reentry_terminal_state": targeted_fix_post_reentry_terminal_state,
+        "targeted_fix_post_reentry_cycle_closed": targeted_fix_post_reentry_cycle_closed,
+        "targeted_fix_post_reentry_safe_to_stop": targeted_fix_post_reentry_safe_to_stop,
+        "targeted_fix_post_reentry_safe_to_commit_prompt_changes": (
+            targeted_fix_post_reentry_safe_to_commit_prompt_changes
+        ),
+        "targeted_fix_post_reentry_requires_codex_reentry": (
+            targeted_fix_post_reentry_requires_codex_reentry
+        ),
+        "targeted_fix_post_reentry_requires_manual_review": (
+            targeted_fix_post_reentry_requires_manual_review
+        ),
         "targeted_fix_post_reentry_review_response_path": str(
             targeted_fix_post_reentry_review_response_path
         ),
@@ -8864,6 +9205,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "targeted_fix_post_reentry_next_step_handoff_path": str(
             targeted_fix_post_reentry_next_step_handoff_path
+        ),
+        "targeted_fix_post_reentry_cycle_closure_result_path": str(
+            targeted_fix_post_reentry_cycle_closure_result_path
+        ),
+        "targeted_fix_post_reentry_terminal_summary_path": str(
+            targeted_fix_post_reentry_terminal_summary_path
         ),
         "targeted_fix_post_reentry_diff_capture_path": str(
             targeted_fix_post_reentry_diff_capture_path
@@ -9095,6 +9442,34 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- Targeted-fix post-reentry targeted-fix required: "
             f"`{str(targeted_fix_post_reentry_targeted_fix_required).lower()}`"
         ),
+        (
+            "- Targeted-fix post-reentry cycle closure status: "
+            f"`{targeted_fix_post_reentry_cycle_closure_status}`"
+        ),
+        (
+            "- Targeted-fix post-reentry terminal state: "
+            f"`{targeted_fix_post_reentry_terminal_state}`"
+        ),
+        (
+            "- Targeted-fix post-reentry cycle closed: "
+            f"`{str(targeted_fix_post_reentry_cycle_closed).lower()}`"
+        ),
+        (
+            "- Targeted-fix post-reentry safe to stop: "
+            f"`{str(targeted_fix_post_reentry_safe_to_stop).lower()}`"
+        ),
+        (
+            "- Targeted-fix post-reentry safe to commit prompt changes: "
+            f"`{str(targeted_fix_post_reentry_safe_to_commit_prompt_changes).lower()}`"
+        ),
+        (
+            "- Targeted-fix post-reentry requires codex reentry: "
+            f"`{str(targeted_fix_post_reentry_requires_codex_reentry).lower()}`"
+        ),
+        (
+            "- Targeted-fix post-reentry requires manual review: "
+            f"`{str(targeted_fix_post_reentry_requires_manual_review).lower()}`"
+        ),
         f"- Approve boundary status: `{approve_commit_tag_boundary_status}`",
         f"- Approve boundary decision: `{approve_commit_tag_boundary_decision}`",
         f"- Approve boundary reason: `{approve_commit_tag_boundary_reason}`",
@@ -9233,6 +9608,14 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- targeted_fix_post_reentry_route_decision.json: "
             f"`{targeted_fix_post_reentry_route_decision_path}`"
         ),
+        (
+            "- targeted_fix_post_reentry_cycle_closure_result.json: "
+            f"`{targeted_fix_post_reentry_cycle_closure_result_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_terminal_summary.json: "
+            f"`{targeted_fix_post_reentry_terminal_summary_path}`"
+        ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
@@ -9354,6 +9737,13 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_post_reentry_targeted_fix_prompt_emission_allowed = False
         targeted_fix_post_reentry_codex_reentry_allowed = False
         targeted_fix_post_reentry_next_step_handoff_status = "blocked"
+        targeted_fix_post_reentry_cycle_closure_status = "blocked"
+        targeted_fix_post_reentry_terminal_state = "blocked"
+        targeted_fix_post_reentry_cycle_closed = False
+        targeted_fix_post_reentry_safe_to_stop = False
+        targeted_fix_post_reentry_safe_to_commit_prompt_changes = False
+        targeted_fix_post_reentry_requires_codex_reentry = False
+        targeted_fix_post_reentry_requires_manual_review = True
         approve_commit_tag_boundary_status = "not_applicable"
         approve_commit_tag_boundary_decision = "none"
         approve_commit_tag_boundary_reason = "route_not_approve"
@@ -9632,6 +10022,27 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "project_browser_autonomous_targeted_fix_post_reentry_next_step_handoff_status": (
             targeted_fix_post_reentry_next_step_handoff_status
         ),
+        "project_browser_autonomous_targeted_fix_post_reentry_cycle_closure_status": (
+            targeted_fix_post_reentry_cycle_closure_status
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_terminal_state": (
+            targeted_fix_post_reentry_terminal_state
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_cycle_closed": (
+            targeted_fix_post_reentry_cycle_closed
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_safe_to_stop": (
+            targeted_fix_post_reentry_safe_to_stop
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_safe_to_commit_prompt_changes": (
+            targeted_fix_post_reentry_safe_to_commit_prompt_changes
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_requires_codex_reentry": (
+            targeted_fix_post_reentry_requires_codex_reentry
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_requires_manual_review": (
+            targeted_fix_post_reentry_requires_manual_review
+        ),
         "project_browser_autonomous_targeted_fix_post_reentry_review_response_path": str(
             targeted_fix_post_reentry_review_response_path
         ),
@@ -9646,6 +10057,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_next_step_handoff_path": str(
             targeted_fix_post_reentry_next_step_handoff_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_cycle_closure_result_path": str(
+            targeted_fix_post_reentry_cycle_closure_result_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_terminal_summary_path": str(
+            targeted_fix_post_reentry_terminal_summary_path
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_path": str(
             targeted_fix_post_reentry_review_handoff_path
