@@ -6687,6 +6687,33 @@ def _build_remote_readiness_boundary_state(
         cwd=normalized_repo_path,
         shell=False,
     )
+    expected_head_tag_exists_cmd = subprocess.run(
+        ["git", "tag", "--list", expected_head_tag],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    expected_head_tag_exists = False
+    expected_head_tag_ancestor_of_head = False
+    expected_tag_ancestor_cmd: subprocess.CompletedProcess[str] | None = None
+    if expected_head_tag_exists_cmd.returncode == 0:
+        expected_head_tag_exists = expected_head_tag in {
+            line.strip()
+            for line in (expected_head_tag_exists_cmd.stdout or "").splitlines()
+            if line.strip()
+        }
+        if expected_head_tag_exists:
+            expected_tag_ancestor_cmd = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", expected_head_tag, "HEAD"],
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            expected_head_tag_ancestor_of_head = expected_tag_ancestor_cmd.returncode == 0
     remotes_cmd = subprocess.run(
         ["git", "remote"],
         text=True,
@@ -6709,10 +6736,13 @@ def _build_remote_readiness_boundary_state(
         current_branch_cmd.returncode,
         head_short_cmd.returncode,
         head_tags_cmd.returncode,
+        expected_head_tag_exists_cmd.returncode,
         remotes_cmd.returncode,
         remotes_verbose_cmd.returncode,
     )
-    if any(code != 0 for code in command_return_codes):
+    if any(code != 0 for code in command_return_codes) or (
+        expected_tag_ancestor_cmd is not None and expected_tag_ancestor_cmd.returncode not in {0, 1}
+    ):
         return {
             **base_state,
             "blocked_reason": "git_metadata_collection_failed",
@@ -6735,7 +6765,9 @@ def _build_remote_readiness_boundary_state(
             if line.strip()
         }
     )
-    expected_head_tag_present = expected_head_tag in set(head_tags)
+    expected_head_tag_present = bool(
+        expected_head_tag_exists and expected_head_tag_ancestor_of_head
+    )
     remotes = [
         line.strip() for line in (remotes_cmd.stdout or "").splitlines() if line.strip()
     ]
@@ -6782,6 +6814,8 @@ def _build_remote_readiness_boundary_state(
         "current_branch": current_branch,
         "head_short": head_short,
         "head_tags": head_tags,
+        "expected_head_tag_exists": expected_head_tag_exists,
+        "expected_head_tag_ancestor_of_head": expected_head_tag_ancestor_of_head,
         "expected_head_tag_present": expected_head_tag_present,
         "worktree_clean": worktree_clean,
         "changed_tracked_files": changed_tracked_files,
@@ -6801,12 +6835,19 @@ def _build_remote_readiness_boundary_state(
             "next_action": "commit_or_reconcile_tracked_changes_before_remote",
             "summary": "Remote readiness boundary is blocked by tracked changes in the worktree.",
         }
-    if not expected_head_tag_present:
+    if not expected_head_tag_exists:
         return {
             **state,
-            "blocked_reason": "expected_prompt321_head_tag_missing",
+            "blocked_reason": "expected_prompt321_tag_missing",
             "next_action": "tag_prompt321_before_remote_boundary",
-            "summary": "Remote readiness boundary is blocked because expected Prompt321 HEAD tag is missing.",
+            "summary": "Remote readiness boundary is blocked because expected Prompt321 tag is missing.",
+        }
+    if not expected_head_tag_ancestor_of_head:
+        return {
+            **state,
+            "blocked_reason": "expected_prompt321_tag_not_ancestor_of_head",
+            "next_action": "checkout_or_merge_history_where_prompt321_tag_is_ancestor_of_head",
+            "summary": "Remote readiness boundary is blocked because expected Prompt321 tag is not an ancestor of HEAD.",
         }
     if current_branch != expected_branch:
         return {
@@ -6994,12 +7035,44 @@ def _build_local_end_to_end_controller_component_matrix_state(
         cwd=normalized_repo_path,
         shell=False,
     )
+    expected_head_tag_exists_cmd = subprocess.run(
+        ["git", "tag", "--list", expected_head_tag],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    expected_head_tag_exists = False
+    expected_head_tag_ancestor_of_head = False
+    expected_tag_ancestor_cmd: subprocess.CompletedProcess[str] | None = None
+    if expected_head_tag_exists_cmd.returncode == 0:
+        expected_head_tag_exists = expected_head_tag in {
+            line.strip()
+            for line in (expected_head_tag_exists_cmd.stdout or "").splitlines()
+            if line.strip()
+        }
+        if expected_head_tag_exists:
+            expected_tag_ancestor_cmd = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", expected_head_tag, "HEAD"],
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            expected_head_tag_ancestor_of_head = expected_tag_ancestor_cmd.returncode == 0
 
     metadata_collection_ok = (
         status_short_cmd.returncode == 0
         and current_branch_cmd.returncode == 0
         and head_short_cmd.returncode == 0
         and head_tags_cmd.returncode == 0
+        and expected_head_tag_exists_cmd.returncode == 0
+        and (
+            expected_tag_ancestor_cmd is None
+            or expected_tag_ancestor_cmd.returncode in {0, 1}
+        )
     )
     changed_tracked_files = (
         [
@@ -7026,7 +7099,9 @@ def _build_local_end_to_end_controller_component_matrix_state(
         if metadata_collection_ok
         else []
     )
-    expected_head_tag_present = expected_head_tag in set(head_tags)
+    expected_head_tag_present = bool(
+        expected_head_tag_exists and expected_head_tag_ancestor_of_head
+    )
 
     approve_reconciliation_receipt = _read_json_object_if_exists(
         approve_commit_tag_artifact_reconciliation_receipt_path
@@ -7401,6 +7476,8 @@ def _build_local_end_to_end_controller_component_matrix_state(
         "head_short": head_short,
         "head_tags": head_tags,
         "expected_head_tag": expected_head_tag,
+        "expected_head_tag_exists": expected_head_tag_exists,
+        "expected_head_tag_ancestor_of_head": expected_head_tag_ancestor_of_head,
         "expected_head_tag_present": expected_head_tag_present,
         "worktree_clean": worktree_clean,
         "changed_tracked_files": changed_tracked_files,
@@ -7473,6 +7550,10 @@ def _build_local_end_to_end_controller_readiness_boundary_state(
     head_tags = _normalize_string_list(component_matrix.get("head_tags"))
     expected_branch = _LOCAL_END_TO_END_CONTROLLER_EXPECTED_BRANCH
     expected_head_tag = _LOCAL_END_TO_END_CONTROLLER_EXPECTED_HEAD_TAG
+    expected_head_tag_exists = bool(component_matrix.get("expected_head_tag_exists", False))
+    expected_head_tag_ancestor_of_head = bool(
+        component_matrix.get("expected_head_tag_ancestor_of_head", False)
+    )
     expected_head_tag_present = bool(component_matrix.get("expected_head_tag_present", False))
     changed_tracked_files = _normalize_string_list(component_matrix.get("changed_tracked_files"))
     worktree_clean = bool(component_matrix.get("worktree_clean", False))
@@ -7489,9 +7570,12 @@ def _build_local_end_to_end_controller_readiness_boundary_state(
     if not worktree_clean:
         blocked_reason = "tracked_changes_present_before_local_end_to_end_readiness"
         next_action = "commit_or_reconcile_tracked_changes_before_local_readiness"
-    elif not expected_head_tag_present:
-        blocked_reason = "expected_prompt322_head_tag_missing"
+    elif not expected_head_tag_exists:
+        blocked_reason = "expected_prompt322_tag_missing"
         next_action = "commit_and_tag_prompt322_before_local_readiness"
+    elif not expected_head_tag_ancestor_of_head:
+        blocked_reason = "expected_prompt322_tag_not_ancestor_of_head"
+        next_action = "checkout_or_merge_history_where_prompt322_tag_is_ancestor_of_head"
     elif not reconciliation_completed:
         blocked_reason = "approve_commit_tag_reconciliation_not_completed"
         next_action = "complete_approve_commit_tag_reconciliation"
@@ -7515,6 +7599,8 @@ def _build_local_end_to_end_controller_readiness_boundary_state(
         "head_short": head_short,
         "head_tags": head_tags,
         "expected_head_tag": expected_head_tag,
+        "expected_head_tag_exists": expected_head_tag_exists,
+        "expected_head_tag_ancestor_of_head": expected_head_tag_ancestor_of_head,
         "expected_head_tag_present": expected_head_tag_present,
         "worktree_clean": worktree_clean,
         "changed_tracked_files": changed_tracked_files,
@@ -7543,11 +7629,15 @@ def _build_local_end_to_end_controller_readiness_boundary_state(
                 if blocked_reason == "tracked_changes_present_before_local_end_to_end_readiness"
                 else (
                     "Local-only end-to-end controller readiness is blocked because expected Prompt322 tag is missing."
-                    if blocked_reason == "expected_prompt322_head_tag_missing"
+                    if blocked_reason == "expected_prompt322_tag_missing"
                     else (
-                        "Local-only end-to-end controller readiness is blocked because approve commit/tag reconciliation is not completed."
-                        if blocked_reason == "approve_commit_tag_reconciliation_not_completed"
-                        else "Local-only end-to-end controller readiness is blocked because required local controller components are missing."
+                        "Local-only end-to-end controller readiness is blocked because expected Prompt322 tag is not an ancestor of HEAD."
+                        if blocked_reason == "expected_prompt322_tag_not_ancestor_of_head"
+                        else (
+                            "Local-only end-to-end controller readiness is blocked because approve commit/tag reconciliation is not completed."
+                            if blocked_reason == "approve_commit_tag_reconciliation_not_completed"
+                            else "Local-only end-to-end controller readiness is blocked because required local controller components are missing."
+                        )
                     )
                 )
             )
@@ -7896,9 +7986,13 @@ def _build_local_end_to_end_dry_run_step_matrix_state(
                 "Metadata-only local end-to-end dry-run step matrix is blocked by tracked changes."
                 if blocked_reason == "tracked_changes_present_before_dry_run_plan"
                 else (
-                    "Metadata-only local end-to-end dry-run step matrix is blocked because expected Prompt323 head tag is missing."
-                    if blocked_reason == "expected_prompt323_head_tag_missing"
-                    else "Metadata-only local end-to-end dry-run step matrix is blocked because local readiness artifacts are missing or incompatible."
+                    "Metadata-only local end-to-end dry-run step matrix is blocked because expected Prompt323 tag is missing."
+                    if blocked_reason == "expected_prompt323_tag_missing"
+                    else (
+                        "Metadata-only local end-to-end dry-run step matrix is blocked because expected Prompt323 tag is not an ancestor of HEAD."
+                        if blocked_reason == "expected_prompt323_tag_not_ancestor_of_head"
+                        else "Metadata-only local end-to-end dry-run step matrix is blocked because local readiness artifacts are missing or incompatible."
+                    )
                 )
             )
         ),
@@ -7952,12 +8046,44 @@ def _build_local_end_to_end_dry_run_plan_state(
         cwd=normalized_repo_path,
         shell=False,
     )
+    expected_head_tag_exists_cmd = subprocess.run(
+        ["git", "tag", "--list", expected_head_tag],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    expected_head_tag_exists = False
+    expected_head_tag_ancestor_of_head = False
+    expected_tag_ancestor_cmd: subprocess.CompletedProcess[str] | None = None
+    if expected_head_tag_exists_cmd.returncode == 0:
+        expected_head_tag_exists = expected_head_tag in {
+            line.strip()
+            for line in (expected_head_tag_exists_cmd.stdout or "").splitlines()
+            if line.strip()
+        }
+        if expected_head_tag_exists:
+            expected_tag_ancestor_cmd = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", expected_head_tag, "HEAD"],
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            expected_head_tag_ancestor_of_head = expected_tag_ancestor_cmd.returncode == 0
 
     metadata_collection_ok = (
         status_short_cmd.returncode == 0
         and current_branch_cmd.returncode == 0
         and head_short_cmd.returncode == 0
         and head_tags_cmd.returncode == 0
+        and expected_head_tag_exists_cmd.returncode == 0
+        and (
+            expected_tag_ancestor_cmd is None
+            or expected_tag_ancestor_cmd.returncode in {0, 1}
+        )
     )
     changed_tracked_files = (
         [
@@ -7984,7 +8110,9 @@ def _build_local_end_to_end_dry_run_plan_state(
         if metadata_collection_ok
         else []
     )
-    expected_head_tag_present = expected_head_tag in set(head_tags)
+    expected_head_tag_present = bool(
+        expected_head_tag_exists and expected_head_tag_ancestor_of_head
+    )
 
     component_matrix_state = _read_json_object_if_exists(component_matrix_path) or {}
     readiness_boundary_state = _read_json_object_if_exists(readiness_boundary_path) or {}
@@ -8070,11 +8198,17 @@ def _build_local_end_to_end_dry_run_plan_state(
         blocked_reason = "tracked_changes_present_before_dry_run_plan"
         next_action = "commit_or_reconcile_tracked_changes_before_dry_run_plan"
         summary = "Local-only end-to-end dry-run plan is blocked by tracked changes in the worktree."
-    elif not expected_head_tag_present:
-        blocked_reason = "expected_prompt323_head_tag_missing"
+    elif not expected_head_tag_exists:
+        blocked_reason = "expected_prompt323_tag_missing"
         next_action = "commit_and_tag_prompt323_before_dry_run_plan"
         summary = (
-            "Local-only end-to-end dry-run plan is blocked because expected Prompt323 head tag is missing."
+            "Local-only end-to-end dry-run plan is blocked because expected Prompt323 tag is missing."
+        )
+    elif not expected_head_tag_ancestor_of_head:
+        blocked_reason = "expected_prompt323_tag_not_ancestor_of_head"
+        next_action = "checkout_or_merge_history_where_prompt323_tag_is_ancestor_of_head"
+        summary = (
+            "Local-only end-to-end dry-run plan is blocked because expected Prompt323 tag is not an ancestor of HEAD."
         )
     elif not prompt323_local_artifacts_compatible:
         blocked_reason = "local_end_to_end_readiness_not_available"
@@ -8101,6 +8235,8 @@ def _build_local_end_to_end_dry_run_plan_state(
         "head_short": head_short,
         "head_tags": head_tags,
         "expected_head_tag": expected_head_tag,
+        "expected_head_tag_exists": expected_head_tag_exists,
+        "expected_head_tag_ancestor_of_head": expected_head_tag_ancestor_of_head,
         "expected_head_tag_present": expected_head_tag_present,
         "worktree_clean": worktree_clean,
         "changed_tracked_files": changed_tracked_files,
@@ -8390,11 +8526,43 @@ def _build_local_end_to_end_one_shot_execution_gate_state(
         cwd=normalized_repo_path,
         shell=False,
     )
+    expected_head_tag_exists_cmd = subprocess.run(
+        ["git", "tag", "--list", expected_head_tag],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    expected_head_tag_exists = False
+    expected_head_tag_ancestor_of_head = False
+    expected_tag_ancestor_cmd: subprocess.CompletedProcess[str] | None = None
+    if expected_head_tag_exists_cmd.returncode == 0:
+        expected_head_tag_exists = expected_head_tag in {
+            line.strip()
+            for line in (expected_head_tag_exists_cmd.stdout or "").splitlines()
+            if line.strip()
+        }
+        if expected_head_tag_exists:
+            expected_tag_ancestor_cmd = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", expected_head_tag, "HEAD"],
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            expected_head_tag_ancestor_of_head = expected_tag_ancestor_cmd.returncode == 0
     metadata_collection_ok = (
         status_short_cmd.returncode == 0
         and current_branch_cmd.returncode == 0
         and head_short_cmd.returncode == 0
         and head_tags_cmd.returncode == 0
+        and expected_head_tag_exists_cmd.returncode == 0
+        and (
+            expected_tag_ancestor_cmd is None
+            or expected_tag_ancestor_cmd.returncode in {0, 1}
+        )
     )
     changed_tracked_files = (
         [
@@ -8427,7 +8595,9 @@ def _build_local_end_to_end_one_shot_execution_gate_state(
         if metadata_collection_ok
         else []
     )
-    expected_head_tag_present = expected_head_tag in set(head_tags)
+    expected_head_tag_present = bool(
+        expected_head_tag_exists and expected_head_tag_ancestor_of_head
+    )
 
     plan_status = _normalize_text(plan.get("status"), default="blocked")
     plan_ready = bool(plan.get("dry_run_plan_ready", False))
@@ -8472,11 +8642,17 @@ def _build_local_end_to_end_one_shot_execution_gate_state(
         blocked_reason = "tracked_changes_present_before_one_shot_execution_gate"
         next_action = "commit_or_reconcile_tracked_changes_before_one_shot_gate"
         summary = "Local-only one-shot execution gate is blocked by tracked changes in the worktree."
-    elif not expected_head_tag_present:
-        blocked_reason = "expected_prompt324_head_tag_missing"
+    elif not expected_head_tag_exists:
+        blocked_reason = "expected_prompt324_tag_missing"
         next_action = "commit_and_tag_prompt324_before_one_shot_gate"
         summary = (
-            "Local-only one-shot execution gate is blocked because expected Prompt324 head tag is missing."
+            "Local-only one-shot execution gate is blocked because expected Prompt324 tag is missing."
+        )
+    elif not expected_head_tag_ancestor_of_head:
+        blocked_reason = "expected_prompt324_tag_not_ancestor_of_head"
+        next_action = "checkout_or_merge_history_where_prompt324_tag_is_ancestor_of_head"
+        summary = (
+            "Local-only one-shot execution gate is blocked because expected Prompt324 tag is not an ancestor of HEAD."
         )
     elif not dry_run_plan_ready:
         blocked_reason = "local_end_to_end_dry_run_plan_not_ready"
@@ -8503,6 +8679,8 @@ def _build_local_end_to_end_one_shot_execution_gate_state(
         "head_short": head_short,
         "head_tags": head_tags,
         "expected_head_tag": expected_head_tag,
+        "expected_head_tag_exists": expected_head_tag_exists,
+        "expected_head_tag_ancestor_of_head": expected_head_tag_ancestor_of_head,
         "expected_head_tag_present": expected_head_tag_present,
         "worktree_clean": worktree_clean,
         "changed_tracked_files": changed_tracked_files,
@@ -8652,12 +8830,44 @@ def _build_bounded_local_autonomous_loop_state(
         cwd=normalized_repo_path,
         shell=False,
     )
+    expected_head_tag_exists_cmd = subprocess.run(
+        ["git", "tag", "--list", expected_head_tag],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    expected_head_tag_exists = False
+    expected_head_tag_ancestor_of_head = False
+    expected_tag_ancestor_cmd: subprocess.CompletedProcess[str] | None = None
+    if expected_head_tag_exists_cmd.returncode == 0:
+        expected_head_tag_exists = expected_head_tag in {
+            line.strip()
+            for line in (expected_head_tag_exists_cmd.stdout or "").splitlines()
+            if line.strip()
+        }
+        if expected_head_tag_exists:
+            expected_tag_ancestor_cmd = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", expected_head_tag, "HEAD"],
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            expected_head_tag_ancestor_of_head = expected_tag_ancestor_cmd.returncode == 0
 
     metadata_collection_ok = (
         status_short_cmd.returncode == 0
         and current_branch_cmd.returncode == 0
         and head_short_cmd.returncode == 0
         and head_tags_cmd.returncode == 0
+        and expected_head_tag_exists_cmd.returncode == 0
+        and (
+            expected_tag_ancestor_cmd is None
+            or expected_tag_ancestor_cmd.returncode in {0, 1}
+        )
     )
     changed_tracked_files = (
         [
@@ -8690,7 +8900,9 @@ def _build_bounded_local_autonomous_loop_state(
         if metadata_collection_ok
         else []
     )
-    expected_head_tag_present = expected_head_tag in set(head_tags)
+    expected_head_tag_present = bool(
+        expected_head_tag_exists and expected_head_tag_ancestor_of_head
+    )
 
     dry_run_plan_state = _read_json_object_if_exists(dry_run_plan_path) or {}
     dry_run_step_matrix_state = _read_json_object_if_exists(dry_run_step_matrix_path) or {}
@@ -8828,11 +9040,17 @@ def _build_bounded_local_autonomous_loop_state(
         blocked_reason = "tracked_changes_present_before_bounded_local_loop"
         next_action = "commit_or_reconcile_tracked_changes_before_bounded_local_loop"
         summary = "Bounded local autonomous loop is blocked by tracked changes in the worktree."
-    elif not expected_head_tag_present:
-        blocked_reason = "expected_prompt325_head_tag_missing"
+    elif not expected_head_tag_exists:
+        blocked_reason = "expected_prompt325_tag_missing"
         next_action = "commit_and_tag_prompt325_before_bounded_local_loop"
         summary = (
-            "Bounded local autonomous loop is blocked because expected Prompt325 head tag is missing."
+            "Bounded local autonomous loop is blocked because expected Prompt325 tag is missing."
+        )
+    elif not expected_head_tag_ancestor_of_head:
+        blocked_reason = "expected_prompt325_tag_not_ancestor_of_head"
+        next_action = "checkout_or_merge_history_where_prompt325_tag_is_ancestor_of_head"
+        summary = (
+            "Bounded local autonomous loop is blocked because expected Prompt325 tag is not an ancestor of HEAD."
         )
     elif not activation_compatible:
         blocked_reason = "local_one_shot_or_dry_run_artifacts_missing"
@@ -8898,6 +9116,8 @@ def _build_bounded_local_autonomous_loop_state(
         "head_short": head_short,
         "head_tags": head_tags,
         "expected_head_tag": expected_head_tag,
+        "expected_head_tag_exists": expected_head_tag_exists,
+        "expected_head_tag_ancestor_of_head": expected_head_tag_ancestor_of_head,
         "expected_head_tag_present": expected_head_tag_present,
         "worktree_clean": worktree_clean,
         "changed_tracked_files": changed_tracked_files,
