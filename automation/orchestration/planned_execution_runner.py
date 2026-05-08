@@ -3480,6 +3480,8 @@ _ONE_CYCLE_CONTROLLER_ENABLEMENT_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_approve_commit_tag_execution_confirmed",
     "project_browser_autonomous_targeted_fix_reentry_execution_enabled",
     "project_browser_autonomous_targeted_fix_reentry_execution_confirmed",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_enabled",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_confirmed",
 )
 
 
@@ -3636,6 +3638,16 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_path",
     "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_receipt_path",
     "project_browser_autonomous_targeted_fix_post_reentry_emitted_prompt_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_status",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_gate_status",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_blocked_reason",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_attempted",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_executed",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_exit_code",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_next_action",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_receipt_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_stdout_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_stderr_path",
     "project_browser_autonomous_approve_commit_tag_boundary_status",
     "project_browser_autonomous_approve_commit_tag_boundary_decision",
     "project_browser_autonomous_approve_commit_tag_boundary_reason",
@@ -3809,6 +3821,15 @@ _TARGETED_FIX_POST_REENTRY_PROMPT_EMISSION_PATH = (
 )
 _TARGETED_FIX_POST_REENTRY_PROMPT_EMISSION_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_prompt_emission_receipt.json"
+)
+_TARGETED_FIX_POST_REENTRY_CODEX_REENTRY_EXECUTION_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_codex_reentry_execution_receipt.json"
+)
+_TARGETED_FIX_POST_REENTRY_CODEX_REENTRY_EXECUTION_STDOUT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_codex_reentry_execution_stdout.txt"
+)
+_TARGETED_FIX_POST_REENTRY_CODEX_REENTRY_EXECUTION_STDERR_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_codex_reentry_execution_stderr.txt"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
@@ -6851,6 +6872,282 @@ def _run_targeted_fix_reentry_execution_if_enabled(
     return _write_receipt()
 
 
+def _run_targeted_fix_post_reentry_codex_reentry_execution_if_enabled(
+    *,
+    prompt_emission_path: Path,
+    prompt_emission_receipt_path: Path,
+    expected_emitted_prompt_path: Path,
+    execution_enabled: bool,
+    execution_confirmed: bool,
+    execution_receipt_path: Path,
+    execution_stdout_path: Path,
+    execution_stderr_path: Path,
+) -> dict[str, Any]:
+    normalized_prompt_emission_path = _normalize_text(
+        str(prompt_emission_path),
+        default=_TARGETED_FIX_POST_REENTRY_PROMPT_EMISSION_PATH,
+    )
+    normalized_prompt_emission_receipt_path = _normalize_text(
+        str(prompt_emission_receipt_path),
+        default=_TARGETED_FIX_POST_REENTRY_PROMPT_EMISSION_RECEIPT_PATH,
+    )
+    normalized_expected_prompt_path = _normalize_text(
+        str(expected_emitted_prompt_path),
+        default=_TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH,
+    )
+    normalized_execution_receipt_path = _normalize_text(
+        str(execution_receipt_path),
+        default=_TARGETED_FIX_POST_REENTRY_CODEX_REENTRY_EXECUTION_RECEIPT_PATH,
+    )
+    normalized_stdout_path = _normalize_text(
+        str(execution_stdout_path),
+        default=_TARGETED_FIX_POST_REENTRY_CODEX_REENTRY_EXECUTION_STDOUT_PATH,
+    )
+    normalized_stderr_path = _normalize_text(
+        str(execution_stderr_path),
+        default=_TARGETED_FIX_POST_REENTRY_CODEX_REENTRY_EXECUTION_STDERR_PATH,
+    )
+
+    prompt_emission_state_payload: dict[str, Any] = {}
+    prompt_emission_receipt_payload: dict[str, Any] = {}
+    try:
+        loaded_prompt_emission_state = _read_json_object_if_exists(Path(normalized_prompt_emission_path))
+    except (OSError, ValueError, json.JSONDecodeError):
+        loaded_prompt_emission_state = None
+    if isinstance(loaded_prompt_emission_state, Mapping):
+        prompt_emission_state_payload = dict(loaded_prompt_emission_state)
+    try:
+        loaded_prompt_emission_receipt = _read_json_object_if_exists(
+            Path(normalized_prompt_emission_receipt_path)
+        )
+    except (OSError, ValueError, json.JSONDecodeError):
+        loaded_prompt_emission_receipt = None
+    if isinstance(loaded_prompt_emission_receipt, Mapping):
+        prompt_emission_receipt_payload = dict(loaded_prompt_emission_receipt)
+
+    prompt_emission_status = _normalize_text(
+        prompt_emission_receipt_payload.get("status"),
+        default=_normalize_text(prompt_emission_state_payload.get("status"), default="not_applicable"),
+    )
+    prompt_emission_receipt_status = _normalize_text(
+        prompt_emission_receipt_payload.get("receipt_status"),
+        default="not_applicable",
+    )
+    prompt_written = bool(
+        prompt_emission_receipt_payload.get(
+            "prompt_written",
+            prompt_emission_state_payload.get("prompt_written", False),
+        )
+    )
+    ready_for_codex_reentry = bool(
+        prompt_emission_receipt_payload.get("ready_for_codex_reentry", False)
+    )
+    codex_reentry_executed = bool(
+        prompt_emission_receipt_payload.get("codex_reentry_executed", False)
+    )
+    execution_performed = bool(
+        prompt_emission_receipt_payload.get("execution_performed", False)
+    )
+    emitted_prompt_path = _normalize_text(
+        prompt_emission_receipt_payload.get("emitted_prompt_path"),
+        default=_normalize_text(
+            prompt_emission_state_payload.get("emitted_prompt_path"),
+            default=normalized_expected_prompt_path,
+        ),
+    )
+
+    state: dict[str, Any] = {
+        "status": "not_applicable",
+        "execution_status": "not_applicable",
+        "gate_status": "not_applicable",
+        "blocked_reason": "prompt_emission_not_ready",
+        "attempted": False,
+        "source": "targeted_fix_post_reentry_prompt_emission_receipt",
+        "prompt_emission_path": normalized_prompt_emission_path,
+        "prompt_emission_receipt_path": normalized_prompt_emission_receipt_path,
+        "emitted_prompt_path": emitted_prompt_path,
+        "stdout_path": normalized_stdout_path,
+        "stderr_path": normalized_stderr_path,
+        "receipt_path": normalized_execution_receipt_path,
+        "prompt_written": bool(prompt_written),
+        "ready_for_codex_reentry": bool(ready_for_codex_reentry),
+        "codex_reentry_executed": False,
+        "execution_performed": False,
+        "execution_enabled": bool(execution_enabled),
+        "execution_confirmed": bool(execution_confirmed),
+        "exit_code": None,
+        "codex_command": list(_TARGETED_FIX_REENTRY_EXECUTION_COMMAND),
+        "next_action": "none",
+        "summary": "Post-reentry Codex reentry execution is not applicable because prompt emission is not ready.",
+    }
+
+    stdout_text = ""
+    stderr_text = ""
+
+    receipt_ready = (
+        prompt_emission_status == "ready"
+        and prompt_emission_receipt_status == "ready"
+        and bool(prompt_written)
+        and bool(ready_for_codex_reentry)
+        and (not codex_reentry_executed)
+        and (not execution_performed)
+    )
+    if not receipt_ready:
+        state.update(
+            {
+                "status": "not_applicable",
+                "execution_status": "not_applicable",
+                "gate_status": "not_applicable",
+                "blocked_reason": "prompt_emission_not_ready",
+                "attempted": False,
+                "codex_reentry_executed": False,
+                "execution_performed": False,
+                "exit_code": None,
+                "next_action": "none",
+                "summary": (
+                    "Prompt317 post-reentry prompt emission receipt is not ready for Codex reentry execution."
+                ),
+            }
+        )
+    elif not (execution_enabled and execution_confirmed):
+        state.update(
+            {
+                "status": "blocked",
+                "execution_status": "blocked",
+                "gate_status": "blocked",
+                "blocked_reason": "post_reentry_codex_reentry_execution_not_enabled",
+                "attempted": False,
+                "codex_reentry_executed": False,
+                "execution_performed": False,
+                "exit_code": None,
+                "next_action": "enable_post_reentry_codex_reentry_execution",
+                "summary": (
+                    "Prompt317 post-reentry prompt is ready, but explicit execution enable/confirmation gates are not set."
+                ),
+            }
+        )
+    else:
+        prompt_text = ""
+        prompt_ready = False
+        if emitted_prompt_path == normalized_expected_prompt_path:
+            try:
+                prompt_text = Path(emitted_prompt_path).read_text(encoding="utf-8")
+                prompt_ready = bool(prompt_text.strip())
+            except OSError:
+                prompt_ready = False
+        if not prompt_ready:
+            state.update(
+                {
+                    "status": "blocked",
+                    "execution_status": "blocked",
+                    "gate_status": "blocked",
+                    "blocked_reason": "post_reentry_codex_prompt_missing_or_empty",
+                    "attempted": False,
+                    "codex_reentry_executed": False,
+                    "execution_performed": False,
+                    "exit_code": None,
+                    "next_action": "prepare_post_reentry_targeted_fix_prompt",
+                    "summary": (
+                        "Post-reentry targeted-fix prompt path is missing, unexpected, or empty."
+                    ),
+                }
+            )
+        else:
+            try:
+                completed = subprocess.run(
+                    list(_TARGETED_FIX_REENTRY_EXECUTION_COMMAND),
+                    input=prompt_text,
+                    shell=False,
+                    cwd="/home/rai/codex-local-runner",
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                exit_code = int(completed.returncode)
+                stdout_text = _normalize_text(completed.stdout, default="")
+                stderr_text = _normalize_text(completed.stderr, default="")
+            except OSError as exc:
+                exit_code = 1
+                stderr_text = _normalize_text(str(exc), default="")
+            if exit_code == 0:
+                state.update(
+                    {
+                        "status": "completed",
+                        "execution_status": "completed",
+                        "gate_status": "executed",
+                        "blocked_reason": "none",
+                        "attempted": True,
+                        "codex_reentry_executed": True,
+                        "execution_performed": True,
+                        "exit_code": 0,
+                        "next_action": "capture_post_reentry_diff_after_codex_reentry",
+                        "summary": "Post-reentry Codex reentry execution completed successfully.",
+                    }
+                )
+            else:
+                state.update(
+                    {
+                        "status": "failed",
+                        "execution_status": "failed",
+                        "gate_status": "executed",
+                        "blocked_reason": "post_reentry_codex_reentry_execution_failed",
+                        "attempted": True,
+                        "codex_reentry_executed": True,
+                        "execution_performed": True,
+                        "exit_code": int(exit_code),
+                        "next_action": "review_post_reentry_codex_reentry_failure",
+                        "summary": "Post-reentry Codex reentry execution failed.",
+                    }
+                )
+
+    state["emitted_prompt_path"] = emitted_prompt_path
+
+    try:
+        stdout_file_path = Path(normalized_stdout_path)
+        stderr_file_path = Path(normalized_stderr_path)
+        stdout_file_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_file_path.write_text(stdout_text, encoding="utf-8")
+        stderr_file_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_file_path.write_text(stderr_text, encoding="utf-8")
+    except OSError:
+        pass
+
+    receipt_payload: dict[str, Any] = {
+        "status": _normalize_text(state.get("status"), default=""),
+        "execution_status": _normalize_text(state.get("execution_status"), default=""),
+        "gate_status": _normalize_text(state.get("gate_status"), default=""),
+        "blocked_reason": _normalize_text(state.get("blocked_reason"), default=""),
+        "attempted": bool(state.get("attempted", False)),
+        "source": _normalize_text(state.get("source"), default=""),
+        "prompt_emission_path": normalized_prompt_emission_path,
+        "prompt_emission_receipt_path": normalized_prompt_emission_receipt_path,
+        "emitted_prompt_path": _normalize_text(state.get("emitted_prompt_path"), default=""),
+        "stdout_path": normalized_stdout_path,
+        "stderr_path": normalized_stderr_path,
+        "receipt_path": normalized_execution_receipt_path,
+        "prompt_written": bool(state.get("prompt_written", False)),
+        "ready_for_codex_reentry": bool(state.get("ready_for_codex_reentry", False)),
+        "codex_reentry_executed": bool(state.get("codex_reentry_executed", False)),
+        "execution_performed": bool(state.get("execution_performed", False)),
+        "execution_enabled": bool(state.get("execution_enabled", False)),
+        "execution_confirmed": bool(state.get("execution_confirmed", False)),
+        "exit_code": state.get("exit_code"),
+        "codex_command": list(_TARGETED_FIX_REENTRY_EXECUTION_COMMAND),
+        "next_action": _normalize_text(state.get("next_action"), default="none"),
+        "summary": _normalize_text(state.get("summary"), default=""),
+    }
+    try:
+        receipt_file_path = Path(normalized_execution_receipt_path)
+        receipt_file_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt_file_path.write_text(
+            json.dumps(receipt_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+    return state
+
+
 def _capture_targeted_fix_post_reentry_diff_state(
     *,
     targeted_fix_reentry_execution_state: Mapping[str, Any] | None,
@@ -8383,6 +8680,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_post_reentry_prompt_emission_receipt_path = (
         one_cycle_controller_dir / "targeted_fix_post_reentry_prompt_emission_receipt.json"
     )
+    targeted_fix_post_reentry_codex_reentry_execution_receipt_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_codex_reentry_execution_receipt.json"
+    )
+    targeted_fix_post_reentry_codex_reentry_execution_stdout_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_codex_reentry_execution_stdout.txt"
+    )
+    targeted_fix_post_reentry_codex_reentry_execution_stderr_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_codex_reentry_execution_stderr.txt"
+    )
     approve_commit_tag_boundary_metadata_path = (
         one_cycle_controller_dir / "approve_commit_tag_boundary.json"
     )
@@ -8446,6 +8752,14 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "project_browser_autonomous_targeted_fix_reentry_execution_confirmed",
         default=False,
     )
+    targeted_fix_post_reentry_codex_reentry_execution_enabled = _read_flag(
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_enabled",
+        default=False,
+    )
+    targeted_fix_post_reentry_codex_reentry_execution_confirmed = _read_flag(
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_confirmed",
+        default=False,
+    )
     targeted_fix_reentry_execution_gate_status = "not_applicable"
     targeted_fix_reentry_execution_status = "not_executed"
     targeted_fix_reentry_execution_attempted = False
@@ -8492,6 +8806,13 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_post_reentry_prompt_ready_for_codex_reentry = False
     targeted_fix_post_reentry_prompt_emission_next_action = "none"
     targeted_fix_post_reentry_emitted_prompt_path = str(targeted_fix_codex_prompt_path)
+    targeted_fix_post_reentry_codex_reentry_execution_status = "not_applicable"
+    targeted_fix_post_reentry_codex_reentry_gate_status = "not_applicable"
+    targeted_fix_post_reentry_codex_reentry_blocked_reason = "prompt_emission_not_ready"
+    targeted_fix_post_reentry_codex_reentry_attempted = False
+    targeted_fix_post_reentry_codex_reentry_executed = False
+    targeted_fix_post_reentry_codex_reentry_exit_code: int | None = None
+    targeted_fix_post_reentry_codex_reentry_next_action = "none"
     approve_commit_tag_boundary_status = "not_applicable"
     approve_commit_tag_boundary_decision = "none"
     approve_commit_tag_boundary_reason = "route_not_approve"
@@ -8633,6 +8954,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_targeted_fix_post_reentry_prompt_emission_receipt_json": str(
             targeted_fix_post_reentry_prompt_emission_receipt_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_codex_reentry_execution_receipt_json": str(
+            targeted_fix_post_reentry_codex_reentry_execution_receipt_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_codex_reentry_execution_stdout_txt": str(
+            targeted_fix_post_reentry_codex_reentry_execution_stdout_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_codex_reentry_execution_stderr_txt": str(
+            targeted_fix_post_reentry_codex_reentry_execution_stderr_path
         ),
         "one_cycle_controller_approve_commit_tag_boundary_json": str(
             approve_commit_tag_boundary_metadata_path
@@ -9187,12 +9517,61 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         )
     except OSError:
         pass
+    targeted_fix_post_reentry_codex_reentry_execution_state = (
+        _run_targeted_fix_post_reentry_codex_reentry_execution_if_enabled(
+            prompt_emission_path=targeted_fix_post_reentry_prompt_emission_path,
+            prompt_emission_receipt_path=targeted_fix_post_reentry_prompt_emission_receipt_path,
+            expected_emitted_prompt_path=targeted_fix_codex_prompt_path,
+            execution_enabled=targeted_fix_post_reentry_codex_reentry_execution_enabled,
+            execution_confirmed=targeted_fix_post_reentry_codex_reentry_execution_confirmed,
+            execution_receipt_path=(
+                targeted_fix_post_reentry_codex_reentry_execution_receipt_path
+            ),
+            execution_stdout_path=(
+                targeted_fix_post_reentry_codex_reentry_execution_stdout_path
+            ),
+            execution_stderr_path=(
+                targeted_fix_post_reentry_codex_reentry_execution_stderr_path
+            ),
+        )
+    )
     targeted_fix_post_reentry_next_step_handoff_state = (
         _build_targeted_fix_post_reentry_next_step_handoff_state(
             route_executor_boundary_state=targeted_fix_post_reentry_route_executor_boundary_state,
             route_decision_path=targeted_fix_post_reentry_route_decision_path,
             route_executor_boundary_path=targeted_fix_post_reentry_route_executor_boundary_path,
         )
+    )
+    targeted_fix_post_reentry_codex_reentry_execution_status = _normalize_text(
+        targeted_fix_post_reentry_codex_reentry_execution_state.get("execution_status"),
+        default=targeted_fix_post_reentry_codex_reentry_execution_status,
+    )
+    targeted_fix_post_reentry_codex_reentry_gate_status = _normalize_text(
+        targeted_fix_post_reentry_codex_reentry_execution_state.get("gate_status"),
+        default=targeted_fix_post_reentry_codex_reentry_gate_status,
+    )
+    targeted_fix_post_reentry_codex_reentry_blocked_reason = _normalize_text(
+        targeted_fix_post_reentry_codex_reentry_execution_state.get("blocked_reason"),
+        default=targeted_fix_post_reentry_codex_reentry_blocked_reason,
+    )
+    targeted_fix_post_reentry_codex_reentry_attempted = bool(
+        targeted_fix_post_reentry_codex_reentry_execution_state.get(
+            "attempted",
+            targeted_fix_post_reentry_codex_reentry_attempted,
+        )
+    )
+    targeted_fix_post_reentry_codex_reentry_executed = bool(
+        targeted_fix_post_reentry_codex_reentry_execution_state.get(
+            "codex_reentry_executed",
+            targeted_fix_post_reentry_codex_reentry_executed,
+        )
+    )
+    targeted_fix_post_reentry_codex_reentry_exit_code = _as_optional_int(
+        targeted_fix_post_reentry_codex_reentry_execution_state.get("exit_code")
+    )
+    targeted_fix_post_reentry_codex_reentry_next_action = _normalize_text(
+        targeted_fix_post_reentry_codex_reentry_execution_state.get("next_action"),
+        default=targeted_fix_post_reentry_codex_reentry_next_action,
     )
     targeted_fix_post_reentry_review_assimilation_status = _normalize_text(
         targeted_fix_post_reentry_review_assimilation_state.get("assimilation_status"),
@@ -9701,6 +10080,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "targeted_fix_post_reentry_emitted_prompt_path": (
             targeted_fix_post_reentry_emitted_prompt_path
         ),
+        "targeted_fix_post_reentry_codex_reentry_execution_status": (
+            targeted_fix_post_reentry_codex_reentry_execution_status
+        ),
+        "targeted_fix_post_reentry_codex_reentry_gate_status": (
+            targeted_fix_post_reentry_codex_reentry_gate_status
+        ),
+        "targeted_fix_post_reentry_codex_reentry_blocked_reason": (
+            targeted_fix_post_reentry_codex_reentry_blocked_reason
+        ),
+        "targeted_fix_post_reentry_codex_reentry_attempted": (
+            targeted_fix_post_reentry_codex_reentry_attempted
+        ),
+        "targeted_fix_post_reentry_codex_reentry_executed": (
+            targeted_fix_post_reentry_codex_reentry_executed
+        ),
+        "targeted_fix_post_reentry_codex_reentry_exit_code": (
+            targeted_fix_post_reentry_codex_reentry_exit_code
+        ),
+        "targeted_fix_post_reentry_codex_reentry_next_action": (
+            targeted_fix_post_reentry_codex_reentry_next_action
+        ),
+        "targeted_fix_post_reentry_codex_reentry_execution_receipt_path": str(
+            targeted_fix_post_reentry_codex_reentry_execution_receipt_path
+        ),
+        "targeted_fix_post_reentry_codex_reentry_stdout_path": str(
+            targeted_fix_post_reentry_codex_reentry_execution_stdout_path
+        ),
+        "targeted_fix_post_reentry_codex_reentry_stderr_path": str(
+            targeted_fix_post_reentry_codex_reentry_execution_stderr_path
+        ),
         "targeted_fix_post_reentry_diff_capture_path": str(
             targeted_fix_post_reentry_diff_capture_path
         ),
@@ -9959,6 +10368,34 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- Targeted-fix post-reentry requires manual review: "
             f"`{str(targeted_fix_post_reentry_requires_manual_review).lower()}`"
         ),
+        (
+            "- Post-reentry codex reentry execution status: "
+            f"`{targeted_fix_post_reentry_codex_reentry_execution_status}`"
+        ),
+        (
+            "- Post-reentry codex reentry gate status: "
+            f"`{targeted_fix_post_reentry_codex_reentry_gate_status}`"
+        ),
+        (
+            "- Post-reentry codex reentry blocked reason: "
+            f"`{targeted_fix_post_reentry_codex_reentry_blocked_reason}`"
+        ),
+        (
+            "- Post-reentry codex reentry attempted: "
+            f"`{str(targeted_fix_post_reentry_codex_reentry_attempted).lower()}`"
+        ),
+        (
+            "- Post-reentry codex reentry executed: "
+            f"`{str(targeted_fix_post_reentry_codex_reentry_executed).lower()}`"
+        ),
+        (
+            "- Post-reentry codex reentry exit code: "
+            f"`{targeted_fix_post_reentry_codex_reentry_exit_code}`"
+        ),
+        (
+            "- Post-reentry codex reentry next action: "
+            f"`{targeted_fix_post_reentry_codex_reentry_next_action}`"
+        ),
         f"- Approve boundary status: `{approve_commit_tag_boundary_status}`",
         f"- Approve boundary decision: `{approve_commit_tag_boundary_decision}`",
         f"- Approve boundary reason: `{approve_commit_tag_boundary_reason}`",
@@ -10113,6 +10550,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- targeted_fix_post_reentry_prompt_emission_receipt.json: "
             f"`{targeted_fix_post_reentry_prompt_emission_receipt_path}`"
         ),
+        (
+            "- targeted_fix_post_reentry_codex_reentry_execution_receipt.json: "
+            f"`{targeted_fix_post_reentry_codex_reentry_execution_receipt_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_codex_reentry_execution_stdout.txt: "
+            f"`{targeted_fix_post_reentry_codex_reentry_execution_stdout_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_codex_reentry_execution_stderr.txt: "
+            f"`{targeted_fix_post_reentry_codex_reentry_execution_stderr_path}`"
+        ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
@@ -10247,6 +10696,13 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_post_reentry_prompt_ready_for_codex_reentry = False
         targeted_fix_post_reentry_prompt_emission_next_action = "none"
         targeted_fix_post_reentry_emitted_prompt_path = str(targeted_fix_codex_prompt_path)
+        targeted_fix_post_reentry_codex_reentry_execution_status = "not_applicable"
+        targeted_fix_post_reentry_codex_reentry_gate_status = "not_applicable"
+        targeted_fix_post_reentry_codex_reentry_blocked_reason = "prompt_emission_not_ready"
+        targeted_fix_post_reentry_codex_reentry_attempted = False
+        targeted_fix_post_reentry_codex_reentry_executed = False
+        targeted_fix_post_reentry_codex_reentry_exit_code = None
+        targeted_fix_post_reentry_codex_reentry_next_action = "none"
         approve_commit_tag_boundary_status = "not_applicable"
         approve_commit_tag_boundary_decision = "none"
         approve_commit_tag_boundary_reason = "route_not_approve"
@@ -10590,6 +11046,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_emitted_prompt_path": (
             targeted_fix_post_reentry_emitted_prompt_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_status": (
+            targeted_fix_post_reentry_codex_reentry_execution_status
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_gate_status": (
+            targeted_fix_post_reentry_codex_reentry_gate_status
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_blocked_reason": (
+            targeted_fix_post_reentry_codex_reentry_blocked_reason
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_attempted": (
+            targeted_fix_post_reentry_codex_reentry_attempted
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_executed": (
+            targeted_fix_post_reentry_codex_reentry_executed
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_exit_code": (
+            targeted_fix_post_reentry_codex_reentry_exit_code
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_next_action": (
+            targeted_fix_post_reentry_codex_reentry_next_action
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_receipt_path": str(
+            targeted_fix_post_reentry_codex_reentry_execution_receipt_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_stdout_path": str(
+            targeted_fix_post_reentry_codex_reentry_execution_stdout_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_stderr_path": str(
+            targeted_fix_post_reentry_codex_reentry_execution_stderr_path
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_path": str(
             targeted_fix_post_reentry_review_handoff_path
