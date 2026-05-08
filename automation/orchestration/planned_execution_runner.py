@@ -3784,6 +3784,14 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_selected_step_live_execution_gate_path",
     "project_browser_autonomous_selected_step_live_execution_result_path",
     "project_browser_autonomous_selected_step_live_execution_receipt_path",
+    "project_browser_autonomous_selected_step_execution_result_route_status",
+    "project_browser_autonomous_selected_step_execution_result_route_blocked_reason",
+    "project_browser_autonomous_selected_step_execution_result_route_decision",
+    "project_browser_autonomous_selected_step_execution_result_route_next_action",
+    "project_browser_autonomous_selected_step_execution_result_route_should_continue",
+    "project_browser_autonomous_selected_step_execution_result_route_capture_path",
+    "project_browser_autonomous_selected_step_execution_result_route_decision_path",
+    "project_browser_autonomous_selected_step_execution_result_route_receipt_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -3996,6 +4004,18 @@ _SELECTED_STEP_LIVE_EXECUTION_RESULT_PATH = (
 _SELECTED_STEP_LIVE_EXECUTION_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/"
     "selected_step_live_execution_receipt.json"
+)
+_SELECTED_STEP_EXECUTION_RESULT_ROUTE_CAPTURE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "selected_step_execution_result_route_capture.json"
+)
+_SELECTED_STEP_EXECUTION_RESULT_ROUTE_DECISION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "selected_step_execution_result_route_decision.json"
+)
+_SELECTED_STEP_EXECUTION_RESULT_ROUTE_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "selected_step_execution_result_route_receipt.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_codex_prompt.md"
@@ -10634,6 +10654,246 @@ def _build_selected_step_live_execution_receipt_state(
     }
 
 
+def _build_selected_step_execution_result_route_capture_state(
+    *,
+    gate_path: Path,
+    result_path: Path,
+    receipt_path: Path,
+) -> dict[str, Any]:
+    normalized_repo_path = _APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH
+    status_short_cmd = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=no"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    metadata_collection_ok = status_short_cmd.returncode == 0
+    changed_tracked_files = (
+        [
+            line.rstrip()
+            for line in (status_short_cmd.stdout or "").splitlines()
+            if line.strip()
+        ]
+        if metadata_collection_ok
+        else []
+    )
+    worktree_clean = bool(metadata_collection_ok and (not changed_tracked_files))
+
+    def _read_artifact_payload(path: Path) -> tuple[bool, bool, dict[str, Any]]:
+        exists = path.exists()
+        if not exists:
+            return False, False, {}
+        try:
+            raw_payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError):
+            return True, False, {}
+        if not isinstance(raw_payload, Mapping):
+            return True, False, {}
+        return True, True, dict(raw_payload)
+
+    gate_present, gate_valid, gate = _read_artifact_payload(gate_path)
+    result_present, result_valid, result = _read_artifact_payload(result_path)
+    receipt_present, receipt_valid, receipt = _read_artifact_payload(receipt_path)
+
+    required_artifacts_present = bool(gate_present and result_present and receipt_present)
+    required_artifacts_valid = bool(gate_valid and result_valid and receipt_valid)
+
+    selected_step_id = _as_non_negative_int(
+        result.get("selected_step_id"),
+        default=_as_non_negative_int(
+            receipt.get("selected_step_id"),
+            default=_as_non_negative_int(gate.get("selected_step_id"), default=1),
+        ),
+    )
+    if selected_step_id <= 0:
+        selected_step_id = 1
+    selected_step_name = _normalize_text(
+        result.get("selected_step_name"),
+        default=_normalize_text(
+            receipt.get("selected_step_name"),
+            default=_normalize_text(gate.get("selected_step_name"), default="read_current_state"),
+        ),
+    )
+    selected_step_operation = _normalize_text(
+        result.get("selected_step_operation"),
+        default=_normalize_text(
+            receipt.get("selected_step_operation"),
+            default=_normalize_text(gate.get("selected_step_operation"), default="read_current_state"),
+        ),
+    )
+    if not selected_step_name:
+        selected_step_name = "read_current_state"
+    if not selected_step_operation:
+        selected_step_operation = "read_current_state"
+
+    gate_status = _normalize_text(
+        gate.get("gate_status"),
+        default=_normalize_text(gate.get("status"), default="missing"),
+    )
+    result_status = _normalize_text(
+        result.get("result_status"),
+        default=_normalize_text(result.get("status"), default="missing"),
+    )
+    receipt_status = _normalize_text(
+        receipt.get("receipt_status"),
+        default=_normalize_text(receipt.get("status"), default="missing"),
+    )
+    final_result = _normalize_text(receipt.get("final_result"), default="unknown")
+    selected_step_result = _normalize_text(
+        final_result,
+        default=_normalize_text(result_status, default="unknown"),
+    )
+    if not selected_step_result:
+        selected_step_result = "unknown"
+
+    def _surface_flag(key: str, *, default: bool = False) -> bool:
+        for surface in (result, receipt, gate):
+            if key not in surface:
+                continue
+            value = surface.get(key)
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, int):
+                return value != 0
+            text = _normalize_text(value, default="").lower()
+            if text in {"1", "true", "yes", "on", "enabled"}:
+                return True
+            if text in {"0", "false", "no", "off", "disabled"}:
+                return False
+        return default
+
+    read_current_state_completed = _surface_flag("read_current_state_completed", default=False)
+    live_execution_performed = _surface_flag("live_execution_performed", default=False)
+    execution_performed = _surface_flag("execution_performed", default=False)
+
+    blocked_reason = "none"
+    if not required_artifacts_present or not required_artifacts_valid:
+        blocked_reason = "selected_step_live_execution_artifacts_missing_or_invalid"
+
+    return {
+        "status": "captured",
+        "route_status": "captured",
+        "blocked_reason": blocked_reason,
+        "next_action": "evaluate_selected_step_execution_result_route",
+        "route_decision": "pending",
+        "should_continue": False,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "selected_step_result": selected_step_result,
+        "read_current_state_completed": read_current_state_completed,
+        "live_execution_performed": live_execution_performed,
+        "execution_performed": execution_performed,
+        "worktree_clean": worktree_clean,
+        "changed_tracked_files": _normalize_string_list(changed_tracked_files),
+        "required_artifacts_present": required_artifacts_present,
+        "required_artifacts_valid": required_artifacts_valid,
+        "gate_status": gate_status,
+        "result_status": result_status,
+        "receipt_status": receipt_status,
+        "final_result": final_result,
+        "codex_invoked": _surface_flag("codex_invoked", default=False),
+        "commit_performed": _surface_flag("commit_performed", default=False),
+        "tag_performed": _surface_flag("tag_performed", default=False),
+        "push_performed": _surface_flag("push_performed", default=False),
+        "pr_created": _surface_flag("pr_created", default=False),
+        "merge_performed": _surface_flag("merge_performed", default=False),
+        "rollback_performed": _surface_flag("rollback_performed", default=False),
+        "source": "selected_step_execution_result_route_capture",
+        "selected_step_live_execution_gate_path": str(gate_path),
+        "selected_step_live_execution_result_path": str(result_path),
+        "selected_step_live_execution_receipt_path": str(receipt_path),
+    }
+
+
+def _build_selected_step_execution_result_route_decision_state(
+    *,
+    capture_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    capture = dict(capture_state) if isinstance(capture_state, Mapping) else {}
+    state = dict(capture)
+
+    changed_tracked_files = _normalize_string_list(capture.get("changed_tracked_files"))
+    required_artifacts_present = bool(capture.get("required_artifacts_present", False))
+    required_artifacts_valid = bool(capture.get("required_artifacts_valid", False))
+    result_status = _normalize_text(capture.get("result_status"), default="missing")
+    final_result = _normalize_text(capture.get("final_result"), default="unknown")
+
+    status = "blocked"
+    route_status = "blocked"
+    blocked_reason = "selected_step_result_not_routable"
+    route_decision = "blocked"
+    should_continue = False
+    next_action = "manual_review_selected_step_result"
+    selected_step_result = _normalize_text(
+        capture.get("selected_step_result"),
+        default=final_result or "unknown",
+    )
+    if not selected_step_result:
+        selected_step_result = "unknown"
+
+    if changed_tracked_files:
+        blocked_reason = "tracked_changes_present_before_selected_step_result_route"
+        next_action = "commit_or_reconcile_tracked_changes_before_selected_step_result_route"
+    elif (not required_artifacts_present) or (not required_artifacts_valid):
+        blocked_reason = "selected_step_live_execution_artifacts_missing_or_invalid"
+        next_action = "rerun_prompt328_live_execution_clean_verify"
+    elif result_status != "completed":
+        blocked_reason = "selected_step_live_execution_not_completed"
+        next_action = "complete_selected_step_live_execution_before_route"
+    elif final_result == "read_current_state_completed":
+        status = "ready"
+        route_status = "ready"
+        blocked_reason = "none"
+        route_decision = "continue_to_next_selected_step"
+        should_continue = True
+        next_action = "prepare_next_selected_step_or_prompt330_loop_closure"
+        selected_step_result = "read_current_state_completed"
+    elif final_result in {"blocked", "not_run", "unknown", ""}:
+        blocked_reason = "selected_step_result_not_routable"
+        next_action = "manual_review_selected_step_result"
+    else:
+        blocked_reason = "selected_step_result_not_routable"
+        next_action = "manual_review_selected_step_result"
+
+    state.update(
+        {
+            "status": status,
+            "route_status": route_status,
+            "blocked_reason": blocked_reason,
+            "next_action": next_action,
+            "route_decision": route_decision,
+            "should_continue": should_continue,
+            "selected_step_result": selected_step_result,
+            "source": "selected_step_execution_result_route_decision",
+        }
+    )
+    return state
+
+
+def _build_selected_step_execution_result_route_receipt_state(
+    *,
+    capture_state: Mapping[str, Any] | None,
+    decision_state: Mapping[str, Any] | None,
+    capture_path: Path,
+    decision_path: Path,
+) -> dict[str, Any]:
+    capture = dict(capture_state) if isinstance(capture_state, Mapping) else {}
+    decision = dict(decision_state) if isinstance(decision_state, Mapping) else {}
+    state = dict(capture)
+    state.update(decision)
+    state.update(
+        {
+            "source": "selected_step_execution_result_route_receipt",
+            "capture_path": str(capture_path),
+            "decision_path": str(decision_path),
+        }
+    )
+    return state
+
+
 def _write_approve_commit_tag_commands_if_safe(
     *,
     boundary_state: Mapping[str, Any] | None,
@@ -13954,6 +14214,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     selected_step_live_execution_receipt_path = Path(
         _SELECTED_STEP_LIVE_EXECUTION_RECEIPT_PATH
     )
+    selected_step_execution_result_route_capture_path = Path(
+        _SELECTED_STEP_EXECUTION_RESULT_ROUTE_CAPTURE_PATH
+    )
+    selected_step_execution_result_route_decision_path = Path(
+        _SELECTED_STEP_EXECUTION_RESULT_ROUTE_DECISION_PATH
+    )
+    selected_step_execution_result_route_receipt_path = Path(
+        _SELECTED_STEP_EXECUTION_RESULT_ROUTE_RECEIPT_PATH
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -14233,6 +14502,24 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         selected_step_live_execution_receipt_path
     )
     selected_step_live_execution_read_current_state_completed = False
+    selected_step_execution_result_route_status = "blocked"
+    selected_step_execution_result_route_blocked_reason = (
+        "selected_step_live_execution_artifacts_missing_or_invalid"
+    )
+    selected_step_execution_result_route_decision = "blocked"
+    selected_step_execution_result_route_next_action = (
+        "prepare_selected_step_execution_result_route"
+    )
+    selected_step_execution_result_route_should_continue = False
+    selected_step_execution_result_route_capture_surface_path = str(
+        selected_step_execution_result_route_capture_path
+    )
+    selected_step_execution_result_route_decision_surface_path = str(
+        selected_step_execution_result_route_decision_path
+    )
+    selected_step_execution_result_route_receipt_surface_path = str(
+        selected_step_execution_result_route_receipt_path
+    )
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -14438,6 +14725,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_selected_step_live_execution_receipt_json": str(
             selected_step_live_execution_receipt_path
+        ),
+        "one_cycle_controller_selected_step_execution_result_route_capture_json": str(
+            selected_step_execution_result_route_capture_path
+        ),
+        "one_cycle_controller_selected_step_execution_result_route_decision_json": str(
+            selected_step_execution_result_route_decision_path
+        ),
+        "one_cycle_controller_selected_step_execution_result_route_receipt_json": str(
+            selected_step_execution_result_route_receipt_path
         ),
     }
 
@@ -16186,6 +16482,103 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "read_current_state_completed",
             selected_step_live_execution_read_current_state_completed,
         )
+    )
+    selected_step_execution_result_route_capture_state = (
+        _build_selected_step_execution_result_route_capture_state(
+            gate_path=selected_step_live_execution_gate_path,
+            result_path=selected_step_live_execution_result_path,
+            receipt_path=selected_step_live_execution_receipt_path,
+        )
+    )
+    selected_step_execution_result_route_decision_state = (
+        _build_selected_step_execution_result_route_decision_state(
+            capture_state=selected_step_execution_result_route_capture_state,
+        )
+    )
+    selected_step_execution_result_route_receipt_state = (
+        _build_selected_step_execution_result_route_receipt_state(
+            capture_state=selected_step_execution_result_route_capture_state,
+            decision_state=selected_step_execution_result_route_decision_state,
+            capture_path=selected_step_execution_result_route_capture_path,
+            decision_path=selected_step_execution_result_route_decision_path,
+        )
+    )
+    selected_step_execution_result_route_artifacts_written = False
+    try:
+        selected_step_execution_result_route_capture_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        _write_json(
+            selected_step_execution_result_route_capture_path,
+            selected_step_execution_result_route_capture_state,
+        )
+        _write_json(
+            selected_step_execution_result_route_decision_path,
+            selected_step_execution_result_route_decision_state,
+        )
+        _write_json(
+            selected_step_execution_result_route_receipt_path,
+            selected_step_execution_result_route_receipt_state,
+        )
+        selected_step_execution_result_route_artifacts_written = True
+    except OSError:
+        selected_step_execution_result_route_artifacts_written = False
+    if (
+        not selected_step_execution_result_route_artifacts_written
+        or not selected_step_execution_result_route_capture_path.exists()
+        or not selected_step_execution_result_route_decision_path.exists()
+        or not selected_step_execution_result_route_receipt_path.exists()
+    ):
+        try:
+            selected_step_execution_result_route_capture_path.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+            _write_json(
+                selected_step_execution_result_route_capture_path,
+                selected_step_execution_result_route_capture_state,
+            )
+            _write_json(
+                selected_step_execution_result_route_decision_path,
+                selected_step_execution_result_route_decision_state,
+            )
+            _write_json(
+                selected_step_execution_result_route_receipt_path,
+                selected_step_execution_result_route_receipt_state,
+            )
+        except OSError:
+            pass
+    selected_step_execution_result_route_status = _normalize_text(
+        selected_step_execution_result_route_decision_state.get("route_status"),
+        default=selected_step_execution_result_route_status,
+    )
+    selected_step_execution_result_route_blocked_reason = _normalize_text(
+        selected_step_execution_result_route_decision_state.get("blocked_reason"),
+        default=selected_step_execution_result_route_blocked_reason,
+    )
+    selected_step_execution_result_route_decision = _normalize_text(
+        selected_step_execution_result_route_decision_state.get("route_decision"),
+        default=selected_step_execution_result_route_decision,
+    )
+    selected_step_execution_result_route_next_action = _normalize_text(
+        selected_step_execution_result_route_decision_state.get("next_action"),
+        default=selected_step_execution_result_route_next_action,
+    )
+    selected_step_execution_result_route_should_continue = bool(
+        selected_step_execution_result_route_decision_state.get(
+            "should_continue",
+            selected_step_execution_result_route_should_continue,
+        )
+    )
+    selected_step_execution_result_route_capture_surface_path = str(
+        selected_step_execution_result_route_capture_path
+    )
+    selected_step_execution_result_route_decision_surface_path = str(
+        selected_step_execution_result_route_decision_path
+    )
+    selected_step_execution_result_route_receipt_surface_path = str(
+        selected_step_execution_result_route_receipt_path
     )
 
     result_payload = {
@@ -18042,6 +18435,30 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_selected_step_live_execution_receipt_path": (
             selected_step_live_execution_receipt_surface_path
+        ),
+        "project_browser_autonomous_selected_step_execution_result_route_status": (
+            selected_step_execution_result_route_status
+        ),
+        "project_browser_autonomous_selected_step_execution_result_route_blocked_reason": (
+            selected_step_execution_result_route_blocked_reason
+        ),
+        "project_browser_autonomous_selected_step_execution_result_route_decision": (
+            selected_step_execution_result_route_decision
+        ),
+        "project_browser_autonomous_selected_step_execution_result_route_next_action": (
+            selected_step_execution_result_route_next_action
+        ),
+        "project_browser_autonomous_selected_step_execution_result_route_should_continue": (
+            selected_step_execution_result_route_should_continue
+        ),
+        "project_browser_autonomous_selected_step_execution_result_route_capture_path": (
+            selected_step_execution_result_route_capture_surface_path
+        ),
+        "project_browser_autonomous_selected_step_execution_result_route_decision_path": (
+            selected_step_execution_result_route_decision_surface_path
+        ),
+        "project_browser_autonomous_selected_step_execution_result_route_receipt_path": (
+            selected_step_execution_result_route_receipt_surface_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
