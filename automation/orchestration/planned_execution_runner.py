@@ -3703,6 +3703,19 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_already_tagged",
     "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_next_action",
     "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_receipt_path",
+    "project_browser_autonomous_remote_readiness_boundary_status",
+    "project_browser_autonomous_remote_readiness_blocked_reason",
+    "project_browser_autonomous_remote_readiness_remote_ready",
+    "project_browser_autonomous_remote_readiness_push_ready",
+    "project_browser_autonomous_remote_readiness_pr_ready",
+    "project_browser_autonomous_remote_readiness_merge_ready",
+    "project_browser_autonomous_remote_readiness_worktree_clean",
+    "project_browser_autonomous_remote_readiness_expected_head_tag_present",
+    "project_browser_autonomous_remote_readiness_remote_configured",
+    "project_browser_autonomous_remote_readiness_upstream_configured",
+    "project_browser_autonomous_remote_readiness_next_action",
+    "project_browser_autonomous_remote_readiness_boundary_path",
+    "project_browser_autonomous_remote_readiness_plan_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -3816,6 +3829,16 @@ _APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_PATH = (
 _APPROVE_COMMIT_TAG_ARTIFACT_RECONCILIATION_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/"
     "approve_commit_tag_artifact_reconciliation_receipt.json"
+)
+_REMOTE_READINESS_EXPECTED_BRANCH = "local/prompt299-one-cycle-controller-v1"
+_REMOTE_READINESS_EXPECTED_HEAD_TAG = (
+    "prompt321-approve-commit-tag-artifact-reconciliation"
+)
+_REMOTE_READINESS_BOUNDARY_METADATA_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/remote_readiness_boundary.json"
+)
+_REMOTE_READINESS_PLAN_METADATA_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/remote_readiness_plan.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_codex_prompt.md"
@@ -6404,6 +6427,324 @@ def _build_approve_commit_tag_plan_state(
         "explicit_add_paths": _normalize_string_list(boundary.get("explicit_add_paths")),
         "command_file_path": str(command_file_path),
         "execution_required_by": "Prompt321",
+        "execution_performed": False,
+        "next_action": next_action,
+        "summary": summary,
+    }
+
+
+def _build_remote_readiness_boundary_state(
+    *,
+    execution_repo_path: str,
+    reconciliation_receipt_path: Path,
+) -> dict[str, Any]:
+    expected_branch = _REMOTE_READINESS_EXPECTED_BRANCH
+    expected_head_tag = _REMOTE_READINESS_EXPECTED_HEAD_TAG
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH,
+    )
+    try:
+        receipt_payload = _read_json_object_if_exists(reconciliation_receipt_path) or {}
+    except (OSError, json.JSONDecodeError, ValueError):
+        receipt_payload = {}
+
+    receipt_completed = (
+        _normalize_text(receipt_payload.get("status"), default="") == "completed"
+        and _normalize_text(receipt_payload.get("reconciliation_status"), default="") == "completed"
+        and _normalize_text(receipt_payload.get("blocked_reason"), default="") == "none"
+        and bool(receipt_payload.get("already_committed", False))
+        and bool(receipt_payload.get("already_tagged", False))
+        and (not bool(receipt_payload.get("execution_performed", True)))
+        and (not bool(receipt_payload.get("commit_performed", True)))
+        and (not bool(receipt_payload.get("tag_performed", True)))
+        and _normalize_text(receipt_payload.get("next_action"), default="") == "prepare_remote_readiness_boundary"
+    )
+
+    base_state: dict[str, Any] = {
+        "status": "blocked",
+        "boundary_status": "blocked",
+        "blocked_reason": "approve_commit_tag_reconciliation_not_completed",
+        "source": "remote_readiness_boundary",
+        "reconciliation_receipt_path": str(reconciliation_receipt_path),
+        "reconciliation_completed": bool(receipt_completed),
+        "current_branch": "",
+        "expected_branch": expected_branch,
+        "head_short": "",
+        "head_tags": [],
+        "expected_head_tag": expected_head_tag,
+        "expected_head_tag_present": False,
+        "worktree_clean": False,
+        "changed_tracked_files": [],
+        "remote_configured": False,
+        "remotes": [],
+        "remote_verbose": [],
+        "upstream_configured": False,
+        "upstream_name": "none",
+        "ahead_count": None,
+        "behind_count": None,
+        "remote_ready": False,
+        "push_ready": False,
+        "pr_ready": False,
+        "merge_ready": False,
+        "execution_allowed": False,
+        "execution_performed": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "next_action": "complete_approve_commit_tag_reconciliation",
+        "summary": "Remote readiness boundary is blocked until approve commit/tag reconciliation is completed.",
+    }
+    if not receipt_completed:
+        return base_state
+
+    status_short = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=no"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    current_branch_cmd = subprocess.run(
+        ["git", "branch", "--show-current"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    head_short_cmd = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    head_tags_cmd = subprocess.run(
+        ["git", "tag", "--points-at", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    remotes_cmd = subprocess.run(
+        ["git", "remote"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    remotes_verbose_cmd = subprocess.run(
+        ["git", "remote", "-v"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+
+    command_return_codes = (
+        status_short.returncode,
+        current_branch_cmd.returncode,
+        head_short_cmd.returncode,
+        head_tags_cmd.returncode,
+        remotes_cmd.returncode,
+        remotes_verbose_cmd.returncode,
+    )
+    if any(code != 0 for code in command_return_codes):
+        return {
+            **base_state,
+            "blocked_reason": "git_metadata_collection_failed",
+            "next_action": "review_git_metadata_failure",
+            "summary": "Remote readiness boundary is blocked because git metadata collection failed.",
+        }
+
+    changed_tracked_files = [
+        line.rstrip()
+        for line in (status_short.stdout or "").splitlines()
+        if line.strip()
+    ]
+    worktree_clean = not changed_tracked_files
+    current_branch = _normalize_text(current_branch_cmd.stdout, default="")
+    head_short = _normalize_text(head_short_cmd.stdout, default="")
+    head_tags = sorted(
+        {
+            line.strip()
+            for line in (head_tags_cmd.stdout or "").splitlines()
+            if line.strip()
+        }
+    )
+    expected_head_tag_present = expected_head_tag in set(head_tags)
+    remotes = [
+        line.strip() for line in (remotes_cmd.stdout or "").splitlines() if line.strip()
+    ]
+    remote_verbose = [
+        line.rstrip()
+        for line in (remotes_verbose_cmd.stdout or "").splitlines()
+        if line.strip()
+    ]
+    remote_configured = bool(remotes)
+
+    upstream_name = "none"
+    upstream_configured = False
+    ahead_count: int | None = None
+    behind_count: int | None = None
+    upstream_cmd = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    if upstream_cmd.returncode == 0:
+        upstream_name = _normalize_text(upstream_cmd.stdout, default="")
+        upstream_configured = bool(upstream_name)
+        if upstream_configured:
+            ahead_behind_cmd = subprocess.run(
+                ["git", "rev-list", "--left-right", "--count", "@{u}...HEAD"],
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            if ahead_behind_cmd.returncode == 0:
+                tokens = (ahead_behind_cmd.stdout or "").strip().split()
+                if len(tokens) >= 2:
+                    behind_count = _as_optional_int(tokens[0])
+                    ahead_count = _as_optional_int(tokens[1])
+
+    state = {
+        **base_state,
+        "reconciliation_completed": True,
+        "current_branch": current_branch,
+        "head_short": head_short,
+        "head_tags": head_tags,
+        "expected_head_tag_present": expected_head_tag_present,
+        "worktree_clean": worktree_clean,
+        "changed_tracked_files": changed_tracked_files,
+        "remote_configured": remote_configured,
+        "remotes": remotes,
+        "remote_verbose": remote_verbose,
+        "upstream_configured": upstream_configured,
+        "upstream_name": upstream_name or "none",
+        "ahead_count": ahead_count,
+        "behind_count": behind_count,
+    }
+
+    if not worktree_clean:
+        return {
+            **state,
+            "blocked_reason": "tracked_changes_present_before_remote_boundary",
+            "next_action": "commit_or_reconcile_tracked_changes_before_remote",
+            "summary": "Remote readiness boundary is blocked by tracked changes in the worktree.",
+        }
+    if not expected_head_tag_present:
+        return {
+            **state,
+            "blocked_reason": "expected_prompt321_head_tag_missing",
+            "next_action": "tag_prompt321_before_remote_boundary",
+            "summary": "Remote readiness boundary is blocked because expected Prompt321 HEAD tag is missing.",
+        }
+    if current_branch != expected_branch:
+        return {
+            **state,
+            "blocked_reason": "unexpected_branch_for_remote_boundary",
+            "next_action": "review_branch_before_remote",
+            "summary": "Remote readiness boundary is blocked because current branch differs from expected branch.",
+        }
+    if not remote_configured:
+        return {
+            **state,
+            "blocked_reason": "no_git_remote_configured",
+            "next_action": "configure_remote_before_push",
+            "summary": "Remote readiness boundary is blocked because no git remote is configured.",
+        }
+
+    return {
+        **state,
+        "status": "ready",
+        "boundary_status": "ready",
+        "blocked_reason": "none",
+        "remote_ready": True,
+        "push_ready": True,
+        "pr_ready": False,
+        "merge_ready": False,
+        "execution_allowed": False,
+        "execution_performed": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "next_action": "prepare_remote_push_boundary",
+        "summary": "Remote readiness boundary is ready; push/PR/merge execution remains disabled.",
+    }
+
+
+def _build_remote_readiness_plan_state(
+    *,
+    boundary_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    boundary = dict(boundary_state) if isinstance(boundary_state, Mapping) else {}
+    remote_ready = bool(boundary.get("remote_ready", False))
+    remote_configured = bool(boundary.get("remote_configured", False))
+    upstream_configured = bool(boundary.get("upstream_configured", False))
+    current_branch = _normalize_text(boundary.get("current_branch"), default="")
+    remotes = _normalize_string_list(boundary.get("remotes"))
+    upstream_name = _normalize_text(boundary.get("upstream_name"), default="")
+    blocked_reason = _normalize_text(boundary.get("blocked_reason"), default="manual_review_required")
+    next_action = _normalize_text(boundary.get("next_action"), default="manual_review_required")
+
+    status = "blocked"
+    plan_status = "blocked"
+    push_plan_kind = "none"
+    suggested_remote = "none"
+    suggested_branch = "none"
+    suggested_push_command = "none"
+    summary = "Remote readiness plan is blocked."
+
+    if remote_ready:
+        status = "ready"
+        plan_status = "ready"
+        blocked_reason = "none"
+        if upstream_configured:
+            push_plan_kind = "push_existing_upstream"
+            suggested_push_command = "git push"
+            if "/" in upstream_name:
+                suggested_remote = upstream_name.split("/", 1)[0].strip() or "none"
+            elif remotes:
+                suggested_remote = remotes[0]
+            suggested_branch = current_branch or "none"
+            summary = "Remote readiness plan is ready with existing upstream push."
+        elif remote_configured:
+            push_plan_kind = "push_set_upstream"
+            suggested_remote = remotes[0] if remotes else "origin"
+            suggested_branch = current_branch or "none"
+            suggested_push_command = (
+                f"git push -u {suggested_remote} {suggested_branch}"
+                if suggested_branch != "none"
+                else "none"
+            )
+            summary = "Remote readiness plan is ready for first push with upstream setup."
+        next_action = "prepare_remote_push_boundary"
+
+    return {
+        "status": status,
+        "plan_status": plan_status,
+        "blocked_reason": blocked_reason,
+        "source": "remote_readiness_boundary",
+        "remote_ready": remote_ready,
+        "push_plan_kind": push_plan_kind,
+        "suggested_remote": suggested_remote,
+        "suggested_branch": suggested_branch,
+        "suggested_push_command": suggested_push_command,
+        "pr_ready": bool(boundary.get("pr_ready", False)),
+        "merge_ready": bool(boundary.get("merge_ready", False)),
+        "execution_required_by": "Prompt323",
         "execution_performed": False,
         "next_action": next_action,
         "summary": summary,
@@ -9670,6 +10011,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     approve_commit_tag_execution_receipt_path = (
         one_cycle_controller_dir / "approve_commit_tag_execution_receipt.json"
     )
+    remote_readiness_boundary_metadata_path = (
+        one_cycle_controller_dir / "remote_readiness_boundary.json"
+    )
+    remote_readiness_plan_metadata_path = (
+        one_cycle_controller_dir / "remote_readiness_plan.json"
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -9847,6 +10194,19 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     approve_commit_tag_artifact_reconciliation_receipt_path = str(
         approve_commit_tag_artifact_reconciliation_receipt_file_path
     )
+    remote_readiness_boundary_status = "blocked"
+    remote_readiness_blocked_reason = "approve_commit_tag_reconciliation_not_completed"
+    remote_readiness_remote_ready = False
+    remote_readiness_push_ready = False
+    remote_readiness_pr_ready = False
+    remote_readiness_merge_ready = False
+    remote_readiness_worktree_clean = False
+    remote_readiness_expected_head_tag_present = False
+    remote_readiness_remote_configured = False
+    remote_readiness_upstream_configured = False
+    remote_readiness_next_action = "complete_approve_commit_tag_reconciliation"
+    remote_readiness_boundary_path = str(remote_readiness_boundary_metadata_path)
+    remote_readiness_plan_path = str(remote_readiness_plan_metadata_path)
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -9992,6 +10352,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_approve_commit_tag_execution_receipt_json": str(
             approve_commit_tag_execution_receipt_path
+        ),
+        "one_cycle_controller_remote_readiness_boundary_json": str(
+            remote_readiness_boundary_metadata_path
+        ),
+        "one_cycle_controller_remote_readiness_plan_json": str(
+            remote_readiness_plan_metadata_path
         ),
     }
 
@@ -11053,6 +11419,76 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     )
     approve_commit_tag_execution_should_commit = False
     approve_commit_tag_execution_should_tag = False
+    remote_readiness_boundary_state = _build_remote_readiness_boundary_state(
+        execution_repo_path=execution_repo_path,
+        reconciliation_receipt_path=approve_commit_tag_artifact_reconciliation_receipt_file_path,
+    )
+    remote_readiness_plan_state = _build_remote_readiness_plan_state(
+        boundary_state=remote_readiness_boundary_state
+    )
+    try:
+        remote_readiness_boundary_metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(
+            remote_readiness_boundary_metadata_path,
+            remote_readiness_boundary_state,
+        )
+        _write_json(
+            remote_readiness_plan_metadata_path,
+            remote_readiness_plan_state,
+        )
+    except OSError:
+        pass
+
+    remote_readiness_boundary_status = _normalize_text(
+        remote_readiness_boundary_state.get("boundary_status"),
+        default=remote_readiness_boundary_status,
+    )
+    remote_readiness_blocked_reason = _normalize_text(
+        remote_readiness_boundary_state.get("blocked_reason"),
+        default=remote_readiness_blocked_reason,
+    )
+    remote_readiness_remote_ready = bool(
+        remote_readiness_boundary_state.get("remote_ready", remote_readiness_remote_ready)
+    )
+    remote_readiness_push_ready = bool(
+        remote_readiness_boundary_state.get("push_ready", remote_readiness_push_ready)
+    )
+    remote_readiness_pr_ready = bool(
+        remote_readiness_boundary_state.get("pr_ready", remote_readiness_pr_ready)
+    )
+    remote_readiness_merge_ready = bool(
+        remote_readiness_boundary_state.get("merge_ready", remote_readiness_merge_ready)
+    )
+    remote_readiness_worktree_clean = bool(
+        remote_readiness_boundary_state.get(
+            "worktree_clean",
+            remote_readiness_worktree_clean,
+        )
+    )
+    remote_readiness_expected_head_tag_present = bool(
+        remote_readiness_boundary_state.get(
+            "expected_head_tag_present",
+            remote_readiness_expected_head_tag_present,
+        )
+    )
+    remote_readiness_remote_configured = bool(
+        remote_readiness_boundary_state.get(
+            "remote_configured",
+            remote_readiness_remote_configured,
+        )
+    )
+    remote_readiness_upstream_configured = bool(
+        remote_readiness_boundary_state.get(
+            "upstream_configured",
+            remote_readiness_upstream_configured,
+        )
+    )
+    remote_readiness_next_action = _normalize_text(
+        remote_readiness_boundary_state.get("next_action"),
+        default=remote_readiness_next_action,
+    )
+    remote_readiness_boundary_path = str(remote_readiness_boundary_metadata_path)
+    remote_readiness_plan_path = str(remote_readiness_plan_metadata_path)
 
     result_payload = {
         "status": status,
@@ -11392,6 +11828,21 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "approve_commit_tag_artifact_reconciliation_receipt_path": (
             approve_commit_tag_artifact_reconciliation_receipt_path
         ),
+        "remote_readiness_boundary_status": remote_readiness_boundary_status,
+        "remote_readiness_blocked_reason": remote_readiness_blocked_reason,
+        "remote_readiness_remote_ready": remote_readiness_remote_ready,
+        "remote_readiness_push_ready": remote_readiness_push_ready,
+        "remote_readiness_pr_ready": remote_readiness_pr_ready,
+        "remote_readiness_merge_ready": remote_readiness_merge_ready,
+        "remote_readiness_worktree_clean": remote_readiness_worktree_clean,
+        "remote_readiness_expected_head_tag_present": (
+            remote_readiness_expected_head_tag_present
+        ),
+        "remote_readiness_remote_configured": remote_readiness_remote_configured,
+        "remote_readiness_upstream_configured": remote_readiness_upstream_configured,
+        "remote_readiness_next_action": remote_readiness_next_action,
+        "remote_readiness_boundary_path": remote_readiness_boundary_path,
+        "remote_readiness_plan_path": remote_readiness_plan_path,
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -11759,6 +12210,40 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- Approve artifact reconciliation receipt path: "
             f"`{approve_commit_tag_artifact_reconciliation_receipt_path}`"
         ),
+        f"- Remote readiness boundary status: `{remote_readiness_boundary_status}`",
+        f"- Remote readiness blocked reason: `{remote_readiness_blocked_reason}`",
+        (
+            "- Remote readiness remote ready: "
+            f"`{str(remote_readiness_remote_ready).lower()}`"
+        ),
+        (
+            "- Remote readiness push ready: "
+            f"`{str(remote_readiness_push_ready).lower()}`"
+        ),
+        f"- Remote readiness PR ready: `{str(remote_readiness_pr_ready).lower()}`",
+        (
+            "- Remote readiness merge ready: "
+            f"`{str(remote_readiness_merge_ready).lower()}`"
+        ),
+        (
+            "- Remote readiness worktree clean: "
+            f"`{str(remote_readiness_worktree_clean).lower()}`"
+        ),
+        (
+            "- Remote readiness expected head tag present: "
+            f"`{str(remote_readiness_expected_head_tag_present).lower()}`"
+        ),
+        (
+            "- Remote readiness remote configured: "
+            f"`{str(remote_readiness_remote_configured).lower()}`"
+        ),
+        (
+            "- Remote readiness upstream configured: "
+            f"`{str(remote_readiness_upstream_configured).lower()}`"
+        ),
+        f"- Remote readiness next action: `{remote_readiness_next_action}`",
+        f"- Remote readiness boundary path: `{remote_readiness_boundary_path}`",
+        f"- Remote readiness plan path: `{remote_readiness_plan_path}`",
         f"- Completed result source path: `{completed_result_source_path}`",
         f"- Completed result source status: `{completed_result_source_status}`",
         f"- Stop reason: `{stop_reason}`",
@@ -11882,6 +12367,8 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
+        f"- remote_readiness_boundary.json: `{remote_readiness_boundary_metadata_path}`",
+        f"- remote_readiness_plan.json: `{remote_readiness_plan_metadata_path}`",
     ]
 
     try:
@@ -12082,6 +12569,19 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         approve_commit_tag_artifact_reconciliation_receipt_path = str(
             approve_commit_tag_artifact_reconciliation_receipt_file_path
         )
+        remote_readiness_boundary_status = "blocked"
+        remote_readiness_blocked_reason = "result_write_failed"
+        remote_readiness_remote_ready = False
+        remote_readiness_push_ready = False
+        remote_readiness_pr_ready = False
+        remote_readiness_merge_ready = False
+        remote_readiness_worktree_clean = False
+        remote_readiness_expected_head_tag_present = False
+        remote_readiness_remote_configured = False
+        remote_readiness_upstream_configured = False
+        remote_readiness_next_action = "manual_review_required"
+        remote_readiness_boundary_path = str(remote_readiness_boundary_metadata_path)
+        remote_readiness_plan_path = str(remote_readiness_plan_metadata_path)
         completed_result_source_status = "not_completed"
         stop_reason = (
             "dry_run_execution_suppressed"
@@ -12557,6 +13057,45 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_receipt_path": (
             approve_commit_tag_artifact_reconciliation_receipt_path
+        ),
+        "project_browser_autonomous_remote_readiness_boundary_status": (
+            remote_readiness_boundary_status
+        ),
+        "project_browser_autonomous_remote_readiness_blocked_reason": (
+            remote_readiness_blocked_reason
+        ),
+        "project_browser_autonomous_remote_readiness_remote_ready": (
+            remote_readiness_remote_ready
+        ),
+        "project_browser_autonomous_remote_readiness_push_ready": (
+            remote_readiness_push_ready
+        ),
+        "project_browser_autonomous_remote_readiness_pr_ready": (
+            remote_readiness_pr_ready
+        ),
+        "project_browser_autonomous_remote_readiness_merge_ready": (
+            remote_readiness_merge_ready
+        ),
+        "project_browser_autonomous_remote_readiness_worktree_clean": (
+            remote_readiness_worktree_clean
+        ),
+        "project_browser_autonomous_remote_readiness_expected_head_tag_present": (
+            remote_readiness_expected_head_tag_present
+        ),
+        "project_browser_autonomous_remote_readiness_remote_configured": (
+            remote_readiness_remote_configured
+        ),
+        "project_browser_autonomous_remote_readiness_upstream_configured": (
+            remote_readiness_upstream_configured
+        ),
+        "project_browser_autonomous_remote_readiness_next_action": (
+            remote_readiness_next_action
+        ),
+        "project_browser_autonomous_remote_readiness_boundary_path": (
+            remote_readiness_boundary_path
+        ),
+        "project_browser_autonomous_remote_readiness_plan_path": (
+            remote_readiness_plan_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
@@ -169700,6 +170239,74 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_receipt_path"
             ),
             default=_APPROVE_COMMIT_TAG_ARTIFACT_RECONCILIATION_RECEIPT_PATH,
+        ),
+        "project_browser_autonomous_remote_readiness_boundary_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_remote_readiness_boundary_status"),
+            default="blocked",
+        ),
+        "project_browser_autonomous_remote_readiness_blocked_reason": _normalize_text(
+            approved_restart.get("project_browser_autonomous_remote_readiness_blocked_reason"),
+            default="approve_commit_tag_reconciliation_not_completed",
+        ),
+        "project_browser_autonomous_remote_readiness_remote_ready": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_remote_readiness_remote_ready",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_remote_readiness_push_ready": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_remote_readiness_push_ready",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_remote_readiness_pr_ready": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_remote_readiness_pr_ready",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_remote_readiness_merge_ready": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_remote_readiness_merge_ready",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_remote_readiness_worktree_clean": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_remote_readiness_worktree_clean",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_remote_readiness_expected_head_tag_present": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_remote_readiness_expected_head_tag_present",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_remote_readiness_remote_configured": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_remote_readiness_remote_configured",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_remote_readiness_upstream_configured": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_remote_readiness_upstream_configured",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_remote_readiness_next_action": _normalize_text(
+            approved_restart.get("project_browser_autonomous_remote_readiness_next_action"),
+            default="complete_approve_commit_tag_reconciliation",
+        ),
+        "project_browser_autonomous_remote_readiness_boundary_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_remote_readiness_boundary_path"),
+            default=_REMOTE_READINESS_BOUNDARY_METADATA_PATH,
+        ),
+        "project_browser_autonomous_remote_readiness_plan_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_remote_readiness_plan_path"),
+            default=_REMOTE_READINESS_PLAN_METADATA_PATH,
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
