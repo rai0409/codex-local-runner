@@ -3476,8 +3476,6 @@ _CODEX_GATE_CONNECTOR_ENABLEMENT_KEYS: tuple[str, ...] = (
 _ONE_CYCLE_CONTROLLER_ENABLEMENT_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_enabled",
     "project_browser_autonomous_one_cycle_controller_execute_enabled",
-    "project_browser_autonomous_approve_commit_tag_execution_enabled",
-    "project_browser_autonomous_approve_commit_tag_execution_confirmed",
     "project_browser_autonomous_targeted_fix_reentry_execution_enabled",
     "project_browser_autonomous_targeted_fix_reentry_execution_confirmed",
     "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_enabled",
@@ -3686,6 +3684,18 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_approve_commit_tag_execution_receipt_path",
     "project_browser_autonomous_approve_commit_tag_execution_should_commit",
     "project_browser_autonomous_approve_commit_tag_execution_should_tag",
+    "project_browser_autonomous_approve_commit_tag_plan_ready",
+    "project_browser_autonomous_approve_commit_tag_tracked_files_allowed",
+    "project_browser_autonomous_approve_commit_tag_changed_tracked_files",
+    "project_browser_autonomous_approve_commit_tag_unexpected_tracked_files",
+    "project_browser_autonomous_approve_commit_tag_explicit_add_paths",
+    "project_browser_autonomous_approve_commit_tag_proposed_commit_message",
+    "project_browser_autonomous_approve_commit_tag_proposed_tag",
+    "project_browser_autonomous_approve_commit_tag_command_file_path",
+    "project_browser_autonomous_approve_commit_tag_execution_allowed",
+    "project_browser_autonomous_approve_commit_tag_next_action",
+    "project_browser_autonomous_approve_commit_tag_boundary_path",
+    "project_browser_autonomous_approve_commit_tag_plan_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -3771,13 +3781,20 @@ _APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH = "/home/rai/codex-local-runner"
 _APPROVE_COMMIT_TAG_EXECUTION_TRACKED_FILE = (
     "automation/orchestration/planned_execution_runner.py"
 )
-_APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE = "Add approved autonomous runner slice"
-_APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME = "prompt306-approve-commit-tag-boundary-ready"
+_APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE = (
+    "Add bounded post-reentry targeted fix cycle orchestrator"
+)
+_APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME = (
+    "prompt319-bounded-post-reentry-targeted-fix-cycle-orchestrator"
+)
 _APPROVE_COMMIT_TAG_BOUNDARY_COMMANDS_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/approve_commit_tag_commands.sh"
 )
 _APPROVE_COMMIT_TAG_BOUNDARY_METADATA_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/approve_commit_tag_boundary.json"
+)
+_APPROVE_COMMIT_TAG_PLAN_METADATA_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/approve_commit_tag_plan.json"
 )
 _APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/approve_commit_tag_execution_receipt.json"
@@ -5833,222 +5850,255 @@ def _build_targeted_fix_prompt_boundary_state(
 
 def _build_approve_commit_tag_boundary_state(
     *,
-    review_route_status: str,
-    review_route_decision: str,
-    review_route_next_action: str,
-    review_route_should_prepare_commit: bool,
-    review_response_status: str,
-    review_response_decision: str,
-    review_response_reason: str,
-    one_cycle_controller_status: str,
-    one_cycle_controller_diff_capture_status: str,
-    one_cycle_controller_review_request_status: str,
-    one_cycle_controller_review_handoff_decision_status: str,
-    one_cycle_controller_tracked_diff_status: str,
-    approve_commit_tag_boundary_metadata_path: Path,
-    approve_commit_tag_boundary_commands_path: Path,
+    execution_repo_path: str,
+    bounded_cycle_decision_path: Path,
+    bounded_cycle_receipt_path: Path,
+    terminal_summary_path: Path,
+    cycle_closure_result_path: Path,
+    command_file_path: Path,
 ) -> dict[str, Any]:
-    deterministic_commit_message = _APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE
-    deterministic_tag_name = _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME
+    tracked_file = _APPROVE_COMMIT_TAG_EXECUTION_TRACKED_FILE
+    proposed_commit_message = _APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE
+    proposed_tag = _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME
+    command_path_text = str(command_file_path)
+
+    def _read_json(path: Path) -> dict[str, Any]:
+        try:
+            payload = _read_json_object_if_exists(path)
+        except (OSError, json.JSONDecodeError, ValueError):
+            payload = None
+        return dict(payload) if isinstance(payload, Mapping) else {}
+
+    bounded_cycle_decision = _read_json(bounded_cycle_decision_path)
+    terminal_summary = _read_json(terminal_summary_path)
+    _ = _read_json(bounded_cycle_receipt_path)
+    _ = _read_json(cycle_closure_result_path)
+
+    activation_via_bounded_cycle = (
+        _normalize_text(bounded_cycle_decision.get("status"), default="") == "completed"
+        and _normalize_text(bounded_cycle_decision.get("decision"), default="") == "stop_completed"
+        and bool(bounded_cycle_decision.get("bounded_cycle_complete", False))
+        and bool(bounded_cycle_decision.get("safe_to_stop", False))
+        and _normalize_text(bounded_cycle_decision.get("next_action"), default="") == "none"
+    )
+    activation_via_terminal_summary = (
+        _normalize_text(terminal_summary.get("status"), default="") == "completed"
+        and _normalize_text(terminal_summary.get("terminal_status"), default="") == "completed"
+        and bool(terminal_summary.get("cycle_closed", False))
+        and bool(terminal_summary.get("safe_to_commit_prompt_changes", False))
+        and bool(terminal_summary.get("safe_to_stop", False))
+        and _normalize_text(terminal_summary.get("final_next_action"), default="") == "none"
+    )
+    activation_condition_met = activation_via_bounded_cycle or activation_via_terminal_summary
+    source = "targeted_fix_post_reentry_bounded_cycle_or_terminal_summary"
+    if activation_via_bounded_cycle:
+        source = "targeted_fix_post_reentry_bounded_cycle_decision"
+    elif activation_via_terminal_summary:
+        source = "targeted_fix_post_reentry_terminal_summary"
 
     base_state: dict[str, Any] = {
-        "approve_commit_tag_boundary_status": "insufficient_truth",
-        "approve_commit_tag_boundary_decision": "insufficient_truth",
-        "approve_commit_tag_boundary_reason": "insufficient_truth",
-        "approve_commit_tag_boundary_next_action": "insufficient_truth",
-        "approve_commit_tag_boundary_blocked_reason": "insufficient_truth",
-        "approve_commit_tag_boundary_commit_message": "",
-        "approve_commit_tag_boundary_tag_name": "",
-        "approve_commit_tag_boundary_commands_path": "",
-        "approve_commit_tag_boundary_metadata_path": "",
-        "approve_commit_tag_boundary_should_execute_commit": False,
-        "approve_commit_tag_boundary_should_execute_tag": False,
-        "approve_commit_tag_boundary_ready": False,
+        "status": "blocked",
+        "boundary_status": "blocked",
+        "blocked_reason": "bounded_cycle_not_completed",
+        "source": source,
+        "bounded_cycle_decision_path": str(bounded_cycle_decision_path),
+        "bounded_cycle_receipt_path": str(bounded_cycle_receipt_path),
+        "terminal_summary_path": str(terminal_summary_path),
+        "activation_condition_met": activation_condition_met,
+        "plan_ready": False,
+        "tracked_files_allowed": False,
+        "changed_tracked_files": [],
+        "unexpected_tracked_files": [],
+        "explicit_add_paths": [],
+        "proposed_commit_message": proposed_commit_message,
+        "proposed_tag": proposed_tag,
+        "command_file_path": command_path_text,
+        "commit_allowed": False,
+        "tag_allowed": False,
+        "execution_allowed": False,
+        "execution_performed": False,
+        "next_action": "complete_bounded_cycle_before_commit",
+        "summary": "Bounded cycle is not completed for approve commit/tag planning.",
     }
-    if review_route_decision != "approve":
+    if not activation_condition_met:
+        return base_state
+
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH,
+    )
+    status_short = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=no"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    diff_names = subprocess.run(
+        ["git", "diff", "--name-only"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    if status_short.returncode != 0 or diff_names.returncode != 0:
         return {
-            "approve_commit_tag_boundary_status": "not_applicable",
-            "approve_commit_tag_boundary_decision": "none",
-            "approve_commit_tag_boundary_reason": "route_not_approve",
-            "approve_commit_tag_boundary_next_action": "none",
-            "approve_commit_tag_boundary_blocked_reason": "route_not_approve",
-            "approve_commit_tag_boundary_commit_message": "",
-            "approve_commit_tag_boundary_tag_name": "",
-            "approve_commit_tag_boundary_commands_path": "",
-            "approve_commit_tag_boundary_metadata_path": "",
-            "approve_commit_tag_boundary_should_execute_commit": False,
-            "approve_commit_tag_boundary_should_execute_tag": False,
-            "approve_commit_tag_boundary_ready": False,
+            **base_state,
+            "blocked_reason": "git_metadata_collection_failed",
+            "next_action": "review_git_metadata_failure",
+            "summary": "Git metadata collection failed for approve commit/tag boundary.",
         }
-    if review_route_status != "route_ready":
+
+    changed_from_status: list[str] = []
+    for line in (status_short.stdout or "").splitlines():
+        if not line.strip():
+            continue
+        path_text = line[3:].strip() if len(line) >= 4 else ""
+        if " -> " in path_text:
+            path_text = path_text.split(" -> ", 1)[1].strip()
+        if path_text:
+            changed_from_status.append(path_text)
+
+    changed_from_diff = [
+        line.strip() for line in (diff_names.stdout or "").splitlines() if line.strip()
+    ]
+    changed_tracked_files = sorted(set(changed_from_status + changed_from_diff))
+    allowed_paths = {tracked_file}
+    unexpected_tracked_files = sorted(
+        path for path in changed_tracked_files if path not in allowed_paths
+    )
+
+    if not changed_tracked_files:
         return {
-            "approve_commit_tag_boundary_status": "blocked",
-            "approve_commit_tag_boundary_decision": "approve",
-            "approve_commit_tag_boundary_reason": "route_not_ready",
-            "approve_commit_tag_boundary_next_action": "manual_review_required",
-            "approve_commit_tag_boundary_blocked_reason": "route_not_ready",
-            "approve_commit_tag_boundary_commit_message": "",
-            "approve_commit_tag_boundary_tag_name": "",
-            "approve_commit_tag_boundary_commands_path": "",
-            "approve_commit_tag_boundary_metadata_path": "",
-            "approve_commit_tag_boundary_should_execute_commit": False,
-            "approve_commit_tag_boundary_should_execute_tag": False,
-            "approve_commit_tag_boundary_ready": False,
+            **base_state,
+            "blocked_reason": "no_tracked_changes_to_commit",
+            "changed_tracked_files": [],
+            "unexpected_tracked_files": [],
+            "next_action": "none",
+            "summary": "No tracked changes are available for commit/tag planning.",
         }
-    if not review_route_should_prepare_commit:
+    if unexpected_tracked_files:
         return {
-            "approve_commit_tag_boundary_status": "blocked",
-            "approve_commit_tag_boundary_decision": "approve",
-            "approve_commit_tag_boundary_reason": "approve_commit_not_requested",
-            "approve_commit_tag_boundary_next_action": "manual_review_required",
-            "approve_commit_tag_boundary_blocked_reason": "approve_commit_not_requested",
-            "approve_commit_tag_boundary_commit_message": "",
-            "approve_commit_tag_boundary_tag_name": "",
-            "approve_commit_tag_boundary_commands_path": "",
-            "approve_commit_tag_boundary_metadata_path": "",
-            "approve_commit_tag_boundary_should_execute_commit": False,
-            "approve_commit_tag_boundary_should_execute_tag": False,
-            "approve_commit_tag_boundary_ready": False,
+            **base_state,
+            "blocked_reason": "unexpected_tracked_files_present",
+            "changed_tracked_files": changed_tracked_files,
+            "unexpected_tracked_files": unexpected_tracked_files,
+            "next_action": "review_unexpected_tracked_files",
+            "summary": "Unexpected tracked files are present for commit/tag planning.",
         }
-    if review_response_status != "available" or review_response_decision != "approve":
+
+    if changed_tracked_files != [tracked_file]:
         return {
-            "approve_commit_tag_boundary_status": "blocked",
-            "approve_commit_tag_boundary_decision": "approve",
-            "approve_commit_tag_boundary_reason": "review_response_not_approve",
-            "approve_commit_tag_boundary_next_action": "manual_review_required",
-            "approve_commit_tag_boundary_blocked_reason": "review_response_not_approve",
-            "approve_commit_tag_boundary_commit_message": "",
-            "approve_commit_tag_boundary_tag_name": "",
-            "approve_commit_tag_boundary_commands_path": "",
-            "approve_commit_tag_boundary_metadata_path": "",
-            "approve_commit_tag_boundary_should_execute_commit": False,
-            "approve_commit_tag_boundary_should_execute_tag": False,
-            "approve_commit_tag_boundary_ready": False,
+            **base_state,
+            "blocked_reason": "unexpected_tracked_files_present",
+            "changed_tracked_files": changed_tracked_files,
+            "unexpected_tracked_files": changed_tracked_files,
+            "next_action": "review_unexpected_tracked_files",
+            "summary": "Tracked file set does not match allowlist for commit/tag planning.",
         }
+
+    return {
+        **base_state,
+        "status": "ready",
+        "boundary_status": "ready",
+        "blocked_reason": "none",
+        "plan_ready": True,
+        "tracked_files_allowed": True,
+        "changed_tracked_files": [tracked_file],
+        "unexpected_tracked_files": [],
+        "explicit_add_paths": [tracked_file],
+        "next_action": "run_prompt321_approve_commit_tag_execution_gate",
+        "summary": "Approve commit/tag boundary is ready; execution remains disabled until Prompt321.",
+    }
+
+
+def _build_approve_commit_tag_plan_state(
+    *,
+    boundary_state: Mapping[str, Any] | None,
+    command_file_path: Path,
+) -> dict[str, Any]:
+    boundary = dict(boundary_state) if isinstance(boundary_state, Mapping) else {}
+    boundary_status = _normalize_text(boundary.get("boundary_status"), default="blocked")
+    blocked_reason = _normalize_text(boundary.get("blocked_reason"), default="bounded_cycle_not_completed")
+    ready = boundary_status == "ready" and bool(boundary.get("plan_ready", False))
+
+    status = "blocked"
+    plan_status = "blocked"
+    next_action = _normalize_text(boundary.get("next_action"), default="none")
+    summary = "Approve commit/tag plan is blocked."
+    if ready:
+        status = "ready"
+        plan_status = "ready"
+        blocked_reason = "none"
+        next_action = "run_prompt321_approve_commit_tag_execution_gate"
+        summary = "Approve commit/tag plan is ready; execution remains disabled until Prompt321."
+
+    return {
+        "status": status,
+        "plan_status": plan_status,
+        "blocked_reason": blocked_reason,
+        "source": "approve_commit_tag_boundary",
+        "commit_message": _normalize_text(
+            boundary.get("proposed_commit_message"),
+            default=_APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE,
+        ),
+        "tag_name": _normalize_text(
+            boundary.get("proposed_tag"),
+            default=_APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME,
+        ),
+        "explicit_add_paths": _normalize_string_list(boundary.get("explicit_add_paths")),
+        "command_file_path": str(command_file_path),
+        "execution_required_by": "Prompt321",
+        "execution_performed": False,
+        "next_action": next_action,
+        "summary": summary,
+    }
+
+
+def _write_approve_commit_tag_commands_if_safe(
+    *,
+    boundary_state: Mapping[str, Any] | None,
+    command_file_path: Path,
+) -> bool:
+    boundary = dict(boundary_state) if isinstance(boundary_state, Mapping) else {}
+    changed_paths = _normalize_string_list(boundary.get("changed_tracked_files"))
+    unexpected_paths = _normalize_string_list(boundary.get("unexpected_tracked_files"))
+    should_write = (
+        _normalize_text(boundary.get("boundary_status"), default="blocked") == "ready"
+        and bool(boundary.get("plan_ready", False))
+        and bool(boundary.get("tracked_files_allowed", False))
+        and changed_paths == [_APPROVE_COMMIT_TAG_EXECUTION_TRACKED_FILE]
+        and not unexpected_paths
+    )
+    if not should_write:
+        try:
+            command_file_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
 
     commands_text = "\n".join(
         [
             "#!/usr/bin/env bash",
             "set -euo pipefail",
             "",
-            "# Prompt306 draft-only boundary commands.",
-            "# These commands are generated for manual review and are not auto-executed by Prompt306.",
             "cd /home/rai/codex-local-runner",
-            "git status --short --untracked-files=no",
-            "git diff --stat",
-            "python -m py_compile automation/orchestration/planned_execution_runner.py",
+            "",
             "git add automation/orchestration/planned_execution_runner.py",
-            'git commit -m "Add approved autonomous runner slice"',
-            "git tag prompt306-approve-commit-tag-boundary-ready",
-            "git log --oneline --decorate -n 12",
-            "git tag --points-at HEAD",
+            'git commit -m "Add bounded post-reentry targeted fix cycle orchestrator"',
+            "git tag prompt319-bounded-post-reentry-targeted-fix-cycle-orchestrator",
+            "",
             "git status --short --untracked-files=no",
         ]
     ).rstrip() + "\n"
-    metadata_payload = {
-        "status": "boundary_ready",
-        "decision": "approve",
-        "reason": "approve_commit_tag_boundary_ready",
-        "next_action": "prepare_approve_commit_tag_execution_gate",
-        "blocked_reason": "none",
-        "commit_message": deterministic_commit_message,
-        "tag_name": deterministic_tag_name,
-        "commands_path": str(approve_commit_tag_boundary_commands_path),
-        "metadata_path": str(approve_commit_tag_boundary_metadata_path),
-        "should_execute_commit": False,
-        "should_execute_tag": False,
-        "source_review_route": {
-            "project_browser_autonomous_review_route_status": review_route_status,
-            "project_browser_autonomous_review_route_decision": review_route_decision,
-            "project_browser_autonomous_review_route_next_action": review_route_next_action,
-            "project_browser_autonomous_review_route_should_prepare_commit": bool(
-                review_route_should_prepare_commit
-            ),
-        },
-        "source_review_response": {
-            "project_browser_autonomous_review_response_status": review_response_status,
-            "project_browser_autonomous_review_response_decision": review_response_decision,
-            "project_browser_autonomous_review_response_reason": review_response_reason,
-        },
-        "source_one_cycle_controller": {
-            "project_browser_autonomous_one_cycle_controller_status": (
-                one_cycle_controller_status
-            ),
-            "project_browser_autonomous_one_cycle_controller_diff_capture_status": (
-                one_cycle_controller_diff_capture_status
-            ),
-            "project_browser_autonomous_one_cycle_controller_review_request_status": (
-                one_cycle_controller_review_request_status
-            ),
-            "project_browser_autonomous_one_cycle_controller_review_handoff_decision_status": (
-                one_cycle_controller_review_handoff_decision_status
-            ),
-            "project_browser_autonomous_one_cycle_controller_tracked_diff_status": (
-                one_cycle_controller_tracked_diff_status
-            ),
-        },
-    }
-
     try:
-        approve_commit_tag_boundary_commands_path.parent.mkdir(parents=True, exist_ok=True)
+        command_file_path.parent.mkdir(parents=True, exist_ok=True)
+        command_file_path.write_text(commands_text, encoding="utf-8")
     except OSError:
-        return base_state
-
-    try:
-        approve_commit_tag_boundary_commands_path.write_text(commands_text, encoding="utf-8")
-    except OSError:
-        return {
-            "approve_commit_tag_boundary_status": "blocked",
-            "approve_commit_tag_boundary_decision": "approve",
-            "approve_commit_tag_boundary_reason": "commands_write_failed",
-            "approve_commit_tag_boundary_next_action": "manual_review_required",
-            "approve_commit_tag_boundary_blocked_reason": "commands_write_failed",
-            "approve_commit_tag_boundary_commit_message": deterministic_commit_message,
-            "approve_commit_tag_boundary_tag_name": deterministic_tag_name,
-            "approve_commit_tag_boundary_commands_path": "",
-            "approve_commit_tag_boundary_metadata_path": "",
-            "approve_commit_tag_boundary_should_execute_commit": False,
-            "approve_commit_tag_boundary_should_execute_tag": False,
-            "approve_commit_tag_boundary_ready": False,
-        }
-    try:
-        approve_commit_tag_boundary_metadata_path.write_text(
-            json.dumps(metadata_payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-    except OSError:
-        try:
-            approve_commit_tag_boundary_commands_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        return {
-            "approve_commit_tag_boundary_status": "blocked",
-            "approve_commit_tag_boundary_decision": "approve",
-            "approve_commit_tag_boundary_reason": "metadata_write_failed",
-            "approve_commit_tag_boundary_next_action": "manual_review_required",
-            "approve_commit_tag_boundary_blocked_reason": "metadata_write_failed",
-            "approve_commit_tag_boundary_commit_message": deterministic_commit_message,
-            "approve_commit_tag_boundary_tag_name": deterministic_tag_name,
-            "approve_commit_tag_boundary_commands_path": "",
-            "approve_commit_tag_boundary_metadata_path": "",
-            "approve_commit_tag_boundary_should_execute_commit": False,
-            "approve_commit_tag_boundary_should_execute_tag": False,
-            "approve_commit_tag_boundary_ready": False,
-        }
-    return {
-        "approve_commit_tag_boundary_status": "boundary_ready",
-        "approve_commit_tag_boundary_decision": "approve",
-        "approve_commit_tag_boundary_reason": "approve_commit_tag_boundary_ready",
-        "approve_commit_tag_boundary_next_action": "prepare_approve_commit_tag_execution_gate",
-        "approve_commit_tag_boundary_blocked_reason": "none",
-        "approve_commit_tag_boundary_commit_message": deterministic_commit_message,
-        "approve_commit_tag_boundary_tag_name": deterministic_tag_name,
-        "approve_commit_tag_boundary_commands_path": str(approve_commit_tag_boundary_commands_path),
-        "approve_commit_tag_boundary_metadata_path": str(approve_commit_tag_boundary_metadata_path),
-        "approve_commit_tag_boundary_should_execute_commit": False,
-        "approve_commit_tag_boundary_should_execute_tag": False,
-        "approve_commit_tag_boundary_ready": True,
-    }
+        return False
+    return True
 
 
 def _build_approve_commit_tag_execution_gate_state(
@@ -6208,6 +6258,57 @@ def _run_approve_commit_tag_execution_if_enabled(
     execution_confirmed: bool,
     execution_receipt_path: Path,
 ) -> dict[str, Any]:
+    state: dict[str, Any] = {
+        "execution_enabled": False,
+        "execution_confirmed": False,
+        "execution_gate_status": "execution_not_enabled",
+        "execution_status": "not_executed",
+        "execution_attempted": False,
+        "execution_exit_code": 0,
+        "execution_blocked_reason": "execution_not_enabled",
+        "execution_commit_message": _APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE,
+        "execution_tag_name": _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME,
+        "execution_receipt_path": _normalize_text(
+            str(execution_receipt_path),
+            default=_APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_PATH,
+        ),
+        "execution_should_commit": False,
+        "execution_should_tag": False,
+    }
+    receipt_payload = {
+        "status": state["execution_status"],
+        "gate_status": state["execution_gate_status"],
+        "blocked_reason": state["execution_blocked_reason"],
+        "attempted": state["execution_attempted"],
+        "exit_code": state["execution_exit_code"],
+        "execution_enabled": state["execution_enabled"],
+        "execution_confirmed": state["execution_confirmed"],
+        "execution_commit_message": state["execution_commit_message"],
+        "execution_tag_name": state["execution_tag_name"],
+        "execution_should_commit": state["execution_should_commit"],
+        "execution_should_tag": state["execution_should_tag"],
+        "execution_repo_path": _normalize_text(execution_repo_path, default=""),
+        "boundary_commands_path": _normalize_text(
+            approve_commit_tag_boundary_commands_path,
+            default="",
+        ),
+        "boundary_metadata_path": _normalize_text(
+            approve_commit_tag_boundary_metadata_path,
+            default="",
+        ),
+        "execution_required_by": "Prompt321",
+        "execution_performed": False,
+    }
+    try:
+        execution_receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        execution_receipt_path.write_text(
+            json.dumps(receipt_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+    return state
+
     state = _build_approve_commit_tag_execution_gate_state(
         execution_enabled=execution_enabled,
         execution_confirmed=execution_confirmed,
@@ -9207,6 +9308,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     approve_commit_tag_boundary_commands_path = (
         one_cycle_controller_dir / "approve_commit_tag_commands.sh"
     )
+    approve_commit_tag_plan_metadata_path = (
+        one_cycle_controller_dir / "approve_commit_tag_plan.json"
+    )
     approve_commit_tag_execution_receipt_path = (
         one_cycle_controller_dir / "approve_commit_tag_execution_receipt.json"
     )
@@ -9356,14 +9460,19 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     approve_commit_tag_boundary_should_execute_commit = False
     approve_commit_tag_boundary_should_execute_tag = False
     approve_commit_tag_boundary_ready = False
-    approve_commit_tag_execution_enabled = _read_flag(
-        "project_browser_autonomous_approve_commit_tag_execution_enabled",
-        default=False,
-    )
-    approve_commit_tag_execution_confirmed = _read_flag(
-        "project_browser_autonomous_approve_commit_tag_execution_confirmed",
-        default=False,
-    )
+    approve_commit_tag_plan_ready = False
+    approve_commit_tag_tracked_files_allowed = False
+    approve_commit_tag_changed_tracked_files: list[str] = []
+    approve_commit_tag_unexpected_tracked_files: list[str] = []
+    approve_commit_tag_explicit_add_paths: list[str] = []
+    approve_commit_tag_proposed_commit_message = ""
+    approve_commit_tag_proposed_tag = ""
+    approve_commit_tag_command_file_path = str(approve_commit_tag_boundary_commands_path)
+    approve_commit_tag_execution_allowed = False
+    approve_commit_tag_boundary_path = str(approve_commit_tag_boundary_metadata_path)
+    approve_commit_tag_plan_path = str(approve_commit_tag_plan_metadata_path)
+    approve_commit_tag_execution_enabled = False
+    approve_commit_tag_execution_confirmed = False
     approve_commit_tag_execution_gate_status = "execution_not_enabled"
     approve_commit_tag_execution_status = "not_executed"
     approve_commit_tag_execution_attempted = False
@@ -9506,6 +9615,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_approve_commit_tag_boundary_json": str(
             approve_commit_tag_boundary_metadata_path
+        ),
+        "one_cycle_controller_approve_commit_tag_plan_json": str(
+            approve_commit_tag_plan_metadata_path
         ),
         "one_cycle_controller_approve_commit_tag_commands_sh": str(
             approve_commit_tag_boundary_commands_path
@@ -10395,142 +10507,134 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         default=targeted_fix_post_reentry_max_cycle_count,
     )
     approve_commit_tag_boundary_state = _build_approve_commit_tag_boundary_state(
-        review_route_status=review_route_status,
-        review_route_decision=review_route_decision,
-        review_route_next_action=review_route_next_action,
-        review_route_should_prepare_commit=review_route_should_prepare_commit,
-        review_response_status=review_response_status,
-        review_response_decision=review_response_decision,
-        review_response_reason=review_response_reason,
-        one_cycle_controller_status=status,
-        one_cycle_controller_diff_capture_status=diff_capture_status,
-        one_cycle_controller_review_request_status=review_request_status,
-        one_cycle_controller_review_handoff_decision_status=review_handoff_decision_status,
-        one_cycle_controller_tracked_diff_status=tracked_diff_status,
-        approve_commit_tag_boundary_metadata_path=approve_commit_tag_boundary_metadata_path,
-        approve_commit_tag_boundary_commands_path=approve_commit_tag_boundary_commands_path,
+        execution_repo_path=execution_repo_path,
+        bounded_cycle_decision_path=targeted_fix_post_reentry_bounded_cycle_decision_path,
+        bounded_cycle_receipt_path=targeted_fix_post_reentry_bounded_cycle_receipt_path,
+        terminal_summary_path=targeted_fix_post_reentry_terminal_summary_path,
+        cycle_closure_result_path=targeted_fix_post_reentry_cycle_closure_result_path,
+        command_file_path=approve_commit_tag_boundary_commands_path,
     )
+    approve_commit_tag_command_written = _write_approve_commit_tag_commands_if_safe(
+        boundary_state=approve_commit_tag_boundary_state,
+        command_file_path=approve_commit_tag_boundary_commands_path,
+    )
+    if (
+        _normalize_text(approve_commit_tag_boundary_state.get("boundary_status"), default="")
+        == "ready"
+        and not approve_commit_tag_command_written
+    ):
+        approve_commit_tag_boundary_state = {
+            **dict(approve_commit_tag_boundary_state),
+            "status": "blocked",
+            "boundary_status": "blocked",
+            "blocked_reason": "command_file_write_failed",
+            "plan_ready": False,
+            "tracked_files_allowed": False,
+            "explicit_add_paths": [],
+            "next_action": "review_command_file_write_failure",
+            "summary": "Approve commit/tag boundary command file write failed.",
+        }
+    approve_commit_tag_plan_state = _build_approve_commit_tag_plan_state(
+        boundary_state=approve_commit_tag_boundary_state,
+        command_file_path=approve_commit_tag_boundary_commands_path,
+    )
+    try:
+        approve_commit_tag_boundary_metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(
+            approve_commit_tag_boundary_metadata_path,
+            dict(approve_commit_tag_boundary_state),
+        )
+        _write_json(
+            approve_commit_tag_plan_metadata_path,
+            dict(approve_commit_tag_plan_state),
+        )
+    except OSError:
+        pass
+
     approve_commit_tag_boundary_status = _normalize_text(
-        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_status"),
+        approve_commit_tag_boundary_state.get("boundary_status"),
         default=approve_commit_tag_boundary_status,
     )
-    approve_commit_tag_boundary_decision = _normalize_text(
-        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_decision"),
-        default=approve_commit_tag_boundary_decision,
+    approve_commit_tag_boundary_decision = (
+        "approve" if approve_commit_tag_boundary_status == "ready" else "none"
     )
-    approve_commit_tag_boundary_reason = _normalize_text(
-        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_reason"),
-        default=approve_commit_tag_boundary_reason,
+    approve_commit_tag_boundary_reason = (
+        "approve_commit_tag_boundary_ready"
+        if approve_commit_tag_boundary_status == "ready"
+        else _normalize_text(approve_commit_tag_boundary_state.get("blocked_reason"), default="blocked")
     )
     approve_commit_tag_boundary_next_action = _normalize_text(
-        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_next_action"),
+        approve_commit_tag_boundary_state.get("next_action"),
         default=approve_commit_tag_boundary_next_action,
     )
     approve_commit_tag_boundary_blocked_reason = _normalize_text(
-        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_blocked_reason"),
+        approve_commit_tag_boundary_state.get("blocked_reason"),
         default=approve_commit_tag_boundary_blocked_reason,
     )
     approve_commit_tag_boundary_commit_message = _normalize_text(
-        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_commit_message"),
+        approve_commit_tag_boundary_state.get("proposed_commit_message"),
         default=approve_commit_tag_boundary_commit_message,
     )
     approve_commit_tag_boundary_tag_name = _normalize_text(
-        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_tag_name"),
+        approve_commit_tag_boundary_state.get("proposed_tag"),
         default=approve_commit_tag_boundary_tag_name,
     )
-    approve_commit_tag_boundary_commands_resolved_path = _normalize_text(
-        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_commands_path"),
-        default=approve_commit_tag_boundary_commands_resolved_path,
+    approve_commit_tag_boundary_commands_resolved_path = (
+        str(approve_commit_tag_boundary_commands_path) if approve_commit_tag_command_written else ""
     )
-    approve_commit_tag_boundary_metadata_resolved_path = _normalize_text(
-        approve_commit_tag_boundary_state.get("approve_commit_tag_boundary_metadata_path"),
-        default=approve_commit_tag_boundary_metadata_resolved_path,
-    )
+    approve_commit_tag_boundary_metadata_resolved_path = str(approve_commit_tag_boundary_metadata_path)
     approve_commit_tag_boundary_should_execute_commit = False
     approve_commit_tag_boundary_should_execute_tag = False
-    approve_commit_tag_boundary_ready = bool(
-        approve_commit_tag_boundary_state.get(
-            "approve_commit_tag_boundary_ready",
-            approve_commit_tag_boundary_ready,
-        )
+    approve_commit_tag_boundary_ready = approve_commit_tag_boundary_status == "ready"
+
+    approve_commit_tag_plan_ready = bool(approve_commit_tag_boundary_state.get("plan_ready", False))
+    approve_commit_tag_tracked_files_allowed = bool(
+        approve_commit_tag_boundary_state.get("tracked_files_allowed", False)
     )
-    approve_commit_tag_execution_state = _run_approve_commit_tag_execution_if_enabled(
-        execution_repo_path=execution_repo_path,
-        dry_run=bool(dry_run),
-        review_route_status=review_route_status,
-        review_route_decision=review_route_decision,
-        review_route_should_prepare_commit=review_route_should_prepare_commit,
-        approve_commit_tag_boundary_status=approve_commit_tag_boundary_status,
-        approve_commit_tag_boundary_decision=approve_commit_tag_boundary_decision,
-        approve_commit_tag_boundary_commit_message=approve_commit_tag_boundary_commit_message,
-        approve_commit_tag_boundary_tag_name=approve_commit_tag_boundary_tag_name,
-        approve_commit_tag_boundary_commands_path=approve_commit_tag_boundary_commands_resolved_path,
-        approve_commit_tag_boundary_metadata_path=approve_commit_tag_boundary_metadata_resolved_path,
-        approve_commit_tag_boundary_should_execute_commit=(
-            approve_commit_tag_boundary_should_execute_commit
-        ),
-        approve_commit_tag_boundary_should_execute_tag=(
-            approve_commit_tag_boundary_should_execute_tag
-        ),
-        approve_commit_tag_boundary_ready=approve_commit_tag_boundary_ready,
-        execution_enabled=approve_commit_tag_execution_enabled,
-        execution_confirmed=approve_commit_tag_execution_confirmed,
-        execution_receipt_path=approve_commit_tag_execution_receipt_path,
+    approve_commit_tag_changed_tracked_files = _normalize_string_list(
+        approve_commit_tag_boundary_state.get("changed_tracked_files")
     )
-    approve_commit_tag_execution_enabled = bool(
-        approve_commit_tag_execution_state.get(
-            "execution_enabled",
-            approve_commit_tag_execution_enabled,
-        )
+    approve_commit_tag_unexpected_tracked_files = _normalize_string_list(
+        approve_commit_tag_boundary_state.get("unexpected_tracked_files")
     )
-    approve_commit_tag_execution_confirmed = bool(
-        approve_commit_tag_execution_state.get(
-            "execution_confirmed",
-            approve_commit_tag_execution_confirmed,
-        )
+    approve_commit_tag_explicit_add_paths = _normalize_string_list(
+        approve_commit_tag_boundary_state.get("explicit_add_paths")
     )
-    approve_commit_tag_execution_gate_status = _normalize_text(
-        approve_commit_tag_execution_state.get("execution_gate_status"),
-        default=approve_commit_tag_execution_gate_status,
+    approve_commit_tag_proposed_commit_message = _normalize_text(
+        approve_commit_tag_boundary_state.get("proposed_commit_message"),
+        default=approve_commit_tag_proposed_commit_message,
     )
-    approve_commit_tag_execution_status = _normalize_text(
-        approve_commit_tag_execution_state.get("execution_status"),
-        default=approve_commit_tag_execution_status,
+    approve_commit_tag_proposed_tag = _normalize_text(
+        approve_commit_tag_boundary_state.get("proposed_tag"),
+        default=approve_commit_tag_proposed_tag,
     )
-    approve_commit_tag_execution_attempted = bool(
-        approve_commit_tag_execution_state.get(
-            "execution_attempted",
-            approve_commit_tag_execution_attempted,
-        )
+    approve_commit_tag_command_file_path = _normalize_text(
+        approve_commit_tag_boundary_state.get("command_file_path"),
+        default=approve_commit_tag_command_file_path,
     )
-    approve_commit_tag_execution_exit_code = _as_int(
-        approve_commit_tag_execution_state.get("execution_exit_code"),
-        default=approve_commit_tag_execution_exit_code,
+    approve_commit_tag_execution_allowed = bool(
+        approve_commit_tag_boundary_state.get("execution_allowed", False)
     )
-    approve_commit_tag_execution_blocked_reason = _normalize_text(
-        approve_commit_tag_execution_state.get("execution_blocked_reason"),
-        default=approve_commit_tag_execution_blocked_reason,
-    )
+    approve_commit_tag_boundary_path = str(approve_commit_tag_boundary_metadata_path)
+    approve_commit_tag_plan_path = str(approve_commit_tag_plan_metadata_path)
+
+    approve_commit_tag_execution_enabled = False
+    approve_commit_tag_execution_confirmed = False
+    approve_commit_tag_execution_gate_status = "execution_not_enabled"
+    approve_commit_tag_execution_status = "not_executed"
+    approve_commit_tag_execution_attempted = False
+    approve_commit_tag_execution_exit_code = 0
+    approve_commit_tag_execution_blocked_reason = "execution_not_enabled"
     approve_commit_tag_execution_commit_message = _normalize_text(
-        approve_commit_tag_execution_state.get("execution_commit_message"),
+        approve_commit_tag_plan_state.get("commit_message"),
         default=approve_commit_tag_execution_commit_message,
     )
     approve_commit_tag_execution_tag_name = _normalize_text(
-        approve_commit_tag_execution_state.get("execution_tag_name"),
+        approve_commit_tag_plan_state.get("tag_name"),
         default=approve_commit_tag_execution_tag_name,
     )
-    approve_commit_tag_execution_should_commit = bool(
-        approve_commit_tag_execution_state.get(
-            "execution_should_commit",
-            approve_commit_tag_execution_should_commit,
-        )
-    )
-    approve_commit_tag_execution_should_tag = bool(
-        approve_commit_tag_execution_state.get(
-            "execution_should_tag",
-            approve_commit_tag_execution_should_tag,
-        )
-    )
+    approve_commit_tag_execution_should_commit = False
+    approve_commit_tag_execution_should_tag = False
 
     result_payload = {
         "status": status,
@@ -10833,6 +10937,22 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             approve_commit_tag_boundary_should_execute_tag
         ),
         "approve_commit_tag_boundary_ready": approve_commit_tag_boundary_ready,
+        "approve_commit_tag_plan_ready": approve_commit_tag_plan_ready,
+        "approve_commit_tag_tracked_files_allowed": approve_commit_tag_tracked_files_allowed,
+        "approve_commit_tag_changed_tracked_files": approve_commit_tag_changed_tracked_files,
+        "approve_commit_tag_unexpected_tracked_files": (
+            approve_commit_tag_unexpected_tracked_files
+        ),
+        "approve_commit_tag_explicit_add_paths": approve_commit_tag_explicit_add_paths,
+        "approve_commit_tag_proposed_commit_message": (
+            approve_commit_tag_proposed_commit_message
+        ),
+        "approve_commit_tag_proposed_tag": approve_commit_tag_proposed_tag,
+        "approve_commit_tag_command_file_path": approve_commit_tag_command_file_path,
+        "approve_commit_tag_execution_allowed": approve_commit_tag_execution_allowed,
+        "approve_commit_tag_next_action": approve_commit_tag_boundary_next_action,
+        "approve_commit_tag_boundary_path": approve_commit_tag_boundary_path,
+        "approve_commit_tag_plan_path": approve_commit_tag_plan_path,
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -11108,6 +11228,31 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             f"`{str(approve_commit_tag_boundary_should_execute_tag).lower()}`"
         ),
         f"- Approve boundary ready: `{str(approve_commit_tag_boundary_ready).lower()}`",
+        f"- Approve plan ready: `{str(approve_commit_tag_plan_ready).lower()}`",
+        (
+            "- Approve tracked files allowed: "
+            f"`{str(approve_commit_tag_tracked_files_allowed).lower()}`"
+        ),
+        (
+            "- Approve changed tracked files: "
+            f"`{', '.join(approve_commit_tag_changed_tracked_files) if approve_commit_tag_changed_tracked_files else 'none'}`"
+        ),
+        (
+            "- Approve unexpected tracked files: "
+            f"`{', '.join(approve_commit_tag_unexpected_tracked_files) if approve_commit_tag_unexpected_tracked_files else 'none'}`"
+        ),
+        (
+            "- Approve explicit add paths: "
+            f"`{', '.join(approve_commit_tag_explicit_add_paths) if approve_commit_tag_explicit_add_paths else 'none'}`"
+        ),
+        (
+            "- Approve command file path: "
+            f"`{approve_commit_tag_command_file_path or 'none'}`"
+        ),
+        (
+            "- Approve execution allowed: "
+            f"`{str(approve_commit_tag_execution_allowed).lower()}`"
+        ),
         (
             "- Approve execution enabled: "
             f"`{str(approve_commit_tag_execution_enabled).lower()}`"
@@ -11263,6 +11408,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             f"`{targeted_fix_post_reentry_bounded_cycle_receipt_path}`"
         ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
+        f"- approve_commit_tag_plan.json: `{approve_commit_tag_plan_metadata_path}`",
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
     ]
@@ -11874,6 +12020,42 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_approve_commit_tag_boundary_ready": (
             approve_commit_tag_boundary_ready
+        ),
+        "project_browser_autonomous_approve_commit_tag_plan_ready": (
+            approve_commit_tag_plan_ready
+        ),
+        "project_browser_autonomous_approve_commit_tag_tracked_files_allowed": (
+            approve_commit_tag_tracked_files_allowed
+        ),
+        "project_browser_autonomous_approve_commit_tag_changed_tracked_files": (
+            approve_commit_tag_changed_tracked_files
+        ),
+        "project_browser_autonomous_approve_commit_tag_unexpected_tracked_files": (
+            approve_commit_tag_unexpected_tracked_files
+        ),
+        "project_browser_autonomous_approve_commit_tag_explicit_add_paths": (
+            approve_commit_tag_explicit_add_paths
+        ),
+        "project_browser_autonomous_approve_commit_tag_proposed_commit_message": (
+            approve_commit_tag_proposed_commit_message
+        ),
+        "project_browser_autonomous_approve_commit_tag_proposed_tag": (
+            approve_commit_tag_proposed_tag
+        ),
+        "project_browser_autonomous_approve_commit_tag_command_file_path": (
+            approve_commit_tag_command_file_path
+        ),
+        "project_browser_autonomous_approve_commit_tag_execution_allowed": (
+            approve_commit_tag_execution_allowed
+        ),
+        "project_browser_autonomous_approve_commit_tag_next_action": (
+            approve_commit_tag_boundary_next_action
+        ),
+        "project_browser_autonomous_approve_commit_tag_boundary_path": (
+            approve_commit_tag_boundary_path
+        ),
+        "project_browser_autonomous_approve_commit_tag_plan_path": (
+            approve_commit_tag_plan_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
