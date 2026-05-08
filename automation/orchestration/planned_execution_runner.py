@@ -3737,6 +3737,16 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_end_to_end_dry_run_plan_path",
     "project_browser_autonomous_local_end_to_end_dry_run_step_matrix_path",
     "project_browser_autonomous_local_end_to_end_dry_run_receipt_path",
+    "project_browser_autonomous_local_one_shot_gate_status",
+    "project_browser_autonomous_local_one_shot_blocked_reason",
+    "project_browser_autonomous_local_one_shot_gate_ready",
+    "project_browser_autonomous_local_one_shot_selected_step_id",
+    "project_browser_autonomous_local_one_shot_selected_step_name",
+    "project_browser_autonomous_local_one_shot_execution_allowed",
+    "project_browser_autonomous_local_one_shot_next_action",
+    "project_browser_autonomous_local_one_shot_gate_path",
+    "project_browser_autonomous_local_one_shot_step_selection_path",
+    "project_browser_autonomous_local_one_shot_receipt_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -3887,6 +3897,21 @@ _LOCAL_END_TO_END_DRY_RUN_STEP_MATRIX_PATH = (
 )
 _LOCAL_END_TO_END_DRY_RUN_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/local_end_to_end_dry_run_receipt.json"
+)
+_LOCAL_END_TO_END_ONE_SHOT_EXPECTED_HEAD_TAG = (
+    "prompt324-local-end-to-end-dry-run-plan-builder"
+)
+_LOCAL_END_TO_END_ONE_SHOT_EXECUTION_GATE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_end_to_end_one_shot_execution_gate.json"
+)
+_LOCAL_END_TO_END_ONE_SHOT_STEP_SELECTION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_end_to_end_one_shot_step_selection.json"
+)
+_LOCAL_END_TO_END_ONE_SHOT_EXECUTION_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_end_to_end_one_shot_execution_receipt.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_codex_prompt.md"
@@ -8061,6 +8086,422 @@ def _build_local_end_to_end_dry_run_receipt_state(
     }
 
 
+def _build_local_end_to_end_one_shot_step_selection_state(
+    *,
+    plan_state: Mapping[str, Any] | None,
+    step_matrix_state: Mapping[str, Any] | None,
+    prior_receipt_state: Mapping[str, Any] | None,
+    plan_path: Path,
+    step_matrix_path: Path,
+    prior_receipt_path: Path,
+) -> dict[str, Any]:
+    plan = dict(plan_state) if isinstance(plan_state, Mapping) else {}
+    step_matrix = dict(step_matrix_state) if isinstance(step_matrix_state, Mapping) else {}
+    prior_receipt = (
+        dict(prior_receipt_state) if isinstance(prior_receipt_state, Mapping) else {}
+    )
+    step_count = _as_non_negative_int(
+        step_matrix.get("step_count"),
+        default=_as_non_negative_int(plan.get("step_count"), default=16),
+    )
+    if step_count <= 0:
+        step_count = 16
+
+    steps_raw = step_matrix.get("steps")
+    step_name_by_id: dict[int, str] = {}
+    if isinstance(steps_raw, list):
+        for entry in steps_raw:
+            if not isinstance(entry, Mapping):
+                continue
+            step_id = _as_non_negative_int(entry.get("step_id"), default=0)
+            step_name = _normalize_text(entry.get("step_name"), default="")
+            if step_id > 0 and step_name:
+                step_name_by_id[step_id] = step_name
+
+    def _resolve_step_name(step_id: int) -> str:
+        if step_id <= 0:
+            return "none"
+        if step_id in step_name_by_id:
+            return step_name_by_id[step_id]
+        if step_id == 1:
+            return "read_current_state"
+        return "unknown_step"
+
+    plan_status = _normalize_text(plan.get("status"), default="blocked")
+    plan_ready = bool(plan.get("dry_run_plan_ready", False))
+    plan_local_only = bool(plan.get("local_only", False))
+    plan_github_deferred = bool(plan.get("github_deferred", False))
+    plan_remote_required = bool(plan.get("remote_required", True))
+    plan_execution_allowed = bool(plan.get("execution_allowed", True))
+    matrix_all_steps_metadata_only = bool(step_matrix.get("all_steps_metadata_only", False))
+    matrix_any_codex = bool(step_matrix.get("any_codex_invocation_allowed_now", True))
+    matrix_any_git_mutation = bool(step_matrix.get("any_git_mutation_allowed_now", True))
+    matrix_any_remote = bool(step_matrix.get("any_remote_operation_allowed_now", True))
+    matrix_status = _normalize_text(step_matrix.get("status"), default="blocked")
+
+    plan_compatible = (
+        plan_status == "ready"
+        and plan_ready
+        and step_count == 16
+        and plan_local_only
+        and plan_github_deferred
+        and (not plan_remote_required)
+        and (not plan_execution_allowed)
+    )
+    step_matrix_compatible = (
+        matrix_status == "ready"
+        and step_count == 16
+        and matrix_all_steps_metadata_only
+        and (not matrix_any_codex)
+        and (not matrix_any_git_mutation)
+        and (not matrix_any_remote)
+    )
+    dry_run_plan_ready = plan_compatible and step_matrix_compatible
+
+    status = "blocked"
+    selection_status = "blocked"
+    blocked_reason = "local_end_to_end_dry_run_plan_not_ready"
+    selected_step_id = 1
+    selected_step_name = _resolve_step_name(selected_step_id)
+    one_shot_sequence_complete = False
+    next_action = "complete_local_end_to_end_dry_run_plan_builder"
+    summary = (
+        "Local-only one-shot step selection is blocked because Prompt324 dry-run metadata is missing or incompatible."
+    )
+
+    if dry_run_plan_ready:
+        status = "ready"
+        selection_status = "ready"
+        blocked_reason = "none"
+        next_action = "prepare_local_one_shot_step_execution_adapter"
+        summary = (
+            "Local-only one-shot step selection is ready; execution remains disabled until an explicit adapter enables the selected step."
+        )
+        if prior_receipt:
+            prior_status = _normalize_text(prior_receipt.get("status"), default="unknown")
+            prior_receipt_status = _normalize_text(
+                prior_receipt.get("receipt_status"),
+                default=prior_status,
+            )
+            if prior_status == "blocked" or prior_receipt_status == "blocked":
+                status = "blocked"
+                selection_status = "blocked"
+                blocked_reason = _normalize_text(
+                    prior_receipt.get("blocked_reason"),
+                    default="prior_one_shot_step_blocked",
+                )
+                selected_step_id = _as_non_negative_int(
+                    prior_receipt.get("selected_step_id"),
+                    default=1,
+                )
+                if selected_step_id <= 0:
+                    selected_step_id = 1
+                selected_step_name = _normalize_text(
+                    prior_receipt.get("selected_step_name"),
+                    default=_resolve_step_name(selected_step_id),
+                )
+                next_action = _normalize_text(
+                    prior_receipt.get("next_action"),
+                    default="resolve_blocked_local_one_shot_step_before_retry",
+                )
+                summary = (
+                    "Local-only one-shot step selection remains blocked at the previously blocked step."
+                )
+            elif prior_status == "completed" or prior_receipt_status == "completed":
+                last_step_id = _as_non_negative_int(
+                    prior_receipt.get("last_step_id"),
+                    default=_as_non_negative_int(
+                        prior_receipt.get("selected_step_id"),
+                        default=0,
+                    ),
+                )
+                if last_step_id >= step_count:
+                    selected_step_id = 0
+                    selected_step_name = "none"
+                    one_shot_sequence_complete = True
+                    summary = (
+                        "Local-only one-shot step sequence is complete; no additional step is selected."
+                    )
+                else:
+                    selected_step_id = last_step_id + 1
+                    if selected_step_id <= 0:
+                        selected_step_id = 1
+                    selected_step_name = _resolve_step_name(selected_step_id)
+            else:
+                selected_step_id = 1
+                selected_step_name = _resolve_step_name(selected_step_id)
+
+    return {
+        "status": status,
+        "selection_status": selection_status,
+        "blocked_reason": blocked_reason,
+        "source": "local_end_to_end_one_shot_step_selection",
+        "plan_path": str(plan_path),
+        "step_matrix_path": str(step_matrix_path),
+        "prior_receipt_path": str(prior_receipt_path),
+        "step_count": step_count,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "one_shot_sequence_complete": one_shot_sequence_complete,
+        "execution_allowed_now": False,
+        "codex_invocation_allowed_now": False,
+        "git_mutation_allowed_now": False,
+        "remote_operation_allowed_now": False,
+        "next_action": next_action,
+        "summary": summary,
+    }
+
+
+def _build_local_end_to_end_one_shot_execution_gate_state(
+    *,
+    execution_repo_path: str,
+    plan_state: Mapping[str, Any] | None,
+    step_matrix_state: Mapping[str, Any] | None,
+    step_selection_state: Mapping[str, Any] | None,
+    expected_head_tag: str,
+) -> dict[str, Any]:
+    _ = execution_repo_path
+    normalized_repo_path = _APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH
+    plan = dict(plan_state) if isinstance(plan_state, Mapping) else {}
+    step_matrix = dict(step_matrix_state) if isinstance(step_matrix_state, Mapping) else {}
+    step_selection = (
+        dict(step_selection_state) if isinstance(step_selection_state, Mapping) else {}
+    )
+    step_count = _as_non_negative_int(
+        step_matrix.get("step_count"),
+        default=_as_non_negative_int(plan.get("step_count"), default=16),
+    )
+    if step_count <= 0:
+        step_count = 16
+
+    status_short_cmd = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=no"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    current_branch_cmd = subprocess.run(
+        ["git", "branch", "--show-current"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    head_short_cmd = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    head_tags_cmd = subprocess.run(
+        ["git", "tag", "--points-at", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    metadata_collection_ok = (
+        status_short_cmd.returncode == 0
+        and current_branch_cmd.returncode == 0
+        and head_short_cmd.returncode == 0
+        and head_tags_cmd.returncode == 0
+    )
+    changed_tracked_files = (
+        [
+            line.rstrip()
+            for line in (status_short_cmd.stdout or "").splitlines()
+            if line.strip()
+        ]
+        if metadata_collection_ok
+        else []
+    )
+    worktree_clean = bool(metadata_collection_ok and (not changed_tracked_files))
+    current_branch = (
+        _normalize_text(current_branch_cmd.stdout, default="")
+        if metadata_collection_ok
+        else ""
+    )
+    head_short = (
+        _normalize_text(head_short_cmd.stdout, default="")
+        if metadata_collection_ok
+        else ""
+    )
+    head_tags = (
+        sorted(
+            {
+                line.strip()
+                for line in (head_tags_cmd.stdout or "").splitlines()
+                if line.strip()
+            }
+        )
+        if metadata_collection_ok
+        else []
+    )
+    expected_head_tag_present = expected_head_tag in set(head_tags)
+
+    plan_status = _normalize_text(plan.get("status"), default="blocked")
+    plan_ready = bool(plan.get("dry_run_plan_ready", False))
+    plan_local_only = bool(plan.get("local_only", False))
+    plan_github_deferred = bool(plan.get("github_deferred", False))
+    plan_remote_required = bool(plan.get("remote_required", True))
+    plan_execution_allowed = bool(plan.get("execution_allowed", True))
+    matrix_status = _normalize_text(step_matrix.get("status"), default="blocked")
+    matrix_all_steps_metadata_only = bool(step_matrix.get("all_steps_metadata_only", False))
+    matrix_any_codex = bool(step_matrix.get("any_codex_invocation_allowed_now", True))
+    matrix_any_git_mutation = bool(step_matrix.get("any_git_mutation_allowed_now", True))
+    matrix_any_remote = bool(step_matrix.get("any_remote_operation_allowed_now", True))
+    dry_run_plan_ready = (
+        plan_status == "ready"
+        and plan_ready
+        and step_count == 16
+        and plan_local_only
+        and plan_github_deferred
+        and (not plan_remote_required)
+        and (not plan_execution_allowed)
+        and matrix_status == "ready"
+        and matrix_all_steps_metadata_only
+        and (not matrix_any_codex)
+        and (not matrix_any_git_mutation)
+        and (not matrix_any_remote)
+    )
+
+    selected_step_id = _as_non_negative_int(step_selection.get("selected_step_id"), default=1)
+    selected_step_name = _normalize_text(
+        step_selection.get("selected_step_name"),
+        default="read_current_state",
+    )
+    status = "blocked"
+    gate_status = "blocked"
+    blocked_reason = "local_end_to_end_dry_run_plan_not_ready"
+    one_shot_gate_ready = False
+    next_action = "complete_local_end_to_end_dry_run_plan_builder"
+    summary = (
+        "Local-only one-shot execution gate is blocked because Prompt324 dry-run metadata is missing or incompatible."
+    )
+    if not worktree_clean:
+        blocked_reason = "tracked_changes_present_before_one_shot_execution_gate"
+        next_action = "commit_or_reconcile_tracked_changes_before_one_shot_gate"
+        summary = "Local-only one-shot execution gate is blocked by tracked changes in the worktree."
+    elif not expected_head_tag_present:
+        blocked_reason = "expected_prompt324_head_tag_missing"
+        next_action = "commit_and_tag_prompt324_before_one_shot_gate"
+        summary = (
+            "Local-only one-shot execution gate is blocked because expected Prompt324 head tag is missing."
+        )
+    elif not dry_run_plan_ready:
+        blocked_reason = "local_end_to_end_dry_run_plan_not_ready"
+        next_action = "complete_local_end_to_end_dry_run_plan_builder"
+        summary = (
+            "Local-only one-shot execution gate is blocked because Prompt324 dry-run metadata is missing or incompatible."
+        )
+    else:
+        status = "ready"
+        gate_status = "ready"
+        blocked_reason = "none"
+        one_shot_gate_ready = True
+        next_action = "prepare_bounded_local_autonomous_loop_controller"
+        summary = (
+            "Local-only one-shot execution gate is ready; execution remains disabled until an explicit adapter/gate enables a selected step."
+        )
+
+    return {
+        "status": status,
+        "gate_status": gate_status,
+        "blocked_reason": blocked_reason,
+        "source": "local_end_to_end_one_shot_execution_gate",
+        "current_branch": current_branch,
+        "head_short": head_short,
+        "head_tags": head_tags,
+        "expected_head_tag": expected_head_tag,
+        "expected_head_tag_present": expected_head_tag_present,
+        "worktree_clean": worktree_clean,
+        "changed_tracked_files": changed_tracked_files,
+        "one_shot_gate_ready": one_shot_gate_ready,
+        "local_only": True,
+        "github_deferred": plan_github_deferred,
+        "remote_required": plan_remote_required,
+        "dry_run_plan_ready": dry_run_plan_ready,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "step_count": step_count,
+        "execution_allowed": False,
+        "execution_performed": False,
+        "codex_invoked": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "rollback_performed": False,
+        "next_prompt_id_recommendation": "Prompt326-local",
+        "next_prompt_title_recommendation": "bounded local autonomous loop controller",
+        "next_action": next_action,
+        "summary": summary,
+    }
+
+
+def _build_local_end_to_end_one_shot_execution_receipt_state(
+    *,
+    gate_state: Mapping[str, Any] | None,
+    step_selection_state: Mapping[str, Any] | None,
+    gate_path: Path,
+    step_selection_path: Path,
+) -> dict[str, Any]:
+    gate = dict(gate_state) if isinstance(gate_state, Mapping) else {}
+    step_selection = (
+        dict(step_selection_state) if isinstance(step_selection_state, Mapping) else {}
+    )
+    status = _normalize_text(gate.get("status"), default="blocked")
+    one_shot_gate_ready = bool(gate.get("one_shot_gate_ready", False))
+    blocked_reason = _normalize_text(
+        gate.get("blocked_reason"),
+        default="local_end_to_end_dry_run_plan_not_ready",
+    )
+    next_action = _normalize_text(
+        gate.get("next_action"),
+        default="complete_local_end_to_end_dry_run_plan_builder",
+    )
+    selected_step_id = _as_non_negative_int(
+        step_selection.get("selected_step_id"),
+        default=_as_non_negative_int(gate.get("selected_step_id"), default=1),
+    )
+    selected_step_name = _normalize_text(
+        step_selection.get("selected_step_name"),
+        default=_normalize_text(gate.get("selected_step_name"), default="read_current_state"),
+    )
+    return {
+        "status": status,
+        "receipt_status": "ready" if status == "ready" and one_shot_gate_ready else "blocked",
+        "blocked_reason": blocked_reason,
+        "source": "local_end_to_end_one_shot_execution_gate",
+        "gate_path": str(gate_path),
+        "step_selection_path": str(step_selection_path),
+        "one_shot_gate_ready": one_shot_gate_ready,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "execution_performed": False,
+        "codex_invoked": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "rollback_performed": False,
+        "next_action": next_action,
+        "summary": (
+            "Local-only one-shot execution receipt captured in ready state; selected step remains metadata-only and execution is disabled."
+            if status == "ready" and one_shot_gate_ready
+            else "Local-only one-shot execution receipt captured in blocked state; execution remains disabled."
+        ),
+    }
+
+
 def _write_approve_commit_tag_commands_if_safe(
     *,
     boundary_state: Mapping[str, Any] | None,
@@ -11345,6 +11786,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_end_to_end_dry_run_receipt_path = (
         one_cycle_controller_dir / "local_end_to_end_dry_run_receipt.json"
     )
+    local_end_to_end_one_shot_execution_gate_path = (
+        one_cycle_controller_dir / "local_end_to_end_one_shot_execution_gate.json"
+    )
+    local_end_to_end_one_shot_step_selection_path = (
+        one_cycle_controller_dir / "local_end_to_end_one_shot_step_selection.json"
+    )
+    local_end_to_end_one_shot_execution_receipt_path = (
+        one_cycle_controller_dir / "local_end_to_end_one_shot_execution_receipt.json"
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -11562,6 +12012,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         local_end_to_end_dry_run_step_matrix_path
     )
     local_end_to_end_dry_run_receipt_surface_path = str(local_end_to_end_dry_run_receipt_path)
+    local_one_shot_gate_status = "blocked"
+    local_one_shot_blocked_reason = "local_end_to_end_dry_run_plan_not_ready"
+    local_one_shot_gate_ready = False
+    local_one_shot_selected_step_id = 1
+    local_one_shot_selected_step_name = "read_current_state"
+    local_one_shot_execution_allowed = False
+    local_one_shot_next_action = "complete_local_end_to_end_dry_run_plan_builder"
+    local_one_shot_gate_surface_path = str(local_end_to_end_one_shot_execution_gate_path)
+    local_one_shot_step_selection_surface_path = str(
+        local_end_to_end_one_shot_step_selection_path
+    )
+    local_one_shot_receipt_surface_path = str(local_end_to_end_one_shot_execution_receipt_path)
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -11731,6 +12193,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_local_end_to_end_dry_run_receipt_json": str(
             local_end_to_end_dry_run_receipt_path
+        ),
+        "one_cycle_controller_local_end_to_end_one_shot_execution_gate_json": str(
+            local_end_to_end_one_shot_execution_gate_path
+        ),
+        "one_cycle_controller_local_end_to_end_one_shot_step_selection_json": str(
+            local_end_to_end_one_shot_step_selection_path
+        ),
+        "one_cycle_controller_local_end_to_end_one_shot_execution_receipt_json": str(
+            local_end_to_end_one_shot_execution_receipt_path
         ),
     }
 
@@ -13015,6 +13486,92 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         local_end_to_end_dry_run_step_matrix_path
     )
     local_end_to_end_dry_run_receipt_surface_path = str(local_end_to_end_dry_run_receipt_path)
+    prior_one_shot_execution_receipt_state = (
+        _read_json_object_if_exists(local_end_to_end_one_shot_execution_receipt_path) or {}
+    )
+    local_end_to_end_one_shot_step_selection_state = (
+        _build_local_end_to_end_one_shot_step_selection_state(
+            plan_state=local_end_to_end_dry_run_plan_state,
+            step_matrix_state=local_end_to_end_dry_run_step_matrix_state,
+            prior_receipt_state=prior_one_shot_execution_receipt_state,
+            plan_path=local_end_to_end_dry_run_plan_path,
+            step_matrix_path=local_end_to_end_dry_run_step_matrix_path,
+            prior_receipt_path=local_end_to_end_one_shot_execution_receipt_path,
+        )
+    )
+    local_end_to_end_one_shot_execution_gate_state = (
+        _build_local_end_to_end_one_shot_execution_gate_state(
+            execution_repo_path=execution_repo_path,
+            plan_state=local_end_to_end_dry_run_plan_state,
+            step_matrix_state=local_end_to_end_dry_run_step_matrix_state,
+            step_selection_state=local_end_to_end_one_shot_step_selection_state,
+            expected_head_tag=_LOCAL_END_TO_END_ONE_SHOT_EXPECTED_HEAD_TAG,
+        )
+    )
+    local_end_to_end_one_shot_execution_receipt_state = (
+        _build_local_end_to_end_one_shot_execution_receipt_state(
+            gate_state=local_end_to_end_one_shot_execution_gate_state,
+            step_selection_state=local_end_to_end_one_shot_step_selection_state,
+            gate_path=local_end_to_end_one_shot_execution_gate_path,
+            step_selection_path=local_end_to_end_one_shot_step_selection_path,
+        )
+    )
+    try:
+        local_end_to_end_one_shot_execution_gate_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        _write_json(
+            local_end_to_end_one_shot_execution_gate_path,
+            local_end_to_end_one_shot_execution_gate_state,
+        )
+        _write_json(
+            local_end_to_end_one_shot_step_selection_path,
+            local_end_to_end_one_shot_step_selection_state,
+        )
+        _write_json(
+            local_end_to_end_one_shot_execution_receipt_path,
+            local_end_to_end_one_shot_execution_receipt_state,
+        )
+    except OSError:
+        pass
+    local_one_shot_gate_status = _normalize_text(
+        local_end_to_end_one_shot_execution_gate_state.get("gate_status"),
+        default=local_one_shot_gate_status,
+    )
+    local_one_shot_blocked_reason = _normalize_text(
+        local_end_to_end_one_shot_execution_gate_state.get("blocked_reason"),
+        default=local_one_shot_blocked_reason,
+    )
+    local_one_shot_gate_ready = bool(
+        local_end_to_end_one_shot_execution_gate_state.get(
+            "one_shot_gate_ready",
+            local_one_shot_gate_ready,
+        )
+    )
+    local_one_shot_selected_step_id = _as_non_negative_int(
+        local_end_to_end_one_shot_execution_gate_state.get("selected_step_id"),
+        default=local_one_shot_selected_step_id,
+    )
+    local_one_shot_selected_step_name = _normalize_text(
+        local_end_to_end_one_shot_execution_gate_state.get("selected_step_name"),
+        default=local_one_shot_selected_step_name,
+    )
+    local_one_shot_execution_allowed = bool(
+        local_end_to_end_one_shot_execution_gate_state.get(
+            "execution_allowed",
+            local_one_shot_execution_allowed,
+        )
+    )
+    local_one_shot_next_action = _normalize_text(
+        local_end_to_end_one_shot_execution_gate_state.get("next_action"),
+        default=local_one_shot_next_action,
+    )
+    local_one_shot_gate_surface_path = str(local_end_to_end_one_shot_execution_gate_path)
+    local_one_shot_step_selection_surface_path = str(
+        local_end_to_end_one_shot_step_selection_path
+    )
+    local_one_shot_receipt_surface_path = str(local_end_to_end_one_shot_execution_receipt_path)
 
     result_payload = {
         "status": status,
@@ -14733,6 +15290,32 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_end_to_end_dry_run_receipt_path": (
             local_end_to_end_dry_run_receipt_surface_path
+        ),
+        "project_browser_autonomous_local_one_shot_gate_status": local_one_shot_gate_status,
+        "project_browser_autonomous_local_one_shot_blocked_reason": (
+            local_one_shot_blocked_reason
+        ),
+        "project_browser_autonomous_local_one_shot_gate_ready": local_one_shot_gate_ready,
+        "project_browser_autonomous_local_one_shot_selected_step_id": (
+            local_one_shot_selected_step_id
+        ),
+        "project_browser_autonomous_local_one_shot_selected_step_name": (
+            local_one_shot_selected_step_name
+        ),
+        "project_browser_autonomous_local_one_shot_execution_allowed": (
+            local_one_shot_execution_allowed
+        ),
+        "project_browser_autonomous_local_one_shot_next_action": (
+            local_one_shot_next_action
+        ),
+        "project_browser_autonomous_local_one_shot_gate_path": (
+            local_one_shot_gate_surface_path
+        ),
+        "project_browser_autonomous_local_one_shot_step_selection_path": (
+            local_one_shot_step_selection_surface_path
+        ),
+        "project_browser_autonomous_local_one_shot_receipt_path": (
+            local_one_shot_receipt_surface_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
@@ -172054,6 +172637,50 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_local_end_to_end_dry_run_receipt_path"
             ),
             default=_LOCAL_END_TO_END_DRY_RUN_RECEIPT_PATH,
+        ),
+        "project_browser_autonomous_local_one_shot_gate_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_one_shot_gate_status"),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_one_shot_blocked_reason": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_one_shot_blocked_reason"),
+            default="local_end_to_end_dry_run_plan_not_ready",
+        ),
+        "project_browser_autonomous_local_one_shot_gate_ready": _read_one_cycle_controller_flag(
+            "project_browser_autonomous_local_one_shot_gate_ready",
+            default=False,
+        ),
+        "project_browser_autonomous_local_one_shot_selected_step_id": _as_non_negative_int(
+            approved_restart.get("project_browser_autonomous_local_one_shot_selected_step_id"),
+            default=1,
+        ),
+        "project_browser_autonomous_local_one_shot_selected_step_name": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_one_shot_selected_step_name"),
+            default="read_current_state",
+        ),
+        "project_browser_autonomous_local_one_shot_execution_allowed": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_one_shot_execution_allowed",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_one_shot_next_action": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_one_shot_next_action"),
+            default="complete_local_end_to_end_dry_run_plan_builder",
+        ),
+        "project_browser_autonomous_local_one_shot_gate_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_one_shot_gate_path"),
+            default=_LOCAL_END_TO_END_ONE_SHOT_EXECUTION_GATE_PATH,
+        ),
+        "project_browser_autonomous_local_one_shot_step_selection_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_one_shot_step_selection_path"
+            ),
+            default=_LOCAL_END_TO_END_ONE_SHOT_STEP_SELECTION_PATH,
+        ),
+        "project_browser_autonomous_local_one_shot_receipt_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_one_shot_receipt_path"),
+            default=_LOCAL_END_TO_END_ONE_SHOT_EXECUTION_RECEIPT_PATH,
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
