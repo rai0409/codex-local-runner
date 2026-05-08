@@ -13641,6 +13641,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     selected_step_execution_receipt_path = (
         one_cycle_controller_dir / "selected_step_execution_receipt.json"
     )
+    selected_step_live_execution_gate_path = Path(
+        _SELECTED_STEP_LIVE_EXECUTION_GATE_PATH
+    )
+    selected_step_live_execution_result_path = Path(
+        _SELECTED_STEP_LIVE_EXECUTION_RESULT_PATH
+    )
+    selected_step_live_execution_receipt_path = Path(
+        _SELECTED_STEP_LIVE_EXECUTION_RECEIPT_PATH
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
