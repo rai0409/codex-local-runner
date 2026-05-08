@@ -3696,6 +3696,13 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_approve_commit_tag_next_action",
     "project_browser_autonomous_approve_commit_tag_boundary_path",
     "project_browser_autonomous_approve_commit_tag_plan_path",
+    "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_status",
+    "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_blocked_reason",
+    "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_stale_artifacts_detected",
+    "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_already_committed",
+    "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_already_tagged",
+    "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_next_action",
+    "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_receipt_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -3782,9 +3789,16 @@ _APPROVE_COMMIT_TAG_EXECUTION_TRACKED_FILE = (
     "automation/orchestration/planned_execution_runner.py"
 )
 _APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE = (
-    "Add bounded post-reentry targeted fix cycle orchestrator"
+    "Add approve commit tag boundary"
 )
 _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME = (
+    "prompt320-approve-commit-tag-boundary"
+)
+_APPROVE_COMMIT_TAG_STALE_IDENTITY = "prompt319"
+_APPROVE_COMMIT_TAG_STALE_COMMIT_MESSAGE = (
+    "Add bounded post-reentry targeted fix cycle orchestrator"
+)
+_APPROVE_COMMIT_TAG_STALE_TAG_NAME = (
     "prompt319-bounded-post-reentry-targeted-fix-cycle-orchestrator"
 )
 _APPROVE_COMMIT_TAG_BOUNDARY_COMMANDS_PATH = (
@@ -3798,6 +3812,10 @@ _APPROVE_COMMIT_TAG_PLAN_METADATA_PATH = (
 )
 _APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/approve_commit_tag_execution_receipt.json"
+)
+_APPROVE_COMMIT_TAG_ARTIFACT_RECONCILIATION_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "approve_commit_tag_artifact_reconciliation_receipt.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_codex_prompt.md"
@@ -6014,6 +6032,341 @@ def _build_approve_commit_tag_boundary_state(
     }
 
 
+def _reconcile_approve_commit_tag_artifacts(
+    *,
+    execution_repo_path: str,
+    boundary_path: Path,
+    plan_path: Path,
+    command_file_path: Path,
+    receipt_path: Path,
+) -> dict[str, Any]:
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH,
+    )
+    metadata_commands: tuple[tuple[str, list[str]], ...] = (
+        ("status_short", ["git", "status", "--short", "--untracked-files=no"]),
+        ("diff_names", ["git", "diff", "--name-only"]),
+        ("head_tags", ["git", "tag", "--points-at", "HEAD"]),
+        ("head_short", ["git", "rev-parse", "--short", "HEAD"]),
+        (
+            "prompt320_tag_list",
+            ["git", "tag", "--list", _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME],
+        ),
+        (
+            "prompt319_tag_list",
+            ["git", "tag", "--list", _APPROVE_COMMIT_TAG_STALE_TAG_NAME],
+        ),
+    )
+
+    command_results: dict[str, subprocess.CompletedProcess[str]] = {}
+    metadata_collection_failed = False
+    for key, args in metadata_commands:
+        completed = subprocess.run(
+            args,
+            text=True,
+            capture_output=True,
+            check=False,
+            cwd=normalized_repo_path,
+            shell=False,
+        )
+        command_results[key] = completed
+        if completed.returncode != 0:
+            metadata_collection_failed = True
+
+    stale_artifacts_detected = False
+    for candidate_path in (boundary_path, plan_path, command_file_path):
+        try:
+            candidate_text = candidate_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if (
+            _APPROVE_COMMIT_TAG_STALE_TAG_NAME in candidate_text
+            or _APPROVE_COMMIT_TAG_STALE_COMMIT_MESSAGE in candidate_text
+        ):
+            stale_artifacts_detected = True
+            break
+
+    changed_from_status: list[str] = []
+    status_stdout = command_results.get("status_short")
+    if isinstance(status_stdout, subprocess.CompletedProcess):
+        for line in (status_stdout.stdout or "").splitlines():
+            if not line.strip():
+                continue
+            path_text = line[3:].strip() if len(line) >= 4 else ""
+            if " -> " in path_text:
+                path_text = path_text.split(" -> ", 1)[1].strip()
+            if path_text:
+                changed_from_status.append(path_text)
+    diff_stdout = command_results.get("diff_names")
+    changed_from_diff: list[str] = []
+    if isinstance(diff_stdout, subprocess.CompletedProcess):
+        changed_from_diff = [
+            line.strip() for line in (diff_stdout.stdout or "").splitlines() if line.strip()
+        ]
+    changed_tracked_files = sorted(set(changed_from_status + changed_from_diff))
+
+    head_tags_stdout = command_results.get("head_tags")
+    head_tags = (
+        sorted(
+            {
+                line.strip()
+                for line in (head_tags_stdout.stdout or "").splitlines()
+                if line.strip()
+            }
+        )
+        if isinstance(head_tags_stdout, subprocess.CompletedProcess)
+        else []
+    )
+    head_short = ""
+    head_short_stdout = command_results.get("head_short")
+    if isinstance(head_short_stdout, subprocess.CompletedProcess):
+        head_short = _normalize_text(head_short_stdout.stdout, default="")
+
+    prompt320_tag_stdout = command_results.get("prompt320_tag_list")
+    prompt320_tag_exists = (
+        bool(
+            _normalize_string_list(
+                (prompt320_tag_stdout.stdout or "").splitlines()
+                if isinstance(prompt320_tag_stdout, subprocess.CompletedProcess)
+                else []
+            )
+        )
+    )
+    prompt319_tag_stdout = command_results.get("prompt319_tag_list")
+    prompt319_tag_exists = (
+        bool(
+            _normalize_string_list(
+                (prompt319_tag_stdout.stdout or "").splitlines()
+                if isinstance(prompt319_tag_stdout, subprocess.CompletedProcess)
+                else []
+            )
+        )
+    )
+    prompt320_tag_on_head = _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME in set(head_tags)
+
+    boundary_rewritten = False
+    plan_rewritten = False
+    command_file_rewritten = False
+
+    receipt_payload: dict[str, Any] = {
+        "status": "blocked",
+        "reconciliation_status": "blocked",
+        "blocked_reason": "none",
+        "source": "approve_commit_tag_artifact_reconciliation",
+        "head_short": head_short,
+        "head_tags": head_tags,
+        "prompt319_tag_exists": bool(prompt319_tag_exists),
+        "prompt320_tag_exists": bool(prompt320_tag_exists),
+        "changed_tracked_files": changed_tracked_files,
+        "stale_artifacts_detected": bool(stale_artifacts_detected),
+        "stale_identity": _APPROVE_COMMIT_TAG_STALE_IDENTITY if stale_artifacts_detected else "",
+        "boundary_path": str(boundary_path),
+        "plan_path": str(plan_path),
+        "command_file_path": str(command_file_path),
+        "boundary_rewritten": False,
+        "plan_rewritten": False,
+        "command_file_rewritten": False,
+        "already_committed": False,
+        "already_tagged": False,
+        "execution_performed": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "next_action": "manual_review_required",
+        "summary": "Approve commit/tag artifacts reconciliation is blocked.",
+    }
+
+    if metadata_collection_failed:
+        receipt_payload.update(
+            {
+                "blocked_reason": "git_metadata_collection_failed",
+                "next_action": "review_git_metadata_failure",
+                "summary": "Approve commit/tag artifact reconciliation blocked by git metadata collection failure.",
+            }
+        )
+        try:
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json(receipt_path, receipt_payload)
+        except OSError:
+            pass
+        return {
+            "status": "blocked",
+            "blocked_reason": "git_metadata_collection_failed",
+            "stale_artifacts_detected": bool(stale_artifacts_detected),
+            "already_committed": False,
+            "already_tagged": False,
+            "changed_tracked_files": changed_tracked_files,
+            "next_action": "review_git_metadata_failure",
+            "receipt_path": str(receipt_path),
+            "boundary_rewritten": False,
+            "plan_rewritten": False,
+            "command_file_rewritten": False,
+        }
+
+    if changed_tracked_files:
+        receipt_payload.update(
+            {
+                "blocked_reason": "tracked_changes_present_before_reconciliation",
+                "next_action": "review_tracked_changes_before_reconciliation",
+                "summary": "Approve commit/tag artifact reconciliation blocked by tracked changes.",
+            }
+        )
+        try:
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json(receipt_path, receipt_payload)
+        except OSError:
+            pass
+        return {
+            "status": "blocked",
+            "blocked_reason": "tracked_changes_present_before_reconciliation",
+            "stale_artifacts_detected": bool(stale_artifacts_detected),
+            "already_committed": False,
+            "already_tagged": False,
+            "changed_tracked_files": changed_tracked_files,
+            "next_action": "review_tracked_changes_before_reconciliation",
+            "receipt_path": str(receipt_path),
+            "boundary_rewritten": False,
+            "plan_rewritten": False,
+            "command_file_rewritten": False,
+        }
+
+    if not (prompt320_tag_on_head and prompt320_tag_exists):
+        receipt_payload.update(
+            {
+                "blocked_reason": "prompt320_head_tag_missing",
+                "next_action": "review_head_tag_before_reconciliation",
+                "summary": "Approve commit/tag artifact reconciliation blocked because Prompt320 tag is not on HEAD.",
+            }
+        )
+        try:
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json(receipt_path, receipt_payload)
+        except OSError:
+            pass
+        return {
+            "status": "blocked",
+            "blocked_reason": "prompt320_head_tag_missing",
+            "stale_artifacts_detected": bool(stale_artifacts_detected),
+            "already_committed": False,
+            "already_tagged": False,
+            "changed_tracked_files": changed_tracked_files,
+            "next_action": "review_head_tag_before_reconciliation",
+            "receipt_path": str(receipt_path),
+            "boundary_rewritten": False,
+            "plan_rewritten": False,
+            "command_file_rewritten": False,
+        }
+
+    boundary_payload = {
+        "status": "completed",
+        "boundary_status": "completed",
+        "blocked_reason": "none",
+        "source": "approve_commit_tag_artifact_reconciliation",
+        "activation_condition_met": True,
+        "plan_ready": False,
+        "tracked_files_allowed": True,
+        "changed_tracked_files": [],
+        "unexpected_tracked_files": [],
+        "explicit_add_paths": [],
+        "proposed_commit_message": _APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE,
+        "proposed_tag": _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME,
+        "command_file_path": str(command_file_path),
+        "commit_allowed": False,
+        "tag_allowed": False,
+        "execution_allowed": False,
+        "execution_performed": False,
+        "already_committed": True,
+        "already_tagged": True,
+        "stale_artifacts_detected": bool(stale_artifacts_detected),
+        "next_action": "prepare_remote_readiness_boundary",
+        "summary": (
+            "Approve commit/tag artifacts reconciled with current HEAD; Prompt320 is already committed and tagged."
+        ),
+    }
+    plan_payload = {
+        "status": "completed",
+        "plan_status": "completed",
+        "blocked_reason": "none",
+        "source": "approve_commit_tag_artifact_reconciliation",
+        "commit_message": _APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE,
+        "tag_name": _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME,
+        "explicit_add_paths": [],
+        "command_file_path": str(command_file_path),
+        "execution_required_by": "none",
+        "execution_performed": False,
+        "already_committed": True,
+        "already_tagged": True,
+        "stale_artifacts_detected": bool(stale_artifacts_detected),
+        "next_action": "prepare_remote_readiness_boundary",
+        "summary": (
+            "Approve commit/tag plan is reconciled as completed because Prompt320 is already committed and tagged."
+        ),
+    }
+    commands_text = (
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "\n"
+        "cd /home/rai/codex-local-runner\n"
+        "\n"
+        'echo "Prompt320 is already committed and tagged: prompt320-approve-commit-tag-boundary"\n'
+        'echo "No approve commit/tag execution is required."\n'
+    )
+
+    try:
+        boundary_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(boundary_path, boundary_payload)
+        boundary_rewritten = True
+    except OSError:
+        boundary_rewritten = False
+    try:
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(plan_path, plan_payload)
+        plan_rewritten = True
+    except OSError:
+        plan_rewritten = False
+    try:
+        command_file_path.parent.mkdir(parents=True, exist_ok=True)
+        command_file_path.write_text(commands_text, encoding="utf-8")
+        command_file_rewritten = True
+    except OSError:
+        command_file_rewritten = False
+
+    receipt_payload.update(
+        {
+            "status": "completed",
+            "reconciliation_status": "completed",
+            "blocked_reason": "none",
+            "boundary_rewritten": bool(boundary_rewritten),
+            "plan_rewritten": bool(plan_rewritten),
+            "command_file_rewritten": bool(command_file_rewritten),
+            "already_committed": True,
+            "already_tagged": True,
+            "next_action": "prepare_remote_readiness_boundary",
+            "summary": (
+                "Approve commit/tag artifacts reconciled with current HEAD; Prompt320 is already committed and tagged."
+            ),
+        }
+    )
+    try:
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(receipt_path, receipt_payload)
+    except OSError:
+        pass
+    return {
+        "status": "completed",
+        "blocked_reason": "none",
+        "stale_artifacts_detected": bool(stale_artifacts_detected),
+        "already_committed": True,
+        "already_tagged": True,
+        "changed_tracked_files": [],
+        "next_action": "prepare_remote_readiness_boundary",
+        "receipt_path": str(receipt_path),
+        "boundary_rewritten": bool(boundary_rewritten),
+        "plan_rewritten": bool(plan_rewritten),
+        "command_file_rewritten": bool(command_file_rewritten),
+    }
+
+
 def _build_approve_commit_tag_plan_state(
     *,
     boundary_state: Mapping[str, Any] | None,
@@ -6087,8 +6440,8 @@ def _write_approve_commit_tag_commands_if_safe(
             "cd /home/rai/codex-local-runner",
             "",
             "git add automation/orchestration/planned_execution_runner.py",
-            'git commit -m "Add bounded post-reentry targeted fix cycle orchestrator"',
-            "git tag prompt319-bounded-post-reentry-targeted-fix-cycle-orchestrator",
+            f'git commit -m "{_APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE}"',
+            f"git tag {_APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME}",
             "",
             "git status --short --untracked-files=no",
         ]
@@ -9311,6 +9664,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     approve_commit_tag_plan_metadata_path = (
         one_cycle_controller_dir / "approve_commit_tag_plan.json"
     )
+    approve_commit_tag_artifact_reconciliation_receipt_file_path = (
+        one_cycle_controller_dir / "approve_commit_tag_artifact_reconciliation_receipt.json"
+    )
     approve_commit_tag_execution_receipt_path = (
         one_cycle_controller_dir / "approve_commit_tag_execution_receipt.json"
     )
@@ -9482,6 +9838,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     approve_commit_tag_execution_tag_name = ""
     approve_commit_tag_execution_should_commit = False
     approve_commit_tag_execution_should_tag = False
+    approve_commit_tag_artifact_reconciliation_status = "not_started"
+    approve_commit_tag_artifact_reconciliation_blocked_reason = "none"
+    approve_commit_tag_artifact_reconciliation_stale_artifacts_detected = False
+    approve_commit_tag_artifact_reconciliation_already_committed = False
+    approve_commit_tag_artifact_reconciliation_already_tagged = False
+    approve_commit_tag_artifact_reconciliation_next_action = "manual_review_required"
+    approve_commit_tag_artifact_reconciliation_receipt_path = str(
+        approve_commit_tag_artifact_reconciliation_receipt_file_path
+    )
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -9618,6 +9983,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_approve_commit_tag_plan_json": str(
             approve_commit_tag_plan_metadata_path
+        ),
+        "one_cycle_controller_approve_commit_tag_artifact_reconciliation_receipt_json": str(
+            approve_commit_tag_artifact_reconciliation_receipt_file_path
         ),
         "one_cycle_controller_approve_commit_tag_commands_sh": str(
             approve_commit_tag_boundary_commands_path
@@ -10506,63 +10874,111 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_post_reentry_bounded_cycle_state.get("max_cycle_count"),
         default=targeted_fix_post_reentry_max_cycle_count,
     )
-    approve_commit_tag_boundary_state = _build_approve_commit_tag_boundary_state(
+    approve_commit_tag_artifact_reconciliation = _reconcile_approve_commit_tag_artifacts(
         execution_repo_path=execution_repo_path,
-        bounded_cycle_decision_path=targeted_fix_post_reentry_bounded_cycle_decision_path,
-        bounded_cycle_receipt_path=targeted_fix_post_reentry_bounded_cycle_receipt_path,
-        terminal_summary_path=targeted_fix_post_reentry_terminal_summary_path,
-        cycle_closure_result_path=targeted_fix_post_reentry_cycle_closure_result_path,
+        boundary_path=approve_commit_tag_boundary_metadata_path,
+        plan_path=approve_commit_tag_plan_metadata_path,
         command_file_path=approve_commit_tag_boundary_commands_path,
+        receipt_path=approve_commit_tag_artifact_reconciliation_receipt_file_path,
     )
-    approve_commit_tag_command_written = _write_approve_commit_tag_commands_if_safe(
-        boundary_state=approve_commit_tag_boundary_state,
-        command_file_path=approve_commit_tag_boundary_commands_path,
+    approve_commit_tag_artifact_reconciliation_status = _normalize_text(
+        approve_commit_tag_artifact_reconciliation.get("status"),
+        default="blocked",
     )
-    if (
-        _normalize_text(approve_commit_tag_boundary_state.get("boundary_status"), default="")
-        == "ready"
-        and not approve_commit_tag_command_written
-    ):
+    approve_commit_tag_artifact_reconciliation_blocked_reason = _normalize_text(
+        approve_commit_tag_artifact_reconciliation.get("blocked_reason"),
+        default="manual_review_required",
+    )
+    approve_commit_tag_artifact_reconciliation_stale_artifacts_detected = bool(
+        approve_commit_tag_artifact_reconciliation.get("stale_artifacts_detected", False)
+    )
+    approve_commit_tag_artifact_reconciliation_already_committed = bool(
+        approve_commit_tag_artifact_reconciliation.get("already_committed", False)
+    )
+    approve_commit_tag_artifact_reconciliation_already_tagged = bool(
+        approve_commit_tag_artifact_reconciliation.get("already_tagged", False)
+    )
+    approve_commit_tag_artifact_reconciliation_next_action = _normalize_text(
+        approve_commit_tag_artifact_reconciliation.get("next_action"),
+        default="manual_review_required",
+    )
+    approve_commit_tag_artifact_reconciliation_receipt_path = _normalize_text(
+        approve_commit_tag_artifact_reconciliation.get("receipt_path"),
+        default=_APPROVE_COMMIT_TAG_ARTIFACT_RECONCILIATION_RECEIPT_PATH,
+    )
+
+    approve_commit_tag_boundary_state = _read_json_object_if_exists(
+        approve_commit_tag_boundary_metadata_path
+    ) or {}
+    approve_commit_tag_plan_state = _read_json_object_if_exists(
+        approve_commit_tag_plan_metadata_path
+    ) or {}
+    if approve_commit_tag_artifact_reconciliation_status != "completed":
+        changed_tracked_files_from_reconciliation = _normalize_string_list(
+            approve_commit_tag_artifact_reconciliation.get("changed_tracked_files")
+        )
         approve_commit_tag_boundary_state = {
-            **dict(approve_commit_tag_boundary_state),
             "status": "blocked",
             "boundary_status": "blocked",
-            "blocked_reason": "command_file_write_failed",
+            "blocked_reason": approve_commit_tag_artifact_reconciliation_blocked_reason,
+            "source": "approve_commit_tag_artifact_reconciliation",
+            "activation_condition_met": False,
             "plan_ready": False,
             "tracked_files_allowed": False,
+            "changed_tracked_files": changed_tracked_files_from_reconciliation,
+            "unexpected_tracked_files": changed_tracked_files_from_reconciliation,
             "explicit_add_paths": [],
-            "next_action": "review_command_file_write_failure",
-            "summary": "Approve commit/tag boundary command file write failed.",
+            "proposed_commit_message": _APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE,
+            "proposed_tag": _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME,
+            "command_file_path": str(approve_commit_tag_boundary_commands_path),
+            "commit_allowed": False,
+            "tag_allowed": False,
+            "execution_allowed": False,
+            "execution_performed": False,
+            "already_committed": False,
+            "already_tagged": False,
+            "stale_artifacts_detected": (
+                approve_commit_tag_artifact_reconciliation_stale_artifacts_detected
+            ),
+            "next_action": approve_commit_tag_artifact_reconciliation_next_action,
+            "summary": "Approve commit/tag artifacts reconciliation is blocked.",
         }
-    approve_commit_tag_plan_state = _build_approve_commit_tag_plan_state(
-        boundary_state=approve_commit_tag_boundary_state,
-        command_file_path=approve_commit_tag_boundary_commands_path,
-    )
-    try:
-        approve_commit_tag_boundary_metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_json(
-            approve_commit_tag_boundary_metadata_path,
-            dict(approve_commit_tag_boundary_state),
-        )
-        _write_json(
-            approve_commit_tag_plan_metadata_path,
-            dict(approve_commit_tag_plan_state),
-        )
-    except OSError:
-        pass
+        approve_commit_tag_plan_state = {
+            "status": "blocked",
+            "plan_status": "blocked",
+            "blocked_reason": approve_commit_tag_artifact_reconciliation_blocked_reason,
+            "source": "approve_commit_tag_artifact_reconciliation",
+            "commit_message": _APPROVE_COMMIT_TAG_EXECUTION_COMMIT_MESSAGE,
+            "tag_name": _APPROVE_COMMIT_TAG_EXECUTION_TAG_NAME,
+            "explicit_add_paths": [],
+            "command_file_path": str(approve_commit_tag_boundary_commands_path),
+            "execution_required_by": "none",
+            "execution_performed": False,
+            "already_committed": False,
+            "already_tagged": False,
+            "stale_artifacts_detected": (
+                approve_commit_tag_artifact_reconciliation_stale_artifacts_detected
+            ),
+            "next_action": approve_commit_tag_artifact_reconciliation_next_action,
+            "summary": "Approve commit/tag plan reconciliation is blocked.",
+        }
 
     approve_commit_tag_boundary_status = _normalize_text(
         approve_commit_tag_boundary_state.get("boundary_status"),
         default=approve_commit_tag_boundary_status,
     )
-    approve_commit_tag_boundary_decision = (
-        "approve" if approve_commit_tag_boundary_status == "ready" else "none"
-    )
-    approve_commit_tag_boundary_reason = (
-        "approve_commit_tag_boundary_ready"
-        if approve_commit_tag_boundary_status == "ready"
-        else _normalize_text(approve_commit_tag_boundary_state.get("blocked_reason"), default="blocked")
-    )
+    if approve_commit_tag_boundary_status == "completed":
+        approve_commit_tag_boundary_decision = "approve"
+        approve_commit_tag_boundary_reason = "approve_commit_tag_artifact_reconciled"
+    elif approve_commit_tag_boundary_status == "ready":
+        approve_commit_tag_boundary_decision = "approve"
+        approve_commit_tag_boundary_reason = "approve_commit_tag_boundary_ready"
+    else:
+        approve_commit_tag_boundary_decision = "none"
+        approve_commit_tag_boundary_reason = _normalize_text(
+            approve_commit_tag_boundary_state.get("blocked_reason"),
+            default="blocked",
+        )
     approve_commit_tag_boundary_next_action = _normalize_text(
         approve_commit_tag_boundary_state.get("next_action"),
         default=approve_commit_tag_boundary_next_action,
@@ -10580,7 +10996,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         default=approve_commit_tag_boundary_tag_name,
     )
     approve_commit_tag_boundary_commands_resolved_path = (
-        str(approve_commit_tag_boundary_commands_path) if approve_commit_tag_command_written else ""
+        str(approve_commit_tag_boundary_commands_path)
+        if bool(approve_commit_tag_artifact_reconciliation.get("command_file_rewritten", False))
+        else ""
     )
     approve_commit_tag_boundary_metadata_resolved_path = str(approve_commit_tag_boundary_metadata_path)
     approve_commit_tag_boundary_should_execute_commit = False
@@ -10953,6 +11371,27 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "approve_commit_tag_next_action": approve_commit_tag_boundary_next_action,
         "approve_commit_tag_boundary_path": approve_commit_tag_boundary_path,
         "approve_commit_tag_plan_path": approve_commit_tag_plan_path,
+        "approve_commit_tag_artifact_reconciliation_status": (
+            approve_commit_tag_artifact_reconciliation_status
+        ),
+        "approve_commit_tag_artifact_reconciliation_blocked_reason": (
+            approve_commit_tag_artifact_reconciliation_blocked_reason
+        ),
+        "approve_commit_tag_artifact_reconciliation_stale_artifacts_detected": (
+            approve_commit_tag_artifact_reconciliation_stale_artifacts_detected
+        ),
+        "approve_commit_tag_artifact_reconciliation_already_committed": (
+            approve_commit_tag_artifact_reconciliation_already_committed
+        ),
+        "approve_commit_tag_artifact_reconciliation_already_tagged": (
+            approve_commit_tag_artifact_reconciliation_already_tagged
+        ),
+        "approve_commit_tag_artifact_reconciliation_next_action": (
+            approve_commit_tag_artifact_reconciliation_next_action
+        ),
+        "approve_commit_tag_artifact_reconciliation_receipt_path": (
+            approve_commit_tag_artifact_reconciliation_receipt_path
+        ),
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -11292,6 +11731,34 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- Approve execution receipt path: "
             f"`{approve_commit_tag_execution_receipt_path}`"
         ),
+        (
+            "- Approve artifact reconciliation status: "
+            f"`{approve_commit_tag_artifact_reconciliation_status}`"
+        ),
+        (
+            "- Approve artifact reconciliation blocked reason: "
+            f"`{approve_commit_tag_artifact_reconciliation_blocked_reason}`"
+        ),
+        (
+            "- Approve artifact reconciliation stale artifacts detected: "
+            f"`{str(approve_commit_tag_artifact_reconciliation_stale_artifacts_detected).lower()}`"
+        ),
+        (
+            "- Approve artifact reconciliation already committed: "
+            f"`{str(approve_commit_tag_artifact_reconciliation_already_committed).lower()}`"
+        ),
+        (
+            "- Approve artifact reconciliation already tagged: "
+            f"`{str(approve_commit_tag_artifact_reconciliation_already_tagged).lower()}`"
+        ),
+        (
+            "- Approve artifact reconciliation next action: "
+            f"`{approve_commit_tag_artifact_reconciliation_next_action}`"
+        ),
+        (
+            "- Approve artifact reconciliation receipt path: "
+            f"`{approve_commit_tag_artifact_reconciliation_receipt_path}`"
+        ),
         f"- Completed result source path: `{completed_result_source_path}`",
         f"- Completed result source status: `{completed_result_source_status}`",
         f"- Stop reason: `{stop_reason}`",
@@ -11409,6 +11876,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
         f"- approve_commit_tag_plan.json: `{approve_commit_tag_plan_metadata_path}`",
+        (
+            "- approve_commit_tag_artifact_reconciliation_receipt.json: "
+            f"`{approve_commit_tag_artifact_reconciliation_receipt_path}`"
+        ),
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
     ]
@@ -11602,6 +12073,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             approve_commit_tag_execution_should_tag = False
         approve_commit_tag_execution_commit_message = ""
         approve_commit_tag_execution_tag_name = ""
+        approve_commit_tag_artifact_reconciliation_status = "blocked"
+        approve_commit_tag_artifact_reconciliation_blocked_reason = "result_write_failed"
+        approve_commit_tag_artifact_reconciliation_stale_artifacts_detected = False
+        approve_commit_tag_artifact_reconciliation_already_committed = False
+        approve_commit_tag_artifact_reconciliation_already_tagged = False
+        approve_commit_tag_artifact_reconciliation_next_action = "manual_review_required"
+        approve_commit_tag_artifact_reconciliation_receipt_path = str(
+            approve_commit_tag_artifact_reconciliation_receipt_file_path
+        )
         completed_result_source_status = "not_completed"
         stop_reason = (
             "dry_run_execution_suppressed"
@@ -12056,6 +12536,27 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_approve_commit_tag_plan_path": (
             approve_commit_tag_plan_path
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_status": (
+            approve_commit_tag_artifact_reconciliation_status
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_blocked_reason": (
+            approve_commit_tag_artifact_reconciliation_blocked_reason
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_stale_artifacts_detected": (
+            approve_commit_tag_artifact_reconciliation_stale_artifacts_detected
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_already_committed": (
+            approve_commit_tag_artifact_reconciliation_already_committed
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_already_tagged": (
+            approve_commit_tag_artifact_reconciliation_already_tagged
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_next_action": (
+            approve_commit_tag_artifact_reconciliation_next_action
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_receipt_path": (
+            approve_commit_tag_artifact_reconciliation_receipt_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
@@ -168263,6 +168764,7 @@ def _build_approved_restart_execution_contract_surface(
     }
     one_cycle_controller_allowed_approve_commit_tag_boundary_statuses = {
         "not_applicable",
+        "completed",
         "boundary_ready",
         "blocked",
         "insufficient_truth",
@@ -168278,6 +168780,7 @@ def _build_approved_restart_execution_contract_surface(
         "approve_commit_not_requested",
         "review_response_not_approve",
         "approve_commit_tag_boundary_ready",
+        "approve_commit_tag_artifact_reconciled",
         "metadata_write_failed",
         "commands_write_failed",
         "manual_review_required",
@@ -168286,6 +168789,10 @@ def _build_approved_restart_execution_contract_surface(
     one_cycle_controller_allowed_approve_commit_tag_boundary_next_actions = {
         "none",
         "prepare_approve_commit_tag_execution_gate",
+        "prepare_remote_readiness_boundary",
+        "review_tracked_changes_before_reconciliation",
+        "review_head_tag_before_reconciliation",
+        "review_git_metadata_failure",
         "manual_review_required",
         "insufficient_truth",
     }
@@ -168297,6 +168804,9 @@ def _build_approved_restart_execution_contract_surface(
         "review_response_not_approve",
         "metadata_write_failed",
         "commands_write_failed",
+        "tracked_changes_present_before_reconciliation",
+        "prompt320_head_tag_missing",
+        "git_metadata_collection_failed",
         "manual_review_required",
         "insufficient_truth",
     }
@@ -169148,6 +169658,48 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_approve_commit_tag_execution_should_tag",
                 default=False,
             )
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_status": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_status"
+            ),
+            default="not_started",
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_blocked_reason": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_blocked_reason"
+            ),
+            default="none",
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_stale_artifacts_detected": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_stale_artifacts_detected",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_already_committed": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_already_committed",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_already_tagged": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_already_tagged",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_next_action": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_next_action"
+            ),
+            default="manual_review_required",
+        ),
+        "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_receipt_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_receipt_path"
+            ),
+            default=_APPROVE_COMMIT_TAG_ARTIFACT_RECONCILIATION_RECEIPT_PATH,
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
