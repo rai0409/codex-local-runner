@@ -3628,6 +3628,14 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_targeted_fix_post_reentry_requires_manual_review",
     "project_browser_autonomous_targeted_fix_post_reentry_cycle_closure_result_path",
     "project_browser_autonomous_targeted_fix_post_reentry_terminal_summary_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_status",
+    "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_blocked_reason",
+    "project_browser_autonomous_targeted_fix_post_reentry_prompt_written",
+    "project_browser_autonomous_targeted_fix_post_reentry_prompt_ready_for_codex_reentry",
+    "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_next_action",
+    "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_receipt_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_emitted_prompt_path",
     "project_browser_autonomous_approve_commit_tag_boundary_status",
     "project_browser_autonomous_approve_commit_tag_boundary_decision",
     "project_browser_autonomous_approve_commit_tag_boundary_reason",
@@ -3796,6 +3804,12 @@ _TARGETED_FIX_POST_REENTRY_CYCLE_CLOSURE_RESULT_PATH = (
 _TARGETED_FIX_POST_REENTRY_TERMINAL_SUMMARY_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_terminal_summary.json"
 )
+_TARGETED_FIX_POST_REENTRY_PROMPT_EMISSION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_prompt_emission.json"
+)
+_TARGETED_FIX_POST_REENTRY_PROMPT_EMISSION_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_prompt_emission_receipt.json"
+)
 _TARGETED_FIX_REENTRY_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
     "exec",
@@ -3810,6 +3824,27 @@ _TARGETED_FIX_REENTRY_EXECUTION_COMMAND: tuple[str, ...] = (
     'model_reasoning_effort="high"',
     "-c",
     'approval_policy="never"',
+)
+_TARGETED_FIX_POST_REENTRY_PROMPT_EMISSION_FORBIDDEN_FRAGMENTS: tuple[str, ...] = (
+    "git commit",
+    "git tag",
+    "git push",
+    "git merge",
+    "git rebase",
+    "gh pr create",
+    "gh pr merge",
+    "rm -rf",
+    "sudo",
+    "chmod 777",
+    "chown",
+    "curl |",
+    "wget |",
+    "while true",
+    "sleep loop",
+    "daemon",
+    "background process",
+    "approval_policy=always",
+    "approval_policy=on-request",
 )
 
 _LOCAL_CODEX_EXECUTION_READINESS_BANNED_PROMPT_FRAGMENTS: tuple[str, ...] = (
@@ -7739,6 +7774,288 @@ def _build_targeted_fix_post_reentry_next_step_handoff_state(
     return state
 
 
+def _build_targeted_fix_post_reentry_prompt_emission_state(
+    *,
+    route_decision_path: Path,
+    review_assimilation_path: Path,
+    review_response_path: Path,
+    route_executor_boundary_path: Path,
+    next_step_handoff_path: Path,
+    emitted_prompt_path: Path,
+) -> dict[str, Any]:
+    normalized_route_decision_path = _normalize_text(
+        str(route_decision_path),
+        default=_TARGETED_FIX_POST_REENTRY_ROUTE_DECISION_PATH,
+    )
+    normalized_review_assimilation_path = _normalize_text(
+        str(review_assimilation_path),
+        default=_TARGETED_FIX_POST_REENTRY_REVIEW_ASSIMILATION_PATH,
+    )
+    normalized_review_response_path = _normalize_text(
+        str(review_response_path),
+        default=_TARGETED_FIX_POST_REENTRY_REVIEW_RESPONSE_PATH,
+    )
+    normalized_route_executor_boundary_path = _normalize_text(
+        str(route_executor_boundary_path),
+        default=_TARGETED_FIX_POST_REENTRY_ROUTE_EXECUTOR_BOUNDARY_PATH,
+    )
+    normalized_next_step_handoff_path = _normalize_text(
+        str(next_step_handoff_path),
+        default=_TARGETED_FIX_POST_REENTRY_NEXT_STEP_HANDOFF_PATH,
+    )
+    normalized_emitted_prompt_path = _normalize_text(
+        str(emitted_prompt_path),
+        default=_TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH,
+    )
+
+    route_payload: dict[str, Any] = {}
+    try:
+        loaded_route_payload = _read_json_object_if_exists(Path(normalized_route_decision_path))
+    except (OSError, ValueError, json.JSONDecodeError):
+        loaded_route_payload = None
+    if isinstance(loaded_route_payload, Mapping):
+        route_payload = dict(loaded_route_payload)
+
+    review_assimilation_payload: dict[str, Any] = {}
+    try:
+        loaded_review_assimilation_payload = _read_json_object_if_exists(
+            Path(normalized_review_assimilation_path)
+        )
+    except (OSError, ValueError, json.JSONDecodeError):
+        loaded_review_assimilation_payload = None
+    if isinstance(loaded_review_assimilation_payload, Mapping):
+        review_assimilation_payload = dict(loaded_review_assimilation_payload)
+
+    review_response_payload: dict[str, Any] = {}
+    try:
+        loaded_review_response_payload = _read_json_object_if_exists(Path(normalized_review_response_path))
+    except (OSError, ValueError, json.JSONDecodeError):
+        loaded_review_response_payload = None
+    if isinstance(loaded_review_response_payload, Mapping):
+        review_response_payload = dict(loaded_review_response_payload)
+
+    route_executor_boundary_payload: dict[str, Any] = {}
+    try:
+        loaded_route_executor_boundary_payload = _read_json_object_if_exists(
+            Path(normalized_route_executor_boundary_path)
+        )
+    except (OSError, ValueError, json.JSONDecodeError):
+        loaded_route_executor_boundary_payload = None
+    if isinstance(loaded_route_executor_boundary_payload, Mapping):
+        route_executor_boundary_payload = dict(loaded_route_executor_boundary_payload)
+
+    route_decision = _normalize_text(route_payload.get("route_decision"), default="")
+    route_status = _normalize_text(route_payload.get("route_status"), default="blocked")
+    targeted_fix_required = bool(route_payload.get("targeted_fix_required", False))
+    boundary_status = _normalize_text(
+        route_executor_boundary_payload.get("boundary_status"),
+        default="blocked",
+    )
+    executor_kind = _normalize_text(
+        route_executor_boundary_payload.get("executor_kind"),
+        default="manual_review",
+    )
+    targeted_fix_prompt_emission_allowed = bool(
+        route_executor_boundary_payload.get("targeted_fix_prompt_emission_allowed", False)
+    )
+    execution_allowed = bool(route_executor_boundary_payload.get("execution_allowed", False))
+    codex_reentry_allowed = bool(route_executor_boundary_payload.get("codex_reentry_allowed", False))
+
+    state: dict[str, Any] = {
+        "status": "not_applicable",
+        "emission_status": "not_applicable",
+        "blocked_reason": "route_not_targeted_fix",
+        "attempted": False,
+        "source": "targeted_fix_post_reentry_route_decision",
+        "route_decision_path": normalized_route_decision_path,
+        "review_assimilation_path": normalized_review_assimilation_path,
+        "review_response_path": normalized_review_response_path,
+        "route_executor_boundary_path": normalized_route_executor_boundary_path,
+        "next_step_handoff_path": normalized_next_step_handoff_path,
+        "emitted_prompt_path": normalized_emitted_prompt_path,
+        "route_decision": route_decision,
+        "route_status": route_status,
+        "executor_kind": executor_kind,
+        "targeted_fix_prompt_emission_allowed": targeted_fix_prompt_emission_allowed,
+        "targeted_fix_prompt_present": False,
+        "targeted_fix_prompt_length": 0,
+        "prompt_written": False,
+        "safety_check_passed": False,
+        "safety_blocked_fragment": "none",
+        "next_action": "none",
+        "summary": "Post-reentry prompt emission is not applicable because route is not targeted_fix.",
+    }
+    if route_decision != "targeted_fix":
+        return state
+
+    activation_allowed = (
+        route_status == "ready"
+        and targeted_fix_required
+        and boundary_status == "ready"
+        and executor_kind == "targeted_fix_prompt_emission"
+        and targeted_fix_prompt_emission_allowed
+        and (not execution_allowed)
+        and (not codex_reentry_allowed)
+    )
+    if not activation_allowed:
+        state.update(
+            {
+                "status": "blocked",
+                "emission_status": "blocked",
+                "blocked_reason": "post_reentry_targeted_fix_prompt_emission_not_allowed",
+                "attempted": False,
+                "source": "targeted_fix_post_reentry_route_executor_boundary",
+                "next_action": "manual_review_required",
+                "summary": (
+                    "Post-reentry targeted-fix prompt emission is blocked because executor boundary "
+                    "conditions are not satisfied."
+                ),
+            }
+        )
+        return state
+
+    targeted_fix_prompt = _normalize_text(
+        review_assimilation_payload.get("targeted_fix_prompt"),
+        default="",
+    )
+    prompt_source = "targeted_fix_post_reentry_review_assimilation"
+    if not targeted_fix_prompt:
+        targeted_fix_prompt = _normalize_text(
+            review_response_payload.get("targeted_fix_prompt"),
+            default="",
+        )
+        prompt_source = "targeted_fix_post_reentry_review_response"
+    targeted_fix_prompt_present = bool(targeted_fix_prompt)
+    targeted_fix_prompt_length = len(targeted_fix_prompt)
+    state.update(
+        {
+            "attempted": True,
+            "source": prompt_source,
+            "targeted_fix_prompt_present": targeted_fix_prompt_present,
+            "targeted_fix_prompt_length": targeted_fix_prompt_length,
+            "targeted_fix_prompt_text": targeted_fix_prompt,
+        }
+    )
+    if not targeted_fix_prompt_present:
+        state.update(
+            {
+                "status": "blocked",
+                "emission_status": "blocked",
+                "blocked_reason": "post_reentry_targeted_fix_prompt_missing",
+                "prompt_written": False,
+                "safety_check_passed": False,
+                "next_action": "provide_post_reentry_targeted_fix_prompt",
+                "summary": "Post-reentry targeted-fix prompt is missing.",
+            }
+        )
+        return state
+
+    prompt_text_lower = targeted_fix_prompt.lower()
+    safety_blocked_fragment = "none"
+    for fragment in _TARGETED_FIX_POST_REENTRY_PROMPT_EMISSION_FORBIDDEN_FRAGMENTS:
+        if fragment in prompt_text_lower:
+            safety_blocked_fragment = fragment
+            break
+    if safety_blocked_fragment != "none":
+        state.update(
+            {
+                "status": "blocked",
+                "emission_status": "blocked",
+                "blocked_reason": "post_reentry_targeted_fix_prompt_failed_safety_check",
+                "prompt_written": False,
+                "safety_check_passed": False,
+                "safety_blocked_fragment": safety_blocked_fragment,
+                "next_action": "revise_post_reentry_targeted_fix_prompt",
+                "summary": "Post-reentry targeted-fix prompt failed safety checks.",
+            }
+        )
+        return state
+
+    state.update(
+        {
+            "status": "ready",
+            "emission_status": "ready",
+            "blocked_reason": "none",
+            "prompt_written": False,
+            "safety_check_passed": True,
+            "safety_blocked_fragment": "none",
+            "next_action": "prepare_post_reentry_targeted_fix_codex_reentry",
+            "summary": "Post-reentry targeted-fix prompt is ready for deterministic emission.",
+        }
+    )
+    return state
+
+
+def _write_targeted_fix_post_reentry_prompt_if_allowed(
+    *,
+    prompt_emission_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    state = dict(prompt_emission_state) if isinstance(prompt_emission_state, Mapping) else {}
+    emission_status = _normalize_text(state.get("emission_status"), default="not_applicable")
+    if emission_status != "ready":
+        state.pop("targeted_fix_prompt_text", None)
+        return state
+
+    prompt_text = _normalize_text(state.get("targeted_fix_prompt_text"), default="")
+    emitted_prompt_path = Path(
+        _normalize_text(
+            state.get("emitted_prompt_path"),
+            default=_TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH,
+        )
+    )
+    if not prompt_text:
+        state.update(
+            {
+                "status": "blocked",
+                "emission_status": "blocked",
+                "blocked_reason": "post_reentry_targeted_fix_prompt_missing",
+                "attempted": True,
+                "prompt_written": False,
+                "targeted_fix_prompt_present": False,
+                "targeted_fix_prompt_length": 0,
+                "safety_check_passed": False,
+                "next_action": "provide_post_reentry_targeted_fix_prompt",
+                "summary": "Post-reentry targeted-fix prompt is missing.",
+            }
+        )
+        state.pop("targeted_fix_prompt_text", None)
+        return state
+    try:
+        emitted_prompt_path.parent.mkdir(parents=True, exist_ok=True)
+        emitted_prompt_path.write_text(prompt_text.rstrip() + "\n", encoding="utf-8")
+    except OSError:
+        state.update(
+            {
+                "status": "blocked",
+                "emission_status": "blocked",
+                "blocked_reason": "post_reentry_targeted_fix_prompt_write_failed",
+                "attempted": True,
+                "prompt_written": False,
+                "next_action": "revise_post_reentry_targeted_fix_prompt",
+                "summary": "Post-reentry targeted-fix prompt emission failed to write.",
+            }
+        )
+        state.pop("targeted_fix_prompt_text", None)
+        return state
+
+    state.update(
+        {
+            "status": "ready",
+            "emission_status": "ready",
+            "blocked_reason": "none",
+            "attempted": True,
+            "prompt_written": True,
+            "targeted_fix_prompt_present": True,
+            "targeted_fix_prompt_length": len(prompt_text),
+            "emitted_prompt_path": str(emitted_prompt_path),
+            "next_action": "prepare_post_reentry_targeted_fix_codex_reentry",
+            "summary": "Post-reentry targeted-fix prompt emitted for deterministic Codex reentry.",
+        }
+    )
+    state.pop("targeted_fix_prompt_text", None)
+    return state
+
+
 def _build_targeted_fix_post_reentry_cycle_closure_result_state(
     *,
     next_step_handoff_path: Path,
@@ -8060,6 +8377,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_post_reentry_terminal_summary_path = (
         one_cycle_controller_dir / "targeted_fix_post_reentry_terminal_summary.json"
     )
+    targeted_fix_post_reentry_prompt_emission_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_prompt_emission.json"
+    )
+    targeted_fix_post_reentry_prompt_emission_receipt_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_prompt_emission_receipt.json"
+    )
     approve_commit_tag_boundary_metadata_path = (
         one_cycle_controller_dir / "approve_commit_tag_boundary.json"
     )
@@ -8163,6 +8486,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_post_reentry_safe_to_commit_prompt_changes = False
     targeted_fix_post_reentry_requires_codex_reentry = False
     targeted_fix_post_reentry_requires_manual_review = True
+    targeted_fix_post_reentry_prompt_emission_status = "not_applicable"
+    targeted_fix_post_reentry_prompt_emission_blocked_reason = "route_not_targeted_fix"
+    targeted_fix_post_reentry_prompt_written = False
+    targeted_fix_post_reentry_prompt_ready_for_codex_reentry = False
+    targeted_fix_post_reentry_prompt_emission_next_action = "none"
+    targeted_fix_post_reentry_emitted_prompt_path = str(targeted_fix_codex_prompt_path)
     approve_commit_tag_boundary_status = "not_applicable"
     approve_commit_tag_boundary_decision = "none"
     approve_commit_tag_boundary_reason = "route_not_approve"
@@ -8298,6 +8627,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_targeted_fix_post_reentry_terminal_summary_json": str(
             targeted_fix_post_reentry_terminal_summary_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_prompt_emission_json": str(
+            targeted_fix_post_reentry_prompt_emission_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_prompt_emission_receipt_json": str(
+            targeted_fix_post_reentry_prompt_emission_receipt_path
         ),
         "one_cycle_controller_approve_commit_tag_boundary_json": str(
             approve_commit_tag_boundary_metadata_path
@@ -8748,6 +9083,110 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             route_decision_path=targeted_fix_post_reentry_route_decision_path
         )
     )
+    targeted_fix_post_reentry_prompt_emission_state = (
+        _write_targeted_fix_post_reentry_prompt_if_allowed(
+            prompt_emission_state=_build_targeted_fix_post_reentry_prompt_emission_state(
+                route_decision_path=targeted_fix_post_reentry_route_decision_path,
+                review_assimilation_path=targeted_fix_post_reentry_review_assimilation_path,
+                review_response_path=targeted_fix_post_reentry_review_response_path,
+                route_executor_boundary_path=targeted_fix_post_reentry_route_executor_boundary_path,
+                next_step_handoff_path=targeted_fix_post_reentry_next_step_handoff_path,
+                emitted_prompt_path=targeted_fix_codex_prompt_path,
+            )
+        )
+    )
+    targeted_fix_post_reentry_prompt_emission_receipt_state = {
+        "status": _normalize_text(
+            targeted_fix_post_reentry_prompt_emission_state.get("status"),
+            default="not_applicable",
+        ),
+        "receipt_status": "not_applicable",
+        "blocked_reason": _normalize_text(
+            targeted_fix_post_reentry_prompt_emission_state.get("blocked_reason"),
+            default="route_not_targeted_fix",
+        ),
+        "source": _normalize_text(
+            targeted_fix_post_reentry_prompt_emission_state.get("source"),
+            default="targeted_fix_post_reentry_prompt_emission",
+        ),
+        "prompt_emission_path": str(targeted_fix_post_reentry_prompt_emission_path),
+        "emitted_prompt_path": _normalize_text(
+            targeted_fix_post_reentry_prompt_emission_state.get("emitted_prompt_path"),
+            default=str(targeted_fix_codex_prompt_path),
+        ),
+        "prompt_written": bool(
+            targeted_fix_post_reentry_prompt_emission_state.get("prompt_written", False)
+        ),
+        "ready_for_codex_reentry": False,
+        "codex_reentry_executed": False,
+        "execution_performed": False,
+        "next_action": _normalize_text(
+            targeted_fix_post_reentry_prompt_emission_state.get("next_action"),
+            default="none",
+        ),
+        "summary": "",
+    }
+    emission_status = _normalize_text(
+        targeted_fix_post_reentry_prompt_emission_state.get("emission_status"),
+        default="not_applicable",
+    )
+    if emission_status == "ready" and bool(
+        targeted_fix_post_reentry_prompt_emission_state.get("prompt_written", False)
+    ):
+        targeted_fix_post_reentry_prompt_emission_receipt_state.update(
+            {
+                "receipt_status": "ready",
+                "blocked_reason": "none",
+                "ready_for_codex_reentry": True,
+                "next_action": "run_prompt318_post_reentry_targeted_fix_codex_reentry",
+                "summary": (
+                    "Post-reentry targeted-fix prompt emitted; ready for deterministic Codex reentry."
+                ),
+            }
+        )
+    elif emission_status == "blocked":
+        targeted_fix_post_reentry_prompt_emission_receipt_state.update(
+            {
+                "receipt_status": "blocked",
+                "ready_for_codex_reentry": False,
+                "next_action": _normalize_text(
+                    targeted_fix_post_reentry_prompt_emission_state.get("next_action"),
+                    default="manual_review_required",
+                ),
+                "summary": "Post-reentry targeted-fix prompt emission is blocked.",
+            }
+        )
+    else:
+        targeted_fix_post_reentry_prompt_emission_receipt_state.update(
+            {
+                "receipt_status": "not_applicable",
+                "ready_for_codex_reentry": False,
+                "next_action": _normalize_text(
+                    targeted_fix_post_reentry_prompt_emission_state.get("next_action"),
+                    default="none",
+                ),
+                "summary": "Post-reentry targeted-fix prompt emission is not applicable.",
+            }
+        )
+    try:
+        targeted_fix_post_reentry_prompt_emission_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(
+            targeted_fix_post_reentry_prompt_emission_path,
+            targeted_fix_post_reentry_prompt_emission_state,
+        )
+    except OSError:
+        pass
+    try:
+        targeted_fix_post_reentry_prompt_emission_receipt_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        _write_json(
+            targeted_fix_post_reentry_prompt_emission_receipt_path,
+            targeted_fix_post_reentry_prompt_emission_receipt_state,
+        )
+    except OSError:
+        pass
     targeted_fix_post_reentry_next_step_handoff_state = (
         _build_targeted_fix_post_reentry_next_step_handoff_state(
             route_executor_boundary_state=targeted_fix_post_reentry_route_executor_boundary_state,
@@ -8848,6 +9287,34 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_post_reentry_next_step_handoff_status = _normalize_text(
         targeted_fix_post_reentry_next_step_handoff_state.get("handoff_status"),
         default=targeted_fix_post_reentry_next_step_handoff_status,
+    )
+    targeted_fix_post_reentry_prompt_emission_status = _normalize_text(
+        targeted_fix_post_reentry_prompt_emission_state.get("emission_status"),
+        default=targeted_fix_post_reentry_prompt_emission_status,
+    )
+    targeted_fix_post_reentry_prompt_emission_blocked_reason = _normalize_text(
+        targeted_fix_post_reentry_prompt_emission_state.get("blocked_reason"),
+        default=targeted_fix_post_reentry_prompt_emission_blocked_reason,
+    )
+    targeted_fix_post_reentry_prompt_written = bool(
+        targeted_fix_post_reentry_prompt_emission_state.get(
+            "prompt_written",
+            targeted_fix_post_reentry_prompt_written,
+        )
+    )
+    targeted_fix_post_reentry_prompt_ready_for_codex_reentry = bool(
+        targeted_fix_post_reentry_prompt_emission_receipt_state.get(
+            "ready_for_codex_reentry",
+            targeted_fix_post_reentry_prompt_ready_for_codex_reentry,
+        )
+    )
+    targeted_fix_post_reentry_prompt_emission_next_action = _normalize_text(
+        targeted_fix_post_reentry_prompt_emission_state.get("next_action"),
+        default=targeted_fix_post_reentry_prompt_emission_next_action,
+    )
+    targeted_fix_post_reentry_emitted_prompt_path = _normalize_text(
+        targeted_fix_post_reentry_prompt_emission_state.get("emitted_prompt_path"),
+        default=targeted_fix_post_reentry_emitted_prompt_path,
     )
     targeted_fix_post_reentry_cycle_closure_result_state = (
         _build_targeted_fix_post_reentry_cycle_closure_result_state(
@@ -9211,6 +9678,28 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "targeted_fix_post_reentry_terminal_summary_path": str(
             targeted_fix_post_reentry_terminal_summary_path
+        ),
+        "targeted_fix_post_reentry_prompt_emission_status": (
+            targeted_fix_post_reentry_prompt_emission_status
+        ),
+        "targeted_fix_post_reentry_prompt_emission_blocked_reason": (
+            targeted_fix_post_reentry_prompt_emission_blocked_reason
+        ),
+        "targeted_fix_post_reentry_prompt_written": targeted_fix_post_reentry_prompt_written,
+        "targeted_fix_post_reentry_prompt_ready_for_codex_reentry": (
+            targeted_fix_post_reentry_prompt_ready_for_codex_reentry
+        ),
+        "targeted_fix_post_reentry_prompt_emission_next_action": (
+            targeted_fix_post_reentry_prompt_emission_next_action
+        ),
+        "targeted_fix_post_reentry_prompt_emission_path": str(
+            targeted_fix_post_reentry_prompt_emission_path
+        ),
+        "targeted_fix_post_reentry_prompt_emission_receipt_path": str(
+            targeted_fix_post_reentry_prompt_emission_receipt_path
+        ),
+        "targeted_fix_post_reentry_emitted_prompt_path": (
+            targeted_fix_post_reentry_emitted_prompt_path
         ),
         "targeted_fix_post_reentry_diff_capture_path": str(
             targeted_fix_post_reentry_diff_capture_path
@@ -9616,6 +10105,14 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- targeted_fix_post_reentry_terminal_summary.json: "
             f"`{targeted_fix_post_reentry_terminal_summary_path}`"
         ),
+        (
+            "- targeted_fix_post_reentry_prompt_emission.json: "
+            f"`{targeted_fix_post_reentry_prompt_emission_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_prompt_emission_receipt.json: "
+            f"`{targeted_fix_post_reentry_prompt_emission_receipt_path}`"
+        ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
@@ -9744,6 +10241,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_post_reentry_safe_to_commit_prompt_changes = False
         targeted_fix_post_reentry_requires_codex_reentry = False
         targeted_fix_post_reentry_requires_manual_review = True
+        targeted_fix_post_reentry_prompt_emission_status = "not_applicable"
+        targeted_fix_post_reentry_prompt_emission_blocked_reason = "route_not_targeted_fix"
+        targeted_fix_post_reentry_prompt_written = False
+        targeted_fix_post_reentry_prompt_ready_for_codex_reentry = False
+        targeted_fix_post_reentry_prompt_emission_next_action = "none"
+        targeted_fix_post_reentry_emitted_prompt_path = str(targeted_fix_codex_prompt_path)
         approve_commit_tag_boundary_status = "not_applicable"
         approve_commit_tag_boundary_decision = "none"
         approve_commit_tag_boundary_reason = "route_not_approve"
@@ -10063,6 +10566,30 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_terminal_summary_path": str(
             targeted_fix_post_reentry_terminal_summary_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_status": (
+            targeted_fix_post_reentry_prompt_emission_status
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_blocked_reason": (
+            targeted_fix_post_reentry_prompt_emission_blocked_reason
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_prompt_written": (
+            targeted_fix_post_reentry_prompt_written
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_prompt_ready_for_codex_reentry": (
+            targeted_fix_post_reentry_prompt_ready_for_codex_reentry
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_next_action": (
+            targeted_fix_post_reentry_prompt_emission_next_action
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_path": str(
+            targeted_fix_post_reentry_prompt_emission_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_prompt_emission_receipt_path": str(
+            targeted_fix_post_reentry_prompt_emission_receipt_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_emitted_prompt_path": (
+            targeted_fix_post_reentry_emitted_prompt_path
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_path": str(
             targeted_fix_post_reentry_review_handoff_path
