@@ -8,6 +8,27 @@ set -u
 # No-arg mode:
 #   Infers the next prompt id from the latest promptNNN-* tag.
 #   Example: latest tag prompt257-explicit-dev-loop-input-readiness -> prompt258
+#
+# Design:
+#   REPORT:
+#     Lightweight review summary only:
+#       - git HEAD
+#       - git status --short
+#       - diff stat
+#       - diff name-status
+#       - diff check
+#       - selected excerpts
+#       - untracked file names only
+#
+#   PATCH:
+#     Full tracked diff only:
+#       - unstaged tracked diff
+#       - staged tracked diff
+#
+#   Important:
+#     Untracked file contents are NOT embedded.
+#     Logs, runlogs, manifests, validation outputs, and other generated artifacts
+#     remain listed only if untracked. They are not included in REPORT or PATCH.
 
 INPUT_PROMPT_ID="${1:-}"
 INPUT_TITLE="${2:-}"
@@ -48,7 +69,7 @@ mkdir -p "$OUT_DIR"
 
 SAFE_TITLE="$(printf '%s' "$TITLE" | tr ' /:' '---' | tr -cd '[:alnum:]_.-')"
 REPORT="$OUT_DIR/${TS}_${PROMPT_ID}_${SAFE_TITLE}_diff_report.txt"
-PATCH="$OUT_DIR/${TS}_${PROMPT_ID}_${SAFE_TITLE}_full.patch"
+PATCH="$OUT_DIR/${TS}_${PROMPT_ID}_${SAFE_TITLE}_tracked.patch"
 
 {
   echo "# Diff report"
@@ -83,7 +104,7 @@ PATCH="$OUT_DIR/${TS}_${PROMPT_ID}_${SAFE_TITLE}_full.patch"
   git diff --cached --name-status
   echo
 
-  echo "## Untracked files"
+  echo "## Untracked files - names only"
   git ls-files --others --exclude-standard
   echo
 
@@ -110,34 +131,37 @@ PATCH="$OUT_DIR/${TS}_${PROMPT_ID}_${SAFE_TITLE}_full.patch"
     || true
   echo
 
-  echo "## Full unstaged tracked diff"
-  git diff --find-renames --find-copies --binary
+  echo "## Changed tracked files summary"
+  {
+    git diff --name-only
+    git diff --cached --name-only
+  } | sort -u
   echo
 
-  echo "## Full staged diff"
-  git diff --cached --find-renames --find-copies --binary
-  echo
-
-  echo "## Untracked file contents / patches"
-  while IFS= read -r f; do
-    [ -z "$f" ] && continue
-    echo
-    echo "### UNTRACKED: $f"
-    if [ -f "$f" ]; then
-      if file "$f" | grep -qiE 'text|json|python|shell|markdown|yaml|xml|csv'; then
-        git diff --no-index -- /dev/null "$f" || true
-      else
-        echo "(binary or non-text file; content not embedded)"
-        ls -lh "$f"
-      fi
-    fi
-  done < <(git ls-files --others --exclude-standard)
+  echo "## Review note"
+  echo "This report is intentionally lightweight."
+  echo "Full tracked diff is stored separately in PATCH."
+  echo "Untracked file contents are intentionally excluded."
+  echo "Generated logs, runlogs, manifests, and validation outputs are not embedded."
 
 } > "$REPORT"
 
 {
-  git diff --find-renames --find-copies --binary
-  git diff --cached --find-renames --find-copies --binary
+  echo "# Full tracked diff"
+  echo "# timestamp=$TS"
+  echo "# prompt_id=$PROMPT_ID"
+  echo "# title=$TITLE"
+  echo "# repo=$(pwd)"
+  echo "# latest_prompt_tag=${LATEST_PROMPT_TAG:-}"
+  echo
+
+  echo "## Full unstaged tracked diff"
+  git diff --find-renames
+  echo
+
+  echo "## Full staged tracked diff"
+  git diff --cached --find-renames
+  echo
 } > "$PATCH"
 
 echo "PROMPT_ID=$PROMPT_ID"
