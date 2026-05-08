@@ -3759,6 +3759,18 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_bounded_local_loop_state_path",
     "project_browser_autonomous_bounded_local_loop_decision_path",
     "project_browser_autonomous_bounded_local_loop_receipt_path",
+    "project_browser_autonomous_selected_step_execution_adapter_status",
+    "project_browser_autonomous_selected_step_execution_blocked_reason",
+    "project_browser_autonomous_selected_step_execution_ready",
+    "project_browser_autonomous_selected_step_execution_selected_step_id",
+    "project_browser_autonomous_selected_step_execution_selected_step_name",
+    "project_browser_autonomous_selected_step_execution_operation",
+    "project_browser_autonomous_selected_step_execution_allowed",
+    "project_browser_autonomous_selected_step_execution_performed",
+    "project_browser_autonomous_selected_step_execution_next_action",
+    "project_browser_autonomous_selected_step_execution_adapter_state_path",
+    "project_browser_autonomous_selected_step_execution_plan_path",
+    "project_browser_autonomous_selected_step_execution_receipt_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -3941,6 +3953,21 @@ _BOUNDED_LOCAL_AUTONOMOUS_LOOP_DECISION_PATH = (
 _BOUNDED_LOCAL_AUTONOMOUS_LOOP_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/"
     "bounded_local_autonomous_loop_receipt.json"
+)
+_SELECTED_STEP_EXECUTION_ADAPTER_EXPECTED_HEAD_TAG = (
+    "prompt326-bounded-local-autonomous-loop-controller"
+)
+_SELECTED_STEP_EXECUTION_ADAPTER_STATE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "selected_step_execution_adapter_state.json"
+)
+_SELECTED_STEP_EXECUTION_PLAN_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "selected_step_execution_plan.json"
+)
+_SELECTED_STEP_EXECUTION_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "selected_step_execution_receipt.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_codex_prompt.md"
@@ -9019,6 +9046,506 @@ def _build_bounded_local_autonomous_loop_receipt_state(
     }
 
 
+def _build_selected_step_execution_adapter_state(
+    *,
+    execution_repo_path: str,
+    one_cycle_controller_dir: Path,
+    expected_head_tag: str,
+) -> dict[str, Any]:
+    _ = execution_repo_path
+    normalized_repo_path = _APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH
+    bounded_loop_state_path = one_cycle_controller_dir / "bounded_local_autonomous_loop_state.json"
+    bounded_loop_decision_path = (
+        one_cycle_controller_dir / "bounded_local_autonomous_loop_decision.json"
+    )
+    bounded_loop_receipt_path = (
+        one_cycle_controller_dir / "bounded_local_autonomous_loop_receipt.json"
+    )
+    one_shot_step_selection_path = (
+        one_cycle_controller_dir / "local_end_to_end_one_shot_step_selection.json"
+    )
+    one_shot_execution_gate_path = (
+        one_cycle_controller_dir / "local_end_to_end_one_shot_execution_gate.json"
+    )
+    one_shot_execution_receipt_path = (
+        one_cycle_controller_dir / "local_end_to_end_one_shot_execution_receipt.json"
+    )
+    dry_run_plan_path = one_cycle_controller_dir / "local_end_to_end_dry_run_plan.json"
+    dry_run_step_matrix_path = (
+        one_cycle_controller_dir / "local_end_to_end_dry_run_step_matrix.json"
+    )
+    dry_run_receipt_path = one_cycle_controller_dir / "local_end_to_end_dry_run_receipt.json"
+
+    status_short_cmd = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=no"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    current_branch_cmd = subprocess.run(
+        ["git", "branch", "--show-current"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    head_short_cmd = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    head_tags_cmd = subprocess.run(
+        ["git", "tag", "--points-at", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    metadata_collection_ok = (
+        status_short_cmd.returncode == 0
+        and current_branch_cmd.returncode == 0
+        and head_short_cmd.returncode == 0
+        and head_tags_cmd.returncode == 0
+    )
+    changed_tracked_files = (
+        [
+            line.rstrip()
+            for line in (status_short_cmd.stdout or "").splitlines()
+            if line.strip()
+        ]
+        if metadata_collection_ok
+        else []
+    )
+    worktree_clean = bool(metadata_collection_ok and (not changed_tracked_files))
+    current_branch = (
+        _normalize_text(current_branch_cmd.stdout, default="")
+        if metadata_collection_ok
+        else ""
+    )
+    head_short = (
+        _normalize_text(head_short_cmd.stdout, default="")
+        if metadata_collection_ok
+        else ""
+    )
+    head_tags = (
+        sorted(
+            {
+                line.strip()
+                for line in (head_tags_cmd.stdout or "").splitlines()
+                if line.strip()
+            }
+        )
+        if metadata_collection_ok
+        else []
+    )
+    expected_head_tag_present = expected_head_tag in set(head_tags)
+
+    bounded_loop_state = _read_json_object_if_exists(bounded_loop_state_path) or {}
+    bounded_loop_decision = _read_json_object_if_exists(bounded_loop_decision_path) or {}
+    bounded_loop_receipt = _read_json_object_if_exists(bounded_loop_receipt_path) or {}
+    one_shot_step_selection = _read_json_object_if_exists(one_shot_step_selection_path) or {}
+    one_shot_execution_gate = _read_json_object_if_exists(one_shot_execution_gate_path) or {}
+    one_shot_execution_receipt = _read_json_object_if_exists(one_shot_execution_receipt_path) or {}
+    dry_run_plan = _read_json_object_if_exists(dry_run_plan_path) or {}
+    _ = _read_json_object_if_exists(dry_run_step_matrix_path) or {}
+    dry_run_receipt = _read_json_object_if_exists(dry_run_receipt_path) or {}
+
+    bounded_artifacts_exist = (
+        bounded_loop_state_path.exists()
+        and bounded_loop_decision_path.exists()
+        and bounded_loop_receipt_path.exists()
+    )
+
+    selected_step_id = _as_non_negative_int(
+        bounded_loop_state.get("selected_step_id"),
+        default=_as_non_negative_int(
+            one_shot_step_selection.get("selected_step_id"),
+            default=_as_non_negative_int(
+                one_shot_execution_gate.get("selected_step_id"),
+                default=_as_non_negative_int(
+                    one_shot_execution_receipt.get("selected_step_id"),
+                    default=1,
+                ),
+            ),
+        ),
+    )
+    if selected_step_id <= 0:
+        selected_step_id = 1
+    selected_step_name = _normalize_text(
+        bounded_loop_state.get("selected_step_name"),
+        default=_normalize_text(
+            one_shot_step_selection.get("selected_step_name"),
+            default=_normalize_text(
+                one_shot_execution_gate.get("selected_step_name"),
+                default=_normalize_text(
+                    one_shot_execution_receipt.get("selected_step_name"),
+                    default="read_current_state",
+                ),
+            ),
+        ),
+    )
+    if not selected_step_name or selected_step_name == "none":
+        selected_step_name = "read_current_state" if selected_step_id == 1 else selected_step_name
+    selected_step_operation = _normalize_text(selected_step_name, default="read_current_state")
+    if not selected_step_operation or selected_step_operation == "none":
+        selected_step_operation = "read_current_state"
+
+    def _read_surface_flag(key: str, *, default: bool) -> bool:
+        for surface in (
+            bounded_loop_state,
+            bounded_loop_decision,
+            bounded_loop_receipt,
+            one_shot_execution_gate,
+            one_shot_execution_receipt,
+            dry_run_plan,
+            dry_run_receipt,
+        ):
+            if not isinstance(surface, Mapping) or key not in surface:
+                continue
+            value = surface.get(key)
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, int):
+                return value != 0
+            text = _normalize_text(value, default="").lower()
+            if text in {"1", "true", "yes", "on", "enabled"}:
+                return True
+            if text in {"0", "false", "no", "off", "disabled"}:
+                return False
+        return default
+
+    execution_performed = _read_surface_flag("execution_performed", default=False)
+    codex_invoked = _read_surface_flag("codex_invoked", default=False)
+    commit_performed = _read_surface_flag("commit_performed", default=False)
+    tag_performed = _read_surface_flag("tag_performed", default=False)
+    push_performed = _read_surface_flag("push_performed", default=False)
+    pr_created = _read_surface_flag("pr_created", default=False)
+    merge_performed = _read_surface_flag("merge_performed", default=False)
+    rollback_performed = _read_surface_flag("rollback_performed", default=False)
+    execution_flags_clear = not any(
+        (
+            execution_performed,
+            codex_invoked,
+            commit_performed,
+            tag_performed,
+            push_performed,
+            pr_created,
+            merge_performed,
+            rollback_performed,
+        )
+    )
+
+    github_deferred = bool(
+        bounded_loop_state.get(
+            "github_deferred",
+            dry_run_plan.get("github_deferred", True),
+        )
+    )
+    remote_required = bool(
+        bounded_loop_state.get(
+            "remote_required",
+            dry_run_plan.get("remote_required", False),
+        )
+    )
+    bounded_loop_ready = bool(bounded_loop_state.get("bounded_loop_ready", False))
+    bounded_loop_decision_value = _normalize_text(
+        bounded_loop_decision.get("decision"),
+        default="stop_blocked",
+    )
+    bounded_loop_should_continue = bool(
+        bounded_loop_state.get(
+            "should_continue",
+            bounded_loop_decision.get("should_continue", False),
+        )
+    )
+    bounded_blocked_reason = _normalize_text(
+        bounded_loop_state.get("blocked_reason"),
+        default=_normalize_text(
+            bounded_loop_decision.get("blocked_reason"),
+            default=_normalize_text(
+                bounded_loop_receipt.get("blocked_reason"),
+                default="bounded_local_loop_not_ready_for_selected_step_execution_adapter",
+            ),
+        ),
+    )
+    stale_bounded_loop_artifact_block_ignored = bool(
+        bounded_blocked_reason == "tracked_changes_present_before_bounded_local_loop"
+        and worktree_clean
+        and expected_head_tag_present
+    )
+
+    status = "blocked"
+    adapter_status = "blocked"
+    blocked_reason = "bounded_local_loop_artifacts_missing"
+    selected_step_execution_ready = False
+    execution_allowed = False
+    next_action = "complete_bounded_local_loop_before_selected_step_execution_adapter"
+    summary = (
+        "Selected-step execution adapter is blocked because required bounded local loop artifacts are missing."
+    )
+
+    if not worktree_clean:
+        blocked_reason = "tracked_changes_present_before_selected_step_execution_adapter"
+        next_action = "commit_or_reconcile_tracked_changes_before_selected_step_execution_adapter"
+        summary = "Selected-step execution adapter is blocked by tracked changes in the worktree."
+    elif not expected_head_tag_present:
+        blocked_reason = "expected_prompt326_head_tag_missing"
+        next_action = "commit_and_tag_prompt326_before_selected_step_execution_adapter"
+        summary = (
+            "Selected-step execution adapter is blocked because expected Prompt326 head tag is missing."
+        )
+    elif not bounded_artifacts_exist:
+        blocked_reason = "bounded_local_loop_artifacts_missing"
+        next_action = "complete_bounded_local_loop_before_selected_step_execution_adapter"
+        summary = (
+            "Selected-step execution adapter is blocked because required bounded local loop artifacts are missing."
+        )
+    elif not execution_flags_clear:
+        blocked_reason = "execution_flags_not_clear_before_selected_step_execution_adapter"
+        next_action = "reconcile_execution_flags_before_selected_step_execution_adapter"
+        summary = (
+            "Selected-step execution adapter is blocked because prior execution flags are not clear."
+        )
+    elif (not github_deferred) or remote_required:
+        blocked_reason = "selected_step_execution_adapter_local_only_posture_required"
+        next_action = "restore_local_only_posture_before_selected_step_execution_adapter"
+        summary = (
+            "Selected-step execution adapter is blocked because local-only posture requirements are not satisfied."
+        )
+    elif bounded_loop_decision_value == "continue_to_selected_step" or (
+        stale_bounded_loop_artifact_block_ignored and worktree_clean and expected_head_tag_present
+    ):
+        status = "ready"
+        adapter_status = "ready"
+        blocked_reason = "none"
+        selected_step_execution_ready = True
+        execution_allowed = False
+        next_action = "prepare_selected_step_execution_live_gate"
+        summary = (
+            "Selected-step execution adapter is ready and prepared as a metadata-only boundary; live step execution remains disabled."
+        )
+    else:
+        blocked_reason = _normalize_text(
+            bounded_blocked_reason,
+            default="bounded_local_loop_not_ready_for_selected_step_execution_adapter",
+        )
+        next_action = _normalize_text(
+            bounded_loop_decision.get("next_action"),
+            default=_normalize_text(
+                bounded_loop_state.get("next_action"),
+                default="complete_bounded_local_loop_before_selected_step_execution_adapter",
+            ),
+        )
+        summary = (
+            "Selected-step execution adapter is blocked because bounded local loop is not ready to continue to a selected step."
+        )
+
+    return {
+        "status": status,
+        "adapter_status": adapter_status,
+        "blocked_reason": blocked_reason,
+        "source": "selected_step_execution_adapter_boundary",
+        "current_branch": current_branch,
+        "head_short": head_short,
+        "head_tags": head_tags,
+        "expected_head_tag": expected_head_tag,
+        "expected_head_tag_present": expected_head_tag_present,
+        "worktree_clean": worktree_clean,
+        "changed_tracked_files": changed_tracked_files,
+        "selected_step_execution_ready": selected_step_execution_ready,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "bounded_loop_ready": bounded_loop_ready,
+        "bounded_loop_decision": bounded_loop_decision_value,
+        "bounded_loop_should_continue": bounded_loop_should_continue,
+        "stale_bounded_loop_artifact_block_ignored": stale_bounded_loop_artifact_block_ignored,
+        "github_deferred": github_deferred,
+        "remote_required": remote_required,
+        "execution_allowed": execution_allowed,
+        "execution_performed": False,
+        "codex_invoked": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "rollback_performed": False,
+        "next_action": next_action,
+        "summary": summary,
+    }
+
+
+def _build_selected_step_execution_plan_state(
+    *,
+    adapter_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    adapter = dict(adapter_state) if isinstance(adapter_state, Mapping) else {}
+    status = _normalize_text(adapter.get("status"), default="blocked")
+    adapter_status = _normalize_text(adapter.get("adapter_status"), default=status)
+    blocked_reason = _normalize_text(
+        adapter.get("blocked_reason"),
+        default="bounded_local_loop_artifacts_missing",
+    )
+    selected_step_id = _as_non_negative_int(adapter.get("selected_step_id"), default=1)
+    if selected_step_id <= 0:
+        selected_step_id = 1
+    selected_step_name = _normalize_text(
+        adapter.get("selected_step_name"),
+        default="read_current_state",
+    )
+    selected_step_operation = _normalize_text(
+        adapter.get("selected_step_operation"),
+        default=selected_step_name,
+    )
+    if not selected_step_operation:
+        selected_step_operation = "read_current_state"
+    execution_performed = False
+    codex_invoked = False
+    commit_performed = False
+    tag_performed = False
+    push_performed = False
+    pr_created = False
+    merge_performed = False
+    rollback_performed = False
+    execution_allowed = False
+    selected_step_execution_ready = bool(adapter.get("selected_step_execution_ready", False))
+
+    plan_status = "blocked"
+    next_action = _normalize_text(
+        adapter.get("next_action"),
+        default="complete_bounded_local_loop_before_selected_step_execution_adapter",
+    )
+    if status == "ready" and adapter_status == "ready" and selected_step_execution_ready:
+        plan_status = "ready"
+        next_action = "prepare_selected_step_execution_live_gate"
+
+    return {
+        "status": "ready" if plan_status == "ready" else "blocked",
+        "plan_status": plan_status,
+        "blocked_reason": "none" if plan_status == "ready" else blocked_reason,
+        "source": "selected_step_execution_adapter_boundary",
+        "adapter_kind": "metadata_only_selected_step_boundary",
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "operation_intent": "collect_current_repo_and_controller_metadata",
+        "live_execution_required": True,
+        "live_execution_enabled": False,
+        "execution_allowed": execution_allowed,
+        "execution_performed": execution_performed,
+        "codex_invoked": codex_invoked,
+        "commit_performed": commit_performed,
+        "tag_performed": tag_performed,
+        "push_performed": push_performed,
+        "pr_created": pr_created,
+        "merge_performed": merge_performed,
+        "rollback_performed": rollback_performed,
+        "next_action": next_action,
+        "summary": (
+            "Selected-step execution plan is ready as a metadata-only boundary; live step execution remains disabled."
+            if plan_status == "ready"
+            else "Selected-step execution plan is blocked because adapter prerequisites are not satisfied."
+        ),
+    }
+
+
+def _build_selected_step_execution_receipt_state(
+    *,
+    adapter_state: Mapping[str, Any] | None,
+    plan_state: Mapping[str, Any] | None,
+    adapter_state_path: Path,
+    execution_plan_path: Path,
+) -> dict[str, Any]:
+    adapter = dict(adapter_state) if isinstance(adapter_state, Mapping) else {}
+    plan = dict(plan_state) if isinstance(plan_state, Mapping) else {}
+    status = _normalize_text(
+        plan.get("status"),
+        default=_normalize_text(adapter.get("status"), default="blocked"),
+    )
+    blocked_reason = _normalize_text(
+        plan.get("blocked_reason"),
+        default=_normalize_text(adapter.get("blocked_reason"), default="bounded_local_loop_artifacts_missing"),
+    )
+    selected_step_id = _as_non_negative_int(
+        plan.get("selected_step_id"),
+        default=_as_non_negative_int(adapter.get("selected_step_id"), default=1),
+    )
+    if selected_step_id <= 0:
+        selected_step_id = 1
+    selected_step_name = _normalize_text(
+        plan.get("selected_step_name"),
+        default=_normalize_text(adapter.get("selected_step_name"), default="read_current_state"),
+    )
+    selected_step_operation = _normalize_text(
+        plan.get("selected_step_operation"),
+        default=_normalize_text(adapter.get("selected_step_operation"), default=selected_step_name),
+    )
+    if not selected_step_operation:
+        selected_step_operation = "read_current_state"
+    selected_step_execution_ready = bool(adapter.get("selected_step_execution_ready", False))
+    live_execution_required = bool(plan.get("live_execution_required", True))
+    live_execution_enabled = bool(plan.get("live_execution_enabled", False))
+    execution_allowed = False
+    execution_performed = False
+    codex_invoked = False
+    commit_performed = False
+    tag_performed = False
+    push_performed = False
+    pr_created = False
+    merge_performed = False
+    rollback_performed = False
+    next_action = _normalize_text(
+        plan.get("next_action"),
+        default=_normalize_text(
+            adapter.get("next_action"),
+            default="complete_bounded_local_loop_before_selected_step_execution_adapter",
+        ),
+    )
+    receipt_ready = (
+        status == "ready"
+        and bool(plan.get("plan_status", "") == "ready")
+        and selected_step_execution_ready
+    )
+
+    return {
+        "status": "ready" if receipt_ready else "blocked",
+        "receipt_status": "ready" if receipt_ready else "blocked",
+        "blocked_reason": "none" if receipt_ready else blocked_reason,
+        "source": "selected_step_execution_adapter_boundary",
+        "adapter_state_path": str(adapter_state_path),
+        "execution_plan_path": str(execution_plan_path),
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "selected_step_execution_ready": selected_step_execution_ready,
+        "live_execution_required": live_execution_required,
+        "live_execution_enabled": live_execution_enabled,
+        "execution_allowed": execution_allowed,
+        "execution_performed": execution_performed,
+        "codex_invoked": codex_invoked,
+        "commit_performed": commit_performed,
+        "tag_performed": tag_performed,
+        "push_performed": push_performed,
+        "pr_created": pr_created,
+        "merge_performed": merge_performed,
+        "rollback_performed": rollback_performed,
+        "next_action": next_action,
+        "summary": (
+            "Selected-step execution receipt captured in ready state; live execution remains disabled."
+            if receipt_ready
+            else "Selected-step execution receipt captured in blocked state; adapter prerequisites are incomplete."
+        ),
+    }
+
+
 def _write_approve_commit_tag_commands_if_safe(
     *,
     boundary_state: Mapping[str, Any] | None,
@@ -12321,6 +12848,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     bounded_local_autonomous_loop_receipt_path = (
         one_cycle_controller_dir / "bounded_local_autonomous_loop_receipt.json"
     )
+    selected_step_execution_adapter_state_path = (
+        one_cycle_controller_dir / "selected_step_execution_adapter_state.json"
+    )
+    selected_step_execution_plan_path = (
+        one_cycle_controller_dir / "selected_step_execution_plan.json"
+    )
+    selected_step_execution_receipt_path = (
+        one_cycle_controller_dir / "selected_step_execution_receipt.json"
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -12564,6 +13100,24 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         bounded_local_autonomous_loop_decision_path
     )
     bounded_local_loop_receipt_surface_path = str(bounded_local_autonomous_loop_receipt_path)
+    selected_step_execution_adapter_status = "blocked"
+    selected_step_execution_blocked_reason = "bounded_local_loop_artifacts_missing"
+    selected_step_execution_ready = False
+    selected_step_execution_selected_step_id = 1
+    selected_step_execution_selected_step_name = "read_current_state"
+    selected_step_execution_operation = "read_current_state"
+    selected_step_execution_allowed = False
+    selected_step_execution_performed = False
+    selected_step_execution_next_action = (
+        "complete_bounded_local_loop_before_selected_step_execution_adapter"
+    )
+    selected_step_execution_adapter_state_surface_path = str(
+        selected_step_execution_adapter_state_path
+    )
+    selected_step_execution_plan_surface_path = str(selected_step_execution_plan_path)
+    selected_step_execution_receipt_surface_path = str(
+        selected_step_execution_receipt_path
+    )
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -12751,6 +13305,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_bounded_local_autonomous_loop_receipt_json": str(
             bounded_local_autonomous_loop_receipt_path
+        ),
+        "one_cycle_controller_selected_step_execution_adapter_state_json": str(
+            selected_step_execution_adapter_state_path
+        ),
+        "one_cycle_controller_selected_step_execution_plan_json": str(
+            selected_step_execution_plan_path
+        ),
+        "one_cycle_controller_selected_step_execution_receipt_json": str(
+            selected_step_execution_receipt_path
         ),
     }
 
@@ -14272,6 +14835,112 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     bounded_local_loop_state_surface_path = str(bounded_local_autonomous_loop_state_path)
     bounded_local_loop_decision_surface_path = str(bounded_local_autonomous_loop_decision_path)
     bounded_local_loop_receipt_surface_path = str(bounded_local_autonomous_loop_receipt_path)
+    selected_step_execution_adapter_state = _build_selected_step_execution_adapter_state(
+        execution_repo_path=execution_repo_path,
+        one_cycle_controller_dir=one_cycle_controller_dir,
+        expected_head_tag=_SELECTED_STEP_EXECUTION_ADAPTER_EXPECTED_HEAD_TAG,
+    )
+    selected_step_execution_plan_state = _build_selected_step_execution_plan_state(
+        adapter_state=selected_step_execution_adapter_state,
+    )
+    selected_step_execution_receipt_state = _build_selected_step_execution_receipt_state(
+        adapter_state=selected_step_execution_adapter_state,
+        plan_state=selected_step_execution_plan_state,
+        adapter_state_path=selected_step_execution_adapter_state_path,
+        execution_plan_path=selected_step_execution_plan_path,
+    )
+    selected_step_execution_artifacts_written = False
+    try:
+        selected_step_execution_adapter_state_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(
+            selected_step_execution_adapter_state_path,
+            selected_step_execution_adapter_state,
+        )
+        _write_json(
+            selected_step_execution_plan_path,
+            selected_step_execution_plan_state,
+        )
+        _write_json(
+            selected_step_execution_receipt_path,
+            selected_step_execution_receipt_state,
+        )
+        selected_step_execution_artifacts_written = True
+    except OSError:
+        selected_step_execution_artifacts_written = False
+    if (
+        not selected_step_execution_artifacts_written
+        or not selected_step_execution_adapter_state_path.exists()
+        or not selected_step_execution_plan_path.exists()
+        or not selected_step_execution_receipt_path.exists()
+    ):
+        try:
+            selected_step_execution_adapter_state_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json(
+                selected_step_execution_adapter_state_path,
+                selected_step_execution_adapter_state,
+            )
+            _write_json(
+                selected_step_execution_plan_path,
+                selected_step_execution_plan_state,
+            )
+            _write_json(
+                selected_step_execution_receipt_path,
+                selected_step_execution_receipt_state,
+            )
+        except OSError:
+            pass
+
+    selected_step_execution_adapter_status = _normalize_text(
+        selected_step_execution_adapter_state.get("adapter_status"),
+        default=selected_step_execution_adapter_status,
+    )
+    selected_step_execution_blocked_reason = _normalize_text(
+        selected_step_execution_adapter_state.get("blocked_reason"),
+        default=selected_step_execution_blocked_reason,
+    )
+    selected_step_execution_ready = bool(
+        selected_step_execution_adapter_state.get(
+            "selected_step_execution_ready",
+            selected_step_execution_ready,
+        )
+    )
+    selected_step_execution_selected_step_id = _as_non_negative_int(
+        selected_step_execution_adapter_state.get("selected_step_id"),
+        default=selected_step_execution_selected_step_id,
+    )
+    if selected_step_execution_selected_step_id <= 0:
+        selected_step_execution_selected_step_id = 1
+    selected_step_execution_selected_step_name = _normalize_text(
+        selected_step_execution_adapter_state.get("selected_step_name"),
+        default=selected_step_execution_selected_step_name,
+    )
+    selected_step_execution_operation = _normalize_text(
+        selected_step_execution_adapter_state.get("selected_step_operation"),
+        default=selected_step_execution_operation,
+    )
+    selected_step_execution_allowed = bool(
+        selected_step_execution_adapter_state.get(
+            "execution_allowed",
+            selected_step_execution_allowed,
+        )
+    )
+    selected_step_execution_performed = bool(
+        selected_step_execution_adapter_state.get(
+            "execution_performed",
+            selected_step_execution_performed,
+        )
+    )
+    selected_step_execution_next_action = _normalize_text(
+        selected_step_execution_adapter_state.get("next_action"),
+        default=selected_step_execution_next_action,
+    )
+    selected_step_execution_adapter_state_surface_path = str(
+        selected_step_execution_adapter_state_path
+    )
+    selected_step_execution_plan_surface_path = str(selected_step_execution_plan_path)
+    selected_step_execution_receipt_surface_path = str(
+        selected_step_execution_receipt_path
+    )
 
     result_payload = {
         "status": status,
@@ -16052,6 +16721,42 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_bounded_local_loop_receipt_path": (
             bounded_local_loop_receipt_surface_path
+        ),
+        "project_browser_autonomous_selected_step_execution_adapter_status": (
+            selected_step_execution_adapter_status
+        ),
+        "project_browser_autonomous_selected_step_execution_blocked_reason": (
+            selected_step_execution_blocked_reason
+        ),
+        "project_browser_autonomous_selected_step_execution_ready": (
+            selected_step_execution_ready
+        ),
+        "project_browser_autonomous_selected_step_execution_selected_step_id": (
+            selected_step_execution_selected_step_id
+        ),
+        "project_browser_autonomous_selected_step_execution_selected_step_name": (
+            selected_step_execution_selected_step_name
+        ),
+        "project_browser_autonomous_selected_step_execution_operation": (
+            selected_step_execution_operation
+        ),
+        "project_browser_autonomous_selected_step_execution_allowed": (
+            selected_step_execution_allowed
+        ),
+        "project_browser_autonomous_selected_step_execution_performed": (
+            selected_step_execution_performed
+        ),
+        "project_browser_autonomous_selected_step_execution_next_action": (
+            selected_step_execution_next_action
+        ),
+        "project_browser_autonomous_selected_step_execution_adapter_state_path": (
+            selected_step_execution_adapter_state_surface_path
+        ),
+        "project_browser_autonomous_selected_step_execution_plan_path": (
+            selected_step_execution_plan_surface_path
+        ),
+        "project_browser_autonomous_selected_step_execution_receipt_path": (
+            selected_step_execution_receipt_surface_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
