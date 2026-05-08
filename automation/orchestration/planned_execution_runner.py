@@ -3648,6 +3648,20 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_receipt_path",
     "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_stdout_path",
     "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_stderr_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_status",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_decision",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_blocked_reason",
+    "project_browser_autonomous_targeted_fix_post_reentry_current_cycle_count",
+    "project_browser_autonomous_targeted_fix_post_reentry_max_cycle_count",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_complete",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_should_continue",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_should_emit_prompt",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_should_execute_codex",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_should_capture_diff",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_next_action",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_state_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_decision_path",
+    "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_receipt_path",
     "project_browser_autonomous_approve_commit_tag_boundary_status",
     "project_browser_autonomous_approve_commit_tag_boundary_decision",
     "project_browser_autonomous_approve_commit_tag_boundary_reason",
@@ -3831,6 +3845,17 @@ _TARGETED_FIX_POST_REENTRY_CODEX_REENTRY_EXECUTION_STDOUT_PATH = (
 _TARGETED_FIX_POST_REENTRY_CODEX_REENTRY_EXECUTION_STDERR_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_codex_reentry_execution_stderr.txt"
 )
+_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_STATE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_bounded_cycle_state.json"
+)
+_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DECISION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_bounded_cycle_decision.json"
+)
+_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_post_reentry_bounded_cycle_receipt.json"
+)
+_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DEFAULT_MAX_CYCLE_COUNT = 2
+_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DEFAULT_CURRENT_CYCLE_COUNT = 0
 _TARGETED_FIX_REENTRY_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
     "exec",
@@ -8592,6 +8617,480 @@ def _build_targeted_fix_post_reentry_terminal_summary_state(
     return state
 
 
+def _build_targeted_fix_post_reentry_bounded_cycle_state(
+    *,
+    prompt_emission_path: Path,
+    prompt_emission_receipt_path: Path,
+    codex_reentry_execution_receipt_path: Path,
+    diff_capture_path: Path,
+    review_handoff_path: Path,
+    review_assimilation_path: Path,
+    route_decision_path: Path,
+    route_executor_boundary_path: Path,
+    next_step_handoff_path: Path,
+    cycle_closure_result_path: Path,
+    terminal_summary_path: Path,
+    current_cycle_count: int,
+    max_cycle_count: int,
+    bounded_cycle_state_path: Path,
+    bounded_cycle_decision_path: Path,
+    bounded_cycle_receipt_path: Path,
+) -> dict[str, Any]:
+    def _load_payload(path: Path) -> dict[str, Any]:
+        try:
+            loaded = _read_json_object_if_exists(path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            loaded = None
+        return dict(loaded) if isinstance(loaded, Mapping) else {}
+
+    prompt_emission_payload = _load_payload(prompt_emission_path)
+    prompt_emission_receipt_payload = _load_payload(prompt_emission_receipt_path)
+    codex_reentry_execution_payload = _load_payload(codex_reentry_execution_receipt_path)
+    diff_capture_payload = _load_payload(diff_capture_path)
+    review_handoff_payload = _load_payload(review_handoff_path)
+    _ = _load_payload(review_assimilation_path)
+    route_decision_payload = _load_payload(route_decision_path)
+    route_executor_boundary_payload = _load_payload(route_executor_boundary_path)
+    _ = _load_payload(next_step_handoff_path)
+    _ = _load_payload(cycle_closure_result_path)
+    terminal_summary_payload = _load_payload(terminal_summary_path)
+
+    route_decision = _normalize_text(route_decision_payload.get("route_decision"), default="")
+    route_status = _normalize_text(route_decision_payload.get("route_status"), default="blocked")
+    targeted_fix_required = bool(route_decision_payload.get("targeted_fix_required", False))
+    boundary_status = _normalize_text(
+        route_executor_boundary_payload.get("boundary_status"),
+        default="blocked",
+    )
+    executor_kind = _normalize_text(
+        route_executor_boundary_payload.get("executor_kind"),
+        default="manual_review",
+    )
+    targeted_fix_prompt_emission_allowed = bool(
+        route_executor_boundary_payload.get("targeted_fix_prompt_emission_allowed", False)
+    )
+
+    prompt_emission_status = _normalize_text(
+        prompt_emission_payload.get("emission_status"),
+        default=_normalize_text(prompt_emission_payload.get("status"), default="not_applicable"),
+    )
+    prompt_emission_receipt_status = _normalize_text(
+        prompt_emission_receipt_payload.get("receipt_status"),
+        default="not_applicable",
+    )
+    prompt_emission_receipt_state_status = _normalize_text(
+        prompt_emission_receipt_payload.get("status"),
+        default="not_applicable",
+    )
+    prompt_written = bool(prompt_emission_receipt_payload.get("prompt_written", False))
+    prompt_ready_for_codex_reentry = bool(
+        prompt_emission_receipt_payload.get("ready_for_codex_reentry", False)
+    )
+    prompt_receipt_codex_reentry_executed = bool(
+        prompt_emission_receipt_payload.get("codex_reentry_executed", False)
+    )
+    prompt_receipt_execution_performed = bool(
+        prompt_emission_receipt_payload.get("execution_performed", False)
+    )
+
+    codex_reentry_execution_status = _normalize_text(
+        codex_reentry_execution_payload.get("execution_status"),
+        default="not_applicable",
+    )
+    codex_reentry_gate_status = _normalize_text(
+        codex_reentry_execution_payload.get("gate_status"),
+        default="not_applicable",
+    )
+    codex_reentry_executed = bool(codex_reentry_execution_payload.get("codex_reentry_executed", False))
+    codex_reentry_execution_performed = bool(
+        codex_reentry_execution_payload.get("execution_performed", False)
+    )
+    codex_reentry_exit_code = _as_optional_int(codex_reentry_execution_payload.get("exit_code"))
+
+    diff_capture_status = _normalize_text(
+        diff_capture_payload.get("capture_status"),
+        default="not_applicable",
+    )
+    diff_has_diff = bool(diff_capture_payload.get("has_diff", False))
+    review_handoff_status = _normalize_text(
+        review_handoff_payload.get("handoff_status"),
+        default="not_applicable",
+    )
+    review_required = bool(review_handoff_payload.get("review_required", False))
+
+    terminal_status = _normalize_text(
+        terminal_summary_payload.get("terminal_status"),
+        default="not_applicable",
+    )
+    terminal_summary_state_status = _normalize_text(
+        terminal_summary_payload.get("status"),
+        default="not_applicable",
+    )
+    terminal_state = _normalize_text(
+        terminal_summary_payload.get("terminal_state"),
+        default="blocked",
+    )
+    terminal_cycle_closed = bool(terminal_summary_payload.get("cycle_closed", False))
+    terminal_final_next_action = _normalize_text(
+        terminal_summary_payload.get("final_next_action"),
+        default="manual_review_required",
+    )
+
+    state: dict[str, Any] = {
+        "status": "blocked",
+        "cycle_status": "blocked",
+        "blocked_reason": "post_reentry_bounded_cycle_inputs_incomplete",
+        "source": "targeted_fix_post_reentry_bounded_cycle_controller",
+        "current_cycle_count": int(current_cycle_count),
+        "max_cycle_count": int(max_cycle_count),
+        "cycle_closed": False,
+        "bounded_cycle_complete": False,
+        "should_continue": False,
+        "should_emit_targeted_fix_prompt": False,
+        "should_execute_codex_reentry": False,
+        "should_capture_diff": False,
+        "should_request_review": False,
+        "should_block": True,
+        "route_decision": route_decision,
+        "route_status": route_status,
+        "prompt_emission_status": prompt_emission_status,
+        "prompt_emission_receipt_status": prompt_emission_receipt_status,
+        "codex_reentry_execution_status": codex_reentry_execution_status,
+        "codex_reentry_gate_status": codex_reentry_gate_status,
+        "diff_capture_status": diff_capture_status,
+        "review_handoff_status": review_handoff_status,
+        "terminal_state": terminal_state,
+        "safe_to_stop": False,
+        "next_action": "manual_review_required",
+        "summary": "Post-reentry bounded cycle inputs are incomplete; manual review required.",
+        "targeted_fix_post_reentry_bounded_cycle_state_path": _normalize_text(
+            str(bounded_cycle_state_path),
+            default=_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_STATE_PATH,
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_decision_path": _normalize_text(
+            str(bounded_cycle_decision_path),
+            default=_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DECISION_PATH,
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_receipt_path": _normalize_text(
+            str(bounded_cycle_receipt_path),
+            default=_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_RECEIPT_PATH,
+        ),
+    }
+
+    terminal_completed = (
+        terminal_summary_state_status == "completed"
+        and terminal_status == "completed"
+        and terminal_cycle_closed
+        and terminal_final_next_action == "none"
+    )
+    diff_captured_no_diff_completed = (
+        diff_capture_status == "captured_no_diff"
+        and (not diff_has_diff)
+        and (route_decision == "completed_no_diff" or terminal_completed)
+    )
+    if terminal_completed or diff_captured_no_diff_completed:
+        state.update(
+            {
+                "status": "completed",
+                "cycle_status": "completed",
+                "blocked_reason": "none",
+                "cycle_closed": True,
+                "bounded_cycle_complete": True,
+                "should_continue": False,
+                "should_emit_targeted_fix_prompt": False,
+                "should_execute_codex_reentry": False,
+                "should_capture_diff": False,
+                "should_request_review": False,
+                "should_block": False,
+                "safe_to_stop": True,
+                "next_action": "none",
+                "summary": "Post-reentry bounded cycle already terminal completed.",
+            }
+        )
+        return state
+
+    requires_targeted_fix_or_codex = (
+        route_decision == "targeted_fix"
+        or targeted_fix_required
+        or (
+            prompt_emission_receipt_state_status == "ready"
+            and prompt_emission_receipt_status == "ready"
+            and prompt_written
+            and prompt_ready_for_codex_reentry
+            and (not prompt_receipt_codex_reentry_executed)
+            and (not prompt_receipt_execution_performed)
+        )
+        or (
+            codex_reentry_execution_status == "completed"
+            and codex_reentry_gate_status == "executed"
+            and codex_reentry_executed
+            and codex_reentry_execution_performed
+            and codex_reentry_exit_code == 0
+        )
+    )
+    if int(current_cycle_count) >= int(max_cycle_count) and requires_targeted_fix_or_codex:
+        state.update(
+            {
+                "status": "blocked",
+                "cycle_status": "max_cycle_count_reached",
+                "blocked_reason": "max_post_reentry_targeted_fix_cycle_count_reached",
+                "bounded_cycle_complete": False,
+                "should_continue": False,
+                "should_emit_targeted_fix_prompt": False,
+                "should_execute_codex_reentry": False,
+                "should_capture_diff": False,
+                "should_request_review": False,
+                "should_block": True,
+                "safe_to_stop": False,
+                "next_action": "manual_review_required_after_max_cycle_count",
+                "summary": "Post-reentry targeted-fix bounded cycle reached max cycle count.",
+            }
+        )
+        return state
+
+    prompt_receipt_missing_or_not_ready = (
+        (not prompt_emission_receipt_payload)
+        or prompt_emission_receipt_status in {"not_applicable", "blocked", ""}
+    )
+    if (
+        route_status == "ready"
+        and route_decision == "targeted_fix"
+        and targeted_fix_required
+        and boundary_status == "ready"
+        and executor_kind == "targeted_fix_prompt_emission"
+        and targeted_fix_prompt_emission_allowed
+        and prompt_receipt_missing_or_not_ready
+    ):
+        state.update(
+            {
+                "status": "ready",
+                "cycle_status": "awaiting_prompt_emission",
+                "blocked_reason": "none",
+                "cycle_closed": False,
+                "bounded_cycle_complete": False,
+                "should_continue": True,
+                "should_emit_targeted_fix_prompt": True,
+                "should_execute_codex_reentry": False,
+                "should_capture_diff": False,
+                "should_request_review": False,
+                "should_block": False,
+                "safe_to_stop": False,
+                "next_action": "run_prompt317_post_reentry_targeted_fix_prompt_emission",
+                "summary": "Post-reentry targeted-fix route is waiting for prompt emission.",
+            }
+        )
+        return state
+
+    if (
+        prompt_emission_receipt_state_status == "ready"
+        and prompt_emission_receipt_status == "ready"
+        and prompt_written
+        and prompt_ready_for_codex_reentry
+        and (not prompt_receipt_codex_reentry_executed)
+        and (not prompt_receipt_execution_performed)
+    ):
+        state.update(
+            {
+                "status": "ready",
+                "cycle_status": "awaiting_codex_reentry",
+                "blocked_reason": "none",
+                "cycle_closed": False,
+                "bounded_cycle_complete": False,
+                "should_continue": True,
+                "should_emit_targeted_fix_prompt": False,
+                "should_execute_codex_reentry": True,
+                "should_capture_diff": False,
+                "should_request_review": False,
+                "should_block": False,
+                "safe_to_stop": False,
+                "next_action": "run_prompt318_post_reentry_targeted_fix_codex_reentry",
+                "summary": "Post-reentry targeted-fix prompt is emitted and waiting for Codex reentry.",
+            }
+        )
+        return state
+
+    if codex_reentry_execution_status == "failed":
+        state.update(
+            {
+                "status": "blocked",
+                "cycle_status": "blocked",
+                "blocked_reason": "post_reentry_codex_reentry_execution_failed",
+                "cycle_closed": False,
+                "bounded_cycle_complete": False,
+                "should_continue": False,
+                "should_emit_targeted_fix_prompt": False,
+                "should_execute_codex_reentry": False,
+                "should_capture_diff": False,
+                "should_request_review": False,
+                "should_block": True,
+                "safe_to_stop": False,
+                "next_action": "review_post_reentry_codex_reentry_failure",
+                "summary": "Post-reentry Codex reentry execution failed and requires manual review.",
+            }
+        )
+        return state
+
+    if (
+        codex_reentry_execution_status == "completed"
+        and codex_reentry_gate_status == "executed"
+        and codex_reentry_executed
+        and codex_reentry_execution_performed
+        and codex_reentry_exit_code == 0
+    ):
+        state.update(
+            {
+                "status": "ready",
+                "cycle_status": "awaiting_post_reentry_diff_capture",
+                "blocked_reason": "none",
+                "cycle_closed": False,
+                "bounded_cycle_complete": False,
+                "should_continue": True,
+                "should_emit_targeted_fix_prompt": False,
+                "should_execute_codex_reentry": False,
+                "should_capture_diff": True,
+                "should_request_review": False,
+                "should_block": False,
+                "safe_to_stop": False,
+                "next_action": "capture_post_reentry_diff_after_codex_reentry",
+                "summary": "Post-reentry Codex reentry completed; waiting for diff capture.",
+            }
+        )
+        return state
+
+    if (
+        diff_capture_status == "captured"
+        and diff_has_diff
+        and review_handoff_status == "ready"
+        and review_required
+    ):
+        state.update(
+            {
+                "status": "ready",
+                "cycle_status": "awaiting_post_reentry_review",
+                "blocked_reason": "none",
+                "cycle_closed": False,
+                "bounded_cycle_complete": False,
+                "should_continue": True,
+                "should_emit_targeted_fix_prompt": False,
+                "should_execute_codex_reentry": False,
+                "should_capture_diff": False,
+                "should_request_review": True,
+                "should_block": False,
+                "safe_to_stop": False,
+                "next_action": "provide_post_reentry_review_response",
+                "summary": "Post-reentry diff capture is ready and requires review response.",
+            }
+        )
+        return state
+
+    return state
+
+
+def _build_targeted_fix_post_reentry_bounded_cycle_decision_state(
+    *,
+    bounded_cycle_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    state = dict(bounded_cycle_state) if isinstance(bounded_cycle_state, Mapping) else {}
+    cycle_status = _normalize_text(state.get("cycle_status"), default="blocked")
+    status = _normalize_text(state.get("status"), default="blocked")
+    blocked_reason = _normalize_text(
+        state.get("blocked_reason"),
+        default="post_reentry_bounded_cycle_inputs_incomplete",
+    )
+    next_action = _normalize_text(state.get("next_action"), default="manual_review_required")
+    decision = "blocked"
+    if status == "completed" and cycle_status == "completed":
+        decision = "stop_completed"
+    elif status == "ready" and cycle_status == "awaiting_prompt_emission":
+        decision = "emit_targeted_fix_prompt"
+    elif status == "ready" and cycle_status == "awaiting_codex_reentry":
+        decision = "execute_codex_reentry"
+    elif status == "ready" and cycle_status == "awaiting_post_reentry_diff_capture":
+        decision = "capture_post_reentry_diff"
+    elif status == "ready" and cycle_status == "awaiting_post_reentry_review":
+        decision = "request_review"
+    elif status == "blocked" and cycle_status == "max_cycle_count_reached":
+        decision = "max_cycle_count_reached"
+
+    return {
+        "status": status,
+        "decision": decision,
+        "blocked_reason": blocked_reason,
+        "source": _normalize_text(
+            state.get("source"),
+            default="targeted_fix_post_reentry_bounded_cycle_state",
+        ),
+        "current_cycle_count": _as_non_negative_int(
+            state.get("current_cycle_count"),
+            default=_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DEFAULT_CURRENT_CYCLE_COUNT,
+        ),
+        "max_cycle_count": _as_non_negative_int(
+            state.get("max_cycle_count"),
+            default=_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DEFAULT_MAX_CYCLE_COUNT,
+        ),
+        "bounded_cycle_complete": bool(state.get("bounded_cycle_complete", False)),
+        "safe_to_stop": bool(state.get("safe_to_stop", False)),
+        "requires_manual_review": bool(state.get("should_block", False)),
+        "requires_codex_reentry": bool(state.get("should_execute_codex_reentry", False)),
+        "requires_prompt_emission": bool(state.get("should_emit_targeted_fix_prompt", False)),
+        "requires_diff_capture": bool(state.get("should_capture_diff", False)),
+        "requires_review_response": bool(state.get("should_request_review", False)),
+        "next_action": next_action,
+        "summary": _normalize_text(state.get("summary"), default=""),
+    }
+
+
+def _build_targeted_fix_post_reentry_bounded_cycle_receipt_state(
+    *,
+    bounded_cycle_state: Mapping[str, Any] | None,
+    bounded_cycle_decision_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    state = dict(bounded_cycle_state) if isinstance(bounded_cycle_state, Mapping) else {}
+    decision_state = (
+        dict(bounded_cycle_decision_state)
+        if isinstance(bounded_cycle_decision_state, Mapping)
+        else {}
+    )
+    status = _normalize_text(state.get("status"), default="blocked")
+    receipt_status = "blocked"
+    if status == "completed":
+        receipt_status = "completed"
+    elif status == "ready":
+        receipt_status = "ready"
+    return {
+        "status": status,
+        "receipt_status": receipt_status,
+        "blocked_reason": _normalize_text(
+            state.get("blocked_reason"),
+            default="post_reentry_bounded_cycle_inputs_incomplete",
+        ),
+        "source": _normalize_text(
+            state.get("source"),
+            default="targeted_fix_post_reentry_bounded_cycle_state",
+        ),
+        "bounded_cycle_complete": bool(state.get("bounded_cycle_complete", False)),
+        "execution_performed": False,
+        "codex_invoked": False,
+        "current_cycle_count": _as_non_negative_int(
+            state.get("current_cycle_count"),
+            default=_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DEFAULT_CURRENT_CYCLE_COUNT,
+        ),
+        "max_cycle_count": _as_non_negative_int(
+            state.get("max_cycle_count"),
+            default=_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DEFAULT_MAX_CYCLE_COUNT,
+        ),
+        "final_decision": _normalize_text(decision_state.get("decision"), default="blocked"),
+        "next_action": _normalize_text(
+            decision_state.get("next_action"),
+            default=_normalize_text(state.get("next_action"), default="manual_review_required"),
+        ),
+        "summary": _normalize_text(
+            decision_state.get("summary"),
+            default=_normalize_text(state.get("summary"), default=""),
+        ),
+    }
+
+
 def _build_project_browser_autonomous_one_cycle_controller_state(
     *,
     approved_restart_payload: Mapping[str, Any] | None,
@@ -8620,6 +9119,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         if text in {"0", "false", "no", "off", "disabled"}:
             return False
         return default
+
+    def _read_non_negative_int_flag(key: str, *, default: int) -> int:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        return _as_non_negative_int(value, default=default)
 
     one_cycle_controller_dir = Path("/tmp/codex-local-runner-decision/one_cycle_controller")
     output_json_path = one_cycle_controller_dir / "one_cycle_controller_result.json"
@@ -8688,6 +9191,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     )
     targeted_fix_post_reentry_codex_reentry_execution_stderr_path = (
         one_cycle_controller_dir / "targeted_fix_post_reentry_codex_reentry_execution_stderr.txt"
+    )
+    targeted_fix_post_reentry_bounded_cycle_state_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_bounded_cycle_state.json"
+    )
+    targeted_fix_post_reentry_bounded_cycle_decision_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_bounded_cycle_decision.json"
+    )
+    targeted_fix_post_reentry_bounded_cycle_receipt_path = (
+        one_cycle_controller_dir / "targeted_fix_post_reentry_bounded_cycle_receipt.json"
     )
     approve_commit_tag_boundary_metadata_path = (
         one_cycle_controller_dir / "approve_commit_tag_boundary.json"
@@ -8760,6 +9272,14 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_execution_confirmed",
         default=False,
     )
+    targeted_fix_post_reentry_current_cycle_count = _read_non_negative_int_flag(
+        "project_browser_autonomous_targeted_fix_post_reentry_current_cycle_count",
+        default=_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DEFAULT_CURRENT_CYCLE_COUNT,
+    )
+    targeted_fix_post_reentry_max_cycle_count = _read_non_negative_int_flag(
+        "project_browser_autonomous_targeted_fix_post_reentry_max_cycle_count",
+        default=_TARGETED_FIX_POST_REENTRY_BOUNDED_CYCLE_DEFAULT_MAX_CYCLE_COUNT,
+    )
     targeted_fix_reentry_execution_gate_status = "not_applicable"
     targeted_fix_reentry_execution_status = "not_executed"
     targeted_fix_reentry_execution_attempted = False
@@ -8813,6 +9333,17 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     targeted_fix_post_reentry_codex_reentry_executed = False
     targeted_fix_post_reentry_codex_reentry_exit_code: int | None = None
     targeted_fix_post_reentry_codex_reentry_next_action = "none"
+    targeted_fix_post_reentry_bounded_cycle_status = "blocked"
+    targeted_fix_post_reentry_bounded_cycle_decision = "blocked"
+    targeted_fix_post_reentry_bounded_cycle_blocked_reason = (
+        "post_reentry_bounded_cycle_inputs_incomplete"
+    )
+    targeted_fix_post_reentry_bounded_cycle_complete = False
+    targeted_fix_post_reentry_bounded_cycle_should_continue = False
+    targeted_fix_post_reentry_bounded_cycle_should_emit_prompt = False
+    targeted_fix_post_reentry_bounded_cycle_should_execute_codex = False
+    targeted_fix_post_reentry_bounded_cycle_should_capture_diff = False
+    targeted_fix_post_reentry_bounded_cycle_next_action = "manual_review_required"
     approve_commit_tag_boundary_status = "not_applicable"
     approve_commit_tag_boundary_decision = "none"
     approve_commit_tag_boundary_reason = "route_not_approve"
@@ -8963,6 +9494,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_targeted_fix_post_reentry_codex_reentry_execution_stderr_txt": str(
             targeted_fix_post_reentry_codex_reentry_execution_stderr_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_bounded_cycle_state_json": str(
+            targeted_fix_post_reentry_bounded_cycle_state_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_bounded_cycle_decision_json": str(
+            targeted_fix_post_reentry_bounded_cycle_decision_path
+        ),
+        "one_cycle_controller_targeted_fix_post_reentry_bounded_cycle_receipt_json": str(
+            targeted_fix_post_reentry_bounded_cycle_receipt_path
         ),
         "one_cycle_controller_approve_commit_tag_boundary_json": str(
             approve_commit_tag_boundary_metadata_path
@@ -9748,6 +10288,112 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             targeted_fix_post_reentry_requires_manual_review,
         )
     )
+    targeted_fix_post_reentry_bounded_cycle_state = (
+        _build_targeted_fix_post_reentry_bounded_cycle_state(
+            prompt_emission_path=targeted_fix_post_reentry_prompt_emission_path,
+            prompt_emission_receipt_path=targeted_fix_post_reentry_prompt_emission_receipt_path,
+            codex_reentry_execution_receipt_path=(
+                targeted_fix_post_reentry_codex_reentry_execution_receipt_path
+            ),
+            diff_capture_path=targeted_fix_post_reentry_diff_capture_path,
+            review_handoff_path=targeted_fix_post_reentry_review_handoff_path,
+            review_assimilation_path=targeted_fix_post_reentry_review_assimilation_path,
+            route_decision_path=targeted_fix_post_reentry_route_decision_path,
+            route_executor_boundary_path=targeted_fix_post_reentry_route_executor_boundary_path,
+            next_step_handoff_path=targeted_fix_post_reentry_next_step_handoff_path,
+            cycle_closure_result_path=targeted_fix_post_reentry_cycle_closure_result_path,
+            terminal_summary_path=targeted_fix_post_reentry_terminal_summary_path,
+            current_cycle_count=targeted_fix_post_reentry_current_cycle_count,
+            max_cycle_count=targeted_fix_post_reentry_max_cycle_count,
+            bounded_cycle_state_path=targeted_fix_post_reentry_bounded_cycle_state_path,
+            bounded_cycle_decision_path=targeted_fix_post_reentry_bounded_cycle_decision_path,
+            bounded_cycle_receipt_path=targeted_fix_post_reentry_bounded_cycle_receipt_path,
+        )
+    )
+    targeted_fix_post_reentry_bounded_cycle_decision_state = (
+        _build_targeted_fix_post_reentry_bounded_cycle_decision_state(
+            bounded_cycle_state=targeted_fix_post_reentry_bounded_cycle_state
+        )
+    )
+    targeted_fix_post_reentry_bounded_cycle_receipt_state = (
+        _build_targeted_fix_post_reentry_bounded_cycle_receipt_state(
+            bounded_cycle_state=targeted_fix_post_reentry_bounded_cycle_state,
+            bounded_cycle_decision_state=targeted_fix_post_reentry_bounded_cycle_decision_state,
+        )
+    )
+    try:
+        targeted_fix_post_reentry_bounded_cycle_state_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        _write_json(
+            targeted_fix_post_reentry_bounded_cycle_state_path,
+            targeted_fix_post_reentry_bounded_cycle_state,
+        )
+        _write_json(
+            targeted_fix_post_reentry_bounded_cycle_decision_path,
+            targeted_fix_post_reentry_bounded_cycle_decision_state,
+        )
+        _write_json(
+            targeted_fix_post_reentry_bounded_cycle_receipt_path,
+            targeted_fix_post_reentry_bounded_cycle_receipt_state,
+        )
+    except OSError:
+        pass
+    targeted_fix_post_reentry_bounded_cycle_status = _normalize_text(
+        targeted_fix_post_reentry_bounded_cycle_state.get("status"),
+        default=targeted_fix_post_reentry_bounded_cycle_status,
+    )
+    targeted_fix_post_reentry_bounded_cycle_decision = _normalize_text(
+        targeted_fix_post_reentry_bounded_cycle_decision_state.get("decision"),
+        default=targeted_fix_post_reentry_bounded_cycle_decision,
+    )
+    targeted_fix_post_reentry_bounded_cycle_blocked_reason = _normalize_text(
+        targeted_fix_post_reentry_bounded_cycle_state.get("blocked_reason"),
+        default=targeted_fix_post_reentry_bounded_cycle_blocked_reason,
+    )
+    targeted_fix_post_reentry_bounded_cycle_complete = bool(
+        targeted_fix_post_reentry_bounded_cycle_state.get(
+            "bounded_cycle_complete",
+            targeted_fix_post_reentry_bounded_cycle_complete,
+        )
+    )
+    targeted_fix_post_reentry_bounded_cycle_should_continue = bool(
+        targeted_fix_post_reentry_bounded_cycle_state.get(
+            "should_continue",
+            targeted_fix_post_reentry_bounded_cycle_should_continue,
+        )
+    )
+    targeted_fix_post_reentry_bounded_cycle_should_emit_prompt = bool(
+        targeted_fix_post_reentry_bounded_cycle_state.get(
+            "should_emit_targeted_fix_prompt",
+            targeted_fix_post_reentry_bounded_cycle_should_emit_prompt,
+        )
+    )
+    targeted_fix_post_reentry_bounded_cycle_should_execute_codex = bool(
+        targeted_fix_post_reentry_bounded_cycle_state.get(
+            "should_execute_codex_reentry",
+            targeted_fix_post_reentry_bounded_cycle_should_execute_codex,
+        )
+    )
+    targeted_fix_post_reentry_bounded_cycle_should_capture_diff = bool(
+        targeted_fix_post_reentry_bounded_cycle_state.get(
+            "should_capture_diff",
+            targeted_fix_post_reentry_bounded_cycle_should_capture_diff,
+        )
+    )
+    targeted_fix_post_reentry_bounded_cycle_next_action = _normalize_text(
+        targeted_fix_post_reentry_bounded_cycle_state.get("next_action"),
+        default=targeted_fix_post_reentry_bounded_cycle_next_action,
+    )
+    targeted_fix_post_reentry_current_cycle_count = _as_non_negative_int(
+        targeted_fix_post_reentry_bounded_cycle_state.get("current_cycle_count"),
+        default=targeted_fix_post_reentry_current_cycle_count,
+    )
+    targeted_fix_post_reentry_max_cycle_count = _as_non_negative_int(
+        targeted_fix_post_reentry_bounded_cycle_state.get("max_cycle_count"),
+        default=targeted_fix_post_reentry_max_cycle_count,
+    )
     approve_commit_tag_boundary_state = _build_approve_commit_tag_boundary_state(
         review_route_status=review_route_status,
         review_route_decision=review_route_decision,
@@ -10109,6 +10755,48 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "targeted_fix_post_reentry_codex_reentry_stderr_path": str(
             targeted_fix_post_reentry_codex_reentry_execution_stderr_path
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_status": (
+            targeted_fix_post_reentry_bounded_cycle_status
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_decision": (
+            targeted_fix_post_reentry_bounded_cycle_decision
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_blocked_reason": (
+            targeted_fix_post_reentry_bounded_cycle_blocked_reason
+        ),
+        "targeted_fix_post_reentry_current_cycle_count": (
+            targeted_fix_post_reentry_current_cycle_count
+        ),
+        "targeted_fix_post_reentry_max_cycle_count": (
+            targeted_fix_post_reentry_max_cycle_count
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_complete": (
+            targeted_fix_post_reentry_bounded_cycle_complete
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_should_continue": (
+            targeted_fix_post_reentry_bounded_cycle_should_continue
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_should_emit_prompt": (
+            targeted_fix_post_reentry_bounded_cycle_should_emit_prompt
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_should_execute_codex": (
+            targeted_fix_post_reentry_bounded_cycle_should_execute_codex
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_should_capture_diff": (
+            targeted_fix_post_reentry_bounded_cycle_should_capture_diff
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_next_action": (
+            targeted_fix_post_reentry_bounded_cycle_next_action
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_state_path": str(
+            targeted_fix_post_reentry_bounded_cycle_state_path
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_decision_path": str(
+            targeted_fix_post_reentry_bounded_cycle_decision_path
+        ),
+        "targeted_fix_post_reentry_bounded_cycle_receipt_path": str(
+            targeted_fix_post_reentry_bounded_cycle_receipt_path
         ),
         "targeted_fix_post_reentry_diff_capture_path": str(
             targeted_fix_post_reentry_diff_capture_path
@@ -10562,6 +11250,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- targeted_fix_post_reentry_codex_reentry_execution_stderr.txt: "
             f"`{targeted_fix_post_reentry_codex_reentry_execution_stderr_path}`"
         ),
+        (
+            "- targeted_fix_post_reentry_bounded_cycle_state.json: "
+            f"`{targeted_fix_post_reentry_bounded_cycle_state_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_bounded_cycle_decision.json: "
+            f"`{targeted_fix_post_reentry_bounded_cycle_decision_path}`"
+        ),
+        (
+            "- targeted_fix_post_reentry_bounded_cycle_receipt.json: "
+            f"`{targeted_fix_post_reentry_bounded_cycle_receipt_path}`"
+        ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
         f"- approve_commit_tag_commands.sh: `{approve_commit_tag_boundary_commands_path}`",
         f"- approve_commit_tag_execution_receipt.json: `{approve_commit_tag_execution_receipt_path}`",
@@ -10703,6 +11403,17 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         targeted_fix_post_reentry_codex_reentry_executed = False
         targeted_fix_post_reentry_codex_reentry_exit_code = None
         targeted_fix_post_reentry_codex_reentry_next_action = "none"
+        targeted_fix_post_reentry_bounded_cycle_status = "blocked"
+        targeted_fix_post_reentry_bounded_cycle_decision = "blocked"
+        targeted_fix_post_reentry_bounded_cycle_blocked_reason = (
+            "post_reentry_bounded_cycle_inputs_incomplete"
+        )
+        targeted_fix_post_reentry_bounded_cycle_complete = False
+        targeted_fix_post_reentry_bounded_cycle_should_continue = False
+        targeted_fix_post_reentry_bounded_cycle_should_emit_prompt = False
+        targeted_fix_post_reentry_bounded_cycle_should_execute_codex = False
+        targeted_fix_post_reentry_bounded_cycle_should_capture_diff = False
+        targeted_fix_post_reentry_bounded_cycle_next_action = "manual_review_required"
         approve_commit_tag_boundary_status = "not_applicable"
         approve_commit_tag_boundary_decision = "none"
         approve_commit_tag_boundary_reason = "route_not_approve"
@@ -11076,6 +11787,48 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_codex_reentry_stderr_path": str(
             targeted_fix_post_reentry_codex_reentry_execution_stderr_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_status": (
+            targeted_fix_post_reentry_bounded_cycle_status
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_decision": (
+            targeted_fix_post_reentry_bounded_cycle_decision
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_blocked_reason": (
+            targeted_fix_post_reentry_bounded_cycle_blocked_reason
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_current_cycle_count": (
+            targeted_fix_post_reentry_current_cycle_count
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_max_cycle_count": (
+            targeted_fix_post_reentry_max_cycle_count
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_complete": (
+            targeted_fix_post_reentry_bounded_cycle_complete
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_should_continue": (
+            targeted_fix_post_reentry_bounded_cycle_should_continue
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_should_emit_prompt": (
+            targeted_fix_post_reentry_bounded_cycle_should_emit_prompt
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_should_execute_codex": (
+            targeted_fix_post_reentry_bounded_cycle_should_execute_codex
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_should_capture_diff": (
+            targeted_fix_post_reentry_bounded_cycle_should_capture_diff
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_next_action": (
+            targeted_fix_post_reentry_bounded_cycle_next_action
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_state_path": str(
+            targeted_fix_post_reentry_bounded_cycle_state_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_decision_path": str(
+            targeted_fix_post_reentry_bounded_cycle_decision_path
+        ),
+        "project_browser_autonomous_targeted_fix_post_reentry_bounded_cycle_receipt_path": str(
+            targeted_fix_post_reentry_bounded_cycle_receipt_path
         ),
         "project_browser_autonomous_targeted_fix_post_reentry_review_handoff_path": str(
             targeted_fix_post_reentry_review_handoff_path
