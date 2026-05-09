@@ -3959,6 +3959,21 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_post_commit_cycle_closure_decision_path",
     "project_browser_autonomous_local_post_commit_cycle_closure_receipt_path",
     "project_browser_autonomous_local_next_cycle_reentry_decision_path",
+    "project_browser_autonomous_local_autonomous_continuation_status",
+    "project_browser_autonomous_local_autonomous_continuation_blocked_reason",
+    "project_browser_autonomous_local_autonomous_continuation_next_action",
+    "project_browser_autonomous_local_autonomous_continuation_reentry_connected",
+    "project_browser_autonomous_local_autonomous_continuation_next_cycle_ready",
+    "project_browser_autonomous_local_autonomous_continuation_selected_step_name",
+    "project_browser_autonomous_local_autonomous_loop_completion_status",
+    "project_browser_autonomous_local_autonomous_loop_completion_final_decision",
+    "project_browser_autonomous_local_only_complete_autonomous_loop_ready",
+    "project_browser_autonomous_local_autonomous_loop_complete",
+    "project_browser_autonomous_local_autonomous_continuation_state_path",
+    "project_browser_autonomous_local_autonomous_continuation_decision_path",
+    "project_browser_autonomous_local_autonomous_continuation_receipt_path",
+    "project_browser_autonomous_local_autonomous_next_cycle_selection_path",
+    "project_browser_autonomous_local_autonomous_loop_completion_summary_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -4433,6 +4448,26 @@ _LOCAL_NEXT_CYCLE_REENTRY_DECISION_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/"
     "local_next_cycle_reentry_decision.json"
 )
+_LOCAL_AUTONOMOUS_CONTINUATION_STATE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_autonomous_continuation_state.json"
+)
+_LOCAL_AUTONOMOUS_CONTINUATION_DECISION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_autonomous_continuation_decision.json"
+)
+_LOCAL_AUTONOMOUS_CONTINUATION_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_autonomous_continuation_receipt.json"
+)
+_LOCAL_AUTONOMOUS_NEXT_CYCLE_SELECTION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_autonomous_next_cycle_selection.json"
+)
+_LOCAL_AUTONOMOUS_LOOP_COMPLETION_SUMMARY_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_autonomous_loop_completion_summary.json"
+)
 _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_GATE_STATE_SCHEMA_VERSION = (
     "local_bounded_approve_commit_tag_gate_state_v1"
 )
@@ -4456,6 +4491,21 @@ _LOCAL_POST_COMMIT_CYCLE_CLOSURE_RECEIPT_SCHEMA_VERSION = (
 )
 _LOCAL_NEXT_CYCLE_REENTRY_DECISION_SCHEMA_VERSION = (
     "local_next_cycle_reentry_decision_v1"
+)
+_LOCAL_AUTONOMOUS_CONTINUATION_STATE_SCHEMA_VERSION = (
+    "local_autonomous_continuation_state_v1"
+)
+_LOCAL_AUTONOMOUS_CONTINUATION_DECISION_SCHEMA_VERSION = (
+    "local_autonomous_continuation_decision_v1"
+)
+_LOCAL_AUTONOMOUS_CONTINUATION_RECEIPT_SCHEMA_VERSION = (
+    "local_autonomous_continuation_receipt_v1"
+)
+_LOCAL_AUTONOMOUS_NEXT_CYCLE_SELECTION_SCHEMA_VERSION = (
+    "local_autonomous_next_cycle_selection_v1"
+)
+_LOCAL_AUTONOMOUS_LOOP_COMPLETION_SUMMARY_SCHEMA_VERSION = (
+    "local_autonomous_loop_completion_summary_v1"
 )
 _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_COMMIT_MESSAGE = "Apply targeted contract-fix route"
 _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_TAG_NAME = (
@@ -10631,6 +10681,737 @@ def _build_local_post_commit_cycle_closure_artifacts(
         "local_post_commit_cycle_closure_decision_path": str(closure_decision_path),
         "local_post_commit_cycle_closure_receipt_path": str(closure_receipt_path),
         "local_next_cycle_reentry_decision_path": str(reentry_decision_path),
+    }
+
+
+def _build_local_autonomous_continuation_artifacts(
+    *,
+    execution_repo_path: str,
+    one_cycle_controller_dir: Path,
+) -> dict[str, Any]:
+    def _as_boolish(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").strip().lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_json_mapping(path: Path) -> tuple[bool, bool, dict[str, Any]]:
+        if not path.exists():
+            return False, False, {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            return True, False, {}
+        if not isinstance(payload, Mapping):
+            return True, False, {}
+        return True, True, dict(payload)
+
+    def _run_local_git(
+        repo_path: str,
+        args: list[str],
+        *,
+        timeout_seconds: float,
+    ) -> tuple[bool, subprocess.CompletedProcess[str] | None]:
+        try:
+            completed = subprocess.run(
+                ["git", "-C", repo_path, *args],
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=timeout_seconds,
+                shell=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False, None
+        return True, completed
+
+    def _collect_tracked_diff_state(
+        repo_path: str,
+    ) -> tuple[bool, bool, list[str], list[str], list[str]]:
+        status_ok, status_short = _run_local_git(
+            repo_path,
+            ["status", "--short", "--untracked-files=no"],
+            timeout_seconds=10,
+        )
+        unstaged_ok, unstaged_names = _run_local_git(
+            repo_path,
+            ["diff", "--name-only"],
+            timeout_seconds=10,
+        )
+        staged_ok, staged_names = _run_local_git(
+            repo_path,
+            ["diff", "--cached", "--name-only"],
+            timeout_seconds=10,
+        )
+        if (
+            not status_ok
+            or not unstaged_ok
+            or not staged_ok
+            or status_short is None
+            or unstaged_names is None
+            or staged_names is None
+        ):
+            return False, False, [], [], []
+        if (
+            status_short.returncode != 0
+            or unstaged_names.returncode != 0
+            or staged_names.returncode != 0
+        ):
+            return False, False, [], [], []
+
+        status_paths = sorted(
+            {
+                _parse_git_status_path(line)
+                for line in (status_short.stdout or "").splitlines()
+                if line.strip() and _parse_git_status_path(line)
+            }
+        )
+        unstaged = sorted(
+            {
+                _normalize_text(line, default="").strip()
+                for line in (unstaged_names.stdout or "").splitlines()
+                if _normalize_text(line, default="").strip()
+            }
+        )
+        staged = sorted(
+            {
+                _normalize_text(line, default="").strip()
+                for line in (staged_names.stdout or "").splitlines()
+                if _normalize_text(line, default="").strip()
+            }
+        )
+        changed = sorted(set(status_paths) | set(unstaged) | set(staged))
+        tracked_worktree_clean = bool(not changed and not staged and not unstaged)
+        return True, tracked_worktree_clean, changed, staged, unstaged
+
+    def _safety_fields() -> dict[str, Any]:
+        return {
+            "codex_invoked": False,
+            "codex_invocation_allowed": False,
+            "execution_allowed": False,
+            "targeted_fix_execution_allowed": False,
+            "commit_allowed": False,
+            "tag_allowed": False,
+            "push_pr_merge_enabled": False,
+            "rollback_allowed": False,
+            "commit_performed": False,
+            "tag_performed": False,
+            "push_performed": False,
+            "pr_created": False,
+            "merge_performed": False,
+            "rollback_performed": False,
+        }
+
+    one_cycle_controller_dir = Path(one_cycle_controller_dir)
+    prompt341_closure_state_path = one_cycle_controller_dir / "local_post_commit_cycle_closure_state.json"
+    prompt341_closure_decision_path = (
+        one_cycle_controller_dir / "local_post_commit_cycle_closure_decision.json"
+    )
+    prompt341_closure_receipt_path = (
+        one_cycle_controller_dir / "local_post_commit_cycle_closure_receipt.json"
+    )
+    prompt341_reentry_decision_path = one_cycle_controller_dir / "local_next_cycle_reentry_decision.json"
+    prompt340_execution_receipt_path = (
+        one_cycle_controller_dir / "local_bounded_approve_commit_tag_execution_receipt.json"
+    )
+    prompt340_execution_result_path = (
+        one_cycle_controller_dir / "local_bounded_approve_commit_tag_execution_result.json"
+    )
+    prompt339_route_decision_path = (
+        one_cycle_controller_dir / "local_post_targeted_contract_fix_route_decision.json"
+    )
+    prompt338_execution_result_path = (
+        one_cycle_controller_dir / "local_targeted_contract_fix_execution_result.json"
+    )
+    cycle_v2_state_path = one_cycle_controller_dir / "local_autonomous_cycle_v2_state.json"
+    cycle_v2_decision_path = one_cycle_controller_dir / "local_autonomous_cycle_v2_decision.json"
+    cycle_v2_receipt_path = one_cycle_controller_dir / "local_autonomous_cycle_v2_receipt.json"
+
+    continuation_state_path = one_cycle_controller_dir / "local_autonomous_continuation_state.json"
+    continuation_decision_path = one_cycle_controller_dir / "local_autonomous_continuation_decision.json"
+    continuation_receipt_path = one_cycle_controller_dir / "local_autonomous_continuation_receipt.json"
+    next_cycle_selection_path = one_cycle_controller_dir / "local_autonomous_next_cycle_selection.json"
+    loop_completion_summary_path = one_cycle_controller_dir / "local_autonomous_loop_completion_summary.json"
+
+    prompt341_closure_state_exists, prompt341_closure_state_valid, prompt341_closure_state_payload = (
+        _read_json_mapping(prompt341_closure_state_path)
+    )
+    (
+        prompt341_closure_decision_exists,
+        prompt341_closure_decision_valid,
+        prompt341_closure_decision_payload,
+    ) = _read_json_mapping(prompt341_closure_decision_path)
+    (
+        prompt341_closure_receipt_exists,
+        prompt341_closure_receipt_valid,
+        prompt341_closure_receipt_payload,
+    ) = _read_json_mapping(prompt341_closure_receipt_path)
+    (
+        prompt341_reentry_decision_exists,
+        prompt341_reentry_decision_valid,
+        prompt341_reentry_decision_payload,
+    ) = _read_json_mapping(prompt341_reentry_decision_path)
+    _ = _read_json_mapping(prompt340_execution_receipt_path)
+    _ = _read_json_mapping(prompt340_execution_result_path)
+    _ = _read_json_mapping(prompt339_route_decision_path)
+    _ = _read_json_mapping(prompt338_execution_result_path)
+    cycle_v2_state_exists, cycle_v2_state_valid, cycle_v2_state_payload = _read_json_mapping(
+        cycle_v2_state_path
+    )
+    cycle_v2_decision_exists, cycle_v2_decision_valid, cycle_v2_decision_payload = _read_json_mapping(
+        cycle_v2_decision_path
+    )
+    cycle_v2_receipt_exists, cycle_v2_receipt_valid, cycle_v2_receipt_payload = _read_json_mapping(
+        cycle_v2_receipt_path
+    )
+
+    prompt341_status = _normalize_text(prompt341_closure_decision_payload.get("status"), default="")
+    prompt341_closure_status = _normalize_text(
+        prompt341_closure_decision_payload.get("closure_status"),
+        default="",
+    )
+    prompt341_cycle_closed = _as_boolish(
+        prompt341_closure_decision_payload.get("cycle_closed"),
+        default=False,
+    )
+    prompt341_reentry_allowed = _as_boolish(
+        prompt341_reentry_decision_payload.get("reentry_allowed"),
+        default=False,
+    )
+    prompt341_should_continue = _as_boolish(
+        prompt341_reentry_decision_payload.get("should_continue"),
+        default=False,
+    )
+    prompt341_cycle_decision = _normalize_text(
+        prompt341_reentry_decision_payload.get("cycle_decision"),
+        default="",
+    )
+
+    completed_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
+    current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
+    max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+    next_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE + 1
+    for exists, valid, payload in (
+        (prompt341_closure_decision_exists, prompt341_closure_decision_valid, prompt341_closure_decision_payload),
+        (prompt341_reentry_decision_exists, prompt341_reentry_decision_valid, prompt341_reentry_decision_payload),
+        (cycle_v2_state_exists, cycle_v2_state_valid, cycle_v2_state_payload),
+        (cycle_v2_decision_exists, cycle_v2_decision_valid, cycle_v2_decision_payload),
+        (cycle_v2_receipt_exists, cycle_v2_receipt_valid, cycle_v2_receipt_payload),
+    ):
+        if not exists or not valid:
+            continue
+        completed_cycle = _as_non_negative_int(
+            payload.get("completed_cycle"),
+            default=completed_cycle,
+        )
+        current_cycle = _as_non_negative_int(
+            payload.get("current_cycle"),
+            default=current_cycle,
+        )
+        max_cycles = _as_non_negative_int(payload.get("max_cycles"), default=max_cycles)
+        next_cycle = _as_non_negative_int(payload.get("next_cycle"), default=next_cycle)
+        if current_cycle <= 0:
+            current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
+        if completed_cycle <= 0:
+            completed_cycle = current_cycle
+        if max_cycles <= 0:
+            max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+        if next_cycle <= 0:
+            next_cycle = current_cycle + 1
+        break
+
+    validation_errors: list[str] = []
+    prompt341_closure_reentry_ready = True
+
+    if not prompt341_closure_state_exists:
+        prompt341_closure_reentry_ready = False
+        validation_errors.append("missing_prompt341_closure_state_artifact")
+    elif not prompt341_closure_state_valid:
+        prompt341_closure_reentry_ready = False
+        validation_errors.append("invalid_prompt341_closure_state_artifact")
+
+    if not prompt341_closure_decision_exists:
+        prompt341_closure_reentry_ready = False
+        validation_errors.append("missing_prompt341_closure_decision_artifact")
+    elif not prompt341_closure_decision_valid:
+        prompt341_closure_reentry_ready = False
+        validation_errors.append("invalid_prompt341_closure_decision_artifact")
+    else:
+        closure_decision_expectations: tuple[tuple[str, Any], ...] = (
+            ("schema_version", _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION),
+            ("status", "completed"),
+            ("closure_status", "completed"),
+            ("blocked_reason", "none"),
+            ("cycle_closed", True),
+            ("local_commit_tag_complete", True),
+        )
+        for key, expected in closure_decision_expectations:
+            value = prompt341_closure_decision_payload.get(key)
+            if isinstance(expected, bool):
+                if _as_boolish(value, default=not expected) != expected:
+                    prompt341_closure_reentry_ready = False
+                    validation_errors.append(f"prompt341_closure_decision_{key}_mismatch")
+            else:
+                if _normalize_text(value, default="") != expected:
+                    prompt341_closure_reentry_ready = False
+                    validation_errors.append(f"prompt341_closure_decision_{key}_mismatch")
+        closure_decision_commit_hash = _normalize_text(
+            prompt341_closure_decision_payload.get("cycle_commit_hash"),
+            default="",
+        )
+        closure_decision_tag_name = _normalize_text(
+            prompt341_closure_decision_payload.get("cycle_tag_name"),
+            default="",
+        )
+        if not closure_decision_commit_hash:
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_decision_cycle_commit_hash_missing")
+        if not closure_decision_tag_name:
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_decision_cycle_tag_name_missing")
+        if _normalize_string_list(prompt341_closure_decision_payload.get("validation_errors")):
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_decision_validation_errors_present")
+
+    cycle_commit_hash = _normalize_text(prompt341_closure_decision_payload.get("cycle_commit_hash"), default="")
+    cycle_tag_name = _normalize_text(prompt341_closure_decision_payload.get("cycle_tag_name"), default="")
+    local_commit_tag_complete = _as_boolish(
+        prompt341_closure_decision_payload.get("local_commit_tag_complete"),
+        default=False,
+    )
+
+    if not prompt341_closure_receipt_exists:
+        prompt341_closure_reentry_ready = False
+        validation_errors.append("missing_prompt341_closure_receipt_artifact")
+    elif not prompt341_closure_receipt_valid:
+        prompt341_closure_reentry_ready = False
+        validation_errors.append("invalid_prompt341_closure_receipt_artifact")
+    else:
+        closure_receipt_expectations: tuple[tuple[str, Any], ...] = (
+            ("status", "completed"),
+            ("closure_status", "completed"),
+            ("blocked_reason", "none"),
+            ("local_commit_tag_complete", True),
+            ("cycle_closed", True),
+            ("tracked_worktree_clean", True),
+        )
+        for key, expected in closure_receipt_expectations:
+            value = prompt341_closure_receipt_payload.get(key)
+            if isinstance(expected, bool):
+                if _as_boolish(value, default=not expected) != expected:
+                    prompt341_closure_reentry_ready = False
+                    validation_errors.append(f"prompt341_closure_receipt_{key}_mismatch")
+            else:
+                if _normalize_text(value, default="") != expected:
+                    prompt341_closure_reentry_ready = False
+                    validation_errors.append(f"prompt341_closure_receipt_{key}_mismatch")
+        receipt_cycle_commit_hash = _normalize_text(
+            prompt341_closure_receipt_payload.get("cycle_commit_hash"),
+            default="",
+        )
+        receipt_cycle_tag_name = _normalize_text(
+            prompt341_closure_receipt_payload.get("cycle_tag_name"),
+            default="",
+        )
+        if receipt_cycle_commit_hash != cycle_commit_hash:
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_receipt_cycle_commit_hash_mismatch")
+        if receipt_cycle_tag_name != cycle_tag_name:
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_receipt_cycle_tag_name_mismatch")
+        if _normalize_string_list(prompt341_closure_receipt_payload.get("validation_errors")):
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_receipt_validation_errors_present")
+
+    if not prompt341_reentry_decision_exists:
+        prompt341_closure_reentry_ready = False
+        validation_errors.append("missing_prompt341_reentry_decision_artifact")
+    elif not prompt341_reentry_decision_valid:
+        prompt341_closure_reentry_ready = False
+        validation_errors.append("invalid_prompt341_reentry_decision_artifact")
+    else:
+        reentry_expectations: tuple[tuple[str, Any], ...] = (
+            ("schema_version", _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION),
+            ("status", "completed"),
+            ("blocked_reason", "none"),
+        )
+        for key, expected in reentry_expectations:
+            value = prompt341_reentry_decision_payload.get(key)
+            if isinstance(expected, bool):
+                if _as_boolish(value, default=not expected) != expected:
+                    prompt341_closure_reentry_ready = False
+                    validation_errors.append(f"prompt341_reentry_decision_{key}_mismatch")
+            else:
+                if _normalize_text(value, default="") != expected:
+                    prompt341_closure_reentry_ready = False
+                    validation_errors.append(f"prompt341_reentry_decision_{key}_mismatch")
+        reentry_status_value = _normalize_text(
+            prompt341_reentry_decision_payload.get("reentry_status"),
+            default="",
+        )
+        if reentry_status_value not in {"completed", "ready", "ready_for_reentry", "bounded_cycle_limit_reached"}:
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_reentry_decision_reentry_status_mismatch")
+        if _normalize_string_list(prompt341_reentry_decision_payload.get("validation_errors")):
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_reentry_decision_validation_errors_present")
+
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH,
+    )
+    current_head_hash = ""
+    tracked_worktree_clean = False
+    staged_tracked_files: list[str] = []
+    unstaged_tracked_files: list[str] = []
+    changed_tracked_files: list[str] = []
+    git_verification_ok = False
+
+    head_ok, head_completed = _run_local_git(
+        normalized_repo_path,
+        ["rev-parse", "HEAD"],
+        timeout_seconds=10,
+    )
+    diff_ok, tracked_worktree_clean, changed_tracked_files, staged_tracked_files, unstaged_tracked_files = (
+        _collect_tracked_diff_state(normalized_repo_path)
+    )
+    if head_ok and isinstance(head_completed, subprocess.CompletedProcess) and head_completed.returncode == 0:
+        current_head_hash = _normalize_text(head_completed.stdout, default="")
+    else:
+        validation_errors.append("prompt342_head_lookup_failed")
+    if not diff_ok:
+        validation_errors.append("prompt342_tracked_worktree_state_lookup_failed")
+    git_verification_ok = bool(
+        current_head_hash
+        and diff_ok
+        and tracked_worktree_clean
+        and not staged_tracked_files
+        and not unstaged_tracked_files
+    )
+
+    status = "blocked"
+    continuation_status = "blocked"
+    blocked_reason = "prompt341_cycle_closure_reentry_not_ready"
+    readiness_reason = "prompt341_cycle_closure_reentry_not_ready"
+    reentry_connected = False
+    next_cycle_ready = False
+    local_autonomous_loop_complete = False
+    local_only_complete_autonomous_loop_ready = False
+    selected_next_cycle: int | None = None
+    selected_step_id: int | None = None
+    selected_step_name = ""
+    selected_step_operation = ""
+    selected_step_authority_source = ""
+    next_action = "manual_review_prompt341_cycle_closure_reentry"
+    decision_reason = "prompt341_cycle_closure_reentry_not_ready"
+    selection_status = "blocked"
+    selection_reason = "prompt341_cycle_closure_reentry_not_ready"
+    final_decision = "manual_review_prompt341_cycle_closure_reentry"
+
+    reentry_allowed = _as_boolish(prompt341_reentry_decision_payload.get("reentry_allowed"), default=False)
+    should_continue = _as_boolish(prompt341_reentry_decision_payload.get("should_continue"), default=False)
+    cycle_decision = _normalize_text(prompt341_reentry_decision_payload.get("cycle_decision"), default="")
+    reentry_next_action = _normalize_text(prompt341_reentry_decision_payload.get("next_action"), default="")
+    selected_next_cycle_value = _as_non_negative_int(
+        prompt341_reentry_decision_payload.get("next_cycle"),
+        default=next_cycle,
+    )
+
+    if prompt341_closure_reentry_ready:
+        if prompt341_closure_status == "completed" and not tracked_worktree_clean:
+            blocked_reason = "post_closure_tracked_worktree_not_clean"
+            readiness_reason = "post_closure_tracked_worktree_not_clean"
+            next_action = "manual_review_post_closure_worktree_state"
+            decision_reason = "post_closure_tracked_worktree_not_clean"
+            selection_status = "blocked"
+            selection_reason = "post_closure_tracked_worktree_not_clean"
+            final_decision = "post_closure_tracked_worktree_not_clean"
+            validation_errors.append("prompt342_post_closure_tracked_worktree_not_clean")
+        elif (
+            reentry_allowed
+            and should_continue
+            and cycle_decision == "continue_next_local_autonomous_cycle"
+            and reentry_next_action == "select_next_local_autonomous_step"
+            and git_verification_ok
+        ):
+            status = "completed"
+            continuation_status = "ready"
+            blocked_reason = "none"
+            readiness_reason = "prompt342_reentry_connected_to_next_cycle_selection"
+            reentry_connected = True
+            next_cycle_ready = True
+            local_autonomous_loop_complete = False
+            local_only_complete_autonomous_loop_ready = True
+            selected_next_cycle = selected_next_cycle_value if selected_next_cycle_value > 0 else next_cycle
+            selected_step_id = 1
+            selected_step_name = "read_current_state"
+            selected_step_operation = "read_current_state"
+            selected_step_authority_source = "prompt342_autonomous_continuation_connector"
+            next_action = "run_next_local_autonomous_cycle_step"
+            decision_reason = "prompt341_reentry_continue_validated"
+            selection_status = "completed"
+            selection_reason = "deterministic_next_step_selected"
+            final_decision = "continue_next_local_autonomous_cycle"
+        elif (
+            (not reentry_allowed)
+            and (not should_continue)
+            and cycle_decision == "bounded_cycle_limit_reached"
+            and reentry_next_action == "local_autonomous_loop_complete"
+        ):
+            status = "completed"
+            continuation_status = "complete"
+            blocked_reason = "none"
+            readiness_reason = "prompt342_bounded_cycle_limit_completion_validated"
+            reentry_connected = False
+            next_cycle_ready = False
+            local_autonomous_loop_complete = True
+            local_only_complete_autonomous_loop_ready = True
+            selected_next_cycle = None
+            selected_step_id = None
+            selected_step_name = ""
+            selected_step_operation = ""
+            selected_step_authority_source = ""
+            next_action = "local_only_autonomous_loop_complete"
+            decision_reason = "prompt341_bounded_cycle_limit_reached"
+            selection_status = "not_applicable"
+            selection_reason = "bounded_cycle_limit_reached"
+            final_decision = "bounded_cycle_limit_reached"
+        else:
+            validation_errors.append("prompt342_prompt341_reentry_contract_mismatch")
+            decision_reason = "prompt341_reentry_contract_mismatch"
+            selection_reason = "prompt341_reentry_contract_mismatch"
+            final_decision = "prompt341_reentry_contract_mismatch"
+
+    if not prompt341_closure_reentry_ready:
+        validation_errors.append("prompt342_prompt341_closure_reentry_not_ready")
+
+    if status == "completed" and continuation_status == "ready":
+        selected_next_cycle = selected_next_cycle if isinstance(selected_next_cycle, int) else next_cycle
+
+    included_local_only_capabilities = [
+        "next_prompt_or_step_selection",
+        "prompt_generation_or_handoff",
+        "codex_execution",
+        "post_execution_review_route",
+        "targeted_fix_prompt_generation",
+        "targeted_fix_execution",
+        "post_targeted_fix_review_route",
+        "approve_commit_tag_execution",
+        "post_commit_cycle_closure",
+        "next_cycle_reentry",
+    ]
+    excluded_remote_capabilities = [
+        "remote_push",
+        "pr_create",
+        "pr_merge",
+        "remote_rollback",
+        "real_background_daemon",
+        "external_scheduler",
+    ]
+    safety_fields = _safety_fields()
+
+    state_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "autonomous_continuation_state_schema_version": (
+            _LOCAL_AUTONOMOUS_CONTINUATION_STATE_SCHEMA_VERSION
+        ),
+        "prompt_id": "prompt342",
+        "status": status,
+        "continuation_status": continuation_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "prompt341_closure_state_path": str(prompt341_closure_state_path),
+        "prompt341_closure_decision_path": str(prompt341_closure_decision_path),
+        "prompt341_closure_receipt_path": str(prompt341_closure_receipt_path),
+        "prompt341_reentry_decision_path": str(prompt341_reentry_decision_path),
+        "prompt341_status": prompt341_status,
+        "prompt341_closure_status": prompt341_closure_status,
+        "prompt341_cycle_closed": prompt341_cycle_closed,
+        "prompt341_reentry_allowed": prompt341_reentry_allowed,
+        "prompt341_should_continue": prompt341_should_continue,
+        "prompt341_cycle_decision": prompt341_cycle_decision,
+        "completed_cycle": completed_cycle,
+        "current_cycle": current_cycle,
+        "next_cycle": next_cycle,
+        "max_cycles": max_cycles,
+        "selected_next_cycle": selected_next_cycle,
+        "current_head_hash": current_head_hash,
+        "tracked_worktree_clean": tracked_worktree_clean,
+        "staged_tracked_files": staged_tracked_files,
+        "unstaged_tracked_files": unstaged_tracked_files,
+        "changed_tracked_files": changed_tracked_files,
+        "local_commit_tag_complete": local_commit_tag_complete,
+        "cycle_commit_hash": cycle_commit_hash,
+        "cycle_tag_name": cycle_tag_name,
+        "reentry_connected": reentry_connected,
+        "next_cycle_ready": next_cycle_ready,
+        "local_autonomous_loop_complete": local_autonomous_loop_complete,
+        "local_only_complete_autonomous_loop_ready": (
+            local_only_complete_autonomous_loop_ready
+        ),
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "selected_step_authority_source": selected_step_authority_source,
+        "next_action": next_action,
+        "validation_errors": _normalize_string_list(validation_errors),
+        **safety_fields,
+    }
+    decision_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "autonomous_continuation_decision_schema_version": (
+            _LOCAL_AUTONOMOUS_CONTINUATION_DECISION_SCHEMA_VERSION
+        ),
+        "prompt_id": "prompt342",
+        "status": status,
+        "continuation_status": continuation_status,
+        "blocked_reason": blocked_reason,
+        "decision_reason": decision_reason,
+        "local_only_complete_autonomous_loop_ready": (
+            local_only_complete_autonomous_loop_ready
+        ),
+        "local_autonomous_loop_complete": local_autonomous_loop_complete,
+        "reentry_connected": reentry_connected,
+        "next_cycle_ready": next_cycle_ready,
+        "selected_next_cycle": selected_next_cycle,
+        "completed_cycle": completed_cycle,
+        "current_cycle": current_cycle,
+        "next_cycle": next_cycle,
+        "max_cycles": max_cycles,
+        "cycle_decision": cycle_decision,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "selected_step_authority_source": selected_step_authority_source,
+        "next_action": next_action,
+        "validation_errors": _normalize_string_list(validation_errors),
+        **safety_fields,
+    }
+    receipt_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "autonomous_continuation_receipt_schema_version": (
+            _LOCAL_AUTONOMOUS_CONTINUATION_RECEIPT_SCHEMA_VERSION
+        ),
+        "prompt_id": "prompt342",
+        "status": status,
+        "continuation_status": continuation_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "continuation_state_path": str(continuation_state_path),
+        "continuation_decision_path": str(continuation_decision_path),
+        "next_cycle_selection_path": str(next_cycle_selection_path),
+        "loop_completion_summary_path": str(loop_completion_summary_path),
+        "prompt341_closure_decision_path": str(prompt341_closure_decision_path),
+        "prompt341_reentry_decision_path": str(prompt341_reentry_decision_path),
+        "local_only_complete_autonomous_loop_ready": (
+            local_only_complete_autonomous_loop_ready
+        ),
+        "local_autonomous_loop_complete": local_autonomous_loop_complete,
+        "reentry_connected": reentry_connected,
+        "next_cycle_ready": next_cycle_ready,
+        "selected_next_cycle": selected_next_cycle,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "cycle_commit_hash": cycle_commit_hash,
+        "cycle_tag_name": cycle_tag_name,
+        "next_action": next_action,
+        "validation_errors": _normalize_string_list(validation_errors),
+        **safety_fields,
+    }
+    next_cycle_selection_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "autonomous_next_cycle_selection_schema_version": (
+            _LOCAL_AUTONOMOUS_NEXT_CYCLE_SELECTION_SCHEMA_VERSION
+        ),
+        "prompt_id": "prompt342",
+        "status": status,
+        "blocked_reason": blocked_reason,
+        "selection_status": selection_status,
+        "selected_next_cycle": selected_next_cycle,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "selected_step_authority_source": selected_step_authority_source,
+        "selection_reason": selection_reason,
+        "next_action": next_action,
+        "validation_errors": _normalize_string_list(validation_errors),
+        **safety_fields,
+    }
+    loop_completion_summary_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "autonomous_loop_completion_summary_schema_version": (
+            _LOCAL_AUTONOMOUS_LOOP_COMPLETION_SUMMARY_SCHEMA_VERSION
+        ),
+        "prompt_id": "prompt342",
+        "status": status,
+        "continuation_status": continuation_status,
+        "blocked_reason": blocked_reason,
+        "local_only_complete_autonomous_loop_ready": (
+            local_only_complete_autonomous_loop_ready
+        ),
+        "local_autonomous_loop_complete": local_autonomous_loop_complete,
+        "completed_cycle": completed_cycle,
+        "next_cycle": next_cycle,
+        "max_cycles": max_cycles,
+        "cycle_commit_hash": cycle_commit_hash,
+        "cycle_tag_name": cycle_tag_name,
+        "final_decision": final_decision,
+        "next_action": next_action,
+        "included_local_only_capabilities": included_local_only_capabilities,
+        "excluded_remote_capabilities": excluded_remote_capabilities,
+        "validation_errors": _normalize_string_list(validation_errors),
+        **safety_fields,
+    }
+
+    try:
+        one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    try:
+        _write_json(continuation_state_path, state_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(continuation_decision_path, decision_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(continuation_receipt_path, receipt_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(next_cycle_selection_path, next_cycle_selection_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(loop_completion_summary_path, loop_completion_summary_payload)
+    except OSError:
+        pass
+
+    return {
+        "local_autonomous_continuation_status": status,
+        "local_autonomous_continuation_blocked_reason": blocked_reason,
+        "local_autonomous_continuation_next_action": next_action,
+        "local_autonomous_continuation_reentry_connected": reentry_connected,
+        "local_autonomous_continuation_next_cycle_ready": next_cycle_ready,
+        "local_autonomous_continuation_selected_step_name": selected_step_name,
+        "local_autonomous_loop_completion_status": continuation_status,
+        "local_autonomous_loop_completion_final_decision": final_decision,
+        "local_only_complete_autonomous_loop_ready": (
+            local_only_complete_autonomous_loop_ready
+        ),
+        "local_autonomous_loop_complete": local_autonomous_loop_complete,
+        "local_autonomous_continuation_state_path": str(continuation_state_path),
+        "local_autonomous_continuation_decision_path": str(continuation_decision_path),
+        "local_autonomous_continuation_receipt_path": str(continuation_receipt_path),
+        "local_autonomous_next_cycle_selection_path": str(next_cycle_selection_path),
+        "local_autonomous_loop_completion_summary_path": str(loop_completion_summary_path),
     }
 
 
@@ -21411,6 +22192,21 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_next_cycle_reentry_decision_path = Path(
         _LOCAL_NEXT_CYCLE_REENTRY_DECISION_PATH
     )
+    local_autonomous_continuation_state_path = Path(
+        _LOCAL_AUTONOMOUS_CONTINUATION_STATE_PATH
+    )
+    local_autonomous_continuation_decision_path = Path(
+        _LOCAL_AUTONOMOUS_CONTINUATION_DECISION_PATH
+    )
+    local_autonomous_continuation_receipt_path = Path(
+        _LOCAL_AUTONOMOUS_CONTINUATION_RECEIPT_PATH
+    )
+    local_autonomous_next_cycle_selection_path = Path(
+        _LOCAL_AUTONOMOUS_NEXT_CYCLE_SELECTION_PATH
+    )
+    local_autonomous_loop_completion_summary_path = Path(
+        _LOCAL_AUTONOMOUS_LOOP_COMPLETION_SUMMARY_PATH
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -21533,6 +22329,22 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_next_cycle_reentry_status = "blocked"
     local_next_cycle_reentry_next_action = "manual_review_prompt340_commit_tag_artifacts"
     local_next_cycle_reentry_selected_step_name = ""
+    local_autonomous_continuation_status = "blocked"
+    local_autonomous_continuation_blocked_reason = (
+        "prompt341_cycle_closure_reentry_not_ready"
+    )
+    local_autonomous_continuation_next_action = (
+        "manual_review_prompt341_cycle_closure_reentry"
+    )
+    local_autonomous_continuation_reentry_connected = False
+    local_autonomous_continuation_next_cycle_ready = False
+    local_autonomous_continuation_selected_step_name = ""
+    local_autonomous_loop_completion_status = "blocked"
+    local_autonomous_loop_completion_final_decision = (
+        "manual_review_prompt341_cycle_closure_reentry"
+    )
+    local_only_complete_autonomous_loop_ready = False
+    local_autonomous_loop_complete = False
     targeted_fix_prompt_status = "not_applicable"
     targeted_fix_prompt_text = ""
     targeted_fix_prompt_resolved_path = ""
@@ -22256,6 +23068,21 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_local_next_cycle_reentry_decision_json": str(
             local_next_cycle_reentry_decision_path
         ),
+        "one_cycle_controller_local_autonomous_continuation_state_json": str(
+            local_autonomous_continuation_state_path
+        ),
+        "one_cycle_controller_local_autonomous_continuation_decision_json": str(
+            local_autonomous_continuation_decision_path
+        ),
+        "one_cycle_controller_local_autonomous_continuation_receipt_json": str(
+            local_autonomous_continuation_receipt_path
+        ),
+        "one_cycle_controller_local_autonomous_next_cycle_selection_json": str(
+            local_autonomous_next_cycle_selection_path
+        ),
+        "one_cycle_controller_local_autonomous_loop_completion_summary_json": str(
+            local_autonomous_loop_completion_summary_path
+        ),
     }
 
     requested_execution = enabled and execute_enabled and (not dry_run)
@@ -22862,6 +23689,64 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "local_next_cycle_reentry_selected_step_name"
         ),
         default=local_next_cycle_reentry_selected_step_name,
+    )
+    local_autonomous_continuation_state = _build_local_autonomous_continuation_artifacts(
+        execution_repo_path=execution_repo_path,
+        one_cycle_controller_dir=one_cycle_controller_dir,
+    )
+    local_autonomous_continuation_status = _normalize_text(
+        local_autonomous_continuation_state.get("local_autonomous_continuation_status"),
+        default=local_autonomous_continuation_status,
+    )
+    local_autonomous_continuation_blocked_reason = _normalize_text(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_blocked_reason"
+        ),
+        default=local_autonomous_continuation_blocked_reason,
+    )
+    local_autonomous_continuation_next_action = _normalize_text(
+        local_autonomous_continuation_state.get("local_autonomous_continuation_next_action"),
+        default=local_autonomous_continuation_next_action,
+    )
+    local_autonomous_continuation_reentry_connected = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_reentry_connected",
+            local_autonomous_continuation_reentry_connected,
+        )
+    )
+    local_autonomous_continuation_next_cycle_ready = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_next_cycle_ready",
+            local_autonomous_continuation_next_cycle_ready,
+        )
+    )
+    local_autonomous_continuation_selected_step_name = _normalize_text(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_selected_step_name"
+        ),
+        default=local_autonomous_continuation_selected_step_name,
+    )
+    local_autonomous_loop_completion_status = _normalize_text(
+        local_autonomous_continuation_state.get("local_autonomous_loop_completion_status"),
+        default=local_autonomous_loop_completion_status,
+    )
+    local_autonomous_loop_completion_final_decision = _normalize_text(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_loop_completion_final_decision"
+        ),
+        default=local_autonomous_loop_completion_final_decision,
+    )
+    local_only_complete_autonomous_loop_ready = bool(
+        local_autonomous_continuation_state.get(
+            "local_only_complete_autonomous_loop_ready",
+            local_only_complete_autonomous_loop_ready,
+        )
+    )
+    local_autonomous_loop_complete = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_loop_complete",
+            local_autonomous_loop_complete,
+        )
     )
     review_handoff_decision_state = _build_one_cycle_review_handoff_decision_state(
         review_handoff_path=review_handoff_path
@@ -25955,6 +26840,45 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "local_next_cycle_reentry_decision_path": str(
             local_next_cycle_reentry_decision_path
         ),
+        "local_autonomous_continuation_status": local_autonomous_continuation_status,
+        "local_autonomous_continuation_blocked_reason": (
+            local_autonomous_continuation_blocked_reason
+        ),
+        "local_autonomous_continuation_next_action": (
+            local_autonomous_continuation_next_action
+        ),
+        "local_autonomous_continuation_reentry_connected": (
+            local_autonomous_continuation_reentry_connected
+        ),
+        "local_autonomous_continuation_next_cycle_ready": (
+            local_autonomous_continuation_next_cycle_ready
+        ),
+        "local_autonomous_continuation_selected_step_name": (
+            local_autonomous_continuation_selected_step_name
+        ),
+        "local_autonomous_loop_completion_status": local_autonomous_loop_completion_status,
+        "local_autonomous_loop_completion_final_decision": (
+            local_autonomous_loop_completion_final_decision
+        ),
+        "local_only_complete_autonomous_loop_ready": (
+            local_only_complete_autonomous_loop_ready
+        ),
+        "local_autonomous_loop_complete": local_autonomous_loop_complete,
+        "local_autonomous_continuation_state_path": str(
+            local_autonomous_continuation_state_path
+        ),
+        "local_autonomous_continuation_decision_path": str(
+            local_autonomous_continuation_decision_path
+        ),
+        "local_autonomous_continuation_receipt_path": str(
+            local_autonomous_continuation_receipt_path
+        ),
+        "local_autonomous_next_cycle_selection_path": str(
+            local_autonomous_next_cycle_selection_path
+        ),
+        "local_autonomous_loop_completion_summary_path": str(
+            local_autonomous_loop_completion_summary_path
+        ),
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -26246,6 +27170,46 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         (
             "- Prompt341 next-cycle reentry selected step: "
             f"`{local_next_cycle_reentry_selected_step_name or 'none'}`"
+        ),
+        (
+            "- Prompt342 continuation status: "
+            f"`{local_autonomous_continuation_status}`"
+        ),
+        (
+            "- Prompt342 continuation blocked reason: "
+            f"`{local_autonomous_continuation_blocked_reason}`"
+        ),
+        (
+            "- Prompt342 continuation next action: "
+            f"`{local_autonomous_continuation_next_action}`"
+        ),
+        (
+            "- Prompt342 continuation reentry connected: "
+            f"`{str(local_autonomous_continuation_reentry_connected).lower()}`"
+        ),
+        (
+            "- Prompt342 continuation next cycle ready: "
+            f"`{str(local_autonomous_continuation_next_cycle_ready).lower()}`"
+        ),
+        (
+            "- Prompt342 continuation selected step: "
+            f"`{local_autonomous_continuation_selected_step_name or 'none'}`"
+        ),
+        (
+            "- Prompt342 loop completion status: "
+            f"`{local_autonomous_loop_completion_status}`"
+        ),
+        (
+            "- Prompt342 loop completion final decision: "
+            f"`{local_autonomous_loop_completion_final_decision}`"
+        ),
+        (
+            "- Prompt342 local-only complete loop ready: "
+            f"`{str(local_only_complete_autonomous_loop_ready).lower()}`"
+        ),
+        (
+            "- Prompt342 autonomous loop complete: "
+            f"`{str(local_autonomous_loop_complete).lower()}`"
         ),
         f"- Diff capture status: `{diff_capture_status}`",
         f"- Diff capture blocked reason: `{diff_capture_blocked_reason}`",
@@ -28408,6 +29372,51 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_next_cycle_reentry_decision_path": str(
             local_next_cycle_reentry_decision_path
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_status": (
+            local_autonomous_continuation_status
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_blocked_reason": (
+            local_autonomous_continuation_blocked_reason
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_next_action": (
+            local_autonomous_continuation_next_action
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_reentry_connected": (
+            local_autonomous_continuation_reentry_connected
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_next_cycle_ready": (
+            local_autonomous_continuation_next_cycle_ready
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_selected_step_name": (
+            local_autonomous_continuation_selected_step_name
+        ),
+        "project_browser_autonomous_local_autonomous_loop_completion_status": (
+            local_autonomous_loop_completion_status
+        ),
+        "project_browser_autonomous_local_autonomous_loop_completion_final_decision": (
+            local_autonomous_loop_completion_final_decision
+        ),
+        "project_browser_autonomous_local_only_complete_autonomous_loop_ready": (
+            local_only_complete_autonomous_loop_ready
+        ),
+        "project_browser_autonomous_local_autonomous_loop_complete": (
+            local_autonomous_loop_complete
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_state_path": str(
+            local_autonomous_continuation_state_path
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_decision_path": str(
+            local_autonomous_continuation_decision_path
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_receipt_path": str(
+            local_autonomous_continuation_receipt_path
+        ),
+        "project_browser_autonomous_local_autonomous_next_cycle_selection_path": str(
+            local_autonomous_next_cycle_selection_path
+        ),
+        "project_browser_autonomous_local_autonomous_loop_completion_summary_path": str(
+            local_autonomous_loop_completion_summary_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
@@ -185701,6 +186710,88 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_local_next_cycle_reentry_decision_path": _normalize_text(
             approved_restart.get("project_browser_autonomous_local_next_cycle_reentry_decision_path"),
             default=_LOCAL_NEXT_CYCLE_REENTRY_DECISION_PATH,
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_autonomous_continuation_status"),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_blocked_reason": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_continuation_blocked_reason"
+            ),
+            default="prompt341_cycle_closure_reentry_not_ready",
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_next_action": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_autonomous_continuation_next_action"),
+            default="manual_review_prompt341_cycle_closure_reentry",
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_reentry_connected": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_autonomous_continuation_reentry_connected",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_next_cycle_ready": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_autonomous_continuation_next_cycle_ready",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_selected_step_name": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_continuation_selected_step_name"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_local_autonomous_loop_completion_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_autonomous_loop_completion_status"),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_autonomous_loop_completion_final_decision": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_loop_completion_final_decision"
+            ),
+            default="manual_review_prompt341_cycle_closure_reentry",
+        ),
+        "project_browser_autonomous_local_only_complete_autonomous_loop_ready": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_only_complete_autonomous_loop_ready",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_autonomous_loop_complete": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_autonomous_loop_complete",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_state_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_autonomous_continuation_state_path"),
+            default=_LOCAL_AUTONOMOUS_CONTINUATION_STATE_PATH,
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_decision_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_continuation_decision_path"
+            ),
+            default=_LOCAL_AUTONOMOUS_CONTINUATION_DECISION_PATH,
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_receipt_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_continuation_receipt_path"
+            ),
+            default=_LOCAL_AUTONOMOUS_CONTINUATION_RECEIPT_PATH,
+        ),
+        "project_browser_autonomous_local_autonomous_next_cycle_selection_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_next_cycle_selection_path"
+            ),
+            default=_LOCAL_AUTONOMOUS_NEXT_CYCLE_SELECTION_PATH,
+        ),
+        "project_browser_autonomous_local_autonomous_loop_completion_summary_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_loop_completion_summary_path"
+            ),
+            default=_LOCAL_AUTONOMOUS_LOOP_COMPLETION_SUMMARY_PATH,
         ),
         "project_browser_autonomous_remote_readiness_boundary_status": _normalize_text(
             approved_restart.get("project_browser_autonomous_remote_readiness_boundary_status"),
