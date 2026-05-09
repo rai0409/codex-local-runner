@@ -3952,6 +3952,10 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_post_commit_cycle_closure_next_action",
     "project_browser_autonomous_local_post_commit_cycle_closure_commit_hash",
     "project_browser_autonomous_local_post_commit_cycle_closure_tag_name",
+    "project_browser_autonomous_local_post_commit_cycle_closure_no_change_cycle_closure",
+    "project_browser_autonomous_local_post_commit_cycle_closure_commit_required",
+    "project_browser_autonomous_local_post_commit_cycle_closure_tag_required",
+    "project_browser_autonomous_local_post_commit_cycle_closure_local_commit_tag_complete",
     "project_browser_autonomous_local_next_cycle_reentry_status",
     "project_browser_autonomous_local_next_cycle_reentry_next_action",
     "project_browser_autonomous_local_next_cycle_reentry_selected_step_name",
@@ -3969,6 +3973,9 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_autonomous_loop_completion_final_decision",
     "project_browser_autonomous_local_only_complete_autonomous_loop_ready",
     "project_browser_autonomous_local_autonomous_loop_complete",
+    "project_browser_autonomous_local_autonomous_continuation_no_change_cycle_closure",
+    "project_browser_autonomous_local_autonomous_continuation_commit_required",
+    "project_browser_autonomous_local_autonomous_continuation_tag_required",
     "project_browser_autonomous_local_autonomous_continuation_state_path",
     "project_browser_autonomous_local_autonomous_continuation_decision_path",
     "project_browser_autonomous_local_autonomous_continuation_receipt_path",
@@ -10239,6 +10246,9 @@ def _build_local_post_commit_cycle_closure_artifacts(
     )
     prompt338_result_path = one_cycle_controller_dir / "local_targeted_contract_fix_execution_result.json"
     prompt337_plan_path = one_cycle_controller_dir / "local_daemon_lite_wrapper_plan.json"
+    prompt334_route_path = one_cycle_controller_dir / "local_post_codex_route_decision.json"
+    prompt334_outcome_path = one_cycle_controller_dir / "local_post_codex_execution_outcome.json"
+    prompt334_diff_capture_path = one_cycle_controller_dir / "local_post_codex_diff_capture.json"
     cycle_state_path = one_cycle_controller_dir / "local_autonomous_cycle_v2_state.json"
     cycle_decision_path = one_cycle_controller_dir / "local_autonomous_cycle_v2_decision.json"
     cycle_receipt_path = one_cycle_controller_dir / "local_autonomous_cycle_v2_receipt.json"
@@ -10271,6 +10281,15 @@ def _build_local_post_commit_cycle_closure_artifacts(
     _ = _read_json_mapping(prompt339_review_receipt_path)
     _ = _read_json_mapping(prompt338_result_path)
     _ = _read_json_mapping(prompt337_plan_path)
+    prompt334_route_exists, prompt334_route_valid, prompt334_route_payload = _read_json_mapping(
+        prompt334_route_path
+    )
+    prompt334_outcome_exists, prompt334_outcome_valid, prompt334_outcome_payload = _read_json_mapping(
+        prompt334_outcome_path
+    )
+    _, _, prompt334_diff_payload = _read_json_mapping(
+        prompt334_diff_capture_path
+    )
 
     current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
     max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
@@ -10294,7 +10313,47 @@ def _build_local_post_commit_cycle_closure_artifacts(
     next_cycle = current_cycle + 1
 
     validation_errors: list[str] = []
-    prompt340_artifacts_ready = True
+
+    prompt334_route_decision = _normalize_text(prompt334_route_payload.get("route_decision"), default="")
+    prompt334_route_status = _normalize_text(prompt334_route_payload.get("status"), default="")
+    prompt334_codex_outcome_classification = _normalize_text(
+        prompt334_route_payload.get("codex_outcome_classification"),
+        default=_normalize_text(
+            prompt334_outcome_payload.get("codex_outcome_classification"),
+            default="",
+        ),
+    )
+    prompt334_blocked_reason = _normalize_text(
+        prompt334_route_payload.get("blocked_reason"),
+        default=_normalize_text(prompt334_outcome_payload.get("blocked_reason"), default=""),
+    )
+    prompt334_blocked_reason_clear = (
+        _normalize_text(prompt334_blocked_reason, default="").strip().lower() in {"", "none"}
+    )
+    prompt334_changed_tracked_file_count = _as_non_negative_int(
+        prompt334_outcome_payload.get("changed_tracked_file_count"),
+        default=_as_non_negative_int(
+            prompt334_diff_payload.get("changed_tracked_file_count"),
+            default=1,
+        ),
+    )
+    prompt334_no_change_route_match = (
+        prompt334_route_decision == "prepare_no_change_review"
+        and prompt334_codex_outcome_classification == "codex_task_success_no_tracked_changes"
+        and prompt334_changed_tracked_file_count == 0
+        and prompt334_blocked_reason_clear
+    )
+    prompt334_no_change_success_route = bool(
+        prompt334_route_exists
+        and prompt334_route_valid
+        and prompt334_outcome_exists
+        and prompt334_outcome_valid
+        and prompt334_route_status == "completed"
+        and prompt334_no_change_route_match
+    )
+
+    prompt340_artifacts_required = not prompt334_no_change_success_route
+    prompt340_artifacts_ready = not prompt340_artifacts_required
 
     prompt340_status = _normalize_text(prompt340_result_payload.get("status"), default="")
     prompt340_execution_status = _normalize_text(
@@ -10316,119 +10375,120 @@ def _build_local_post_commit_cycle_closure_artifacts(
         default=False,
     )
 
-    if not prompt340_result_exists:
-        prompt340_artifacts_ready = False
-        validation_errors.append("missing_prompt340_execution_result_artifact")
-    elif not prompt340_result_valid:
-        prompt340_artifacts_ready = False
-        validation_errors.append("invalid_prompt340_execution_result_artifact")
-    else:
-        result_expectations: tuple[tuple[str, Any], ...] = (
-            ("schema_version", _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION),
-            ("status", "completed"),
-            ("execution_status", "completed"),
-            ("commit_performed", True),
-            ("tag_performed", True),
-            ("tag_points_at_commit", True),
-            ("post_execution_tracked_worktree_clean", True),
-            ("next_action", "prepare_post_commit_cycle_closure"),
-            ("codex_invoked", False),
-            ("push_pr_merge_enabled", False),
-            ("rollback_allowed", False),
-            ("push_performed", False),
-            ("pr_created", False),
-            ("merge_performed", False),
-            ("rollback_performed", False),
-        )
-        for key, expected in result_expectations:
-            value = prompt340_result_payload.get(key)
-            if isinstance(expected, bool):
-                if _as_boolish(value, default=not expected) != expected:
-                    prompt340_artifacts_ready = False
-                    validation_errors.append(f"prompt340_result_{key}_mismatch")
-            else:
-                if _normalize_text(value, default="") != expected:
-                    prompt340_artifacts_ready = False
-                    validation_errors.append(f"prompt340_result_{key}_mismatch")
-        if not prompt340_commit_hash:
+    if prompt340_artifacts_required:
+        if not prompt340_result_exists:
             prompt340_artifacts_ready = False
-            validation_errors.append("prompt340_result_commit_hash_missing")
-        if not prompt340_tag_name:
+            validation_errors.append("missing_prompt340_execution_result_artifact")
+        elif not prompt340_result_valid:
             prompt340_artifacts_ready = False
-            validation_errors.append("prompt340_result_tag_name_missing")
-
-    if not prompt340_receipt_exists:
-        prompt340_artifacts_ready = False
-        validation_errors.append("missing_prompt340_execution_receipt_artifact")
-    elif not prompt340_receipt_valid:
-        prompt340_artifacts_ready = False
-        validation_errors.append("invalid_prompt340_execution_receipt_artifact")
-    else:
-        receipt_expectations: tuple[tuple[str, Any], ...] = (
-            ("status", "completed"),
-            ("execution_status", "completed"),
-            ("commit_performed", True),
-            ("tag_performed", True),
-            ("tag_points_at_commit", True),
-            ("post_execution_tracked_worktree_clean", True),
-            ("next_action", "prepare_post_commit_cycle_closure"),
-        )
-        for key, expected in receipt_expectations:
-            value = prompt340_receipt_payload.get(key)
-            if isinstance(expected, bool):
-                if _as_boolish(value, default=not expected) != expected:
-                    prompt340_artifacts_ready = False
-                    validation_errors.append(f"prompt340_receipt_{key}_mismatch")
-            else:
-                if _normalize_text(value, default="") != expected:
-                    prompt340_artifacts_ready = False
-                    validation_errors.append(f"prompt340_receipt_{key}_mismatch")
-        receipt_commit_hash = _normalize_text(
-            prompt340_receipt_payload.get("commit_hash"),
-            default="",
-        )
-        receipt_tag_name = _normalize_text(prompt340_receipt_payload.get("tag_name"), default="")
-        if receipt_commit_hash != prompt340_commit_hash:
-            prompt340_artifacts_ready = False
-            validation_errors.append("prompt340_receipt_commit_hash_mismatch")
-        if receipt_tag_name != prompt340_tag_name:
-            prompt340_artifacts_ready = False
-            validation_errors.append("prompt340_receipt_tag_name_mismatch")
-
-    for label, exists, valid, payload in (
-        ("prompt340_plan", prompt340_plan_exists, prompt340_plan_valid, prompt340_plan_payload),
-        ("prompt340_gate", prompt340_gate_exists, prompt340_gate_valid, prompt340_gate_payload),
-    ):
-        if not exists:
-            continue
-        if not valid:
-            prompt340_artifacts_ready = False
-            validation_errors.append(f"invalid_{label}_artifact")
-            continue
-        if not _as_boolish(payload.get("approve_commit_tag_ready"), default=False):
-            prompt340_artifacts_ready = False
-            validation_errors.append(f"{label}_approve_commit_tag_ready_mismatch")
-        if _normalize_text(payload.get("route_decision"), default="") != "prepare_approve_commit_tag":
-            prompt340_artifacts_ready = False
-            validation_errors.append(f"{label}_route_decision_mismatch")
-        if _as_boolish(payload.get("push_pr_merge_enabled"), default=True):
-            prompt340_artifacts_ready = False
-            validation_errors.append(f"{label}_push_pr_merge_enabled_mismatch")
-        if _as_boolish(payload.get("rollback_allowed"), default=True):
-            prompt340_artifacts_ready = False
-            validation_errors.append(f"{label}_rollback_allowed_mismatch")
-        status_value = _normalize_text(payload.get("status"), default="")
-        execution_status_value = _normalize_text(payload.get("execution_status"), default="")
-        for permission_key in ("commit_allowed", "tag_allowed"):
-            if not _as_boolish(payload.get(permission_key), default=False):
-                continue
-            in_ready_path = status_value in {"ready", "completed"} or execution_status_value in {
-                "ready",
-                "completed",
-            }
-            if not in_ready_path:
+            validation_errors.append("invalid_prompt340_execution_result_artifact")
+        else:
+            result_expectations: tuple[tuple[str, Any], ...] = (
+                ("schema_version", _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION),
+                ("status", "completed"),
+                ("execution_status", "completed"),
+                ("commit_performed", True),
+                ("tag_performed", True),
+                ("tag_points_at_commit", True),
+                ("post_execution_tracked_worktree_clean", True),
+                ("next_action", "prepare_post_commit_cycle_closure"),
+                ("codex_invoked", False),
+                ("push_pr_merge_enabled", False),
+                ("rollback_allowed", False),
+                ("push_performed", False),
+                ("pr_created", False),
+                ("merge_performed", False),
+                ("rollback_performed", False),
+            )
+            for key, expected in result_expectations:
+                value = prompt340_result_payload.get(key)
+                if isinstance(expected, bool):
+                    if _as_boolish(value, default=not expected) != expected:
+                        prompt340_artifacts_ready = False
+                        validation_errors.append(f"prompt340_result_{key}_mismatch")
+                else:
+                    if _normalize_text(value, default="") != expected:
+                        prompt340_artifacts_ready = False
+                        validation_errors.append(f"prompt340_result_{key}_mismatch")
+            if not prompt340_commit_hash:
                 prompt340_artifacts_ready = False
-                validation_errors.append(f"{label}_{permission_key}_outside_ready_completed_path")
+                validation_errors.append("prompt340_result_commit_hash_missing")
+            if not prompt340_tag_name:
+                prompt340_artifacts_ready = False
+                validation_errors.append("prompt340_result_tag_name_missing")
+
+        if not prompt340_receipt_exists:
+            prompt340_artifacts_ready = False
+            validation_errors.append("missing_prompt340_execution_receipt_artifact")
+        elif not prompt340_receipt_valid:
+            prompt340_artifacts_ready = False
+            validation_errors.append("invalid_prompt340_execution_receipt_artifact")
+        else:
+            receipt_expectations: tuple[tuple[str, Any], ...] = (
+                ("status", "completed"),
+                ("execution_status", "completed"),
+                ("commit_performed", True),
+                ("tag_performed", True),
+                ("tag_points_at_commit", True),
+                ("post_execution_tracked_worktree_clean", True),
+                ("next_action", "prepare_post_commit_cycle_closure"),
+            )
+            for key, expected in receipt_expectations:
+                value = prompt340_receipt_payload.get(key)
+                if isinstance(expected, bool):
+                    if _as_boolish(value, default=not expected) != expected:
+                        prompt340_artifacts_ready = False
+                        validation_errors.append(f"prompt340_receipt_{key}_mismatch")
+                else:
+                    if _normalize_text(value, default="") != expected:
+                        prompt340_artifacts_ready = False
+                        validation_errors.append(f"prompt340_receipt_{key}_mismatch")
+            receipt_commit_hash = _normalize_text(
+                prompt340_receipt_payload.get("commit_hash"),
+                default="",
+            )
+            receipt_tag_name = _normalize_text(prompt340_receipt_payload.get("tag_name"), default="")
+            if receipt_commit_hash != prompt340_commit_hash:
+                prompt340_artifacts_ready = False
+                validation_errors.append("prompt340_receipt_commit_hash_mismatch")
+            if receipt_tag_name != prompt340_tag_name:
+                prompt340_artifacts_ready = False
+                validation_errors.append("prompt340_receipt_tag_name_mismatch")
+
+        for label, exists, valid, payload in (
+            ("prompt340_plan", prompt340_plan_exists, prompt340_plan_valid, prompt340_plan_payload),
+            ("prompt340_gate", prompt340_gate_exists, prompt340_gate_valid, prompt340_gate_payload),
+        ):
+            if not exists:
+                continue
+            if not valid:
+                prompt340_artifacts_ready = False
+                validation_errors.append(f"invalid_{label}_artifact")
+                continue
+            if not _as_boolish(payload.get("approve_commit_tag_ready"), default=False):
+                prompt340_artifacts_ready = False
+                validation_errors.append(f"{label}_approve_commit_tag_ready_mismatch")
+            if _normalize_text(payload.get("route_decision"), default="") != "prepare_approve_commit_tag":
+                prompt340_artifacts_ready = False
+                validation_errors.append(f"{label}_route_decision_mismatch")
+            if _as_boolish(payload.get("push_pr_merge_enabled"), default=True):
+                prompt340_artifacts_ready = False
+                validation_errors.append(f"{label}_push_pr_merge_enabled_mismatch")
+            if _as_boolish(payload.get("rollback_allowed"), default=True):
+                prompt340_artifacts_ready = False
+                validation_errors.append(f"{label}_rollback_allowed_mismatch")
+            status_value = _normalize_text(payload.get("status"), default="")
+            execution_status_value = _normalize_text(payload.get("execution_status"), default="")
+            for permission_key in ("commit_allowed", "tag_allowed"):
+                if not _as_boolish(payload.get(permission_key), default=False):
+                    continue
+                in_ready_path = status_value in {"ready", "completed"} or execution_status_value in {
+                    "ready",
+                    "completed",
+                }
+                if not in_ready_path:
+                    prompt340_artifacts_ready = False
+                    validation_errors.append(f"{label}_{permission_key}_outside_ready_completed_path")
 
     current_head_hash = ""
     current_head_matches_prompt340_commit = False
@@ -10444,7 +10504,7 @@ def _build_local_post_commit_cycle_closure_artifacts(
         execution_repo_path,
         default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH,
     )
-    if prompt340_artifacts_ready:
+    if prompt340_artifacts_ready and prompt340_artifacts_required:
         head_ok, head_completed = _run_local_git(
             normalized_repo_path,
             ["rev-parse", "HEAD"],
@@ -10493,11 +10553,37 @@ def _build_local_post_commit_cycle_closure_artifacts(
         )
         if not git_verification_ok:
             validation_errors.append("prompt341_post_commit_git_state_verification_failed")
+    elif prompt334_no_change_success_route:
+        head_ok, head_completed = _run_local_git(
+            normalized_repo_path,
+            ["rev-parse", "HEAD"],
+            timeout_seconds=10,
+        )
+        diff_ok, tracked_worktree_clean, changed_tracked_files, staged_tracked_files, unstaged_tracked_files = (
+            _collect_tracked_diff_state(normalized_repo_path)
+        )
+        if head_ok and isinstance(head_completed, subprocess.CompletedProcess) and head_completed.returncode == 0:
+            current_head_hash = _normalize_text(head_completed.stdout, default="")
+        else:
+            validation_errors.append("prompt341_no_change_head_lookup_failed")
+        if not diff_ok:
+            validation_errors.append("prompt341_no_change_tracked_worktree_state_lookup_failed")
+        git_verification_ok = bool(
+            diff_ok
+            and tracked_worktree_clean
+            and not staged_tracked_files
+            and not unstaged_tracked_files
+        )
+        if not git_verification_ok:
+            validation_errors.append("prompt341_post_no_change_git_state_verification_failed")
 
     status = "blocked"
     closure_status = "blocked"
     blocked_reason = "prompt340_commit_tag_artifacts_not_ready"
     readiness_reason = "prompt341_prompt340_artifacts_not_ready"
+    no_change_cycle_closure = False
+    commit_required = True
+    tag_required = True
     local_commit_tag_complete = False
     cycle_closed = False
     cycle_decision = "manual_review_post_commit_cycle_closure"
@@ -10507,7 +10593,37 @@ def _build_local_post_commit_cycle_closure_artifacts(
     next_action = "manual_review_prompt340_commit_tag_artifacts"
     reentry_status = "blocked"
 
-    if prompt340_artifacts_ready and not git_verification_ok:
+    if prompt334_no_change_success_route:
+        no_change_cycle_closure = True
+        commit_required = False
+        tag_required = False
+        if not git_verification_ok:
+            blocked_reason = "post_no_change_git_state_verification_failed"
+            readiness_reason = "prompt341_post_no_change_git_state_verification_failed"
+            decision_reason = "post_no_change_git_state_verification_failed"
+            next_action = "manual_review_post_no_change_git_state"
+        else:
+            status = "completed"
+            closure_status = "completed"
+            blocked_reason = "none"
+            readiness_reason = "prompt341_no_change_cycle_closure_verified"
+            local_commit_tag_complete = True
+            cycle_closed = True
+            if next_cycle <= max_cycles:
+                cycle_decision = "continue_next_local_autonomous_cycle"
+                decision_reason = "no_change_cycle_closed_and_within_max_cycles"
+                reentry_allowed = True
+                should_continue = True
+                next_action = "select_next_local_autonomous_step"
+                reentry_status = "ready_for_reentry"
+            else:
+                cycle_decision = "bounded_cycle_limit_reached"
+                decision_reason = "no_change_cycle_closed_and_bounded_cycle_limit_reached"
+                reentry_allowed = False
+                should_continue = False
+                next_action = "local_autonomous_loop_complete"
+                reentry_status = "bounded_cycle_limit_reached"
+    elif prompt340_artifacts_ready and not git_verification_ok:
         blocked_reason = "post_commit_git_state_verification_failed"
         readiness_reason = "prompt341_post_commit_git_state_verification_failed"
         decision_reason = "post_commit_git_state_verification_failed"
@@ -10533,6 +10649,9 @@ def _build_local_post_commit_cycle_closure_artifacts(
             should_continue = False
             next_action = "local_autonomous_loop_complete"
             reentry_status = "bounded_cycle_limit_reached"
+
+    cycle_commit_hash = prompt340_commit_hash if commit_required else ""
+    cycle_tag_name = prompt340_tag_name if tag_required else ""
 
     next_selected_step_id: int | None = None
     next_selected_step_name = ""
@@ -10570,10 +10689,18 @@ def _build_local_post_commit_cycle_closure_artifacts(
         "current_head_matches_prompt340_commit": current_head_matches_prompt340_commit,
         "prompt340_tag_resolves_to_commit": prompt340_tag_resolves_to_commit,
         "prompt340_tag_points_at_head": prompt340_tag_points_at_head,
+        "prompt334_route_path": str(prompt334_route_path),
+        "prompt334_outcome_path": str(prompt334_outcome_path),
+        "prompt334_diff_capture_path": str(prompt334_diff_capture_path),
+        "prompt334_no_change_route_match": prompt334_no_change_route_match,
+        "prompt334_no_change_success_route": prompt334_no_change_success_route,
         "tracked_worktree_clean": tracked_worktree_clean,
         "staged_tracked_files": staged_tracked_files,
         "unstaged_tracked_files": unstaged_tracked_files,
         "changed_tracked_files": changed_tracked_files,
+        "no_change_cycle_closure": no_change_cycle_closure,
+        "commit_required": commit_required,
+        "tag_required": tag_required,
         "local_commit_tag_complete": local_commit_tag_complete,
         "cycle_closed": cycle_closed,
         "completed_cycle": completed_cycle,
@@ -10594,6 +10721,9 @@ def _build_local_post_commit_cycle_closure_artifacts(
         "closure_status": closure_status,
         "blocked_reason": blocked_reason,
         "cycle_closed": cycle_closed,
+        "no_change_cycle_closure": no_change_cycle_closure,
+        "commit_required": commit_required,
+        "tag_required": tag_required,
         "local_commit_tag_complete": local_commit_tag_complete,
         "cycle_decision": cycle_decision,
         "decision_reason": decision_reason,
@@ -10603,8 +10733,8 @@ def _build_local_post_commit_cycle_closure_artifacts(
         "current_cycle": current_cycle,
         "next_cycle": next_cycle,
         "max_cycles": max_cycles,
-        "cycle_commit_hash": prompt340_commit_hash,
-        "cycle_tag_name": prompt340_tag_name,
+        "cycle_commit_hash": cycle_commit_hash,
+        "cycle_tag_name": cycle_tag_name,
         "next_action": next_action,
         "validation_errors": _normalize_string_list(validation_errors),
         **safety_fields,
@@ -10624,6 +10754,12 @@ def _build_local_post_commit_cycle_closure_artifacts(
         "reentry_decision_path": str(reentry_decision_path),
         "prompt340_result_path": str(prompt340_result_path),
         "prompt340_receipt_path": str(prompt340_receipt_path),
+        "prompt334_route_path": str(prompt334_route_path),
+        "prompt334_outcome_path": str(prompt334_outcome_path),
+        "prompt334_diff_capture_path": str(prompt334_diff_capture_path),
+        "no_change_cycle_closure": no_change_cycle_closure,
+        "commit_required": commit_required,
+        "tag_required": tag_required,
         "local_commit_tag_complete": local_commit_tag_complete,
         "cycle_closed": cycle_closed,
         "cycle_decision": cycle_decision,
@@ -10632,8 +10768,8 @@ def _build_local_post_commit_cycle_closure_artifacts(
         "completed_cycle": completed_cycle,
         "next_cycle": next_cycle,
         "max_cycles": max_cycles,
-        "cycle_commit_hash": prompt340_commit_hash,
-        "cycle_tag_name": prompt340_tag_name,
+        "cycle_commit_hash": cycle_commit_hash,
+        "cycle_tag_name": cycle_tag_name,
         "tracked_worktree_clean": tracked_worktree_clean,
         "next_action": next_action,
         "validation_errors": _normalize_string_list(validation_errors),
@@ -10650,14 +10786,17 @@ def _build_local_post_commit_cycle_closure_artifacts(
         "reentry_status": reentry_status,
         "cycle_decision": cycle_decision,
         "decision_reason": decision_reason,
+        "no_change_cycle_closure": no_change_cycle_closure,
+        "commit_required": commit_required,
+        "tag_required": tag_required,
         "reentry_allowed": reentry_allowed,
         "should_continue": should_continue,
         "completed_cycle": completed_cycle,
         "current_cycle": current_cycle,
         "next_cycle": next_cycle,
         "max_cycles": max_cycles,
-        "previous_cycle_commit_hash": prompt340_commit_hash,
-        "previous_cycle_tag_name": prompt340_tag_name,
+        "previous_cycle_commit_hash": cycle_commit_hash,
+        "previous_cycle_tag_name": cycle_tag_name,
         "next_selected_step_id": next_selected_step_id,
         "next_selected_step_name": next_selected_step_name,
         "next_selected_step_operation": next_selected_step_operation,
@@ -10696,8 +10835,12 @@ def _build_local_post_commit_cycle_closure_artifacts(
         "local_post_commit_cycle_closure_should_continue": should_continue,
         "local_post_commit_cycle_closure_cycle_decision": cycle_decision,
         "local_post_commit_cycle_closure_next_action": next_action,
-        "local_post_commit_cycle_closure_commit_hash": prompt340_commit_hash,
-        "local_post_commit_cycle_closure_tag_name": prompt340_tag_name,
+        "local_post_commit_cycle_closure_commit_hash": cycle_commit_hash,
+        "local_post_commit_cycle_closure_tag_name": cycle_tag_name,
+        "local_post_commit_cycle_closure_no_change_cycle_closure": no_change_cycle_closure,
+        "local_post_commit_cycle_closure_commit_required": commit_required,
+        "local_post_commit_cycle_closure_tag_required": tag_required,
+        "local_post_commit_cycle_closure_local_commit_tag_complete": local_commit_tag_complete,
         "local_next_cycle_reentry_status": reentry_status,
         "local_next_cycle_reentry_next_action": next_action,
         "local_next_cycle_reentry_selected_step_name": next_selected_step_name,
@@ -10916,6 +11059,18 @@ def _build_local_autonomous_continuation_artifacts(
         prompt341_reentry_decision_payload.get("cycle_decision"),
         default="",
     )
+    prompt341_no_change_cycle_closure = _as_boolish(
+        prompt341_closure_decision_payload.get("no_change_cycle_closure"),
+        default=False,
+    )
+    prompt341_commit_required = _as_boolish(
+        prompt341_closure_decision_payload.get("commit_required"),
+        default=True,
+    )
+    prompt341_tag_required = _as_boolish(
+        prompt341_closure_decision_payload.get("tag_required"),
+        default=True,
+    )
 
     completed_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
     current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
@@ -10993,12 +11148,24 @@ def _build_local_autonomous_continuation_artifacts(
             prompt341_closure_decision_payload.get("cycle_tag_name"),
             default="",
         )
-        if not closure_decision_commit_hash:
+        if prompt341_commit_required and not closure_decision_commit_hash:
             prompt341_closure_reentry_ready = False
             validation_errors.append("prompt341_closure_decision_cycle_commit_hash_missing")
-        if not closure_decision_tag_name:
+        if prompt341_tag_required and not closure_decision_tag_name:
             prompt341_closure_reentry_ready = False
             validation_errors.append("prompt341_closure_decision_cycle_tag_name_missing")
+        if prompt341_no_change_cycle_closure:
+            if prompt341_commit_required or prompt341_tag_required:
+                prompt341_closure_reentry_ready = False
+                validation_errors.append(
+                    "prompt341_closure_decision_no_change_commit_tag_requirement_mismatch"
+                )
+        else:
+            if (not prompt341_commit_required) or (not prompt341_tag_required):
+                prompt341_closure_reentry_ready = False
+                validation_errors.append(
+                    "prompt341_closure_decision_commit_tag_requirement_mismatch"
+                )
         if _normalize_string_list(prompt341_closure_decision_payload.get("validation_errors")):
             prompt341_closure_reentry_ready = False
             validation_errors.append("prompt341_closure_decision_validation_errors_present")
@@ -11043,12 +11210,39 @@ def _build_local_autonomous_continuation_artifacts(
             prompt341_closure_receipt_payload.get("cycle_tag_name"),
             default="",
         )
-        if receipt_cycle_commit_hash != cycle_commit_hash:
+        receipt_no_change_cycle_closure = _as_boolish(
+            prompt341_closure_receipt_payload.get("no_change_cycle_closure"),
+            default=False,
+        )
+        receipt_commit_required = _as_boolish(
+            prompt341_closure_receipt_payload.get("commit_required"),
+            default=True,
+        )
+        receipt_tag_required = _as_boolish(
+            prompt341_closure_receipt_payload.get("tag_required"),
+            default=True,
+        )
+        if receipt_no_change_cycle_closure != prompt341_no_change_cycle_closure:
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_receipt_no_change_cycle_closure_mismatch")
+        if receipt_commit_required != prompt341_commit_required:
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_receipt_commit_required_mismatch")
+        if receipt_tag_required != prompt341_tag_required:
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_receipt_tag_required_mismatch")
+        if prompt341_commit_required and receipt_cycle_commit_hash != cycle_commit_hash:
             prompt341_closure_reentry_ready = False
             validation_errors.append("prompt341_closure_receipt_cycle_commit_hash_mismatch")
-        if receipt_cycle_tag_name != cycle_tag_name:
+        if prompt341_tag_required and receipt_cycle_tag_name != cycle_tag_name:
             prompt341_closure_reentry_ready = False
             validation_errors.append("prompt341_closure_receipt_cycle_tag_name_mismatch")
+        if (not prompt341_commit_required) and _normalize_text(receipt_cycle_commit_hash, default=""):
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_receipt_cycle_commit_hash_unexpected")
+        if (not prompt341_tag_required) and _normalize_text(receipt_cycle_tag_name, default=""):
+            prompt341_closure_reentry_ready = False
+            validation_errors.append("prompt341_closure_receipt_cycle_tag_name_unexpected")
         if _normalize_string_list(prompt341_closure_receipt_payload.get("validation_errors")):
             prompt341_closure_reentry_ready = False
             validation_errors.append("prompt341_closure_receipt_validation_errors_present")
@@ -11260,6 +11454,9 @@ def _build_local_autonomous_continuation_artifacts(
         "prompt341_reentry_allowed": prompt341_reentry_allowed,
         "prompt341_should_continue": prompt341_should_continue,
         "prompt341_cycle_decision": prompt341_cycle_decision,
+        "prompt341_no_change_cycle_closure": prompt341_no_change_cycle_closure,
+        "prompt341_commit_required": prompt341_commit_required,
+        "prompt341_tag_required": prompt341_tag_required,
         "completed_cycle": completed_cycle,
         "current_cycle": current_cycle,
         "next_cycle": next_cycle,
@@ -11270,6 +11467,9 @@ def _build_local_autonomous_continuation_artifacts(
         "staged_tracked_files": staged_tracked_files,
         "unstaged_tracked_files": unstaged_tracked_files,
         "changed_tracked_files": changed_tracked_files,
+        "no_change_cycle_closure": prompt341_no_change_cycle_closure,
+        "commit_required": prompt341_commit_required,
+        "tag_required": prompt341_tag_required,
         "local_commit_tag_complete": local_commit_tag_complete,
         "cycle_commit_hash": cycle_commit_hash,
         "cycle_tag_name": cycle_tag_name,
@@ -11297,6 +11497,9 @@ def _build_local_autonomous_continuation_artifacts(
         "continuation_status": continuation_status,
         "blocked_reason": blocked_reason,
         "decision_reason": decision_reason,
+        "no_change_cycle_closure": prompt341_no_change_cycle_closure,
+        "commit_required": prompt341_commit_required,
+        "tag_required": prompt341_tag_required,
         "local_only_complete_autonomous_loop_ready": (
             local_only_complete_autonomous_loop_ready
         ),
@@ -11333,6 +11536,9 @@ def _build_local_autonomous_continuation_artifacts(
         "loop_completion_summary_path": str(loop_completion_summary_path),
         "prompt341_closure_decision_path": str(prompt341_closure_decision_path),
         "prompt341_reentry_decision_path": str(prompt341_reentry_decision_path),
+        "no_change_cycle_closure": prompt341_no_change_cycle_closure,
+        "commit_required": prompt341_commit_required,
+        "tag_required": prompt341_tag_required,
         "local_only_complete_autonomous_loop_ready": (
             local_only_complete_autonomous_loop_ready
         ),
@@ -11376,6 +11582,9 @@ def _build_local_autonomous_continuation_artifacts(
         "status": status,
         "continuation_status": continuation_status,
         "blocked_reason": blocked_reason,
+        "no_change_cycle_closure": prompt341_no_change_cycle_closure,
+        "commit_required": prompt341_commit_required,
+        "tag_required": prompt341_tag_required,
         "local_only_complete_autonomous_loop_ready": (
             local_only_complete_autonomous_loop_ready
         ),
@@ -11431,6 +11640,11 @@ def _build_local_autonomous_continuation_artifacts(
             local_only_complete_autonomous_loop_ready
         ),
         "local_autonomous_loop_complete": local_autonomous_loop_complete,
+        "local_autonomous_continuation_no_change_cycle_closure": (
+            prompt341_no_change_cycle_closure
+        ),
+        "local_autonomous_continuation_commit_required": prompt341_commit_required,
+        "local_autonomous_continuation_tag_required": prompt341_tag_required,
         "local_autonomous_continuation_state_path": str(continuation_state_path),
         "local_autonomous_continuation_decision_path": str(continuation_decision_path),
         "local_autonomous_continuation_receipt_path": str(continuation_receipt_path),
@@ -22350,6 +22564,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_post_commit_cycle_closure_next_action = "manual_review_prompt340_commit_tag_artifacts"
     local_post_commit_cycle_closure_commit_hash = ""
     local_post_commit_cycle_closure_tag_name = _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_TAG_NAME
+    local_post_commit_cycle_closure_no_change_cycle_closure = False
+    local_post_commit_cycle_closure_commit_required = True
+    local_post_commit_cycle_closure_tag_required = True
+    local_post_commit_cycle_closure_local_commit_tag_complete = False
     local_next_cycle_reentry_status = "blocked"
     local_next_cycle_reentry_next_action = "manual_review_prompt340_commit_tag_artifacts"
     local_next_cycle_reentry_selected_step_name = ""
@@ -22369,6 +22587,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     )
     local_only_complete_autonomous_loop_ready = False
     local_autonomous_loop_complete = False
+    local_autonomous_continuation_no_change_cycle_closure = False
+    local_autonomous_continuation_commit_required = True
+    local_autonomous_continuation_tag_required = True
     targeted_fix_prompt_status = "not_applicable"
     targeted_fix_prompt_text = ""
     targeted_fix_prompt_resolved_path = ""
@@ -23700,6 +23921,30 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         local_post_commit_cycle_closure_state.get("local_post_commit_cycle_closure_tag_name"),
         default=local_post_commit_cycle_closure_tag_name,
     )
+    local_post_commit_cycle_closure_no_change_cycle_closure = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_no_change_cycle_closure",
+            local_post_commit_cycle_closure_no_change_cycle_closure,
+        )
+    )
+    local_post_commit_cycle_closure_commit_required = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_commit_required",
+            local_post_commit_cycle_closure_commit_required,
+        )
+    )
+    local_post_commit_cycle_closure_tag_required = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_tag_required",
+            local_post_commit_cycle_closure_tag_required,
+        )
+    )
+    local_post_commit_cycle_closure_local_commit_tag_complete = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_local_commit_tag_complete",
+            local_post_commit_cycle_closure_local_commit_tag_complete,
+        )
+    )
     local_next_cycle_reentry_status = _normalize_text(
         local_post_commit_cycle_closure_state.get("local_next_cycle_reentry_status"),
         default=local_next_cycle_reentry_status,
@@ -23770,6 +24015,24 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         local_autonomous_continuation_state.get(
             "local_autonomous_loop_complete",
             local_autonomous_loop_complete,
+        )
+    )
+    local_autonomous_continuation_no_change_cycle_closure = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_no_change_cycle_closure",
+            local_autonomous_continuation_no_change_cycle_closure,
+        )
+    )
+    local_autonomous_continuation_commit_required = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_commit_required",
+            local_autonomous_continuation_commit_required,
+        )
+    )
+    local_autonomous_continuation_tag_required = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_tag_required",
+            local_autonomous_continuation_tag_required,
         )
     )
     review_handoff_decision_state = _build_one_cycle_review_handoff_decision_state(
@@ -26847,6 +27110,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "local_post_commit_cycle_closure_tag_name": (
             local_post_commit_cycle_closure_tag_name
         ),
+        "local_post_commit_cycle_closure_no_change_cycle_closure": (
+            local_post_commit_cycle_closure_no_change_cycle_closure
+        ),
+        "local_post_commit_cycle_closure_commit_required": (
+            local_post_commit_cycle_closure_commit_required
+        ),
+        "local_post_commit_cycle_closure_tag_required": (
+            local_post_commit_cycle_closure_tag_required
+        ),
+        "local_post_commit_cycle_closure_local_commit_tag_complete": (
+            local_post_commit_cycle_closure_local_commit_tag_complete
+        ),
         "local_next_cycle_reentry_status": local_next_cycle_reentry_status,
         "local_next_cycle_reentry_next_action": local_next_cycle_reentry_next_action,
         "local_next_cycle_reentry_selected_step_name": (
@@ -26888,6 +27163,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             local_only_complete_autonomous_loop_ready
         ),
         "local_autonomous_loop_complete": local_autonomous_loop_complete,
+        "local_autonomous_continuation_no_change_cycle_closure": (
+            local_autonomous_continuation_no_change_cycle_closure
+        ),
+        "local_autonomous_continuation_commit_required": (
+            local_autonomous_continuation_commit_required
+        ),
+        "local_autonomous_continuation_tag_required": (
+            local_autonomous_continuation_tag_required
+        ),
         "local_autonomous_continuation_state_path": str(
             local_autonomous_continuation_state_path
         ),
@@ -29376,6 +29660,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "project_browser_autonomous_local_post_commit_cycle_closure_tag_name": (
             local_post_commit_cycle_closure_tag_name
         ),
+        "project_browser_autonomous_local_post_commit_cycle_closure_no_change_cycle_closure": (
+            local_post_commit_cycle_closure_no_change_cycle_closure
+        ),
+        "project_browser_autonomous_local_post_commit_cycle_closure_commit_required": (
+            local_post_commit_cycle_closure_commit_required
+        ),
+        "project_browser_autonomous_local_post_commit_cycle_closure_tag_required": (
+            local_post_commit_cycle_closure_tag_required
+        ),
+        "project_browser_autonomous_local_post_commit_cycle_closure_local_commit_tag_complete": (
+            local_post_commit_cycle_closure_local_commit_tag_complete
+        ),
         "project_browser_autonomous_local_next_cycle_reentry_status": (
             local_next_cycle_reentry_status
         ),
@@ -29426,6 +29722,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_autonomous_loop_complete": (
             local_autonomous_loop_complete
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_no_change_cycle_closure": (
+            local_autonomous_continuation_no_change_cycle_closure
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_commit_required": (
+            local_autonomous_continuation_commit_required
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_tag_required": (
+            local_autonomous_continuation_tag_required
         ),
         "project_browser_autonomous_local_autonomous_continuation_state_path": str(
             local_autonomous_continuation_state_path
@@ -186701,6 +187006,30 @@ def _build_approved_restart_execution_contract_surface(
             approved_restart.get("project_browser_autonomous_local_post_commit_cycle_closure_tag_name"),
             default=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_TAG_NAME,
         ),
+        "project_browser_autonomous_local_post_commit_cycle_closure_no_change_cycle_closure": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_post_commit_cycle_closure_no_change_cycle_closure",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_post_commit_cycle_closure_commit_required": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_post_commit_cycle_closure_commit_required",
+                default=True,
+            )
+        ),
+        "project_browser_autonomous_local_post_commit_cycle_closure_tag_required": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_post_commit_cycle_closure_tag_required",
+                default=True,
+            )
+        ),
+        "project_browser_autonomous_local_post_commit_cycle_closure_local_commit_tag_complete": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_post_commit_cycle_closure_local_commit_tag_complete",
+                default=False,
+            )
+        ),
         "project_browser_autonomous_local_next_cycle_reentry_status": _normalize_text(
             approved_restart.get("project_browser_autonomous_local_next_cycle_reentry_status"),
             default="blocked",
@@ -186787,6 +187116,24 @@ def _build_approved_restart_execution_contract_surface(
             _read_one_cycle_controller_flag(
                 "project_browser_autonomous_local_autonomous_loop_complete",
                 default=False,
+            )
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_no_change_cycle_closure": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_autonomous_continuation_no_change_cycle_closure",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_commit_required": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_autonomous_continuation_commit_required",
+                default=True,
+            )
+        ),
+        "project_browser_autonomous_local_autonomous_continuation_tag_required": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_autonomous_continuation_tag_required",
+                default=True,
             )
         ),
         "project_browser_autonomous_local_autonomous_continuation_state_path": _normalize_text(
