@@ -3792,6 +3792,16 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_selected_step_execution_result_route_capture_path",
     "project_browser_autonomous_selected_step_execution_result_route_decision_path",
     "project_browser_autonomous_selected_step_execution_result_route_receipt_path",
+    "project_browser_autonomous_local_only_autonomous_loop_closure_status",
+    "project_browser_autonomous_local_only_autonomous_loop_closure_blocked_reason",
+    "project_browser_autonomous_local_only_autonomous_loop_closure_decision",
+    "project_browser_autonomous_local_only_autonomous_loop_closure_next_action",
+    "project_browser_autonomous_local_only_autonomous_loop_v1_complete",
+    "project_browser_autonomous_local_only_autonomous_loop_closed",
+    "project_browser_autonomous_local_only_autonomous_loop_closure_should_continue",
+    "project_browser_autonomous_local_only_autonomous_loop_closure_state_path",
+    "project_browser_autonomous_local_only_autonomous_loop_closure_decision_path",
+    "project_browser_autonomous_local_only_autonomous_loop_closure_receipt_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -4016,6 +4026,18 @@ _SELECTED_STEP_EXECUTION_RESULT_ROUTE_DECISION_PATH = (
 _SELECTED_STEP_EXECUTION_RESULT_ROUTE_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/"
     "selected_step_execution_result_route_receipt.json"
+)
+_LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_STATE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_only_autonomous_loop_closure_state.json"
+)
+_LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_DECISION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_only_autonomous_loop_closure_decision.json"
+)
+_LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_only_autonomous_loop_closure_receipt.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_codex_prompt.md"
@@ -10894,6 +10916,268 @@ def _build_selected_step_execution_result_route_receipt_state(
     return state
 
 
+def _build_local_only_autonomous_loop_closure_state(
+    *,
+    route_capture_path: Path,
+    route_decision_path: Path,
+    route_receipt_path: Path,
+    live_gate_path: Path,
+    live_result_path: Path,
+    live_receipt_path: Path,
+) -> dict[str, Any]:
+    normalized_repo_path = _APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH
+    status_short_cmd = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=no"],
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=normalized_repo_path,
+        shell=False,
+    )
+    metadata_collection_ok = status_short_cmd.returncode == 0
+    changed_tracked_files = (
+        [
+            line.rstrip()
+            for line in (status_short_cmd.stdout or "").splitlines()
+            if line.strip()
+        ]
+        if metadata_collection_ok
+        else []
+    )
+    worktree_clean = bool(metadata_collection_ok and (not changed_tracked_files))
+
+    def _read_artifact_payload(path: Path) -> tuple[bool, bool, dict[str, Any]]:
+        exists = path.exists()
+        if not exists:
+            return False, False, {}
+        try:
+            raw_payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError):
+            return True, False, {}
+        if not isinstance(raw_payload, Mapping):
+            return True, False, {}
+        return True, True, dict(raw_payload)
+
+    route_capture_present, route_capture_valid, route_capture = _read_artifact_payload(
+        route_capture_path
+    )
+    route_decision_present, route_decision_valid, route_decision = _read_artifact_payload(
+        route_decision_path
+    )
+    route_receipt_present, route_receipt_valid, route_receipt = _read_artifact_payload(
+        route_receipt_path
+    )
+    live_gate_present, live_gate_valid, live_gate = _read_artifact_payload(live_gate_path)
+    live_result_present, live_result_valid, live_result = _read_artifact_payload(live_result_path)
+    live_receipt_present, live_receipt_valid, live_receipt = _read_artifact_payload(
+        live_receipt_path
+    )
+
+    route_artifacts_present = bool(
+        route_capture_present and route_decision_present and route_receipt_present
+    )
+    route_artifacts_valid = bool(
+        route_capture_valid and route_decision_valid and route_receipt_valid
+    )
+    live_execution_artifacts_present = bool(
+        live_gate_present and live_result_present and live_receipt_present
+    )
+    live_execution_artifacts_valid = bool(
+        live_gate_valid and live_result_valid and live_receipt_valid
+    )
+    required_artifacts_present = bool(
+        route_artifacts_present and live_execution_artifacts_present
+    )
+    required_artifacts_valid = bool(route_artifacts_valid and live_execution_artifacts_valid)
+
+    surfaces: tuple[Mapping[str, Any], ...] = (
+        route_decision,
+        route_receipt,
+        route_capture,
+        live_receipt,
+        live_result,
+        live_gate,
+    )
+
+    def _surface_flag(key: str, *, default: bool = False) -> bool:
+        for surface in surfaces:
+            if key not in surface:
+                continue
+            value = surface.get(key)
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, int):
+                return value != 0
+            text = _normalize_text(value, default="").lower()
+            if text in {"1", "true", "yes", "on", "enabled"}:
+                return True
+            if text in {"0", "false", "no", "off", "disabled"}:
+                return False
+        return default
+
+    def _surface_text(key: str, *, default: str = "") -> str:
+        for surface in surfaces:
+            if key not in surface:
+                continue
+            return _normalize_text(surface.get(key), default=default)
+        return default
+
+    def _surface_int(key: str, *, default: int) -> int:
+        for surface in surfaces:
+            if key not in surface:
+                continue
+            return _as_non_negative_int(surface.get(key), default=default)
+        return default
+
+    selected_step_id = _surface_int("selected_step_id", default=1)
+    if selected_step_id <= 0:
+        selected_step_id = 1
+    selected_step_name = _surface_text("selected_step_name", default="read_current_state")
+    if not selected_step_name:
+        selected_step_name = "read_current_state"
+    selected_step_operation = _surface_text(
+        "selected_step_operation",
+        default=selected_step_name,
+    )
+    if not selected_step_operation:
+        selected_step_operation = "read_current_state"
+    selected_step_result = _surface_text("selected_step_result", default="unknown")
+    if not selected_step_result:
+        selected_step_result = "unknown"
+
+    route_status = _surface_text("route_status", default="missing")
+    route_decision_value = _surface_text("route_decision", default="blocked")
+    route_should_continue = _surface_flag("should_continue", default=False)
+    read_current_state_completed = _surface_flag(
+        "read_current_state_completed",
+        default=False,
+    )
+    live_execution_performed = _surface_flag("live_execution_performed", default=False)
+    execution_performed = _surface_flag("execution_performed", default=False)
+
+    status = "blocked"
+    closure_status = "blocked"
+    blocked_reason = "selected_step_result_route_not_routable"
+    next_action = "manual_review_selected_step_route_before_loop_closure"
+    closure_decision = "blocked"
+    local_only_v1_complete = False
+    local_only_loop_closed = False
+    should_continue = False
+    completed_result = "not_completed"
+    completed_step_id = 0
+    completed_step_name = ""
+    completed_step_operation = ""
+
+    if changed_tracked_files:
+        blocked_reason = (
+            "tracked_changes_present_before_local_only_autonomous_loop_closure"
+        )
+        next_action = "commit_or_reconcile_tracked_changes_before_local_only_loop_closure"
+    elif (not route_artifacts_present) or (not route_artifacts_valid):
+        blocked_reason = "selected_step_result_route_artifacts_missing_or_invalid"
+        next_action = "rerun_prompt329_selected_step_route_clean_verify"
+    elif route_status == "blocked" or route_decision_value == "blocked":
+        blocked_reason = "selected_step_result_route_not_routable"
+        next_action = "manual_review_selected_step_route_before_loop_closure"
+    elif route_status != "ready":
+        blocked_reason = "selected_step_result_route_not_ready"
+        next_action = "complete_selected_step_result_route_before_loop_closure"
+    elif (
+        route_decision_value == "continue_to_next_selected_step"
+        and route_should_continue
+        and selected_step_result == "read_current_state_completed"
+        and read_current_state_completed
+    ):
+        status = "completed"
+        closure_status = "completed"
+        blocked_reason = "none"
+        next_action = "prepare_prompt331_or_enable_next_local_loop_increment"
+        closure_decision = "local_only_v1_closed"
+        local_only_v1_complete = True
+        local_only_loop_closed = True
+        should_continue = False
+        completed_result = "read_current_state_completed"
+        completed_step_id = 1
+        completed_step_name = "read_current_state"
+        completed_step_operation = "read_current_state"
+    else:
+        blocked_reason = "selected_step_result_route_not_routable"
+        next_action = "manual_review_selected_step_route_before_loop_closure"
+
+    return {
+        "status": status,
+        "closure_status": closure_status,
+        "blocked_reason": blocked_reason,
+        "next_action": next_action,
+        "closure_decision": closure_decision,
+        "local_only_v1_complete": local_only_v1_complete,
+        "local_only_loop_closed": local_only_loop_closed,
+        "should_continue": should_continue,
+        "completed_result": completed_result,
+        "completed_step_id": completed_step_id,
+        "completed_step_name": completed_step_name,
+        "completed_step_operation": completed_step_operation,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "selected_step_result": selected_step_result,
+        "route_status": route_status,
+        "route_decision": route_decision_value,
+        "route_should_continue": route_should_continue,
+        "read_current_state_completed": read_current_state_completed,
+        "live_execution_performed": live_execution_performed,
+        "execution_performed": execution_performed,
+        "worktree_clean": worktree_clean,
+        "changed_tracked_files": _normalize_string_list(changed_tracked_files),
+        "required_artifacts_present": required_artifacts_present,
+        "required_artifacts_valid": required_artifacts_valid,
+        "route_artifacts_present": route_artifacts_present,
+        "route_artifacts_valid": route_artifacts_valid,
+        "live_execution_artifacts_present": live_execution_artifacts_present,
+        "live_execution_artifacts_valid": live_execution_artifacts_valid,
+        "codex_invoked": _surface_flag("codex_invoked", default=False),
+        "commit_performed": _surface_flag("commit_performed", default=False),
+        "tag_performed": _surface_flag("tag_performed", default=False),
+        "push_performed": _surface_flag("push_performed", default=False),
+        "pr_created": _surface_flag("pr_created", default=False),
+        "merge_performed": _surface_flag("merge_performed", default=False),
+        "rollback_performed": _surface_flag("rollback_performed", default=False),
+        "source": "local_only_autonomous_loop_closure_state",
+        "summary": (
+            "Local-only autonomous loop closure v1 completed after selected-step route readiness."
+            if status == "completed"
+            else "Local-only autonomous loop closure v1 remains blocked pending selected-step route prerequisites."
+        ),
+    }
+
+
+def _build_local_only_autonomous_loop_closure_decision(
+    *,
+    closure_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    state = dict(closure_state) if isinstance(closure_state, Mapping) else {}
+    decision = dict(state)
+    decision["source"] = "local_only_autonomous_loop_closure_decision"
+    return decision
+
+
+def _build_local_only_autonomous_loop_closure_receipt(
+    *,
+    closure_state: Mapping[str, Any] | None,
+    closure_decision: Mapping[str, Any] | None,
+    closure_state_path: Path,
+    closure_decision_path: Path,
+) -> dict[str, Any]:
+    state = dict(closure_state) if isinstance(closure_state, Mapping) else {}
+    decision = dict(closure_decision) if isinstance(closure_decision, Mapping) else {}
+    receipt = dict(state)
+    receipt.update(decision)
+    receipt["source"] = "local_only_autonomous_loop_closure_receipt"
+    receipt["closure_state_path"] = str(closure_state_path)
+    receipt["closure_decision_path"] = str(closure_decision_path)
+    return receipt
+
+
 def _write_approve_commit_tag_commands_if_safe(
     *,
     boundary_state: Mapping[str, Any] | None,
@@ -14223,6 +14507,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     selected_step_execution_result_route_receipt_path = Path(
         _SELECTED_STEP_EXECUTION_RESULT_ROUTE_RECEIPT_PATH
     )
+    local_only_autonomous_loop_closure_state_path = Path(
+        _LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_STATE_PATH
+    )
+    local_only_autonomous_loop_closure_decision_path = Path(
+        _LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_DECISION_PATH
+    )
+    local_only_autonomous_loop_closure_receipt_path = Path(
+        _LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_RECEIPT_PATH
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -14520,6 +14813,26 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     selected_step_execution_result_route_receipt_surface_path = str(
         selected_step_execution_result_route_receipt_path
     )
+    local_only_autonomous_loop_closure_status = "blocked"
+    local_only_autonomous_loop_closure_blocked_reason = (
+        "selected_step_result_route_artifacts_missing_or_invalid"
+    )
+    local_only_autonomous_loop_closure_decision = "blocked"
+    local_only_autonomous_loop_closure_next_action = (
+        "complete_selected_step_result_route_before_loop_closure"
+    )
+    local_only_autonomous_loop_v1_complete = False
+    local_only_autonomous_loop_closed = False
+    local_only_autonomous_loop_closure_should_continue = False
+    local_only_autonomous_loop_closure_state_surface_path = str(
+        local_only_autonomous_loop_closure_state_path
+    )
+    local_only_autonomous_loop_closure_decision_surface_path = str(
+        local_only_autonomous_loop_closure_decision_path
+    )
+    local_only_autonomous_loop_closure_receipt_surface_path = str(
+        local_only_autonomous_loop_closure_receipt_path
+    )
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -14734,6 +15047,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_selected_step_execution_result_route_receipt_json": str(
             selected_step_execution_result_route_receipt_path
+        ),
+        "one_cycle_controller_local_only_autonomous_loop_closure_state_json": str(
+            local_only_autonomous_loop_closure_state_path
+        ),
+        "one_cycle_controller_local_only_autonomous_loop_closure_decision_json": str(
+            local_only_autonomous_loop_closure_decision_path
+        ),
+        "one_cycle_controller_local_only_autonomous_loop_closure_receipt_json": str(
+            local_only_autonomous_loop_closure_receipt_path
         ),
     }
 
@@ -16579,6 +16901,118 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     )
     selected_step_execution_result_route_receipt_surface_path = str(
         selected_step_execution_result_route_receipt_path
+    )
+    local_only_autonomous_loop_closure_state = (
+        _build_local_only_autonomous_loop_closure_state(
+            route_capture_path=selected_step_execution_result_route_capture_path,
+            route_decision_path=selected_step_execution_result_route_decision_path,
+            route_receipt_path=selected_step_execution_result_route_receipt_path,
+            live_gate_path=selected_step_live_execution_gate_path,
+            live_result_path=selected_step_live_execution_result_path,
+            live_receipt_path=selected_step_live_execution_receipt_path,
+        )
+    )
+    local_only_autonomous_loop_closure_decision_state = (
+        _build_local_only_autonomous_loop_closure_decision(
+            closure_state=local_only_autonomous_loop_closure_state,
+        )
+    )
+    local_only_autonomous_loop_closure_receipt_state = (
+        _build_local_only_autonomous_loop_closure_receipt(
+            closure_state=local_only_autonomous_loop_closure_state,
+            closure_decision=local_only_autonomous_loop_closure_decision_state,
+            closure_state_path=local_only_autonomous_loop_closure_state_path,
+            closure_decision_path=local_only_autonomous_loop_closure_decision_path,
+        )
+    )
+    local_only_autonomous_loop_closure_artifacts_written = False
+    try:
+        local_only_autonomous_loop_closure_state_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        _write_json(
+            local_only_autonomous_loop_closure_state_path,
+            local_only_autonomous_loop_closure_state,
+        )
+        _write_json(
+            local_only_autonomous_loop_closure_decision_path,
+            local_only_autonomous_loop_closure_decision_state,
+        )
+        _write_json(
+            local_only_autonomous_loop_closure_receipt_path,
+            local_only_autonomous_loop_closure_receipt_state,
+        )
+        local_only_autonomous_loop_closure_artifacts_written = True
+    except OSError:
+        local_only_autonomous_loop_closure_artifacts_written = False
+    if (
+        not local_only_autonomous_loop_closure_artifacts_written
+        or not local_only_autonomous_loop_closure_state_path.exists()
+        or not local_only_autonomous_loop_closure_decision_path.exists()
+        or not local_only_autonomous_loop_closure_receipt_path.exists()
+    ):
+        try:
+            local_only_autonomous_loop_closure_state_path.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+            _write_json(
+                local_only_autonomous_loop_closure_state_path,
+                local_only_autonomous_loop_closure_state,
+            )
+            _write_json(
+                local_only_autonomous_loop_closure_decision_path,
+                local_only_autonomous_loop_closure_decision_state,
+            )
+            _write_json(
+                local_only_autonomous_loop_closure_receipt_path,
+                local_only_autonomous_loop_closure_receipt_state,
+            )
+        except OSError:
+            pass
+    local_only_autonomous_loop_closure_status = _normalize_text(
+        local_only_autonomous_loop_closure_decision_state.get("closure_status"),
+        default=local_only_autonomous_loop_closure_status,
+    )
+    local_only_autonomous_loop_closure_blocked_reason = _normalize_text(
+        local_only_autonomous_loop_closure_decision_state.get("blocked_reason"),
+        default=local_only_autonomous_loop_closure_blocked_reason,
+    )
+    local_only_autonomous_loop_closure_decision = _normalize_text(
+        local_only_autonomous_loop_closure_decision_state.get("closure_decision"),
+        default=local_only_autonomous_loop_closure_decision,
+    )
+    local_only_autonomous_loop_closure_next_action = _normalize_text(
+        local_only_autonomous_loop_closure_decision_state.get("next_action"),
+        default=local_only_autonomous_loop_closure_next_action,
+    )
+    local_only_autonomous_loop_v1_complete = bool(
+        local_only_autonomous_loop_closure_decision_state.get(
+            "local_only_v1_complete",
+            local_only_autonomous_loop_v1_complete,
+        )
+    )
+    local_only_autonomous_loop_closed = bool(
+        local_only_autonomous_loop_closure_decision_state.get(
+            "local_only_loop_closed",
+            local_only_autonomous_loop_closed,
+        )
+    )
+    local_only_autonomous_loop_closure_should_continue = bool(
+        local_only_autonomous_loop_closure_decision_state.get(
+            "should_continue",
+            local_only_autonomous_loop_closure_should_continue,
+        )
+    )
+    local_only_autonomous_loop_closure_state_surface_path = str(
+        local_only_autonomous_loop_closure_state_path
+    )
+    local_only_autonomous_loop_closure_decision_surface_path = str(
+        local_only_autonomous_loop_closure_decision_path
+    )
+    local_only_autonomous_loop_closure_receipt_surface_path = str(
+        local_only_autonomous_loop_closure_receipt_path
     )
 
     result_payload = {
@@ -18459,6 +18893,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_selected_step_execution_result_route_receipt_path": (
             selected_step_execution_result_route_receipt_surface_path
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_status": (
+            local_only_autonomous_loop_closure_status
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_blocked_reason": (
+            local_only_autonomous_loop_closure_blocked_reason
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_decision": (
+            local_only_autonomous_loop_closure_decision
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_next_action": (
+            local_only_autonomous_loop_closure_next_action
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_v1_complete": (
+            local_only_autonomous_loop_v1_complete
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closed": (
+            local_only_autonomous_loop_closed
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_should_continue": (
+            local_only_autonomous_loop_closure_should_continue
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_state_path": (
+            local_only_autonomous_loop_closure_state_surface_path
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_decision_path": (
+            local_only_autonomous_loop_closure_decision_surface_path
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_receipt_path": (
+            local_only_autonomous_loop_closure_receipt_surface_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
@@ -175879,6 +176343,66 @@ def _build_approved_restart_execution_contract_surface(
         "project_browser_autonomous_bounded_local_loop_receipt_path": _normalize_text(
             approved_restart.get("project_browser_autonomous_bounded_local_loop_receipt_path"),
             default=_BOUNDED_LOCAL_AUTONOMOUS_LOOP_RECEIPT_PATH,
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_status": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_only_autonomous_loop_closure_status"
+            ),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_blocked_reason": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_only_autonomous_loop_closure_blocked_reason"
+            ),
+            default="selected_step_result_route_artifacts_missing_or_invalid",
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_decision": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_only_autonomous_loop_closure_decision"
+            ),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_next_action": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_only_autonomous_loop_closure_next_action"
+            ),
+            default="complete_selected_step_result_route_before_loop_closure",
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_v1_complete": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_only_autonomous_loop_v1_complete",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closed": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_only_autonomous_loop_closed",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_should_continue": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_only_autonomous_loop_closure_should_continue",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_state_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_only_autonomous_loop_closure_state_path"
+            ),
+            default=_LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_STATE_PATH,
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_decision_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_only_autonomous_loop_closure_decision_path"
+            ),
+            default=_LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_DECISION_PATH,
+        ),
+        "project_browser_autonomous_local_only_autonomous_loop_closure_receipt_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_only_autonomous_loop_closure_receipt_path"
+            ),
+            default=_LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_RECEIPT_PATH,
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
