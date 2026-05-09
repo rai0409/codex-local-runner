@@ -3930,6 +3930,19 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_post_targeted_contract_fix_execution_outcome_path",
     "project_browser_autonomous_local_post_targeted_contract_fix_route_decision_path",
     "project_browser_autonomous_local_post_targeted_contract_fix_review_receipt_path",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_status",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_execution_status",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_blocked_reason",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_next_action",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_commit_performed",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_tag_performed",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_commit_hash",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_tag_name",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_worktree_clean",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_gate_state_path",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_execution_result_path",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_execution_receipt_path",
+    "project_browser_autonomous_local_bounded_approve_commit_tag_plan_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -4372,6 +4385,39 @@ _LOCAL_POST_TARGETED_CONTRACT_FIX_REVIEW_RECEIPT_SCHEMA_VERSION = (
     "local_post_targeted_contract_fix_review_receipt_v1"
 )
 _LOCAL_POST_TARGETED_CONTRACT_FIX_STDIO_MAX_CHARS = 200_000
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_GATE_STATE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_bounded_approve_commit_tag_gate_state.json"
+)
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RESULT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_bounded_approve_commit_tag_execution_result.json"
+)
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_bounded_approve_commit_tag_execution_receipt.json"
+)
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_PLAN_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_bounded_approve_commit_tag_plan.json"
+)
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_GATE_STATE_SCHEMA_VERSION = (
+    "local_bounded_approve_commit_tag_gate_state_v1"
+)
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RESULT_SCHEMA_VERSION = (
+    "local_bounded_approve_commit_tag_execution_result_v1"
+)
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_SCHEMA_VERSION = (
+    "local_bounded_approve_commit_tag_execution_receipt_v1"
+)
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_PLAN_SCHEMA_VERSION = (
+    "local_bounded_approve_commit_tag_plan_v1"
+)
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_COMMIT_MESSAGE = "Apply targeted contract-fix route"
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_TAG_NAME = (
+    "prompt340-bounded-approve-commit-tag-execution"
+)
+_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_STDIO_MAX_CHARS = 8_000
 _LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
     "exec",
@@ -9231,6 +9277,706 @@ def _build_local_post_targeted_contract_fix_review_artifacts(
         "local_post_targeted_contract_fix_execution_outcome_path": str(execution_outcome_path),
         "local_post_targeted_contract_fix_route_decision_path": str(route_decision_path),
         "local_post_targeted_contract_fix_review_receipt_path": str(review_receipt_path),
+    }
+
+
+def _build_local_bounded_approve_commit_tag_execution_artifacts(
+    *,
+    execution_repo_path: str,
+    one_cycle_controller_dir: Path,
+) -> dict[str, Any]:
+    def _as_boolish(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").strip().lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_json_mapping(path: Path) -> tuple[bool, bool, dict[str, Any]]:
+        if not path.exists():
+            return False, False, {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            return True, False, {}
+        if not isinstance(payload, Mapping):
+            return True, False, {}
+        return True, True, dict(payload)
+
+    def _collect_tracked_diff_state(
+        repo_path: str,
+    ) -> tuple[bool, bool, list[str], list[str], list[str]]:
+        try:
+            status_short = _run_git(
+                repo_path,
+                ["status", "--short", "--untracked-files=no"],
+                timeout_seconds=10,
+            )
+            unstaged_names = _run_git(
+                repo_path,
+                ["diff", "--name-only"],
+                timeout_seconds=10,
+            )
+            staged_names = _run_git(
+                repo_path,
+                ["diff", "--cached", "--name-only"],
+                timeout_seconds=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False, False, [], [], []
+
+        if status_short.returncode != 0 or unstaged_names.returncode != 0 or staged_names.returncode != 0:
+            return False, False, [], [], []
+
+        status_paths = sorted(
+            {
+                _parse_git_status_path(line)
+                for line in (status_short.stdout or "").splitlines()
+                if line.strip() and _parse_git_status_path(line)
+            }
+        )
+        unstaged = sorted(
+            {
+                _normalize_text(line, default="").strip()
+                for line in (unstaged_names.stdout or "").splitlines()
+                if _normalize_text(line, default="").strip()
+            }
+        )
+        staged = sorted(
+            {
+                _normalize_text(line, default="").strip()
+                for line in (staged_names.stdout or "").splitlines()
+                if _normalize_text(line, default="").strip()
+            }
+        )
+        changed = sorted(set(status_paths) | set(unstaged) | set(staged))
+        tracked_worktree_clean = bool(not status_paths and not changed)
+        return True, tracked_worktree_clean, changed, staged, unstaged
+
+    def _bounded_output(text: Any, *, max_chars: int) -> str:
+        normalized = _normalize_text(text, default="")
+        if len(normalized) <= max_chars:
+            return normalized
+        head = max_chars // 2
+        tail = max_chars - head
+        return normalized[:head] + "\n...\n" + normalized[-tail:]
+
+    def _safety_fields() -> dict[str, Any]:
+        return {
+            "codex_invoked": False,
+            "codex_invocation_allowed": False,
+            "targeted_fix_execution_allowed": False,
+            "push_pr_merge_enabled": False,
+            "rollback_allowed": False,
+            "push_performed": False,
+            "pr_created": False,
+            "merge_performed": False,
+            "rollback_performed": False,
+        }
+
+    one_cycle_controller_dir = Path(one_cycle_controller_dir)
+    prompt339_diff_capture_path = (
+        one_cycle_controller_dir / "local_post_targeted_contract_fix_diff_capture.json"
+    )
+    prompt339_route_decision_path = (
+        one_cycle_controller_dir / "local_post_targeted_contract_fix_route_decision.json"
+    )
+    prompt339_review_receipt_path = (
+        one_cycle_controller_dir / "local_post_targeted_contract_fix_review_receipt.json"
+    )
+    _ = _read_json_mapping(one_cycle_controller_dir / "local_post_targeted_contract_fix_execution_outcome.json")
+    _ = _read_json_mapping(one_cycle_controller_dir / "local_targeted_contract_fix_execution_result.json")
+    _ = _read_json_mapping(one_cycle_controller_dir / "local_targeted_contract_fix_execution_receipt.json")
+
+    gate_state_path = one_cycle_controller_dir / "local_bounded_approve_commit_tag_gate_state.json"
+    execution_result_path = (
+        one_cycle_controller_dir / "local_bounded_approve_commit_tag_execution_result.json"
+    )
+    execution_receipt_path = (
+        one_cycle_controller_dir / "local_bounded_approve_commit_tag_execution_receipt.json"
+    )
+    plan_path = one_cycle_controller_dir / "local_bounded_approve_commit_tag_plan.json"
+
+    route_exists, route_valid, route_payload = _read_json_mapping(prompt339_route_decision_path)
+    diff_exists, diff_valid, diff_payload = _read_json_mapping(prompt339_diff_capture_path)
+    review_exists, review_valid, review_payload = _read_json_mapping(prompt339_review_receipt_path)
+
+    route_decision = _normalize_text(route_payload.get("route_decision"), default="")
+    codex_outcome_classification = _normalize_text(
+        route_payload.get("codex_outcome_classification"),
+        default="",
+    )
+    approve_commit_tag_ready = _as_boolish(
+        route_payload.get("approve_commit_tag_ready"),
+        default=False,
+    )
+    allowed_tracked_files = _normalize_string_list(route_payload.get("allowed_tracked_files"))
+    if not allowed_tracked_files:
+        allowed_tracked_files = _normalize_string_list(diff_payload.get("allowed_tracked_files"))
+    changed_tracked_files = _normalize_string_list(route_payload.get("changed_tracked_files"))
+    unexpected_tracked_files_changed = _normalize_string_list(
+        route_payload.get("unexpected_tracked_files_changed")
+    )
+    only_allowed_tracked_files_changed = bool(
+        (not changed_tracked_files)
+        or (
+            not sorted(
+                path for path in changed_tracked_files if path not in set(allowed_tracked_files)
+            )
+        )
+    )
+
+    validation_errors: list[str] = []
+    blocked_reason = "none"
+    readiness_reason = "prompt340_readiness_checks_pending"
+    status = "blocked"
+    execution_status = "blocked"
+    execution_allowed = False
+    commit_allowed = False
+    tag_allowed = False
+    commit_performed = False
+    tag_performed = False
+    tag_already_exists = False
+    commit_hash = ""
+    tag_points_at_commit = False
+    next_action = "manual_review_prompt339_approve_route_not_ready"
+
+    pre_execution_changed_tracked_files: list[str] = []
+    pre_execution_staged_tracked_files: list[str] = []
+    pre_execution_unstaged_tracked_files: list[str] = []
+    post_execution_changed_tracked_files: list[str] = []
+    post_execution_tracked_worktree_clean = False
+    staged_files_requested: list[str] = []
+
+    git_add_exit_code: int | None = None
+    git_commit_exit_code: int | None = None
+    git_tag_exit_code: int | None = None
+    git_add_stdout = ""
+    git_add_stderr = ""
+    git_commit_stdout = ""
+    git_commit_stderr = ""
+    git_tag_stdout = ""
+    git_tag_stderr = ""
+
+    commit_message = _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_COMMIT_MESSAGE
+    tag_name = _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_TAG_NAME
+    command_sequence: list[list[str]] = [
+        ["git", "add", "--"],
+        ["git", "commit", "-m", commit_message],
+        ["git", "tag", tag_name],
+    ]
+
+    route_ready = True
+    if not route_exists:
+        route_ready = False
+        validation_errors.append("missing_prompt339_route_decision_artifact")
+    elif not route_valid:
+        route_ready = False
+        validation_errors.append("invalid_prompt339_route_decision_artifact")
+    if route_ready:
+        route_expectations: tuple[tuple[str, Any], ...] = (
+            ("schema_version", _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION),
+            ("status", "completed"),
+            ("blocked_reason", "none"),
+            ("codex_outcome_classification", "targeted_contract_fix_completed_with_allowed_changes"),
+            ("route_decision", "prepare_approve_commit_tag"),
+            ("approve_commit_tag_ready", True),
+            ("approve_commit_tag_allowed", False),
+            ("targeted_fix_recommended", False),
+            ("next_action", "prepare_bounded_approve_commit_tag_execution"),
+        )
+        for key, expected in route_expectations:
+            value = route_payload.get(key)
+            if isinstance(expected, bool):
+                if _as_boolish(value, default=not expected) != expected:
+                    route_ready = False
+                    validation_errors.append(f"prompt339_route_{key}_mismatch")
+            else:
+                if _normalize_text(value, default="") != expected:
+                    route_ready = False
+                    validation_errors.append(f"prompt339_route_{key}_mismatch")
+        if not changed_tracked_files:
+            route_ready = False
+            validation_errors.append("prompt339_route_changed_tracked_files_missing")
+        if unexpected_tracked_files_changed:
+            route_ready = False
+            validation_errors.append("prompt339_route_unexpected_tracked_files_present")
+        if not allowed_tracked_files:
+            route_ready = False
+            validation_errors.append("prompt339_route_allowed_tracked_files_missing")
+        if changed_tracked_files and allowed_tracked_files:
+            allowed_set = set(allowed_tracked_files)
+            out_of_scope = sorted(path for path in changed_tracked_files if path not in allowed_set)
+            if out_of_scope:
+                route_ready = False
+                validation_errors.append("prompt339_route_changed_files_outside_allowed_set")
+
+    diff_ready = True
+    if not diff_exists:
+        diff_ready = False
+        validation_errors.append("missing_prompt339_diff_capture_artifact")
+    elif not diff_valid:
+        diff_ready = False
+        validation_errors.append("invalid_prompt339_diff_capture_artifact")
+    if diff_ready:
+        diff_expectations: tuple[tuple[str, Any], ...] = (
+            ("status", "completed"),
+            ("local_diff_present", True),
+            ("only_allowed_tracked_files_changed", True),
+            ("unexpected_tracked_file_count", 0),
+            ("stdout_contains_blocked", False),
+            ("stderr_contains_blocked", False),
+            ("codex_invocation_allowed", False),
+            ("execution_allowed", False),
+            ("commit_allowed", False),
+            ("tag_allowed", False),
+            ("push_pr_merge_enabled", False),
+            ("rollback_allowed", False),
+        )
+        for key, expected in diff_expectations:
+            value = diff_payload.get(key)
+            if isinstance(expected, bool):
+                if _as_boolish(value, default=not expected) != expected:
+                    diff_ready = False
+                    validation_errors.append(f"prompt339_diff_{key}_mismatch")
+            elif isinstance(expected, int):
+                if _as_non_negative_int(value, default=-1) != expected:
+                    diff_ready = False
+                    validation_errors.append(f"prompt339_diff_{key}_mismatch")
+            else:
+                if _normalize_text(value, default="") != expected:
+                    diff_ready = False
+                    validation_errors.append(f"prompt339_diff_{key}_mismatch")
+        if _as_non_negative_int(diff_payload.get("changed_tracked_file_count"), default=0) <= 0:
+            diff_ready = False
+            validation_errors.append("prompt339_diff_changed_tracked_file_count_invalid")
+
+    review_ready = True
+    if not review_exists:
+        review_ready = False
+        validation_errors.append("missing_prompt339_review_receipt_artifact")
+    elif not review_valid:
+        review_ready = False
+        validation_errors.append("invalid_prompt339_review_receipt_artifact")
+    if review_ready:
+        review_expectations: tuple[tuple[str, Any], ...] = (
+            ("status", "completed"),
+            ("approve_commit_tag_ready", True),
+            ("targeted_fix_recommended", False),
+            ("unexpected_tracked_file_count", 0),
+            ("next_action", "prepare_bounded_approve_commit_tag_execution"),
+        )
+        for key, expected in review_expectations:
+            value = review_payload.get(key)
+            if isinstance(expected, bool):
+                if _as_boolish(value, default=not expected) != expected:
+                    review_ready = False
+                    validation_errors.append(f"prompt339_review_{key}_mismatch")
+            elif isinstance(expected, int):
+                if _as_non_negative_int(value, default=-1) != expected:
+                    review_ready = False
+                    validation_errors.append(f"prompt339_review_{key}_mismatch")
+            else:
+                if _normalize_text(value, default="") != expected:
+                    review_ready = False
+                    validation_errors.append(f"prompt339_review_{key}_mismatch")
+        if _as_non_negative_int(review_payload.get("changed_tracked_file_count"), default=0) <= 0:
+            review_ready = False
+            validation_errors.append("prompt339_review_changed_tracked_file_count_invalid")
+
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH,
+    )
+    git_ok, _, pre_changed, pre_staged, pre_unstaged = _collect_tracked_diff_state(
+        normalized_repo_path
+    )
+    if git_ok:
+        pre_execution_changed_tracked_files = list(pre_changed)
+        pre_execution_staged_tracked_files = list(pre_staged)
+        pre_execution_unstaged_tracked_files = list(pre_unstaged)
+    else:
+        blocked_reason = "prompt340_git_state_capture_failed"
+        validation_errors.append("prompt340_pre_execution_git_state_capture_failed")
+
+    route_gates_ready = bool(route_ready and diff_ready and review_ready and git_ok)
+    allowed_set = set(allowed_tracked_files)
+    pre_unexpected_tracked_files = sorted(
+        path for path in pre_execution_changed_tracked_files if path not in allowed_set
+    )
+    allowed_pre_execution_changed_tracked_files = sorted(
+        path for path in pre_execution_changed_tracked_files if path in allowed_set
+    )
+
+    if not route_gates_ready:
+        status = "blocked"
+        execution_status = "blocked"
+        execution_allowed = False
+        commit_allowed = False
+        tag_allowed = False
+        commit_performed = False
+        tag_performed = False
+        if blocked_reason == "none":
+            blocked_reason = "prompt339_approve_route_not_ready"
+        readiness_reason = "prompt340_readiness_checks_failed"
+        next_action = "manual_review_prompt339_approve_route_not_ready"
+    elif not pre_execution_changed_tracked_files:
+        status = "blocked"
+        execution_status = "blocked"
+        blocked_reason = "no_tracked_changes_available_for_approve_commit_tag"
+        readiness_reason = "prompt340_worktree_has_no_tracked_changes"
+        next_action = "manual_review_no_tracked_changes_for_approve_commit_tag"
+    elif pre_unexpected_tracked_files:
+        status = "blocked"
+        execution_status = "blocked"
+        blocked_reason = "unexpected_tracked_files_present_for_approve_commit_tag"
+        readiness_reason = "prompt340_worktree_contains_unexpected_tracked_changes"
+        validation_errors.append("prompt340_pre_execution_unexpected_tracked_files_present")
+        next_action = "manual_review_unexpected_tracked_changes_for_approve_commit_tag"
+    elif pre_execution_staged_tracked_files and (
+        sorted(pre_execution_staged_tracked_files)
+        != allowed_pre_execution_changed_tracked_files
+    ):
+        status = "blocked"
+        execution_status = "blocked"
+        blocked_reason = "staged_tracked_files_not_allowed_for_approve_commit_tag"
+        readiness_reason = "prompt340_staged_state_not_safe"
+        validation_errors.append("prompt340_pre_execution_staged_tracked_files_not_allowed")
+        next_action = "manual_review_staged_tracked_files_for_approve_commit_tag"
+    else:
+        tag_exists_result = _run_git(
+            normalized_repo_path,
+            ["rev-parse", "--verify", f"refs/tags/{tag_name}"],
+            timeout_seconds=10,
+        )
+        tag_already_exists = tag_exists_result.returncode == 0
+        if tag_already_exists:
+            status = "blocked"
+            execution_status = "blocked"
+            blocked_reason = "approve_commit_tag_target_tag_already_exists"
+            readiness_reason = "prompt340_tag_collision_detected"
+            next_action = "manual_review_existing_prompt340_tag"
+        else:
+            status = "completed"
+            execution_status = "in_progress"
+            blocked_reason = "none"
+            readiness_reason = "prompt340_readiness_checks_passed"
+            next_action = "manual_review_approve_commit_tag_failure"
+            execution_allowed = True
+            commit_allowed = True
+            tag_allowed = True
+            staged_files_requested = sorted(
+                path for path in pre_execution_changed_tracked_files if path in allowed_set
+            )
+            if not staged_files_requested:
+                status = "blocked"
+                execution_status = "blocked"
+                blocked_reason = "no_tracked_changes_available_for_approve_commit_tag"
+                readiness_reason = "prompt340_no_allowed_tracked_changes_to_stage"
+                next_action = "manual_review_no_tracked_changes_for_approve_commit_tag"
+                execution_allowed = False
+                commit_allowed = False
+                tag_allowed = False
+            else:
+                command_sequence = [
+                    ["git", "add", "--", *staged_files_requested],
+                    ["git", "commit", "-m", commit_message],
+                    ["git", "tag", tag_name],
+                ]
+
+                add_result = _run_git(
+                    normalized_repo_path,
+                    ["add", "--", *staged_files_requested],
+                    timeout_seconds=30,
+                )
+                git_add_exit_code = int(add_result.returncode)
+                git_add_stdout = _bounded_output(
+                    add_result.stdout,
+                    max_chars=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_STDIO_MAX_CHARS,
+                )
+                git_add_stderr = _bounded_output(
+                    add_result.stderr,
+                    max_chars=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_STDIO_MAX_CHARS,
+                )
+                if add_result.returncode != 0:
+                    status = "completed"
+                    execution_status = "failed"
+                    commit_performed = False
+                    tag_performed = False
+                    next_action = "manual_review_approve_commit_tag_failure"
+                else:
+                    commit_result = _run_git(
+                        normalized_repo_path,
+                        ["commit", "-m", commit_message],
+                        timeout_seconds=30,
+                    )
+                    git_commit_exit_code = int(commit_result.returncode)
+                    git_commit_stdout = _bounded_output(
+                        commit_result.stdout,
+                        max_chars=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_STDIO_MAX_CHARS,
+                    )
+                    git_commit_stderr = _bounded_output(
+                        commit_result.stderr,
+                        max_chars=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_STDIO_MAX_CHARS,
+                    )
+                    if commit_result.returncode != 0:
+                        status = "completed"
+                        execution_status = "failed"
+                        commit_performed = False
+                        tag_performed = False
+                        next_action = "manual_review_approve_commit_tag_failure"
+                    else:
+                        commit_performed = True
+                        head_result = _run_git(
+                            normalized_repo_path,
+                            ["rev-parse", "HEAD"],
+                            timeout_seconds=10,
+                        )
+                        if head_result.returncode == 0:
+                            commit_hash = _normalize_text(head_result.stdout, default="")
+
+                        tag_result = _run_git(
+                            normalized_repo_path,
+                            ["tag", tag_name],
+                            timeout_seconds=30,
+                        )
+                        git_tag_exit_code = int(tag_result.returncode)
+                        git_tag_stdout = _bounded_output(
+                            tag_result.stdout,
+                            max_chars=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_STDIO_MAX_CHARS,
+                        )
+                        git_tag_stderr = _bounded_output(
+                            tag_result.stderr,
+                            max_chars=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_STDIO_MAX_CHARS,
+                        )
+                        if tag_result.returncode != 0:
+                            status = "completed"
+                            execution_status = "partial_commit_without_tag"
+                            commit_performed = True
+                            tag_performed = False
+                            next_action = "manual_review_commit_without_tag"
+                        else:
+                            tag_head_result = _run_git(
+                                normalized_repo_path,
+                                ["rev-list", "-n", "1", tag_name],
+                                timeout_seconds=10,
+                            )
+                            tag_head_commit = _normalize_text(
+                                tag_head_result.stdout,
+                                default="",
+                            )
+                            tag_points_at_commit = bool(
+                                tag_head_result.returncode == 0
+                                and commit_hash
+                                and tag_head_commit == commit_hash
+                            )
+                            status = "completed"
+                            execution_status = "completed"
+                            commit_performed = True
+                            tag_performed = True
+                            next_action = "prepare_post_commit_cycle_closure"
+
+    post_git_ok, post_clean, post_changed, _, _ = _collect_tracked_diff_state(normalized_repo_path)
+    if post_git_ok:
+        post_execution_changed_tracked_files = list(post_changed)
+        post_execution_tracked_worktree_clean = bool(post_clean)
+    else:
+        post_execution_changed_tracked_files = list(pre_execution_changed_tracked_files)
+        post_execution_tracked_worktree_clean = False
+        validation_errors.append("prompt340_post_execution_git_state_capture_failed")
+
+    if execution_status in {"blocked", "not_ready"}:
+        execution_allowed = False
+        commit_allowed = False
+        tag_allowed = False
+        commit_performed = False
+        tag_performed = False
+    if execution_status == "in_progress":
+        execution_status = "failed"
+        next_action = "manual_review_approve_commit_tag_failure"
+    if status == "blocked":
+        execution_status = "blocked"
+
+    safety_fields = _safety_fields()
+
+    plan_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "bounded_approve_commit_tag_plan_schema_version": (
+            _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_PLAN_SCHEMA_VERSION
+        ),
+        "prompt_id": "prompt340",
+        "status": status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "prompt339_route_decision_path": str(prompt339_route_decision_path),
+        "prompt339_diff_capture_path": str(prompt339_diff_capture_path),
+        "prompt339_review_receipt_path": str(prompt339_review_receipt_path),
+        "approve_commit_tag_ready": approve_commit_tag_ready,
+        "route_decision": route_decision,
+        "codex_outcome_classification": codex_outcome_classification,
+        "allowed_tracked_files": allowed_tracked_files,
+        "changed_tracked_files": changed_tracked_files,
+        "only_allowed_tracked_files_changed": only_allowed_tracked_files_changed,
+        "unexpected_tracked_files_changed": unexpected_tracked_files_changed,
+        "commit_message": commit_message,
+        "tag_name": tag_name,
+        "command_sequence": command_sequence,
+        "execution_allowed": execution_allowed,
+        "commit_allowed": commit_allowed,
+        "tag_allowed": tag_allowed,
+        "push_pr_merge_enabled": False,
+        "rollback_allowed": False,
+        "next_action": next_action,
+        "validation_errors": _normalize_string_list(validation_errors),
+        "commit_performed": commit_performed,
+        "tag_performed": tag_performed,
+        **safety_fields,
+    }
+
+    gate_state_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "bounded_approve_commit_tag_gate_state_schema_version": (
+            _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_GATE_STATE_SCHEMA_VERSION
+        ),
+        "prompt_id": "prompt340",
+        "status": status,
+        "execution_status": execution_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "prompt339_route_decision_path": str(prompt339_route_decision_path),
+        "prompt339_diff_capture_path": str(prompt339_diff_capture_path),
+        "prompt339_review_receipt_path": str(prompt339_review_receipt_path),
+        "approve_commit_tag_ready": approve_commit_tag_ready,
+        "route_decision": route_decision,
+        "codex_outcome_classification": codex_outcome_classification,
+        "allowed_tracked_files": allowed_tracked_files,
+        "changed_tracked_files": changed_tracked_files,
+        "pre_execution_changed_tracked_files": pre_execution_changed_tracked_files,
+        "pre_execution_staged_tracked_files": pre_execution_staged_tracked_files,
+        "pre_execution_unstaged_tracked_files": pre_execution_unstaged_tracked_files,
+        "only_allowed_tracked_files_changed": only_allowed_tracked_files_changed,
+        "unexpected_tracked_files_changed": unexpected_tracked_files_changed,
+        "tag_name": tag_name,
+        "tag_already_exists": tag_already_exists,
+        "execution_allowed": execution_allowed,
+        "commit_allowed": commit_allowed,
+        "tag_allowed": tag_allowed,
+        "next_action": next_action,
+        "validation_errors": _normalize_string_list(validation_errors),
+        "commit_performed": commit_performed,
+        "tag_performed": tag_performed,
+        **safety_fields,
+    }
+
+    execution_result_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "bounded_approve_commit_tag_execution_result_schema_version": (
+            _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RESULT_SCHEMA_VERSION
+        ),
+        "prompt_id": "prompt340",
+        "status": status,
+        "execution_status": execution_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "execution_allowed": execution_allowed,
+        "commit_allowed": commit_allowed,
+        "tag_allowed": tag_allowed,
+        "commit_performed": commit_performed,
+        "tag_performed": tag_performed,
+        "staged_files_requested": staged_files_requested,
+        "commit_message": commit_message,
+        "tag_name": tag_name,
+        "git_add_exit_code": git_add_exit_code,
+        "git_commit_exit_code": git_commit_exit_code,
+        "git_tag_exit_code": git_tag_exit_code,
+        "git_add_stdout": git_add_stdout,
+        "git_add_stderr": git_add_stderr,
+        "git_commit_stdout": git_commit_stdout,
+        "git_commit_stderr": git_commit_stderr,
+        "git_tag_stdout": git_tag_stdout,
+        "git_tag_stderr": git_tag_stderr,
+        "commit_hash": commit_hash,
+        "tag_points_at_commit": tag_points_at_commit,
+        "post_execution_changed_tracked_files": post_execution_changed_tracked_files,
+        "post_execution_tracked_worktree_clean": post_execution_tracked_worktree_clean,
+        "next_action": next_action,
+        "validation_errors": _normalize_string_list(validation_errors),
+        "push_pr_merge_enabled": False,
+        "rollback_allowed": False,
+        **safety_fields,
+    }
+
+    execution_receipt_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "bounded_approve_commit_tag_execution_receipt_schema_version": (
+            _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_SCHEMA_VERSION
+        ),
+        "prompt_id": "prompt340",
+        "status": status,
+        "execution_status": execution_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "plan_path": str(plan_path),
+        "gate_state_path": str(gate_state_path),
+        "execution_result_path": str(execution_result_path),
+        "prompt339_route_decision_path": str(prompt339_route_decision_path),
+        "approve_commit_tag_ready": approve_commit_tag_ready,
+        "route_decision": route_decision,
+        "codex_outcome_classification": codex_outcome_classification,
+        "commit_performed": commit_performed,
+        "tag_performed": tag_performed,
+        "commit_hash": commit_hash,
+        "tag_name": tag_name,
+        "tag_points_at_commit": tag_points_at_commit,
+        "post_execution_tracked_worktree_clean": post_execution_tracked_worktree_clean,
+        "next_action": next_action,
+        "validation_errors": _normalize_string_list(validation_errors),
+        "execution_allowed": execution_allowed,
+        "commit_allowed": commit_allowed,
+        "tag_allowed": tag_allowed,
+        **safety_fields,
+    }
+
+    try:
+        one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    try:
+        _write_json(plan_path, plan_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(gate_state_path, gate_state_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(execution_result_path, execution_result_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(execution_receipt_path, execution_receipt_payload)
+    except OSError:
+        pass
+
+    return {
+        "local_bounded_approve_commit_tag_status": status,
+        "local_bounded_approve_commit_tag_execution_status": execution_status,
+        "local_bounded_approve_commit_tag_blocked_reason": blocked_reason,
+        "local_bounded_approve_commit_tag_next_action": next_action,
+        "local_bounded_approve_commit_tag_commit_performed": commit_performed,
+        "local_bounded_approve_commit_tag_tag_performed": tag_performed,
+        "local_bounded_approve_commit_tag_commit_hash": commit_hash,
+        "local_bounded_approve_commit_tag_tag_name": tag_name,
+        "local_bounded_approve_commit_tag_worktree_clean": post_execution_tracked_worktree_clean,
+        "local_bounded_approve_commit_tag_gate_state_path": str(gate_state_path),
+        "local_bounded_approve_commit_tag_execution_result_path": str(execution_result_path),
+        "local_bounded_approve_commit_tag_execution_receipt_path": str(execution_receipt_path),
+        "local_bounded_approve_commit_tag_plan_path": str(plan_path),
     }
 
 
@@ -19987,6 +20733,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_post_targeted_contract_fix_review_receipt_path = Path(
         _LOCAL_POST_TARGETED_CONTRACT_FIX_REVIEW_RECEIPT_PATH
     )
+    local_bounded_approve_commit_tag_gate_state_path = Path(
+        _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_GATE_STATE_PATH
+    )
+    local_bounded_approve_commit_tag_execution_result_path = Path(
+        _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RESULT_PATH
+    )
+    local_bounded_approve_commit_tag_execution_receipt_path = Path(
+        _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_PATH
+    )
+    local_bounded_approve_commit_tag_plan_path = Path(
+        _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_PLAN_PATH
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -20086,6 +20844,17 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_post_targeted_contract_fix_approve_commit_tag_ready = False
     local_post_targeted_contract_fix_changed_tracked_file_count = 0
     local_post_targeted_contract_fix_unexpected_tracked_file_count = 0
+    local_bounded_approve_commit_tag_status = "blocked"
+    local_bounded_approve_commit_tag_execution_status = "blocked"
+    local_bounded_approve_commit_tag_blocked_reason = "prompt340_not_started"
+    local_bounded_approve_commit_tag_next_action = (
+        "manual_review_prompt339_approve_route_not_ready"
+    )
+    local_bounded_approve_commit_tag_commit_performed = False
+    local_bounded_approve_commit_tag_tag_performed = False
+    local_bounded_approve_commit_tag_commit_hash = ""
+    local_bounded_approve_commit_tag_tag_name = _LOCAL_BOUNDED_APPROVE_COMMIT_TAG_TAG_NAME
+    local_bounded_approve_commit_tag_worktree_clean = False
     targeted_fix_prompt_status = "not_applicable"
     targeted_fix_prompt_text = ""
     targeted_fix_prompt_resolved_path = ""
@@ -20785,6 +21554,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_local_post_targeted_contract_fix_review_receipt_json": str(
             local_post_targeted_contract_fix_review_receipt_path
         ),
+        "one_cycle_controller_local_bounded_approve_commit_tag_gate_state_json": str(
+            local_bounded_approve_commit_tag_gate_state_path
+        ),
+        "one_cycle_controller_local_bounded_approve_commit_tag_execution_result_json": str(
+            local_bounded_approve_commit_tag_execution_result_path
+        ),
+        "one_cycle_controller_local_bounded_approve_commit_tag_execution_receipt_json": str(
+            local_bounded_approve_commit_tag_execution_receipt_path
+        ),
+        "one_cycle_controller_local_bounded_approve_commit_tag_plan_json": str(
+            local_bounded_approve_commit_tag_plan_path
+        ),
     }
 
     requested_execution = enabled and execute_enabled and (not dry_run)
@@ -21271,6 +22052,58 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "local_post_targeted_contract_fix_unexpected_tracked_file_count"
         ),
         default=local_post_targeted_contract_fix_unexpected_tracked_file_count,
+    )
+    local_bounded_approve_commit_tag_state = (
+        _build_local_bounded_approve_commit_tag_execution_artifacts(
+            execution_repo_path=execution_repo_path,
+            one_cycle_controller_dir=one_cycle_controller_dir,
+        )
+    )
+    local_bounded_approve_commit_tag_status = _normalize_text(
+        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_status"),
+        default=local_bounded_approve_commit_tag_status,
+    )
+    local_bounded_approve_commit_tag_execution_status = _normalize_text(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_execution_status"
+        ),
+        default=local_bounded_approve_commit_tag_execution_status,
+    )
+    local_bounded_approve_commit_tag_blocked_reason = _normalize_text(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_blocked_reason"
+        ),
+        default=local_bounded_approve_commit_tag_blocked_reason,
+    )
+    local_bounded_approve_commit_tag_next_action = _normalize_text(
+        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_next_action"),
+        default=local_bounded_approve_commit_tag_next_action,
+    )
+    local_bounded_approve_commit_tag_commit_performed = bool(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_commit_performed",
+            local_bounded_approve_commit_tag_commit_performed,
+        )
+    )
+    local_bounded_approve_commit_tag_tag_performed = bool(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_tag_performed",
+            local_bounded_approve_commit_tag_tag_performed,
+        )
+    )
+    local_bounded_approve_commit_tag_commit_hash = _normalize_text(
+        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_commit_hash"),
+        default=local_bounded_approve_commit_tag_commit_hash,
+    )
+    local_bounded_approve_commit_tag_tag_name = _normalize_text(
+        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_tag_name"),
+        default=local_bounded_approve_commit_tag_tag_name,
+    )
+    local_bounded_approve_commit_tag_worktree_clean = bool(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_worktree_clean",
+            local_bounded_approve_commit_tag_worktree_clean,
+        )
     )
     review_handoff_decision_state = _build_one_cycle_review_handoff_decision_state(
         review_handoff_path=review_handoff_path
@@ -24281,6 +25114,45 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "local_post_targeted_contract_fix_review_receipt_path": str(
             local_post_targeted_contract_fix_review_receipt_path
         ),
+        "local_bounded_approve_commit_tag_status": (
+            local_bounded_approve_commit_tag_status
+        ),
+        "local_bounded_approve_commit_tag_execution_status": (
+            local_bounded_approve_commit_tag_execution_status
+        ),
+        "local_bounded_approve_commit_tag_blocked_reason": (
+            local_bounded_approve_commit_tag_blocked_reason
+        ),
+        "local_bounded_approve_commit_tag_next_action": (
+            local_bounded_approve_commit_tag_next_action
+        ),
+        "local_bounded_approve_commit_tag_commit_performed": (
+            local_bounded_approve_commit_tag_commit_performed
+        ),
+        "local_bounded_approve_commit_tag_tag_performed": (
+            local_bounded_approve_commit_tag_tag_performed
+        ),
+        "local_bounded_approve_commit_tag_commit_hash": (
+            local_bounded_approve_commit_tag_commit_hash
+        ),
+        "local_bounded_approve_commit_tag_tag_name": (
+            local_bounded_approve_commit_tag_tag_name
+        ),
+        "local_bounded_approve_commit_tag_worktree_clean": (
+            local_bounded_approve_commit_tag_worktree_clean
+        ),
+        "local_bounded_approve_commit_tag_gate_state_path": str(
+            local_bounded_approve_commit_tag_gate_state_path
+        ),
+        "local_bounded_approve_commit_tag_execution_result_path": str(
+            local_bounded_approve_commit_tag_execution_result_path
+        ),
+        "local_bounded_approve_commit_tag_execution_receipt_path": str(
+            local_bounded_approve_commit_tag_execution_receipt_path
+        ),
+        "local_bounded_approve_commit_tag_plan_path": str(
+            local_bounded_approve_commit_tag_plan_path
+        ),
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -24491,6 +25363,39 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         (
             "- Prompt339 post-targeted-contract-fix unexpected tracked file count: "
             f"`{local_post_targeted_contract_fix_unexpected_tracked_file_count}`"
+        ),
+        f"- Prompt340 bounded approve status: `{local_bounded_approve_commit_tag_status}`",
+        (
+            "- Prompt340 bounded approve execution status: "
+            f"`{local_bounded_approve_commit_tag_execution_status}`"
+        ),
+        (
+            "- Prompt340 bounded approve blocked reason: "
+            f"`{local_bounded_approve_commit_tag_blocked_reason}`"
+        ),
+        (
+            "- Prompt340 bounded approve next action: "
+            f"`{local_bounded_approve_commit_tag_next_action}`"
+        ),
+        (
+            "- Prompt340 bounded approve commit performed: "
+            f"`{str(local_bounded_approve_commit_tag_commit_performed).lower()}`"
+        ),
+        (
+            "- Prompt340 bounded approve tag performed: "
+            f"`{str(local_bounded_approve_commit_tag_tag_performed).lower()}`"
+        ),
+        (
+            "- Prompt340 bounded approve commit hash: "
+            f"`{local_bounded_approve_commit_tag_commit_hash or 'none'}`"
+        ),
+        (
+            "- Prompt340 bounded approve tag name: "
+            f"`{local_bounded_approve_commit_tag_tag_name}`"
+        ),
+        (
+            "- Prompt340 bounded approve worktree clean: "
+            f"`{str(local_bounded_approve_commit_tag_worktree_clean).lower()}`"
         ),
         f"- Diff capture status: `{diff_capture_status}`",
         f"- Diff capture blocked reason: `{diff_capture_blocked_reason}`",
@@ -26566,6 +27471,45 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_post_targeted_contract_fix_review_receipt_path": str(
             local_post_targeted_contract_fix_review_receipt_path
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_status": (
+            local_bounded_approve_commit_tag_status
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_execution_status": (
+            local_bounded_approve_commit_tag_execution_status
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_blocked_reason": (
+            local_bounded_approve_commit_tag_blocked_reason
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_next_action": (
+            local_bounded_approve_commit_tag_next_action
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_commit_performed": (
+            local_bounded_approve_commit_tag_commit_performed
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_tag_performed": (
+            local_bounded_approve_commit_tag_tag_performed
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_commit_hash": (
+            local_bounded_approve_commit_tag_commit_hash
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_tag_name": (
+            local_bounded_approve_commit_tag_tag_name
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_worktree_clean": (
+            local_bounded_approve_commit_tag_worktree_clean
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_gate_state_path": str(
+            local_bounded_approve_commit_tag_gate_state_path
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_execution_result_path": str(
+            local_bounded_approve_commit_tag_execution_result_path
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_execution_receipt_path": str(
+            local_bounded_approve_commit_tag_execution_receipt_path
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_plan_path": str(
+            local_bounded_approve_commit_tag_plan_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
@@ -183709,6 +184653,72 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_approve_commit_tag_artifact_reconciliation_receipt_path"
             ),
             default=_APPROVE_COMMIT_TAG_ARTIFACT_RECONCILIATION_RECEIPT_PATH,
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_bounded_approve_commit_tag_status"),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_execution_status": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_bounded_approve_commit_tag_execution_status"
+            ),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_blocked_reason": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_bounded_approve_commit_tag_blocked_reason"
+            ),
+            default="prompt340_not_started",
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_next_action": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_bounded_approve_commit_tag_next_action"),
+            default="manual_review_prompt339_approve_route_not_ready",
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_commit_performed": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_bounded_approve_commit_tag_commit_performed",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_tag_performed": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_bounded_approve_commit_tag_tag_performed",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_commit_hash": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_bounded_approve_commit_tag_commit_hash"),
+            default="",
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_tag_name": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_bounded_approve_commit_tag_tag_name"),
+            default=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_TAG_NAME,
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_worktree_clean": (
+            _read_one_cycle_controller_flag(
+                "project_browser_autonomous_local_bounded_approve_commit_tag_worktree_clean",
+                default=False,
+            )
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_gate_state_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_bounded_approve_commit_tag_gate_state_path"),
+            default=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_GATE_STATE_PATH,
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_execution_result_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_bounded_approve_commit_tag_execution_result_path"
+            ),
+            default=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RESULT_PATH,
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_execution_receipt_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_bounded_approve_commit_tag_execution_receipt_path"
+            ),
+            default=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_EXECUTION_RECEIPT_PATH,
+        ),
+        "project_browser_autonomous_local_bounded_approve_commit_tag_plan_path": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_bounded_approve_commit_tag_plan_path"),
+            default=_LOCAL_BOUNDED_APPROVE_COMMIT_TAG_PLAN_PATH,
         ),
         "project_browser_autonomous_remote_readiness_boundary_status": _normalize_text(
             approved_restart.get("project_browser_autonomous_remote_readiness_boundary_status"),
