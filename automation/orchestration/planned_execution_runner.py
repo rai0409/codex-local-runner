@@ -3839,6 +3839,30 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_codex_one_shot_handoff_cycle_id",
     "project_browser_autonomous_local_codex_one_shot_handoff_current_cycle",
     "project_browser_autonomous_local_codex_one_shot_handoff_max_cycles",
+    "project_browser_autonomous_local_codex_one_shot_execution_status",
+    "project_browser_autonomous_local_codex_one_shot_execution_execution_status",
+    "project_browser_autonomous_local_codex_one_shot_execution_next_action",
+    "project_browser_autonomous_local_codex_one_shot_execution_blocked_reason",
+    "project_browser_autonomous_local_codex_one_shot_execution_readiness_reason",
+    "project_browser_autonomous_local_codex_one_shot_execution_codex_invoked",
+    "project_browser_autonomous_local_codex_one_shot_execution_codex_invocation_allowed",
+    "project_browser_autonomous_local_codex_one_shot_execution_execution_allowed",
+    "project_browser_autonomous_local_codex_one_shot_execution_execution_attempted",
+    "project_browser_autonomous_local_codex_one_shot_execution_execution_completed",
+    "project_browser_autonomous_local_codex_one_shot_execution_execution_exit_code",
+    "project_browser_autonomous_local_codex_one_shot_execution_max_codex_invocations",
+    "project_browser_autonomous_local_codex_one_shot_execution_codex_invocation_count",
+    "project_browser_autonomous_local_codex_one_shot_execution_selected_step_id",
+    "project_browser_autonomous_local_codex_one_shot_execution_selected_step_name",
+    "project_browser_autonomous_local_codex_one_shot_execution_selected_step_operation",
+    "project_browser_autonomous_local_codex_one_shot_execution_prompt_path",
+    "project_browser_autonomous_local_codex_one_shot_execution_stdout_path",
+    "project_browser_autonomous_local_codex_one_shot_execution_stderr_path",
+    "project_browser_autonomous_local_codex_one_shot_execution_result_path",
+    "project_browser_autonomous_local_codex_one_shot_execution_run_id",
+    "project_browser_autonomous_local_codex_one_shot_execution_cycle_id",
+    "project_browser_autonomous_local_codex_one_shot_execution_current_cycle",
+    "project_browser_autonomous_local_codex_one_shot_execution_max_cycles",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -4092,6 +4116,7 @@ _LOCAL_AUTONOMOUS_CYCLE_V2_RECEIPT_PATH = (
     "local_autonomous_cycle_v2_receipt.json"
 )
 _LOCAL_CODEX_ONE_SHOT_HANDOFF_SCHEMA_VERSION = "local_codex_one_shot_handoff_v1"
+_LOCAL_CODEX_ONE_SHOT_EXECUTION_SCHEMA_VERSION = "local_codex_one_shot_execution_v1"
 _LOCAL_CODEX_ONE_SHOT_PROMPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/"
     "local_codex_one_shot_prompt.md"
@@ -4104,6 +4129,23 @@ _LOCAL_CODEX_ONE_SHOT_EXECUTION_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/"
     "local_codex_one_shot_execution_receipt.json"
 )
+_LOCAL_CODEX_ONE_SHOT_EXECUTION_RESULT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_codex_one_shot_execution_result.json"
+)
+_LOCAL_CODEX_ONE_SHOT_EXECUTION_RECEIPT_V2_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_codex_one_shot_execution_receipt_v2.json"
+)
+_LOCAL_CODEX_ONE_SHOT_EXECUTION_STDOUT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_codex_one_shot_execution_stdout.txt"
+)
+_LOCAL_CODEX_ONE_SHOT_EXECUTION_STDERR_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_codex_one_shot_execution_stderr.txt"
+)
+_LOCAL_CODEX_ONE_SHOT_EXECUTION_OUTPUT_MAX_CHARS = 200_000
 _LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
     "exec",
@@ -12196,6 +12238,699 @@ def _build_local_codex_one_shot_execution_receipt(
     }
 
 
+def _build_local_codex_one_shot_execution_result_state(
+    *,
+    execution_repo_path: str,
+    handoff_path: Path,
+    handoff_receipt_path: Path,
+    prompt_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    result_path: Path,
+) -> dict[str, Any]:
+    def _read_artifact(path: Path) -> tuple[bool, bool, dict[str, Any]]:
+        if not path.exists():
+            return False, False, {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            return True, False, {}
+        if not isinstance(payload, Mapping):
+            return True, False, {}
+        return True, True, dict(payload)
+
+    def _extract_bool(value: Any) -> tuple[bool, bool]:
+        if isinstance(value, bool):
+            return value, True
+        if isinstance(value, int):
+            return value != 0, True
+        text = _normalize_text(value, default="").strip().lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True, True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False, True
+        return False, False
+
+    def _as_field_int(value: Any) -> int | None:
+        return _as_optional_int(value)
+
+    def _bounded_output(text: str, *, max_chars: int) -> tuple[str, bool, int]:
+        normalized = _normalize_text(text, default="")
+        total_chars = len(normalized)
+        if total_chars <= max_chars:
+            return normalized, False, total_chars
+        return normalized[:max_chars], True, total_chars
+
+    handoff_exists, handoff_valid, handoff_payload = _read_artifact(handoff_path)
+    receipt_exists, receipt_valid, receipt_payload = _read_artifact(handoff_receipt_path)
+    prompt_artifact_exists = prompt_path.exists()
+
+    run_id = _normalize_text(
+        handoff_payload.get("run_id"),
+        default=_normalize_text(receipt_payload.get("run_id"), default="local-autonomous-v2"),
+    )
+    cycle_id = _normalize_text(
+        handoff_payload.get("cycle_id"),
+        default=_normalize_text(receipt_payload.get("cycle_id"), default="local-autonomous-v2-cycle-1"),
+    )
+    current_cycle = _as_non_negative_int(
+        handoff_payload.get("current_cycle"),
+        default=_as_non_negative_int(
+            receipt_payload.get("current_cycle"),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+        ),
+    )
+    max_cycles = _as_non_negative_int(
+        handoff_payload.get("max_cycles"),
+        default=_as_non_negative_int(
+            receipt_payload.get("max_cycles"),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+        ),
+    )
+    if current_cycle <= 0:
+        current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
+    if max_cycles <= 0:
+        max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+
+    default_blocked_state: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "execution_schema_version": _LOCAL_CODEX_ONE_SHOT_EXECUTION_SCHEMA_VERSION,
+        "source_prompt": "prompt333",
+        "source_handoff_schema_version": _LOCAL_CODEX_ONE_SHOT_HANDOFF_SCHEMA_VERSION,
+        "run_id": run_id,
+        "cycle_id": cycle_id,
+        "current_cycle": _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+        "max_cycles": _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+        "source_step_id": 2,
+        "source_step_name": "generate_next_codex_task",
+        "source_step_operation": "generate_next_codex_task",
+        "status": "blocked",
+        "execution_status": "blocked",
+        "blocked_reason": "local_codex_one_shot_handoff_not_valid_for_execution",
+        "readiness_reason": "local_codex_one_shot_handoff_not_valid_for_execution",
+        "execution_result": "codex_one_shot_not_executed",
+        "codex_invoked": False,
+        "codex_invocation_allowed": False,
+        "execution_allowed": False,
+        "execution_attempted": False,
+        "execution_completed": False,
+        "execution_exit_code": None,
+        "stdout_path": None,
+        "stderr_path": None,
+        "result_path": None,
+        "selected_step_id": None,
+        "selected_step_name": None,
+        "selected_step_operation": None,
+        "command_argv": [],
+        "prompt_path": None,
+        "prompt_exists": False,
+        "prompt_non_empty": False,
+        "max_codex_invocations": 1,
+        "codex_invocation_count": 0,
+        "changed_tracked_files": [],
+        "changed_tracked_files_after_execution": [],
+        "validation_errors": [],
+        "should_continue": False,
+        "next_action": "manual_review_local_codex_one_shot_handoff_before_execution",
+        "stdout_chars_total": 0,
+        "stderr_chars_total": 0,
+        "stdout_chars_written": 0,
+        "stderr_chars_written": 0,
+        "stdout_truncated": False,
+        "stderr_truncated": False,
+        "output_max_chars": _LOCAL_CODEX_ONE_SHOT_EXECUTION_OUTPUT_MAX_CHARS,
+        "commit_allowed": False,
+        "tag_allowed": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "push_pr_merge_enabled": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "targeted_fix_allowed": False,
+        "rollback_allowed": False,
+        "rollback_performed": False,
+    }
+
+    def _blocked_state(
+        *,
+        blocked_reason: str,
+        validation_errors: list[str],
+        changed_tracked_files: list[str] | None = None,
+        readiness_reason: str = "local_codex_one_shot_handoff_not_valid_for_execution",
+        next_action: str = "manual_review_local_codex_one_shot_handoff_before_execution",
+    ) -> dict[str, Any]:
+        state = dict(default_blocked_state)
+        state["blocked_reason"] = blocked_reason
+        state["readiness_reason"] = readiness_reason
+        state["validation_errors"] = _normalize_string_list(validation_errors)
+        state["changed_tracked_files"] = _normalize_string_list(changed_tracked_files)
+        state["next_action"] = next_action
+        return state
+
+    if not handoff_exists:
+        return _blocked_state(
+            blocked_reason="missing_local_codex_one_shot_execution_handoff_artifact",
+            validation_errors=["missing_local_codex_one_shot_execution_handoff_artifact"],
+        )
+    if not handoff_valid:
+        return _blocked_state(
+            blocked_reason="invalid_local_codex_one_shot_execution_handoff_artifact",
+            validation_errors=["invalid_local_codex_one_shot_execution_handoff_artifact"],
+        )
+    if not receipt_exists:
+        return _blocked_state(
+            blocked_reason="missing_local_codex_one_shot_execution_receipt_artifact",
+            validation_errors=["missing_local_codex_one_shot_execution_receipt_artifact"],
+        )
+    if not receipt_valid:
+        return _blocked_state(
+            blocked_reason="invalid_local_codex_one_shot_execution_receipt_artifact",
+            validation_errors=["invalid_local_codex_one_shot_execution_receipt_artifact"],
+        )
+    if not prompt_artifact_exists:
+        return _blocked_state(
+            blocked_reason="missing_local_codex_one_shot_prompt_artifact",
+            validation_errors=["missing_local_codex_one_shot_prompt_artifact"],
+        )
+
+    expected_command_argv = list(_LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND)
+    required_fields: tuple[tuple[str, Any], ...] = (
+        ("schema_version", _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION),
+        ("handoff_schema_version", _LOCAL_CODEX_ONE_SHOT_HANDOFF_SCHEMA_VERSION),
+        ("status", "ready"),
+        ("handoff_status", "ready"),
+        ("blocked_reason", "none"),
+        ("readiness_reason", "local_autonomous_cycle_v2_ready_and_tracked_worktree_clean"),
+        ("codex_prompt_ready", True),
+        ("codex_execution_command_ready", True),
+        ("codex_invocation_allowed", True),
+        ("execution_allowed", True),
+        ("max_codex_invocations", 1),
+        ("codex_invocation_count", 0),
+        ("selected_step_id", 2),
+        ("selected_step_name", "generate_next_codex_task"),
+        ("selected_step_operation", "generate_next_codex_task"),
+        ("prompt_exists", True),
+        ("prompt_non_empty", True),
+        ("command_argv", expected_command_argv),
+        ("next_action", "execute_local_codex_one_shot_adapter"),
+        ("commit_allowed", False),
+        ("tag_allowed", False),
+        ("push_pr_merge_enabled", False),
+        ("targeted_fix_allowed", False),
+        ("rollback_allowed", False),
+        ("changed_tracked_files", []),
+        ("validation_errors", []),
+    )
+    field_to_blocked_reason: dict[str, str] = {
+        "schema_version": "local_codex_one_shot_handoff_schema_version_mismatch",
+        "handoff_schema_version": "local_codex_one_shot_handoff_schema_version_mismatch",
+        "status": "local_codex_one_shot_handoff_status_not_ready",
+        "handoff_status": "local_codex_one_shot_handoff_handoff_status_not_ready",
+        "blocked_reason": "local_codex_one_shot_handoff_blocked_reason_not_none",
+        "readiness_reason": "local_codex_one_shot_handoff_readiness_reason_mismatch",
+        "codex_prompt_ready": "local_codex_one_shot_handoff_prompt_not_ready",
+        "codex_execution_command_ready": "local_codex_one_shot_handoff_command_not_ready",
+        "codex_invocation_allowed": "local_codex_one_shot_handoff_invocation_not_allowed",
+        "execution_allowed": "local_codex_one_shot_handoff_execution_not_allowed",
+        "max_codex_invocations": "local_codex_one_shot_handoff_max_codex_invocations_not_one",
+        "codex_invocation_count": "local_codex_one_shot_handoff_invocation_count_not_zero",
+        "selected_step_id": "local_codex_one_shot_handoff_selected_step_mismatch",
+        "selected_step_name": "local_codex_one_shot_handoff_selected_step_mismatch",
+        "selected_step_operation": "local_codex_one_shot_handoff_selected_step_mismatch",
+        "prompt_exists": "local_codex_one_shot_handoff_prompt_not_ready",
+        "prompt_non_empty": "local_codex_one_shot_handoff_prompt_not_ready",
+        "command_argv": "local_codex_one_shot_handoff_command_argv_mismatch",
+        "next_action": "local_codex_one_shot_handoff_next_action_mismatch",
+        "commit_allowed": "local_codex_one_shot_handoff_safety_flag_mismatch",
+        "tag_allowed": "local_codex_one_shot_handoff_safety_flag_mismatch",
+        "push_pr_merge_enabled": "local_codex_one_shot_handoff_safety_flag_mismatch",
+        "targeted_fix_allowed": "local_codex_one_shot_handoff_safety_flag_mismatch",
+        "rollback_allowed": "local_codex_one_shot_handoff_safety_flag_mismatch",
+        "changed_tracked_files": "local_codex_one_shot_handoff_changed_tracked_files_not_empty",
+        "validation_errors": "local_codex_one_shot_handoff_validation_errors_not_empty",
+        "prompt_path": "local_codex_one_shot_handoff_prompt_not_ready",
+    }
+
+    validation_errors: list[str] = []
+    first_failure_reason = ""
+    authoritative = handoff_payload
+    supporting_surfaces: tuple[tuple[str, Mapping[str, Any]], ...] = (
+        ("receipt", receipt_payload),
+    )
+
+    if "prompt_path" not in authoritative:
+        if any("prompt_path" in surface for _, surface in supporting_surfaces):
+            validation_errors.append(
+                "local_codex_one_shot_handoff_prompt_path_present_only_in_non_authoritative_artifact"
+            )
+        else:
+            validation_errors.append(
+                "local_codex_one_shot_handoff_prompt_path_missing_in_authoritative_artifact"
+            )
+        first_failure_reason = "local_codex_one_shot_handoff_prompt_not_ready"
+    elif not _normalize_text(authoritative.get("prompt_path"), default=""):
+        validation_errors.append("local_codex_one_shot_handoff_prompt_path_empty")
+        first_failure_reason = "local_codex_one_shot_handoff_prompt_not_ready"
+    else:
+        authoritative_prompt_path = _normalize_text(
+            authoritative.get("prompt_path"),
+            default="",
+        )
+        for surface_name, surface in supporting_surfaces:
+            if "prompt_path" not in surface:
+                continue
+            supporting_prompt_path = _normalize_text(surface.get("prompt_path"), default="")
+            if (not supporting_prompt_path) or (supporting_prompt_path != authoritative_prompt_path):
+                validation_errors.append(
+                    "local_codex_one_shot_handoff_prompt_path_"
+                    f"mismatch_in_supporting_{surface_name}_artifact"
+                )
+                if not first_failure_reason:
+                    first_failure_reason = "local_codex_one_shot_handoff_prompt_not_ready"
+
+    for field_name, expected in required_fields:
+        if field_name not in authoritative:
+            present_in_supporting = any(
+                field_name in surface for _, surface in supporting_surfaces
+            )
+            if present_in_supporting:
+                validation_errors.append(
+                    f"local_codex_one_shot_handoff_{field_name}_present_only_in_non_authoritative_artifact"
+                )
+            else:
+                validation_errors.append(
+                    f"local_codex_one_shot_handoff_{field_name}_missing_in_authoritative_artifact"
+                )
+            if not first_failure_reason:
+                first_failure_reason = field_to_blocked_reason.get(
+                    field_name,
+                    "local_codex_one_shot_handoff_not_valid_for_execution",
+                )
+            continue
+
+        authoritative_value = authoritative.get(field_name)
+        mismatch = False
+        if isinstance(expected, bool):
+            parsed, valid = _extract_bool(authoritative_value)
+            mismatch = (not valid) or (parsed != expected)
+        elif isinstance(expected, int):
+            mismatch = _as_field_int(authoritative_value) != expected
+        elif isinstance(expected, list):
+            if field_name == "command_argv":
+                mismatch = _normalize_string_list(authoritative_value, sort_items=False) != expected
+            else:
+                mismatch = _normalize_string_list(authoritative_value) != expected
+        else:
+            mismatch = _normalize_text(authoritative_value, default="") != expected
+
+        if mismatch:
+            validation_errors.append(
+                f"local_codex_one_shot_handoff_{field_name}_mismatch_expected_{expected}"
+            )
+            if not first_failure_reason:
+                first_failure_reason = field_to_blocked_reason.get(
+                    field_name,
+                    "local_codex_one_shot_handoff_not_valid_for_execution",
+                )
+
+        for surface_name, surface in supporting_surfaces:
+            if field_name not in surface:
+                continue
+            support_value = surface.get(field_name)
+            support_mismatch = False
+            if isinstance(expected, bool):
+                parsed, valid = _extract_bool(support_value)
+                support_mismatch = (not valid) or (parsed != expected)
+            elif isinstance(expected, int):
+                support_mismatch = _as_field_int(support_value) != expected
+            elif isinstance(expected, list):
+                if field_name == "command_argv":
+                    support_mismatch = (
+                        _normalize_string_list(support_value, sort_items=False) != expected
+                    )
+                else:
+                    support_mismatch = _normalize_string_list(support_value) != expected
+            else:
+                support_mismatch = _normalize_text(support_value, default="") != expected
+
+            if support_mismatch:
+                validation_errors.append(
+                    "local_codex_one_shot_handoff_"
+                    f"{field_name}_mismatch_in_supporting_{surface_name}_artifact"
+                )
+                if not first_failure_reason:
+                    first_failure_reason = field_to_blocked_reason.get(
+                        field_name,
+                        "local_codex_one_shot_handoff_not_valid_for_execution",
+                    )
+
+    resolved_prompt_path_text = _normalize_text(
+        authoritative.get("prompt_path"),
+        default=str(prompt_path),
+    )
+    resolved_prompt_path = Path(resolved_prompt_path_text)
+
+    prompt_text = ""
+    try:
+        prompt_text = resolved_prompt_path.read_text(encoding="utf-8")
+    except OSError:
+        prompt_text = ""
+    if not prompt_text:
+        if not validation_errors:
+            validation_errors.append("local_codex_one_shot_prompt_missing")
+        return _blocked_state(
+            blocked_reason="local_codex_one_shot_prompt_missing",
+            validation_errors=validation_errors,
+        )
+    if not prompt_text.strip():
+        validation_errors.append("local_codex_one_shot_prompt_empty")
+        return _blocked_state(
+            blocked_reason="local_codex_one_shot_prompt_empty",
+            validation_errors=validation_errors,
+        )
+
+    if validation_errors:
+        return _blocked_state(
+            blocked_reason=(
+                first_failure_reason or "local_codex_one_shot_handoff_not_valid_for_execution"
+            ),
+            validation_errors=validation_errors,
+        )
+
+    try:
+        status_short_cmd = _run_git(
+            _normalize_text(execution_repo_path, default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH),
+            ["status", "--short", "--untracked-files=no"],
+            timeout_seconds=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        status_short_cmd = subprocess.CompletedProcess(
+            args=["git", "status", "--short", "--untracked-files=no"],
+            returncode=1,
+            stdout="",
+            stderr="",
+        )
+
+    if status_short_cmd.returncode != 0:
+        return _blocked_state(
+            blocked_reason="git_metadata_collection_failed_before_local_codex_one_shot_execution",
+            validation_errors=[],
+            readiness_reason="worktree_not_clean_before_local_codex_one_shot_execution",
+            next_action="review_git_metadata_failure_before_local_codex_one_shot_execution",
+        )
+
+    changed_tracked_files = sorted(
+        {
+            _parse_git_status_path(line)
+            for line in (status_short_cmd.stdout or "").splitlines()
+            if line.strip() and _parse_git_status_path(line)
+        }
+    )
+    if changed_tracked_files:
+        return _blocked_state(
+            blocked_reason="tracked_changes_present_before_local_codex_one_shot_execution",
+            validation_errors=[],
+            changed_tracked_files=changed_tracked_files,
+            readiness_reason="worktree_not_clean_before_local_codex_one_shot_execution",
+            next_action=(
+                "commit_or_reconcile_tracked_changes_before_local_codex_one_shot_execution"
+            ),
+        )
+
+    command_argv = _normalize_string_list(
+        authoritative.get("command_argv"),
+        sort_items=False,
+    )
+    try:
+        completed = subprocess.run(
+            command_argv,
+            input=prompt_text,
+            shell=False,
+            cwd=_normalize_text(
+                execution_repo_path,
+                default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH,
+            ),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        execution_exit_code = int(completed.returncode)
+        raw_stdout = _normalize_text(completed.stdout, default="")
+        raw_stderr = _normalize_text(completed.stderr, default="")
+    except subprocess.TimeoutExpired as exc:
+        execution_exit_code = 124
+        raw_stdout = _normalize_text(exc.stdout, default="")
+        raw_stderr = _normalize_text(exc.stderr, default="")
+    except OSError as exc:
+        execution_exit_code = 126
+        raw_stdout = ""
+        raw_stderr = _normalize_text(str(exc), default="")
+
+    stdout_text, stdout_truncated, stdout_chars_total = _bounded_output(
+        raw_stdout,
+        max_chars=_LOCAL_CODEX_ONE_SHOT_EXECUTION_OUTPUT_MAX_CHARS,
+    )
+    stderr_text, stderr_truncated, stderr_chars_total = _bounded_output(
+        raw_stderr,
+        max_chars=_LOCAL_CODEX_ONE_SHOT_EXECUTION_OUTPUT_MAX_CHARS,
+    )
+    try:
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(stdout_text, encoding="utf-8")
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.write_text(stderr_text, encoding="utf-8")
+    except OSError:
+        pass
+
+    try:
+        post_status_cmd = _run_git(
+            _normalize_text(execution_repo_path, default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH),
+            ["status", "--short", "--untracked-files=no"],
+            timeout_seconds=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        post_status_cmd = subprocess.CompletedProcess(
+            args=["git", "status", "--short", "--untracked-files=no"],
+            returncode=1,
+            stdout="",
+            stderr="",
+        )
+    changed_tracked_files_after_execution = (
+        sorted(
+            {
+                _parse_git_status_path(line)
+                for line in (post_status_cmd.stdout or "").splitlines()
+                if line.strip() and _parse_git_status_path(line)
+            }
+        )
+        if post_status_cmd.returncode == 0
+        else []
+    )
+
+    should_continue = execution_exit_code == 0
+    return {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "execution_schema_version": _LOCAL_CODEX_ONE_SHOT_EXECUTION_SCHEMA_VERSION,
+        "source_prompt": "prompt333",
+        "source_handoff_schema_version": _LOCAL_CODEX_ONE_SHOT_HANDOFF_SCHEMA_VERSION,
+        "run_id": run_id,
+        "cycle_id": cycle_id,
+        "current_cycle": _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+        "max_cycles": _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+        "source_step_id": 2,
+        "source_step_name": "generate_next_codex_task",
+        "source_step_operation": "generate_next_codex_task",
+        "status": "completed",
+        "execution_status": "completed",
+        "blocked_reason": "none",
+        "readiness_reason": "local_codex_one_shot_handoff_valid_and_tracked_worktree_clean",
+        "execution_result": (
+            "codex_one_shot_completed" if should_continue else "codex_one_shot_failed"
+        ),
+        "codex_invoked": True,
+        "codex_invocation_allowed": True,
+        "execution_allowed": True,
+        "execution_attempted": True,
+        "execution_completed": True,
+        "execution_exit_code": int(execution_exit_code),
+        "stdout_path": str(stdout_path),
+        "stderr_path": str(stderr_path),
+        "result_path": str(result_path),
+        "selected_step_id": 2,
+        "selected_step_name": "generate_next_codex_task",
+        "selected_step_operation": "generate_next_codex_task",
+        "command_argv": list(command_argv),
+        "prompt_path": str(resolved_prompt_path),
+        "prompt_exists": True,
+        "prompt_non_empty": True,
+        "max_codex_invocations": 1,
+        "codex_invocation_count": 1,
+        "changed_tracked_files": [],
+        "changed_tracked_files_after_execution": changed_tracked_files_after_execution,
+        "validation_errors": [],
+        "should_continue": should_continue,
+        "next_action": (
+            "prepare_local_git_diff_capture"
+            if should_continue
+            else "manual_review_local_codex_one_shot_execution_failure"
+        ),
+        "stdout_chars_total": stdout_chars_total,
+        "stderr_chars_total": stderr_chars_total,
+        "stdout_chars_written": len(stdout_text),
+        "stderr_chars_written": len(stderr_text),
+        "stdout_truncated": stdout_truncated,
+        "stderr_truncated": stderr_truncated,
+        "output_max_chars": _LOCAL_CODEX_ONE_SHOT_EXECUTION_OUTPUT_MAX_CHARS,
+        "commit_allowed": False,
+        "tag_allowed": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "push_pr_merge_enabled": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "targeted_fix_allowed": False,
+        "rollback_allowed": False,
+        "rollback_performed": False,
+    }
+
+
+def _build_local_codex_one_shot_execution_receipt_v2(
+    *,
+    result_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    state = dict(result_state) if isinstance(result_state, Mapping) else {}
+    return {
+        "schema_version": _normalize_text(
+            state.get("schema_version"),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        ),
+        "execution_schema_version": _normalize_text(
+            state.get("execution_schema_version"),
+            default=_LOCAL_CODEX_ONE_SHOT_EXECUTION_SCHEMA_VERSION,
+        ),
+        "receipt_schema_version": "local_codex_one_shot_execution_receipt_v2",
+        "source_prompt": "prompt333",
+        "source_handoff_schema_version": _normalize_text(
+            state.get("source_handoff_schema_version"),
+            default=_LOCAL_CODEX_ONE_SHOT_HANDOFF_SCHEMA_VERSION,
+        ),
+        "run_id": _normalize_text(state.get("run_id"), default="local-autonomous-v2"),
+        "cycle_id": _normalize_text(
+            state.get("cycle_id"),
+            default="local-autonomous-v2-cycle-1",
+        ),
+        "current_cycle": _as_non_negative_int(
+            state.get("current_cycle"),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+        ),
+        "max_cycles": _as_non_negative_int(
+            state.get("max_cycles"),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+        ),
+        "source_step_id": _as_non_negative_int(state.get("source_step_id"), default=2),
+        "source_step_name": _normalize_text(
+            state.get("source_step_name"),
+            default="generate_next_codex_task",
+        ),
+        "source_step_operation": _normalize_text(
+            state.get("source_step_operation"),
+            default="generate_next_codex_task",
+        ),
+        "status": _normalize_text(state.get("status"), default="blocked"),
+        "execution_status": _normalize_text(state.get("execution_status"), default="blocked"),
+        "blocked_reason": _normalize_text(
+            state.get("blocked_reason"),
+            default="local_codex_one_shot_handoff_not_valid_for_execution",
+        ),
+        "readiness_reason": _normalize_text(
+            state.get("readiness_reason"),
+            default="local_codex_one_shot_handoff_not_valid_for_execution",
+        ),
+        "execution_result": _normalize_text(
+            state.get("execution_result"),
+            default="codex_one_shot_not_executed",
+        ),
+        "codex_invoked": bool(state.get("codex_invoked", False)),
+        "codex_invocation_allowed": bool(state.get("codex_invocation_allowed", False)),
+        "execution_allowed": bool(state.get("execution_allowed", False)),
+        "execution_attempted": bool(state.get("execution_attempted", False)),
+        "execution_completed": bool(state.get("execution_completed", False)),
+        "execution_exit_code": _as_optional_int(state.get("execution_exit_code")),
+        "stdout_path": (
+            _normalize_text(state.get("stdout_path"), default="") or None
+        ),
+        "stderr_path": (
+            _normalize_text(state.get("stderr_path"), default="") or None
+        ),
+        "result_path": (
+            _normalize_text(state.get("result_path"), default="") or None
+        ),
+        "selected_step_id": _as_optional_int(state.get("selected_step_id")),
+        "selected_step_name": (
+            _normalize_text(state.get("selected_step_name"), default="") or None
+        ),
+        "selected_step_operation": (
+            _normalize_text(state.get("selected_step_operation"), default="") or None
+        ),
+        "command_argv": list(state.get("command_argv", []))
+        if isinstance(state.get("command_argv"), list)
+        else [],
+        "prompt_path": (
+            _normalize_text(state.get("prompt_path"), default="") or None
+        ),
+        "prompt_exists": bool(state.get("prompt_exists", False)),
+        "prompt_non_empty": bool(state.get("prompt_non_empty", False)),
+        "max_codex_invocations": _as_non_negative_int(
+            state.get("max_codex_invocations"),
+            default=1,
+        ),
+        "codex_invocation_count": _as_non_negative_int(
+            state.get("codex_invocation_count"),
+            default=0,
+        ),
+        "changed_tracked_files": _normalize_string_list(state.get("changed_tracked_files")),
+        "changed_tracked_files_after_execution": _normalize_string_list(
+            state.get("changed_tracked_files_after_execution")
+        ),
+        "validation_errors": _normalize_string_list(state.get("validation_errors")),
+        "should_continue": bool(state.get("should_continue", False)),
+        "next_action": _normalize_text(
+            state.get("next_action"),
+            default="manual_review_local_codex_one_shot_handoff_before_execution",
+        ),
+        "stdout_chars_total": _as_non_negative_int(state.get("stdout_chars_total"), default=0),
+        "stderr_chars_total": _as_non_negative_int(state.get("stderr_chars_total"), default=0),
+        "stdout_chars_written": _as_non_negative_int(
+            state.get("stdout_chars_written"),
+            default=0,
+        ),
+        "stderr_chars_written": _as_non_negative_int(
+            state.get("stderr_chars_written"),
+            default=0,
+        ),
+        "stdout_truncated": bool(state.get("stdout_truncated", False)),
+        "stderr_truncated": bool(state.get("stderr_truncated", False)),
+        "output_max_chars": _as_non_negative_int(
+            state.get("output_max_chars"),
+            default=_LOCAL_CODEX_ONE_SHOT_EXECUTION_OUTPUT_MAX_CHARS,
+        ),
+        "commit_allowed": False,
+        "tag_allowed": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "push_pr_merge_enabled": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "targeted_fix_allowed": False,
+        "rollback_allowed": False,
+        "rollback_performed": False,
+    }
+
+
 def _write_approve_commit_tag_commands_if_safe(
     *,
     boundary_state: Mapping[str, Any] | None,
@@ -15544,6 +16279,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_codex_one_shot_execution_receipt_path = Path(
         _LOCAL_CODEX_ONE_SHOT_EXECUTION_RECEIPT_PATH
     )
+    local_codex_one_shot_execution_result_path = Path(
+        _LOCAL_CODEX_ONE_SHOT_EXECUTION_RESULT_PATH
+    )
+    local_codex_one_shot_execution_receipt_v2_path = Path(
+        _LOCAL_CODEX_ONE_SHOT_EXECUTION_RECEIPT_V2_PATH
+    )
+    local_codex_one_shot_execution_stdout_path = Path(
+        _LOCAL_CODEX_ONE_SHOT_EXECUTION_STDOUT_PATH
+    )
+    local_codex_one_shot_execution_stderr_path = Path(
+        _LOCAL_CODEX_ONE_SHOT_EXECUTION_STDERR_PATH
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -15908,6 +16655,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_codex_one_shot_handoff_cycle_id = "local-autonomous-v2-cycle-1"
     local_codex_one_shot_handoff_current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
     local_codex_one_shot_handoff_max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+    local_codex_one_shot_execution_status = "blocked"
+    local_codex_one_shot_execution_execution_status = "blocked"
+    local_codex_one_shot_execution_next_action = (
+        "manual_review_local_codex_one_shot_handoff_before_execution"
+    )
+    local_codex_one_shot_execution_blocked_reason = (
+        "local_codex_one_shot_handoff_not_valid_for_execution"
+    )
+    local_codex_one_shot_execution_readiness_reason = (
+        "local_codex_one_shot_handoff_not_valid_for_execution"
+    )
+    local_codex_one_shot_execution_codex_invoked = False
+    local_codex_one_shot_execution_codex_invocation_allowed = False
+    local_codex_one_shot_execution_execution_allowed = False
+    local_codex_one_shot_execution_execution_attempted = False
+    local_codex_one_shot_execution_execution_completed = False
+    local_codex_one_shot_execution_execution_exit_code: int | None = None
+    local_codex_one_shot_execution_max_codex_invocations = 1
+    local_codex_one_shot_execution_codex_invocation_count = 0
+    local_codex_one_shot_execution_selected_step_id: int | None = None
+    local_codex_one_shot_execution_selected_step_name: str | None = None
+    local_codex_one_shot_execution_selected_step_operation: str | None = None
+    local_codex_one_shot_execution_prompt_path: str | None = None
+    local_codex_one_shot_execution_stdout_path_text: str | None = None
+    local_codex_one_shot_execution_stderr_path_text: str | None = None
+    local_codex_one_shot_execution_result_path_text: str | None = None
+    local_codex_one_shot_execution_run_id = "local-autonomous-v2"
+    local_codex_one_shot_execution_cycle_id = "local-autonomous-v2-cycle-1"
+    local_codex_one_shot_execution_current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
+    local_codex_one_shot_execution_max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -16149,6 +16926,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_local_codex_one_shot_execution_receipt_json": str(
             local_codex_one_shot_execution_receipt_path
+        ),
+        "one_cycle_controller_local_codex_one_shot_execution_result_json": str(
+            local_codex_one_shot_execution_result_path
+        ),
+        "one_cycle_controller_local_codex_one_shot_execution_receipt_v2_json": str(
+            local_codex_one_shot_execution_receipt_v2_path
+        ),
+        "one_cycle_controller_local_codex_one_shot_execution_stdout_txt": str(
+            local_codex_one_shot_execution_stdout_path
+        ),
+        "one_cycle_controller_local_codex_one_shot_execution_stderr_txt": str(
+            local_codex_one_shot_execution_stderr_path
         ),
     }
 
@@ -18515,6 +19304,175 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         local_codex_one_shot_handoff_state.get("max_cycles"),
         default=local_codex_one_shot_handoff_max_cycles,
     )
+    local_codex_one_shot_execution_result_state = (
+        _build_local_codex_one_shot_execution_result_state(
+            execution_repo_path=str(execution_repo_path),
+            handoff_path=local_codex_one_shot_execution_handoff_path,
+            handoff_receipt_path=local_codex_one_shot_execution_receipt_path,
+            prompt_path=local_codex_one_shot_prompt_path,
+            stdout_path=local_codex_one_shot_execution_stdout_path,
+            stderr_path=local_codex_one_shot_execution_stderr_path,
+            result_path=local_codex_one_shot_execution_result_path,
+        )
+    )
+    local_codex_one_shot_execution_receipt_v2_state = (
+        _build_local_codex_one_shot_execution_receipt_v2(
+            result_state=local_codex_one_shot_execution_result_state,
+        )
+    )
+    local_codex_one_shot_execution_artifacts_written = False
+    try:
+        local_codex_one_shot_execution_result_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(
+            local_codex_one_shot_execution_result_path,
+            local_codex_one_shot_execution_result_state,
+        )
+        _write_json(
+            local_codex_one_shot_execution_receipt_v2_path,
+            local_codex_one_shot_execution_receipt_v2_state,
+        )
+        local_codex_one_shot_execution_artifacts_written = True
+    except OSError:
+        local_codex_one_shot_execution_artifacts_written = False
+    if (
+        (not local_codex_one_shot_execution_artifacts_written)
+        or (not local_codex_one_shot_execution_result_path.exists())
+        or (not local_codex_one_shot_execution_receipt_v2_path.exists())
+    ):
+        try:
+            local_codex_one_shot_execution_result_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json(
+                local_codex_one_shot_execution_result_path,
+                local_codex_one_shot_execution_result_state,
+            )
+            _write_json(
+                local_codex_one_shot_execution_receipt_v2_path,
+                local_codex_one_shot_execution_receipt_v2_state,
+            )
+        except OSError:
+            pass
+    local_codex_one_shot_execution_status = _normalize_text(
+        local_codex_one_shot_execution_result_state.get("status"),
+        default=local_codex_one_shot_execution_status,
+    )
+    local_codex_one_shot_execution_execution_status = _normalize_text(
+        local_codex_one_shot_execution_result_state.get("execution_status"),
+        default=local_codex_one_shot_execution_execution_status,
+    )
+    local_codex_one_shot_execution_next_action = _normalize_text(
+        local_codex_one_shot_execution_result_state.get("next_action"),
+        default=local_codex_one_shot_execution_next_action,
+    )
+    local_codex_one_shot_execution_blocked_reason = _normalize_text(
+        local_codex_one_shot_execution_result_state.get("blocked_reason"),
+        default=local_codex_one_shot_execution_blocked_reason,
+    )
+    local_codex_one_shot_execution_readiness_reason = _normalize_text(
+        local_codex_one_shot_execution_result_state.get("readiness_reason"),
+        default=local_codex_one_shot_execution_readiness_reason,
+    )
+    local_codex_one_shot_execution_codex_invoked = bool(
+        local_codex_one_shot_execution_result_state.get(
+            "codex_invoked",
+            local_codex_one_shot_execution_codex_invoked,
+        )
+    )
+    local_codex_one_shot_execution_codex_invocation_allowed = bool(
+        local_codex_one_shot_execution_result_state.get(
+            "codex_invocation_allowed",
+            local_codex_one_shot_execution_codex_invocation_allowed,
+        )
+    )
+    local_codex_one_shot_execution_execution_allowed = bool(
+        local_codex_one_shot_execution_result_state.get(
+            "execution_allowed",
+            local_codex_one_shot_execution_execution_allowed,
+        )
+    )
+    local_codex_one_shot_execution_execution_attempted = bool(
+        local_codex_one_shot_execution_result_state.get(
+            "execution_attempted",
+            local_codex_one_shot_execution_execution_attempted,
+        )
+    )
+    local_codex_one_shot_execution_execution_completed = bool(
+        local_codex_one_shot_execution_result_state.get(
+            "execution_completed",
+            local_codex_one_shot_execution_execution_completed,
+        )
+    )
+    local_codex_one_shot_execution_execution_exit_code = _as_optional_int(
+        local_codex_one_shot_execution_result_state.get("execution_exit_code")
+    )
+    local_codex_one_shot_execution_max_codex_invocations = _as_non_negative_int(
+        local_codex_one_shot_execution_result_state.get("max_codex_invocations"),
+        default=local_codex_one_shot_execution_max_codex_invocations,
+    )
+    local_codex_one_shot_execution_codex_invocation_count = _as_non_negative_int(
+        local_codex_one_shot_execution_result_state.get("codex_invocation_count"),
+        default=local_codex_one_shot_execution_codex_invocation_count,
+    )
+    local_codex_one_shot_execution_selected_step_id = _as_optional_int(
+        local_codex_one_shot_execution_result_state.get("selected_step_id")
+    )
+    local_codex_one_shot_execution_selected_step_name = (
+        _normalize_text(
+            local_codex_one_shot_execution_result_state.get("selected_step_name"),
+            default="",
+        )
+        or None
+    )
+    local_codex_one_shot_execution_selected_step_operation = (
+        _normalize_text(
+            local_codex_one_shot_execution_result_state.get("selected_step_operation"),
+            default="",
+        )
+        or None
+    )
+    local_codex_one_shot_execution_prompt_path = (
+        _normalize_text(
+            local_codex_one_shot_execution_result_state.get("prompt_path"),
+            default="",
+        )
+        or None
+    )
+    local_codex_one_shot_execution_stdout_path_text = (
+        _normalize_text(
+            local_codex_one_shot_execution_result_state.get("stdout_path"),
+            default="",
+        )
+        or None
+    )
+    local_codex_one_shot_execution_stderr_path_text = (
+        _normalize_text(
+            local_codex_one_shot_execution_result_state.get("stderr_path"),
+            default="",
+        )
+        or None
+    )
+    local_codex_one_shot_execution_result_path_text = (
+        _normalize_text(
+            local_codex_one_shot_execution_result_state.get("result_path"),
+            default="",
+        )
+        or None
+    )
+    local_codex_one_shot_execution_run_id = _normalize_text(
+        local_codex_one_shot_execution_result_state.get("run_id"),
+        default=local_codex_one_shot_execution_run_id,
+    )
+    local_codex_one_shot_execution_cycle_id = _normalize_text(
+        local_codex_one_shot_execution_result_state.get("cycle_id"),
+        default=local_codex_one_shot_execution_cycle_id,
+    )
+    local_codex_one_shot_execution_current_cycle = _as_non_negative_int(
+        local_codex_one_shot_execution_result_state.get("current_cycle"),
+        default=local_codex_one_shot_execution_current_cycle,
+    )
+    local_codex_one_shot_execution_max_cycles = _as_non_negative_int(
+        local_codex_one_shot_execution_result_state.get("max_cycles"),
+        default=local_codex_one_shot_execution_max_cycles,
+    )
 
     result_payload = {
         "status": status,
@@ -18954,6 +19912,68 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             local_codex_one_shot_handoff_current_cycle
         ),
         "local_codex_one_shot_handoff_max_cycles": local_codex_one_shot_handoff_max_cycles,
+        "local_codex_one_shot_execution_status": local_codex_one_shot_execution_status,
+        "local_codex_one_shot_execution_execution_status": (
+            local_codex_one_shot_execution_execution_status
+        ),
+        "local_codex_one_shot_execution_next_action": local_codex_one_shot_execution_next_action,
+        "local_codex_one_shot_execution_blocked_reason": (
+            local_codex_one_shot_execution_blocked_reason
+        ),
+        "local_codex_one_shot_execution_readiness_reason": (
+            local_codex_one_shot_execution_readiness_reason
+        ),
+        "local_codex_one_shot_execution_codex_invoked": (
+            local_codex_one_shot_execution_codex_invoked
+        ),
+        "local_codex_one_shot_execution_codex_invocation_allowed": (
+            local_codex_one_shot_execution_codex_invocation_allowed
+        ),
+        "local_codex_one_shot_execution_execution_allowed": (
+            local_codex_one_shot_execution_execution_allowed
+        ),
+        "local_codex_one_shot_execution_execution_attempted": (
+            local_codex_one_shot_execution_execution_attempted
+        ),
+        "local_codex_one_shot_execution_execution_completed": (
+            local_codex_one_shot_execution_execution_completed
+        ),
+        "local_codex_one_shot_execution_execution_exit_code": (
+            local_codex_one_shot_execution_execution_exit_code
+        ),
+        "local_codex_one_shot_execution_max_codex_invocations": (
+            local_codex_one_shot_execution_max_codex_invocations
+        ),
+        "local_codex_one_shot_execution_codex_invocation_count": (
+            local_codex_one_shot_execution_codex_invocation_count
+        ),
+        "local_codex_one_shot_execution_selected_step_id": (
+            local_codex_one_shot_execution_selected_step_id
+        ),
+        "local_codex_one_shot_execution_selected_step_name": (
+            local_codex_one_shot_execution_selected_step_name
+        ),
+        "local_codex_one_shot_execution_selected_step_operation": (
+            local_codex_one_shot_execution_selected_step_operation
+        ),
+        "local_codex_one_shot_execution_prompt_path": (
+            local_codex_one_shot_execution_prompt_path
+        ),
+        "local_codex_one_shot_execution_stdout_path": (
+            local_codex_one_shot_execution_stdout_path_text
+        ),
+        "local_codex_one_shot_execution_stderr_path": (
+            local_codex_one_shot_execution_stderr_path_text
+        ),
+        "local_codex_one_shot_execution_result_path": (
+            local_codex_one_shot_execution_result_path_text
+        ),
+        "local_codex_one_shot_execution_run_id": local_codex_one_shot_execution_run_id,
+        "local_codex_one_shot_execution_cycle_id": local_codex_one_shot_execution_cycle_id,
+        "local_codex_one_shot_execution_current_cycle": (
+            local_codex_one_shot_execution_current_cycle
+        ),
+        "local_codex_one_shot_execution_max_cycles": local_codex_one_shot_execution_max_cycles,
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -19465,6 +20485,102 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "- Local Codex one-shot handoff max cycles: "
             f"`{local_codex_one_shot_handoff_max_cycles}`"
         ),
+        (
+            "- Local Codex one-shot execution status: "
+            f"`{local_codex_one_shot_execution_status}`"
+        ),
+        (
+            "- Local Codex one-shot execution execution status: "
+            f"`{local_codex_one_shot_execution_execution_status}`"
+        ),
+        (
+            "- Local Codex one-shot execution next action: "
+            f"`{local_codex_one_shot_execution_next_action}`"
+        ),
+        (
+            "- Local Codex one-shot execution blocked reason: "
+            f"`{local_codex_one_shot_execution_blocked_reason}`"
+        ),
+        (
+            "- Local Codex one-shot execution readiness reason: "
+            f"`{local_codex_one_shot_execution_readiness_reason}`"
+        ),
+        (
+            "- Local Codex one-shot execution codex invoked: "
+            f"`{str(local_codex_one_shot_execution_codex_invoked).lower()}`"
+        ),
+        (
+            "- Local Codex one-shot execution codex invocation allowed: "
+            f"`{str(local_codex_one_shot_execution_codex_invocation_allowed).lower()}`"
+        ),
+        (
+            "- Local Codex one-shot execution execution allowed: "
+            f"`{str(local_codex_one_shot_execution_execution_allowed).lower()}`"
+        ),
+        (
+            "- Local Codex one-shot execution attempted: "
+            f"`{str(local_codex_one_shot_execution_execution_attempted).lower()}`"
+        ),
+        (
+            "- Local Codex one-shot execution completed: "
+            f"`{str(local_codex_one_shot_execution_execution_completed).lower()}`"
+        ),
+        (
+            "- Local Codex one-shot execution exit code: "
+            f"`{local_codex_one_shot_execution_execution_exit_code}`"
+        ),
+        (
+            "- Local Codex one-shot execution max codex invocations: "
+            f"`{local_codex_one_shot_execution_max_codex_invocations}`"
+        ),
+        (
+            "- Local Codex one-shot execution codex invocation count: "
+            f"`{local_codex_one_shot_execution_codex_invocation_count}`"
+        ),
+        (
+            "- Local Codex one-shot execution selected step id: "
+            f"`{local_codex_one_shot_execution_selected_step_id}`"
+        ),
+        (
+            "- Local Codex one-shot execution selected step name: "
+            f"`{local_codex_one_shot_execution_selected_step_name or 'none'}`"
+        ),
+        (
+            "- Local Codex one-shot execution selected step operation: "
+            f"`{local_codex_one_shot_execution_selected_step_operation or 'none'}`"
+        ),
+        (
+            "- Local Codex one-shot execution prompt path: "
+            f"`{local_codex_one_shot_execution_prompt_path or 'none'}`"
+        ),
+        (
+            "- Local Codex one-shot execution stdout path: "
+            f"`{local_codex_one_shot_execution_stdout_path_text or 'none'}`"
+        ),
+        (
+            "- Local Codex one-shot execution stderr path: "
+            f"`{local_codex_one_shot_execution_stderr_path_text or 'none'}`"
+        ),
+        (
+            "- Local Codex one-shot execution result path: "
+            f"`{local_codex_one_shot_execution_result_path_text or 'none'}`"
+        ),
+        (
+            "- Local Codex one-shot execution run id: "
+            f"`{local_codex_one_shot_execution_run_id}`"
+        ),
+        (
+            "- Local Codex one-shot execution cycle id: "
+            f"`{local_codex_one_shot_execution_cycle_id}`"
+        ),
+        (
+            "- Local Codex one-shot execution current cycle: "
+            f"`{local_codex_one_shot_execution_current_cycle}`"
+        ),
+        (
+            "- Local Codex one-shot execution max cycles: "
+            f"`{local_codex_one_shot_execution_max_cycles}`"
+        ),
         f"- Completed result source path: `{completed_result_source_path}`",
         f"- Completed result source status: `{completed_result_source_status}`",
         f"- Stop reason: `{stop_reason}`",
@@ -19591,6 +20707,22 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         (
             "- local_codex_one_shot_execution_receipt.json: "
             f"`{local_codex_one_shot_execution_receipt_path}`"
+        ),
+        (
+            "- local_codex_one_shot_execution_result.json: "
+            f"`{local_codex_one_shot_execution_result_path}`"
+        ),
+        (
+            "- local_codex_one_shot_execution_receipt_v2.json: "
+            f"`{local_codex_one_shot_execution_receipt_v2_path}`"
+        ),
+        (
+            "- local_codex_one_shot_execution_stdout.txt: "
+            f"`{local_codex_one_shot_execution_stdout_path}`"
+        ),
+        (
+            "- local_codex_one_shot_execution_stderr.txt: "
+            f"`{local_codex_one_shot_execution_stderr_path}`"
         ),
         f"- approve_commit_tag_boundary.json: `{approve_commit_tag_boundary_metadata_path}`",
         f"- approve_commit_tag_plan.json: `{approve_commit_tag_plan_metadata_path}`",
@@ -20698,6 +21830,78 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_codex_one_shot_handoff_max_cycles": (
             local_codex_one_shot_handoff_max_cycles
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_status": (
+            local_codex_one_shot_execution_status
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_execution_status": (
+            local_codex_one_shot_execution_execution_status
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_next_action": (
+            local_codex_one_shot_execution_next_action
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_blocked_reason": (
+            local_codex_one_shot_execution_blocked_reason
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_readiness_reason": (
+            local_codex_one_shot_execution_readiness_reason
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_codex_invoked": (
+            local_codex_one_shot_execution_codex_invoked
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_codex_invocation_allowed": (
+            local_codex_one_shot_execution_codex_invocation_allowed
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_execution_allowed": (
+            local_codex_one_shot_execution_execution_allowed
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_execution_attempted": (
+            local_codex_one_shot_execution_execution_attempted
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_execution_completed": (
+            local_codex_one_shot_execution_execution_completed
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_execution_exit_code": (
+            local_codex_one_shot_execution_execution_exit_code
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_max_codex_invocations": (
+            local_codex_one_shot_execution_max_codex_invocations
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_codex_invocation_count": (
+            local_codex_one_shot_execution_codex_invocation_count
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_selected_step_id": (
+            local_codex_one_shot_execution_selected_step_id
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_selected_step_name": (
+            local_codex_one_shot_execution_selected_step_name or ""
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_selected_step_operation": (
+            local_codex_one_shot_execution_selected_step_operation or ""
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_prompt_path": (
+            local_codex_one_shot_execution_prompt_path or ""
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_stdout_path": (
+            local_codex_one_shot_execution_stdout_path_text or ""
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_stderr_path": (
+            local_codex_one_shot_execution_stderr_path_text or ""
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_result_path": (
+            local_codex_one_shot_execution_result_path_text or ""
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_run_id": (
+            local_codex_one_shot_execution_run_id
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_cycle_id": (
+            local_codex_one_shot_execution_cycle_id
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_current_cycle": (
+            local_codex_one_shot_execution_current_cycle
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_max_cycles": (
+            local_codex_one_shot_execution_max_cycles
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
