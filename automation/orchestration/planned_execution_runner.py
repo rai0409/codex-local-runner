@@ -3901,6 +3901,15 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_contract_fix_cycle_selected_step_name",
     "project_browser_autonomous_local_contract_fix_cycle_handoff_status",
     "project_browser_autonomous_local_contract_fix_cycle_handoff_next_action",
+    "project_browser_autonomous_local_daemon_lite_wrapper_status",
+    "project_browser_autonomous_local_daemon_lite_wrapper_blocked_reason",
+    "project_browser_autonomous_local_daemon_lite_wrapper_ready",
+    "project_browser_autonomous_local_daemon_lite_wrapper_decision",
+    "project_browser_autonomous_local_daemon_lite_wrapper_next_action",
+    "project_browser_autonomous_local_daemon_lite_wrapper_selected_step_name",
+    "project_browser_autonomous_local_daemon_lite_wrapper_prompt_path",
+    "project_browser_autonomous_local_daemon_lite_wrapper_bounded_execution",
+    "project_browser_autonomous_local_daemon_lite_wrapper_total_codex_invocation_budget",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -4255,6 +4264,34 @@ _LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_RECEIPT_SCHEMA_VERSION = (
 )
 _LOCAL_CONTRACT_FIX_CYCLE_EXECUTION_HANDOFF_SCHEMA_VERSION = (
     "local_contract_fix_cycle_execution_handoff_v1"
+)
+_LOCAL_DAEMON_LITE_WRAPPER_STATE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_daemon_lite_wrapper_state.json"
+)
+_LOCAL_DAEMON_LITE_WRAPPER_PLAN_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_daemon_lite_wrapper_plan.json"
+)
+_LOCAL_DAEMON_LITE_WRAPPER_DECISION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_daemon_lite_wrapper_decision.json"
+)
+_LOCAL_DAEMON_LITE_WRAPPER_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_daemon_lite_wrapper_receipt.json"
+)
+_LOCAL_DAEMON_LITE_WRAPPER_STATE_SCHEMA_VERSION = (
+    "local_daemon_lite_wrapper_state_v1"
+)
+_LOCAL_DAEMON_LITE_WRAPPER_PLAN_SCHEMA_VERSION = (
+    "local_daemon_lite_wrapper_plan_v1"
+)
+_LOCAL_DAEMON_LITE_WRAPPER_DECISION_SCHEMA_VERSION = (
+    "local_daemon_lite_wrapper_decision_v1"
+)
+_LOCAL_DAEMON_LITE_WRAPPER_RECEIPT_SCHEMA_VERSION = (
+    "local_daemon_lite_wrapper_receipt_v1"
 )
 _LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
@@ -7199,6 +7236,507 @@ def _build_local_contract_fix_cycle_coordination_artifacts(
         "coordination_decision_path": str(coordination_decision_path),
         "coordination_receipt_path": str(coordination_receipt_path),
         "execution_handoff_path": str(execution_handoff_path),
+    }
+
+
+def _build_local_daemon_lite_wrapper_artifacts(
+    *,
+    one_cycle_controller_dir: Path,
+) -> dict[str, Any]:
+    def _prompt337_safety_fields() -> dict[str, Any]:
+        return {
+            "commit_allowed": False,
+            "tag_allowed": False,
+            "push_pr_merge_enabled": False,
+            "targeted_fix_execution_allowed": False,
+            "rollback_allowed": False,
+            "commit_performed": False,
+            "tag_performed": False,
+            "push_performed": False,
+            "pr_created": False,
+            "merge_performed": False,
+            "rollback_performed": False,
+            "codex_invoked": False,
+            "codex_invocation_allowed": False,
+            "execution_allowed": False,
+        }
+
+    def _as_boolish(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").strip().lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_json_mapping(path: Path) -> tuple[bool, dict[str, Any]]:
+        if not path.exists():
+            return False, {}
+        payload = _read_json_object_if_exists(path)
+        if not isinstance(payload, Mapping):
+            return True, {}
+        return True, dict(payload)
+
+    one_cycle_controller_dir = Path(one_cycle_controller_dir)
+    prompt336_coordination_state_path = (
+        one_cycle_controller_dir / "local_contract_fix_cycle_coordination_state.json"
+    )
+    prompt336_coordination_decision_path = (
+        one_cycle_controller_dir / "local_contract_fix_cycle_coordination_decision.json"
+    )
+    prompt336_coordination_receipt_path = (
+        one_cycle_controller_dir / "local_contract_fix_cycle_coordination_receipt.json"
+    )
+    prompt336_handoff_path = (
+        one_cycle_controller_dir / "local_contract_fix_cycle_execution_handoff.json"
+    )
+    prompt_path = one_cycle_controller_dir / "local_targeted_contract_fix_prompt.md"
+
+    daemon_lite_state_path = one_cycle_controller_dir / "local_daemon_lite_wrapper_state.json"
+    daemon_lite_plan_path = one_cycle_controller_dir / "local_daemon_lite_wrapper_plan.json"
+    daemon_lite_decision_path = one_cycle_controller_dir / "local_daemon_lite_wrapper_decision.json"
+    daemon_lite_receipt_path = one_cycle_controller_dir / "local_daemon_lite_wrapper_receipt.json"
+
+    prompt336_handoff_exists, prompt336_handoff_payload = _read_json_mapping(prompt336_handoff_path)
+    (
+        prompt336_coordination_state_exists,
+        prompt336_coordination_state_payload,
+    ) = _read_json_mapping(prompt336_coordination_state_path)
+    (
+        prompt336_coordination_decision_exists,
+        prompt336_coordination_decision_payload,
+    ) = _read_json_mapping(prompt336_coordination_decision_path)
+    (
+        prompt336_coordination_receipt_exists,
+        prompt336_coordination_receipt_payload,
+    ) = _read_json_mapping(prompt336_coordination_receipt_path)
+
+    prompt336_handoff_status = _normalize_text(
+        prompt336_handoff_payload.get("status"),
+        default="missing",
+    )
+    prompt336_handoff_handoff_status = _normalize_text(
+        prompt336_handoff_payload.get("handoff_status"),
+        default=prompt336_handoff_status,
+    )
+    prompt336_handoff_blocked_reason = _normalize_text(
+        prompt336_handoff_payload.get("blocked_reason"),
+        default=(
+            "missing_local_contract_fix_cycle_execution_handoff"
+            if not prompt336_handoff_exists
+            else "prompt336_handoff_blocked_or_invalid"
+        ),
+    )
+    prompt336_handoff_readiness_reason = _normalize_text(
+        prompt336_handoff_payload.get("readiness_reason"),
+        default="",
+    )
+    prompt336_handoff_next_action = _normalize_text(
+        prompt336_handoff_payload.get("next_action"),
+        default="manual_review_contract_fix_cycle_handoff",
+    )
+    prompt336_selected_step_id = _as_int(
+        prompt336_handoff_payload.get("selected_step_id"),
+        default=0,
+    )
+    prompt336_selected_step_name = _normalize_text(
+        prompt336_handoff_payload.get("selected_step_name"),
+        default="none",
+    )
+    prompt336_selected_step_operation = _normalize_text(
+        prompt336_handoff_payload.get("selected_step_operation"),
+        default="none",
+    )
+    prompt336_prompt_path = _normalize_text(
+        prompt336_handoff_payload.get("prompt_path"),
+        default=str(prompt_path),
+    )
+    prompt336_prompt_exists = _as_boolish(
+        prompt336_handoff_payload.get("prompt_exists"),
+        default=False,
+    )
+    prompt336_prompt_non_empty = _as_boolish(
+        prompt336_handoff_payload.get("prompt_non_empty"),
+        default=False,
+    )
+    prompt336_explicit_allowed_tracked_files = _normalize_string_list(
+        prompt336_handoff_payload.get("explicit_allowed_tracked_files")
+    )
+    prompt336_mutation_allowed = _as_boolish(
+        prompt336_handoff_payload.get("mutation_allowed"),
+        default=False,
+    )
+    prompt336_execution_allowed = _as_boolish(
+        prompt336_handoff_payload.get("execution_allowed"),
+        default=False,
+    )
+    prompt336_codex_invocation_allowed = _as_boolish(
+        prompt336_handoff_payload.get("codex_invocation_allowed"),
+        default=False,
+    )
+    prompt336_command_argv_raw = prompt336_handoff_payload.get("command_argv")
+    prompt336_command_argv: list[str] = []
+    if isinstance(prompt336_command_argv_raw, list):
+        prompt336_command_argv = [
+            _normalize_text(item, default="") for item in prompt336_command_argv_raw
+        ]
+    prompt336_command_display = _normalize_text(
+        prompt336_handoff_payload.get("command_display"),
+        default="",
+    )
+    prompt336_max_codex_invocations = _as_non_negative_int(
+        prompt336_handoff_payload.get("max_codex_invocations"),
+        default=0,
+    )
+    prompt336_codex_invocation_count = _as_non_negative_int(
+        prompt336_handoff_payload.get("codex_invocation_count"),
+        default=0,
+    )
+
+    prompt336_coordination_status = _normalize_text(
+        prompt336_coordination_state_payload.get("coordination_status"),
+        default=_normalize_text(
+            prompt336_coordination_decision_payload.get("coordination_status"),
+            default=_normalize_text(
+                prompt336_coordination_receipt_payload.get("coordination_status"),
+                default="missing",
+            ),
+        ),
+    )
+    prompt336_coordination_blocked_reason = _normalize_text(
+        prompt336_coordination_state_payload.get("blocked_reason"),
+        default=_normalize_text(
+            prompt336_coordination_decision_payload.get("blocked_reason"),
+            default=_normalize_text(
+                prompt336_coordination_receipt_payload.get("blocked_reason"),
+                default=(
+                    "missing_local_contract_fix_cycle_coordination_state"
+                    if not prompt336_coordination_state_exists
+                    else "none"
+                ),
+            ),
+        ),
+    )
+    prompt336_contract_fix_cycle_ready = _as_boolish(
+        prompt336_coordination_state_payload.get("contract_fix_cycle_ready"),
+        default=_as_boolish(
+            prompt336_coordination_decision_payload.get("contract_fix_cycle_ready"),
+            default=_as_boolish(
+                prompt336_coordination_receipt_payload.get("contract_fix_cycle_ready"),
+                default=False,
+            ),
+        ),
+    )
+
+    blocked_reason = "none"
+    expected_prompt_path = str(prompt_path)
+    expected_allowed_tracked_files = ["automation/orchestration/planned_execution_runner.py"]
+
+    if not prompt336_handoff_exists:
+        blocked_reason = "missing_prompt336_execution_handoff_artifact"
+    elif prompt336_handoff_status != "ready":
+        blocked_reason = "prompt336_handoff_status_not_ready"
+    elif prompt336_handoff_handoff_status != "ready":
+        blocked_reason = "prompt336_handoff_handoff_status_not_ready"
+    elif prompt336_handoff_blocked_reason != "none":
+        blocked_reason = "prompt336_handoff_blocked_reason_not_none"
+    elif prompt336_handoff_readiness_reason != "bounded_contract_fix_cycle_ready_for_prompt337":
+        blocked_reason = "prompt336_handoff_readiness_reason_not_ready_for_prompt337"
+    elif prompt336_handoff_next_action != "prompt337_may_execute_targeted_contract_fix_once":
+        blocked_reason = "prompt336_handoff_next_action_not_prompt337_single_execution"
+    elif prompt336_selected_step_id != 3:
+        blocked_reason = "prompt336_handoff_selected_step_id_not_3"
+    elif prompt336_selected_step_name != "execute_targeted_contract_fix_prompt":
+        blocked_reason = "prompt336_handoff_selected_step_name_not_execute_targeted_contract_fix_prompt"
+    elif prompt336_selected_step_operation != "execute_targeted_contract_fix_prompt":
+        blocked_reason = (
+            "prompt336_handoff_selected_step_operation_not_execute_targeted_contract_fix_prompt"
+        )
+    elif prompt336_prompt_path != expected_prompt_path:
+        blocked_reason = "prompt336_handoff_prompt_path_mismatch"
+    elif not prompt336_prompt_exists:
+        blocked_reason = "prompt336_handoff_prompt_exists_false"
+    elif not prompt336_prompt_non_empty:
+        blocked_reason = "prompt336_handoff_prompt_non_empty_false"
+    elif prompt336_explicit_allowed_tracked_files != expected_allowed_tracked_files:
+        blocked_reason = "prompt336_handoff_explicit_allowed_tracked_files_mismatch"
+    elif not prompt336_mutation_allowed:
+        blocked_reason = "prompt336_handoff_mutation_allowed_false"
+    elif prompt336_execution_allowed:
+        blocked_reason = "prompt336_handoff_execution_allowed_true"
+    elif prompt336_codex_invocation_allowed:
+        blocked_reason = "prompt336_handoff_codex_invocation_allowed_true"
+    elif prompt336_command_argv:
+        blocked_reason = "prompt336_handoff_command_argv_not_empty"
+    elif prompt336_command_display:
+        blocked_reason = "prompt336_handoff_command_display_not_empty"
+    elif prompt336_max_codex_invocations != 1:
+        blocked_reason = "prompt336_handoff_max_codex_invocations_not_1"
+    elif prompt336_codex_invocation_count != 0:
+        blocked_reason = "prompt336_handoff_codex_invocation_count_not_0"
+
+    supporting_expectations: tuple[tuple[str, Any, str], ...] = (
+        ("status", "ready", "status_not_ready"),
+        ("coordination_status", "ready", "coordination_status_not_ready"),
+        ("contract_fix_cycle_ready", True, "contract_fix_cycle_ready_not_true"),
+        (
+            "selected_step_operation",
+            "execute_targeted_contract_fix_prompt",
+            "selected_step_operation_not_execute_targeted_contract_fix_prompt",
+        ),
+        ("prompt_exists", True, "prompt_exists_not_true"),
+        ("prompt_non_empty", True, "prompt_non_empty_not_true"),
+        ("execution_allowed", False, "execution_allowed_not_false"),
+        ("codex_invocation_allowed", False, "codex_invocation_allowed_not_false"),
+    )
+    supporting_artifacts: tuple[tuple[str, bool, dict[str, Any]], ...] = (
+        ("coordination_state", prompt336_coordination_state_exists, prompt336_coordination_state_payload),
+        (
+            "coordination_decision",
+            prompt336_coordination_decision_exists,
+            prompt336_coordination_decision_payload,
+        ),
+        (
+            "coordination_receipt",
+            prompt336_coordination_receipt_exists,
+            prompt336_coordination_receipt_payload,
+        ),
+    )
+    if blocked_reason == "none":
+        for artifact_name, artifact_exists, artifact_payload in supporting_artifacts:
+            if not artifact_exists:
+                continue
+            for key, expected_value, error_suffix in supporting_expectations:
+                if key not in artifact_payload:
+                    continue
+                actual_value = artifact_payload.get(key)
+                if isinstance(expected_value, bool):
+                    if _as_boolish(actual_value, default=not expected_value) != expected_value:
+                        blocked_reason = f"prompt336_{artifact_name}_{error_suffix}"
+                        break
+                else:
+                    if _normalize_text(actual_value, default="") != expected_value:
+                        blocked_reason = f"prompt336_{artifact_name}_{error_suffix}"
+                        break
+            if blocked_reason != "none":
+                break
+
+    status = "ready" if blocked_reason == "none" else "blocked"
+    daemon_lite_status = status
+    wrapper_plan_status = status
+    daemon_lite_ready = status == "ready"
+    readiness_reason = (
+        "prompt336_handoff_ready_for_bounded_daemon_lite_wrapper"
+        if daemon_lite_ready
+        else "prompt336_handoff_not_ready_for_bounded_daemon_lite_wrapper"
+    )
+
+    selected_step_id = 3 if daemon_lite_ready else prompt336_selected_step_id
+    selected_step_name = (
+        "execute_targeted_contract_fix_prompt"
+        if daemon_lite_ready
+        else (
+            prompt336_selected_step_name
+            if prompt336_selected_step_name
+            else "none"
+        )
+    )
+    selected_step_operation = (
+        "execute_targeted_contract_fix_prompt"
+        if daemon_lite_ready
+        else (
+            prompt336_selected_step_operation
+            if prompt336_selected_step_operation
+            else "none"
+        )
+    )
+    mutation_allowed = prompt336_mutation_allowed
+    wrapper_next_action = (
+        "manual_execute_bounded_targeted_contract_fix_adapter"
+        if daemon_lite_ready
+        else "manual_review_contract_fix_cycle_handoff"
+    )
+    next_action = wrapper_next_action
+    decision = (
+        "prepare_manual_bounded_targeted_contract_fix_execution"
+        if daemon_lite_ready
+        else "manual_review_contract_fix_cycle_handoff"
+    )
+    decision_reason = (
+        "prompt336_handoff_ready_and_daemon_lite_wrapper_bounded"
+        if daemon_lite_ready
+        else blocked_reason
+    )
+    validation_errors = [] if daemon_lite_ready else [blocked_reason]
+
+    safety_fields = _prompt337_safety_fields()
+    state_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "daemon_lite_state_schema_version": _LOCAL_DAEMON_LITE_WRAPPER_STATE_SCHEMA_VERSION,
+        "status": status,
+        "daemon_lite_status": daemon_lite_status,
+        "wrapper_plan_status": wrapper_plan_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "daemon_lite_ready": daemon_lite_ready,
+        "prompt336_handoff_status": prompt336_handoff_handoff_status,
+        "prompt336_handoff_blocked_reason": prompt336_handoff_blocked_reason,
+        "prompt336_handoff_next_action": prompt336_handoff_next_action,
+        "prompt336_coordination_status": prompt336_coordination_status,
+        "prompt336_coordination_blocked_reason": prompt336_coordination_blocked_reason,
+        "prompt336_contract_fix_cycle_ready": prompt336_contract_fix_cycle_ready,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "prompt_path": prompt336_prompt_path or expected_prompt_path,
+        "prompt_exists": prompt336_prompt_exists,
+        "prompt_non_empty": prompt336_prompt_non_empty,
+        "explicit_allowed_tracked_files": prompt336_explicit_allowed_tracked_files,
+        "mutation_allowed": mutation_allowed,
+        "execution_allowed": False,
+        "codex_invocation_allowed": False,
+        "max_wrapper_cycles": 1,
+        "current_wrapper_cycle": 0,
+        "max_codex_invocations_per_cycle": 1,
+        "total_codex_invocation_budget": 1,
+        "bounded_execution": True,
+        "unbounded_loop_allowed": False,
+        "retry_allowed": False,
+        "sleep_poll_allowed": False,
+        "next_action": next_action,
+        "validation_errors": validation_errors,
+        **safety_fields,
+    }
+
+    plan_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "daemon_lite_plan_schema_version": _LOCAL_DAEMON_LITE_WRAPPER_PLAN_SCHEMA_VERSION,
+        "status": status,
+        "daemon_lite_status": daemon_lite_status,
+        "wrapper_plan_status": wrapper_plan_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "daemon_lite_ready": daemon_lite_ready,
+        "daemon_mode": "daemon_lite",
+        "daemon_is_real_background_process": False,
+        "background_execution_enabled": False,
+        "scheduler_enabled": False,
+        "watcher_enabled": False,
+        "max_wrapper_cycles": 1,
+        "current_wrapper_cycle": 0,
+        "max_codex_invocations_per_cycle": 1,
+        "total_codex_invocation_budget": 1,
+        "bounded_execution": True,
+        "unbounded_loop_allowed": False,
+        "retry_allowed": False,
+        "sleep_poll_allowed": False,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "selected_step_authority_source": "prompt336_contract_fix_cycle_execution_handoff",
+        "selected_step_authority_artifact": str(prompt336_handoff_path),
+        "prompt_path": prompt336_prompt_path or expected_prompt_path,
+        "prompt_exists": prompt336_prompt_exists,
+        "prompt_non_empty": prompt336_prompt_non_empty,
+        "explicit_allowed_tracked_files": prompt336_explicit_allowed_tracked_files,
+        "mutation_allowed": mutation_allowed,
+        "execution_allowed": False,
+        "codex_invocation_allowed": False,
+        "command_argv": [],
+        "command_display": "",
+        "wrapper_next_action": wrapper_next_action,
+        "next_action": next_action,
+        "validation_errors": validation_errors,
+        **safety_fields,
+    }
+
+    decision_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "daemon_lite_decision_schema_version": _LOCAL_DAEMON_LITE_WRAPPER_DECISION_SCHEMA_VERSION,
+        "status": status,
+        "daemon_lite_status": daemon_lite_status,
+        "wrapper_plan_status": wrapper_plan_status,
+        "blocked_reason": blocked_reason,
+        "daemon_lite_ready": daemon_lite_ready,
+        "decision": decision,
+        "decision_reason": decision_reason,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "wrapper_next_action": wrapper_next_action,
+        "next_action": next_action,
+        "execution_allowed": False,
+        "codex_invocation_allowed": False,
+        "max_wrapper_cycles": 1,
+        "total_codex_invocation_budget": 1,
+        "validation_errors": validation_errors,
+        **safety_fields,
+    }
+
+    receipt_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "daemon_lite_receipt_schema_version": _LOCAL_DAEMON_LITE_WRAPPER_RECEIPT_SCHEMA_VERSION,
+        "status": status,
+        "daemon_lite_status": daemon_lite_status,
+        "wrapper_plan_status": wrapper_plan_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "daemon_lite_ready": daemon_lite_ready,
+        "state_path": str(daemon_lite_state_path),
+        "plan_path": str(daemon_lite_plan_path),
+        "decision_path": str(daemon_lite_decision_path),
+        "prompt336_handoff_path": str(prompt336_handoff_path),
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "prompt_path": prompt336_prompt_path or expected_prompt_path,
+        "prompt_exists": prompt336_prompt_exists,
+        "prompt_non_empty": prompt336_prompt_non_empty,
+        "wrapper_next_action": wrapper_next_action,
+        "next_action": next_action,
+        "validation_errors": validation_errors,
+        **safety_fields,
+    }
+
+    try:
+        one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    try:
+        _write_json(daemon_lite_state_path, state_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(daemon_lite_plan_path, plan_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(daemon_lite_decision_path, decision_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(daemon_lite_receipt_path, receipt_payload)
+    except OSError:
+        pass
+
+    return {
+        "local_daemon_lite_wrapper_status": status,
+        "local_daemon_lite_wrapper_blocked_reason": blocked_reason,
+        "local_daemon_lite_wrapper_ready": daemon_lite_ready,
+        "local_daemon_lite_wrapper_decision": decision,
+        "local_daemon_lite_wrapper_next_action": next_action,
+        "local_daemon_lite_wrapper_selected_step_name": selected_step_name,
+        "local_daemon_lite_wrapper_prompt_path": prompt336_prompt_path or expected_prompt_path,
+        "local_daemon_lite_wrapper_bounded_execution": True,
+        "local_daemon_lite_wrapper_total_codex_invocation_budget": 1,
+        "local_daemon_lite_wrapper_state_path": str(daemon_lite_state_path),
+        "local_daemon_lite_wrapper_plan_path": str(daemon_lite_plan_path),
+        "local_daemon_lite_wrapper_decision_path": str(daemon_lite_decision_path),
+        "local_daemon_lite_wrapper_receipt_path": str(daemon_lite_receipt_path),
     }
 
 
@@ -17924,6 +18462,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_contract_fix_cycle_execution_handoff_path = Path(
         _LOCAL_CONTRACT_FIX_CYCLE_EXECUTION_HANDOFF_PATH
     )
+    local_daemon_lite_wrapper_state_path = Path(_LOCAL_DAEMON_LITE_WRAPPER_STATE_PATH)
+    local_daemon_lite_wrapper_plan_path = Path(_LOCAL_DAEMON_LITE_WRAPPER_PLAN_PATH)
+    local_daemon_lite_wrapper_decision_path = Path(_LOCAL_DAEMON_LITE_WRAPPER_DECISION_PATH)
+    local_daemon_lite_wrapper_receipt_path = Path(_LOCAL_DAEMON_LITE_WRAPPER_RECEIPT_PATH)
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -17984,6 +18526,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_contract_fix_cycle_selected_step_name = "none"
     local_contract_fix_cycle_handoff_status = "not_started"
     local_contract_fix_cycle_handoff_next_action = "manual_review_targeted_contract_fix_prompt"
+    local_daemon_lite_wrapper_status = "not_started"
+    local_daemon_lite_wrapper_blocked_reason = "prompt337_not_started"
+    local_daemon_lite_wrapper_ready = False
+    local_daemon_lite_wrapper_decision = "manual_review_contract_fix_cycle_handoff"
+    local_daemon_lite_wrapper_next_action = "manual_review_contract_fix_cycle_handoff"
+    local_daemon_lite_wrapper_selected_step_name = "none"
+    local_daemon_lite_wrapper_prompt_path = str(local_targeted_contract_fix_prompt_path)
+    local_daemon_lite_wrapper_bounded_execution = True
+    local_daemon_lite_wrapper_total_codex_invocation_budget = 1
     targeted_fix_prompt_status = "not_applicable"
     targeted_fix_prompt_text = ""
     targeted_fix_prompt_resolved_path = ""
@@ -18644,6 +19195,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_local_contract_fix_cycle_execution_handoff_json": str(
             local_contract_fix_cycle_execution_handoff_path
         ),
+        "one_cycle_controller_local_daemon_lite_wrapper_state_json": str(
+            local_daemon_lite_wrapper_state_path
+        ),
+        "one_cycle_controller_local_daemon_lite_wrapper_plan_json": str(
+            local_daemon_lite_wrapper_plan_path
+        ),
+        "one_cycle_controller_local_daemon_lite_wrapper_decision_json": str(
+            local_daemon_lite_wrapper_decision_path
+        ),
+        "one_cycle_controller_local_daemon_lite_wrapper_receipt_json": str(
+            local_daemon_lite_wrapper_receipt_path
+        ),
     }
 
     requested_execution = enabled and execute_enabled and (not dry_run)
@@ -18978,6 +19541,51 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_contract_fix_cycle_handoff_next_action = _normalize_text(
         local_contract_fix_cycle_coordination_state.get("handoff_next_action"),
         default=local_contract_fix_cycle_handoff_next_action,
+    )
+    local_daemon_lite_wrapper_state = _build_local_daemon_lite_wrapper_artifacts(
+        one_cycle_controller_dir=one_cycle_controller_dir
+    )
+    local_daemon_lite_wrapper_status = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_status"),
+        default=local_daemon_lite_wrapper_status,
+    )
+    local_daemon_lite_wrapper_blocked_reason = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_blocked_reason"),
+        default=local_daemon_lite_wrapper_blocked_reason,
+    )
+    local_daemon_lite_wrapper_ready = bool(
+        local_daemon_lite_wrapper_state.get(
+            "local_daemon_lite_wrapper_ready",
+            local_daemon_lite_wrapper_ready,
+        )
+    )
+    local_daemon_lite_wrapper_decision = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_decision"),
+        default=local_daemon_lite_wrapper_decision,
+    )
+    local_daemon_lite_wrapper_next_action = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_next_action"),
+        default=local_daemon_lite_wrapper_next_action,
+    )
+    local_daemon_lite_wrapper_selected_step_name = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_selected_step_name"),
+        default=local_daemon_lite_wrapper_selected_step_name,
+    )
+    local_daemon_lite_wrapper_prompt_path = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_prompt_path"),
+        default=local_daemon_lite_wrapper_prompt_path,
+    )
+    local_daemon_lite_wrapper_bounded_execution = bool(
+        local_daemon_lite_wrapper_state.get(
+            "local_daemon_lite_wrapper_bounded_execution",
+            local_daemon_lite_wrapper_bounded_execution,
+        )
+    )
+    local_daemon_lite_wrapper_total_codex_invocation_budget = _as_non_negative_int(
+        local_daemon_lite_wrapper_state.get(
+            "local_daemon_lite_wrapper_total_codex_invocation_budget"
+        ),
+        default=local_daemon_lite_wrapper_total_codex_invocation_budget,
     )
     review_handoff_decision_state = _build_one_cycle_review_handoff_decision_state(
         review_handoff_path=review_handoff_path
@@ -21915,6 +22523,21 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "local_contract_fix_cycle_handoff_next_action": (
             local_contract_fix_cycle_handoff_next_action
         ),
+        "local_daemon_lite_wrapper_status": local_daemon_lite_wrapper_status,
+        "local_daemon_lite_wrapper_blocked_reason": local_daemon_lite_wrapper_blocked_reason,
+        "local_daemon_lite_wrapper_ready": local_daemon_lite_wrapper_ready,
+        "local_daemon_lite_wrapper_decision": local_daemon_lite_wrapper_decision,
+        "local_daemon_lite_wrapper_next_action": local_daemon_lite_wrapper_next_action,
+        "local_daemon_lite_wrapper_selected_step_name": (
+            local_daemon_lite_wrapper_selected_step_name
+        ),
+        "local_daemon_lite_wrapper_prompt_path": local_daemon_lite_wrapper_prompt_path,
+        "local_daemon_lite_wrapper_bounded_execution": (
+            local_daemon_lite_wrapper_bounded_execution
+        ),
+        "local_daemon_lite_wrapper_total_codex_invocation_budget": (
+            local_daemon_lite_wrapper_total_codex_invocation_budget
+        ),
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -22040,6 +22663,33 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         (
             "- Prompt336 handoff next action: "
             f"`{local_contract_fix_cycle_handoff_next_action}`"
+        ),
+        f"- Prompt337 daemon-lite wrapper status: `{local_daemon_lite_wrapper_status}`",
+        (
+            "- Prompt337 daemon-lite wrapper blocked reason: "
+            f"`{local_daemon_lite_wrapper_blocked_reason}`"
+        ),
+        (
+            "- Prompt337 daemon-lite wrapper ready: "
+            f"`{str(local_daemon_lite_wrapper_ready).lower()}`"
+        ),
+        f"- Prompt337 daemon-lite wrapper decision: `{local_daemon_lite_wrapper_decision}`",
+        (
+            "- Prompt337 daemon-lite wrapper next action: "
+            f"`{local_daemon_lite_wrapper_next_action}`"
+        ),
+        (
+            "- Prompt337 daemon-lite wrapper selected step name: "
+            f"`{local_daemon_lite_wrapper_selected_step_name}`"
+        ),
+        f"- Prompt337 daemon-lite wrapper prompt path: `{local_daemon_lite_wrapper_prompt_path}`",
+        (
+            "- Prompt337 daemon-lite wrapper bounded execution: "
+            f"`{str(local_daemon_lite_wrapper_bounded_execution).lower()}`"
+        ),
+        (
+            "- Prompt337 daemon-lite wrapper total codex invocation budget: "
+            f"`{local_daemon_lite_wrapper_total_codex_invocation_budget}`"
         ),
         f"- Diff capture status: `{diff_capture_status}`",
         f"- Diff capture blocked reason: `{diff_capture_blocked_reason}`",
@@ -24028,6 +24678,33 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_contract_fix_cycle_handoff_next_action": (
             local_contract_fix_cycle_handoff_next_action
+        ),
+        "project_browser_autonomous_local_daemon_lite_wrapper_status": (
+            local_daemon_lite_wrapper_status
+        ),
+        "project_browser_autonomous_local_daemon_lite_wrapper_blocked_reason": (
+            local_daemon_lite_wrapper_blocked_reason
+        ),
+        "project_browser_autonomous_local_daemon_lite_wrapper_ready": (
+            local_daemon_lite_wrapper_ready
+        ),
+        "project_browser_autonomous_local_daemon_lite_wrapper_decision": (
+            local_daemon_lite_wrapper_decision
+        ),
+        "project_browser_autonomous_local_daemon_lite_wrapper_next_action": (
+            local_daemon_lite_wrapper_next_action
+        ),
+        "project_browser_autonomous_local_daemon_lite_wrapper_selected_step_name": (
+            local_daemon_lite_wrapper_selected_step_name
+        ),
+        "project_browser_autonomous_local_daemon_lite_wrapper_prompt_path": (
+            local_daemon_lite_wrapper_prompt_path
+        ),
+        "project_browser_autonomous_local_daemon_lite_wrapper_bounded_execution": (
+            local_daemon_lite_wrapper_bounded_execution
+        ),
+        "project_browser_autonomous_local_daemon_lite_wrapper_total_codex_invocation_budget": (
+            local_daemon_lite_wrapper_total_codex_invocation_budget
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
