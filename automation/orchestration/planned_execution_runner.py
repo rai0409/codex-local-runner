@@ -12567,9 +12567,22 @@ def _build_local_codex_one_shot_execution_result_state(
                 support_mismatch = _as_field_int(support_value) != expected
             elif isinstance(expected, list):
                 if field_name == "command_argv":
-                    support_mismatch = (
-                        _normalize_string_list(support_value, sort_items=False) != expected
-                    )
+                    if support_value is None:
+                        continue
+                    if isinstance(support_value, (list, tuple)):
+                        normalized_support_argv = _normalize_string_list(
+                            support_value,
+                            sort_items=False,
+                        )
+                        if not normalized_support_argv:
+                            continue
+                        support_mismatch = normalized_support_argv != expected
+                    else:
+                        # Receipt command_argv is optional, but if present as a non-empty
+                        # non-sequence value it is treated as an invalid/mismatched command.
+                        support_mismatch = bool(
+                            _normalize_text(support_value, default="")
+                        )
                 else:
                     support_mismatch = _normalize_string_list(support_value) != expected
             else:
