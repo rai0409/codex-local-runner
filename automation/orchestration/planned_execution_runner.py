@@ -3891,6 +3891,16 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_targeted_contract_fix_prompt_next_action",
     "project_browser_autonomous_local_targeted_contract_fix_prompt_normalized_reason",
     "project_browser_autonomous_local_targeted_contract_fix_prompt_lifecycle_issue_detected",
+    "project_browser_autonomous_local_contract_fix_cycle_coordination_status",
+    "project_browser_autonomous_local_contract_fix_cycle_coordination_blocked_reason",
+    "project_browser_autonomous_local_contract_fix_cycle_coordination_ready",
+    "project_browser_autonomous_local_contract_fix_cycle_coordination_next_action",
+    "project_browser_autonomous_local_contract_fix_cycle_prompt_path",
+    "project_browser_autonomous_local_contract_fix_cycle_prompt_ready",
+    "project_browser_autonomous_local_contract_fix_cycle_normalized_reason",
+    "project_browser_autonomous_local_contract_fix_cycle_selected_step_name",
+    "project_browser_autonomous_local_contract_fix_cycle_handoff_status",
+    "project_browser_autonomous_local_contract_fix_cycle_handoff_next_action",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -4217,6 +4227,34 @@ _LOCAL_TARGETED_CONTRACT_FIX_PROMPT_PLAN_SCHEMA_VERSION = (
 )
 _LOCAL_TARGETED_CONTRACT_FIX_PROMPT_RECEIPT_SCHEMA_VERSION = (
     "local_targeted_contract_fix_prompt_receipt_v1"
+)
+_LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_STATE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_contract_fix_cycle_coordination_state.json"
+)
+_LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_DECISION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_contract_fix_cycle_coordination_decision.json"
+)
+_LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_contract_fix_cycle_coordination_receipt.json"
+)
+_LOCAL_CONTRACT_FIX_CYCLE_EXECUTION_HANDOFF_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_contract_fix_cycle_execution_handoff.json"
+)
+_LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_STATE_SCHEMA_VERSION = (
+    "local_contract_fix_cycle_coordination_state_v1"
+)
+_LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_DECISION_SCHEMA_VERSION = (
+    "local_contract_fix_cycle_coordination_decision_v1"
+)
+_LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_RECEIPT_SCHEMA_VERSION = (
+    "local_contract_fix_cycle_coordination_receipt_v1"
+)
+_LOCAL_CONTRACT_FIX_CYCLE_EXECUTION_HANDOFF_SCHEMA_VERSION = (
+    "local_contract_fix_cycle_execution_handoff_v1"
 )
 _LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
@@ -6786,6 +6824,381 @@ def _build_local_targeted_contract_fix_prompt_artifacts(
         "route_intake_path": str(route_intake_path),
         "prompt_plan_path": str(prompt_plan_path),
         "prompt_receipt_path": str(prompt_receipt_path),
+    }
+
+
+def _build_local_contract_fix_cycle_coordination_artifacts(
+    *,
+    one_cycle_controller_dir: Path,
+) -> dict[str, Any]:
+    def _prompt336_safety_fields() -> dict[str, Any]:
+        return {
+            "commit_allowed": False,
+            "tag_allowed": False,
+            "push_pr_merge_enabled": False,
+            "targeted_fix_execution_allowed": False,
+            "rollback_allowed": False,
+            "commit_performed": False,
+            "tag_performed": False,
+            "push_performed": False,
+            "pr_created": False,
+            "merge_performed": False,
+            "rollback_performed": False,
+            "codex_invoked": False,
+            "codex_invocation_allowed": False,
+        }
+
+    def _as_boolish(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").strip().lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_json_mapping(path: Path) -> tuple[bool, dict[str, Any]]:
+        if not path.exists():
+            return False, {}
+        payload = _read_json_object_if_exists(path)
+        if not isinstance(payload, Mapping):
+            return True, {}
+        return True, dict(payload)
+
+    one_cycle_controller_dir = Path(one_cycle_controller_dir)
+    route_intake_path = one_cycle_controller_dir / "local_targeted_contract_fix_route_intake.json"
+    prompt_plan_path = one_cycle_controller_dir / "local_targeted_contract_fix_prompt_plan.json"
+    prompt_receipt_path = one_cycle_controller_dir / "local_targeted_contract_fix_prompt_receipt.json"
+    prompt_path = one_cycle_controller_dir / "local_targeted_contract_fix_prompt.md"
+    coordination_state_path = (
+        one_cycle_controller_dir / "local_contract_fix_cycle_coordination_state.json"
+    )
+    coordination_decision_path = (
+        one_cycle_controller_dir / "local_contract_fix_cycle_coordination_decision.json"
+    )
+    coordination_receipt_path = (
+        one_cycle_controller_dir / "local_contract_fix_cycle_coordination_receipt.json"
+    )
+    execution_handoff_path = (
+        one_cycle_controller_dir / "local_contract_fix_cycle_execution_handoff.json"
+    )
+
+    required_reason = "missing_explicit_allowed_tracked_files_and_conflicting_step_authority"
+    allowed_tracked_file = "automation/orchestration/planned_execution_runner.py"
+
+    route_intake_exists, route_intake_payload = _read_json_mapping(route_intake_path)
+    prompt_plan_exists, prompt_plan_payload = _read_json_mapping(prompt_plan_path)
+    prompt_receipt_exists, prompt_receipt_payload = _read_json_mapping(prompt_receipt_path)
+
+    route_intake_status = _normalize_text(route_intake_payload.get("status"), default="missing")
+    contract_fix_signal_source = _normalize_text(
+        prompt_plan_payload.get("contract_fix_signal_source"),
+        default=_normalize_text(
+            route_intake_payload.get("contract_fix_signal_source"),
+            default="none",
+        ),
+    )
+    prompt335_plan_status = _normalize_text(prompt_plan_payload.get("status"), default="missing")
+    prompt335_plan_blocked_reason = _normalize_text(
+        prompt_plan_payload.get("blocked_reason"),
+        default="missing_prompt335_prompt_plan_artifact",
+    )
+    prompt335_receipt_status = _normalize_text(
+        prompt_receipt_payload.get("status"),
+        default="missing",
+    )
+    prompt335_receipt_blocked_reason = _normalize_text(
+        prompt_receipt_payload.get("blocked_reason"),
+        default="missing_prompt335_prompt_receipt_artifact",
+    )
+    contract_fix_signal_detected = _as_boolish(
+        prompt_plan_payload.get("contract_fix_signal_detected"),
+        default=False,
+    )
+    normalized_contract_fix_reason = _normalize_text(
+        prompt_plan_payload.get("normalized_contract_fix_reason"),
+        default="",
+    )
+
+    plan_prompt_path = _normalize_text(
+        prompt_plan_payload.get("prompt_path"),
+        default=str(prompt_path),
+    )
+    plan_prompt_exists = _as_boolish(prompt_plan_payload.get("prompt_exists"), default=False)
+    plan_prompt_non_empty = _as_boolish(
+        prompt_plan_payload.get("prompt_non_empty"),
+        default=False,
+    )
+    plan_next_action = _normalize_text(prompt_plan_payload.get("next_action"), default="")
+
+    receipt_prompt_exists = _as_boolish(prompt_receipt_payload.get("prompt_exists"), default=False)
+    receipt_prompt_non_empty = _as_boolish(
+        prompt_receipt_payload.get("prompt_non_empty"),
+        default=False,
+    )
+    generated_prompt_sha256 = _normalize_text(
+        prompt_receipt_payload.get("generated_prompt_sha256"),
+        default="",
+    )
+    generated_prompt_size_bytes = _as_non_negative_int(
+        prompt_receipt_payload.get("generated_prompt_size_bytes"),
+        default=0,
+    )
+    generated_prompt_line_count = _as_non_negative_int(
+        prompt_receipt_payload.get("generated_prompt_line_count"),
+        default=0,
+    )
+
+    prompt_exists = prompt_path.exists()
+    prompt_text = ""
+    if prompt_exists:
+        try:
+            prompt_text = prompt_path.read_text(encoding="utf-8")
+        except OSError:
+            prompt_text = ""
+    prompt_non_empty = bool(prompt_text.strip())
+    prompt_size_bytes = len(prompt_text.encode("utf-8"))
+    prompt_line_count = len(prompt_text.splitlines())
+    prompt_sha256 = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest() if prompt_text else ""
+    prompt_lines = prompt_text.splitlines()
+    prompt_first_80_lines_text = "\n".join(prompt_lines[:80])
+
+    blocked_reason = "none"
+    prompt_content_validation_errors: list[str] = []
+    prompt_content_validation_status = "not_checked"
+
+    if not route_intake_exists:
+        blocked_reason = "missing_prompt335_route_intake_artifact"
+    elif not prompt_plan_exists:
+        blocked_reason = "missing_prompt335_prompt_plan_artifact"
+    elif prompt335_plan_status != "ready":
+        blocked_reason = "prompt335_plan_status_not_ready"
+    elif prompt335_plan_blocked_reason != "none":
+        blocked_reason = "prompt335_plan_blocked_reason_not_none"
+    elif not contract_fix_signal_detected:
+        blocked_reason = "prompt335_contract_fix_signal_not_detected"
+    elif not normalized_contract_fix_reason:
+        blocked_reason = "prompt335_normalized_contract_fix_reason_missing"
+    elif plan_prompt_path != str(prompt_path):
+        blocked_reason = "prompt335_prompt_path_mismatch"
+    elif not plan_prompt_exists:
+        blocked_reason = "prompt335_prompt_exists_false"
+    elif not plan_prompt_non_empty:
+        blocked_reason = "prompt335_prompt_non_empty_false"
+    elif plan_next_action != "execute_targeted_contract_fix_prompt_adapter":
+        blocked_reason = "prompt335_plan_next_action_not_execute_targeted_contract_fix_prompt_adapter"
+    elif not prompt_receipt_exists:
+        blocked_reason = "missing_prompt335_prompt_receipt_artifact"
+    elif prompt335_receipt_status != "ready":
+        blocked_reason = "prompt335_receipt_status_not_ready"
+    elif prompt335_receipt_blocked_reason != "none":
+        blocked_reason = "prompt335_receipt_blocked_reason_not_none"
+    elif not receipt_prompt_exists:
+        blocked_reason = "prompt335_receipt_prompt_exists_false"
+    elif not receipt_prompt_non_empty:
+        blocked_reason = "prompt335_receipt_prompt_non_empty_false"
+    elif not generated_prompt_sha256:
+        blocked_reason = "prompt335_receipt_generated_prompt_sha256_missing"
+    elif generated_prompt_size_bytes <= 0:
+        blocked_reason = "prompt335_receipt_generated_prompt_size_bytes_not_positive"
+    elif generated_prompt_line_count <= 0:
+        blocked_reason = "prompt335_receipt_generated_prompt_line_count_not_positive"
+    else:
+        prompt_content_validation_status = "passed"
+        if not prompt_exists:
+            prompt_content_validation_status = "failed"
+            prompt_content_validation_errors = ["prompt_file_missing"]
+        elif not prompt_non_empty:
+            prompt_content_validation_status = "failed"
+            prompt_content_validation_errors = ["prompt_file_empty"]
+        elif "DO NOT EXECUTE" in prompt_first_80_lines_text.upper():
+            prompt_content_validation_status = "failed"
+            prompt_content_validation_errors = ["prompt_contains_do_not_execute_in_first_80_lines"]
+        elif "Modify only automation/orchestration/planned_execution_runner.py" not in prompt_text:
+            prompt_content_validation_status = "failed"
+            prompt_content_validation_errors = ["prompt_missing_modify_only_allowed_file_instruction"]
+        elif "Do not run tests" not in prompt_text:
+            prompt_content_validation_status = "failed"
+            prompt_content_validation_errors = ["prompt_missing_do_not_run_tests_instruction"]
+        elif "Do not invoke Codex" not in prompt_text:
+            prompt_content_validation_status = "failed"
+            prompt_content_validation_errors = ["prompt_missing_do_not_invoke_codex_instruction"]
+        elif required_reason not in prompt_text:
+            prompt_content_validation_status = "failed"
+            prompt_content_validation_errors = ["prompt_missing_normalized_contract_fix_reason"]
+        elif allowed_tracked_file not in prompt_text:
+            prompt_content_validation_status = "failed"
+            prompt_content_validation_errors = ["prompt_missing_explicit_allowed_tracked_file_scope"]
+        if prompt_content_validation_errors:
+            blocked_reason = prompt_content_validation_errors[0]
+
+    status = "ready" if blocked_reason == "none" else "blocked"
+    coordination_status = status
+    contract_fix_cycle_ready = status == "ready"
+    readiness_reason = (
+        "targeted_contract_fix_prompt_ready_for_bounded_execution_handoff"
+        if status == "ready"
+        else "targeted_contract_fix_prompt_not_ready"
+    )
+    selected_step_id = 3 if status == "ready" else 0
+    selected_step_name = "execute_targeted_contract_fix_prompt" if status == "ready" else "none"
+    selected_step_operation = (
+        "execute_targeted_contract_fix_prompt" if status == "ready" else "none"
+    )
+    selected_step_authority_source = (
+        "prompt335_targeted_contract_fix_prompt_plan" if status == "ready" else "none"
+    )
+    selected_step_authority_artifact = str(prompt_plan_path)
+    explicit_allowed_tracked_files = [allowed_tracked_file]
+    mutation_allowed = status == "ready"
+    execution_allowed = False
+    next_action = (
+        "prepare_prompt337_local_daemon_lite_wrapper"
+        if status == "ready"
+        else "manual_review_targeted_contract_fix_prompt"
+    )
+    validation_errors = [] if status == "ready" else [blocked_reason]
+
+    handoff_status = "ready" if status == "ready" else "blocked"
+    handoff_readiness_reason = (
+        "bounded_contract_fix_cycle_ready_for_prompt337"
+        if handoff_status == "ready"
+        else "bounded_contract_fix_cycle_not_ready"
+    )
+    handoff_next_action = (
+        "prompt337_may_execute_targeted_contract_fix_once"
+        if handoff_status == "ready"
+        else "manual_review_targeted_contract_fix_prompt"
+    )
+
+    safety_fields = _prompt336_safety_fields()
+    coordination_payload_base: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "status": status,
+        "coordination_status": coordination_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "contract_fix_cycle_ready": contract_fix_cycle_ready,
+        "prompt335_plan_status": prompt335_plan_status,
+        "prompt335_plan_blocked_reason": prompt335_plan_blocked_reason,
+        "prompt335_receipt_status": prompt335_receipt_status,
+        "prompt335_receipt_blocked_reason": prompt335_receipt_blocked_reason,
+        "route_intake_status": route_intake_status,
+        "contract_fix_signal_detected": contract_fix_signal_detected,
+        "contract_fix_signal_source": contract_fix_signal_source,
+        "normalized_contract_fix_reason": normalized_contract_fix_reason,
+        "prompt_path": str(prompt_path),
+        "prompt_exists": prompt_exists,
+        "prompt_non_empty": prompt_non_empty,
+        "prompt_sha256": prompt_sha256,
+        "prompt_size_bytes": prompt_size_bytes,
+        "prompt_line_count": prompt_line_count,
+        "prompt_content_validation_status": prompt_content_validation_status,
+        "prompt_content_validation_errors": prompt_content_validation_errors,
+        "current_cycle": _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+        "max_cycles": _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "selected_step_authority_source": selected_step_authority_source,
+        "selected_step_authority_artifact": selected_step_authority_artifact,
+        "explicit_allowed_tracked_files": explicit_allowed_tracked_files,
+        "mutation_allowed": mutation_allowed,
+        "execution_allowed": execution_allowed,
+        "execution_handoff_status": handoff_status,
+        "max_codex_invocations": 1,
+        "codex_invocation_count": 0,
+        "next_action": next_action,
+        "validation_errors": validation_errors,
+        **safety_fields,
+    }
+
+    coordination_state_payload = {
+        **coordination_payload_base,
+        "coordination_state_schema_version": (
+            _LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_STATE_SCHEMA_VERSION
+        ),
+    }
+    coordination_decision_payload = {
+        **coordination_payload_base,
+        "coordination_decision_schema_version": (
+            _LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_DECISION_SCHEMA_VERSION
+        ),
+    }
+    coordination_receipt_payload = {
+        **coordination_payload_base,
+        "coordination_receipt_schema_version": (
+            _LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_RECEIPT_SCHEMA_VERSION
+        ),
+    }
+
+    execution_handoff_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "execution_handoff_schema_version": (
+            _LOCAL_CONTRACT_FIX_CYCLE_EXECUTION_HANDOFF_SCHEMA_VERSION
+        ),
+        "status": handoff_status,
+        "handoff_status": handoff_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": handoff_readiness_reason,
+        "execution_allowed": False,
+        "codex_invocation_allowed": False,
+        "prompt_path": str(prompt_path),
+        "prompt_exists": prompt_exists,
+        "prompt_non_empty": prompt_non_empty,
+        "command_argv": [],
+        "command_display": "",
+        "max_codex_invocations": 1,
+        "codex_invocation_count": 0,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "explicit_allowed_tracked_files": explicit_allowed_tracked_files,
+        "mutation_allowed": mutation_allowed,
+        "next_action": handoff_next_action,
+        "validation_errors": [] if handoff_status == "ready" else [blocked_reason],
+        **safety_fields,
+    }
+
+    try:
+        one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    try:
+        _write_json(coordination_state_path, coordination_state_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(coordination_decision_path, coordination_decision_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(coordination_receipt_path, coordination_receipt_payload)
+    except OSError:
+        pass
+    try:
+        _write_json(execution_handoff_path, execution_handoff_payload)
+    except OSError:
+        pass
+
+    return {
+        "coordination_status": coordination_status,
+        "coordination_blocked_reason": blocked_reason,
+        "coordination_ready": contract_fix_cycle_ready,
+        "coordination_next_action": next_action,
+        "coordination_prompt_path": str(prompt_path),
+        "coordination_prompt_ready": prompt_exists and prompt_non_empty and status == "ready",
+        "coordination_normalized_reason": normalized_contract_fix_reason,
+        "coordination_selected_step_name": selected_step_name,
+        "handoff_status": handoff_status,
+        "handoff_next_action": handoff_next_action,
+        "coordination_state_path": str(coordination_state_path),
+        "coordination_decision_path": str(coordination_decision_path),
+        "coordination_receipt_path": str(coordination_receipt_path),
+        "execution_handoff_path": str(execution_handoff_path),
     }
 
 
@@ -17499,6 +17912,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_targeted_contract_fix_route_intake_path = Path(
         _LOCAL_TARGETED_CONTRACT_FIX_ROUTE_INTAKE_PATH
     )
+    local_contract_fix_cycle_coordination_state_path = Path(
+        _LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_STATE_PATH
+    )
+    local_contract_fix_cycle_coordination_decision_path = Path(
+        _LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_DECISION_PATH
+    )
+    local_contract_fix_cycle_coordination_receipt_path = Path(
+        _LOCAL_CONTRACT_FIX_CYCLE_COORDINATION_RECEIPT_PATH
+    )
+    local_contract_fix_cycle_execution_handoff_path = Path(
+        _LOCAL_CONTRACT_FIX_CYCLE_EXECUTION_HANDOFF_PATH
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -17547,6 +17972,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_targeted_contract_fix_prompt_next_action = "manual_review_contract_fix_route_intake"
     local_targeted_contract_fix_prompt_normalized_reason = ""
     local_targeted_contract_fix_prompt_lifecycle_issue_detected = False
+    local_contract_fix_cycle_coordination_status = "not_started"
+    local_contract_fix_cycle_coordination_blocked_reason = "prompt336_not_started"
+    local_contract_fix_cycle_coordination_ready = False
+    local_contract_fix_cycle_coordination_next_action = (
+        "manual_review_targeted_contract_fix_prompt"
+    )
+    local_contract_fix_cycle_prompt_path = str(local_targeted_contract_fix_prompt_path)
+    local_contract_fix_cycle_prompt_ready = False
+    local_contract_fix_cycle_normalized_reason = ""
+    local_contract_fix_cycle_selected_step_name = "none"
+    local_contract_fix_cycle_handoff_status = "not_started"
+    local_contract_fix_cycle_handoff_next_action = "manual_review_targeted_contract_fix_prompt"
     targeted_fix_prompt_status = "not_applicable"
     targeted_fix_prompt_text = ""
     targeted_fix_prompt_resolved_path = ""
@@ -18195,6 +18632,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_local_targeted_contract_fix_route_intake_json": str(
             local_targeted_contract_fix_route_intake_path
         ),
+        "one_cycle_controller_local_contract_fix_cycle_coordination_state_json": str(
+            local_contract_fix_cycle_coordination_state_path
+        ),
+        "one_cycle_controller_local_contract_fix_cycle_coordination_decision_json": str(
+            local_contract_fix_cycle_coordination_decision_path
+        ),
+        "one_cycle_controller_local_contract_fix_cycle_coordination_receipt_json": str(
+            local_contract_fix_cycle_coordination_receipt_path
+        ),
+        "one_cycle_controller_local_contract_fix_cycle_execution_handoff_json": str(
+            local_contract_fix_cycle_execution_handoff_path
+        ),
     }
 
     requested_execution = enabled and execute_enabled and (not dry_run)
@@ -18480,6 +18929,55 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             "prompt_lifecycle_issue_detected",
             local_targeted_contract_fix_prompt_lifecycle_issue_detected,
         )
+    )
+    local_contract_fix_cycle_coordination_state = (
+        _build_local_contract_fix_cycle_coordination_artifacts(
+            one_cycle_controller_dir=one_cycle_controller_dir
+        )
+    )
+    local_contract_fix_cycle_coordination_status = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_status"),
+        default=local_contract_fix_cycle_coordination_status,
+    )
+    local_contract_fix_cycle_coordination_blocked_reason = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_blocked_reason"),
+        default=local_contract_fix_cycle_coordination_blocked_reason,
+    )
+    local_contract_fix_cycle_coordination_ready = bool(
+        local_contract_fix_cycle_coordination_state.get(
+            "coordination_ready",
+            local_contract_fix_cycle_coordination_ready,
+        )
+    )
+    local_contract_fix_cycle_coordination_next_action = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_next_action"),
+        default=local_contract_fix_cycle_coordination_next_action,
+    )
+    local_contract_fix_cycle_prompt_path = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_prompt_path"),
+        default=local_contract_fix_cycle_prompt_path,
+    )
+    local_contract_fix_cycle_prompt_ready = bool(
+        local_contract_fix_cycle_coordination_state.get(
+            "coordination_prompt_ready",
+            local_contract_fix_cycle_prompt_ready,
+        )
+    )
+    local_contract_fix_cycle_normalized_reason = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_normalized_reason"),
+        default=local_contract_fix_cycle_normalized_reason,
+    )
+    local_contract_fix_cycle_selected_step_name = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_selected_step_name"),
+        default=local_contract_fix_cycle_selected_step_name,
+    )
+    local_contract_fix_cycle_handoff_status = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("handoff_status"),
+        default=local_contract_fix_cycle_handoff_status,
+    )
+    local_contract_fix_cycle_handoff_next_action = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("handoff_next_action"),
+        default=local_contract_fix_cycle_handoff_next_action,
     )
     review_handoff_decision_state = _build_one_cycle_review_handoff_decision_state(
         review_handoff_path=review_handoff_path
@@ -21393,6 +21891,30 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "local_targeted_contract_fix_prompt_lifecycle_issue_detected": (
             local_targeted_contract_fix_prompt_lifecycle_issue_detected
         ),
+        "local_contract_fix_cycle_coordination_status": (
+            local_contract_fix_cycle_coordination_status
+        ),
+        "local_contract_fix_cycle_coordination_blocked_reason": (
+            local_contract_fix_cycle_coordination_blocked_reason
+        ),
+        "local_contract_fix_cycle_coordination_ready": (
+            local_contract_fix_cycle_coordination_ready
+        ),
+        "local_contract_fix_cycle_coordination_next_action": (
+            local_contract_fix_cycle_coordination_next_action
+        ),
+        "local_contract_fix_cycle_prompt_path": local_contract_fix_cycle_prompt_path,
+        "local_contract_fix_cycle_prompt_ready": local_contract_fix_cycle_prompt_ready,
+        "local_contract_fix_cycle_normalized_reason": (
+            local_contract_fix_cycle_normalized_reason
+        ),
+        "local_contract_fix_cycle_selected_step_name": (
+            local_contract_fix_cycle_selected_step_name
+        ),
+        "local_contract_fix_cycle_handoff_status": local_contract_fix_cycle_handoff_status,
+        "local_contract_fix_cycle_handoff_next_action": (
+            local_contract_fix_cycle_handoff_next_action
+        ),
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -21481,6 +22003,43 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         (
             "- Prompt335 lifecycle issue detected: "
             f"`{str(local_targeted_contract_fix_prompt_lifecycle_issue_detected).lower()}`"
+        ),
+        (
+            "- Prompt336 coordination status: "
+            f"`{local_contract_fix_cycle_coordination_status}`"
+        ),
+        (
+            "- Prompt336 coordination blocked reason: "
+            f"`{local_contract_fix_cycle_coordination_blocked_reason}`"
+        ),
+        (
+            "- Prompt336 coordination ready: "
+            f"`{str(local_contract_fix_cycle_coordination_ready).lower()}`"
+        ),
+        (
+            "- Prompt336 coordination next action: "
+            f"`{local_contract_fix_cycle_coordination_next_action}`"
+        ),
+        f"- Prompt336 prompt path: `{local_contract_fix_cycle_prompt_path}`",
+        (
+            "- Prompt336 prompt ready: "
+            f"`{str(local_contract_fix_cycle_prompt_ready).lower()}`"
+        ),
+        (
+            "- Prompt336 normalized reason: "
+            f"`{local_contract_fix_cycle_normalized_reason or 'none'}`"
+        ),
+        (
+            "- Prompt336 selected step name: "
+            f"`{local_contract_fix_cycle_selected_step_name}`"
+        ),
+        (
+            "- Prompt336 handoff status: "
+            f"`{local_contract_fix_cycle_handoff_status}`"
+        ),
+        (
+            "- Prompt336 handoff next action: "
+            f"`{local_contract_fix_cycle_handoff_next_action}`"
         ),
         f"- Diff capture status: `{diff_capture_status}`",
         f"- Diff capture blocked reason: `{diff_capture_blocked_reason}`",
@@ -23439,6 +23998,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_targeted_contract_fix_prompt_lifecycle_issue_detected": (
             local_targeted_contract_fix_prompt_lifecycle_issue_detected
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_coordination_status": (
+            local_contract_fix_cycle_coordination_status
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_coordination_blocked_reason": (
+            local_contract_fix_cycle_coordination_blocked_reason
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_coordination_ready": (
+            local_contract_fix_cycle_coordination_ready
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_coordination_next_action": (
+            local_contract_fix_cycle_coordination_next_action
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_prompt_path": (
+            local_contract_fix_cycle_prompt_path
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_prompt_ready": (
+            local_contract_fix_cycle_prompt_ready
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_normalized_reason": (
+            local_contract_fix_cycle_normalized_reason
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_selected_step_name": (
+            local_contract_fix_cycle_selected_step_name
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_handoff_status": (
+            local_contract_fix_cycle_handoff_status
+        ),
+        "project_browser_autonomous_local_contract_fix_cycle_handoff_next_action": (
+            local_contract_fix_cycle_handoff_next_action
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
