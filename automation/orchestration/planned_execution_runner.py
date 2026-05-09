@@ -26446,6 +26446,135 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             )
         except OSError:
             pass
+    (
+        refreshed_post_execution_handoff,
+        prompt334_post_write_reconciliation_state,
+    ) = _maybe_reconcile_stale_prompt334_post_codex_artifacts(
+        execution_repo_path=execution_repo_path,
+        status=status,
+        stop_reason=stop_reason,
+        next_action=next_action,
+        execution_attempted=execution_attempted,
+        execution_exit_code=execution_exit_code,
+        exec_plan_execution_status=exec_plan_execution_status,
+        one_cycle_controller_dir=one_cycle_controller_dir,
+        completed_result_source_path=completed_result_source_path,
+    )
+    if refreshed_post_execution_handoff is not None:
+        prompt334_stale_post_codex_artifact_detected = bool(
+            prompt334_post_write_reconciliation_state.get(
+                "prompt334_stale_post_codex_artifact_detected",
+                prompt334_stale_post_codex_artifact_detected,
+            )
+        )
+        prompt334_stale_post_codex_artifact_regeneration_attempted = bool(
+            prompt334_post_write_reconciliation_state.get(
+                "prompt334_stale_post_codex_artifact_regeneration_attempted",
+                prompt334_stale_post_codex_artifact_regeneration_attempted,
+            )
+        )
+        prompt334_stale_post_codex_artifact_regeneration_reason = _normalize_text(
+            prompt334_post_write_reconciliation_state.get(
+                "prompt334_stale_post_codex_artifact_regeneration_reason"
+            ),
+            default=prompt334_stale_post_codex_artifact_regeneration_reason,
+        )
+        prompt334_stale_post_codex_artifact_regeneration_status = _normalize_text(
+            prompt334_post_write_reconciliation_state.get(
+                "prompt334_stale_post_codex_artifact_regeneration_status"
+            ),
+            default=prompt334_stale_post_codex_artifact_regeneration_status,
+        )
+        next_action = _normalize_text(
+            refreshed_post_execution_handoff.get("next_action"),
+            default=next_action,
+        )
+        diff_capture_status = _normalize_text(
+            refreshed_post_execution_handoff.get("diff_capture_status"),
+            default=diff_capture_status,
+        )
+        diff_capture_blocked_reason = _normalize_text(
+            refreshed_post_execution_handoff.get("diff_capture_blocked_reason"),
+            default=diff_capture_blocked_reason,
+        )
+        review_request_status = _normalize_text(
+            refreshed_post_execution_handoff.get("review_request_status"),
+            default=review_request_status,
+        )
+        review_request_blocked_reason = _normalize_text(
+            refreshed_post_execution_handoff.get("review_request_blocked_reason"),
+            default=review_request_blocked_reason,
+        )
+        completed_result_source_status = _normalize_text(
+            refreshed_post_execution_handoff.get("completed_result_source_status"),
+            default=completed_result_source_status,
+        )
+        local_post_codex_diff_capture_status = _normalize_text(
+            refreshed_post_execution_handoff.get("local_post_codex_diff_capture_status"),
+            default=local_post_codex_diff_capture_status,
+        )
+        local_post_codex_diff_capture_blocked_reason = _normalize_text(
+            refreshed_post_execution_handoff.get("local_post_codex_diff_capture_blocked_reason"),
+            default=local_post_codex_diff_capture_blocked_reason,
+        )
+        local_post_codex_diff_capture_next_action = _normalize_text(
+            refreshed_post_execution_handoff.get("local_post_codex_diff_capture_next_action"),
+            default=local_post_codex_diff_capture_next_action,
+        )
+        local_post_codex_diff_capture_worktree_clean_for_tracked_files = bool(
+            refreshed_post_execution_handoff.get(
+                "local_post_codex_diff_capture_worktree_clean_for_tracked_files",
+                local_post_codex_diff_capture_worktree_clean_for_tracked_files,
+            )
+        )
+        local_post_codex_diff_capture_changed_tracked_file_count = _as_non_negative_int(
+            refreshed_post_execution_handoff.get(
+                "local_post_codex_diff_capture_changed_tracked_file_count"
+            ),
+            default=local_post_codex_diff_capture_changed_tracked_file_count,
+        )
+        local_post_codex_outcome_status = _normalize_text(
+            refreshed_post_execution_handoff.get("local_post_codex_outcome_status"),
+            default=local_post_codex_outcome_status,
+        )
+        local_post_codex_outcome_classification = _normalize_text(
+            refreshed_post_execution_handoff.get("local_post_codex_outcome_classification"),
+            default=local_post_codex_outcome_classification,
+        )
+        local_post_codex_stdout_contains_blocked = bool(
+            refreshed_post_execution_handoff.get(
+                "local_post_codex_stdout_contains_blocked",
+                local_post_codex_stdout_contains_blocked,
+            )
+        )
+        local_post_codex_stdout_blocked_reason = _normalize_text(
+            refreshed_post_execution_handoff.get("local_post_codex_stdout_blocked_reason"),
+            default=local_post_codex_stdout_blocked_reason,
+        )
+        local_post_codex_route_status = _normalize_text(
+            refreshed_post_execution_handoff.get("local_post_codex_route_status"),
+            default=local_post_codex_route_status,
+        )
+        local_post_codex_route_decision = _normalize_text(
+            refreshed_post_execution_handoff.get("local_post_codex_route_decision"),
+            default=local_post_codex_route_decision,
+        )
+        local_post_codex_route_next_action = _normalize_text(
+            refreshed_post_execution_handoff.get("local_post_codex_route_next_action"),
+            default=local_post_codex_route_next_action,
+        )
+        local_post_codex_route_targeted_contract_fix_recommended = bool(
+            refreshed_post_execution_handoff.get(
+                "local_post_codex_route_targeted_contract_fix_recommended",
+                local_post_codex_route_targeted_contract_fix_recommended,
+            )
+        )
+        local_post_codex_route_approve_commit_tag_allowed = bool(
+            refreshed_post_execution_handoff.get(
+                "local_post_codex_route_approve_commit_tag_allowed",
+                local_post_codex_route_approve_commit_tag_allowed,
+            )
+        )
     local_codex_one_shot_execution_status = _normalize_text(
         local_codex_one_shot_execution_result_state.get("status"),
         default=local_codex_one_shot_execution_status,
