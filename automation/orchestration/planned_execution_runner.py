@@ -6938,6 +6938,7 @@ def _build_local_targeted_contract_fix_prompt_artifacts(
                 "- none",
                 "",
                 "Out of scope:",
+                "- Do not run tests.",
                 "- running tests or py_compile",
                 "- invoking Codex",
                 "- executing this generated prompt",
