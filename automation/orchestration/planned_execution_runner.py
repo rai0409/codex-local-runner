@@ -3881,6 +3881,16 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_post_codex_execution_outcome_path",
     "project_browser_autonomous_local_post_codex_route_decision_path",
     "project_browser_autonomous_local_post_codex_diff_capture_receipt_path",
+    "project_browser_autonomous_local_targeted_contract_fix_route_intake_status",
+    "project_browser_autonomous_local_targeted_contract_fix_route_intake_blocked_reason",
+    "project_browser_autonomous_local_targeted_contract_fix_route_intake_signal_source",
+    "project_browser_autonomous_local_targeted_contract_fix_prompt_plan_status",
+    "project_browser_autonomous_local_targeted_contract_fix_prompt_plan_blocked_reason",
+    "project_browser_autonomous_local_targeted_contract_fix_prompt_path",
+    "project_browser_autonomous_local_targeted_contract_fix_prompt_ready",
+    "project_browser_autonomous_local_targeted_contract_fix_prompt_next_action",
+    "project_browser_autonomous_local_targeted_contract_fix_prompt_normalized_reason",
+    "project_browser_autonomous_local_targeted_contract_fix_prompt_lifecycle_issue_detected",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -4183,6 +4193,31 @@ _LOCAL_POST_CODEX_DIFF_CAPTURE_RECEIPT_PATH = (
 _LOCAL_POST_CODEX_DIFF_CAPTURE_SCHEMA_VERSION = "local_post_codex_diff_capture_v1"
 _LOCAL_POST_CODEX_EXECUTION_OUTCOME_SCHEMA_VERSION = "local_post_codex_execution_outcome_v1"
 _LOCAL_POST_CODEX_ROUTE_DECISION_SCHEMA_VERSION = "local_post_codex_route_decision_v1"
+_LOCAL_TARGETED_CONTRACT_FIX_PROMPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_targeted_contract_fix_prompt.md"
+)
+_LOCAL_TARGETED_CONTRACT_FIX_PROMPT_PLAN_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_targeted_contract_fix_prompt_plan.json"
+)
+_LOCAL_TARGETED_CONTRACT_FIX_PROMPT_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_targeted_contract_fix_prompt_receipt.json"
+)
+_LOCAL_TARGETED_CONTRACT_FIX_ROUTE_INTAKE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_targeted_contract_fix_route_intake.json"
+)
+_LOCAL_TARGETED_CONTRACT_FIX_ROUTE_INTAKE_SCHEMA_VERSION = (
+    "local_targeted_contract_fix_route_intake_v1"
+)
+_LOCAL_TARGETED_CONTRACT_FIX_PROMPT_PLAN_SCHEMA_VERSION = (
+    "local_targeted_contract_fix_prompt_plan_v1"
+)
+_LOCAL_TARGETED_CONTRACT_FIX_PROMPT_RECEIPT_SCHEMA_VERSION = (
+    "local_targeted_contract_fix_prompt_receipt_v1"
+)
 _LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
     "exec",
@@ -6212,6 +6247,545 @@ def _build_one_cycle_post_execution_handoff(
         "local_post_codex_execution_outcome_path": str(prompt334_outcome_path),
         "local_post_codex_route_decision_path": str(prompt334_route_path),
         "local_post_codex_diff_capture_receipt_path": str(prompt334_receipt_path),
+    }
+
+
+def _build_local_targeted_contract_fix_prompt_artifacts(
+    *,
+    one_cycle_controller_dir: Path,
+) -> dict[str, Any]:
+    def _prompt335_safety_fields() -> dict[str, Any]:
+        return {
+            "commit_allowed": False,
+            "tag_allowed": False,
+            "push_pr_merge_enabled": False,
+            "targeted_fix_execution_allowed": False,
+            "rollback_allowed": False,
+            "commit_performed": False,
+            "tag_performed": False,
+            "push_performed": False,
+            "pr_created": False,
+            "merge_performed": False,
+            "rollback_performed": False,
+            "codex_invoked": False,
+            "codex_invocation_allowed": False,
+        }
+
+    def _as_boolish(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").strip().lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _read_json_mapping(path: Path) -> tuple[bool, dict[str, Any]]:
+        if not path.exists():
+            return False, {}
+        payload = _read_json_object_if_exists(path)
+        if not isinstance(payload, Mapping):
+            return True, {}
+        return True, dict(payload)
+
+    def _read_text(path: Path) -> tuple[bool, str]:
+        if not path.exists():
+            return False, ""
+        try:
+            return True, path.read_text(encoding="utf-8")
+        except OSError:
+            return True, ""
+
+    def _extract_stdout_blocked_reason(stdout_text: str) -> tuple[bool, str]:
+        lines = stdout_text.splitlines()
+        contains_blocked = any(
+            _normalize_text(line, default="").strip().upper().startswith("BLOCKED")
+            for line in lines
+        )
+        blocked_reason = ""
+        marker_index = -1
+        for idx, raw_line in enumerate(lines):
+            normalized = _normalize_text(raw_line, default="").strip().lower()
+            if normalized.startswith("specific blocked reason"):
+                marker_index = idx
+                suffix = _normalize_text(raw_line, default="")
+                if ":" in suffix:
+                    maybe_reason = _normalize_text(
+                        suffix.split(":", 1)[1],
+                        default="",
+                    ).strip()
+                    if maybe_reason:
+                        blocked_reason = maybe_reason
+                break
+        if marker_index >= 0 and not blocked_reason:
+            for follow_line in lines[marker_index + 1 :]:
+                maybe_reason = _normalize_text(follow_line, default="").strip()
+                if maybe_reason:
+                    blocked_reason = maybe_reason
+                    break
+        return contains_blocked, blocked_reason
+
+    def _normalize_blocked_reason(value: Any) -> str:
+        text = _normalize_text(value, default="").strip()
+        for _ in range(8):
+            prior = text
+            text = text.strip()
+            if text.startswith("**") and text.endswith("**") and len(text) >= 4:
+                text = text[2:-2]
+            elif text.startswith("__") and text.endswith("__") and len(text) >= 4:
+                text = text[2:-2]
+            elif text.startswith("`") and text.endswith("`") and len(text) >= 2:
+                text = text[1:-1]
+            elif text.startswith('"') and text.endswith('"') and len(text) >= 2:
+                text = text[1:-1]
+            elif text.startswith("'") and text.endswith("'") and len(text) >= 2:
+                text = text[1:-1]
+            text = text.strip().strip("`").strip().strip('"').strip("'").strip()
+            if text == prior:
+                break
+        return text
+
+    one_cycle_controller_dir = Path(one_cycle_controller_dir)
+    prompt_path = one_cycle_controller_dir / "local_targeted_contract_fix_prompt.md"
+    prompt_plan_path = one_cycle_controller_dir / "local_targeted_contract_fix_prompt_plan.json"
+    prompt_receipt_path = one_cycle_controller_dir / "local_targeted_contract_fix_prompt_receipt.json"
+    route_intake_path = one_cycle_controller_dir / "local_targeted_contract_fix_route_intake.json"
+
+    prompt334_route_path = one_cycle_controller_dir / "local_post_codex_route_decision.json"
+    prompt334_outcome_path = one_cycle_controller_dir / "local_post_codex_execution_outcome.json"
+    prompt334_diff_receipt_path = one_cycle_controller_dir / "local_post_codex_diff_capture_receipt.json"
+    prompt334_diff_capture_path = one_cycle_controller_dir / "local_post_codex_diff_capture.json"
+
+    prompt333_stdout_path = one_cycle_controller_dir / "local_codex_one_shot_execution_stdout.txt"
+    prompt333_stderr_path = one_cycle_controller_dir / "local_codex_one_shot_execution_stderr.txt"
+    prompt333_result_path = one_cycle_controller_dir / "local_codex_one_shot_execution_result.json"
+    prompt333_receipt_v2_path = (
+        one_cycle_controller_dir / "local_codex_one_shot_execution_receipt_v2.json"
+    )
+    supported_blocked_reason = (
+        "missing_explicit_allowed_tracked_files_and_conflicting_step_authority"
+    )
+
+    prompt334_route_exists, prompt334_route_payload = _read_json_mapping(prompt334_route_path)
+    _, prompt334_outcome_payload = _read_json_mapping(prompt334_outcome_path)
+    _, prompt334_diff_capture_payload = _read_json_mapping(prompt334_diff_capture_path)
+    _, _ = _read_json_mapping(prompt334_diff_receipt_path)
+    prompt333_result_exists, prompt333_result_payload = _read_json_mapping(prompt333_result_path)
+    _, _ = _read_json_mapping(prompt333_receipt_v2_path)
+
+    prompt333_stdout_exists, prompt333_stdout_text = _read_text(prompt333_stdout_path)
+    _, _ = _read_text(prompt333_stderr_path)
+    prompt333_stdout_contains_blocked, prompt333_stdout_blocked_reason_raw = (
+        _extract_stdout_blocked_reason(prompt333_stdout_text)
+    )
+
+    prompt334_route_status = _normalize_text(prompt334_route_payload.get("status"), default="")
+    prompt334_route_blocked_reason = _normalize_text(
+        prompt334_route_payload.get("blocked_reason"),
+        default="",
+    )
+    prompt334_route_decision = _normalize_text(prompt334_route_payload.get("route_decision"), default="")
+    prompt334_route_next_action = _normalize_text(prompt334_route_payload.get("next_action"), default="")
+    prompt334_codex_outcome_classification = _normalize_text(
+        prompt334_route_payload.get("codex_outcome_classification"),
+        default=_normalize_text(
+            prompt334_outcome_payload.get("codex_outcome_classification"),
+            default="",
+        ),
+    )
+    prompt334_targeted_contract_fix_recommended = _as_boolish(
+        prompt334_route_payload.get("targeted_contract_fix_recommended"),
+        default=False,
+    )
+    prompt334_contract_fix_reason = _normalize_text(
+        prompt334_route_payload.get("contract_fix_reason"),
+        default="",
+    )
+
+    prompt334_stdout_contains_blocked = _as_boolish(
+        prompt334_outcome_payload.get("local_post_codex_stdout_contains_blocked"),
+        default=_as_boolish(
+            prompt334_outcome_payload.get("stdout_contains_blocked"),
+            default=_as_boolish(
+                prompt334_diff_capture_payload.get("stdout_contains_blocked"),
+                default=False,
+            ),
+        ),
+    )
+    prompt334_stdout_blocked_reason_raw = _normalize_text(
+        prompt334_outcome_payload.get("local_post_codex_stdout_blocked_reason"),
+        default=_normalize_text(
+            prompt334_outcome_payload.get("stdout_blocked_reason"),
+            default=_normalize_text(
+                prompt334_diff_capture_payload.get("stdout_blocked_reason"),
+                default="",
+            ),
+        ),
+    )
+
+    prompt333_result_status = _normalize_text(prompt333_result_payload.get("status"), default="")
+    prompt333_execution_status = _normalize_text(
+        prompt333_result_payload.get("execution_status"),
+        default="",
+    )
+    prompt333_blocked_reason = _normalize_text(
+        prompt333_result_payload.get("blocked_reason"),
+        default="",
+    )
+    prompt333_execution_exit_code = _as_int(
+        prompt333_result_payload.get("execution_exit_code"),
+        default=-1,
+    )
+    prompt333_execution_result = _normalize_text(
+        prompt333_result_payload.get("execution_result"),
+        default="",
+    )
+
+    prompt334_stdout_blocked_reason = _normalize_blocked_reason(prompt334_stdout_blocked_reason_raw)
+    prompt333_stdout_blocked_reason = _normalize_blocked_reason(prompt333_stdout_blocked_reason_raw)
+    normalized_contract_fix_reason = _normalize_blocked_reason(prompt334_contract_fix_reason)
+    if not normalized_contract_fix_reason:
+        normalized_contract_fix_reason = prompt334_stdout_blocked_reason or prompt333_stdout_blocked_reason
+
+    path_a_allowed_decisions = {
+        "prepare_contract_handoff_fix",
+        "prepare_blocked_with_changes_review",
+    }
+
+    path_a_ready = True
+    path_a_blocked_reason = "none"
+    if not prompt334_route_exists:
+        path_a_ready = False
+        path_a_blocked_reason = "missing_prompt334_route_decision_artifact"
+    elif prompt334_route_status != "completed":
+        path_a_ready = False
+        path_a_blocked_reason = "prompt334_route_status_not_completed"
+    elif prompt334_route_decision not in path_a_allowed_decisions:
+        path_a_ready = False
+        path_a_blocked_reason = "prompt334_route_decision_not_contract_fix_path"
+    elif not prompt334_targeted_contract_fix_recommended:
+        path_a_ready = False
+        path_a_blocked_reason = "prompt334_targeted_contract_fix_not_recommended"
+    elif not (normalized_contract_fix_reason or prompt334_stdout_blocked_reason):
+        path_a_ready = False
+        path_a_blocked_reason = "prompt334_contract_fix_reason_missing"
+
+    path_b_candidate_reason = prompt334_stdout_blocked_reason or prompt333_stdout_blocked_reason
+    path_b_ready = True
+    path_b_blocked_reason = "none"
+    if not prompt334_route_exists:
+        path_b_ready = False
+        path_b_blocked_reason = "missing_prompt334_route_decision_artifact"
+    elif prompt334_route_status != "blocked":
+        path_b_ready = False
+        path_b_blocked_reason = "prompt334_route_status_not_blocked"
+    elif "prompt333_execution_result_status_not_completed" not in prompt334_route_blocked_reason:
+        path_b_ready = False
+        path_b_blocked_reason = (
+            "prompt334_route_blocked_reason_missing_prompt333_execution_not_completed_signal"
+        )
+    elif prompt334_codex_outcome_classification != "prompt333_execution_not_ready":
+        path_b_ready = False
+        path_b_blocked_reason = "prompt334_codex_outcome_classification_not_prompt333_execution_not_ready"
+    elif not (prompt334_stdout_contains_blocked or prompt333_stdout_contains_blocked):
+        path_b_ready = False
+        path_b_blocked_reason = "blocked_stdout_signal_missing"
+    elif path_b_candidate_reason != supported_blocked_reason:
+        path_b_ready = False
+        path_b_blocked_reason = "stdout_blocked_reason_not_supported_contract_fix_reason"
+
+    route_intake_status = "blocked"
+    route_intake_blocked_reason = "manual_review_contract_fix_route_intake"
+    route_intake_readiness_reason = "contract_fix_signal_not_detected"
+    contract_fix_signal_detected = False
+    contract_fix_signal_source = "none"
+    prompt333_artifact_lifecycle_issue_detected = False
+
+    if path_a_ready:
+        route_intake_status = "ready"
+        route_intake_blocked_reason = "none"
+        route_intake_readiness_reason = "contract_fix_signal_detected"
+        contract_fix_signal_detected = True
+        contract_fix_signal_source = "prompt334_route_decision"
+    elif path_b_ready:
+        route_intake_status = "ready"
+        route_intake_blocked_reason = "none"
+        route_intake_readiness_reason = "contract_fix_signal_detected"
+        contract_fix_signal_detected = True
+        contract_fix_signal_source = "prompt333_stdout_fallback"
+        prompt333_artifact_lifecycle_issue_detected = True
+        normalized_contract_fix_reason = path_b_candidate_reason
+    else:
+        if prompt334_route_status == "completed":
+            route_intake_blocked_reason = path_a_blocked_reason
+        elif prompt334_route_status == "blocked":
+            route_intake_blocked_reason = path_b_blocked_reason
+        else:
+            route_intake_blocked_reason = (
+                path_a_blocked_reason
+                if path_a_blocked_reason != "none"
+                else path_b_blocked_reason
+            )
+
+    route_intake_next_action = (
+        "execute_targeted_contract_fix_prompt_adapter"
+        if route_intake_status == "ready"
+        else "manual_review_contract_fix_route_intake"
+    )
+    route_intake_validation_errors = (
+        [] if route_intake_status == "ready" else [route_intake_blocked_reason]
+    )
+
+    safety_fields = _prompt335_safety_fields()
+    route_intake_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "route_intake_schema_version": _LOCAL_TARGETED_CONTRACT_FIX_ROUTE_INTAKE_SCHEMA_VERSION,
+        "status": route_intake_status,
+        "route_intake_status": route_intake_status,
+        "blocked_reason": route_intake_blocked_reason,
+        "readiness_reason": route_intake_readiness_reason,
+        "next_action": route_intake_next_action,
+        "prompt334_route_status": prompt334_route_status,
+        "prompt334_route_blocked_reason": prompt334_route_blocked_reason,
+        "prompt334_route_decision": prompt334_route_decision,
+        "prompt334_route_next_action": prompt334_route_next_action,
+        "prompt334_codex_outcome_classification": prompt334_codex_outcome_classification,
+        "prompt334_targeted_contract_fix_recommended": prompt334_targeted_contract_fix_recommended,
+        "prompt334_contract_fix_reason": prompt334_contract_fix_reason,
+        "prompt334_stdout_contains_blocked": prompt334_stdout_contains_blocked,
+        "prompt334_stdout_blocked_reason": prompt334_stdout_blocked_reason,
+        "prompt333_result_status": prompt333_result_status,
+        "prompt333_execution_status": prompt333_execution_status,
+        "prompt333_blocked_reason": prompt333_blocked_reason,
+        "prompt333_execution_exit_code": prompt333_execution_exit_code,
+        "prompt333_execution_result": prompt333_execution_result,
+        "prompt333_stdout_exists": prompt333_stdout_exists,
+        "prompt333_stdout_contains_blocked": prompt333_stdout_contains_blocked,
+        "prompt333_stdout_blocked_reason": prompt333_stdout_blocked_reason,
+        "prompt333_artifact_lifecycle_issue_detected": prompt333_artifact_lifecycle_issue_detected,
+        "contract_fix_signal_detected": contract_fix_signal_detected,
+        "contract_fix_signal_source": contract_fix_signal_source,
+        "validation_errors": route_intake_validation_errors,
+        **safety_fields,
+    }
+
+    prompt_text = ""
+    prompt_write_errors: list[str] = []
+    try:
+        one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        prompt_write_errors.append("prompt335_artifact_directory_create_failed")
+
+    if route_intake_status == "ready":
+        prompt_text = "\n".join(
+            [
+                "# Prompt335 Local Targeted Contract-Fix Handoff",
+                "",
+                "Mode: Repair",
+                "",
+                "Goal:",
+                "Implement a minimal correction for the local one-shot handoff contract so the next Prompt333/334/335 cycle no longer blocks on missing explicit tracked-file allowlist or conflicting selected-step authority.",
+                "",
+                "Allowed files:",
+                "- automation/orchestration/planned_execution_runner.py",
+                "",
+                "Forbidden files:",
+                "- docs/**",
+                "- tests/**",
+                "- scripts/**",
+                "- runtime logs",
+                "- generated artifacts outside normal runner artifact output behavior",
+                "",
+                "Expected artifact/output:",
+                "- Minimal code update in automation/orchestration/planned_execution_runner.py that updates the Prompt332/333/334 contract surfaces and keeps Prompt333 command argv contract validation intact.",
+                "",
+                "Allowed validation commands:",
+                "- none",
+                "",
+                "Out of scope:",
+                "- running tests or py_compile",
+                "- invoking Codex",
+                "- executing this generated prompt",
+                "- commit/tag/push/PR/merge operations",
+                "- rollback",
+                "- Prompt336 bounded cycle controller",
+                "- Prompt337 daemon-lite wrapper",
+                "- retry loops, sleep loops, polling loops, or unbounded execution",
+                "",
+                "Correction objective:",
+                "1. Prompt332 handoff prompt must include explicit_allowed_tracked_files.",
+                "2. Mutation-capable selected steps must include a deterministic non-empty explicit_allowed_tracked_files list.",
+                "3. Read-only/no-mutation steps must set explicit_allowed_tracked_files=[] and mutation_allowed=false.",
+                "4. For generate_next_codex_task handoff, explicit_allowed_tracked_files must be exactly ['automation/orchestration/planned_execution_runner.py'].",
+                "5. Handoff prompt must not request tracked file mutation without explicit allowlist coverage.",
+                "6. Selected-step authority must come from Prompt331 v2 local_autonomous_cycle_v2_decision and must not conflict with stale local_end_to_end_one_shot_step_selection when stale/blocked.",
+                "7. Add and propagate fields as needed: selected_step_authority_source, selected_step_authority_artifact, selected_step_authority_status, explicit_allowed_tracked_files, mutation_allowed, stale_step_selection_conflict_detected, stale_step_selection_artifact_path, stale_step_selection_status, contract_fix_applied.",
+                "8. Prompt333 validation must tolerate the added contract fields while preserving exact command argv validation.",
+                "9. Prompt334 must keep classifying stdout BLOCKED; after this fix, clean rerun should no longer block for missing explicit allowed tracked files or conflicting step authority.",
+                "",
+                "Deterministic authority contract:",
+                "- selected_step_authority_source: prompt331_v2_local_autonomous_cycle_v2_decision",
+                "- selected_step_authority_artifact: /tmp/codex-local-runner-decision/one_cycle_controller/local_autonomous_cycle_v2_decision.json",
+                "- explicit_allowed_tracked_files: ['automation/orchestration/planned_execution_runner.py']",
+                "- mutation_allowed: true",
+            ]
+        ) + "\n"
+    else:
+        prompt_text = "\n".join(
+            [
+                "# Prompt335 Local Targeted Contract-Fix Handoff (Blocked)",
+                "",
+                "DO NOT EXECUTE.",
+                "",
+                f"- Route intake status: `{route_intake_status}`",
+                f"- Blocked reason: `{route_intake_blocked_reason}`",
+                "- Next action: `manual_review_contract_fix_route_intake`",
+            ]
+        ) + "\n"
+
+    if not prompt_write_errors:
+        try:
+            prompt_path.write_text(prompt_text, encoding="utf-8")
+        except OSError:
+            prompt_write_errors.append("local_targeted_contract_fix_prompt_write_failed")
+
+    prompt_exists = prompt_path.exists()
+    prompt_non_empty = False
+    prompt_size_bytes = 0
+    generated_prompt_line_count = 0
+    generated_prompt_sha256 = ""
+    if prompt_exists:
+        try:
+            prompt_size_bytes = _as_non_negative_int(prompt_path.stat().st_size, default=0)
+        except OSError:
+            prompt_size_bytes = 0
+        try:
+            prompt_text_now = prompt_path.read_text(encoding="utf-8")
+        except OSError:
+            prompt_text_now = ""
+        prompt_non_empty = bool(prompt_text_now.strip())
+        generated_prompt_line_count = len(prompt_text_now.splitlines())
+        generated_prompt_sha256 = (
+            hashlib.sha256(prompt_text_now.encode("utf-8")).hexdigest()
+            if prompt_text_now
+            else ""
+        )
+
+    plan_status = "blocked"
+    plan_blocked_reason = route_intake_blocked_reason
+    plan_readiness_reason = "contract_fix_signal_not_ready_for_prompt_generation"
+    plan_next_action = "manual_review_contract_fix_route_intake"
+    if (
+        route_intake_status == "ready"
+        and prompt_exists
+        and prompt_non_empty
+        and not prompt_write_errors
+    ):
+        plan_status = "ready"
+        plan_blocked_reason = "none"
+        plan_readiness_reason = "contract_fix_signal_detected_and_prompt_generated"
+        plan_next_action = "execute_targeted_contract_fix_prompt_adapter"
+    elif route_intake_status == "ready" and prompt_write_errors:
+        plan_blocked_reason = prompt_write_errors[0]
+
+    stale_step_selection_conflict_detected = (
+        normalized_contract_fix_reason == supported_blocked_reason
+    )
+    correction_objective = (
+        "Fix one-shot handoff contract boundaries for explicit tracked file scope and authoritative selected-step source."
+    )
+
+    plan_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "fix_prompt_plan_schema_version": (
+            _LOCAL_TARGETED_CONTRACT_FIX_PROMPT_PLAN_SCHEMA_VERSION
+        ),
+        "status": plan_status,
+        "blocked_reason": plan_blocked_reason,
+        "readiness_reason": plan_readiness_reason,
+        "route_intake_status": route_intake_status,
+        "contract_fix_signal_detected": contract_fix_signal_detected,
+        "contract_fix_signal_source": contract_fix_signal_source,
+        "normalized_contract_fix_reason": normalized_contract_fix_reason,
+        "prompt_path": str(prompt_path),
+        "prompt_exists": prompt_exists,
+        "prompt_non_empty": prompt_non_empty,
+        "correction_objective": correction_objective,
+        "explicit_allowed_tracked_files": ["automation/orchestration/planned_execution_runner.py"],
+        "selected_step_authority_source": "prompt331_v2_local_autonomous_cycle_v2_decision",
+        "selected_step_authority_artifact": str(_LOCAL_AUTONOMOUS_CYCLE_V2_DECISION_PATH),
+        "stale_step_selection_conflict_detected": stale_step_selection_conflict_detected,
+        "prompt333_artifact_lifecycle_issue_detected": prompt333_artifact_lifecycle_issue_detected,
+        "next_action": plan_next_action,
+        "validation_errors": [] if plan_status == "ready" else [plan_blocked_reason],
+        **safety_fields,
+    }
+
+    receipt_status = "ready" if plan_status == "ready" else "blocked"
+    receipt_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "fix_prompt_receipt_schema_version": (
+            _LOCAL_TARGETED_CONTRACT_FIX_PROMPT_RECEIPT_SCHEMA_VERSION
+        ),
+        "status": receipt_status,
+        "blocked_reason": "none" if receipt_status == "ready" else plan_blocked_reason,
+        "readiness_reason": (
+            "contract_fix_signal_detected_and_prompt_generated"
+            if receipt_status == "ready"
+            else "contract_fix_signal_not_ready_for_prompt_generation"
+        ),
+        "prompt_path": str(prompt_path),
+        "prompt_exists": prompt_exists,
+        "prompt_non_empty": prompt_non_empty,
+        "generated_prompt_sha256": generated_prompt_sha256,
+        "generated_prompt_line_count": generated_prompt_line_count,
+        "generated_prompt_size_bytes": prompt_size_bytes,
+        "route_intake_path": str(route_intake_path),
+        "fix_prompt_plan_path": str(prompt_plan_path),
+        "next_action": plan_next_action,
+        "validation_errors": [] if receipt_status == "ready" else [plan_blocked_reason],
+        **safety_fields,
+    }
+
+    json_write_errors: list[str] = []
+    try:
+        _write_json(route_intake_path, route_intake_payload)
+    except OSError:
+        json_write_errors.append("local_targeted_contract_fix_route_intake_write_failed")
+    try:
+        _write_json(prompt_plan_path, plan_payload)
+    except OSError:
+        json_write_errors.append("local_targeted_contract_fix_prompt_plan_write_failed")
+    try:
+        _write_json(prompt_receipt_path, receipt_payload)
+    except OSError:
+        json_write_errors.append("local_targeted_contract_fix_prompt_receipt_write_failed")
+    prompt_write_errors.extend(json_write_errors)
+
+    if prompt_write_errors:
+        if plan_status == "ready":
+            plan_status = "blocked"
+            plan_blocked_reason = prompt_write_errors[0]
+            plan_next_action = "manual_review_contract_fix_route_intake"
+        receipt_status = "blocked"
+
+    return {
+        "route_intake_status": route_intake_status,
+        "route_intake_blocked_reason": route_intake_blocked_reason,
+        "route_intake_signal_source": contract_fix_signal_source,
+        "prompt_plan_status": plan_status,
+        "prompt_plan_blocked_reason": plan_blocked_reason,
+        "prompt_path": str(prompt_path),
+        "prompt_ready": plan_status == "ready",
+        "prompt_next_action": plan_next_action,
+        "prompt_normalized_reason": normalized_contract_fix_reason,
+        "prompt_lifecycle_issue_detected": prompt333_artifact_lifecycle_issue_detected,
+        "route_intake_path": str(route_intake_path),
+        "prompt_plan_path": str(prompt_plan_path),
+        "prompt_receipt_path": str(prompt_receipt_path),
     }
 
 
@@ -16915,6 +17489,16 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_post_codex_execution_outcome_path = Path(_LOCAL_POST_CODEX_EXECUTION_OUTCOME_PATH)
     local_post_codex_route_decision_path = Path(_LOCAL_POST_CODEX_ROUTE_DECISION_PATH)
     local_post_codex_diff_capture_receipt_path = Path(_LOCAL_POST_CODEX_DIFF_CAPTURE_RECEIPT_PATH)
+    local_targeted_contract_fix_prompt_path = Path(_LOCAL_TARGETED_CONTRACT_FIX_PROMPT_PATH)
+    local_targeted_contract_fix_prompt_plan_path = Path(
+        _LOCAL_TARGETED_CONTRACT_FIX_PROMPT_PLAN_PATH
+    )
+    local_targeted_contract_fix_prompt_receipt_path = Path(
+        _LOCAL_TARGETED_CONTRACT_FIX_PROMPT_RECEIPT_PATH
+    )
+    local_targeted_contract_fix_route_intake_path = Path(
+        _LOCAL_TARGETED_CONTRACT_FIX_ROUTE_INTAKE_PATH
+    )
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -16953,6 +17537,16 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_post_codex_route_next_action = "manual_review_prompt333_execution_artifacts"
     local_post_codex_route_targeted_contract_fix_recommended = False
     local_post_codex_route_approve_commit_tag_allowed = False
+    local_targeted_contract_fix_route_intake_status = "not_started"
+    local_targeted_contract_fix_route_intake_blocked_reason = "prompt335_not_started"
+    local_targeted_contract_fix_route_intake_signal_source = "none"
+    local_targeted_contract_fix_prompt_plan_status = "not_started"
+    local_targeted_contract_fix_prompt_plan_blocked_reason = "prompt335_not_started"
+    local_targeted_contract_fix_prompt_path_text = str(local_targeted_contract_fix_prompt_path)
+    local_targeted_contract_fix_prompt_ready = False
+    local_targeted_contract_fix_prompt_next_action = "manual_review_contract_fix_route_intake"
+    local_targeted_contract_fix_prompt_normalized_reason = ""
+    local_targeted_contract_fix_prompt_lifecycle_issue_detected = False
     targeted_fix_prompt_status = "not_applicable"
     targeted_fix_prompt_text = ""
     targeted_fix_prompt_resolved_path = ""
@@ -17589,6 +18183,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_local_post_codex_diff_capture_receipt_json": str(
             local_post_codex_diff_capture_receipt_path
         ),
+        "one_cycle_controller_local_targeted_contract_fix_prompt_md": str(
+            local_targeted_contract_fix_prompt_path
+        ),
+        "one_cycle_controller_local_targeted_contract_fix_prompt_plan_json": str(
+            local_targeted_contract_fix_prompt_plan_path
+        ),
+        "one_cycle_controller_local_targeted_contract_fix_prompt_receipt_json": str(
+            local_targeted_contract_fix_prompt_receipt_path
+        ),
+        "one_cycle_controller_local_targeted_contract_fix_route_intake_json": str(
+            local_targeted_contract_fix_route_intake_path
+        ),
     }
 
     requested_execution = enabled and execute_enabled and (not dry_run)
@@ -17826,6 +18432,53 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         post_execution_handoff.get(
             "local_post_codex_route_approve_commit_tag_allowed",
             local_post_codex_route_approve_commit_tag_allowed,
+        )
+    )
+    local_targeted_contract_fix_prompt_state = _build_local_targeted_contract_fix_prompt_artifacts(
+        one_cycle_controller_dir=one_cycle_controller_dir
+    )
+    local_targeted_contract_fix_route_intake_status = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("route_intake_status"),
+        default=local_targeted_contract_fix_route_intake_status,
+    )
+    local_targeted_contract_fix_route_intake_blocked_reason = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("route_intake_blocked_reason"),
+        default=local_targeted_contract_fix_route_intake_blocked_reason,
+    )
+    local_targeted_contract_fix_route_intake_signal_source = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("route_intake_signal_source"),
+        default=local_targeted_contract_fix_route_intake_signal_source,
+    )
+    local_targeted_contract_fix_prompt_plan_status = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_plan_status"),
+        default=local_targeted_contract_fix_prompt_plan_status,
+    )
+    local_targeted_contract_fix_prompt_plan_blocked_reason = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_plan_blocked_reason"),
+        default=local_targeted_contract_fix_prompt_plan_blocked_reason,
+    )
+    local_targeted_contract_fix_prompt_path_text = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_path"),
+        default=local_targeted_contract_fix_prompt_path_text,
+    )
+    local_targeted_contract_fix_prompt_ready = bool(
+        local_targeted_contract_fix_prompt_state.get(
+            "prompt_ready",
+            local_targeted_contract_fix_prompt_ready,
+        )
+    )
+    local_targeted_contract_fix_prompt_next_action = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_next_action"),
+        default=local_targeted_contract_fix_prompt_next_action,
+    )
+    local_targeted_contract_fix_prompt_normalized_reason = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_normalized_reason"),
+        default=local_targeted_contract_fix_prompt_normalized_reason,
+    )
+    local_targeted_contract_fix_prompt_lifecycle_issue_detected = bool(
+        local_targeted_contract_fix_prompt_state.get(
+            "prompt_lifecycle_issue_detected",
+            local_targeted_contract_fix_prompt_lifecycle_issue_detected,
         )
     )
     review_handoff_decision_state = _build_one_cycle_review_handoff_decision_state(
@@ -20714,6 +21367,32 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "local_post_codex_execution_outcome_path": str(local_post_codex_execution_outcome_path),
         "local_post_codex_route_decision_path": str(local_post_codex_route_decision_path),
         "local_post_codex_diff_capture_receipt_path": str(local_post_codex_diff_capture_receipt_path),
+        "local_targeted_contract_fix_route_intake_status": (
+            local_targeted_contract_fix_route_intake_status
+        ),
+        "local_targeted_contract_fix_route_intake_blocked_reason": (
+            local_targeted_contract_fix_route_intake_blocked_reason
+        ),
+        "local_targeted_contract_fix_route_intake_signal_source": (
+            local_targeted_contract_fix_route_intake_signal_source
+        ),
+        "local_targeted_contract_fix_prompt_plan_status": (
+            local_targeted_contract_fix_prompt_plan_status
+        ),
+        "local_targeted_contract_fix_prompt_plan_blocked_reason": (
+            local_targeted_contract_fix_prompt_plan_blocked_reason
+        ),
+        "local_targeted_contract_fix_prompt_path": local_targeted_contract_fix_prompt_path_text,
+        "local_targeted_contract_fix_prompt_ready": local_targeted_contract_fix_prompt_ready,
+        "local_targeted_contract_fix_prompt_next_action": (
+            local_targeted_contract_fix_prompt_next_action
+        ),
+        "local_targeted_contract_fix_prompt_normalized_reason": (
+            local_targeted_contract_fix_prompt_normalized_reason
+        ),
+        "local_targeted_contract_fix_prompt_lifecycle_issue_detected": (
+            local_targeted_contract_fix_prompt_lifecycle_issue_detected
+        ),
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -20769,6 +21448,40 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- Prompt334 outcome class: `{local_post_codex_outcome_classification}`",
         f"- Prompt334 route decision: `{local_post_codex_route_decision}`",
         f"- Prompt334 route next action: `{local_post_codex_route_next_action}`",
+        (
+            "- Prompt335 route intake status: "
+            f"`{local_targeted_contract_fix_route_intake_status}`"
+        ),
+        (
+            "- Prompt335 route intake blocked reason: "
+            f"`{local_targeted_contract_fix_route_intake_blocked_reason}`"
+        ),
+        (
+            "- Prompt335 route intake signal source: "
+            f"`{local_targeted_contract_fix_route_intake_signal_source}`"
+        ),
+        f"- Prompt335 prompt plan status: `{local_targeted_contract_fix_prompt_plan_status}`",
+        (
+            "- Prompt335 prompt plan blocked reason: "
+            f"`{local_targeted_contract_fix_prompt_plan_blocked_reason}`"
+        ),
+        f"- Prompt335 prompt path: `{local_targeted_contract_fix_prompt_path_text}`",
+        (
+            "- Prompt335 prompt ready: "
+            f"`{str(local_targeted_contract_fix_prompt_ready).lower()}`"
+        ),
+        (
+            "- Prompt335 prompt next action: "
+            f"`{local_targeted_contract_fix_prompt_next_action}`"
+        ),
+        (
+            "- Prompt335 normalized blocked reason: "
+            f"`{local_targeted_contract_fix_prompt_normalized_reason or 'none'}`"
+        ),
+        (
+            "- Prompt335 lifecycle issue detected: "
+            f"`{str(local_targeted_contract_fix_prompt_lifecycle_issue_detected).lower()}`"
+        ),
         f"- Diff capture status: `{diff_capture_status}`",
         f"- Diff capture blocked reason: `{diff_capture_blocked_reason}`",
         f"- Review request status: `{review_request_status}`",
@@ -22696,6 +23409,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_post_codex_diff_capture_receipt_path": str(
             local_post_codex_diff_capture_receipt_path
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_route_intake_status": (
+            local_targeted_contract_fix_route_intake_status
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_route_intake_blocked_reason": (
+            local_targeted_contract_fix_route_intake_blocked_reason
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_route_intake_signal_source": (
+            local_targeted_contract_fix_route_intake_signal_source
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_prompt_plan_status": (
+            local_targeted_contract_fix_prompt_plan_status
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_prompt_plan_blocked_reason": (
+            local_targeted_contract_fix_prompt_plan_blocked_reason
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_prompt_path": (
+            local_targeted_contract_fix_prompt_path_text
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_prompt_ready": (
+            local_targeted_contract_fix_prompt_ready
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_prompt_next_action": (
+            local_targeted_contract_fix_prompt_next_action
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_prompt_normalized_reason": (
+            local_targeted_contract_fix_prompt_normalized_reason
+        ),
+        "project_browser_autonomous_local_targeted_contract_fix_prompt_lifecycle_issue_detected": (
+            local_targeted_contract_fix_prompt_lifecycle_issue_detected
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
