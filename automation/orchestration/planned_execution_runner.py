@@ -3863,6 +3863,24 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_codex_one_shot_execution_cycle_id",
     "project_browser_autonomous_local_codex_one_shot_execution_current_cycle",
     "project_browser_autonomous_local_codex_one_shot_execution_max_cycles",
+    "project_browser_autonomous_local_post_codex_diff_capture_status",
+    "project_browser_autonomous_local_post_codex_diff_capture_blocked_reason",
+    "project_browser_autonomous_local_post_codex_diff_capture_next_action",
+    "project_browser_autonomous_local_post_codex_diff_capture_worktree_clean_for_tracked_files",
+    "project_browser_autonomous_local_post_codex_diff_capture_changed_tracked_file_count",
+    "project_browser_autonomous_local_post_codex_outcome_status",
+    "project_browser_autonomous_local_post_codex_outcome_classification",
+    "project_browser_autonomous_local_post_codex_stdout_contains_blocked",
+    "project_browser_autonomous_local_post_codex_stdout_blocked_reason",
+    "project_browser_autonomous_local_post_codex_route_status",
+    "project_browser_autonomous_local_post_codex_route_decision",
+    "project_browser_autonomous_local_post_codex_route_next_action",
+    "project_browser_autonomous_local_post_codex_route_targeted_contract_fix_recommended",
+    "project_browser_autonomous_local_post_codex_route_approve_commit_tag_allowed",
+    "project_browser_autonomous_local_post_codex_diff_capture_path",
+    "project_browser_autonomous_local_post_codex_execution_outcome_path",
+    "project_browser_autonomous_local_post_codex_route_decision_path",
+    "project_browser_autonomous_local_post_codex_diff_capture_receipt_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -4146,6 +4164,25 @@ _LOCAL_CODEX_ONE_SHOT_EXECUTION_STDERR_PATH = (
     "local_codex_one_shot_execution_stderr.txt"
 )
 _LOCAL_CODEX_ONE_SHOT_EXECUTION_OUTPUT_MAX_CHARS = 200_000
+_LOCAL_POST_CODEX_DIFF_CAPTURE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_post_codex_diff_capture.json"
+)
+_LOCAL_POST_CODEX_EXECUTION_OUTCOME_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_post_codex_execution_outcome.json"
+)
+_LOCAL_POST_CODEX_ROUTE_DECISION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_post_codex_route_decision.json"
+)
+_LOCAL_POST_CODEX_DIFF_CAPTURE_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_post_codex_diff_capture_receipt.json"
+)
+_LOCAL_POST_CODEX_DIFF_CAPTURE_SCHEMA_VERSION = "local_post_codex_diff_capture_v1"
+_LOCAL_POST_CODEX_EXECUTION_OUTCOME_SCHEMA_VERSION = "local_post_codex_execution_outcome_v1"
+_LOCAL_POST_CODEX_ROUTE_DECISION_SCHEMA_VERSION = "local_post_codex_route_decision_v1"
 _LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
     "exec",
@@ -5548,203 +5585,602 @@ def _build_one_cycle_post_execution_handoff(
     one_cycle_controller_dir: Path,
     completed_result_source_path: Path,
 ) -> dict[str, Any]:
-    def _read_flag(value: Any) -> bool:
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, int):
-            return value != 0
-        text = _normalize_text(value, default="").lower()
-        if text in {"1", "true", "yes", "on", "enabled"}:
-            return True
-        if text in {"0", "false", "no", "off", "disabled"}:
-            return False
-        return False
+    _ = (
+        status,
+        stop_reason,
+        next_action,
+        execution_attempted,
+        execution_exit_code,
+        exec_plan_execution_status,
+        completed_result_source_path,
+    )
 
+    def _read_json_mapping(path: Path) -> tuple[bool, bool, dict[str, Any]]:
+        if not path.exists():
+            return False, False, {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            return True, False, {}
+        if not isinstance(payload, Mapping):
+            return True, False, {}
+        return True, True, dict(payload)
+
+    def _read_bounded_text(path: Path, *, max_lines: int) -> tuple[bool, int, list[str], str]:
+        if not path.exists():
+            return False, 0, [], ""
+        size_bytes = 0
+        try:
+            size_bytes = max(0, int(path.stat().st_size))
+        except OSError:
+            size_bytes = 0
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            return True, size_bytes, [], ""
+        lines = text.splitlines()
+        return True, size_bytes, lines[:max_lines], text
+
+    def _extract_stdout_blocked_reason(stdout_text: str) -> tuple[bool, str]:
+        lines = stdout_text.splitlines()
+        contains_blocked = any(
+            _normalize_text(line, default="").strip().upper().startswith("BLOCKED")
+            for line in lines
+        )
+        blocked_reason = ""
+        marker_index = -1
+        for idx, raw_line in enumerate(lines):
+            normalized = _normalize_text(raw_line, default="").strip().lower()
+            if normalized.startswith("specific blocked reason"):
+                marker_index = idx
+                suffix = _normalize_text(raw_line, default="")
+                if ":" in suffix:
+                    maybe_reason = suffix.split(":", 1)[1].strip()
+                    if maybe_reason:
+                        blocked_reason = maybe_reason
+                break
+        if marker_index >= 0 and not blocked_reason:
+            for follow_line in lines[marker_index + 1 :]:
+                maybe_reason = _normalize_text(follow_line, default="").strip()
+                if maybe_reason:
+                    blocked_reason = maybe_reason
+                    break
+        return contains_blocked, blocked_reason
+
+    def _prompt334_safety_fields() -> dict[str, Any]:
+        return {
+            "commit_allowed": False,
+            "tag_allowed": False,
+            "push_pr_merge_enabled": False,
+            "targeted_fix_execution_allowed": False,
+            "rollback_allowed": False,
+            "commit_performed": False,
+            "tag_performed": False,
+            "push_performed": False,
+            "pr_created": False,
+            "merge_performed": False,
+            "rollback_performed": False,
+            "codex_invoked": False,
+            "codex_invocation_allowed": False,
+        }
+
+    one_cycle_controller_dir = Path(one_cycle_controller_dir)
     diff_stat_path = one_cycle_controller_dir / "one_cycle_controller_diff_stat.txt"
     diff_name_status_path = one_cycle_controller_dir / "one_cycle_controller_diff_name_status.txt"
     diff_patch_path = one_cycle_controller_dir / "one_cycle_controller_diff.patch"
     review_request_path = one_cycle_controller_dir / "one_cycle_controller_review_request.md"
     review_handoff_path = one_cycle_controller_dir / "one_cycle_controller_review_handoff.json"
 
-    diff_capture_status = "not_started"
-    diff_capture_blocked_reason = "one_cycle_not_completed"
-    review_request_status = "not_started"
-    review_request_blocked_reason = "one_cycle_not_completed"
-    completed_result_source_status = "not_completed"
-
-    current_run_completed = (
-        status == "one_cycle_controller_completed"
-        and stop_reason == "review_response_required"
-        and execution_attempted
-        and execution_exit_code == 0
-        and exec_plan_execution_status == "completed"
+    prompt333_result_path = one_cycle_controller_dir / "local_codex_one_shot_execution_result.json"
+    prompt333_receipt_v2_path = (
+        one_cycle_controller_dir / "local_codex_one_shot_execution_receipt_v2.json"
     )
-    source_payload: dict[str, Any] = {}
-    if current_run_completed:
-        completed_result_source_status = "available"
-    else:
-        completed_result_source_status, source_payload = _read_one_cycle_completed_result_source(
-            result_path=completed_result_source_path
+    prompt333_stdout_path = one_cycle_controller_dir / "local_codex_one_shot_execution_stdout.txt"
+    prompt333_stderr_path = one_cycle_controller_dir / "local_codex_one_shot_execution_stderr.txt"
+    prompt334_diff_capture_path = one_cycle_controller_dir / "local_post_codex_diff_capture.json"
+    prompt334_outcome_path = one_cycle_controller_dir / "local_post_codex_execution_outcome.json"
+    prompt334_route_path = one_cycle_controller_dir / "local_post_codex_route_decision.json"
+    prompt334_receipt_path = one_cycle_controller_dir / "local_post_codex_diff_capture_receipt.json"
+
+    prompt333_result_exists, prompt333_result_valid, prompt333_result_payload = _read_json_mapping(
+        prompt333_result_path
+    )
+    prompt333_receipt_v2_exists, prompt333_receipt_v2_valid, prompt333_receipt_v2_payload = (
+        _read_json_mapping(prompt333_receipt_v2_path)
+    )
+    prompt333_validation_errors: list[str] = []
+    prompt333_blocked_reason = "none"
+    prompt333_ready = True
+
+    def _invalidate(reason: str, detail: str) -> None:
+        nonlocal prompt333_ready, prompt333_blocked_reason
+        prompt333_ready = False
+        if prompt333_blocked_reason == "none":
+            prompt333_blocked_reason = reason
+        prompt333_validation_errors.append(detail)
+
+    if not prompt333_result_exists:
+        _invalidate(
+            "missing_prompt333_execution_result_artifact",
+            "missing_prompt333_execution_result_artifact",
+        )
+    elif not prompt333_result_valid:
+        _invalidate(
+            "invalid_prompt333_execution_result_artifact",
+            "invalid_prompt333_execution_result_artifact",
         )
 
-    handoff_eligible = current_run_completed or completed_result_source_status == "available"
-    effective_next_action = next_action
-    if handoff_eligible:
-        effective_next_action = "wait_for_chatgpt_diff_review_response"
-        diff_stat_result = _run_git(
-            execution_repo_path,
-            ["diff", "--stat"],
-            timeout_seconds=15,
+    if not prompt333_receipt_v2_exists:
+        _invalidate(
+            "missing_prompt333_execution_receipt_v2_artifact",
+            "missing_prompt333_execution_receipt_v2_artifact",
         )
-        diff_name_status_result = _run_git(
-            execution_repo_path,
-            ["diff", "--name-status"],
-            timeout_seconds=15,
+    elif not prompt333_receipt_v2_valid:
+        _invalidate(
+            "invalid_prompt333_execution_receipt_v2_artifact",
+            "invalid_prompt333_execution_receipt_v2_artifact",
         )
-        diff_patch_result = _run_git(
-            execution_repo_path,
-            ["diff"],
-            timeout_seconds=30,
+
+    if prompt333_result_valid:
+        expected_fields: tuple[tuple[str, Any], ...] = (
+            ("schema_version", _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION),
+            ("execution_schema_version", _LOCAL_CODEX_ONE_SHOT_EXECUTION_SCHEMA_VERSION),
+            ("status", "completed"),
+            ("execution_status", "completed"),
+            ("blocked_reason", "none"),
+            (
+                "readiness_reason",
+                "local_codex_one_shot_handoff_valid_and_tracked_worktree_clean",
+            ),
+            ("codex_invoked", True),
+            ("execution_attempted", True),
+            ("execution_completed", True),
+            ("max_codex_invocations", 1),
+            ("codex_invocation_count", 1),
         )
-        if (
-            diff_stat_result.returncode != 0
-            or diff_name_status_result.returncode != 0
-            or diff_patch_result.returncode != 0
-        ):
-            diff_capture_status = "blocked"
-            diff_capture_blocked_reason = "diff_capture_failed"
-            review_request_status = "blocked"
-            review_request_blocked_reason = "diff_capture_failed"
-            effective_next_action = "manual_review_required"
-        else:
-            diff_stat_text = (diff_stat_result.stdout or "").strip()
-            diff_name_status_text = (diff_name_status_result.stdout or "").strip()
-            diff_patch_text = diff_patch_result.stdout or ""
+        field_failure_reasons = {
+            "schema_version": "prompt333_execution_result_schema_version_mismatch",
+            "execution_schema_version": "prompt333_execution_result_execution_schema_version_mismatch",
+            "status": "prompt333_execution_result_status_not_completed",
+            "execution_status": "prompt333_execution_result_execution_status_not_completed",
+            "blocked_reason": "prompt333_execution_result_blocked_reason_not_none",
+            "readiness_reason": "prompt333_execution_result_readiness_reason_mismatch",
+            "codex_invoked": "prompt333_execution_result_codex_not_invoked",
+            "execution_attempted": "prompt333_execution_result_execution_not_attempted",
+            "execution_completed": "prompt333_execution_result_execution_not_completed",
+            "max_codex_invocations": "prompt333_execution_result_max_codex_invocations_not_one",
+            "codex_invocation_count": "prompt333_execution_result_codex_invocation_count_not_one",
+        }
+        for field_name, expected_value in expected_fields:
+            actual_value = prompt333_result_payload.get(field_name)
+            if actual_value != expected_value:
+                _invalidate(
+                    field_failure_reasons[field_name],
+                    f"{field_name}_mismatch",
+                )
+                break
+        raw_execution_exit_code = prompt333_result_payload.get("execution_exit_code")
+        parsed_execution_exit_code = _as_optional_int(raw_execution_exit_code)
+        if parsed_execution_exit_code is None:
+            _invalidate(
+                "prompt333_execution_result_execution_exit_code_not_integer",
+                "execution_exit_code_not_integer",
+            )
+        execution_result = _normalize_text(
+            prompt333_result_payload.get("execution_result"),
+            default="",
+        )
+        if execution_result not in {"codex_one_shot_completed", "codex_one_shot_failed"}:
+            _invalidate(
+                "prompt333_execution_result_execution_result_invalid",
+                "execution_result_invalid",
+            )
+        result_next_action = _normalize_text(
+            prompt333_result_payload.get("next_action"),
+            default="",
+        )
+        if result_next_action not in {
+            "prepare_local_git_diff_capture",
+            "manual_review_local_codex_one_shot_execution_failure",
+        }:
+            _invalidate(
+                "prompt333_execution_result_next_action_invalid",
+                "next_action_invalid",
+            )
+        validation_errors_field = prompt333_result_payload.get("validation_errors")
+        if _normalize_string_list(validation_errors_field):
+            _invalidate(
+                "prompt333_execution_result_validation_errors_not_empty",
+                "validation_errors_not_empty",
+            )
+        if "command_argv_mismatch_source" in prompt333_result_payload:
+            if (
+                _normalize_text(
+                    prompt333_result_payload.get("command_argv_mismatch_source"),
+                    default="",
+                )
+                != "none"
+            ):
+                _invalidate(
+                    "prompt333_execution_result_command_argv_mismatch_source_not_none",
+                    "command_argv_mismatch_source_invalid",
+                )
+        if "authoritative_handoff_command_argv_equal_expected" in prompt333_result_payload:
+            if not bool(
+                prompt333_result_payload.get("authoritative_handoff_command_argv_equal_expected")
+            ):
+                _invalidate(
+                    "prompt333_execution_result_authoritative_handoff_command_argv_not_equal_expected",
+                    "authoritative_handoff_command_argv_equal_expected_invalid",
+                )
+        if "supporting_receipt_command_argv_equal_expected" in prompt333_result_payload:
+            supporting_value = prompt333_result_payload.get(
+                "supporting_receipt_command_argv_equal_expected"
+            )
+            if supporting_value is not None and bool(supporting_value) is not True:
+                _invalidate(
+                    "prompt333_execution_result_supporting_receipt_command_argv_not_equal_expected",
+                    "supporting_receipt_command_argv_equal_expected_invalid",
+                )
+
+    prompt333_execution_exit_code_value = _as_optional_int(
+        prompt333_result_payload.get("execution_exit_code")
+    )
+    prompt333_execution_exit_code = (
+        int(prompt333_execution_exit_code_value)
+        if prompt333_execution_exit_code_value is not None
+        else -1
+    )
+
+    stdout_exists, stdout_size_bytes, stdout_head_lines, stdout_text = _read_bounded_text(
+        prompt333_stdout_path,
+        max_lines=40,
+    )
+    stderr_exists, stderr_size_bytes, stderr_head_lines, stderr_text = _read_bounded_text(
+        prompt333_stderr_path,
+        max_lines=40,
+    )
+    stdout_contains_blocked, stdout_blocked_reason = _extract_stdout_blocked_reason(stdout_text)
+
+    git_commands: dict[str, list[str]] = {
+        "status_short": ["status", "--short", "--untracked-files=no"],
+        "diff_stat": ["diff", "--stat"],
+        "diff_name_status": ["diff", "--name-status"],
+        "diff_numstat": ["diff", "--numstat"],
+        "diff_name_only": ["diff", "--name-only"],
+        "cached_diff_stat": ["diff", "--cached", "--stat"],
+        "cached_diff_name_status": ["diff", "--cached", "--name-status"],
+        "cached_diff_name_only": ["diff", "--cached", "--name-only"],
+    }
+    git_command_exit_codes: dict[str, int] = {}
+    git_command_stdout: dict[str, str] = {}
+    git_capture_failed = False
+    if prompt333_ready:
+        for key, args in git_commands.items():
             try:
-                one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
-                diff_stat_path.write_text(
-                    (diff_stat_text + "\n") if diff_stat_text else "",
-                    encoding="utf-8",
-                )
-                diff_name_status_path.write_text(
-                    (diff_name_status_text + "\n") if diff_name_status_text else "",
-                    encoding="utf-8",
-                )
-                diff_patch_path.write_text(diff_patch_text, encoding="utf-8")
-            except OSError:
-                diff_capture_status = "blocked"
-                diff_capture_blocked_reason = "diff_capture_failed"
-                review_request_status = "blocked"
-                review_request_blocked_reason = "diff_capture_failed"
-                effective_next_action = "manual_review_required"
-            else:
-                diff_capture_status = "completed"
-                diff_capture_blocked_reason = "none"
-                source_execution_attempted = (
-                    execution_attempted
-                    if current_run_completed
-                    else _read_flag(source_payload.get("execution_attempted", False))
-                )
-                source_execution_exit_code = (
-                    execution_exit_code
-                    if current_run_completed
-                    else _as_int(source_payload.get("execution_exit_code"), default=-1)
-                )
-                source_exec_plan_execution_status = (
-                    exec_plan_execution_status
-                    if current_run_completed
-                    else _normalize_text(source_payload.get("exec_plan_execution_status"), default="")
-                )
-                source_status = (
-                    status
-                    if current_run_completed
-                    else _normalize_text(source_payload.get("status"), default=status)
-                )
-                source_stop_reason = (
-                    stop_reason
-                    if current_run_completed
-                    else _normalize_text(source_payload.get("stop_reason"), default=stop_reason)
-                )
-                has_tracked_diff = bool(diff_patch_text.strip())
-                review_lines = [
-                    "# One Cycle Controller Diff Review Request",
-                    "",
-                    "## One-Cycle Status Summary",
-                    f"- status: `{source_status}`",
-                    f"- next_action: `{effective_next_action}`",
-                    f"- stop_reason: `{source_stop_reason}`",
-                    f"- completed_result_source_path: `{completed_result_source_path}`",
-                    f"- completed_result_source_status: `{completed_result_source_status}`",
-                    f"- execution_attempted: `{str(source_execution_attempted).lower()}`",
-                    f"- execution_exit_code: `{source_execution_exit_code}`",
-                    f"- exec_plan_execution_status: `{source_exec_plan_execution_status or 'unknown'}`",
-                    "",
-                    "## Diff Stat (tracked only)",
-                    "```text",
-                    diff_stat_text or "(no tracked diff present)",
-                    "```",
-                    "",
-                    "## Diff Name-Status (tracked only)",
-                    "```text",
-                    diff_name_status_text or "(no tracked diff present)",
-                    "```",
-                    "",
-                    f"- patch_path: `{diff_patch_path}`",
-                    (
-                        "- tracked_diff_presence: `present`"
-                        if has_tracked_diff
-                        else "- tracked_diff_presence: `none`"
-                    ),
-                    "",
-                    "## Review Instructions",
-                    "- Approve the diff.",
-                    "- Reject the diff.",
-                    "- Request a targeted fix.",
-                    (
-                        "- No tracked diff is present; confirm whether to proceed anyway."
-                        if not has_tracked_diff
-                        else "- Review the tracked diff patch and respond with one of the three decisions."
-                    ),
-                    "",
-                    "## Safety Statements",
-                    "- No commit/tag/push/PR/merge has been performed.",
-                    "- Codex was not executed by this handoff layer.",
-                    "- local_codex_exec_plan.sh was not executed by this handoff layer.",
-                    "- Tracked diff only was captured.",
-                    "- Untracked files are not part of this review request.",
-                ]
-                review_handoff_payload = {
-                    "status": "ready",
-                    "review_request_status": "ready",
-                    "review_request_blocked_reason": "none",
-                    "diff_capture_status": diff_capture_status,
-                    "diff_capture_blocked_reason": diff_capture_blocked_reason,
-                    "completed_result_source_path": str(completed_result_source_path),
-                    "completed_result_source_status": completed_result_source_status,
-                    "diff_stat_path": str(diff_stat_path),
-                    "diff_name_status_path": str(diff_name_status_path),
-                    "diff_patch_path": str(diff_patch_path),
-                    "review_request_path": str(review_request_path),
-                    "tracked_diff_present": has_tracked_diff,
-                }
-                try:
-                    review_request_path.write_text("\n".join(review_lines) + "\n", encoding="utf-8")
-                    review_handoff_path.write_text(
-                        json.dumps(review_handoff_payload, ensure_ascii=False, indent=2) + "\n",
-                        encoding="utf-8",
-                    )
-                except OSError:
-                    review_request_status = "blocked"
-                    review_request_blocked_reason = "review_request_write_failed"
-                    effective_next_action = "manual_review_required"
-                else:
-                    review_request_status = "ready"
-                    review_request_blocked_reason = "none"
+                cp = _run_git(execution_repo_path, args, timeout_seconds=20.0)
+            except (OSError, subprocess.TimeoutExpired):
+                git_command_exit_codes[key] = 124
+                git_command_stdout[key] = ""
+                git_capture_failed = True
+                continue
+            git_command_exit_codes[key] = int(cp.returncode)
+            git_command_stdout[key] = _normalize_text(cp.stdout, default="")
+            if cp.returncode != 0:
+                git_capture_failed = True
+
+    status_short_lines = (
+        [
+            _normalize_text(line, default="")
+            for line in git_command_stdout.get("status_short", "").splitlines()
+            if _normalize_text(line, default="").strip()
+        ]
+        if prompt333_ready
+        else []
+    )
+    unstaged_tracked_files = (
+        sorted(
+            {
+                _normalize_text(line, default="").strip()
+                for line in git_command_stdout.get("diff_name_only", "").splitlines()
+                if _normalize_text(line, default="").strip()
+            }
+        )
+        if prompt333_ready
+        else []
+    )
+    staged_tracked_files = (
+        sorted(
+            {
+                _normalize_text(line, default="").strip()
+                for line in git_command_stdout.get("cached_diff_name_only", "").splitlines()
+                if _normalize_text(line, default="").strip()
+            }
+        )
+        if prompt333_ready
+        else []
+    )
+    changed_tracked_files = sorted(set(unstaged_tracked_files) | set(staged_tracked_files))
+    changed_tracked_file_count = len(changed_tracked_files)
+    staged_tracked_file_count = len(staged_tracked_files)
+    unstaged_tracked_file_count = len(unstaged_tracked_files)
+    worktree_clean_for_tracked_files = changed_tracked_file_count == 0 and not status_short_lines
+    staged_changes_present = staged_tracked_file_count > 0
+    unstaged_changes_present = unstaged_tracked_file_count > 0
+    local_diff_present = changed_tracked_file_count > 0
+    local_diff_stat_text = _normalize_text(git_command_stdout.get("diff_stat"), default="").strip()
+    local_diff_name_status_lines = [
+        _normalize_text(line, default="").strip()
+        for line in git_command_stdout.get("diff_name_status", "").splitlines()
+        if _normalize_text(line, default="").strip()
+    ]
+    local_diff_numstat_lines = [
+        _normalize_text(line, default="").strip()
+        for line in git_command_stdout.get("diff_numstat", "").splitlines()
+        if _normalize_text(line, default="").strip()
+    ]
+    local_diff_name_only_lines = [
+        _normalize_text(line, default="").strip()
+        for line in git_command_stdout.get("diff_name_only", "").splitlines()
+        if _normalize_text(line, default="").strip()
+    ]
+
+    if not prompt333_ready:
+        codex_outcome_classification = "prompt333_execution_not_ready"
+    elif prompt333_execution_exit_code == 0 and not stdout_contains_blocked and changed_tracked_file_count > 0:
+        codex_outcome_classification = "codex_task_success_with_tracked_changes"
+    elif prompt333_execution_exit_code == 0 and not stdout_contains_blocked and changed_tracked_file_count == 0:
+        codex_outcome_classification = "codex_task_success_no_tracked_changes"
+    elif prompt333_execution_exit_code == 0 and stdout_contains_blocked and changed_tracked_file_count == 0:
+        codex_outcome_classification = "codex_task_blocked_no_tracked_changes"
+    elif prompt333_execution_exit_code == 0 and stdout_contains_blocked and changed_tracked_file_count > 0:
+        codex_outcome_classification = "codex_task_blocked_with_tracked_changes"
+    elif prompt333_execution_exit_code != 0 and changed_tracked_file_count == 0:
+        codex_outcome_classification = "codex_task_failed_no_tracked_changes"
+    else:
+        codex_outcome_classification = "codex_task_failed_with_tracked_changes"
+
+    route_decision = "manual_review_prompt333_execution_artifacts"
+    route_next_action = "manual_review_prompt333_execution_artifacts"
+    approve_commit_tag_allowed = False
+    targeted_contract_fix_recommended = False
+    contract_fix_reason = ""
+    if codex_outcome_classification == "codex_task_success_with_tracked_changes":
+        route_decision = "prepare_review_for_tracked_changes"
+        route_next_action = "prepare_local_review_handoff"
+    elif codex_outcome_classification == "codex_task_success_no_tracked_changes":
+        route_decision = "prepare_no_change_review"
+        route_next_action = "manual_review_no_tracked_changes_after_codex_success"
+    elif codex_outcome_classification == "codex_task_blocked_no_tracked_changes":
+        route_decision = "prepare_contract_handoff_fix"
+        route_next_action = "prepare_targeted_contract_fix_prompt"
+        targeted_contract_fix_recommended = True
+        contract_fix_reason = stdout_blocked_reason
+    elif codex_outcome_classification == "codex_task_blocked_with_tracked_changes":
+        route_decision = "prepare_blocked_with_changes_review"
+        route_next_action = "manual_review_blocked_codex_with_tracked_changes"
+        targeted_contract_fix_recommended = True
+        contract_fix_reason = stdout_blocked_reason
+    elif codex_outcome_classification == "codex_task_failed_no_tracked_changes":
+        route_decision = "manual_review_codex_failure"
+        route_next_action = "manual_review_local_codex_one_shot_execution_failure"
+    elif codex_outcome_classification == "codex_task_failed_with_tracked_changes":
+        route_decision = "manual_review_codex_failure_with_changes"
+        route_next_action = "manual_review_failed_codex_with_tracked_changes"
+
+    local_post_codex_diff_capture_status = "completed"
+    local_post_codex_diff_capture_blocked_reason = "none"
+    if not prompt333_ready:
+        local_post_codex_diff_capture_status = "blocked"
+        local_post_codex_diff_capture_blocked_reason = prompt333_blocked_reason
+    elif git_capture_failed:
+        local_post_codex_diff_capture_status = "blocked"
+        local_post_codex_diff_capture_blocked_reason = "local_post_codex_git_diff_capture_failed"
+
+    local_post_codex_outcome_status = "completed" if prompt333_ready else "blocked"
+    local_post_codex_route_status = "completed" if prompt333_ready else "blocked"
+
+    safety_fields = _prompt334_safety_fields()
+    prompt333_validation_errors_normalized = _normalize_string_list(prompt333_validation_errors)
+    diff_capture_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "diff_capture_schema_version": _LOCAL_POST_CODEX_DIFF_CAPTURE_SCHEMA_VERSION,
+        "source_prompt": "prompt334",
+        "status": local_post_codex_diff_capture_status,
+        "blocked_reason": local_post_codex_diff_capture_blocked_reason,
+        "next_action": route_next_action,
+        "execution_repo_path": _normalize_text(execution_repo_path, default=""),
+        "prompt333_result_path": str(prompt333_result_path),
+        "prompt333_receipt_v2_path": str(prompt333_receipt_v2_path),
+        "prompt333_stdout_path": str(prompt333_stdout_path),
+        "prompt333_stderr_path": str(prompt333_stderr_path),
+        "prompt333_result_exists": prompt333_result_exists,
+        "prompt333_result_valid": prompt333_result_valid,
+        "prompt333_receipt_v2_exists": prompt333_receipt_v2_exists,
+        "prompt333_receipt_v2_valid": prompt333_receipt_v2_valid,
+        "prompt333_validation_errors": prompt333_validation_errors_normalized,
+        "changed_tracked_files": changed_tracked_files,
+        "staged_tracked_files": staged_tracked_files,
+        "unstaged_tracked_files": unstaged_tracked_files,
+        "changed_tracked_file_count": changed_tracked_file_count,
+        "staged_tracked_file_count": staged_tracked_file_count,
+        "unstaged_tracked_file_count": unstaged_tracked_file_count,
+        "worktree_clean_for_tracked_files": worktree_clean_for_tracked_files,
+        "staged_changes_present": staged_changes_present,
+        "unstaged_changes_present": unstaged_changes_present,
+        "local_diff_present": local_diff_present,
+        "local_diff_stat_text": local_diff_stat_text,
+        "local_diff_name_status_lines": local_diff_name_status_lines,
+        "local_diff_numstat_lines": local_diff_numstat_lines,
+        "local_diff_name_only_lines": local_diff_name_only_lines,
+        "status_short_lines": status_short_lines,
+        "cached_diff_stat_text": _normalize_text(
+            git_command_stdout.get("cached_diff_stat"),
+            default="",
+        ).strip(),
+        "cached_diff_name_status_lines": [
+            _normalize_text(line, default="").strip()
+            for line in git_command_stdout.get("cached_diff_name_status", "").splitlines()
+            if _normalize_text(line, default="").strip()
+        ],
+        "cached_diff_name_only_lines": staged_tracked_files,
+        "git_diff_commands": {key: list(value) for key, value in git_commands.items()},
+        "git_diff_command_exit_codes": dict(git_command_exit_codes),
+        "stdout_exists": stdout_exists,
+        "stderr_exists": stderr_exists,
+        "stdout_size_bytes": stdout_size_bytes,
+        "stderr_size_bytes": stderr_size_bytes,
+        "stdout_head_lines": stdout_head_lines,
+        "stderr_head_lines": stderr_head_lines,
+        "stdout_contains_blocked": stdout_contains_blocked,
+        "stdout_blocked_reason": stdout_blocked_reason,
+        "local_post_codex_diff_capture_status": local_post_codex_diff_capture_status,
+        "local_post_codex_diff_capture_blocked_reason": local_post_codex_diff_capture_blocked_reason,
+        "local_post_codex_diff_capture_next_action": route_next_action,
+        "local_post_codex_diff_capture_worktree_clean_for_tracked_files": (
+            worktree_clean_for_tracked_files
+        ),
+        "local_post_codex_diff_capture_changed_tracked_file_count": changed_tracked_file_count,
+        **safety_fields,
+    }
+
+    outcome_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "outcome_schema_version": _LOCAL_POST_CODEX_EXECUTION_OUTCOME_SCHEMA_VERSION,
+        "source_prompt": "prompt334",
+        "status": local_post_codex_outcome_status,
+        "blocked_reason": prompt333_blocked_reason if not prompt333_ready else "none",
+        "next_action": route_next_action,
+        "prompt333_result_path": str(prompt333_result_path),
+        "prompt333_receipt_v2_path": str(prompt333_receipt_v2_path),
+        "execution_exit_code": prompt333_execution_exit_code,
+        "stdout_contains_blocked": stdout_contains_blocked,
+        "stdout_blocked_reason": stdout_blocked_reason,
+        "changed_tracked_file_count": changed_tracked_file_count,
+        "changed_tracked_files": changed_tracked_files,
+        "codex_outcome_classification": codex_outcome_classification,
+        "local_post_codex_outcome_status": local_post_codex_outcome_status,
+        "local_post_codex_outcome_classification": codex_outcome_classification,
+        "local_post_codex_stdout_contains_blocked": stdout_contains_blocked,
+        "local_post_codex_stdout_blocked_reason": stdout_blocked_reason,
+        **safety_fields,
+    }
+
+    route_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "route_decision_schema_version": _LOCAL_POST_CODEX_ROUTE_DECISION_SCHEMA_VERSION,
+        "source_prompt": "prompt334",
+        "status": local_post_codex_route_status,
+        "blocked_reason": prompt333_blocked_reason if not prompt333_ready else "none",
+        "codex_outcome_classification": codex_outcome_classification,
+        "route_decision": route_decision,
+        "next_action": route_next_action,
+        "approve_commit_tag_allowed": approve_commit_tag_allowed,
+        "targeted_contract_fix_recommended": targeted_contract_fix_recommended,
+        "contract_fix_reason": contract_fix_reason,
+        "local_post_codex_route_status": local_post_codex_route_status,
+        "local_post_codex_route_decision": route_decision,
+        "local_post_codex_route_next_action": route_next_action,
+        "local_post_codex_route_targeted_contract_fix_recommended": (
+            targeted_contract_fix_recommended
+        ),
+        "local_post_codex_route_approve_commit_tag_allowed": approve_commit_tag_allowed,
+        **safety_fields,
+    }
+
+    artifact_write_status = {
+        "local_post_codex_diff_capture_written": False,
+        "local_post_codex_execution_outcome_written": False,
+        "local_post_codex_route_decision_written": False,
+    }
+    artifact_write_errors: list[str] = []
+    try:
+        one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        artifact_write_errors.append("local_post_codex_artifact_directory_create_failed")
+    else:
+        try:
+            _write_json(prompt334_diff_capture_path, diff_capture_payload)
+            artifact_write_status["local_post_codex_diff_capture_written"] = True
+        except OSError:
+            artifact_write_errors.append("local_post_codex_diff_capture_write_failed")
+        try:
+            _write_json(prompt334_outcome_path, outcome_payload)
+            artifact_write_status["local_post_codex_execution_outcome_written"] = True
+        except OSError:
+            artifact_write_errors.append("local_post_codex_execution_outcome_write_failed")
+        try:
+            _write_json(prompt334_route_path, route_payload)
+            artifact_write_status["local_post_codex_route_decision_written"] = True
+        except OSError:
+            artifact_write_errors.append("local_post_codex_route_decision_write_failed")
+        try:
+            diff_stat_path.write_text(
+                (local_diff_stat_text + "\n") if local_diff_stat_text else "",
+                encoding="utf-8",
+            )
+            diff_name_status_path.write_text(
+                ("\n".join(local_diff_name_status_lines) + "\n")
+                if local_diff_name_status_lines
+                else "",
+                encoding="utf-8",
+            )
+            diff_patch_path.write_text("", encoding="utf-8")
+        except OSError:
+            pass
+
+    receipt_payload: dict[str, Any] = {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "diff_capture_schema_version": _LOCAL_POST_CODEX_DIFF_CAPTURE_SCHEMA_VERSION,
+        "receipt_schema_version": "local_post_codex_diff_capture_receipt_v1",
+        "source_prompt": "prompt334",
+        "status": "completed" if not artifact_write_errors else "blocked",
+        "blocked_reason": "none"
+        if not artifact_write_errors
+        else artifact_write_errors[0],
+        "next_action": route_next_action,
+        "artifact_paths": {
+            "local_post_codex_diff_capture_path": str(prompt334_diff_capture_path),
+            "local_post_codex_execution_outcome_path": str(prompt334_outcome_path),
+            "local_post_codex_route_decision_path": str(prompt334_route_path),
+            "local_post_codex_diff_capture_receipt_path": str(prompt334_receipt_path),
+        },
+        "artifact_write_status": artifact_write_status,
+        "artifact_write_errors": artifact_write_errors,
+        "codex_outcome_classification": codex_outcome_classification,
+        "route_decision": route_decision,
+        "route_next_action": route_next_action,
+        "approve_commit_tag_allowed": approve_commit_tag_allowed,
+        "targeted_contract_fix_recommended": targeted_contract_fix_recommended,
+        "contract_fix_reason": contract_fix_reason,
+        "local_post_codex_diff_capture_status": local_post_codex_diff_capture_status,
+        "local_post_codex_diff_capture_blocked_reason": local_post_codex_diff_capture_blocked_reason,
+        "local_post_codex_outcome_status": local_post_codex_outcome_status,
+        "local_post_codex_outcome_classification": codex_outcome_classification,
+        "local_post_codex_stdout_contains_blocked": stdout_contains_blocked,
+        "local_post_codex_stdout_blocked_reason": stdout_blocked_reason,
+        "local_post_codex_route_status": local_post_codex_route_status,
+        "local_post_codex_route_decision": route_decision,
+        "local_post_codex_route_next_action": route_next_action,
+        "local_post_codex_route_targeted_contract_fix_recommended": (
+            targeted_contract_fix_recommended
+        ),
+        "local_post_codex_route_approve_commit_tag_allowed": approve_commit_tag_allowed,
+        **safety_fields,
+    }
+    try:
+        _write_json(prompt334_receipt_path, receipt_payload)
+    except OSError:
+        pass
+
+    completed_result_source_status = "available" if prompt333_ready else "not_completed"
+    review_request_status = "not_started"
+    review_request_blocked_reason = "prompt334_route_decision_boundary_only"
 
     return {
-        "next_action": effective_next_action,
-        "diff_capture_status": diff_capture_status,
-        "diff_capture_blocked_reason": diff_capture_blocked_reason,
+        "next_action": route_next_action,
+        "diff_capture_status": local_post_codex_diff_capture_status,
+        "diff_capture_blocked_reason": local_post_codex_diff_capture_blocked_reason,
         "diff_stat_path": str(diff_stat_path),
         "diff_name_status_path": str(diff_name_status_path),
         "diff_patch_path": str(diff_patch_path),
@@ -5754,6 +6190,28 @@ def _build_one_cycle_post_execution_handoff(
         "review_handoff_path": str(review_handoff_path),
         "completed_result_source_path": str(completed_result_source_path),
         "completed_result_source_status": completed_result_source_status,
+        "local_post_codex_diff_capture_status": local_post_codex_diff_capture_status,
+        "local_post_codex_diff_capture_blocked_reason": local_post_codex_diff_capture_blocked_reason,
+        "local_post_codex_diff_capture_next_action": route_next_action,
+        "local_post_codex_diff_capture_worktree_clean_for_tracked_files": (
+            worktree_clean_for_tracked_files
+        ),
+        "local_post_codex_diff_capture_changed_tracked_file_count": changed_tracked_file_count,
+        "local_post_codex_outcome_status": local_post_codex_outcome_status,
+        "local_post_codex_outcome_classification": codex_outcome_classification,
+        "local_post_codex_stdout_contains_blocked": stdout_contains_blocked,
+        "local_post_codex_stdout_blocked_reason": stdout_blocked_reason,
+        "local_post_codex_route_status": local_post_codex_route_status,
+        "local_post_codex_route_decision": route_decision,
+        "local_post_codex_route_next_action": route_next_action,
+        "local_post_codex_route_targeted_contract_fix_recommended": (
+            targeted_contract_fix_recommended
+        ),
+        "local_post_codex_route_approve_commit_tag_allowed": approve_commit_tag_allowed,
+        "local_post_codex_diff_capture_path": str(prompt334_diff_capture_path),
+        "local_post_codex_execution_outcome_path": str(prompt334_outcome_path),
+        "local_post_codex_route_decision_path": str(prompt334_route_path),
+        "local_post_codex_diff_capture_receipt_path": str(prompt334_receipt_path),
     }
 
 
@@ -16453,6 +16911,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_codex_one_shot_execution_stderr_path = Path(
         _LOCAL_CODEX_ONE_SHOT_EXECUTION_STDERR_PATH
     )
+    local_post_codex_diff_capture_path = Path(_LOCAL_POST_CODEX_DIFF_CAPTURE_PATH)
+    local_post_codex_execution_outcome_path = Path(_LOCAL_POST_CODEX_EXECUTION_OUTCOME_PATH)
+    local_post_codex_route_decision_path = Path(_LOCAL_POST_CODEX_ROUTE_DECISION_PATH)
+    local_post_codex_diff_capture_receipt_path = Path(_LOCAL_POST_CODEX_DIFF_CAPTURE_RECEIPT_PATH)
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -16477,6 +16939,20 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     review_response_decision = "none"
     review_response_reason = ""
     review_response_next_action = "wait_for_chatgpt_diff_review_response"
+    local_post_codex_diff_capture_status = "not_started"
+    local_post_codex_diff_capture_blocked_reason = "prompt334_not_started"
+    local_post_codex_diff_capture_next_action = "prepare_prompt333_execution_result_artifacts"
+    local_post_codex_diff_capture_worktree_clean_for_tracked_files = False
+    local_post_codex_diff_capture_changed_tracked_file_count = 0
+    local_post_codex_outcome_status = "not_started"
+    local_post_codex_outcome_classification = "prompt333_execution_not_ready"
+    local_post_codex_stdout_contains_blocked = False
+    local_post_codex_stdout_blocked_reason = ""
+    local_post_codex_route_status = "not_started"
+    local_post_codex_route_decision = "manual_review_prompt333_execution_artifacts"
+    local_post_codex_route_next_action = "manual_review_prompt333_execution_artifacts"
+    local_post_codex_route_targeted_contract_fix_recommended = False
+    local_post_codex_route_approve_commit_tag_allowed = False
     targeted_fix_prompt_status = "not_applicable"
     targeted_fix_prompt_text = ""
     targeted_fix_prompt_resolved_path = ""
@@ -17101,6 +17577,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "one_cycle_controller_local_codex_one_shot_execution_stderr_txt": str(
             local_codex_one_shot_execution_stderr_path
         ),
+        "one_cycle_controller_local_post_codex_diff_capture_json": str(
+            local_post_codex_diff_capture_path
+        ),
+        "one_cycle_controller_local_post_codex_execution_outcome_json": str(
+            local_post_codex_execution_outcome_path
+        ),
+        "one_cycle_controller_local_post_codex_route_decision_json": str(
+            local_post_codex_route_decision_path
+        ),
+        "one_cycle_controller_local_post_codex_diff_capture_receipt_json": str(
+            local_post_codex_diff_capture_receipt_path
+        ),
     }
 
     requested_execution = enabled and execute_enabled and (not dry_run)
@@ -17275,6 +17763,70 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     completed_result_source_status = _normalize_text(
         post_execution_handoff.get("completed_result_source_status"),
         default=completed_result_source_status,
+    )
+    local_post_codex_diff_capture_status = _normalize_text(
+        post_execution_handoff.get("local_post_codex_diff_capture_status"),
+        default=local_post_codex_diff_capture_status,
+    )
+    local_post_codex_diff_capture_blocked_reason = _normalize_text(
+        post_execution_handoff.get("local_post_codex_diff_capture_blocked_reason"),
+        default=local_post_codex_diff_capture_blocked_reason,
+    )
+    local_post_codex_diff_capture_next_action = _normalize_text(
+        post_execution_handoff.get("local_post_codex_diff_capture_next_action"),
+        default=local_post_codex_diff_capture_next_action,
+    )
+    local_post_codex_diff_capture_worktree_clean_for_tracked_files = bool(
+        post_execution_handoff.get(
+            "local_post_codex_diff_capture_worktree_clean_for_tracked_files",
+            local_post_codex_diff_capture_worktree_clean_for_tracked_files,
+        )
+    )
+    local_post_codex_diff_capture_changed_tracked_file_count = _as_non_negative_int(
+        post_execution_handoff.get("local_post_codex_diff_capture_changed_tracked_file_count"),
+        default=local_post_codex_diff_capture_changed_tracked_file_count,
+    )
+    local_post_codex_outcome_status = _normalize_text(
+        post_execution_handoff.get("local_post_codex_outcome_status"),
+        default=local_post_codex_outcome_status,
+    )
+    local_post_codex_outcome_classification = _normalize_text(
+        post_execution_handoff.get("local_post_codex_outcome_classification"),
+        default=local_post_codex_outcome_classification,
+    )
+    local_post_codex_stdout_contains_blocked = bool(
+        post_execution_handoff.get(
+            "local_post_codex_stdout_contains_blocked",
+            local_post_codex_stdout_contains_blocked,
+        )
+    )
+    local_post_codex_stdout_blocked_reason = _normalize_text(
+        post_execution_handoff.get("local_post_codex_stdout_blocked_reason"),
+        default=local_post_codex_stdout_blocked_reason,
+    )
+    local_post_codex_route_status = _normalize_text(
+        post_execution_handoff.get("local_post_codex_route_status"),
+        default=local_post_codex_route_status,
+    )
+    local_post_codex_route_decision = _normalize_text(
+        post_execution_handoff.get("local_post_codex_route_decision"),
+        default=local_post_codex_route_decision,
+    )
+    local_post_codex_route_next_action = _normalize_text(
+        post_execution_handoff.get("local_post_codex_route_next_action"),
+        default=local_post_codex_route_next_action,
+    )
+    local_post_codex_route_targeted_contract_fix_recommended = bool(
+        post_execution_handoff.get(
+            "local_post_codex_route_targeted_contract_fix_recommended",
+            local_post_codex_route_targeted_contract_fix_recommended,
+        )
+    )
+    local_post_codex_route_approve_commit_tag_allowed = bool(
+        post_execution_handoff.get(
+            "local_post_codex_route_approve_commit_tag_allowed",
+            local_post_codex_route_approve_commit_tag_allowed,
+        )
     )
     review_handoff_decision_state = _build_one_cycle_review_handoff_decision_state(
         review_handoff_path=review_handoff_path
@@ -20136,6 +20688,32 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             local_codex_one_shot_execution_current_cycle
         ),
         "local_codex_one_shot_execution_max_cycles": local_codex_one_shot_execution_max_cycles,
+        "local_post_codex_diff_capture_status": local_post_codex_diff_capture_status,
+        "local_post_codex_diff_capture_blocked_reason": local_post_codex_diff_capture_blocked_reason,
+        "local_post_codex_diff_capture_next_action": local_post_codex_diff_capture_next_action,
+        "local_post_codex_diff_capture_worktree_clean_for_tracked_files": (
+            local_post_codex_diff_capture_worktree_clean_for_tracked_files
+        ),
+        "local_post_codex_diff_capture_changed_tracked_file_count": (
+            local_post_codex_diff_capture_changed_tracked_file_count
+        ),
+        "local_post_codex_outcome_status": local_post_codex_outcome_status,
+        "local_post_codex_outcome_classification": local_post_codex_outcome_classification,
+        "local_post_codex_stdout_contains_blocked": local_post_codex_stdout_contains_blocked,
+        "local_post_codex_stdout_blocked_reason": local_post_codex_stdout_blocked_reason,
+        "local_post_codex_route_status": local_post_codex_route_status,
+        "local_post_codex_route_decision": local_post_codex_route_decision,
+        "local_post_codex_route_next_action": local_post_codex_route_next_action,
+        "local_post_codex_route_targeted_contract_fix_recommended": (
+            local_post_codex_route_targeted_contract_fix_recommended
+        ),
+        "local_post_codex_route_approve_commit_tag_allowed": (
+            local_post_codex_route_approve_commit_tag_allowed
+        ),
+        "local_post_codex_diff_capture_path": str(local_post_codex_diff_capture_path),
+        "local_post_codex_execution_outcome_path": str(local_post_codex_execution_outcome_path),
+        "local_post_codex_route_decision_path": str(local_post_codex_route_decision_path),
+        "local_post_codex_diff_capture_receipt_path": str(local_post_codex_diff_capture_receipt_path),
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -20187,6 +20765,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         f"- Cycle count: `{cycle_count}`",
         f"- Max cycles: `{max_cycles}`",
         f"- Codex execution status: `{codex_execution_status}`",
+        f"- Prompt334 diff capture status: `{local_post_codex_diff_capture_status}`",
+        f"- Prompt334 outcome class: `{local_post_codex_outcome_classification}`",
+        f"- Prompt334 route decision: `{local_post_codex_route_decision}`",
+        f"- Prompt334 route next action: `{local_post_codex_route_next_action}`",
         f"- Diff capture status: `{diff_capture_status}`",
         f"- Diff capture blocked reason: `{diff_capture_blocked_reason}`",
         f"- Review request status: `{review_request_status}`",
@@ -22064,6 +22646,56 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_codex_one_shot_execution_max_cycles": (
             local_codex_one_shot_execution_max_cycles
+        ),
+        "project_browser_autonomous_local_post_codex_diff_capture_status": (
+            local_post_codex_diff_capture_status
+        ),
+        "project_browser_autonomous_local_post_codex_diff_capture_blocked_reason": (
+            local_post_codex_diff_capture_blocked_reason
+        ),
+        "project_browser_autonomous_local_post_codex_diff_capture_next_action": (
+            local_post_codex_diff_capture_next_action
+        ),
+        "project_browser_autonomous_local_post_codex_diff_capture_worktree_clean_for_tracked_files": (
+            local_post_codex_diff_capture_worktree_clean_for_tracked_files
+        ),
+        "project_browser_autonomous_local_post_codex_diff_capture_changed_tracked_file_count": (
+            local_post_codex_diff_capture_changed_tracked_file_count
+        ),
+        "project_browser_autonomous_local_post_codex_outcome_status": local_post_codex_outcome_status,
+        "project_browser_autonomous_local_post_codex_outcome_classification": (
+            local_post_codex_outcome_classification
+        ),
+        "project_browser_autonomous_local_post_codex_stdout_contains_blocked": (
+            local_post_codex_stdout_contains_blocked
+        ),
+        "project_browser_autonomous_local_post_codex_stdout_blocked_reason": (
+            local_post_codex_stdout_blocked_reason
+        ),
+        "project_browser_autonomous_local_post_codex_route_status": local_post_codex_route_status,
+        "project_browser_autonomous_local_post_codex_route_decision": (
+            local_post_codex_route_decision
+        ),
+        "project_browser_autonomous_local_post_codex_route_next_action": (
+            local_post_codex_route_next_action
+        ),
+        "project_browser_autonomous_local_post_codex_route_targeted_contract_fix_recommended": (
+            local_post_codex_route_targeted_contract_fix_recommended
+        ),
+        "project_browser_autonomous_local_post_codex_route_approve_commit_tag_allowed": (
+            local_post_codex_route_approve_commit_tag_allowed
+        ),
+        "project_browser_autonomous_local_post_codex_diff_capture_path": str(
+            local_post_codex_diff_capture_path
+        ),
+        "project_browser_autonomous_local_post_codex_execution_outcome_path": str(
+            local_post_codex_execution_outcome_path
+        ),
+        "project_browser_autonomous_local_post_codex_route_decision_path": str(
+            local_post_codex_route_decision_path
+        ),
+        "project_browser_autonomous_local_post_codex_diff_capture_receipt_path": str(
+            local_post_codex_diff_capture_receipt_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
