@@ -3802,6 +3802,23 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_only_autonomous_loop_closure_state_path",
     "project_browser_autonomous_local_only_autonomous_loop_closure_decision_path",
     "project_browser_autonomous_local_only_autonomous_loop_closure_receipt_path",
+    "project_browser_autonomous_local_autonomous_cycle_v2_status",
+    "project_browser_autonomous_local_autonomous_cycle_v2_cycle_status",
+    "project_browser_autonomous_local_autonomous_cycle_v2_next_action",
+    "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_id",
+    "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_name",
+    "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_operation",
+    "project_browser_autonomous_local_autonomous_cycle_v2_decision",
+    "project_browser_autonomous_local_autonomous_cycle_v2_ready",
+    "project_browser_autonomous_local_autonomous_cycle_v2_blocked_reason",
+    "project_browser_autonomous_local_autonomous_cycle_v2_readiness_reason",
+    "project_browser_autonomous_local_autonomous_cycle_v2_run_id",
+    "project_browser_autonomous_local_autonomous_cycle_v2_cycle_id",
+    "project_browser_autonomous_local_autonomous_cycle_v2_current_cycle",
+    "project_browser_autonomous_local_autonomous_cycle_v2_max_cycles",
+    "project_browser_autonomous_local_autonomous_cycle_v2_state_path",
+    "project_browser_autonomous_local_autonomous_cycle_v2_decision_path",
+    "project_browser_autonomous_local_autonomous_cycle_v2_receipt_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_path",
     "project_browser_autonomous_one_cycle_controller_completed_result_source_status",
     "project_browser_autonomous_one_cycle_controller_stop_reason",
@@ -4038,6 +4055,21 @@ _LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_DECISION_PATH = (
 _LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_RECEIPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/"
     "local_only_autonomous_loop_closure_receipt.json"
+)
+_LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION = "local_autonomous_dev_v2_1"
+_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE = 1
+_LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES = 2
+_LOCAL_AUTONOMOUS_CYCLE_V2_STATE_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_autonomous_cycle_v2_state.json"
+)
+_LOCAL_AUTONOMOUS_CYCLE_V2_DECISION_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_autonomous_cycle_v2_decision.json"
+)
+_LOCAL_AUTONOMOUS_CYCLE_V2_RECEIPT_PATH = (
+    "/tmp/codex-local-runner-decision/one_cycle_controller/"
+    "local_autonomous_cycle_v2_receipt.json"
 )
 _TARGETED_FIX_REENTRY_EXECUTION_PROMPT_PATH = (
     "/tmp/codex-local-runner-decision/one_cycle_controller/targeted_fix_codex_prompt.md"
@@ -11178,6 +11210,390 @@ def _build_local_only_autonomous_loop_closure_receipt(
     return receipt
 
 
+def _build_local_autonomous_cycle_v2_state(
+    *,
+    prompt330_closure_state_path: Path,
+    prompt330_closure_decision_path: Path,
+    prompt330_closure_receipt_path: Path,
+    execution_repo_path: str,
+    controller_run_id: str,
+    controller_job_id: str,
+) -> dict[str, Any]:
+    current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
+    max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+
+    def _read_artifact(path: Path) -> tuple[bool, bool, dict[str, Any]]:
+        if not path.exists():
+            return False, False, {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError):
+            return True, False, {}
+        if not isinstance(payload, Mapping):
+            return True, False, {}
+        return True, True, dict(payload)
+
+    def _extract_bool(value: Any) -> tuple[bool, bool]:
+        if isinstance(value, bool):
+            return value, True
+        if isinstance(value, int):
+            return value != 0, True
+        text = _normalize_text(value, default="").strip().lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True, True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False, True
+        return False, False
+
+    prompt330_state_exists, prompt330_state_valid, prompt330_state = _read_artifact(
+        prompt330_closure_state_path
+    )
+    prompt330_decision_exists, prompt330_decision_valid, prompt330_decision = _read_artifact(
+        prompt330_closure_decision_path
+    )
+    prompt330_receipt_exists, prompt330_receipt_valid, prompt330_receipt = _read_artifact(
+        prompt330_closure_receipt_path
+    )
+
+    run_id_candidates = [
+        controller_run_id,
+        _normalize_text(prompt330_decision.get("run_id"), default=""),
+        _normalize_text(prompt330_state.get("run_id"), default=""),
+        _normalize_text(prompt330_receipt.get("run_id"), default=""),
+    ]
+    job_id_candidates = [
+        controller_job_id,
+        _normalize_text(prompt330_decision.get("job_id"), default=""),
+        _normalize_text(prompt330_state.get("job_id"), default=""),
+        _normalize_text(prompt330_receipt.get("job_id"), default=""),
+    ]
+    resolved_run_id = next((value for value in run_id_candidates if value), "")
+    if not resolved_run_id:
+        resolved_job_id = next((value for value in job_id_candidates if value), "")
+        if resolved_job_id:
+            resolved_run_id = resolved_job_id
+    if not resolved_run_id:
+        resolved_run_id = "local-autonomous-v2"
+    cycle_id = f"{resolved_run_id}-cycle-{current_cycle}"
+
+    safety_fields: dict[str, Any] = {
+        "codex_invoked": False,
+        "codex_invocation_allowed": False,
+        "commit_allowed": False,
+        "tag_allowed": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "push_pr_merge_enabled": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "targeted_fix_allowed": False,
+        "rollback_allowed": False,
+        "rollback_performed": False,
+    }
+
+    validation_errors: list[str] = []
+    blocked_reason = "prompt330_closure_status_not_completed"
+    readiness_reason = "prompt330_closure_not_valid_for_local_autonomous_cycle_v2"
+    changed_tracked_files: list[str] = []
+
+    status = "blocked"
+    cycle_status = "blocked"
+    v2_cycle_ready = False
+    selected_step_id: int | None = None
+    selected_step_name: str | None = None
+    selected_step_operation: str | None = None
+    cycle_decision = "blocked"
+    cycle_reason = ""
+    should_continue = False
+    next_action = "manual_review_prompt330_closure_before_v2_cycle"
+
+    if not prompt330_state_exists:
+        blocked_reason = "missing_prompt330_closure_state_artifact"
+        validation_errors.append("missing_prompt330_closure_state_artifact")
+    elif not prompt330_state_valid:
+        blocked_reason = "invalid_prompt330_closure_state_artifact"
+        validation_errors.append("invalid_prompt330_closure_state_artifact")
+    elif not prompt330_decision_exists:
+        blocked_reason = "missing_prompt330_closure_decision_artifact"
+        validation_errors.append("missing_prompt330_closure_decision_artifact")
+    elif not prompt330_decision_valid:
+        blocked_reason = "invalid_prompt330_closure_decision_artifact"
+        validation_errors.append("invalid_prompt330_closure_decision_artifact")
+    elif not prompt330_receipt_exists:
+        blocked_reason = "missing_prompt330_closure_receipt_artifact"
+        validation_errors.append("missing_prompt330_closure_receipt_artifact")
+    elif not prompt330_receipt_valid:
+        blocked_reason = "invalid_prompt330_closure_receipt_artifact"
+        validation_errors.append("invalid_prompt330_closure_receipt_artifact")
+    else:
+        authoritative = prompt330_decision
+        supporting_surfaces: tuple[Mapping[str, Any], ...] = (prompt330_state, prompt330_receipt)
+        required_fields: tuple[tuple[str, Any], ...] = (
+            ("status", "completed"),
+            ("closure_status", "completed"),
+            ("blocked_reason", "none"),
+            ("local_only_v1_complete", True),
+            ("local_only_loop_closed", True),
+            ("closure_decision", "local_only_v1_closed"),
+            ("completed_step_id", 1),
+            ("completed_step_name", "read_current_state"),
+            ("completed_step_operation", "read_current_state"),
+            (
+                "next_action",
+                "prepare_prompt331_or_enable_next_local_loop_increment",
+            ),
+        )
+        field_to_blocked_reason = {
+            "status": "prompt330_closure_status_not_completed",
+            "closure_status": "prompt330_closure_status_not_completed",
+            "blocked_reason": "prompt330_blocked_reason_not_none",
+            "local_only_v1_complete": "prompt330_local_only_v1_not_complete",
+            "local_only_loop_closed": "prompt330_local_only_loop_not_closed",
+            "closure_decision": "prompt330_closure_decision_mismatch",
+            "completed_step_id": "prompt330_completed_step_mismatch",
+            "completed_step_name": "prompt330_completed_step_mismatch",
+            "completed_step_operation": "prompt330_completed_step_mismatch",
+            "next_action": "prompt330_next_action_mismatch",
+        }
+        first_failure_reason = ""
+
+        for field_name, expected in required_fields:
+            if field_name not in authoritative:
+                present_in_supporting = any(field_name in surface for surface in supporting_surfaces)
+                if present_in_supporting:
+                    validation_errors.append(
+                        f"prompt330_{field_name}_present_only_in_non_authoritative_artifact"
+                    )
+                else:
+                    validation_errors.append(
+                        f"prompt330_{field_name}_missing_in_authoritative_artifact"
+                    )
+                if not first_failure_reason:
+                    first_failure_reason = field_to_blocked_reason.get(
+                        field_name,
+                        "prompt330_closure_status_not_completed",
+                    )
+                continue
+
+            raw_value = authoritative.get(field_name)
+            if isinstance(expected, bool):
+                parsed_value, valid_bool = _extract_bool(raw_value)
+                if (not valid_bool) or parsed_value != expected:
+                    validation_errors.append(
+                        f"prompt330_{field_name}_mismatch_expected_{str(expected).lower()}"
+                    )
+                    if not first_failure_reason:
+                        first_failure_reason = field_to_blocked_reason.get(
+                            field_name,
+                            "prompt330_closure_status_not_completed",
+                        )
+            elif isinstance(expected, int):
+                parsed_int = _as_optional_int(raw_value)
+                if parsed_int != expected:
+                    validation_errors.append(
+                        f"prompt330_{field_name}_mismatch_expected_{expected}"
+                    )
+                    if not first_failure_reason:
+                        first_failure_reason = field_to_blocked_reason.get(
+                            field_name,
+                            "prompt330_closure_status_not_completed",
+                        )
+            else:
+                parsed_text = _normalize_text(raw_value, default="")
+                if parsed_text != expected:
+                    validation_errors.append(
+                        f"prompt330_{field_name}_mismatch_expected_{expected}"
+                    )
+                    if not first_failure_reason:
+                        first_failure_reason = field_to_blocked_reason.get(
+                            field_name,
+                            "prompt330_closure_status_not_completed",
+                        )
+
+        if validation_errors:
+            blocked_reason = first_failure_reason or "prompt330_closure_status_not_completed"
+        else:
+            status_short_cmd = subprocess.run(
+                ["git", "status", "--short", "--untracked-files=no"],
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=_normalize_text(execution_repo_path, default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH),
+                shell=False,
+            )
+            if status_short_cmd.returncode == 0:
+                changed_tracked_files = sorted(
+                    {
+                        _parse_git_status_path(line)
+                        for line in (status_short_cmd.stdout or "").splitlines()
+                        if line.strip() and _parse_git_status_path(line)
+                    }
+                )
+            else:
+                changed_tracked_files = []
+
+            if status_short_cmd.returncode != 0:
+                blocked_reason = "git_metadata_collection_failed_before_local_autonomous_cycle_v2"
+                readiness_reason = "worktree_not_clean_before_local_autonomous_cycle_v2"
+                validation_errors = []
+                next_action = "review_git_metadata_failure_before_local_autonomous_cycle_v2"
+            elif changed_tracked_files:
+                blocked_reason = "tracked_changes_present_before_local_autonomous_cycle_v2"
+                readiness_reason = "worktree_not_clean_before_local_autonomous_cycle_v2"
+                validation_errors = []
+                next_action = (
+                    "commit_or_reconcile_tracked_changes_before_local_autonomous_cycle_v2"
+                )
+            else:
+                status = "ready"
+                cycle_status = "ready"
+                blocked_reason = "none"
+                readiness_reason = (
+                    "prompt330_closure_valid_and_tracked_worktree_clean"
+                )
+                v2_cycle_ready = True
+                selected_step_id = 2
+                selected_step_name = "generate_next_codex_task"
+                selected_step_operation = "generate_next_codex_task"
+                cycle_decision = "continue_local_multi_step"
+                cycle_reason = (
+                    "local_only_v1_closed_and_next_v2_step_is_codex_task_generation"
+                )
+                should_continue = True
+                next_action = "prepare_local_codex_one_shot_execution_handoff"
+                changed_tracked_files = []
+                validation_errors = []
+
+    return {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "run_id": resolved_run_id,
+        "cycle_id": cycle_id,
+        "current_cycle": current_cycle,
+        "max_cycles": max_cycles,
+        "status": status,
+        "cycle_status": cycle_status,
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "validation_errors": _normalize_string_list(validation_errors),
+        "v2_cycle_ready": v2_cycle_ready,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "cycle_decision": cycle_decision,
+        "cycle_reason": cycle_reason,
+        "should_continue": should_continue,
+        "next_action": next_action,
+        "changed_tracked_files": _normalize_string_list(changed_tracked_files),
+        "prompt330_closure_state_path": str(prompt330_closure_state_path),
+        "prompt330_closure_decision_path": str(prompt330_closure_decision_path),
+        "prompt330_closure_receipt_path": str(prompt330_closure_receipt_path),
+        "source": "local_autonomous_cycle_v2_state",
+        **safety_fields,
+    }
+
+
+def _build_local_autonomous_cycle_v2_decision(
+    *,
+    cycle_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    state = dict(cycle_state) if isinstance(cycle_state, Mapping) else {}
+    decision = dict(state)
+    decision["source"] = "local_autonomous_cycle_v2_decision"
+    return decision
+
+
+def _build_local_autonomous_cycle_v2_receipt(
+    *,
+    cycle_state: Mapping[str, Any] | None,
+    cycle_decision: Mapping[str, Any] | None,
+    cycle_state_path: Path,
+    cycle_decision_path: Path,
+) -> dict[str, Any]:
+    state = dict(cycle_state) if isinstance(cycle_state, Mapping) else {}
+    decision = dict(cycle_decision) if isinstance(cycle_decision, Mapping) else {}
+    receipt: dict[str, Any] = {
+        "schema_version": _normalize_text(
+            decision.get("schema_version"),
+            default=_normalize_text(
+                state.get("schema_version"),
+                default=_LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+            ),
+        ),
+        "run_id": _normalize_text(
+            decision.get("run_id"),
+            default=_normalize_text(state.get("run_id"), default="local-autonomous-v2"),
+        ),
+        "cycle_id": _normalize_text(
+            decision.get("cycle_id"),
+            default=_normalize_text(state.get("cycle_id"), default="local-autonomous-v2-cycle-1"),
+        ),
+        "current_cycle": _as_non_negative_int(
+            decision.get("current_cycle"),
+            default=_as_non_negative_int(
+                state.get("current_cycle"),
+                default=_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+            ),
+        ),
+        "max_cycles": _as_non_negative_int(
+            decision.get("max_cycles"),
+            default=_as_non_negative_int(
+                state.get("max_cycles"),
+                default=_LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+            ),
+        ),
+        "status": _normalize_text(decision.get("status"), default="blocked"),
+        "cycle_status": _normalize_text(decision.get("cycle_status"), default="blocked"),
+        "blocked_reason": _normalize_text(
+            decision.get("blocked_reason"),
+            default="prompt330_closure_status_not_completed",
+        ),
+        "readiness_reason": _normalize_text(
+            decision.get("readiness_reason"),
+            default="prompt330_closure_not_valid_for_local_autonomous_cycle_v2",
+        ),
+        "v2_cycle_ready": bool(decision.get("v2_cycle_ready", False)),
+        "selected_step_id": _as_optional_int(decision.get("selected_step_id")),
+        "selected_step_name": (
+            _normalize_text(decision.get("selected_step_name"), default="")
+            or None
+        ),
+        "selected_step_operation": (
+            _normalize_text(decision.get("selected_step_operation"), default="")
+            or None
+        ),
+        "cycle_decision": _normalize_text(decision.get("cycle_decision"), default="blocked"),
+        "should_continue": bool(decision.get("should_continue", False)),
+        "next_action": _normalize_text(
+            decision.get("next_action"),
+            default="manual_review_prompt330_closure_before_v2_cycle",
+        ),
+        "changed_tracked_files": _normalize_string_list(decision.get("changed_tracked_files")),
+        "validation_errors": _normalize_string_list(decision.get("validation_errors")),
+        "codex_invoked": bool(decision.get("codex_invoked", False)),
+        "codex_invocation_allowed": bool(decision.get("codex_invocation_allowed", False)),
+        "commit_allowed": bool(decision.get("commit_allowed", False)),
+        "tag_allowed": bool(decision.get("tag_allowed", False)),
+        "commit_performed": bool(decision.get("commit_performed", False)),
+        "tag_performed": bool(decision.get("tag_performed", False)),
+        "push_pr_merge_enabled": bool(decision.get("push_pr_merge_enabled", False)),
+        "push_performed": bool(decision.get("push_performed", False)),
+        "pr_created": bool(decision.get("pr_created", False)),
+        "merge_performed": bool(decision.get("merge_performed", False)),
+        "targeted_fix_allowed": bool(decision.get("targeted_fix_allowed", False)),
+        "rollback_allowed": bool(decision.get("rollback_allowed", False)),
+        "rollback_performed": bool(decision.get("rollback_performed", False)),
+        "source": "local_autonomous_cycle_v2_receipt",
+        "cycle_state_path": str(cycle_state_path),
+        "cycle_decision_path": str(cycle_decision_path),
+    }
+    if not receipt.get("selected_step_name"):
+        receipt["selected_step_name"] = None
+    if not receipt.get("selected_step_operation"):
+        receipt["selected_step_operation"] = None
+    return receipt
+
+
 def _write_approve_commit_tag_commands_if_safe(
     *,
     boundary_state: Mapping[str, Any] | None,
@@ -14516,6 +14932,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_only_autonomous_loop_closure_receipt_path = Path(
         _LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_RECEIPT_PATH
     )
+    local_autonomous_cycle_v2_state_path = Path(_LOCAL_AUTONOMOUS_CYCLE_V2_STATE_PATH)
+    local_autonomous_cycle_v2_decision_path = Path(_LOCAL_AUTONOMOUS_CYCLE_V2_DECISION_PATH)
+    local_autonomous_cycle_v2_receipt_path = Path(_LOCAL_AUTONOMOUS_CYCLE_V2_RECEIPT_PATH)
     completed_result_source_path = output_json_path
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
@@ -14833,6 +15252,27 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_only_autonomous_loop_closure_receipt_surface_path = str(
         local_only_autonomous_loop_closure_receipt_path
     )
+    local_autonomous_cycle_v2_status = "blocked"
+    local_autonomous_cycle_v2_cycle_status = "blocked"
+    local_autonomous_cycle_v2_next_action = "manual_review_prompt330_closure_before_v2_cycle"
+    local_autonomous_cycle_v2_selected_step_id: int | None = None
+    local_autonomous_cycle_v2_selected_step_name: str | None = None
+    local_autonomous_cycle_v2_selected_step_operation: str | None = None
+    local_autonomous_cycle_v2_decision = "blocked"
+    local_autonomous_cycle_v2_ready = False
+    local_autonomous_cycle_v2_blocked_reason = "prompt330_closure_status_not_completed"
+    local_autonomous_cycle_v2_readiness_reason = (
+        "prompt330_closure_not_valid_for_local_autonomous_cycle_v2"
+    )
+    local_autonomous_cycle_v2_run_id = "local-autonomous-v2"
+    local_autonomous_cycle_v2_cycle_id = "local-autonomous-v2-cycle-1"
+    local_autonomous_cycle_v2_current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
+    local_autonomous_cycle_v2_max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+    local_autonomous_cycle_v2_state_surface_path = str(local_autonomous_cycle_v2_state_path)
+    local_autonomous_cycle_v2_decision_surface_path = str(
+        local_autonomous_cycle_v2_decision_path
+    )
+    local_autonomous_cycle_v2_receipt_surface_path = str(local_autonomous_cycle_v2_receipt_path)
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -15056,6 +15496,15 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "one_cycle_controller_local_only_autonomous_loop_closure_receipt_json": str(
             local_only_autonomous_loop_closure_receipt_path
+        ),
+        "one_cycle_controller_local_autonomous_cycle_v2_state_json": str(
+            local_autonomous_cycle_v2_state_path
+        ),
+        "one_cycle_controller_local_autonomous_cycle_v2_decision_json": str(
+            local_autonomous_cycle_v2_decision_path
+        ),
+        "one_cycle_controller_local_autonomous_cycle_v2_receipt_json": str(
+            local_autonomous_cycle_v2_receipt_path
         ),
     }
 
@@ -17014,6 +17463,125 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_only_autonomous_loop_closure_receipt_surface_path = str(
         local_only_autonomous_loop_closure_receipt_path
     )
+    local_autonomous_cycle_v2_state = _build_local_autonomous_cycle_v2_state(
+        prompt330_closure_state_path=local_only_autonomous_loop_closure_state_path,
+        prompt330_closure_decision_path=local_only_autonomous_loop_closure_decision_path,
+        prompt330_closure_receipt_path=local_only_autonomous_loop_closure_receipt_path,
+        execution_repo_path=str(execution_repo_path),
+        controller_run_id=_normalize_text(
+            prior_payload.get("run_id", approved_restart.get("run_id")),
+            default="",
+        ),
+        controller_job_id=_normalize_text(
+            prior_payload.get("job_id", approved_restart.get("job_id")),
+            default="",
+        ),
+    )
+    local_autonomous_cycle_v2_decision_state = _build_local_autonomous_cycle_v2_decision(
+        cycle_state=local_autonomous_cycle_v2_state,
+    )
+    local_autonomous_cycle_v2_receipt_state = _build_local_autonomous_cycle_v2_receipt(
+        cycle_state=local_autonomous_cycle_v2_state,
+        cycle_decision=local_autonomous_cycle_v2_decision_state,
+        cycle_state_path=local_autonomous_cycle_v2_state_path,
+        cycle_decision_path=local_autonomous_cycle_v2_decision_path,
+    )
+    local_autonomous_cycle_v2_artifacts_written = False
+    try:
+        local_autonomous_cycle_v2_state_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(local_autonomous_cycle_v2_state_path, local_autonomous_cycle_v2_state)
+        _write_json(local_autonomous_cycle_v2_decision_path, local_autonomous_cycle_v2_decision_state)
+        _write_json(local_autonomous_cycle_v2_receipt_path, local_autonomous_cycle_v2_receipt_state)
+        local_autonomous_cycle_v2_artifacts_written = True
+    except OSError:
+        local_autonomous_cycle_v2_artifacts_written = False
+    if (
+        not local_autonomous_cycle_v2_artifacts_written
+        or not local_autonomous_cycle_v2_state_path.exists()
+        or not local_autonomous_cycle_v2_decision_path.exists()
+        or not local_autonomous_cycle_v2_receipt_path.exists()
+    ):
+        try:
+            local_autonomous_cycle_v2_state_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json(local_autonomous_cycle_v2_state_path, local_autonomous_cycle_v2_state)
+            _write_json(
+                local_autonomous_cycle_v2_decision_path,
+                local_autonomous_cycle_v2_decision_state,
+            )
+            _write_json(
+                local_autonomous_cycle_v2_receipt_path,
+                local_autonomous_cycle_v2_receipt_state,
+            )
+        except OSError:
+            pass
+    local_autonomous_cycle_v2_status = _normalize_text(
+        local_autonomous_cycle_v2_decision_state.get("status"),
+        default=local_autonomous_cycle_v2_status,
+    )
+    local_autonomous_cycle_v2_cycle_status = _normalize_text(
+        local_autonomous_cycle_v2_decision_state.get("cycle_status"),
+        default=local_autonomous_cycle_v2_cycle_status,
+    )
+    local_autonomous_cycle_v2_next_action = _normalize_text(
+        local_autonomous_cycle_v2_decision_state.get("next_action"),
+        default=local_autonomous_cycle_v2_next_action,
+    )
+    local_autonomous_cycle_v2_selected_step_id = _as_optional_int(
+        local_autonomous_cycle_v2_decision_state.get("selected_step_id")
+    )
+    local_autonomous_cycle_v2_selected_step_name = (
+        _normalize_text(
+            local_autonomous_cycle_v2_decision_state.get("selected_step_name"),
+            default="",
+        )
+        or None
+    )
+    local_autonomous_cycle_v2_selected_step_operation = (
+        _normalize_text(
+            local_autonomous_cycle_v2_decision_state.get("selected_step_operation"),
+            default="",
+        )
+        or None
+    )
+    local_autonomous_cycle_v2_decision = _normalize_text(
+        local_autonomous_cycle_v2_decision_state.get("cycle_decision"),
+        default=local_autonomous_cycle_v2_decision,
+    )
+    local_autonomous_cycle_v2_ready = bool(
+        local_autonomous_cycle_v2_decision_state.get(
+            "v2_cycle_ready",
+            local_autonomous_cycle_v2_ready,
+        )
+    )
+    local_autonomous_cycle_v2_blocked_reason = _normalize_text(
+        local_autonomous_cycle_v2_decision_state.get("blocked_reason"),
+        default=local_autonomous_cycle_v2_blocked_reason,
+    )
+    local_autonomous_cycle_v2_readiness_reason = _normalize_text(
+        local_autonomous_cycle_v2_decision_state.get("readiness_reason"),
+        default=local_autonomous_cycle_v2_readiness_reason,
+    )
+    local_autonomous_cycle_v2_run_id = _normalize_text(
+        local_autonomous_cycle_v2_decision_state.get("run_id"),
+        default=local_autonomous_cycle_v2_run_id,
+    )
+    local_autonomous_cycle_v2_cycle_id = _normalize_text(
+        local_autonomous_cycle_v2_decision_state.get("cycle_id"),
+        default=local_autonomous_cycle_v2_cycle_id,
+    )
+    local_autonomous_cycle_v2_current_cycle = _as_non_negative_int(
+        local_autonomous_cycle_v2_decision_state.get("current_cycle"),
+        default=local_autonomous_cycle_v2_current_cycle,
+    )
+    local_autonomous_cycle_v2_max_cycles = _as_non_negative_int(
+        local_autonomous_cycle_v2_decision_state.get("max_cycles"),
+        default=local_autonomous_cycle_v2_max_cycles,
+    )
+    local_autonomous_cycle_v2_state_surface_path = str(local_autonomous_cycle_v2_state_path)
+    local_autonomous_cycle_v2_decision_surface_path = str(
+        local_autonomous_cycle_v2_decision_path
+    )
+    local_autonomous_cycle_v2_receipt_surface_path = str(local_autonomous_cycle_v2_receipt_path)
 
     result_payload = {
         "status": status,
@@ -17382,6 +17950,29 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             local_end_to_end_readiness_boundary_surface_path
         ),
         "local_end_to_end_gap_report_path": local_end_to_end_gap_report_surface_path,
+        "local_autonomous_cycle_v2_status": local_autonomous_cycle_v2_status,
+        "local_autonomous_cycle_v2_cycle_status": local_autonomous_cycle_v2_cycle_status,
+        "local_autonomous_cycle_v2_next_action": local_autonomous_cycle_v2_next_action,
+        "local_autonomous_cycle_v2_selected_step_id": local_autonomous_cycle_v2_selected_step_id,
+        "local_autonomous_cycle_v2_selected_step_name": (
+            local_autonomous_cycle_v2_selected_step_name
+        ),
+        "local_autonomous_cycle_v2_selected_step_operation": (
+            local_autonomous_cycle_v2_selected_step_operation
+        ),
+        "local_autonomous_cycle_v2_decision": local_autonomous_cycle_v2_decision,
+        "local_autonomous_cycle_v2_ready": local_autonomous_cycle_v2_ready,
+        "local_autonomous_cycle_v2_blocked_reason": local_autonomous_cycle_v2_blocked_reason,
+        "local_autonomous_cycle_v2_readiness_reason": local_autonomous_cycle_v2_readiness_reason,
+        "local_autonomous_cycle_v2_run_id": local_autonomous_cycle_v2_run_id,
+        "local_autonomous_cycle_v2_cycle_id": local_autonomous_cycle_v2_cycle_id,
+        "local_autonomous_cycle_v2_current_cycle": local_autonomous_cycle_v2_current_cycle,
+        "local_autonomous_cycle_v2_max_cycles": local_autonomous_cycle_v2_max_cycles,
+        "local_autonomous_cycle_v2_state_path": local_autonomous_cycle_v2_state_surface_path,
+        "local_autonomous_cycle_v2_decision_path": (
+            local_autonomous_cycle_v2_decision_surface_path
+        ),
+        "local_autonomous_cycle_v2_receipt_path": local_autonomous_cycle_v2_receipt_surface_path,
         "approve_commit_tag_execution_enabled": approve_commit_tag_execution_enabled,
         "approve_commit_tag_execution_confirmed": approve_commit_tag_execution_confirmed,
         "approve_commit_tag_execution_gate_status": approve_commit_tag_execution_gate_status,
@@ -18923,6 +19514,57 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_only_autonomous_loop_closure_receipt_path": (
             local_only_autonomous_loop_closure_receipt_surface_path
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_status": (
+            local_autonomous_cycle_v2_status
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_cycle_status": (
+            local_autonomous_cycle_v2_cycle_status
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_next_action": (
+            local_autonomous_cycle_v2_next_action
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_id": (
+            local_autonomous_cycle_v2_selected_step_id
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_name": (
+            local_autonomous_cycle_v2_selected_step_name or ""
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_operation": (
+            local_autonomous_cycle_v2_selected_step_operation or ""
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_decision": (
+            local_autonomous_cycle_v2_decision
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_ready": (
+            local_autonomous_cycle_v2_ready
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_blocked_reason": (
+            local_autonomous_cycle_v2_blocked_reason
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_readiness_reason": (
+            local_autonomous_cycle_v2_readiness_reason
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_run_id": (
+            local_autonomous_cycle_v2_run_id
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_cycle_id": (
+            local_autonomous_cycle_v2_cycle_id
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_current_cycle": (
+            local_autonomous_cycle_v2_current_cycle
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_max_cycles": (
+            local_autonomous_cycle_v2_max_cycles
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_state_path": (
+            local_autonomous_cycle_v2_state_surface_path
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_decision_path": (
+            local_autonomous_cycle_v2_decision_surface_path
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_receipt_path": (
+            local_autonomous_cycle_v2_receipt_surface_path
         ),
         "project_browser_autonomous_approve_commit_tag_execution_enabled": (
             approve_commit_tag_execution_enabled
@@ -176403,6 +177045,95 @@ def _build_approved_restart_execution_contract_surface(
                 "project_browser_autonomous_local_only_autonomous_loop_closure_receipt_path"
             ),
             default=_LOCAL_ONLY_AUTONOMOUS_LOOP_CLOSURE_RECEIPT_PATH,
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_status": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_autonomous_cycle_v2_status"),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_cycle_status": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_cycle_status"
+            ),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_next_action": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_next_action"
+            ),
+            default="manual_review_prompt330_closure_before_v2_cycle",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_id": _as_optional_int(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_id"
+            )
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_name": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_name"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_operation": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_selected_step_operation"
+            ),
+            default="",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_decision": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_autonomous_cycle_v2_decision"),
+            default="blocked",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_ready": _read_one_cycle_controller_flag(
+            "project_browser_autonomous_local_autonomous_cycle_v2_ready",
+            default=False,
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_blocked_reason": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_blocked_reason"
+            ),
+            default="prompt330_closure_status_not_completed",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_readiness_reason": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_readiness_reason"
+            ),
+            default="prompt330_closure_not_valid_for_local_autonomous_cycle_v2",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_run_id": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_autonomous_cycle_v2_run_id"),
+            default="local-autonomous-v2",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_cycle_id": _normalize_text(
+            approved_restart.get("project_browser_autonomous_local_autonomous_cycle_v2_cycle_id"),
+            default="local-autonomous-v2-cycle-1",
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_current_cycle": _as_non_negative_int(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_current_cycle"
+            ),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_max_cycles": _as_non_negative_int(
+            approved_restart.get("project_browser_autonomous_local_autonomous_cycle_v2_max_cycles"),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_state_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_state_path"
+            ),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_STATE_PATH,
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_decision_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_decision_path"
+            ),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_DECISION_PATH,
+        ),
+        "project_browser_autonomous_local_autonomous_cycle_v2_receipt_path": _normalize_text(
+            approved_restart.get(
+                "project_browser_autonomous_local_autonomous_cycle_v2_receipt_path"
+            ),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_RECEIPT_PATH,
         ),
         "project_browser_autonomous_one_cycle_controller_completed_result_source_path": _normalize_text(
             approved_restart.get(
