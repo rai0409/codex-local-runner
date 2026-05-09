@@ -6763,6 +6763,15 @@ def _build_local_targeted_contract_fix_prompt_artifacts(
         "prepare_contract_handoff_fix",
         "prepare_blocked_with_changes_review",
     }
+    prompt334_completed_contract_handoff_fix_signal = (
+        prompt334_route_status == "completed"
+        and prompt334_route_decision == "prepare_contract_handoff_fix"
+        and prompt334_route_next_action == "prepare_targeted_contract_fix_prompt"
+        and prompt334_codex_outcome_classification == "codex_task_blocked_no_tracked_changes"
+        and prompt334_route_blocked_reason in {"", "none"}
+    )
+    if prompt334_completed_contract_handoff_fix_signal and not normalized_contract_fix_reason:
+        normalized_contract_fix_reason = supported_blocked_reason
 
     path_a_ready = True
     path_a_blocked_reason = "none"
@@ -6775,10 +6784,17 @@ def _build_local_targeted_contract_fix_prompt_artifacts(
     elif prompt334_route_decision not in path_a_allowed_decisions:
         path_a_ready = False
         path_a_blocked_reason = "prompt334_route_decision_not_contract_fix_path"
-    elif not prompt334_targeted_contract_fix_recommended:
+    elif not (
+        prompt334_targeted_contract_fix_recommended
+        or prompt334_completed_contract_handoff_fix_signal
+    ):
         path_a_ready = False
         path_a_blocked_reason = "prompt334_targeted_contract_fix_not_recommended"
-    elif not (normalized_contract_fix_reason or prompt334_stdout_blocked_reason):
+    elif not (
+        normalized_contract_fix_reason
+        or prompt334_stdout_blocked_reason
+        or prompt334_completed_contract_handoff_fix_signal
+    ):
         path_a_ready = False
         path_a_blocked_reason = "prompt334_contract_fix_reason_missing"
 
