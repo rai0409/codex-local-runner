@@ -3877,6 +3877,10 @@ _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_post_codex_route_next_action",
     "project_browser_autonomous_local_post_codex_route_targeted_contract_fix_recommended",
     "project_browser_autonomous_local_post_codex_route_approve_commit_tag_allowed",
+    "project_browser_autonomous_prompt334_stale_post_codex_artifact_detected",
+    "project_browser_autonomous_prompt334_stale_post_codex_artifact_regeneration_attempted",
+    "project_browser_autonomous_prompt334_stale_post_codex_artifact_regeneration_reason",
+    "project_browser_autonomous_prompt334_stale_post_codex_artifact_regeneration_status",
     "project_browser_autonomous_local_post_codex_diff_capture_path",
     "project_browser_autonomous_local_post_codex_execution_outcome_path",
     "project_browser_autonomous_local_post_codex_route_decision_path",
@@ -5922,6 +5926,130 @@ def _read_one_cycle_completed_result_source(
     ):
         return "available", result_payload
     return "not_completed", result_payload
+
+
+def _maybe_reconcile_stale_prompt334_post_codex_artifacts(
+    *,
+    execution_repo_path: str,
+    status: str,
+    stop_reason: str,
+    next_action: str,
+    execution_attempted: bool,
+    execution_exit_code: int,
+    exec_plan_execution_status: str,
+    one_cycle_controller_dir: Path,
+    completed_result_source_path: Path,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    def _read_json_mapping(path: Path) -> tuple[bool, bool, dict[str, Any]]:
+        if not path.exists():
+            return False, False, {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            return True, False, {}
+        if not isinstance(payload, Mapping):
+            return True, False, {}
+        return True, True, dict(payload)
+
+    def _is_completed_prompt333_payload(payload: Mapping[str, Any]) -> bool:
+        return (
+            _normalize_text(payload.get("status"), default="") == "completed"
+            and _normalize_text(payload.get("execution_status"), default="") == "completed"
+            and _normalize_text(payload.get("blocked_reason"), default="") == "none"
+        )
+
+    def _read_mtime(path: Path) -> float | None:
+        try:
+            return float(path.stat().st_mtime)
+        except OSError:
+            return None
+
+    stale_state = {
+        "prompt334_stale_post_codex_artifact_detected": False,
+        "prompt334_stale_post_codex_artifact_regeneration_attempted": False,
+        "prompt334_stale_post_codex_artifact_regeneration_reason": (
+            "prompt333_completed_artifacts_not_ready_for_reconciliation"
+        ),
+        "prompt334_stale_post_codex_artifact_regeneration_status": "not_applicable",
+    }
+
+    one_cycle_controller_dir = Path(one_cycle_controller_dir)
+    prompt333_result_path = one_cycle_controller_dir / "local_codex_one_shot_execution_result.json"
+    prompt333_receipt_v2_path = (
+        one_cycle_controller_dir / "local_codex_one_shot_execution_receipt_v2.json"
+    )
+    prompt334_diff_capture_path = one_cycle_controller_dir / "local_post_codex_diff_capture.json"
+    prompt334_outcome_path = one_cycle_controller_dir / "local_post_codex_execution_outcome.json"
+    prompt334_route_path = one_cycle_controller_dir / "local_post_codex_route_decision.json"
+    prompt334_receipt_path = one_cycle_controller_dir / "local_post_codex_diff_capture_receipt.json"
+
+    prompt333_result_exists, prompt333_result_valid, prompt333_result_payload = _read_json_mapping(
+        prompt333_result_path
+    )
+    prompt333_receipt_exists, prompt333_receipt_valid, prompt333_receipt_payload = (
+        _read_json_mapping(prompt333_receipt_v2_path)
+    )
+    if not (
+        prompt333_result_exists
+        and prompt333_result_valid
+        and prompt333_receipt_exists
+        and prompt333_receipt_valid
+        and _is_completed_prompt333_payload(prompt333_result_payload)
+        and _is_completed_prompt333_payload(prompt333_receipt_payload)
+    ):
+        return None, stale_state
+
+    result_mtime = _read_mtime(prompt333_result_path)
+    receipt_mtime = _read_mtime(prompt333_receipt_v2_path)
+    if result_mtime is None or receipt_mtime is None:
+        return None, stale_state
+
+    latest_prompt333_artifact_mtime = max(result_mtime, receipt_mtime)
+    route_exists = prompt334_route_path.exists()
+    route_mtime = _read_mtime(prompt334_route_path) if route_exists else None
+    if not route_exists:
+        stale_reason = "prompt334_route_missing_after_prompt333_completion"
+    elif route_mtime is None:
+        return None, stale_state
+    elif route_mtime < latest_prompt333_artifact_mtime:
+        stale_reason = "prompt334_route_older_than_completed_prompt333_artifacts"
+    else:
+        stale_state["prompt334_stale_post_codex_artifact_regeneration_reason"] = "route_current"
+        stale_state["prompt334_stale_post_codex_artifact_regeneration_status"] = "not_needed"
+        return None, stale_state
+
+    stale_state["prompt334_stale_post_codex_artifact_detected"] = True
+    stale_state["prompt334_stale_post_codex_artifact_regeneration_attempted"] = True
+    stale_state["prompt334_stale_post_codex_artifact_regeneration_reason"] = stale_reason
+
+    handoff = _build_one_cycle_post_execution_handoff(
+        execution_repo_path=execution_repo_path,
+        status=status,
+        stop_reason=stop_reason,
+        next_action=next_action,
+        execution_attempted=execution_attempted,
+        execution_exit_code=execution_exit_code,
+        exec_plan_execution_status=exec_plan_execution_status,
+        one_cycle_controller_dir=one_cycle_controller_dir,
+        completed_result_source_path=completed_result_source_path,
+    )
+
+    regenerated_paths = (
+        prompt334_diff_capture_path,
+        prompt334_outcome_path,
+        prompt334_route_path,
+        prompt334_receipt_path,
+    )
+    regenerated_artifacts_current = True
+    for artifact_path in regenerated_paths:
+        artifact_mtime = _read_mtime(artifact_path)
+        if artifact_mtime is None or artifact_mtime < latest_prompt333_artifact_mtime:
+            regenerated_artifacts_current = False
+            break
+    stale_state["prompt334_stale_post_codex_artifact_regeneration_status"] = (
+        "completed" if regenerated_artifacts_current else "write_incomplete"
+    )
+    return handoff, stale_state
 
 
 def _build_one_cycle_post_execution_handoff(
@@ -22483,6 +22611,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_post_codex_route_next_action = "manual_review_prompt333_execution_artifacts"
     local_post_codex_route_targeted_contract_fix_recommended = False
     local_post_codex_route_approve_commit_tag_allowed = False
+    prompt334_stale_post_codex_artifact_detected = False
+    prompt334_stale_post_codex_artifact_regeneration_attempted = False
+    prompt334_stale_post_codex_artifact_regeneration_reason = (
+        "prompt333_completed_artifacts_not_ready_for_reconciliation"
+    )
+    prompt334_stale_post_codex_artifact_regeneration_status = "not_applicable"
     local_targeted_contract_fix_route_intake_status = "not_started"
     local_targeted_contract_fix_route_intake_blocked_reason = "prompt335_not_started"
     local_targeted_contract_fix_route_intake_signal_source = "none"
@@ -23471,7 +23605,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
                         execution_blocked_reason = "exec_plan_execution_failed"
                         execution_gate_status = "ready_for_single_execution"
 
-    post_execution_handoff = _build_one_cycle_post_execution_handoff(
+    (
+        post_execution_handoff,
+        prompt334_stale_post_codex_reconciliation_state,
+    ) = _maybe_reconcile_stale_prompt334_post_codex_artifacts(
         execution_repo_path=execution_repo_path,
         status=status,
         stop_reason=stop_reason,
@@ -23481,6 +23618,42 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         exec_plan_execution_status=exec_plan_execution_status,
         one_cycle_controller_dir=one_cycle_controller_dir,
         completed_result_source_path=completed_result_source_path,
+    )
+    if post_execution_handoff is None:
+        post_execution_handoff = _build_one_cycle_post_execution_handoff(
+            execution_repo_path=execution_repo_path,
+            status=status,
+            stop_reason=stop_reason,
+            next_action=next_action,
+            execution_attempted=execution_attempted,
+            execution_exit_code=execution_exit_code,
+            exec_plan_execution_status=exec_plan_execution_status,
+            one_cycle_controller_dir=one_cycle_controller_dir,
+            completed_result_source_path=completed_result_source_path,
+        )
+    prompt334_stale_post_codex_artifact_detected = bool(
+        prompt334_stale_post_codex_reconciliation_state.get(
+            "prompt334_stale_post_codex_artifact_detected",
+            prompt334_stale_post_codex_artifact_detected,
+        )
+    )
+    prompt334_stale_post_codex_artifact_regeneration_attempted = bool(
+        prompt334_stale_post_codex_reconciliation_state.get(
+            "prompt334_stale_post_codex_artifact_regeneration_attempted",
+            prompt334_stale_post_codex_artifact_regeneration_attempted,
+        )
+    )
+    prompt334_stale_post_codex_artifact_regeneration_reason = _normalize_text(
+        prompt334_stale_post_codex_reconciliation_state.get(
+            "prompt334_stale_post_codex_artifact_regeneration_reason"
+        ),
+        default=prompt334_stale_post_codex_artifact_regeneration_reason,
+    )
+    prompt334_stale_post_codex_artifact_regeneration_status = _normalize_text(
+        prompt334_stale_post_codex_reconciliation_state.get(
+            "prompt334_stale_post_codex_artifact_regeneration_status"
+        ),
+        default=prompt334_stale_post_codex_artifact_regeneration_status,
     )
     next_action = _normalize_text(post_execution_handoff.get("next_action"), default=next_action)
     diff_capture_status = _normalize_text(
@@ -26917,6 +27090,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         "local_post_codex_route_approve_commit_tag_allowed": (
             local_post_codex_route_approve_commit_tag_allowed
         ),
+        "prompt334_stale_post_codex_artifact_detected": (
+            prompt334_stale_post_codex_artifact_detected
+        ),
+        "prompt334_stale_post_codex_artifact_regeneration_attempted": (
+            prompt334_stale_post_codex_artifact_regeneration_attempted
+        ),
+        "prompt334_stale_post_codex_artifact_regeneration_reason": (
+            prompt334_stale_post_codex_artifact_regeneration_reason
+        ),
+        "prompt334_stale_post_codex_artifact_regeneration_status": (
+            prompt334_stale_post_codex_artifact_regeneration_status
+        ),
         "local_post_codex_diff_capture_path": str(local_post_codex_diff_capture_path),
         "local_post_codex_execution_outcome_path": str(local_post_codex_execution_outcome_path),
         "local_post_codex_route_decision_path": str(local_post_codex_route_decision_path),
@@ -29434,6 +29619,18 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         ),
         "project_browser_autonomous_local_post_codex_route_approve_commit_tag_allowed": (
             local_post_codex_route_approve_commit_tag_allowed
+        ),
+        "project_browser_autonomous_prompt334_stale_post_codex_artifact_detected": (
+            prompt334_stale_post_codex_artifact_detected
+        ),
+        "project_browser_autonomous_prompt334_stale_post_codex_artifact_regeneration_attempted": (
+            prompt334_stale_post_codex_artifact_regeneration_attempted
+        ),
+        "project_browser_autonomous_prompt334_stale_post_codex_artifact_regeneration_reason": (
+            prompt334_stale_post_codex_artifact_regeneration_reason
+        ),
+        "project_browser_autonomous_prompt334_stale_post_codex_artifact_regeneration_status": (
+            prompt334_stale_post_codex_artifact_regeneration_status
         ),
         "project_browser_autonomous_local_post_codex_diff_capture_path": str(
             local_post_codex_diff_capture_path
