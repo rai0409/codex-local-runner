@@ -12281,9 +12281,63 @@ def _build_local_codex_one_shot_execution_result_state(
             return normalized, False, total_chars
         return normalized[:max_chars], True, total_chars
 
+    def _command_argv_length(value: Any) -> int | None:
+        if isinstance(value, (list, tuple)):
+            return len(value)
+        return None
+
     handoff_exists, handoff_valid, handoff_payload = _read_artifact(handoff_path)
     receipt_exists, receipt_valid, receipt_payload = _read_artifact(handoff_receipt_path)
     prompt_artifact_exists = prompt_path.exists()
+    expected_command_argv = list(_LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND)
+    authoritative_handoff_command_argv = (
+        handoff_payload.get("command_argv") if handoff_valid else None
+    )
+    supporting_receipt_command_argv = (
+        receipt_payload.get("command_argv") if receipt_valid else None
+    )
+    authoritative_handoff_command_argv_equal_expected = (
+        isinstance(authoritative_handoff_command_argv, (list, tuple))
+        and list(authoritative_handoff_command_argv) == expected_command_argv
+    )
+    supporting_receipt_command_argv_equal_expected: bool | None = None
+    if isinstance(supporting_receipt_command_argv, (list, tuple)):
+        if supporting_receipt_command_argv:
+            supporting_receipt_command_argv_equal_expected = (
+                list(supporting_receipt_command_argv) == expected_command_argv
+            )
+
+    command_argv_validation_mode = (
+        "authoritative_handoff_strict_supporting_receipt_optional"
+    )
+    command_argv_mismatch_source = "none"
+    command_argv_diagnostics: dict[str, Any] = {
+        "expected_command_argv": list(expected_command_argv),
+        "expected_command_argv_type": type(expected_command_argv).__name__,
+        "expected_command_argv_length": _command_argv_length(expected_command_argv),
+        "authoritative_handoff_command_argv": authoritative_handoff_command_argv,
+        "authoritative_handoff_command_argv_type": type(
+            authoritative_handoff_command_argv
+        ).__name__,
+        "authoritative_handoff_command_argv_length": _command_argv_length(
+            authoritative_handoff_command_argv
+        ),
+        "supporting_receipt_command_argv": supporting_receipt_command_argv,
+        "supporting_receipt_command_argv_type": type(
+            supporting_receipt_command_argv
+        ).__name__,
+        "supporting_receipt_command_argv_length": _command_argv_length(
+            supporting_receipt_command_argv
+        ),
+        "authoritative_handoff_command_argv_equal_expected": (
+            authoritative_handoff_command_argv_equal_expected
+        ),
+        "supporting_receipt_command_argv_equal_expected": (
+            supporting_receipt_command_argv_equal_expected
+        ),
+        "command_argv_mismatch_source": command_argv_mismatch_source,
+        "command_argv_validation_mode": command_argv_validation_mode,
+    }
 
     run_id = _normalize_text(
         handoff_payload.get("run_id"),
@@ -12370,6 +12424,7 @@ def _build_local_codex_one_shot_execution_result_state(
         "targeted_fix_allowed": False,
         "rollback_allowed": False,
         "rollback_performed": False,
+        **command_argv_diagnostics,
     }
 
     def _blocked_state(
@@ -12381,6 +12436,7 @@ def _build_local_codex_one_shot_execution_result_state(
         next_action: str = "manual_review_local_codex_one_shot_handoff_before_execution",
     ) -> dict[str, Any]:
         state = dict(default_blocked_state)
+        state.update(command_argv_diagnostics)
         state["blocked_reason"] = blocked_reason
         state["readiness_reason"] = readiness_reason
         state["validation_errors"] = _normalize_string_list(validation_errors)
@@ -12414,7 +12470,6 @@ def _build_local_codex_one_shot_execution_result_state(
             validation_errors=["missing_local_codex_one_shot_prompt_artifact"],
         )
 
-    expected_command_argv = list(_LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND)
     required_fields: tuple[tuple[str, Any], ...] = (
         ("schema_version", _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION),
         ("handoff_schema_version", _LOCAL_CODEX_ONE_SHOT_HANDOFF_SCHEMA_VERSION),
@@ -12433,7 +12488,6 @@ def _build_local_codex_one_shot_execution_result_state(
         ("selected_step_operation", "generate_next_codex_task"),
         ("prompt_exists", True),
         ("prompt_non_empty", True),
-        ("command_argv", expected_command_argv),
         ("next_action", "execute_local_codex_one_shot_adapter"),
         ("commit_allowed", False),
         ("tag_allowed", False),
@@ -12599,6 +12653,54 @@ def _build_local_codex_one_shot_execution_result_state(
                         "local_codex_one_shot_handoff_not_valid_for_execution",
                     )
 
+    authoritative_command_argv = authoritative.get("command_argv")
+    authoritative_command_argv_matches_expected = (
+        isinstance(authoritative_command_argv, (list, tuple))
+        and list(authoritative_command_argv) == expected_command_argv
+    )
+    if not authoritative_command_argv_matches_expected:
+        validation_errors.append(
+            "local_codex_one_shot_handoff_command_argv_mismatch_expected_"
+            f"{expected_command_argv}"
+        )
+        if not first_failure_reason:
+            first_failure_reason = "local_codex_one_shot_handoff_command_argv_mismatch"
+        command_argv_mismatch_source = "authoritative_handoff"
+
+    support_command_argv = receipt_payload.get("command_argv")
+    support_command_argv_is_optional_missing = False
+    if support_command_argv is None:
+        support_command_argv_is_optional_missing = True
+    elif isinstance(support_command_argv, str) and not support_command_argv.strip():
+        support_command_argv_is_optional_missing = True
+    elif isinstance(support_command_argv, (list, tuple)) and not support_command_argv:
+        support_command_argv_is_optional_missing = True
+
+    if not support_command_argv_is_optional_missing:
+        if isinstance(support_command_argv, (list, tuple)):
+            if list(support_command_argv) != expected_command_argv:
+                validation_errors.append(
+                    "local_codex_one_shot_handoff_command_argv_"
+                    "mismatch_in_supporting_receipt_artifact"
+                )
+                if not first_failure_reason:
+                    first_failure_reason = (
+                        "local_codex_one_shot_handoff_command_argv_mismatch"
+                    )
+                if command_argv_mismatch_source == "none":
+                    command_argv_mismatch_source = "supporting_receipt"
+        else:
+            validation_errors.append(
+                "local_codex_one_shot_handoff_command_argv_"
+                "invalid_shape_in_supporting_receipt_artifact"
+            )
+            if not first_failure_reason:
+                first_failure_reason = "local_codex_one_shot_handoff_command_argv_mismatch"
+            if command_argv_mismatch_source == "none":
+                command_argv_mismatch_source = "supporting_receipt_shape"
+
+    command_argv_diagnostics["command_argv_mismatch_source"] = command_argv_mismatch_source
+
     resolved_prompt_path_text = _normalize_text(
         authoritative.get("prompt_path"),
         default=str(prompt_path),
@@ -12672,10 +12774,7 @@ def _build_local_codex_one_shot_execution_result_state(
             ),
         )
 
-    command_argv = _normalize_string_list(
-        authoritative.get("command_argv"),
-        sort_items=False,
-    )
+    command_argv = list(authoritative.get("command_argv", []))
     try:
         completed = subprocess.run(
             command_argv,
@@ -12807,6 +12906,7 @@ def _build_local_codex_one_shot_execution_result_state(
         "targeted_fix_allowed": False,
         "rollback_allowed": False,
         "rollback_performed": False,
+        **command_argv_diagnostics,
     }
 
 
@@ -12825,6 +12925,55 @@ def _build_local_codex_one_shot_execution_receipt_v2(
             default=_LOCAL_CODEX_ONE_SHOT_EXECUTION_SCHEMA_VERSION,
         ),
         "receipt_schema_version": "local_codex_one_shot_execution_receipt_v2",
+        "expected_command_argv": (
+            list(state.get("expected_command_argv"))
+            if isinstance(state.get("expected_command_argv"), (list, tuple))
+            else []
+        ),
+        "expected_command_argv_type": _normalize_text(
+            state.get("expected_command_argv_type"),
+            default="list",
+        ),
+        "expected_command_argv_length": _as_optional_int(
+            state.get("expected_command_argv_length")
+        ),
+        "authoritative_handoff_command_argv": state.get(
+            "authoritative_handoff_command_argv"
+        ),
+        "authoritative_handoff_command_argv_type": _normalize_text(
+            state.get("authoritative_handoff_command_argv_type"),
+            default="NoneType",
+        ),
+        "authoritative_handoff_command_argv_length": _as_optional_int(
+            state.get("authoritative_handoff_command_argv_length")
+        ),
+        "supporting_receipt_command_argv": state.get("supporting_receipt_command_argv"),
+        "supporting_receipt_command_argv_type": _normalize_text(
+            state.get("supporting_receipt_command_argv_type"),
+            default="NoneType",
+        ),
+        "supporting_receipt_command_argv_length": _as_optional_int(
+            state.get("supporting_receipt_command_argv_length")
+        ),
+        "authoritative_handoff_command_argv_equal_expected": bool(
+            state.get("authoritative_handoff_command_argv_equal_expected", False)
+        ),
+        "supporting_receipt_command_argv_equal_expected": (
+            bool(state.get("supporting_receipt_command_argv_equal_expected"))
+            if isinstance(
+                state.get("supporting_receipt_command_argv_equal_expected"),
+                bool,
+            )
+            else None
+        ),
+        "command_argv_mismatch_source": _normalize_text(
+            state.get("command_argv_mismatch_source"),
+            default="none",
+        ),
+        "command_argv_validation_mode": _normalize_text(
+            state.get("command_argv_validation_mode"),
+            default="authoritative_handoff_strict_supporting_receipt_optional",
+        ),
         "source_prompt": "prompt333",
         "source_handoff_schema_version": _normalize_text(
             state.get("source_handoff_schema_version"),
