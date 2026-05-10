@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Any
 from typing import Mapping
 
+from automation.orchestration.completion_contract import (
+    evaluate_prompt353_local_only_verified_no_change_posture,
+)
+
 EXECUTION_AUTHORIZATION_GATE_SCHEMA_VERSION = "v1"
 
 EXECUTION_AUTHORIZATION_STATUSES = {
@@ -484,6 +488,11 @@ def build_execution_authorization_gate_surface(
         or _normalize_bool(run_state.get("repair_truth_gathering_required"))
         or reconcile_status == "waiting_for_truth"
     )
+    local_only_posture = evaluate_prompt353_local_only_verified_no_change_posture(
+        objective_contract_payload=objective,
+        run_state_payload=run_state,
+        completion_contract_payload=completion,
+    )
 
     upstream_missing = bool(
         not cross_surface_present
@@ -494,7 +503,9 @@ def build_execution_authorization_gate_surface(
         or not binding_status
     )
 
-    if approval_denied:
+    if bool(local_only_posture.get("eligible")):
+        auth_status = "pending"
+    elif approval_denied:
         auth_status = "denied"
     elif replan_required:
         auth_status = "blocked"
@@ -531,7 +542,9 @@ def build_execution_authorization_gate_surface(
         default="insufficient_truth",
     )
 
-    if auth_status == "eligible":
+    if bool(local_only_posture.get("eligible")):
+        auth_decision = "hold_pending"
+    elif auth_status == "eligible":
         auth_decision = "authorize_future_execution"
     elif auth_status == "denied":
         auth_decision = "deny_execution"
@@ -549,7 +562,9 @@ def build_execution_authorization_gate_surface(
     )
 
     derived_scope = _BINDING_SCOPE_TO_AUTH_SCOPE.get(binding_scope, "")
-    if auth_status == "eligible":
+    if bool(local_only_posture.get("eligible")):
+        auth_scope = "none"
+    elif auth_status == "eligible":
         auth_scope = derived_scope or "current_repair_plan_candidate"
     elif auth_decision == "request_replan" or binding_scope == "replan_only":
         auth_scope = "replan_only"
@@ -568,7 +583,9 @@ def build_execution_authorization_gate_surface(
         default="none",
     )
 
-    if auth_status == "eligible":
+    if bool(local_only_posture.get("eligible")):
+        auth_validity = "valid"
+    elif auth_status == "eligible":
         auth_validity = "valid"
     elif binding_superseded:
         auth_validity = "superseded"
@@ -588,7 +605,9 @@ def build_execution_authorization_gate_surface(
     )
 
     reason_candidates: list[str] = []
-    if binding_missing:
+    if bool(local_only_posture.get("eligible")):
+        reason_candidates.append("plan_not_needed")
+    if binding_missing and not bool(local_only_posture.get("eligible")):
         reason_candidates.append("missing_binding")
     if binding_blocked:
         reason_candidates.append("binding_blocked")
@@ -600,7 +619,7 @@ def build_execution_authorization_gate_surface(
         reason_candidates.append("binding_superseded")
     if approval_denied:
         reason_candidates.append("approval_denied")
-    if approval_missing:
+    if approval_missing and not bool(local_only_posture.get("eligible")):
         reason_candidates.append("approval_missing")
     if plan_not_available:
         reason_candidates.append("plan_not_available")
@@ -618,7 +637,9 @@ def build_execution_authorization_gate_surface(
         reason_candidates.insert(0, "authorization_ready")
 
     reason_codes = _normalize_reason_codes(reason_candidates)
-    if auth_status == "eligible":
+    if bool(local_only_posture.get("eligible")):
+        reason_codes = ["plan_not_needed"]
+    elif auth_status == "eligible":
         if "authorization_ready" not in reason_codes:
             reason_codes = ["authorization_ready"]
         elif reason_codes[0] != "authorization_ready":
@@ -638,7 +659,9 @@ def build_execution_authorization_gate_surface(
     primary_reason = reason_codes[0] if reason_codes else "insufficient_upstream_truth"
 
     blocked_reasons: list[str] = []
-    if auth_status != "eligible":
+    if bool(local_only_posture.get("eligible")):
+        blocked_reasons = []
+    elif auth_status != "eligible":
         blocked_reasons = _normalize_reason_codes(
             [code for code in reason_codes if code not in {"authorization_ready", "no_reason"}]
         )
@@ -657,7 +680,12 @@ def build_execution_authorization_gate_surface(
         default="insufficient_truth",
     )
 
-    if auth_status == "eligible" and auth_validity == "valid" and not (
+    if bool(local_only_posture.get("eligible")):
+        auth_confidence = "strong"
+        manual_required = False
+        replan_required = False
+        truth_gathering_required = False
+    elif auth_status == "eligible" and auth_validity == "valid" and not (
         manual_required or replan_required or truth_gathering_required
     ):
         auth_confidence = "strong"
@@ -691,9 +719,15 @@ def build_execution_authorization_gate_surface(
         "execution_authorization_denied": auth_status == "denied",
         "execution_authorization_eligible": auth_status == "eligible",
         "execution_authorization_source_status": source_status,
-        "execution_authorization_binding_status": binding_status or "missing",
-        "execution_authorization_plan_status": repair_plan_status or "missing",
-        "execution_authorization_approval_status": approval_status or "absent",
+        "execution_authorization_binding_status": (
+            "not_needed" if bool(local_only_posture.get("eligible")) else (binding_status or "missing")
+        ),
+        "execution_authorization_plan_status": (
+            "not_needed" if bool(local_only_posture.get("eligible")) else (repair_plan_status or "missing")
+        ),
+        "execution_authorization_approval_status": (
+            "not_needed" if bool(local_only_posture.get("eligible")) else (approval_status or "absent")
+        ),
         "supporting_compact_truth_refs": _build_supporting_refs(
             next_safe_action=next_safe_action,
             policy_primary_action=policy_primary_action,

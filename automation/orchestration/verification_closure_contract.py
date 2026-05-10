@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Any
 from typing import Mapping
 
+from automation.orchestration.completion_contract import (
+    evaluate_prompt353_local_only_verified_no_change_posture,
+)
+
 VERIFICATION_CLOSURE_CONTRACT_SCHEMA_VERSION = "v1"
 
 VERIFICATION_STATUSES = {
@@ -414,6 +418,12 @@ def build_verification_closure_contract_surface(
         if "delivery_complete_waiting_external_truth" in completion
         else run_state.get("delivery_complete_waiting_external_truth")
     )
+    local_only_posture = evaluate_prompt353_local_only_verified_no_change_posture(
+        objective_contract_payload=objective,
+        run_state_payload=run_state,
+        execution_result_contract_payload=execution_result,
+        completion_contract_payload=completion,
+    )
 
     execution_result_present = bool(artifacts.get("execution_result_contract.json")) or bool(
         run_state.get("execution_result_contract_present")
@@ -504,6 +514,17 @@ def build_verification_closure_contract_surface(
         completion_satisfaction_status = "satisfied"
     elif completion_status:
         completion_satisfaction_status = "not_satisfied"
+    if bool(local_only_posture.get("eligible")):
+        completion_satisfaction_status = "satisfied"
+        manual_closure_required = False
+        closure_followup_required = False
+        explicit_completion_gap = False
+        explicit_approval_blocker = False
+        explicit_reconcile_mismatch = False
+        explicit_external_truth_pending = False
+        safe_closure_status = "safely_closed"
+        lifecycle_safely_closed = True
+        insufficient_truth = False
 
     verified_success_ready = bool(
         execution_result_status == "succeeded"
