@@ -3528,6 +3528,21 @@ _LOCAL_CODEX_EXECUTION_READINESS_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_codex_execution_readiness_runtime_posture",
 )
 
+_PROMPT360_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt360_gate_status",
+    "prompt360_live_execution_attempted",
+    "prompt360_live_execution_allowed",
+    "prompt360_codex_execution_allowed",
+    "prompt360_execution_status",
+    "prompt360_execution_receipt_path",
+    "prompt360_authoritative_next_action",
+    "prompt360_next_action",
+    "prompt360_manual_required",
+    "prompt360_replan_required",
+    "prompt360_active_blocked_reason",
+    "prompt360_active_blocked_reasons",
+)
+
 _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_status",
     "project_browser_autonomous_one_cycle_controller_next_action",
@@ -5097,6 +5112,19 @@ def _merge_local_codex_execution_readiness_surface_into_approved_restart_payload
         else {}
     )
     for key in _LOCAL_CODEX_EXECUTION_READINESS_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt360_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt360_gate_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = dict(prompt360_gate_state) if isinstance(prompt360_gate_state, Mapping) else {}
+    for key in _PROMPT360_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -38803,6 +38831,242 @@ def _build_prompt359_bounded_selected_step_execution_contract(
             prompt358_selected_prompt_contract_path_text
         ),
     }
+
+
+def _build_prompt360_bounded_codex_live_execution_gate(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    dry_run: bool,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    prompt359_contract_status = _normalize_text(
+        run_state.get("prompt359_contract_status"),
+        default="",
+    )
+    prompt359_selected_step_execution_contract_ready = _prompt357_as_boolish(
+        run_state.get("prompt359_selected_step_execution_contract_ready")
+    )
+    prompt359_selected_step_operation = _normalize_text(
+        run_state.get("prompt359_selected_step_operation"),
+        default="",
+    )
+    prompt359_authoritative_next_action = _normalize_text(
+        run_state.get("prompt359_authoritative_next_action"),
+        default="",
+    )
+    prompt359_next_action = _normalize_text(
+        run_state.get("prompt359_next_action"),
+        default="",
+    )
+    prompt359_manual_required = _prompt357_as_boolish(
+        run_state.get("prompt359_manual_required")
+    )
+    prompt359_replan_required = _prompt357_as_boolish(
+        run_state.get("prompt359_replan_required")
+    )
+    prompt359_active_blocked_reason = _normalize_text(
+        run_state.get("prompt359_active_blocked_reason"),
+        default="",
+    )
+    prompt359_active_blocked_reasons = _normalize_string_list(
+        run_state.get("prompt359_active_blocked_reasons"),
+        sort_items=False,
+    )
+    prompt359_prompt358_recovered_evidence_used = _prompt357_as_boolish(
+        run_state.get("prompt359_prompt358_recovered_evidence_used")
+    )
+    prompt359_prompt358_recovered_prompt355_source = _normalize_text(
+        run_state.get("prompt359_prompt358_recovered_prompt355_source"),
+        default="",
+    )
+    prompt359_prompt358_recovered_prompt356_source = _normalize_text(
+        run_state.get("prompt359_prompt358_recovered_prompt356_source"),
+        default="",
+    )
+    prompt359_prompt358_recovered_prompt357_source = _normalize_text(
+        run_state.get("prompt359_prompt358_recovered_prompt357_source"),
+        default="",
+    )
+    prompt359_prompt358_selected_prompt_contract_path = _normalize_text(
+        run_state.get("prompt359_prompt358_selected_prompt_contract_path"),
+        default="",
+    )
+
+    active_blocked_reasons: list[str] = []
+    if prompt359_contract_status != "ready":
+        _append_reason(active_blocked_reasons, "prompt359_contract_status_not_ready")
+    if not prompt359_selected_step_execution_contract_ready:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_selected_step_execution_contract_ready_not_true",
+        )
+    if prompt359_selected_step_operation != "prepare_bounded_codex_live_execution":
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_selected_step_operation_not_prepare_bounded_codex_live_execution",
+        )
+    if prompt359_authoritative_next_action != "prepare_bounded_codex_live_execution":
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_authoritative_next_action_not_prepare_bounded_codex_live_execution",
+        )
+    if prompt359_next_action != "prepare_prompt360_codex_live_execution_gate":
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_next_action_not_prepare_prompt360_codex_live_execution_gate",
+        )
+    if prompt359_manual_required:
+        _append_reason(active_blocked_reasons, "prompt359_manual_required_true")
+    if prompt359_replan_required:
+        _append_reason(active_blocked_reasons, "prompt359_replan_required_true")
+    if prompt359_active_blocked_reason:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_active_blocked_reason_present",
+        )
+    if prompt359_active_blocked_reasons:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_active_blocked_reasons_present",
+        )
+    if not prompt359_prompt358_recovered_evidence_used:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_prompt358_recovered_evidence_used_not_true",
+        )
+    if not prompt359_prompt358_recovered_prompt355_source:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_prompt358_recovered_prompt355_source_missing",
+        )
+    if not prompt359_prompt358_recovered_prompt356_source:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_prompt358_recovered_prompt356_source_missing",
+        )
+    if not prompt359_prompt358_recovered_prompt357_source:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_prompt358_recovered_prompt357_source_missing",
+        )
+    if not prompt359_prompt358_selected_prompt_contract_path:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt359_prompt358_selected_prompt_contract_path_missing",
+        )
+
+    explicit_live_execution_enabled = not bool(dry_run)
+    transport_mode = "live" if explicit_live_execution_enabled else "dry-run"
+
+    if active_blocked_reasons:
+        gate_status = "blocked"
+        execution_status = "not_run"
+        live_execution_attempted = False
+        live_execution_allowed = False
+        codex_execution_allowed = False
+        execution_receipt_path = ""
+        authoritative_next_action = "hold_for_followup"
+        next_action = "hold_for_followup"
+        manual_required = True
+        replan_required = False
+        active_blocked_reason = active_blocked_reasons[0]
+        normalized_active_blocked_reasons = _normalize_string_list(
+            active_blocked_reasons,
+            sort_items=False,
+        )
+        summary = "Prompt360 blocked: " + ", ".join(normalized_active_blocked_reasons)
+    elif not explicit_live_execution_enabled:
+        gate_status = "ready_for_live_execution"
+        execution_status = "not_run"
+        live_execution_attempted = False
+        live_execution_allowed = False
+        codex_execution_allowed = False
+        execution_receipt_path = ""
+        authoritative_next_action = "run_with_explicit_live_execution_flags"
+        next_action = "run_prompt360_with_explicit_live_execution_flags"
+        manual_required = False
+        replan_required = False
+        active_blocked_reason = ""
+        normalized_active_blocked_reasons = []
+        summary = (
+            "Prompt360 is ready for explicit live execution, but dry-run/default mode keeps Codex execution disabled."
+        )
+    else:
+        gate_status = "blocked_unsupported_live_execution_helper_missing"
+        execution_status = "not_run"
+        live_execution_attempted = False
+        live_execution_allowed = False
+        codex_execution_allowed = False
+        execution_receipt_path = ""
+        authoritative_next_action = "hold_for_followup"
+        next_action = "hold_for_followup"
+        manual_required = True
+        replan_required = False
+        active_blocked_reason = "safe_live_execution_helper_missing"
+        normalized_active_blocked_reasons = [
+            "safe_live_execution_helper_missing"
+        ]
+        summary = (
+            "Prompt360 live execution remains blocked because no clearly reusable safe live helper is bound to the Prompt359 contract artifacts."
+        )
+
+    return {
+        "prompt360_gate_status": gate_status,
+        "prompt360_source_prompt": "prompt359",
+        "prompt360_source_action": "prepare_prompt360_codex_live_execution_gate",
+        "prompt360_transport_mode": transport_mode,
+        "prompt360_live_execution_attempted": bool(live_execution_attempted),
+        "prompt360_live_execution_allowed": bool(live_execution_allowed),
+        "prompt360_codex_execution_allowed": bool(codex_execution_allowed),
+        "prompt360_execution_status": execution_status,
+        "prompt360_execution_receipt_path": execution_receipt_path,
+        "prompt360_authoritative_next_action": authoritative_next_action,
+        "prompt360_next_action": next_action,
+        "prompt360_manual_required": bool(manual_required),
+        "prompt360_replan_required": bool(replan_required),
+        "prompt360_active_blocked_reason": active_blocked_reason,
+        "prompt360_active_blocked_reasons": normalized_active_blocked_reasons,
+        "prompt360_summary": summary,
+    }
+
+
+def _merge_prompt360_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt360_gate_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt360 = dict(prompt360_gate_payload) if isinstance(prompt360_gate_payload, Mapping) else {}
+    for key in _PROMPT360_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt360 and prompt360.get(key) is not None:
+            payload[key] = prompt360.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt360_gate_status"
+            if _normalize_text(prompt360.get("prompt360_gate_status"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt360_next_action"
+            if _normalize_text(prompt360.get("prompt360_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
 
 
 def _approval_delivery_noop_adapter(
@@ -207204,6 +207468,41 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt359_bounded_selected_step_execution_contract_payload,
         }
+        prompt360_bounded_codex_live_execution_gate_path = (
+            run_root / "prompt360_bounded_codex_live_execution_gate.json"
+        )
+        prompt360_bounded_codex_live_execution_gate_payload = (
+            _build_prompt360_bounded_codex_live_execution_gate(
+                run_state_payload=run_state_payload,
+                dry_run=bool(dry_run),
+            )
+        )
+        _write_json(
+            prompt360_bounded_codex_live_execution_gate_path,
+            prompt360_bounded_codex_live_execution_gate_payload,
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt360_bounded_codex_live_execution_gate_payload,
+        }
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt360_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt360_gate_state=prompt360_bounded_codex_live_execution_gate_payload,
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt360_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt360_gate_payload=prompt360_bounded_codex_live_execution_gate_payload,
+            )
+        )
+        _write_json(
+            approved_restart_execution_contract_path,
+            approved_restart_execution_contract_payload,
+        )
         run_state_payload = _augment_run_state_with_operator_explainability(
             run_state_payload=run_state_payload,
         )
@@ -207314,6 +207613,12 @@ class PlannedExecutionRunner:
         manifest["prompt359_bounded_selected_step_execution_contract_path"] = str(
             prompt359_bounded_selected_step_execution_contract_path
         )
+        manifest["prompt360_bounded_codex_live_execution_gate_summary"] = dict(
+            prompt360_bounded_codex_live_execution_gate_payload
+        )
+        manifest["prompt360_bounded_codex_live_execution_gate_path"] = str(
+            prompt360_bounded_codex_live_execution_gate_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -207344,6 +207649,9 @@ class PlannedExecutionRunner:
         contract_summaries_by_role[
             "prompt359_bounded_selected_step_execution_contract"
         ] = manifest.get("prompt359_bounded_selected_step_execution_contract_summary")
+        contract_summaries_by_role[
+            "prompt360_bounded_codex_live_execution_gate"
+        ] = manifest.get("prompt360_bounded_codex_live_execution_gate_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -207374,6 +207682,9 @@ class PlannedExecutionRunner:
         contract_paths_by_role[
             "prompt359_bounded_selected_step_execution_contract"
         ] = manifest.get("prompt359_bounded_selected_step_execution_contract_path")
+        contract_paths_by_role[
+            "prompt360_bounded_codex_live_execution_gate"
+        ] = manifest.get("prompt360_bounded_codex_live_execution_gate_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -207591,6 +207902,18 @@ class PlannedExecutionRunner:
             "prompt359_next_action": _normalize_text(
                 prompt359_bounded_selected_step_execution_contract_payload.get(
                     "prompt359_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt360_gate_status": _normalize_text(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_gate_status"
+                ),
+                default="blocked",
+            ),
+            "prompt360_next_action": _normalize_text(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_next_action"
                 ),
                 default="hold_for_followup",
             ),
@@ -207820,6 +208143,54 @@ class PlannedExecutionRunner:
             "prompt359_active_blocked_reason": _normalize_text(
                 prompt359_bounded_selected_step_execution_contract_payload.get(
                     "prompt359_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt360_gate_status": _normalize_text(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_gate_status"
+                ),
+                default="blocked",
+            ),
+            "prompt360_live_execution_attempted": bool(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_live_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt360_live_execution_allowed": bool(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_live_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt360_codex_execution_allowed": bool(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt360_next_action": _normalize_text(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt360_manual_required": bool(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_manual_required",
+                    False,
+                )
+            ),
+            "prompt360_replan_required": bool(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_replan_required",
+                    False,
+                )
+            ),
+            "prompt360_active_blocked_reason": _normalize_text(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_active_blocked_reason"
                 ),
                 default="",
             ),

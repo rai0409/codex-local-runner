@@ -327,6 +327,22 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt359_prompt358_recovered_prompt356_source",
     "prompt359_prompt358_recovered_prompt357_source",
     "prompt359_prompt358_selected_prompt_contract_path",
+    "prompt360_gate_status",
+    "prompt360_source_prompt",
+    "prompt360_source_action",
+    "prompt360_transport_mode",
+    "prompt360_live_execution_attempted",
+    "prompt360_live_execution_allowed",
+    "prompt360_codex_execution_allowed",
+    "prompt360_execution_status",
+    "prompt360_execution_receipt_path",
+    "prompt360_authoritative_next_action",
+    "prompt360_next_action",
+    "prompt360_manual_required",
+    "prompt360_replan_required",
+    "prompt360_active_blocked_reason",
+    "prompt360_active_blocked_reasons",
+    "prompt360_summary",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -851,6 +867,11 @@ def select_manifest_run_state_summary_compact(
         "prompt359_manual_required",
         "prompt359_replan_required",
         "prompt359_prompt358_recovered_evidence_used",
+        "prompt360_live_execution_attempted",
+        "prompt360_live_execution_allowed",
+        "prompt360_codex_execution_allowed",
+        "prompt360_manual_required",
+        "prompt360_replan_required",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -861,6 +882,7 @@ def select_manifest_run_state_summary_compact(
         "prompt357_active_blocked_reasons",
         "prompt358_active_blocked_reasons",
         "prompt359_active_blocked_reasons",
+        "prompt360_active_blocked_reasons",
     }
 
     summary: dict[str, Any] = {}
