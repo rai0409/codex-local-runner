@@ -36421,6 +36421,337 @@ def _build_prompt355_local_autonomous_continuation_readiness_surface(
     }
 
 
+def _build_prompt356_stale_blocker_alignment_surface(
+    *,
+    run_state_payload: Mapping[str, Any],
+    prompt355_readiness_payload: Mapping[str, Any] | None,
+    completion_contract_payload: Mapping[str, Any] | None,
+    execution_authorization_gate_payload: Mapping[str, Any] | None,
+    bounded_execution_bridge_payload: Mapping[str, Any] | None,
+    verification_closure_contract_payload: Mapping[str, Any] | None,
+    endgame_closure_contract_payload: Mapping[str, Any] | None,
+    failure_bucket_rollup_payload: Mapping[str, Any] | None,
+    failure_bucketing_hardening_payload: Mapping[str, Any] | None,
+    reconcile_contract_payload: Mapping[str, Any] | None,
+    repair_suggestion_contract_payload: Mapping[str, Any] | None,
+    repair_plan_transport_payload: Mapping[str, Any] | None,
+    repair_approval_binding_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    prompt355 = dict(prompt355_readiness_payload or {})
+    completion = dict(completion_contract_payload or {})
+    execution_authorization = dict(execution_authorization_gate_payload or {})
+    bounded_execution = dict(bounded_execution_bridge_payload or {})
+    verification = dict(verification_closure_contract_payload or {})
+    endgame = dict(endgame_closure_contract_payload or {})
+    failure_bucket = dict(failure_bucket_rollup_payload or {})
+    failure_bucketing = dict(failure_bucketing_hardening_payload or {})
+    reconcile = dict(reconcile_contract_payload or {})
+    repair = dict(repair_suggestion_contract_payload or {})
+    repair_plan = dict(repair_plan_transport_payload or {})
+    repair_binding = dict(repair_approval_binding_payload or {})
+
+    def _read_text(*values: Any, default: str = "") -> str:
+        for value in values:
+            text = _normalize_text(value, default="")
+            if text:
+                return text
+        return default
+
+    def _as_boolish(value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        text = _normalize_text(value, default="").strip().lower()
+        if text in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disabled"}:
+            return False
+        return default
+
+    def _is_clear_reason(value: Any) -> bool:
+        return _normalize_text(value, default="").strip().lower() in {"", "none"}
+
+    def _contains_marker(value: Any, marker: str) -> bool:
+        return marker in _normalize_text(value, default="").strip().lower()
+
+    prompt355_readiness_status = _read_text(
+        prompt355.get("prompt355_readiness_status"),
+        run_state.get("prompt355_readiness_status"),
+    )
+    prompt355_next_cycle_allowed = _as_boolish(
+        prompt355.get("prompt355_next_cycle_allowed")
+        if "prompt355_next_cycle_allowed" in prompt355
+        else run_state.get("prompt355_next_cycle_allowed")
+    )
+    prompt355_next_action = _read_text(
+        prompt355.get("prompt355_next_action"),
+        run_state.get("prompt355_next_action"),
+    )
+    prompt355_manual_required = _as_boolish(
+        prompt355.get("prompt355_manual_required")
+        if "prompt355_manual_required" in prompt355
+        else run_state.get("prompt355_manual_required")
+    )
+    prompt355_replan_required = _as_boolish(
+        prompt355.get("prompt355_replan_required")
+        if "prompt355_replan_required" in prompt355
+        else run_state.get("prompt355_replan_required")
+    )
+
+    verification_status = _read_text(
+        verification.get("verification_status"),
+        run_state.get("verification_status"),
+    )
+    verification_outcome = _read_text(
+        verification.get("verification_outcome"),
+        run_state.get("verification_outcome"),
+    )
+    verification_primary_reason = _read_text(
+        verification.get("verification_primary_reason"),
+        run_state.get("verification_primary_reason"),
+    )
+    closure_status = _read_text(
+        verification.get("closure_status"),
+        run_state.get("closure_status"),
+    )
+    safely_closable = _as_boolish(
+        verification.get("safely_closable")
+        if "safely_closable" in verification
+        else run_state.get("safely_closable")
+    )
+    completion_status = _read_text(
+        completion.get("completion_status"),
+        run_state.get("completion_status"),
+    )
+    safe_closure_status = _read_text(
+        completion.get("safe_closure_status"),
+        run_state.get("safe_closure_status"),
+    )
+    endgame_closure_status = _read_text(
+        endgame.get("endgame_closure_status"),
+        run_state.get("endgame_closure_status"),
+    )
+    terminal_success = _as_boolish(
+        endgame.get("terminal_success")
+        if "terminal_success" in endgame
+        else run_state.get("terminal_success")
+    )
+    execution_authorization_blocked_reason = _read_text(
+        execution_authorization.get("execution_authorization_blocked_reason"),
+        run_state.get("execution_authorization_blocked_reason"),
+    )
+    bounded_execution_blocked_reason = _read_text(
+        bounded_execution.get("bounded_execution_blocked_reason"),
+        run_state.get("bounded_execution_blocked_reason"),
+    )
+
+    authoritative_ready = all(
+        (
+            prompt355_readiness_status == "ready",
+            prompt355_next_cycle_allowed,
+            prompt355_next_action == "proceed_to_next_local_cycle",
+            not prompt355_manual_required,
+            not prompt355_replan_required,
+            verification_status == "verified_success",
+            verification_outcome == "objective_satisfied",
+            verification_primary_reason == "verified_success",
+            closure_status == "safely_closable",
+            safely_closable,
+            completion_status == "done_and_safely_closed",
+            safe_closure_status == "safely_closed",
+            endgame_closure_status == "safely_closed" or terminal_success,
+            _is_clear_reason(execution_authorization_blocked_reason),
+            _is_clear_reason(bounded_execution_blocked_reason),
+        )
+    )
+
+    stale_blocker_reasons: list[str] = []
+
+    def _add_stale_reason(condition: bool, reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if condition and normalized_reason and normalized_reason not in stale_blocker_reasons:
+            stale_blocker_reasons.append(normalized_reason)
+
+    primary_failure_bucket = _read_text(
+        failure_bucket.get("primary_failure_bucket"),
+        failure_bucketing.get("primary_failure_bucket"),
+        run_state.get("primary_failure_bucket"),
+    )
+    failure_bucketing_primary_reason = _read_text(
+        failure_bucketing.get("failure_bucketing_primary_reason"),
+        run_state.get("failure_bucketing_primary_reason"),
+    )
+    reconcile_status = _read_text(
+        reconcile.get("reconcile_status"),
+        run_state.get("reconcile_status"),
+    )
+    reconcile_primary_mismatch = _read_text(
+        reconcile.get("reconcile_primary_mismatch"),
+        run_state.get("reconcile_primary_mismatch"),
+    )
+    repair_primary_reason = _read_text(
+        repair.get("repair_primary_reason"),
+        run_state.get("repair_primary_reason"),
+    )
+    repair_plan_primary_reason = _read_text(
+        repair_plan.get("repair_plan_primary_reason"),
+        run_state.get("repair_plan_primary_reason"),
+    )
+    repair_approval_binding_status = _read_text(
+        repair_binding.get("repair_approval_binding_status"),
+        run_state.get("repair_approval_binding_status"),
+    )
+    repair_approval_binding_primary_reason = _read_text(
+        repair_binding.get("repair_approval_binding_primary_reason"),
+        run_state.get("repair_approval_binding_primary_reason"),
+    )
+
+    _add_stale_reason(
+        primary_failure_bucket == "approval_blocker",
+        "failure_bucket_approval_blocker",
+    )
+    _add_stale_reason(
+        _contains_marker(failure_bucketing_primary_reason, "approval_blocker"),
+        "failure_bucketing_primary_reason_approval_blocker",
+    )
+    _add_stale_reason(
+        reconcile_status == "blocked"
+        and reconcile_primary_mismatch == "completion_evidence_partial",
+        "reconcile_blocked_completion_evidence_partial",
+    )
+    _add_stale_reason(
+        repair_primary_reason == "completion_not_safely_closed",
+        "repair_completion_not_safely_closed",
+    )
+    _add_stale_reason(
+        repair_plan_primary_reason == "completion_not_safely_closed",
+        "repair_plan_completion_not_safely_closed",
+    )
+    _add_stale_reason(
+        repair_approval_binding_status == "missing"
+        and repair_approval_binding_primary_reason == "missing_approval",
+        "repair_approval_binding_missing_approval",
+    )
+
+    active_blocked_reasons: list[str] = []
+
+    def _add_active_reason(condition: bool, reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if condition and normalized_reason and normalized_reason not in active_blocked_reasons:
+            active_blocked_reasons.append(normalized_reason)
+
+    _add_active_reason(
+        prompt355_readiness_status != "ready",
+        "prompt355_readiness_status_not_ready",
+    )
+    _add_active_reason(
+        not prompt355_next_cycle_allowed,
+        "prompt355_next_cycle_not_allowed",
+    )
+    _add_active_reason(
+        prompt355_next_action != "proceed_to_next_local_cycle",
+        "prompt355_next_action_not_proceed_to_next_local_cycle",
+    )
+    _add_active_reason(
+        prompt355_manual_required,
+        "prompt355_manual_required",
+    )
+    _add_active_reason(
+        prompt355_replan_required,
+        "prompt355_replan_required",
+    )
+    _add_active_reason(
+        verification_status != "verified_success",
+        "verification_status_not_verified_success",
+    )
+    _add_active_reason(
+        verification_outcome != "objective_satisfied",
+        "verification_outcome_not_objective_satisfied",
+    )
+    _add_active_reason(
+        verification_primary_reason != "verified_success",
+        "verification_primary_reason_not_verified_success",
+    )
+    _add_active_reason(
+        closure_status != "safely_closable",
+        "closure_status_not_safely_closable",
+    )
+    _add_active_reason(
+        not safely_closable,
+        "safely_closable_false",
+    )
+    _add_active_reason(
+        completion_status != "done_and_safely_closed",
+        "completion_status_not_done_and_safely_closed",
+    )
+    _add_active_reason(
+        safe_closure_status != "safely_closed",
+        "safe_closure_status_not_safely_closed",
+    )
+    _add_active_reason(
+        endgame_closure_status != "safely_closed" and not terminal_success,
+        "endgame_closure_not_safely_closed_or_terminal_success",
+    )
+    _add_active_reason(
+        not _is_clear_reason(execution_authorization_blocked_reason),
+        "execution_authorization_blocked_reason_present",
+    )
+    _add_active_reason(
+        not _is_clear_reason(bounded_execution_blocked_reason),
+        "bounded_execution_blocked_reason_present",
+    )
+
+    if authoritative_ready:
+        alignment_status = "aligned"
+        next_cycle_safe = True
+        stale_blockers_ignored = bool(stale_blocker_reasons)
+        active_blocked_reason = ""
+        active_blocked_reasons = []
+        manual_required = False
+        replan_required = False
+        next_action = "proceed_to_next_local_cycle"
+        if stale_blocker_reasons:
+            summary = (
+                "Prompt356 aligned: local-only terminal success is authoritative and "
+                "stale blocker surfaces are ignored_for_local_only_next_cycle: "
+                + ", ".join(stale_blocker_reasons)
+            )
+        else:
+            summary = (
+                "Prompt356 aligned: Prompt355 ready terminal success is authoritative "
+                "for next local-only cycle routing."
+            )
+    else:
+        alignment_status = "blocked"
+        next_cycle_safe = False
+        stale_blockers_ignored = False
+        active_blocked_reason = active_blocked_reasons[0] if active_blocked_reasons else "prompt356_authoritative_ready_evidence_missing"
+        if not active_blocked_reasons:
+            active_blocked_reasons = [active_blocked_reason]
+        manual_required = bool(prompt355_manual_required)
+        replan_required = bool(prompt355_replan_required)
+        next_action = "hold_for_followup"
+        summary = "Prompt356 blocked: " + ", ".join(active_blocked_reasons)
+
+    return {
+        "prompt356_alignment_status": alignment_status,
+        "prompt356_next_cycle_safe": bool(next_cycle_safe),
+        "prompt356_stale_blockers_present": bool(stale_blocker_reasons),
+        "prompt356_stale_blockers_ignored": bool(stale_blockers_ignored),
+        "prompt356_stale_blocker_reasons": _normalize_string_list(stale_blocker_reasons),
+        "prompt356_active_blocked_reason": active_blocked_reason,
+        "prompt356_active_blocked_reasons": _normalize_string_list(active_blocked_reasons),
+        "prompt356_authoritative_source": "prompt355_ready_terminal_success",
+        "prompt356_scope": "local_only",
+        "prompt356_manual_required": bool(manual_required),
+        "prompt356_replan_required": bool(replan_required),
+        "prompt356_next_action": next_action,
+        "prompt356_summary": summary,
+    }
+
+
 def _approval_delivery_noop_adapter(
     handoff_payload: Mapping[str, Any],
 ) -> Mapping[str, Any]:
@@ -204678,6 +205009,34 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt355_readiness_payload,
         }
+        prompt356_stale_blocker_alignment_path = (
+            run_root / "prompt356_stale_blocker_alignment.json"
+        )
+        prompt356_stale_blocker_alignment_payload = (
+            _build_prompt356_stale_blocker_alignment_surface(
+                run_state_payload=run_state_payload,
+                prompt355_readiness_payload=prompt355_readiness_payload,
+                completion_contract_payload=completion_contract_payload,
+                execution_authorization_gate_payload=execution_authorization_gate_payload,
+                bounded_execution_bridge_payload=bounded_execution_bridge_payload,
+                verification_closure_contract_payload=verification_closure_contract_payload,
+                endgame_closure_contract_payload=endgame_closure_contract_payload,
+                failure_bucket_rollup_payload=failure_bucket_rollup_payload,
+                failure_bucketing_hardening_payload=failure_bucketing_hardening_payload,
+                reconcile_contract_payload=reconcile_contract_payload,
+                repair_suggestion_contract_payload=repair_suggestion_contract_payload,
+                repair_plan_transport_payload=repair_plan_transport_payload,
+                repair_approval_binding_payload=repair_approval_binding_payload,
+            )
+        )
+        _write_json(
+            prompt356_stale_blocker_alignment_path,
+            prompt356_stale_blocker_alignment_payload,
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt356_stale_blocker_alignment_payload,
+        }
         run_state_payload = _augment_run_state_with_operator_explainability(
             run_state_payload=run_state_payload,
         )
@@ -204758,6 +205117,12 @@ class PlannedExecutionRunner:
         )
         manifest["prompt355_readiness_summary"] = dict(prompt355_readiness_payload)
         manifest["prompt355_readiness_path"] = str(prompt355_readiness_path)
+        manifest["prompt356_stale_blocker_alignment_summary"] = dict(
+            prompt356_stale_blocker_alignment_payload
+        )
+        manifest["prompt356_stale_blocker_alignment_path"] = str(
+            prompt356_stale_blocker_alignment_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -204902,6 +205267,22 @@ class PlannedExecutionRunner:
                 prompt355_readiness_payload.get("prompt355_next_action"),
                 default="hold_for_followup",
             ),
+            "prompt356_alignment_status": _normalize_text(
+                prompt356_stale_blocker_alignment_payload.get(
+                    "prompt356_alignment_status"
+                ),
+                default="blocked",
+            ),
+            "prompt356_next_action": _normalize_text(
+                prompt356_stale_blocker_alignment_payload.get("prompt356_next_action"),
+                default="hold_for_followup",
+            ),
+            "prompt356_stale_blockers_ignored": bool(
+                prompt356_stale_blocker_alignment_payload.get(
+                    "prompt356_stale_blockers_ignored",
+                    False,
+                )
+            ),
         }
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -204920,6 +205301,42 @@ class PlannedExecutionRunner:
             ),
             "prompt355_replan_required": bool(
                 prompt355_readiness_payload.get("prompt355_replan_required", False)
+            ),
+            "prompt356_next_cycle_safe": bool(
+                prompt356_stale_blocker_alignment_payload.get(
+                    "prompt356_next_cycle_safe",
+                    False,
+                )
+            ),
+            "prompt356_stale_blockers_present": bool(
+                prompt356_stale_blocker_alignment_payload.get(
+                    "prompt356_stale_blockers_present",
+                    False,
+                )
+            ),
+            "prompt356_stale_blockers_ignored": bool(
+                prompt356_stale_blocker_alignment_payload.get(
+                    "prompt356_stale_blockers_ignored",
+                    False,
+                )
+            ),
+            "prompt356_manual_required": bool(
+                prompt356_stale_blocker_alignment_payload.get(
+                    "prompt356_manual_required",
+                    False,
+                )
+            ),
+            "prompt356_replan_required": bool(
+                prompt356_stale_blocker_alignment_payload.get(
+                    "prompt356_replan_required",
+                    False,
+                )
+            ),
+            "prompt356_active_blocked_reason": _normalize_text(
+                prompt356_stale_blocker_alignment_payload.get(
+                    "prompt356_active_blocked_reason"
+                ),
+                default="",
             ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(

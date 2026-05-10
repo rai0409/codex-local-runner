@@ -226,6 +226,19 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *APPROVAL_SAFETY_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *LIFECYCLE_SUMMARY_SAFE_FIELDS,
     *OPERATOR_SUMMARY_SAFE_FIELDS,
+    "prompt356_alignment_status",
+    "prompt356_next_cycle_safe",
+    "prompt356_stale_blockers_present",
+    "prompt356_stale_blockers_ignored",
+    "prompt356_stale_blocker_reasons",
+    "prompt356_active_blocked_reason",
+    "prompt356_active_blocked_reasons",
+    "prompt356_authoritative_source",
+    "prompt356_scope",
+    "prompt356_manual_required",
+    "prompt356_replan_required",
+    "prompt356_next_action",
+    "prompt356_summary",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -262,6 +275,20 @@ def _normalize_bool(value: Any) -> bool:
         if normalized in {"0", "false", "no"}:
             return False
     return False
+
+
+def _normalize_string_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = _normalize_text(item)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
 
 
 def is_manifest_summary_safe_field(field_name: str) -> bool:
@@ -684,6 +711,15 @@ def select_manifest_run_state_summary_compact(
         "lifecycle_replan_required",
         "lifecycle_execution_complete_not_closed",
         "lifecycle_rollback_complete_not_closed",
+        "prompt356_next_cycle_safe",
+        "prompt356_stale_blockers_present",
+        "prompt356_stale_blockers_ignored",
+        "prompt356_manual_required",
+        "prompt356_replan_required",
+    }
+    list_fields = {
+        "prompt356_stale_blocker_reasons",
+        "prompt356_active_blocked_reasons",
     }
 
     summary: dict[str, Any] = {}
@@ -693,6 +729,8 @@ def select_manifest_run_state_summary_compact(
             summary[field] = _normalize_non_negative_int(value)
         elif field in bool_fields:
             summary[field] = _normalize_bool(value)
+        elif field in list_fields:
+            summary[field] = _normalize_string_list(value)
         else:
             summary[field] = _normalize_text(value)
     _apply_compact_stabilization(summary)
