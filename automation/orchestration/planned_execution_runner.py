@@ -23741,9 +23741,12 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             local_post_codex_route_approve_commit_tag_allowed,
         )
     )
-    local_targeted_contract_fix_prompt_state = _build_local_targeted_contract_fix_prompt_artifacts(
-        one_cycle_controller_dir=one_cycle_controller_dir
-    )
+    if local_targeted_contract_fix_prompt_state is None:
+        local_targeted_contract_fix_prompt_state = (
+            _build_local_targeted_contract_fix_prompt_artifacts(
+                one_cycle_controller_dir=one_cycle_controller_dir
+            )
+        )
     local_targeted_contract_fix_route_intake_status = _normalize_text(
         local_targeted_contract_fix_prompt_state.get("route_intake_status"),
         default=local_targeted_contract_fix_route_intake_status,
@@ -26446,6 +26449,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             )
         except OSError:
             pass
+    local_targeted_contract_fix_prompt_state: dict[str, Any] | None = None
     (
         refreshed_post_execution_handoff,
         prompt334_post_write_reconciliation_state,
@@ -26573,6 +26577,11 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             refreshed_post_execution_handoff.get(
                 "local_post_codex_route_approve_commit_tag_allowed",
                 local_post_codex_route_approve_commit_tag_allowed,
+            )
+        )
+        local_targeted_contract_fix_prompt_state = (
+            _build_local_targeted_contract_fix_prompt_artifacts(
+                one_cycle_controller_dir=one_cycle_controller_dir
             )
         )
     local_codex_one_shot_execution_status = _normalize_text(
