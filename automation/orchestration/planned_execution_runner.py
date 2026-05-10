@@ -38570,6 +38570,241 @@ def _build_prompt358_selected_prompt_contract(
     }
 
 
+def _build_prompt359_bounded_selected_step_execution_contract(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    prompt358_selected_prompt_contract_path: Path | None = None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+
+    def _read_text(*values: Any, default: str = "") -> str:
+        for value in values:
+            text = _normalize_text(value, default="")
+            if text:
+                return text
+        return default
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    prompt358_selection_status = _read_text(
+        run_state.get("prompt358_selection_status"),
+    )
+    prompt358_next_local_cycle_prepared = _prompt357_as_boolish(
+        run_state.get("prompt358_next_local_cycle_prepared")
+    )
+    prompt358_selected_step_operation = _read_text(
+        run_state.get("prompt358_selected_step_operation"),
+    )
+    prompt358_selected_prompt_id = _read_text(
+        run_state.get("prompt358_selected_prompt_id"),
+    )
+    prompt358_selected_prompt_title = _read_text(
+        run_state.get("prompt358_selected_prompt_title"),
+    )
+    prompt358_authoritative_next_action = _read_text(
+        run_state.get("prompt358_authoritative_next_action"),
+    )
+    prompt358_next_action = _read_text(
+        run_state.get("prompt358_next_action"),
+    )
+    prompt358_codex_execution_allowed = _prompt357_as_boolish(
+        run_state.get("prompt358_codex_execution_allowed")
+    )
+    prompt358_selected_prompt_execution_allowed = _prompt357_as_boolish(
+        run_state.get("prompt358_selected_prompt_execution_allowed")
+    )
+    prompt358_prompt_generation_execution_allowed = _prompt357_as_boolish(
+        run_state.get("prompt358_prompt_generation_execution_allowed")
+    )
+    prompt358_manual_required = _prompt357_as_boolish(
+        run_state.get("prompt358_manual_required")
+    )
+    prompt358_replan_required = _prompt357_as_boolish(
+        run_state.get("prompt358_replan_required")
+    )
+    prompt358_active_blocked_reason = _read_text(
+        run_state.get("prompt358_active_blocked_reason"),
+    )
+    prompt358_active_blocked_reasons = _normalize_string_list(
+        run_state.get("prompt358_active_blocked_reasons"),
+        sort_items=False,
+    )
+    prompt358_recovered_evidence_used = _prompt357_as_boolish(
+        run_state.get("prompt358_recovered_evidence_used")
+    )
+    prompt358_recovered_prompt355_source = _read_text(
+        run_state.get("prompt358_recovered_prompt355_source"),
+    )
+    prompt358_recovered_prompt356_source = _read_text(
+        run_state.get("prompt358_recovered_prompt356_source"),
+    )
+    prompt358_recovered_prompt357_source = _read_text(
+        run_state.get("prompt358_recovered_prompt357_source"),
+    )
+
+    active_blocked_reasons: list[str] = []
+    if prompt358_selection_status != "ready":
+        _append_reason(active_blocked_reasons, "prompt358_selection_status_not_ready")
+    if not prompt358_next_local_cycle_prepared:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_next_local_cycle_prepared_not_true",
+        )
+    if prompt358_selected_step_operation != "emit_selected_prompt_contract":
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_selected_step_operation_not_emit_selected_prompt_contract",
+        )
+    if prompt358_selected_prompt_id != "prompt359":
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_selected_prompt_id_not_prompt359",
+        )
+    if prompt358_selected_prompt_title != "bounded_selected_step_execution_contract":
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_selected_prompt_title_not_bounded_selected_step_execution_contract",
+        )
+    if prompt358_authoritative_next_action != "emit_selected_prompt_contract":
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_authoritative_next_action_not_emit_selected_prompt_contract",
+        )
+    if prompt358_next_action != "prepare_prompt359_contract":
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_next_action_not_prepare_prompt359_contract",
+        )
+    if prompt358_codex_execution_allowed:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_codex_execution_allowed_true",
+        )
+    if prompt358_selected_prompt_execution_allowed:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_selected_prompt_execution_allowed_true",
+        )
+    if prompt358_prompt_generation_execution_allowed:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_prompt_generation_execution_allowed_true",
+        )
+    if prompt358_manual_required:
+        _append_reason(active_blocked_reasons, "prompt358_manual_required")
+    if prompt358_replan_required:
+        _append_reason(active_blocked_reasons, "prompt358_replan_required")
+    if prompt358_active_blocked_reason:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_active_blocked_reason_present",
+        )
+    if prompt358_active_blocked_reasons:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_active_blocked_reasons_present",
+        )
+    if not prompt358_recovered_evidence_used:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_recovered_evidence_used_not_true",
+        )
+    if not prompt358_recovered_prompt355_source:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_recovered_prompt355_source_missing",
+        )
+    if not prompt358_recovered_prompt356_source:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_recovered_prompt356_source_missing",
+        )
+    if not prompt358_recovered_prompt357_source:
+        _append_reason(
+            active_blocked_reasons,
+            "prompt358_recovered_prompt357_source_missing",
+        )
+
+    contract_ready = not active_blocked_reasons
+    prompt358_selected_prompt_contract_path_text = _normalize_text(
+        str(prompt358_selected_prompt_contract_path)
+        if prompt358_selected_prompt_contract_path is not None
+        else "",
+        default="",
+    )
+
+    if contract_ready:
+        contract_status = "ready"
+        selected_step_execution_contract_ready = True
+        selected_step_operation = "prepare_bounded_codex_live_execution"
+        authoritative_next_action = "prepare_bounded_codex_live_execution"
+        next_action = "prepare_prompt360_codex_live_execution_gate"
+        manual_required = False
+        replan_required = False
+        active_blocked_reason = ""
+        normalized_active_blocked_reasons: list[str] = []
+    else:
+        contract_status = "blocked"
+        selected_step_execution_contract_ready = False
+        selected_step_operation = "blocked"
+        authoritative_next_action = "hold_for_followup"
+        next_action = "hold_for_followup"
+        manual_required = True
+        replan_required = False
+        active_blocked_reason = active_blocked_reasons[0]
+        normalized_active_blocked_reasons = _normalize_string_list(
+            active_blocked_reasons,
+            sort_items=False,
+        )
+
+    return {
+        "prompt359_contract_status": contract_status,
+        "prompt359_selected_step_execution_contract_ready": bool(
+            selected_step_execution_contract_ready
+        ),
+        "prompt359_selected_step_operation": selected_step_operation,
+        "prompt359_source_prompt": "prompt358",
+        "prompt359_source_action": "prepare_prompt359_contract",
+        "prompt359_authoritative_next_action": authoritative_next_action,
+        "prompt359_next_action": next_action,
+        "prompt359_local_only": True,
+        "prompt359_codex_execution_allowed": False,
+        "prompt359_live_execution_allowed": False,
+        "prompt359_selected_step_execution_allowed": False,
+        "prompt359_prompt_generation_execution_allowed": False,
+        "prompt359_commit_tag_automation_allowed": False,
+        "prompt359_commit_tag_manual_step_allowed": False,
+        "prompt359_github_operations_required": False,
+        "prompt359_remote_operations_required": False,
+        "prompt359_push_required": False,
+        "prompt359_pr_required": False,
+        "prompt359_merge_required": False,
+        "prompt359_rollback_required": False,
+        "prompt359_manual_required": bool(manual_required),
+        "prompt359_replan_required": bool(replan_required),
+        "prompt359_active_blocked_reason": active_blocked_reason,
+        "prompt359_active_blocked_reasons": normalized_active_blocked_reasons,
+        "prompt359_prompt358_recovered_evidence_used": bool(
+            prompt358_recovered_evidence_used
+        ),
+        "prompt359_prompt358_recovered_prompt355_source": (
+            prompt358_recovered_prompt355_source
+        ),
+        "prompt359_prompt358_recovered_prompt356_source": (
+            prompt358_recovered_prompt356_source
+        ),
+        "prompt359_prompt358_recovered_prompt357_source": (
+            prompt358_recovered_prompt357_source
+        ),
+        "prompt359_prompt358_selected_prompt_contract_path": (
+            prompt358_selected_prompt_contract_path_text
+        ),
+    }
+
+
 def _approval_delivery_noop_adapter(
     handoff_payload: Mapping[str, Any],
 ) -> Mapping[str, Any]:
@@ -206950,6 +207185,25 @@ class PlannedExecutionRunner:
             prompt358_selected_prompt_contract_path,
             prompt358_selected_prompt_contract_payload,
         )
+        prompt359_bounded_selected_step_execution_contract_path = (
+            run_root / "prompt359_bounded_selected_step_execution_contract.json"
+        )
+        prompt359_bounded_selected_step_execution_contract_payload = (
+            _build_prompt359_bounded_selected_step_execution_contract(
+                run_state_payload=run_state_payload,
+                prompt358_selected_prompt_contract_path=(
+                    prompt358_selected_prompt_contract_path
+                ),
+            )
+        )
+        _write_json(
+            prompt359_bounded_selected_step_execution_contract_path,
+            prompt359_bounded_selected_step_execution_contract_payload,
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt359_bounded_selected_step_execution_contract_payload,
+        }
         run_state_payload = _augment_run_state_with_operator_explainability(
             run_state_payload=run_state_payload,
         )
@@ -207054,6 +207308,12 @@ class PlannedExecutionRunner:
         manifest["prompt358_selected_prompt_contract_path"] = str(
             prompt358_selected_prompt_contract_path
         )
+        manifest["prompt359_bounded_selected_step_execution_contract_summary"] = dict(
+            prompt359_bounded_selected_step_execution_contract_payload
+        )
+        manifest["prompt359_bounded_selected_step_execution_contract_path"] = str(
+            prompt359_bounded_selected_step_execution_contract_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -207081,6 +207341,9 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["approval_safety_contract"] = manifest.get(
             "approval_safety_contract_summary"
         )
+        contract_summaries_by_role[
+            "prompt359_bounded_selected_step_execution_contract"
+        ] = manifest.get("prompt359_bounded_selected_step_execution_contract_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -207108,6 +207371,9 @@ class PlannedExecutionRunner:
         contract_paths_by_role["approval_safety_contract"] = manifest.get(
             "approval_safety_contract_path"
         )
+        contract_paths_by_role[
+            "prompt359_bounded_selected_step_execution_contract"
+        ] = manifest.get("prompt359_bounded_selected_step_execution_contract_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -207304,6 +207570,30 @@ class PlannedExecutionRunner:
                 ),
                 default="hold_for_followup",
             ),
+            "prompt359_contract_status": _normalize_text(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_contract_status"
+                ),
+                default="blocked",
+            ),
+            "prompt359_selected_step_operation": _normalize_text(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_selected_step_operation"
+                ),
+                default="blocked",
+            ),
+            "prompt359_authoritative_next_action": _normalize_text(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_authoritative_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt359_next_action": _normalize_text(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_next_action"
+                ),
+                default="hold_for_followup",
+            ),
         }
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -207482,6 +207772,54 @@ class PlannedExecutionRunner:
             "prompt358_active_blocked_reason": _normalize_text(
                 prompt358_next_local_cycle_selection_payload.get(
                     "prompt358_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt359_contract_status": _normalize_text(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_contract_status"
+                ),
+                default="blocked",
+            ),
+            "prompt359_selected_step_execution_contract_ready": bool(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_selected_step_execution_contract_ready",
+                    False,
+                )
+            ),
+            "prompt359_next_action": _normalize_text(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt359_codex_execution_allowed": bool(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt359_live_execution_allowed": bool(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_live_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt359_manual_required": bool(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_manual_required",
+                    False,
+                )
+            ),
+            "prompt359_replan_required": bool(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_replan_required",
+                    False,
+                )
+            ),
+            "prompt359_active_blocked_reason": _normalize_text(
+                prompt359_bounded_selected_step_execution_contract_payload.get(
+                    "prompt359_active_blocked_reason"
                 ),
                 default="",
             ),
