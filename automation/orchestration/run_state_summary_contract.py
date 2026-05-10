@@ -405,6 +405,31 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt362_active_blocked_reason",
     "prompt362_active_blocked_reasons",
     "prompt362_summary",
+    "prompt363_boundary_status",
+    "prompt363_source_prompt",
+    "prompt363_source_action",
+    "prompt363_prompt362_review_status",
+    "prompt363_prompt362_route_decision",
+    "prompt363_prompt362_source_path",
+    "prompt363_recovered_prompt362_evidence_used",
+    "prompt363_approve_commit_tag_plan_ready",
+    "prompt363_commit_tag_execution_allowed",
+    "prompt363_commit_tag_execution_attempted",
+    "prompt363_commit_tag_execution_status",
+    "prompt363_commit_message",
+    "prompt363_tag_name",
+    "prompt363_expected_tracked_files",
+    "prompt363_actual_tracked_files",
+    "prompt363_untracked_files_ignored",
+    "prompt363_plan_path",
+    "prompt363_commands_path",
+    "prompt363_authoritative_next_action",
+    "prompt363_next_action",
+    "prompt363_manual_required",
+    "prompt363_replan_required",
+    "prompt363_active_blocked_reason",
+    "prompt363_active_blocked_reasons",
+    "prompt363_summary",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -951,6 +976,13 @@ def select_manifest_run_state_summary_compact(
         "prompt362_no_change_review_ready",
         "prompt362_manual_required",
         "prompt362_replan_required",
+        "prompt363_recovered_prompt362_evidence_used",
+        "prompt363_approve_commit_tag_plan_ready",
+        "prompt363_commit_tag_execution_allowed",
+        "prompt363_commit_tag_execution_attempted",
+        "prompt363_untracked_files_ignored",
+        "prompt363_manual_required",
+        "prompt363_replan_required",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -967,6 +999,9 @@ def select_manifest_run_state_summary_compact(
         "prompt362_prompt361_changed_tracked_files",
         "prompt362_review_findings",
         "prompt362_active_blocked_reasons",
+        "prompt363_expected_tracked_files",
+        "prompt363_actual_tracked_files",
+        "prompt363_active_blocked_reasons",
     }
 
     summary: dict[str, Any] = {}

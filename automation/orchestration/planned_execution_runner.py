@@ -3608,6 +3608,34 @@ _PROMPT362_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt362_summary",
 )
 
+_PROMPT363_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt363_boundary_status",
+    "prompt363_source_prompt",
+    "prompt363_source_action",
+    "prompt363_prompt362_review_status",
+    "prompt363_prompt362_route_decision",
+    "prompt363_prompt362_source_path",
+    "prompt363_recovered_prompt362_evidence_used",
+    "prompt363_approve_commit_tag_plan_ready",
+    "prompt363_commit_tag_execution_allowed",
+    "prompt363_commit_tag_execution_attempted",
+    "prompt363_commit_tag_execution_status",
+    "prompt363_commit_message",
+    "prompt363_tag_name",
+    "prompt363_expected_tracked_files",
+    "prompt363_actual_tracked_files",
+    "prompt363_untracked_files_ignored",
+    "prompt363_plan_path",
+    "prompt363_commands_path",
+    "prompt363_authoritative_next_action",
+    "prompt363_next_action",
+    "prompt363_manual_required",
+    "prompt363_replan_required",
+    "prompt363_active_blocked_reason",
+    "prompt363_active_blocked_reasons",
+    "prompt363_summary",
+)
+
 _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_status",
     "project_browser_autonomous_one_cycle_controller_next_action",
@@ -5224,6 +5252,23 @@ def _merge_prompt362_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT362_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt363_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt363_approve_commit_tag_boundary_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt363_approve_commit_tag_boundary_state)
+        if isinstance(prompt363_approve_commit_tag_boundary_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT363_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -41321,6 +41366,581 @@ def _merge_prompt362_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt362_no_change_review_ready"
             if bool(prompt362.get("prompt362_no_change_review_ready", False))
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _build_prompt363_approve_commit_tag_boundary(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str = "",
+    current_prompt362_source_path: str = "",
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt363_boundary_path = artifact_root / "prompt363_approve_commit_tag_boundary.json"
+    prompt363_plan_path = artifact_root / "prompt363_approve_commit_tag_plan.json"
+    prompt363_commands_path = artifact_root / "prompt363_approve_commit_tag_commands.sh"
+    normalized_plan_path = _normalize_text(str(prompt363_plan_path), default="")
+    normalized_commands_path = _normalize_text(str(prompt363_commands_path), default="")
+    expected_tracked_files = [
+        "automation/orchestration/planned_execution_runner.py",
+        "automation/orchestration/run_state_summary_contract.py",
+    ]
+    commit_message = "Add Prompt361 and Prompt362 post execution review route"
+    tag_name = "prompt362-post-execution-review-route"
+    commands_lines = [
+        "cd ~/codex-local-runner",
+        "git status --short --untracked-files=no",
+        "git diff --name-only",
+        "git add automation/orchestration/planned_execution_runner.py automation/orchestration/run_state_summary_contract.py",
+        'git commit -m "Add Prompt361 and Prompt362 post execution review route"',
+        "git tag prompt362-post-execution-review-route",
+        "git log --oneline --decorate -n 5",
+        "git status --short --untracked-files=no",
+    ]
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt362_surface(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(payload) if isinstance(payload, Mapping) else {}
+        return {
+            "prompt362_review_status": _normalize_text(
+                source.get("prompt362_review_status"),
+                default="",
+            ),
+            "prompt362_route_decision": _normalize_text(
+                source.get("prompt362_route_decision"),
+                default="",
+            ),
+            "prompt362_review_handoff_ready": _prompt357_as_boolish(
+                source.get("prompt362_review_handoff_ready")
+            ),
+            "prompt362_requires_targeted_fix": _prompt357_as_boolish(
+                source.get("prompt362_requires_targeted_fix")
+            ),
+            "prompt362_approve_commit_tag_ready": _prompt357_as_boolish(
+                source.get("prompt362_approve_commit_tag_ready")
+            ),
+            "prompt362_no_change_review_ready": _prompt357_as_boolish(
+                source.get("prompt362_no_change_review_ready")
+            ),
+            "prompt362_authoritative_next_action": _normalize_text(
+                source.get("prompt362_authoritative_next_action"),
+                default="",
+            ),
+            "prompt362_next_action": _normalize_text(
+                source.get("prompt362_next_action"),
+                default="",
+            ),
+            "prompt362_manual_required": _prompt357_as_boolish(
+                source.get("prompt362_manual_required")
+            ),
+            "prompt362_replan_required": _prompt357_as_boolish(
+                source.get("prompt362_replan_required")
+            ),
+            "prompt362_active_blocked_reason": _normalize_text(
+                source.get("prompt362_active_blocked_reason"),
+                default="",
+            ),
+            "prompt362_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt362_active_blocked_reasons"),
+                sort_items=False,
+            ),
+            "prompt362_prompt361_changed_tracked_files": _normalize_string_list(
+                source.get("prompt362_prompt361_changed_tracked_files"),
+                sort_items=False,
+            ),
+            "prompt362_prompt361_patch_path": _normalize_text(
+                source.get("prompt362_prompt361_patch_path"),
+                default="",
+            ),
+            "prompt362_prompt361_diff_report_path": _normalize_text(
+                source.get("prompt362_prompt361_diff_report_path"),
+                default="",
+            ),
+        }
+
+    def _valid_prompt362_approve_commit_tag_payload(
+        payload: Mapping[str, Any] | None,
+    ) -> bool:
+        if not isinstance(payload, Mapping):
+            return False
+        active_blocked_reasons = payload.get("prompt362_active_blocked_reasons")
+        changed_tracked_files = _normalize_string_list(
+            payload.get("prompt362_prompt361_changed_tracked_files"),
+            sort_items=False,
+        )
+        return all(
+            (
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt362_review_status",
+                    "completed",
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt362_route_decision",
+                    "approve_commit_tag",
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt362_review_handoff_ready",
+                    True,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt362_requires_targeted_fix",
+                    False,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt362_approve_commit_tag_ready",
+                    True,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt362_no_change_review_ready",
+                    False,
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt362_authoritative_next_action",
+                    "prepare_approve_commit_tag",
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt362_next_action",
+                    "prepare_approve_commit_tag",
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt362_manual_required",
+                    False,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt362_replan_required",
+                    False,
+                ),
+                "prompt362_active_blocked_reason" in payload,
+                _normalize_text(
+                    payload.get("prompt362_active_blocked_reason"),
+                    default="",
+                )
+                == "",
+                isinstance(active_blocked_reasons, list),
+                _normalize_string_list(active_blocked_reasons, sort_items=False) == [],
+                bool(changed_tracked_files),
+                bool(
+                    _normalize_text(
+                        payload.get("prompt362_prompt361_patch_path"),
+                        default="",
+                    )
+                ),
+                bool(
+                    _normalize_text(
+                        payload.get("prompt362_prompt361_diff_report_path"),
+                        default="",
+                    )
+                ),
+            )
+        )
+
+    def _resolve_prompt363_recovered_prompt362_evidence() -> tuple[dict[str, Any], str]:
+        payload, source = _prompt358_find_latest_valid_prior_artifact(
+            filename="prompt362_review_route_decision.json",
+            validator=_valid_prompt362_approve_commit_tag_payload,
+        )
+        return _normalize_prompt362_surface(payload), _normalize_text(source, default="")
+
+    def _derive_prompt362_invalid_reasons(
+        surface: Mapping[str, Any] | None,
+    ) -> list[str]:
+        normalized = dict(surface) if isinstance(surface, Mapping) else {}
+        reasons: list[str] = []
+        review_status = _normalize_text(normalized.get("prompt362_review_status"), default="")
+        if not review_status:
+            _append_reason(reasons, "prompt362_review_status_missing")
+        elif review_status != "completed":
+            _append_reason(reasons, f"prompt362_review_status_{review_status}")
+
+        route_decision = _normalize_text(normalized.get("prompt362_route_decision"), default="")
+        if not route_decision:
+            _append_reason(reasons, "prompt362_route_decision_missing")
+        elif route_decision != "approve_commit_tag":
+            _append_reason(reasons, f"prompt362_route_decision_{route_decision}")
+
+        if "prompt362_review_handoff_ready" not in normalized:
+            _append_reason(reasons, "prompt362_review_handoff_ready_missing")
+        elif not bool(normalized.get("prompt362_review_handoff_ready", False)):
+            _append_reason(reasons, "prompt362_review_handoff_ready_not_true")
+
+        if bool(normalized.get("prompt362_requires_targeted_fix", False)):
+            _append_reason(reasons, "prompt362_requires_targeted_fix_true")
+        if not bool(normalized.get("prompt362_approve_commit_tag_ready", False)):
+            _append_reason(reasons, "prompt362_approve_commit_tag_ready_not_true")
+        if bool(normalized.get("prompt362_no_change_review_ready", False)):
+            _append_reason(reasons, "prompt362_no_change_review_ready_true")
+
+        authoritative_next_action = _normalize_text(
+            normalized.get("prompt362_authoritative_next_action"),
+            default="",
+        )
+        if not authoritative_next_action:
+            _append_reason(reasons, "prompt362_authoritative_next_action_missing")
+        elif authoritative_next_action != "prepare_approve_commit_tag":
+            _append_reason(
+                reasons,
+                f"prompt362_authoritative_next_action_{authoritative_next_action}",
+            )
+
+        next_action = _normalize_text(normalized.get("prompt362_next_action"), default="")
+        if not next_action:
+            _append_reason(reasons, "prompt362_next_action_missing")
+        elif next_action != "prepare_approve_commit_tag":
+            _append_reason(reasons, f"prompt362_next_action_{next_action}")
+
+        if bool(normalized.get("prompt362_manual_required", False)):
+            _append_reason(reasons, "prompt362_manual_required_true")
+        if bool(normalized.get("prompt362_replan_required", False)):
+            _append_reason(reasons, "prompt362_replan_required_true")
+
+        if "prompt362_active_blocked_reason" not in normalized:
+            _append_reason(reasons, "prompt362_active_blocked_reason_missing")
+        else:
+            active_blocked_reason = _normalize_text(
+                normalized.get("prompt362_active_blocked_reason"),
+                default="",
+            )
+            if active_blocked_reason:
+                _append_reason(reasons, active_blocked_reason)
+
+        active_blocked_reasons_raw = normalized.get("prompt362_active_blocked_reasons")
+        if not isinstance(active_blocked_reasons_raw, list):
+            _append_reason(reasons, "prompt362_active_blocked_reasons_missing_or_invalid")
+        else:
+            active_blocked_reasons = _normalize_string_list(
+                active_blocked_reasons_raw,
+                sort_items=False,
+            )
+            for active_reason in active_blocked_reasons:
+                _append_reason(reasons, active_reason)
+
+        if not _normalize_string_list(
+            normalized.get("prompt362_prompt361_changed_tracked_files"),
+            sort_items=False,
+        ):
+            _append_reason(reasons, "prompt362_prompt361_changed_tracked_files_missing")
+        if not _normalize_text(
+            normalized.get("prompt362_prompt361_patch_path"),
+            default="",
+        ):
+            _append_reason(reasons, "prompt362_prompt361_patch_path_missing")
+        if not _normalize_text(
+            normalized.get("prompt362_prompt361_diff_report_path"),
+            default="",
+        ):
+            _append_reason(reasons, "prompt362_prompt361_diff_report_path_missing")
+        if not reasons:
+            _append_reason(reasons, "prompt362_approve_commit_tag_evidence_missing")
+        return reasons
+
+    def _build_prompt363_state(
+        *,
+        boundary_status: str,
+        prompt362_surface: Mapping[str, Any],
+        prompt362_source_path: str,
+        recovered_prompt362_evidence_used: bool,
+        approve_commit_tag_plan_ready: bool,
+        actual_tracked_files: list[str],
+        next_action: str,
+        blocked_reasons: list[str],
+        summary: str,
+    ) -> dict[str, Any]:
+        normalized_blocked_reasons = _normalize_string_list(
+            blocked_reasons,
+            sort_items=False,
+        )
+        return {
+            "prompt363_boundary_status": _normalize_text(
+                boundary_status,
+                default="blocked",
+            ),
+            "prompt363_source_prompt": "prompt362",
+            "prompt363_source_action": "prepare_approve_commit_tag",
+            "prompt363_prompt362_review_status": _normalize_text(
+                prompt362_surface.get("prompt362_review_status"),
+                default="",
+            ),
+            "prompt363_prompt362_route_decision": _normalize_text(
+                prompt362_surface.get("prompt362_route_decision"),
+                default="",
+            ),
+            "prompt363_prompt362_source_path": _normalize_text(
+                prompt362_source_path,
+                default="",
+            ),
+            "prompt363_recovered_prompt362_evidence_used": bool(
+                recovered_prompt362_evidence_used
+            ),
+            "prompt363_approve_commit_tag_plan_ready": bool(
+                approve_commit_tag_plan_ready
+            ),
+            "prompt363_commit_tag_execution_allowed": False,
+            "prompt363_commit_tag_execution_attempted": False,
+            "prompt363_commit_tag_execution_status": "not_run",
+            "prompt363_commit_message": commit_message,
+            "prompt363_tag_name": tag_name,
+            "prompt363_expected_tracked_files": list(expected_tracked_files),
+            "prompt363_actual_tracked_files": list(actual_tracked_files),
+            "prompt363_untracked_files_ignored": True,
+            "prompt363_plan_path": normalized_plan_path,
+            "prompt363_commands_path": normalized_commands_path,
+            "prompt363_authoritative_next_action": _normalize_text(
+                next_action,
+                default="hold_for_followup",
+            ),
+            "prompt363_next_action": _normalize_text(
+                next_action,
+                default="hold_for_followup",
+            ),
+            "prompt363_manual_required": False,
+            "prompt363_replan_required": False,
+            "prompt363_active_blocked_reason": (
+                normalized_blocked_reasons[0] if normalized_blocked_reasons else ""
+            ),
+            "prompt363_active_blocked_reasons": normalized_blocked_reasons,
+            "prompt363_summary": _normalize_text(summary, default=""),
+        }
+
+    def _write_prompt363_artifacts(state: Mapping[str, Any]) -> None:
+        commands_text = "\n".join(commands_lines) + "\n"
+        prompt363_boundary_path.parent.mkdir(parents=True, exist_ok=True)
+        prompt363_commands_path.write_text(commands_text, encoding="utf-8")
+        _write_json(prompt363_boundary_path, state)
+        _write_json(prompt363_plan_path, state)
+
+    current_prompt362 = _normalize_prompt362_surface(run_state)
+    current_prompt362_source = _normalize_text(current_prompt362_source_path, default="")
+    current_prompt362_valid = _valid_prompt362_approve_commit_tag_payload(run_state)
+    recovered_prompt362, recovered_prompt362_source = ({}, "")
+    recovered_prompt362_used = False
+    if not current_prompt362_valid:
+        (
+            recovered_prompt362,
+            recovered_prompt362_source,
+        ) = _resolve_prompt363_recovered_prompt362_evidence()
+        recovered_prompt362_used = bool(recovered_prompt362_source)
+
+    effective_prompt362 = (
+        recovered_prompt362 if recovered_prompt362_used else current_prompt362
+    )
+    effective_prompt362_source = (
+        recovered_prompt362_source if recovered_prompt362_used else current_prompt362_source
+    )
+    effective_prompt362_valid = bool(
+        recovered_prompt362_used or current_prompt362_valid
+    )
+
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=str(Path.cwd()),
+    )
+    git_commands = {
+        "status_short": ["git", "status", "--short", "--untracked-files=no"],
+        "diff_name_only": ["git", "diff", "--name-only"],
+        "diff_stat": ["git", "diff", "--stat"],
+    }
+    git_outputs: dict[str, str] = {}
+    git_failed_reasons: list[str] = []
+    actual_tracked_files: list[str] = []
+    if not normalized_repo_path:
+        _append_reason(git_failed_reasons, "prompt363_execution_repo_path_missing")
+    else:
+        for command_key, command in git_commands.items():
+            completed = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            git_outputs[command_key] = completed.stdout or ""
+            if completed.returncode != 0:
+                _append_reason(
+                    git_failed_reasons,
+                    f"prompt363_{command_key}_command_failed",
+                )
+        if not git_failed_reasons:
+            changed_from_status = [
+                path_text
+                for path_text in (
+                    _parse_git_status_path(raw_line.rstrip("\n"))
+                    for raw_line in (git_outputs.get("status_short") or "").splitlines()
+                )
+                if path_text
+            ]
+            changed_from_diff = [
+                line.strip()
+                for line in (git_outputs.get("diff_name_only") or "").splitlines()
+                if line.strip()
+            ]
+            actual_tracked_files = _normalize_string_list(
+                sorted(set(changed_from_status + changed_from_diff)),
+                sort_items=True,
+            )
+
+    if not effective_prompt362_valid:
+        blocked_reasons = _derive_prompt362_invalid_reasons(current_prompt362)
+        if not recovered_prompt362_used:
+            _append_reason(
+                blocked_reasons,
+                "prompt363_valid_prompt362_recovery_artifact_not_found",
+            )
+        state = _build_prompt363_state(
+            boundary_status="blocked",
+            prompt362_surface=current_prompt362,
+            prompt362_source_path=current_prompt362_source,
+            recovered_prompt362_evidence_used=False,
+            approve_commit_tag_plan_ready=False,
+            actual_tracked_files=actual_tracked_files,
+            next_action="hold_for_followup",
+            blocked_reasons=blocked_reasons,
+            summary=(
+                "Prompt363 is blocked because no valid Prompt362 approve-commit-tag evidence is available from the current run_state or recovery artifacts."
+            ),
+        )
+        _write_prompt363_artifacts(state)
+        return state
+
+    if git_failed_reasons:
+        state = _build_prompt363_state(
+            boundary_status="blocked",
+            prompt362_surface=effective_prompt362,
+            prompt362_source_path=effective_prompt362_source,
+            recovered_prompt362_evidence_used=recovered_prompt362_used,
+            approve_commit_tag_plan_ready=False,
+            actual_tracked_files=actual_tracked_files,
+            next_action="hold_for_followup",
+            blocked_reasons=git_failed_reasons,
+            summary=(
+                "Prompt363 is blocked because bounded local git diff validation could not be completed."
+            ),
+        )
+        _write_prompt363_artifacts(state)
+        return state
+
+    if not actual_tracked_files:
+        state = _build_prompt363_state(
+            boundary_status="blocked",
+            prompt362_surface=effective_prompt362,
+            prompt362_source_path=effective_prompt362_source,
+            recovered_prompt362_evidence_used=recovered_prompt362_used,
+            approve_commit_tag_plan_ready=False,
+            actual_tracked_files=actual_tracked_files,
+            next_action="hold_for_followup",
+            blocked_reasons=["tracked_diff_missing"],
+            summary=(
+                "Prompt363 is blocked because the current tracked git diff is empty."
+            ),
+        )
+        _write_prompt363_artifacts(state)
+        return state
+
+    if actual_tracked_files != expected_tracked_files:
+        state = _build_prompt363_state(
+            boundary_status="blocked",
+            prompt362_surface=effective_prompt362,
+            prompt362_source_path=effective_prompt362_source,
+            recovered_prompt362_evidence_used=recovered_prompt362_used,
+            approve_commit_tag_plan_ready=False,
+            actual_tracked_files=actual_tracked_files,
+            next_action="hold_for_followup",
+            blocked_reasons=["unexpected_tracked_files_present"],
+            summary=(
+                "Prompt363 is blocked because the current tracked git diff does not match the expected two-file approve commit/tag boundary."
+            ),
+        )
+        _write_prompt363_artifacts(state)
+        return state
+
+    state = _build_prompt363_state(
+        boundary_status="ready",
+        prompt362_surface=effective_prompt362,
+        prompt362_source_path=effective_prompt362_source,
+        recovered_prompt362_evidence_used=recovered_prompt362_used,
+        approve_commit_tag_plan_ready=True,
+        actual_tracked_files=actual_tracked_files,
+        next_action="run_manual_commit_tag_commands",
+        blocked_reasons=[],
+        summary=(
+            "Prompt363 validated Prompt362 approve-commit-tag evidence, confirmed the exact tracked two-file diff, and wrote deterministic manual commit/tag plan artifacts without executing git mutation."
+        ),
+    )
+    _write_prompt363_artifacts(state)
+    return state
+
+
+def _merge_prompt363_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt363_approve_commit_tag_boundary_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt363 = (
+        dict(prompt363_approve_commit_tag_boundary_payload)
+        if isinstance(prompt363_approve_commit_tag_boundary_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT363_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt363 and prompt363.get(key) is not None:
+            payload[key] = prompt363.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt363_boundary_status"
+            if _normalize_text(prompt363.get("prompt363_boundary_status"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt363_prompt362_source_path"
+            if _normalize_text(
+                prompt363.get("prompt363_prompt362_source_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt363_recovered_prompt362_evidence_used"
+            if bool(prompt363.get("prompt363_recovered_prompt362_evidence_used", False))
+            else "",
+            "approved_restart_execution_contract.prompt363_approve_commit_tag_plan_ready"
+            if bool(prompt363.get("prompt363_approve_commit_tag_plan_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt363_commit_tag_execution_allowed"
+            if bool(prompt363.get("prompt363_commit_tag_execution_allowed", False))
+            else "",
+            "approved_restart_execution_contract.prompt363_next_action"
+            if _normalize_text(prompt363.get("prompt363_next_action"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt363_plan_path"
+            if _normalize_text(prompt363.get("prompt363_plan_path"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt363_commands_path"
+            if _normalize_text(prompt363.get("prompt363_commands_path"), default="")
             else "",
         ]
     )
@@ -209782,6 +210402,29 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt362_review_route_decision_payload,
         }
+        prompt363_approve_commit_tag_boundary_path = (
+            run_root / "prompt363_approve_commit_tag_boundary.json"
+        )
+        prompt363_approve_commit_tag_plan_path = (
+            run_root / "prompt363_approve_commit_tag_plan.json"
+        )
+        prompt363_approve_commit_tag_commands_path = (
+            run_root / "prompt363_approve_commit_tag_commands.sh"
+        )
+        prompt363_approve_commit_tag_boundary_payload = (
+            _build_prompt363_approve_commit_tag_boundary(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+                current_prompt362_source_path=str(
+                    prompt362_review_route_decision_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt363_approve_commit_tag_boundary_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -209801,6 +210444,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt362_review_route_state=(
                     prompt362_review_route_decision_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt363_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt363_approve_commit_tag_boundary_state=(
+                    prompt363_approve_commit_tag_boundary_payload
                 ),
             )
         )
@@ -209829,6 +210480,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt362_review_route_payload=(
                     prompt362_review_route_decision_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt363_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt363_approve_commit_tag_boundary_payload=(
+                    prompt363_approve_commit_tag_boundary_payload
                 ),
             )
         )
@@ -209964,6 +210625,21 @@ class PlannedExecutionRunner:
         manifest["prompt362_review_route_decision_path"] = str(
             prompt362_review_route_decision_path
         )
+        manifest["prompt363_approve_commit_tag_boundary_summary"] = dict(
+            prompt363_approve_commit_tag_boundary_payload
+        )
+        manifest["prompt363_approve_commit_tag_boundary_path"] = str(
+            prompt363_approve_commit_tag_boundary_path
+        )
+        manifest["prompt363_approve_commit_tag_plan_summary"] = dict(
+            prompt363_approve_commit_tag_boundary_payload
+        )
+        manifest["prompt363_approve_commit_tag_plan_path"] = str(
+            prompt363_approve_commit_tag_plan_path
+        )
+        manifest["prompt363_approve_commit_tag_commands_path"] = str(
+            prompt363_approve_commit_tag_commands_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -210003,6 +210679,12 @@ class PlannedExecutionRunner:
         contract_summaries_by_role[
             "prompt362_review_route_decision"
         ] = manifest.get("prompt362_review_route_decision_summary")
+        contract_summaries_by_role[
+            "prompt363_approve_commit_tag_boundary"
+        ] = manifest.get("prompt363_approve_commit_tag_boundary_summary")
+        contract_summaries_by_role[
+            "prompt363_approve_commit_tag_plan"
+        ] = manifest.get("prompt363_approve_commit_tag_plan_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -210042,6 +210724,12 @@ class PlannedExecutionRunner:
         contract_paths_by_role[
             "prompt362_review_route_decision"
         ] = manifest.get("prompt362_review_route_decision_path")
+        contract_paths_by_role[
+            "prompt363_approve_commit_tag_boundary"
+        ] = manifest.get("prompt363_approve_commit_tag_boundary_path")
+        contract_paths_by_role[
+            "prompt363_approve_commit_tag_plan"
+        ] = manifest.get("prompt363_approve_commit_tag_plan_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -210301,6 +210989,24 @@ class PlannedExecutionRunner:
             "prompt362_next_action": _normalize_text(
                 prompt362_review_route_decision_payload.get(
                     "prompt362_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt363_boundary_status": _normalize_text(
+                prompt363_approve_commit_tag_boundary_payload.get(
+                    "prompt363_boundary_status"
+                ),
+                default="blocked",
+            ),
+            "prompt363_approve_commit_tag_plan_ready": bool(
+                prompt363_approve_commit_tag_boundary_payload.get(
+                    "prompt363_approve_commit_tag_plan_ready",
+                    False,
+                )
+            ),
+            "prompt363_next_action": _normalize_text(
+                prompt363_approve_commit_tag_boundary_payload.get(
+                    "prompt363_next_action"
                 ),
                 default="hold_for_followup",
             ),
@@ -210716,6 +211422,36 @@ class PlannedExecutionRunner:
             "prompt362_active_blocked_reason": _normalize_text(
                 prompt362_review_route_decision_payload.get(
                     "prompt362_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt363_boundary_status": _normalize_text(
+                prompt363_approve_commit_tag_boundary_payload.get(
+                    "prompt363_boundary_status"
+                ),
+                default="blocked",
+            ),
+            "prompt363_approve_commit_tag_plan_ready": bool(
+                prompt363_approve_commit_tag_boundary_payload.get(
+                    "prompt363_approve_commit_tag_plan_ready",
+                    False,
+                )
+            ),
+            "prompt363_commit_tag_execution_allowed": bool(
+                prompt363_approve_commit_tag_boundary_payload.get(
+                    "prompt363_commit_tag_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt363_next_action": _normalize_text(
+                prompt363_approve_commit_tag_boundary_payload.get(
+                    "prompt363_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt363_active_blocked_reason": _normalize_text(
+                prompt363_approve_commit_tag_boundary_payload.get(
+                    "prompt363_active_blocked_reason"
                 ),
                 default="",
             ),
