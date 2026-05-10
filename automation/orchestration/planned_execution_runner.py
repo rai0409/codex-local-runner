@@ -3535,6 +3535,12 @@ _PROMPT360_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt360_codex_execution_allowed",
     "prompt360_execution_status",
     "prompt360_execution_receipt_path",
+    "prompt360_safe_live_helper_found",
+    "prompt360_safe_live_helper_name",
+    "prompt360_bounded_prompt_source_path",
+    "prompt360_bounded_prompt_source_status",
+    "prompt360_execution_receipt_written",
+    "prompt360_execution_returncode",
     "prompt360_authoritative_next_action",
     "prompt360_next_action",
     "prompt360_manual_required",
@@ -38628,11 +38634,18 @@ def _build_prompt359_bounded_selected_step_execution_contract(
         if normalized_reason and normalized_reason not in reasons:
             reasons.append(normalized_reason)
 
+    prompt358_contract_status = _read_text(
+        run_state.get("prompt358_contract_status"),
+    )
+    prompt358_selected_contract_ready = prompt358_contract_status == "ready"
     prompt358_selection_status = _read_text(
         run_state.get("prompt358_selection_status"),
+        "ready" if prompt358_selected_contract_ready else "",
     )
     prompt358_next_local_cycle_prepared = _prompt357_as_boolish(
         run_state.get("prompt358_next_local_cycle_prepared")
+        if "prompt358_next_local_cycle_prepared" in run_state
+        else prompt358_selected_contract_ready
     )
     prompt358_selected_step_operation = _read_text(
         run_state.get("prompt358_selected_step_operation"),
@@ -38645,9 +38658,21 @@ def _build_prompt359_bounded_selected_step_execution_contract(
     )
     prompt358_authoritative_next_action = _read_text(
         run_state.get("prompt358_authoritative_next_action"),
+        (
+            "emit_selected_prompt_contract"
+            if prompt358_selected_contract_ready
+            and prompt358_selected_step_operation == "emit_selected_prompt_contract"
+            else ""
+        ),
     )
     prompt358_next_action = _read_text(
         run_state.get("prompt358_next_action"),
+        (
+            "prepare_prompt359_contract"
+            if prompt358_selected_contract_ready
+            and prompt358_selected_step_operation == "emit_selected_prompt_contract"
+            else ""
+        ),
     )
     prompt358_codex_execution_allowed = _prompt357_as_boolish(
         run_state.get("prompt358_codex_execution_allowed")
@@ -38848,6 +38873,11 @@ def _build_prompt360_bounded_codex_live_execution_gate(
     *,
     run_state_payload: Mapping[str, Any] | None,
     dry_run: bool,
+    adapter: CodexExecutorAdapter | None = None,
+    run_root: Path | None = None,
+    job_id: str = "",
+    execution_repo_path: str = "",
+    now: Callable[[], datetime] = datetime.now,
 ) -> dict[str, Any]:
     run_state = dict(run_state_payload or {})
 
@@ -39133,6 +39163,343 @@ def _build_prompt360_bounded_codex_live_execution_gate(
             ),
         }
 
+    def _resolve_safe_live_helper() -> tuple[bool, str]:
+        if dry_run or not isinstance(adapter, CodexExecutorAdapter):
+            return False, ""
+        transport = getattr(adapter, "transport", None)
+        if transport is None or isinstance(transport, DryRunCodexExecutionTransport):
+            return False, ""
+        transport_name = _normalize_text(type(transport).__name__, default="live_transport")
+        return True, f"CodexExecutorAdapter:{transport_name}"
+
+    def _resolve_live_timeout_seconds() -> int:
+        transport = getattr(adapter, "transport", None) if adapter is not None else None
+        timeout_seconds = _as_non_negative_int(
+            getattr(transport, "timeout_seconds", 0),
+            default=600,
+        )
+        if timeout_seconds <= 0:
+            timeout_seconds = 600
+        return timeout_seconds
+
+    def _resolve_repo_path() -> str:
+        transport = getattr(adapter, "transport", None) if adapter is not None else None
+        return _normalize_text(
+            execution_repo_path,
+            default=_normalize_text(getattr(transport, "repo_path", ""), default=""),
+        )
+
+    def _resolve_bounded_prompt_source(
+        *,
+        selected_prompt_contract_path: str,
+        recovered_prompt359_used: bool,
+    ) -> dict[str, Any]:
+        path_text = _normalize_text(selected_prompt_contract_path, default="")
+        source_label = (
+            "prompt360_recovered_prompt359_prompt358_selected_prompt_contract_path"
+            if recovered_prompt359_used
+            else "prompt359_prompt358_selected_prompt_contract_path"
+        )
+        if not path_text:
+            return {
+                "path": "",
+                "status": "missing",
+                "source": source_label,
+            }
+        prompt_path = Path(path_text)
+        if not prompt_path.exists() or not prompt_path.is_file():
+            return {
+                "path": path_text,
+                "status": "missing",
+                "source": source_label,
+            }
+        try:
+            prompt_text = prompt_path.read_text(encoding="utf-8")
+        except OSError:
+            return {
+                "path": path_text,
+                "status": "read_error",
+                "source": source_label,
+            }
+        if not prompt_text.strip():
+            return {
+                "path": path_text,
+                "status": "empty",
+                "source": source_label,
+            }
+        return {
+            "path": path_text,
+            "status": "ready",
+            "source": source_label,
+        }
+
+    def _run_prompt360_live_execution_once(
+        *,
+        helper_name: str,
+        prompt_source_path: str,
+        prompt_source_status: str,
+        recovered_prompt359_source: str,
+        recovered_prompt359_evidence_used: bool,
+    ) -> dict[str, Any]:
+        receipt_path = (
+            run_root / "prompt360_bounded_codex_live_execution_receipt.json"
+            if run_root is not None
+            else Path("prompt360_bounded_codex_live_execution_receipt.json")
+        )
+        execution_work_dir = (
+            run_root / "prompt360_bounded_codex_live_execution"
+            if run_root is not None
+            else Path("prompt360_bounded_codex_live_execution")
+        )
+        execution_work_dir.mkdir(parents=True, exist_ok=True)
+
+        normalized_job_id = _normalize_text(job_id, default="")
+        normalized_repo_path = _resolve_repo_path()
+        live_timeout_seconds = _resolve_live_timeout_seconds()
+        prompt360_pr_id = "prompt360__bounded_codex_live_execution_once"
+        attempted = True
+        execution_enabled = True
+        execution_confirmed = False
+        execution_status = "failed"
+        returncode = 1
+        stdout_path = ""
+        stderr_path = ""
+        started_at = _iso_now(now)
+        completed_at = started_at
+        command_args: list[str] = []
+        safe_args_metadata: dict[str, Any] = {
+            "helper_name": helper_name,
+            "transport_mode": "live",
+            "transport_class": _normalize_text(
+                type(getattr(adapter, "transport", None)).__name__,
+                default="",
+            ),
+            "invocation_mode": "adapter_launch_job_poll_collect",
+            "shell": False,
+            "argv_list_managed_by_transport": True,
+            "work_dir": str(execution_work_dir),
+            "prompt_source_status": prompt_source_status,
+        }
+        raw_transport_execution: dict[str, Any] = {}
+        launch_response: dict[str, Any] = {}
+        status_response: dict[str, Any] = {}
+        artifact_response: dict[str, Any] = {}
+        execution_error = ""
+
+        if not isinstance(adapter, CodexExecutorAdapter):
+            execution_status = "failed"
+            returncode = 126
+            execution_error = "prompt360_safe_live_helper_unavailable"
+        else:
+            try:
+                launch_response = dict(
+                    adapter.launch_job(
+                        job_id=normalized_job_id,
+                        pr_id=prompt360_pr_id,
+                        prompt_path=prompt_source_path,
+                        work_dir=str(execution_work_dir),
+                        metadata={
+                            "prompt360_bounded_live_execution": True,
+                            "prompt360_bounded_live_execution_max_attempts": 1,
+                            "prompt360_source_prompt": "prompt359",
+                            "prompt360_source_action": (
+                                "prepare_prompt360_codex_live_execution_gate"
+                            ),
+                            "prompt360_recovered_prompt359_source": (
+                                recovered_prompt359_source
+                            ),
+                            "prompt360_recovered_prompt359_evidence_used": bool(
+                                recovered_prompt359_evidence_used
+                            ),
+                            "validation_commands": [],
+                            "requires_explicit_validation": False,
+                            "strict_scope_files": [
+                                "automation/orchestration/planned_execution_runner.py"
+                            ],
+                            "forbidden_files": [],
+                        },
+                    )
+                )
+                run_id = _normalize_text(launch_response.get("run_id"), default="")
+                execution_confirmed = bool(run_id)
+                if run_id:
+                    status_response = dict(adapter.poll_status(run_id=run_id))
+                    artifact_response = dict(adapter.collect_artifacts(run_id=run_id))
+                else:
+                    status_response = {
+                        "status": "failed",
+                        "error": "missing_run_id",
+                    }
+                    artifact_response = {
+                        "stdout_path": "",
+                        "stderr_path": "",
+                        "artifacts": [],
+                    }
+            except Exception as exc:
+                execution_confirmed = False
+                status_response = {
+                    "status": "failed",
+                    "error": (
+                        "prompt360_live_execution_launch_exception"
+                        f" ({type(exc).__name__}): {exc}"
+                    ),
+                }
+                artifact_response = {
+                    "stdout_path": "",
+                    "stderr_path": "",
+                    "artifacts": [],
+                }
+
+            execution_status = _normalize_text(
+                status_response.get("status") or launch_response.get("status"),
+                default="failed",
+            ).lower()
+            if execution_status not in {
+                "completed",
+                "failed",
+                "timed_out",
+                "not_started",
+                "running",
+            }:
+                execution_status = "failed"
+            raw_transport = (
+                dict(status_response.get("raw_transport"))
+                if isinstance(status_response.get("raw_transport"), Mapping)
+                else (
+                    dict(artifact_response.get("raw_transport"))
+                    if isinstance(artifact_response.get("raw_transport"), Mapping)
+                    else {}
+                )
+            )
+            raw_transport_execution = (
+                dict(raw_transport.get("execution"))
+                if isinstance(raw_transport.get("execution"), Mapping)
+                else {}
+            )
+            command_args = (
+                _normalize_string_list(
+                    raw_transport_execution.get("command"),
+                    sort_items=False,
+                )
+                if isinstance(raw_transport_execution.get("command"), (list, tuple))
+                else []
+            )
+            maybe_returncode = _as_optional_int(
+                raw_transport_execution.get("return_code")
+            )
+            if maybe_returncode is None:
+                maybe_returncode = _as_optional_int(
+                    raw_transport_execution.get("returncode")
+                )
+            if maybe_returncode is None:
+                if execution_status == "completed":
+                    maybe_returncode = 0
+                elif execution_status == "timed_out":
+                    maybe_returncode = 124
+                else:
+                    maybe_returncode = 1
+            returncode = maybe_returncode
+            stdout_path = _normalize_text(
+                status_response.get("stdout_path")
+                or artifact_response.get("stdout_path")
+                or raw_transport_execution.get("stdout_path"),
+                default="",
+            )
+            stderr_path = _normalize_text(
+                status_response.get("stderr_path")
+                or artifact_response.get("stderr_path")
+                or raw_transport_execution.get("stderr_path"),
+                default="",
+            )
+            started_at = _normalize_text(
+                status_response.get("started_at")
+                or raw_transport_execution.get("started_at"),
+                default=started_at,
+            )
+            completed_at = _normalize_text(
+                status_response.get("finished_at")
+                or raw_transport_execution.get("finished_at"),
+                default=_iso_now(now),
+            )
+            execution_error = _normalize_text(
+                status_response.get("error")
+                or raw_transport_execution.get("error"),
+                default="",
+            )
+
+        receipt_payload: dict[str, Any] = {
+            "attempted": attempted,
+            "execution_enabled": execution_enabled,
+            "execution_confirmed": execution_confirmed,
+            "execution_status": execution_status,
+            "command_args": command_args,
+            "safe_args_metadata": safe_args_metadata,
+            "returncode": returncode,
+            "stdout_path": stdout_path,
+            "stderr_path": stderr_path,
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "repo_path": normalized_repo_path,
+            "job_id": normalized_job_id,
+            "transport_mode": "live",
+            "live_timeout_seconds": live_timeout_seconds,
+            "prompt360_recovered_prompt359_source": recovered_prompt359_source,
+            "prompt360_recovered_prompt359_evidence_used": bool(
+                recovered_prompt359_evidence_used
+            ),
+            "prompt360_bounded_prompt_source_path": prompt_source_path,
+            "prompt360_bounded_prompt_source_status": prompt_source_status,
+            "prompt360_execution_error": execution_error,
+        }
+        receipt_written = False
+        try:
+            _write_json(receipt_path, receipt_payload)
+            receipt_written = True
+        except OSError:
+            receipt_written = False
+
+        execution_succeeded = bool(
+            execution_confirmed
+            and receipt_written
+            and execution_status == "completed"
+            and returncode == 0
+        )
+        if execution_succeeded:
+            return {
+                "prompt360_gate_status": "executed",
+                "prompt360_execution_status": execution_status,
+                "prompt360_live_execution_attempted": True,
+                "prompt360_live_execution_allowed": True,
+                "prompt360_codex_execution_allowed": True,
+                "prompt360_execution_receipt_path": str(receipt_path),
+                "prompt360_execution_receipt_written": bool(receipt_written),
+                "prompt360_execution_returncode": returncode,
+                "prompt360_authoritative_next_action": "capture_prompt360_execution_diff",
+                "prompt360_next_action": "capture_prompt360_execution_diff",
+                "prompt360_manual_required": False,
+                "prompt360_replan_required": False,
+                "prompt360_active_blocked_reason": "",
+                "prompt360_active_blocked_reasons": [],
+            }
+        return {
+            "prompt360_gate_status": "execution_failed",
+            "prompt360_execution_status": execution_status,
+            "prompt360_live_execution_attempted": True,
+            "prompt360_live_execution_allowed": True,
+            "prompt360_codex_execution_allowed": True,
+            "prompt360_execution_receipt_path": str(receipt_path),
+            "prompt360_execution_receipt_written": bool(receipt_written),
+            "prompt360_execution_returncode": returncode,
+            "prompt360_authoritative_next_action": "review_prompt360_execution_failure",
+            "prompt360_next_action": "review_prompt360_execution_failure",
+            "prompt360_manual_required": True,
+            "prompt360_replan_required": False,
+            "prompt360_active_blocked_reason": "prompt360_live_execution_failed",
+            "prompt360_active_blocked_reasons": [
+                "prompt360_live_execution_failed"
+            ],
+        }
+
     current_prompt359 = _normalize_prompt359_surface(run_state)
     current_prompt359_ready = not _prompt359_validation_reasons(current_prompt359)
     recovered_prompt359 = _resolve_recovered_prompt359_evidence()
@@ -39202,6 +39569,24 @@ def _build_prompt360_bounded_codex_live_execution_gate(
 
     explicit_live_execution_enabled = not bool(dry_run)
     transport_mode = "live" if explicit_live_execution_enabled else "dry-run"
+    safe_live_helper_found, safe_live_helper_name = _resolve_safe_live_helper()
+    bounded_prompt_source = _resolve_bounded_prompt_source(
+        selected_prompt_contract_path=_normalize_text(
+            effective_prompt359.get("prompt359_prompt358_selected_prompt_contract_path"),
+            default="",
+        ),
+        recovered_prompt359_used=recovered_prompt359_used,
+    )
+    prompt360_bounded_prompt_source_path = _normalize_text(
+        bounded_prompt_source.get("path"),
+        default="",
+    )
+    prompt360_bounded_prompt_source_status = _normalize_text(
+        bounded_prompt_source.get("status"),
+        default="missing",
+    )
+    prompt360_execution_receipt_written = False
+    prompt360_execution_returncode = 0
 
     if active_blocked_reasons:
         gate_status = "blocked"
@@ -39210,6 +39595,8 @@ def _build_prompt360_bounded_codex_live_execution_gate(
         live_execution_allowed = False
         codex_execution_allowed = False
         execution_receipt_path = ""
+        prompt360_execution_receipt_written = False
+        prompt360_execution_returncode = 0
         authoritative_next_action = "hold_for_followup"
         next_action = "hold_for_followup"
         manual_required = True
@@ -39224,6 +39611,8 @@ def _build_prompt360_bounded_codex_live_execution_gate(
         live_execution_allowed = False
         codex_execution_allowed = False
         execution_receipt_path = ""
+        prompt360_execution_receipt_written = False
+        prompt360_execution_returncode = 0
         authoritative_next_action = "run_with_explicit_live_execution_flags"
         next_action = "run_prompt360_with_explicit_live_execution_flags"
         manual_required = False
@@ -39238,13 +39627,15 @@ def _build_prompt360_bounded_codex_live_execution_gate(
             summary = (
                 "Prompt360 is ready for explicit live execution, but dry-run/default mode keeps Codex execution disabled."
             )
-    else:
+    elif not safe_live_helper_found:
         gate_status = "blocked_unsupported_live_execution_helper_missing"
         execution_status = "not_run"
         live_execution_attempted = False
         live_execution_allowed = False
         codex_execution_allowed = False
         execution_receipt_path = ""
+        prompt360_execution_receipt_written = False
+        prompt360_execution_returncode = 0
         authoritative_next_action = "hold_for_followup"
         next_action = "hold_for_followup"
         manual_required = True
@@ -39261,6 +39652,100 @@ def _build_prompt360_bounded_codex_live_execution_gate(
             summary = (
                 "Prompt360 live execution remains blocked because no clearly reusable safe live helper is bound to the Prompt359 contract artifacts."
             )
+    elif prompt360_bounded_prompt_source_status != "ready":
+        gate_status = "blocked_missing_bounded_execution_prompt"
+        execution_status = "not_run"
+        live_execution_attempted = False
+        live_execution_allowed = False
+        codex_execution_allowed = False
+        execution_receipt_path = ""
+        prompt360_execution_receipt_written = False
+        prompt360_execution_returncode = 0
+        authoritative_next_action = "prepare_bounded_execution_prompt"
+        next_action = "prepare_bounded_execution_prompt"
+        manual_required = True
+        replan_required = False
+        active_blocked_reason = "bounded_execution_prompt_missing"
+        normalized_active_blocked_reasons = [
+            "bounded_execution_prompt_missing"
+        ]
+        if recovered_prompt359_used:
+            summary = (
+                "Prompt360 accepted recovered Prompt359 evidence, but explicit live execution remains blocked because the bounded Prompt359/Prompt360 prompt artifact is unavailable."
+            )
+        else:
+            summary = (
+                "Prompt360 explicit live execution remains blocked because the bounded Prompt359/Prompt360 prompt artifact is unavailable."
+            )
+    else:
+        execution_attempt_state = _run_prompt360_live_execution_once(
+            helper_name=safe_live_helper_name,
+            prompt_source_path=prompt360_bounded_prompt_source_path,
+            prompt_source_status=prompt360_bounded_prompt_source_status,
+            recovered_prompt359_source=_normalize_text(
+                recovered_prompt359.get("prompt360_recovered_prompt359_source"),
+                default="",
+            ),
+            recovered_prompt359_evidence_used=bool(recovered_prompt359_used),
+        )
+        gate_status = _normalize_text(
+            execution_attempt_state.get("prompt360_gate_status"),
+            default="execution_failed",
+        )
+        execution_status = _normalize_text(
+            execution_attempt_state.get("prompt360_execution_status"),
+            default="failed",
+        )
+        live_execution_attempted = bool(
+            execution_attempt_state.get("prompt360_live_execution_attempted", False)
+        )
+        live_execution_allowed = bool(
+            execution_attempt_state.get("prompt360_live_execution_allowed", False)
+        )
+        codex_execution_allowed = bool(
+            execution_attempt_state.get("prompt360_codex_execution_allowed", False)
+        )
+        execution_receipt_path = _normalize_text(
+            execution_attempt_state.get("prompt360_execution_receipt_path"),
+            default="",
+        )
+        prompt360_execution_receipt_written = bool(
+            execution_attempt_state.get("prompt360_execution_receipt_written", False)
+        )
+        prompt360_execution_returncode = _as_non_negative_int(
+            execution_attempt_state.get("prompt360_execution_returncode"),
+            default=0,
+        )
+        authoritative_next_action = _normalize_text(
+            execution_attempt_state.get("prompt360_authoritative_next_action"),
+            default="review_prompt360_execution_failure",
+        )
+        next_action = _normalize_text(
+            execution_attempt_state.get("prompt360_next_action"),
+            default="review_prompt360_execution_failure",
+        )
+        manual_required = bool(
+            execution_attempt_state.get("prompt360_manual_required", True)
+        )
+        replan_required = bool(
+            execution_attempt_state.get("prompt360_replan_required", False)
+        )
+        active_blocked_reason = _normalize_text(
+            execution_attempt_state.get("prompt360_active_blocked_reason"),
+            default="",
+        )
+        normalized_active_blocked_reasons = _normalize_string_list(
+            execution_attempt_state.get("prompt360_active_blocked_reasons"),
+            sort_items=False,
+        )
+        if gate_status == "executed":
+            summary = (
+                "Prompt360 performed one bounded live Codex execution through the existing safe execution adapter and captured a receipt."
+            )
+        else:
+            summary = (
+                "Prompt360 attempted one bounded live Codex execution through the existing safe execution adapter, but the execution did not complete successfully."
+            )
 
     return {
         "prompt360_gate_status": gate_status,
@@ -39272,6 +39757,16 @@ def _build_prompt360_bounded_codex_live_execution_gate(
         "prompt360_codex_execution_allowed": bool(codex_execution_allowed),
         "prompt360_execution_status": execution_status,
         "prompt360_execution_receipt_path": execution_receipt_path,
+        "prompt360_safe_live_helper_found": bool(safe_live_helper_found),
+        "prompt360_safe_live_helper_name": safe_live_helper_name,
+        "prompt360_bounded_prompt_source_path": prompt360_bounded_prompt_source_path,
+        "prompt360_bounded_prompt_source_status": (
+            prompt360_bounded_prompt_source_status
+        ),
+        "prompt360_execution_receipt_written": bool(
+            prompt360_execution_receipt_written
+        ),
+        "prompt360_execution_returncode": int(prompt360_execution_returncode),
         "prompt360_authoritative_next_action": authoritative_next_action,
         "prompt360_next_action": next_action,
         "prompt360_manual_required": bool(manual_required),
@@ -39369,6 +39864,21 @@ def _merge_prompt360_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt360_next_action"
             if _normalize_text(prompt360.get("prompt360_next_action"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt360_safe_live_helper_found"
+            if bool(prompt360.get("prompt360_safe_live_helper_found", False))
+            else "",
+            "approved_restart_execution_contract.prompt360_bounded_prompt_source_path"
+            if _normalize_text(
+                prompt360.get("prompt360_bounded_prompt_source_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt360_execution_receipt_path"
+            if _normalize_text(
+                prompt360.get("prompt360_execution_receipt_path"),
+                default="",
+            )
             else "",
             "approved_restart_execution_contract.prompt360_recovered_prompt359_evidence_used"
             if bool(prompt360.get("prompt360_recovered_prompt359_evidence_used", False))
@@ -207791,6 +208301,11 @@ class PlannedExecutionRunner:
             _build_prompt360_bounded_codex_live_execution_gate(
                 run_state_payload=run_state_payload,
                 dry_run=bool(dry_run),
+                adapter=self.adapter,
+                run_root=run_root,
+                job_id=resolved_job_id,
+                execution_repo_path=resolved_execution_repo_path,
+                now=self.now,
             )
         )
         _write_json(
@@ -208474,6 +208989,18 @@ class PlannedExecutionRunner:
                     False,
                 )
             ),
+            "prompt360_safe_live_helper_found": bool(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_safe_live_helper_found",
+                    False,
+                )
+            ),
+            "prompt360_safe_live_helper_name": _normalize_text(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_safe_live_helper_name"
+                ),
+                default="",
+            ),
             "prompt360_live_execution_allowed": bool(
                 prompt360_bounded_codex_live_execution_gate_payload.get(
                     "prompt360_live_execution_allowed",
@@ -208485,6 +209012,30 @@ class PlannedExecutionRunner:
                     "prompt360_codex_execution_allowed",
                     False,
                 )
+            ),
+            "prompt360_bounded_prompt_source_path": _normalize_text(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_bounded_prompt_source_path"
+                ),
+                default="",
+            ),
+            "prompt360_bounded_prompt_source_status": _normalize_text(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_bounded_prompt_source_status"
+                ),
+                default="missing",
+            ),
+            "prompt360_execution_receipt_written": bool(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_execution_receipt_written",
+                    False,
+                )
+            ),
+            "prompt360_execution_returncode": _as_non_negative_int(
+                prompt360_bounded_codex_live_execution_gate_payload.get(
+                    "prompt360_execution_returncode"
+                ),
+                default=0,
             ),
             "prompt360_next_action": _normalize_text(
                 prompt360_bounded_codex_live_execution_gate_payload.get(
