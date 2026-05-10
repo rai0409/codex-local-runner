@@ -3560,6 +3560,54 @@ _PROMPT360_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt360_recovered_prompt359_prompt358_recovered_prompt357_source",
 )
 
+_PROMPT361_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt361_diff_capture_status",
+    "prompt361_prompt360_gate_status",
+    "prompt361_prompt360_execution_status",
+    "prompt361_prompt360_execution_receipt_path",
+    "prompt361_prompt360_source_path",
+    "prompt361_recovered_prompt360_evidence_used",
+    "prompt361_tracked_diff_present",
+    "prompt361_changed_tracked_files",
+    "prompt361_untracked_files_ignored",
+    "prompt361_patch_path",
+    "prompt361_diff_report_path",
+    "prompt361_review_handoff_ready",
+    "prompt361_authoritative_next_action",
+    "prompt361_next_action",
+    "prompt361_manual_required",
+    "prompt361_replan_required",
+    "prompt361_active_blocked_reason",
+    "prompt361_active_blocked_reasons",
+)
+
+_PROMPT362_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt362_review_status",
+    "prompt362_route_decision",
+    "prompt362_source_prompt",
+    "prompt362_source_action",
+    "prompt362_prompt361_diff_capture_status",
+    "prompt362_prompt361_tracked_diff_present",
+    "prompt362_prompt361_changed_tracked_files",
+    "prompt362_prompt361_patch_path",
+    "prompt362_prompt361_diff_report_path",
+    "prompt362_prompt361_source_path",
+    "prompt362_recovered_prompt361_evidence_used",
+    "prompt362_review_handoff_ready",
+    "prompt362_review_summary",
+    "prompt362_review_findings",
+    "prompt362_requires_targeted_fix",
+    "prompt362_approve_commit_tag_ready",
+    "prompt362_no_change_review_ready",
+    "prompt362_authoritative_next_action",
+    "prompt362_next_action",
+    "prompt362_manual_required",
+    "prompt362_replan_required",
+    "prompt362_active_blocked_reason",
+    "prompt362_active_blocked_reasons",
+    "prompt362_summary",
+)
+
 _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_status",
     "project_browser_autonomous_one_cycle_controller_next_action",
@@ -5142,6 +5190,40 @@ def _merge_prompt360_surface_into_approved_restart_payload(
     merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
     surface = dict(prompt360_gate_state) if isinstance(prompt360_gate_state, Mapping) else {}
     for key in _PROMPT360_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt361_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt361_diff_capture_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt361_diff_capture_state)
+        if isinstance(prompt361_diff_capture_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT361_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt362_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt362_review_route_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt362_review_route_state)
+        if isinstance(prompt362_review_route_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT362_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -39888,6 +39970,1357 @@ def _merge_prompt360_surface_into_approved_restart_execution_contract(
                 prompt360.get("prompt360_recovered_prompt359_source"),
                 default="",
             )
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _build_prompt361_post_execution_diff_capture(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str = "",
+    current_prompt360_source_path: str = "",
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt361_json_path = artifact_root / "prompt361_post_execution_diff_capture.json"
+    prompt361_patch_path = artifact_root / "prompt361_post_execution_tracked.patch"
+    prompt361_report_path = artifact_root / "prompt361_post_execution_diff_report.txt"
+    normalized_patch_path = _normalize_text(str(prompt361_patch_path), default="")
+    normalized_report_path = _normalize_text(str(prompt361_report_path), default="")
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt360_surface(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(payload) if isinstance(payload, Mapping) else {}
+        return {
+            "prompt360_gate_status": _normalize_text(
+                source.get("prompt360_gate_status"),
+                default="",
+            ),
+            "prompt360_source_prompt": _normalize_text(
+                source.get("prompt360_source_prompt"),
+                default="",
+            ),
+            "prompt360_source_action": _normalize_text(
+                source.get("prompt360_source_action"),
+                default="",
+            ),
+            "prompt360_execution_status": _normalize_text(
+                source.get("prompt360_execution_status"),
+                default="",
+            ),
+            "prompt360_execution_receipt_path": _normalize_text(
+                source.get("prompt360_execution_receipt_path"),
+                default="",
+            ),
+            "prompt360_live_execution_attempted": _prompt357_as_boolish(
+                source.get("prompt360_live_execution_attempted")
+            ),
+            "prompt360_live_execution_allowed": _prompt357_as_boolish(
+                source.get("prompt360_live_execution_allowed")
+            ),
+            "prompt360_codex_execution_allowed": _prompt357_as_boolish(
+                source.get("prompt360_codex_execution_allowed")
+            ),
+            "prompt360_execution_receipt_written": _prompt357_as_boolish(
+                source.get("prompt360_execution_receipt_written")
+            ),
+            "prompt360_execution_returncode": _as_non_negative_int(
+                source.get("prompt360_execution_returncode"),
+                default=0,
+            ),
+            "prompt360_authoritative_next_action": _normalize_text(
+                source.get("prompt360_authoritative_next_action"),
+                default="",
+            ),
+            "prompt360_next_action": _normalize_text(
+                source.get("prompt360_next_action"),
+                default="",
+            ),
+            "prompt360_manual_required": _prompt357_as_boolish(
+                source.get("prompt360_manual_required")
+            ),
+            "prompt360_replan_required": _prompt357_as_boolish(
+                source.get("prompt360_replan_required")
+            ),
+            "prompt360_active_blocked_reason": _normalize_text(
+                source.get("prompt360_active_blocked_reason"),
+                default="",
+            ),
+            "prompt360_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt360_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _valid_prompt360_executed_payload(payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(payload, Mapping):
+            return False
+        active_blocked_reasons = payload.get("prompt360_active_blocked_reasons")
+        return all(
+            (
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt360_gate_status",
+                    "executed",
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt360_execution_status",
+                    "completed",
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_live_execution_attempted",
+                    True,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_live_execution_allowed",
+                    True,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_codex_execution_allowed",
+                    True,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_execution_receipt_written",
+                    True,
+                ),
+                _as_non_negative_int(
+                    payload.get("prompt360_execution_returncode"),
+                    default=-1,
+                )
+                == 0,
+                bool(
+                    _normalize_text(
+                        payload.get("prompt360_execution_receipt_path"),
+                        default="",
+                    )
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt360_authoritative_next_action",
+                    "capture_prompt360_execution_diff",
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt360_next_action",
+                    "capture_prompt360_execution_diff",
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_manual_required",
+                    False,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_replan_required",
+                    False,
+                ),
+                "prompt360_active_blocked_reason" in payload,
+                _normalize_text(
+                    payload.get("prompt360_active_blocked_reason"),
+                    default="",
+                )
+                == "",
+                isinstance(active_blocked_reasons, list),
+                _normalize_string_list(active_blocked_reasons, sort_items=False) == [],
+            )
+        )
+
+    def _prompt360_ready_for_live_execution(payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(payload, Mapping):
+            return False
+        active_blocked_reasons = payload.get("prompt360_active_blocked_reasons")
+        return all(
+            (
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt360_gate_status",
+                    "ready_for_live_execution",
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt360_execution_status",
+                    "not_run",
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_live_execution_attempted",
+                    False,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_live_execution_allowed",
+                    False,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_codex_execution_allowed",
+                    False,
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt360_next_action",
+                    "run_prompt360_with_explicit_live_execution_flags",
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_manual_required",
+                    False,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt360_replan_required",
+                    False,
+                ),
+                "prompt360_active_blocked_reason" in payload,
+                _normalize_text(
+                    payload.get("prompt360_active_blocked_reason"),
+                    default="",
+                )
+                == "",
+                isinstance(active_blocked_reasons, list),
+                _normalize_string_list(active_blocked_reasons, sort_items=False) == [],
+            )
+        )
+
+    def _resolve_prompt361_recovered_prompt360_executed_evidence() -> tuple[dict[str, Any], str]:
+        # Prompt361 may see a regenerated Prompt360 dry-run gate in the current runtime.
+        # Recover only the newest prior executed Prompt360 gate artifact that passes the
+        # strict executed-evidence validator.
+        payload, source = _prompt358_find_latest_valid_prior_artifact(
+            filename="prompt360_bounded_codex_live_execution_gate.json",
+            validator=_valid_prompt360_executed_payload,
+        )
+        return _normalize_prompt360_surface(payload), _normalize_text(source, default="")
+
+    def _derive_prompt360_invalid_reasons(
+        surface: Mapping[str, Any] | None,
+        *,
+        fallback_missing_reason: str,
+    ) -> list[str]:
+        normalized = dict(surface) if isinstance(surface, Mapping) else {}
+        reasons: list[str] = []
+        gate_status = _normalize_text(normalized.get("prompt360_gate_status"), default="")
+        execution_status = _normalize_text(
+            normalized.get("prompt360_execution_status"),
+            default="",
+        )
+        if not gate_status:
+            _append_reason(reasons, fallback_missing_reason)
+            return reasons
+        if gate_status != "executed":
+            active_reasons = _normalize_string_list(
+                normalized.get("prompt360_active_blocked_reasons"),
+                sort_items=False,
+            )
+            if active_reasons:
+                for active_reason in active_reasons:
+                    _append_reason(reasons, active_reason)
+            else:
+                _append_reason(reasons, f"prompt360_gate_status_{gate_status}")
+            if gate_status == "ready_for_live_execution":
+                _append_reason(
+                    reasons,
+                    "prompt360_live_execution_not_attempted",
+                )
+            return reasons
+        if execution_status != "completed":
+            _append_reason(
+                reasons,
+                f"prompt360_execution_status_{execution_status or 'missing'}",
+            )
+        if not bool(normalized.get("prompt360_live_execution_attempted", False)):
+            _append_reason(reasons, "prompt360_live_execution_attempted_not_true")
+        if not bool(normalized.get("prompt360_live_execution_allowed", False)):
+            _append_reason(reasons, "prompt360_live_execution_allowed_not_true")
+        if not bool(normalized.get("prompt360_codex_execution_allowed", False)):
+            _append_reason(reasons, "prompt360_codex_execution_allowed_not_true")
+        if not bool(normalized.get("prompt360_execution_receipt_written", False)):
+            _append_reason(reasons, "prompt360_execution_receipt_written_not_true")
+        if (
+            _as_non_negative_int(
+                normalized.get("prompt360_execution_returncode"),
+                default=-1,
+            )
+            != 0
+        ):
+            _append_reason(reasons, "prompt360_execution_returncode_not_zero")
+        if not _normalize_text(
+            normalized.get("prompt360_execution_receipt_path"),
+            default="",
+        ):
+            _append_reason(reasons, "prompt360_execution_receipt_path_missing")
+        if (
+            _normalize_text(
+                normalized.get("prompt360_authoritative_next_action"),
+                default="",
+            )
+            != "capture_prompt360_execution_diff"
+        ):
+            _append_reason(
+                reasons,
+                "prompt360_authoritative_next_action_not_capture_prompt360_execution_diff",
+            )
+        if (
+            _normalize_text(normalized.get("prompt360_next_action"), default="")
+            != "capture_prompt360_execution_diff"
+        ):
+            _append_reason(
+                reasons,
+                "prompt360_next_action_not_capture_prompt360_execution_diff",
+            )
+        if bool(normalized.get("prompt360_manual_required", False)):
+            _append_reason(reasons, "prompt360_manual_required_true")
+        if bool(normalized.get("prompt360_replan_required", False)):
+            _append_reason(reasons, "prompt360_replan_required_true")
+        active_blocked_reason = _normalize_text(
+            normalized.get("prompt360_active_blocked_reason"),
+            default="",
+        )
+        if active_blocked_reason:
+            _append_reason(reasons, active_blocked_reason)
+        active_blocked_reasons = _normalize_string_list(
+            normalized.get("prompt360_active_blocked_reasons"),
+            sort_items=False,
+        )
+        for active_reason in active_blocked_reasons:
+            _append_reason(reasons, active_reason)
+        if not reasons:
+            _append_reason(reasons, fallback_missing_reason)
+        return reasons
+
+    def _write_prompt361_artifacts(
+        *,
+        payload: Mapping[str, Any],
+        patch_text: str,
+        report_lines: list[str],
+    ) -> None:
+        prompt361_json_path.parent.mkdir(parents=True, exist_ok=True)
+        prompt361_patch_path.write_text(patch_text, encoding="utf-8")
+        prompt361_report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+        _write_json(prompt361_json_path, payload)
+
+    def _build_prompt361_state(
+        *,
+        diff_capture_status: str,
+        prompt360_surface: Mapping[str, Any],
+        prompt360_source_path: str,
+        recovered_prompt360_evidence_used: bool,
+        tracked_diff_present: bool,
+        changed_tracked_files: list[str],
+        review_handoff_ready: bool,
+        next_action: str,
+        manual_required: bool,
+        replan_required: bool,
+        blocked_reasons: list[str],
+        summary: str,
+    ) -> dict[str, Any]:
+        normalized_blocked_reasons = _normalize_string_list(
+            blocked_reasons,
+            sort_items=False,
+        )
+        return {
+            "prompt361_diff_capture_status": diff_capture_status,
+            "prompt361_source_prompt": "prompt360",
+            "prompt361_source_action": "capture_prompt360_execution_diff",
+            "prompt361_prompt360_gate_status": _normalize_text(
+                prompt360_surface.get("prompt360_gate_status"),
+                default="",
+            ),
+            "prompt361_prompt360_execution_status": _normalize_text(
+                prompt360_surface.get("prompt360_execution_status"),
+                default="",
+            ),
+            "prompt361_prompt360_execution_receipt_path": _normalize_text(
+                prompt360_surface.get("prompt360_execution_receipt_path"),
+                default="",
+            ),
+            "prompt361_prompt360_source_path": _normalize_text(
+                prompt360_source_path,
+                default="",
+            ),
+            "prompt361_recovered_prompt360_evidence_used": bool(
+                recovered_prompt360_evidence_used
+            ),
+            "prompt361_tracked_diff_present": bool(tracked_diff_present),
+            "prompt361_changed_tracked_files": list(changed_tracked_files),
+            "prompt361_untracked_files_ignored": True,
+            "prompt361_patch_path": normalized_patch_path,
+            "prompt361_diff_report_path": normalized_report_path,
+            "prompt361_review_handoff_ready": bool(review_handoff_ready),
+            "prompt361_authoritative_next_action": _normalize_text(
+                next_action,
+                default="hold_for_followup",
+            ),
+            "prompt361_next_action": _normalize_text(
+                next_action,
+                default="hold_for_followup",
+            ),
+            "prompt361_manual_required": bool(manual_required),
+            "prompt361_replan_required": bool(replan_required),
+            "prompt361_active_blocked_reason": (
+                normalized_blocked_reasons[0] if normalized_blocked_reasons else ""
+            ),
+            "prompt361_active_blocked_reasons": normalized_blocked_reasons,
+            "prompt361_summary": _normalize_text(summary, default=""),
+        }
+
+    def _write_and_return(
+        *,
+        state: Mapping[str, Any],
+        report_lines: list[str],
+        patch_text: str = "",
+    ) -> dict[str, Any]:
+        _write_prompt361_artifacts(
+            payload=state,
+            patch_text=patch_text,
+            report_lines=report_lines,
+        )
+        return dict(state)
+
+    current_prompt360 = _normalize_prompt360_surface(run_state)
+    current_prompt360_source = _normalize_text(current_prompt360_source_path, default="")
+    current_prompt360_valid_executed = _valid_prompt360_executed_payload(run_state)
+    current_prompt360_ready = _prompt360_ready_for_live_execution(run_state)
+    recovered_prompt360, recovered_prompt360_source = ({}, "")
+    recovered_prompt360_used = False
+    if not current_prompt360_valid_executed:
+        (
+            recovered_prompt360,
+            recovered_prompt360_source,
+        ) = _resolve_prompt361_recovered_prompt360_executed_evidence()
+        recovered_prompt360_used = bool(recovered_prompt360_source)
+
+    effective_prompt360 = (
+        recovered_prompt360 if recovered_prompt360_used else current_prompt360
+    )
+    effective_prompt360_source = (
+        recovered_prompt360_source if recovered_prompt360_used else current_prompt360_source
+    )
+    effective_prompt360_valid_executed = bool(
+        recovered_prompt360_used or current_prompt360_valid_executed
+    )
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=str(Path.cwd()),
+    )
+
+    patch_text = ""
+    report_lines = [
+        "Prompt361 Post-Execution Diff Report",
+        "",
+        "- Source prompt: prompt360",
+        "- Source action: capture_prompt360_execution_diff",
+        f"- Prompt360 source path: {effective_prompt360_source or '(missing)'}",
+    ]
+
+    def _emit_blocked(
+        *,
+        prompt360_surface: Mapping[str, Any],
+        prompt360_source_path: str,
+        recovered_used: bool,
+        blocked_reasons: list[str],
+        summary: str,
+    ) -> dict[str, Any]:
+        state = _build_prompt361_state(
+            diff_capture_status="blocked",
+            prompt360_surface=prompt360_surface,
+            prompt360_source_path=prompt360_source_path,
+            recovered_prompt360_evidence_used=recovered_used,
+            tracked_diff_present=False,
+            changed_tracked_files=[],
+            review_handoff_ready=False,
+            next_action="hold_for_followup",
+            manual_required=True,
+            replan_required=False,
+            blocked_reasons=blocked_reasons,
+            summary=summary,
+        )
+        blocked_report_lines = [
+            *report_lines,
+            f"- Prompt361 status: {state['prompt361_diff_capture_status']}",
+            f"- Review handoff ready: {str(state['prompt361_review_handoff_ready']).lower()}",
+            f"- Blocked reason: {state['prompt361_active_blocked_reason']}",
+        ]
+        return _write_and_return(
+            state=state,
+            report_lines=blocked_report_lines,
+            patch_text=patch_text,
+        )
+
+    if effective_prompt360_valid_executed:
+        if not normalized_repo_path:
+            return _emit_blocked(
+                prompt360_surface=effective_prompt360,
+                prompt360_source_path=effective_prompt360_source,
+                recovered_used=recovered_prompt360_used,
+                blocked_reasons=["prompt361_execution_repo_path_missing"],
+                summary=(
+                    "Prompt361 blocked because the execution repository path is unavailable for tracked diff capture."
+                ),
+            )
+        if not shutil.which("git"):
+            return _emit_blocked(
+                prompt360_surface=effective_prompt360,
+                prompt360_source_path=effective_prompt360_source,
+                recovered_used=recovered_prompt360_used,
+                blocked_reasons=["prompt361_git_unavailable"],
+                summary=(
+                    "Prompt361 blocked because git is unavailable for tracked diff capture."
+                ),
+            )
+
+        git_commands = {
+            "status_short": ["git", "status", "--short", "--untracked-files=no"],
+            "diff_name_only": ["git", "diff", "--name-only"],
+            "diff_stat": ["git", "diff", "--stat"],
+            "diff_patch": ["git", "diff", "--no-ext-diff", "--binary"],
+        }
+        git_outputs: dict[str, str] = {}
+        git_failed_reasons: list[str] = []
+        for command_key, command in git_commands.items():
+            completed = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            git_outputs[command_key] = completed.stdout or ""
+            if completed.returncode != 0:
+                _append_reason(
+                    git_failed_reasons,
+                    f"prompt361_{command_key}_command_failed",
+                )
+        if git_failed_reasons:
+            return _emit_blocked(
+                prompt360_surface=effective_prompt360,
+                prompt360_source_path=effective_prompt360_source,
+                recovered_used=recovered_prompt360_used,
+                blocked_reasons=git_failed_reasons,
+                summary="Prompt361 blocked because tracked git diff capture failed.",
+            )
+
+        changed_from_status = [
+            path_text
+            for path_text in (
+                _parse_git_status_path(raw_line.rstrip("\n"))
+                for raw_line in (git_outputs.get("status_short") or "").splitlines()
+            )
+            if path_text
+        ]
+        changed_from_diff = [
+            line.strip()
+            for line in (git_outputs.get("diff_name_only") or "").splitlines()
+            if line.strip()
+        ]
+        changed_tracked_files = sorted(set(changed_from_status + changed_from_diff))
+        patch_text = git_outputs.get("diff_patch", "")
+        tracked_diff_present = bool(changed_tracked_files)
+        next_action = (
+            "prepare_post_execution_review"
+            if tracked_diff_present
+            else "prepare_no_change_review"
+        )
+        state = _build_prompt361_state(
+            diff_capture_status=(
+                "captured" if tracked_diff_present else "captured_no_diff"
+            ),
+            prompt360_surface=effective_prompt360,
+            prompt360_source_path=effective_prompt360_source,
+            recovered_prompt360_evidence_used=recovered_prompt360_used,
+            tracked_diff_present=tracked_diff_present,
+            changed_tracked_files=changed_tracked_files,
+            review_handoff_ready=True,
+            next_action=next_action,
+            manual_required=False,
+            replan_required=False,
+            blocked_reasons=[],
+            summary=(
+                "Prompt361 captured tracked post-execution git diff artifacts and marked the run ready for review handoff."
+                if tracked_diff_present
+                else "Prompt361 captured tracked post-execution git diff artifacts, found no tracked changes, and marked the run ready for no-change review."
+            ),
+        )
+        capture_report_lines = [
+            *report_lines,
+            f"- Prompt361 status: {state['prompt361_diff_capture_status']}",
+            f"- Review handoff ready: {str(state['prompt361_review_handoff_ready']).lower()}",
+            f"- Recovered Prompt360 evidence used: {str(recovered_prompt360_used).lower()}",
+            f"- Tracked diff present: {str(tracked_diff_present).lower()}",
+            "",
+            "## Commands",
+            "- git status --short --untracked-files=no",
+            "- git diff --name-only",
+            "- git diff --stat",
+            "- git diff --no-ext-diff --binary",
+            "",
+            "## Changed Tracked Files",
+        ]
+        if changed_tracked_files:
+            capture_report_lines.extend(f"- {path}" for path in changed_tracked_files)
+        else:
+            capture_report_lines.append("- None")
+        capture_report_lines.extend(
+            [
+                "",
+                "## git status --short --untracked-files=no",
+                (git_outputs.get("status_short") or "").rstrip("\n")
+                or "(no tracked changes)",
+                "",
+                "## git diff --stat",
+                (git_outputs.get("diff_stat") or "").rstrip("\n")
+                or "(no tracked diff)",
+            ]
+        )
+        return _write_and_return(
+            state=state,
+            report_lines=capture_report_lines,
+            patch_text=patch_text,
+        )
+
+    if current_prompt360_ready:
+        state = _build_prompt361_state(
+            diff_capture_status="waiting_for_prompt360_live_execution",
+            prompt360_surface=current_prompt360,
+            prompt360_source_path=current_prompt360_source,
+            recovered_prompt360_evidence_used=False,
+            tracked_diff_present=False,
+            changed_tracked_files=[],
+            review_handoff_ready=False,
+            next_action="run_prompt360_with_explicit_live_execution_flags",
+            manual_required=False,
+            replan_required=False,
+            blocked_reasons=[],
+            summary=(
+                "Prompt361 is waiting for Prompt360 explicit live execution before tracked diff capture can begin."
+            ),
+        )
+        waiting_report_lines = [
+            *report_lines,
+            f"- Prompt361 status: {state['prompt361_diff_capture_status']}",
+            f"- Review handoff ready: {str(state['prompt361_review_handoff_ready']).lower()}",
+            f"- Next action: {state['prompt361_next_action']}",
+        ]
+        return _write_and_return(
+            state=state,
+            report_lines=waiting_report_lines,
+            patch_text=patch_text,
+        )
+
+    blocked_reasons = _derive_prompt360_invalid_reasons(
+        current_prompt360,
+        fallback_missing_reason="prompt360_executed_state_unavailable",
+    )
+    if (
+        not blocked_reasons
+        and not recovered_prompt360_used
+        and not current_prompt360_source
+    ):
+        blocked_reasons = ["prompt360_executed_state_unavailable"]
+    return _emit_blocked(
+        prompt360_surface=current_prompt360,
+        prompt360_source_path=current_prompt360_source,
+        recovered_used=False,
+        blocked_reasons=blocked_reasons,
+        summary=(
+            "Prompt361 is blocked because Prompt360 execution evidence is invalid or unavailable for post-execution diff capture."
+        ),
+    )
+
+
+def _merge_prompt361_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt361_diff_capture_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt361 = (
+        dict(prompt361_diff_capture_payload)
+        if isinstance(prompt361_diff_capture_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT361_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt361 and prompt361.get(key) is not None:
+            payload[key] = prompt361.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt361_diff_capture_status"
+            if _normalize_text(prompt361.get("prompt361_diff_capture_status"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt361_next_action"
+            if _normalize_text(prompt361.get("prompt361_next_action"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt361_patch_path"
+            if _normalize_text(prompt361.get("prompt361_patch_path"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt361_diff_report_path"
+            if _normalize_text(
+                prompt361.get("prompt361_diff_report_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt361_review_handoff_ready"
+            if bool(prompt361.get("prompt361_review_handoff_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt361_recovered_prompt360_evidence_used"
+            if bool(prompt361.get("prompt361_recovered_prompt360_evidence_used", False))
+            else "",
+            "approved_restart_execution_contract.prompt361_prompt360_source_path"
+            if _normalize_text(
+                prompt361.get("prompt361_prompt360_source_path"),
+                default="",
+            )
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _build_prompt362_review_route_decision(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    current_prompt361_source_path: str = "",
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt362_json_path = artifact_root / "prompt362_review_route_decision.json"
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt361_surface(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(payload) if isinstance(payload, Mapping) else {}
+        return {
+            "prompt361_diff_capture_status": _normalize_text(
+                source.get("prompt361_diff_capture_status"),
+                default="",
+            ),
+            "prompt361_source_prompt": _normalize_text(
+                source.get("prompt361_source_prompt"),
+                default="prompt360",
+            ),
+            "prompt361_source_action": _normalize_text(
+                source.get("prompt361_source_action"),
+                default="capture_prompt360_execution_diff",
+            ),
+            "prompt361_prompt360_gate_status": _normalize_text(
+                source.get("prompt361_prompt360_gate_status"),
+                default="",
+            ),
+            "prompt361_prompt360_execution_status": _normalize_text(
+                source.get("prompt361_prompt360_execution_status"),
+                default="",
+            ),
+            "prompt361_prompt360_execution_receipt_path": _normalize_text(
+                source.get("prompt361_prompt360_execution_receipt_path"),
+                default="",
+            ),
+            "prompt361_prompt360_source_path": _normalize_text(
+                source.get("prompt361_prompt360_source_path"),
+                default="",
+            ),
+            "prompt361_recovered_prompt360_evidence_used": _prompt357_as_boolish(
+                source.get("prompt361_recovered_prompt360_evidence_used")
+            ),
+            "prompt361_tracked_diff_present": _prompt357_as_boolish(
+                source.get("prompt361_tracked_diff_present")
+            ),
+            "prompt361_changed_tracked_files": _normalize_string_list(
+                source.get("prompt361_changed_tracked_files"),
+                sort_items=False,
+            ),
+            "prompt361_untracked_files_ignored": _prompt357_as_boolish(
+                source.get("prompt361_untracked_files_ignored")
+            ),
+            "prompt361_patch_path": _normalize_text(
+                source.get("prompt361_patch_path"),
+                default="",
+            ),
+            "prompt361_diff_report_path": _normalize_text(
+                source.get("prompt361_diff_report_path"),
+                default="",
+            ),
+            "prompt361_review_handoff_ready": _prompt357_as_boolish(
+                source.get("prompt361_review_handoff_ready")
+            ),
+            "prompt361_authoritative_next_action": _normalize_text(
+                source.get("prompt361_authoritative_next_action"),
+                default="",
+            ),
+            "prompt361_next_action": _normalize_text(
+                source.get("prompt361_next_action"),
+                default="",
+            ),
+            "prompt361_manual_required": _prompt357_as_boolish(
+                source.get("prompt361_manual_required")
+            ),
+            "prompt361_replan_required": _prompt357_as_boolish(
+                source.get("prompt361_replan_required")
+            ),
+            "prompt361_active_blocked_reason": _normalize_text(
+                source.get("prompt361_active_blocked_reason"),
+                default="",
+            ),
+            "prompt361_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt361_active_blocked_reasons"),
+                sort_items=False,
+            ),
+            "prompt361_summary": _normalize_text(
+                source.get("prompt361_summary"),
+                default="",
+            ),
+        }
+
+    def _valid_prompt361_review_payload(payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(payload, Mapping):
+            return False
+        active_blocked_reasons = payload.get("prompt361_active_blocked_reasons")
+        next_action = _normalize_text(payload.get("prompt361_next_action"), default="")
+        active_blocked_reason = _normalize_text(
+            payload.get("prompt361_active_blocked_reason"),
+            default="",
+        )
+        return all(
+            (
+                _normalize_text(
+                    payload.get("prompt361_diff_capture_status"),
+                    default="",
+                )
+                in {"captured", "captured_no_diff"},
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt361_review_handoff_ready",
+                    True,
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt361_prompt360_gate_status",
+                    "executed",
+                ),
+                _prompt358_required_text_match(
+                    payload,
+                    "prompt361_prompt360_execution_status",
+                    "completed",
+                ),
+                bool(
+                    _normalize_text(
+                        payload.get("prompt361_prompt360_execution_receipt_path"),
+                        default="",
+                    )
+                ),
+                bool(_normalize_text(payload.get("prompt361_patch_path"), default="")),
+                bool(
+                    _normalize_text(
+                        payload.get("prompt361_diff_report_path"),
+                        default="",
+                    )
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt361_untracked_files_ignored",
+                    True,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt361_manual_required",
+                    False,
+                ),
+                _prompt358_required_bool_match(
+                    payload,
+                    "prompt361_replan_required",
+                    False,
+                ),
+                active_blocked_reason == "",
+                isinstance(active_blocked_reasons, list),
+                _normalize_string_list(active_blocked_reasons, sort_items=False) == [],
+                next_action in {
+                    "prepare_post_execution_review",
+                    "prepare_no_change_review",
+                },
+            )
+        )
+
+    def _resolve_prompt362_recovered_prompt361_evidence() -> tuple[dict[str, Any], str]:
+        payload, source = _prompt358_find_latest_valid_prior_artifact(
+            filename="prompt361_post_execution_diff_capture.json",
+            validator=_valid_prompt361_review_payload,
+        )
+        return _normalize_prompt361_surface(payload), _normalize_text(source, default="")
+
+    def _derive_prompt361_invalid_reasons(
+        surface: Mapping[str, Any] | None,
+        *,
+        fallback_missing_reason: str,
+    ) -> list[str]:
+        normalized = dict(surface) if isinstance(surface, Mapping) else {}
+        reasons: list[str] = []
+        diff_capture_status = _normalize_text(
+            normalized.get("prompt361_diff_capture_status"),
+            default="",
+        )
+        if not diff_capture_status:
+            _append_reason(reasons, fallback_missing_reason)
+            return reasons
+        if diff_capture_status not in {"captured", "captured_no_diff"}:
+            _append_reason(
+                reasons,
+                f"prompt361_diff_capture_status_{diff_capture_status}",
+            )
+        if (
+            _normalize_text(
+                normalized.get("prompt361_prompt360_gate_status"),
+                default="",
+            )
+            != "executed"
+        ):
+            _append_reason(reasons, "prompt361_prompt360_gate_status_not_executed")
+        if (
+            _normalize_text(
+                normalized.get("prompt361_prompt360_execution_status"),
+                default="",
+            )
+            != "completed"
+        ):
+            _append_reason(
+                reasons,
+                "prompt361_prompt360_execution_status_not_completed",
+            )
+        if not _normalize_text(
+            normalized.get("prompt361_prompt360_execution_receipt_path"),
+            default="",
+        ):
+            _append_reason(
+                reasons,
+                "prompt361_prompt360_execution_receipt_path_missing",
+            )
+        if not _normalize_text(normalized.get("prompt361_patch_path"), default=""):
+            _append_reason(reasons, "prompt361_patch_path_missing")
+        if not _normalize_text(
+            normalized.get("prompt361_diff_report_path"),
+            default="",
+        ):
+            _append_reason(reasons, "prompt361_diff_report_path_missing")
+        if not bool(normalized.get("prompt361_untracked_files_ignored", False)):
+            _append_reason(reasons, "prompt361_untracked_files_ignored_not_true")
+        if not bool(normalized.get("prompt361_review_handoff_ready", False)):
+            _append_reason(reasons, "prompt361_review_handoff_ready_not_true")
+        next_action = _normalize_text(normalized.get("prompt361_next_action"), default="")
+        if next_action not in {
+            "prepare_post_execution_review",
+            "prepare_no_change_review",
+        }:
+            _append_reason(
+                reasons,
+                f"prompt361_next_action_{next_action or 'missing'}",
+            )
+        if bool(normalized.get("prompt361_manual_required", False)):
+            _append_reason(reasons, "prompt361_manual_required_true")
+        if bool(normalized.get("prompt361_replan_required", False)):
+            _append_reason(reasons, "prompt361_replan_required_true")
+        active_blocked_reason = _normalize_text(
+            normalized.get("prompt361_active_blocked_reason"),
+            default="",
+        )
+        if active_blocked_reason:
+            _append_reason(reasons, active_blocked_reason)
+        active_blocked_reasons = _normalize_string_list(
+            normalized.get("prompt361_active_blocked_reasons"),
+            sort_items=False,
+        )
+        for active_reason in active_blocked_reasons:
+            _append_reason(reasons, active_reason)
+        if not reasons:
+            _append_reason(reasons, fallback_missing_reason)
+        return reasons
+
+    def _path_has_readable_metadata(path_text: str) -> bool:
+        normalized_path = _normalize_text(path_text, default="")
+        if not normalized_path:
+            return False
+        try:
+            candidate = Path(normalized_path)
+            if not candidate.exists() or not candidate.is_file():
+                return False
+            candidate.stat()
+        except OSError:
+            return False
+        return True
+
+    def _read_diff_report(path_text: str) -> tuple[str, bool]:
+        normalized_path = _normalize_text(path_text, default="")
+        if not normalized_path:
+            return "", False
+        try:
+            report_text = Path(normalized_path).read_text(encoding="utf-8")
+        except OSError:
+            return "", False
+        return report_text, True
+
+    def _build_prompt362_state(
+        *,
+        review_status: str,
+        route_decision: str,
+        prompt361_surface: Mapping[str, Any],
+        prompt361_source_path: str,
+        recovered_prompt361_evidence_used: bool,
+        review_handoff_ready: bool,
+        review_summary: str,
+        review_findings: list[str],
+        requires_targeted_fix: bool,
+        approve_commit_tag_ready: bool,
+        no_change_review_ready: bool,
+        next_action: str,
+        manual_required: bool,
+        replan_required: bool,
+        blocked_reasons: list[str],
+        summary: str,
+    ) -> dict[str, Any]:
+        normalized_review_findings = _normalize_string_list(
+            review_findings,
+            sort_items=False,
+        )
+        normalized_blocked_reasons = _normalize_string_list(
+            blocked_reasons,
+            sort_items=False,
+        )
+        return {
+            "prompt362_review_status": _normalize_text(review_status, default="blocked"),
+            "prompt362_route_decision": _normalize_text(route_decision, default="blocked"),
+            "prompt362_source_prompt": "prompt361",
+            "prompt362_source_action": _normalize_text(
+                prompt361_surface.get("prompt361_next_action"),
+                default="",
+            ),
+            "prompt362_prompt361_diff_capture_status": _normalize_text(
+                prompt361_surface.get("prompt361_diff_capture_status"),
+                default="",
+            ),
+            "prompt362_prompt361_tracked_diff_present": bool(
+                prompt361_surface.get("prompt361_tracked_diff_present", False)
+            ),
+            "prompt362_prompt361_changed_tracked_files": _normalize_string_list(
+                prompt361_surface.get("prompt361_changed_tracked_files"),
+                sort_items=False,
+            ),
+            "prompt362_prompt361_patch_path": _normalize_text(
+                prompt361_surface.get("prompt361_patch_path"),
+                default="",
+            ),
+            "prompt362_prompt361_diff_report_path": _normalize_text(
+                prompt361_surface.get("prompt361_diff_report_path"),
+                default="",
+            ),
+            "prompt362_prompt361_source_path": _normalize_text(
+                prompt361_source_path,
+                default="",
+            ),
+            "prompt362_recovered_prompt361_evidence_used": bool(
+                recovered_prompt361_evidence_used
+            ),
+            "prompt362_review_handoff_ready": bool(review_handoff_ready),
+            "prompt362_review_summary": _normalize_text(review_summary, default=""),
+            "prompt362_review_findings": normalized_review_findings,
+            "prompt362_requires_targeted_fix": bool(requires_targeted_fix),
+            "prompt362_approve_commit_tag_ready": bool(approve_commit_tag_ready),
+            "prompt362_no_change_review_ready": bool(no_change_review_ready),
+            "prompt362_authoritative_next_action": _normalize_text(
+                next_action,
+                default="hold_for_followup",
+            ),
+            "prompt362_next_action": _normalize_text(
+                next_action,
+                default="hold_for_followup",
+            ),
+            "prompt362_manual_required": bool(manual_required),
+            "prompt362_replan_required": bool(replan_required),
+            "prompt362_active_blocked_reason": (
+                normalized_blocked_reasons[0] if normalized_blocked_reasons else ""
+            ),
+            "prompt362_active_blocked_reasons": normalized_blocked_reasons,
+            "prompt362_summary": _normalize_text(summary, default=""),
+        }
+
+    current_prompt361 = _normalize_prompt361_surface(run_state)
+    current_prompt361_source = _normalize_text(current_prompt361_source_path, default="")
+    current_prompt361_valid = _valid_prompt361_review_payload(run_state)
+    recovered_prompt361, recovered_prompt361_source = ({}, "")
+    recovered_prompt361_used = False
+    if not current_prompt361_valid:
+        (
+            recovered_prompt361,
+            recovered_prompt361_source,
+        ) = _resolve_prompt362_recovered_prompt361_evidence()
+        recovered_prompt361_used = bool(recovered_prompt361_source)
+
+    effective_prompt361 = (
+        recovered_prompt361 if recovered_prompt361_used else current_prompt361
+    )
+    effective_prompt361_source = (
+        recovered_prompt361_source if recovered_prompt361_used else current_prompt361_source
+    )
+    effective_prompt361_valid = bool(
+        recovered_prompt361_used or current_prompt361_valid
+    )
+
+    if not effective_prompt361_valid:
+        blocked_reasons = _derive_prompt361_invalid_reasons(
+            current_prompt361,
+            fallback_missing_reason="prompt361_review_input_unavailable",
+        )
+        if not recovered_prompt361_used:
+            _append_reason(
+                blocked_reasons,
+                "prompt362_valid_prompt361_recovery_artifact_not_found",
+            )
+        state = _build_prompt362_state(
+            review_status="blocked",
+            route_decision="blocked",
+            prompt361_surface=current_prompt361,
+            prompt361_source_path=current_prompt361_source,
+            recovered_prompt361_evidence_used=False,
+            review_handoff_ready=False,
+            review_summary=(
+                "Prompt362 could not locate valid Prompt361 post-execution review evidence."
+            ),
+            review_findings=blocked_reasons,
+            requires_targeted_fix=False,
+            approve_commit_tag_ready=False,
+            no_change_review_ready=False,
+            next_action="hold_for_followup",
+            manual_required=True,
+            replan_required=False,
+            blocked_reasons=blocked_reasons,
+            summary=(
+                "Prompt362 is blocked because no valid Prompt361 diff capture evidence is available from the current run_state or recovery artifacts."
+            ),
+        )
+        _write_json(prompt362_json_path, state)
+        return state
+
+    prompt361_diff_capture_status = _normalize_text(
+        effective_prompt361.get("prompt361_diff_capture_status"),
+        default="",
+    )
+    prompt361_tracked_diff_present = bool(
+        effective_prompt361.get("prompt361_tracked_diff_present", False)
+    )
+    prompt361_changed_tracked_files = _normalize_string_list(
+        effective_prompt361.get("prompt361_changed_tracked_files"),
+        sort_items=False,
+    )
+    prompt361_patch_path = _normalize_text(
+        effective_prompt361.get("prompt361_patch_path"),
+        default="",
+    )
+    prompt361_diff_report_path = _normalize_text(
+        effective_prompt361.get("prompt361_diff_report_path"),
+        default="",
+    )
+    diff_report_text, diff_report_readable = _read_diff_report(prompt361_diff_report_path)
+
+    review_findings: list[str] = []
+    if not diff_report_readable:
+        _append_reason(review_findings, "prompt362_prompt361_diff_report_unreadable")
+    if prompt361_diff_capture_status == "captured" and not prompt361_tracked_diff_present:
+        _append_reason(
+            review_findings,
+            "prompt362_prompt361_tracked_diff_expected_but_missing",
+        )
+    if prompt361_tracked_diff_present and not prompt361_changed_tracked_files:
+        _append_reason(
+            review_findings,
+            "prompt362_prompt361_changed_tracked_files_missing",
+        )
+    if prompt361_tracked_diff_present and not _path_has_readable_metadata(prompt361_patch_path):
+        _append_reason(review_findings, "prompt362_prompt361_patch_path_unreadable")
+    if _normalize_text(
+        effective_prompt361.get("prompt361_active_blocked_reason"),
+        default="",
+    ):
+        _append_reason(review_findings, "prompt362_prompt361_active_blocker_present")
+    if _normalize_string_list(
+        effective_prompt361.get("prompt361_active_blocked_reasons"),
+        sort_items=False,
+    ):
+        _append_reason(review_findings, "prompt362_prompt361_active_blockers_present")
+    if bool(effective_prompt361.get("prompt361_manual_required", False)):
+        _append_reason(review_findings, "prompt362_prompt361_manual_required_true")
+    if bool(effective_prompt361.get("prompt361_replan_required", False)):
+        _append_reason(review_findings, "prompt362_prompt361_replan_required_true")
+    if not bool(effective_prompt361.get("prompt361_review_handoff_ready", False)):
+        _append_reason(review_findings, "prompt362_prompt361_review_handoff_not_ready")
+
+    report_line_count = len(
+        [line for line in diff_report_text.splitlines() if line.strip()]
+    ) if diff_report_readable else 0
+
+    if review_findings:
+        review_summary = (
+            "Prompt362 completed bounded local review assimilation and found metadata-local blocker indicators in Prompt361 evidence."
+        )
+        summary = (
+            "Prompt362 selected the targeted-fix route because Prompt361 review evidence contains metadata-local blocker indicators."
+        )
+        state = _build_prompt362_state(
+            review_status="completed",
+            route_decision="targeted_fix_required",
+            prompt361_surface=effective_prompt361,
+            prompt361_source_path=effective_prompt361_source,
+            recovered_prompt361_evidence_used=recovered_prompt361_used,
+            review_handoff_ready=True,
+            review_summary=review_summary,
+            review_findings=review_findings,
+            requires_targeted_fix=True,
+            approve_commit_tag_ready=False,
+            no_change_review_ready=False,
+            next_action="prepare_targeted_fix_prompt",
+            manual_required=False,
+            replan_required=False,
+            blocked_reasons=[],
+            summary=summary,
+        )
+        _write_json(prompt362_json_path, state)
+        return state
+
+    if prompt361_diff_capture_status == "captured_no_diff":
+        review_summary = (
+            "Prompt362 reviewed Prompt361 no-diff evidence and confirmed the no-change review route."
+        )
+        summary = (
+            "Prompt362 selected the no-change review route from Prompt361 post-execution diff capture evidence."
+        )
+        state = _build_prompt362_state(
+            review_status="completed",
+            route_decision="no_change_review",
+            prompt361_surface=effective_prompt361,
+            prompt361_source_path=effective_prompt361_source,
+            recovered_prompt361_evidence_used=recovered_prompt361_used,
+            review_handoff_ready=True,
+            review_summary=review_summary,
+            review_findings=[],
+            requires_targeted_fix=False,
+            approve_commit_tag_ready=False,
+            no_change_review_ready=True,
+            next_action="prepare_no_change_review_route",
+            manual_required=False,
+            replan_required=False,
+            blocked_reasons=[],
+            summary=summary,
+        )
+        _write_json(prompt362_json_path, state)
+        return state
+
+    review_summary = (
+        "Prompt362 reviewed Prompt361 tracked diff metadata and diff report and found no metadata-local blocker indicators."
+    )
+    if report_line_count > 0:
+        review_summary = (
+            "Prompt362 reviewed Prompt361 tracked diff metadata and "
+            f"{report_line_count} non-empty diff report lines without detecting metadata-local blockers."
+        )
+    summary = (
+        "Prompt362 selected the approve-commit-tag preparation route from Prompt361 post-execution diff capture evidence."
+    )
+    state = _build_prompt362_state(
+        review_status="completed",
+        route_decision="approve_commit_tag",
+        prompt361_surface=effective_prompt361,
+        prompt361_source_path=effective_prompt361_source,
+        recovered_prompt361_evidence_used=recovered_prompt361_used,
+        review_handoff_ready=True,
+        review_summary=review_summary,
+        review_findings=[],
+        requires_targeted_fix=False,
+        approve_commit_tag_ready=True,
+        no_change_review_ready=False,
+        next_action="prepare_approve_commit_tag",
+        manual_required=False,
+        replan_required=False,
+        blocked_reasons=[],
+        summary=summary,
+    )
+    _write_json(prompt362_json_path, state)
+    return state
+
+
+def _merge_prompt362_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt362_review_route_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt362 = (
+        dict(prompt362_review_route_payload)
+        if isinstance(prompt362_review_route_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT362_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt362 and prompt362.get(key) is not None:
+            payload[key] = prompt362.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt362_review_status"
+            if _normalize_text(prompt362.get("prompt362_review_status"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt362_route_decision"
+            if _normalize_text(prompt362.get("prompt362_route_decision"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt362_next_action"
+            if _normalize_text(prompt362.get("prompt362_next_action"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt362_prompt361_source_path"
+            if _normalize_text(
+                prompt362.get("prompt362_prompt361_source_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt362_recovered_prompt361_evidence_used"
+            if bool(prompt362.get("prompt362_recovered_prompt361_evidence_used", False))
+            else "",
+            "approved_restart_execution_contract.prompt362_requires_targeted_fix"
+            if bool(prompt362.get("prompt362_requires_targeted_fix", False))
+            else "",
+            "approved_restart_execution_contract.prompt362_approve_commit_tag_ready"
+            if bool(prompt362.get("prompt362_approve_commit_tag_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt362_no_change_review_ready"
+            if bool(prompt362.get("prompt362_no_change_review_ready", False))
             else "",
         ]
     )
@@ -208316,10 +209749,59 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt360_bounded_codex_live_execution_gate_payload,
         }
+        prompt361_post_execution_diff_capture_path = (
+            run_root / "prompt361_post_execution_diff_capture.json"
+        )
+        prompt361_post_execution_diff_capture_payload = (
+            _build_prompt361_post_execution_diff_capture(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+                current_prompt360_source_path=str(
+                    prompt360_bounded_codex_live_execution_gate_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt361_post_execution_diff_capture_payload,
+        }
+        prompt362_review_route_decision_path = (
+            run_root / "prompt362_review_route_decision.json"
+        )
+        prompt362_review_route_decision_payload = (
+            _build_prompt362_review_route_decision(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                current_prompt361_source_path=str(
+                    prompt361_post_execution_diff_capture_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt362_review_route_decision_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt360_gate_state=prompt360_bounded_codex_live_execution_gate_payload,
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt361_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt361_diff_capture_state=(
+                    prompt361_post_execution_diff_capture_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt362_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt362_review_route_state=(
+                    prompt362_review_route_decision_payload
+                ),
             )
         )
         approved_restart_execution_contract_payload = (
@@ -208328,6 +209810,26 @@ class PlannedExecutionRunner:
                     approved_restart_execution_contract_payload
                 ),
                 prompt360_gate_payload=prompt360_bounded_codex_live_execution_gate_payload,
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt361_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt361_diff_capture_payload=(
+                    prompt361_post_execution_diff_capture_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt362_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt362_review_route_payload=(
+                    prompt362_review_route_decision_payload
+                ),
             )
         )
         _write_json(
@@ -208450,6 +209952,18 @@ class PlannedExecutionRunner:
         manifest["prompt360_bounded_codex_live_execution_gate_path"] = str(
             prompt360_bounded_codex_live_execution_gate_path
         )
+        manifest["prompt361_post_execution_diff_capture_summary"] = dict(
+            prompt361_post_execution_diff_capture_payload
+        )
+        manifest["prompt361_post_execution_diff_capture_path"] = str(
+            prompt361_post_execution_diff_capture_path
+        )
+        manifest["prompt362_review_route_decision_summary"] = dict(
+            prompt362_review_route_decision_payload
+        )
+        manifest["prompt362_review_route_decision_path"] = str(
+            prompt362_review_route_decision_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -208483,6 +209997,12 @@ class PlannedExecutionRunner:
         contract_summaries_by_role[
             "prompt360_bounded_codex_live_execution_gate"
         ] = manifest.get("prompt360_bounded_codex_live_execution_gate_summary")
+        contract_summaries_by_role[
+            "prompt361_post_execution_diff_capture"
+        ] = manifest.get("prompt361_post_execution_diff_capture_summary")
+        contract_summaries_by_role[
+            "prompt362_review_route_decision"
+        ] = manifest.get("prompt362_review_route_decision_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -208516,6 +210036,12 @@ class PlannedExecutionRunner:
         contract_paths_by_role[
             "prompt360_bounded_codex_live_execution_gate"
         ] = manifest.get("prompt360_bounded_codex_live_execution_gate_path")
+        contract_paths_by_role[
+            "prompt361_post_execution_diff_capture"
+        ] = manifest.get("prompt361_post_execution_diff_capture_path")
+        contract_paths_by_role[
+            "prompt362_review_route_decision"
+        ] = manifest.get("prompt362_review_route_decision_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -208745,6 +210271,36 @@ class PlannedExecutionRunner:
             "prompt360_next_action": _normalize_text(
                 prompt360_bounded_codex_live_execution_gate_payload.get(
                     "prompt360_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt361_diff_capture_status": _normalize_text(
+                prompt361_post_execution_diff_capture_payload.get(
+                    "prompt361_diff_capture_status"
+                ),
+                default="blocked",
+            ),
+            "prompt361_next_action": _normalize_text(
+                prompt361_post_execution_diff_capture_payload.get(
+                    "prompt361_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt362_review_status": _normalize_text(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_review_status"
+                ),
+                default="blocked",
+            ),
+            "prompt362_route_decision": _normalize_text(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_route_decision"
+                ),
+                default="blocked",
+            ),
+            "prompt362_next_action": _normalize_text(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_next_action"
                 ),
                 default="hold_for_followup",
             ),
@@ -209058,6 +210614,108 @@ class PlannedExecutionRunner:
             "prompt360_active_blocked_reason": _normalize_text(
                 prompt360_bounded_codex_live_execution_gate_payload.get(
                     "prompt360_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt361_diff_capture_status": _normalize_text(
+                prompt361_post_execution_diff_capture_payload.get(
+                    "prompt361_diff_capture_status"
+                ),
+                default="blocked",
+            ),
+            "prompt361_tracked_diff_present": bool(
+                prompt361_post_execution_diff_capture_payload.get(
+                    "prompt361_tracked_diff_present",
+                    False,
+                )
+            ),
+            "prompt361_review_handoff_ready": bool(
+                prompt361_post_execution_diff_capture_payload.get(
+                    "prompt361_review_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt361_next_action": _normalize_text(
+                prompt361_post_execution_diff_capture_payload.get(
+                    "prompt361_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt361_manual_required": bool(
+                prompt361_post_execution_diff_capture_payload.get(
+                    "prompt361_manual_required",
+                    False,
+                )
+            ),
+            "prompt361_replan_required": bool(
+                prompt361_post_execution_diff_capture_payload.get(
+                    "prompt361_replan_required",
+                    False,
+                )
+            ),
+            "prompt361_active_blocked_reason": _normalize_text(
+                prompt361_post_execution_diff_capture_payload.get(
+                    "prompt361_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt362_review_status": _normalize_text(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_review_status"
+                ),
+                default="blocked",
+            ),
+            "prompt362_route_decision": _normalize_text(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_route_decision"
+                ),
+                default="blocked",
+            ),
+            "prompt362_review_handoff_ready": bool(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_review_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt362_requires_targeted_fix": bool(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_requires_targeted_fix",
+                    False,
+                )
+            ),
+            "prompt362_approve_commit_tag_ready": bool(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_approve_commit_tag_ready",
+                    False,
+                )
+            ),
+            "prompt362_no_change_review_ready": bool(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_no_change_review_ready",
+                    False,
+                )
+            ),
+            "prompt362_next_action": _normalize_text(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt362_manual_required": bool(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_manual_required",
+                    False,
+                )
+            ),
+            "prompt362_replan_required": bool(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_replan_required",
+                    False,
+                )
+            ),
+            "prompt362_active_blocked_reason": _normalize_text(
+                prompt362_review_route_decision_payload.get(
+                    "prompt362_active_blocked_reason"
                 ),
                 default="",
             ),
