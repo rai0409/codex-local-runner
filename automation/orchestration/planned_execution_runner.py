@@ -15,6 +15,7 @@ import time
 from typing import Any
 from typing import Callable
 from typing import Mapping
+from typing import Sequence
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -36749,6 +36750,1231 @@ def _build_prompt356_stale_blocker_alignment_surface(
         "prompt356_replan_required": bool(replan_required),
         "prompt356_next_action": next_action,
         "prompt356_summary": summary,
+    }
+
+
+def _prompt357_as_boolish(value: Any, *, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    text = _normalize_text(value, default="").strip().lower()
+    if text in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if text in {"0", "false", "no", "off", "disabled"}:
+        return False
+    return default
+
+
+def _prompt357_read_text(
+    field_name: str,
+    *payloads: Mapping[str, Any] | None,
+    default: str = "",
+) -> str:
+    for payload in payloads:
+        if not isinstance(payload, Mapping):
+            continue
+        text = _normalize_text(payload.get(field_name), default="")
+        if text:
+            return text
+    return default
+
+
+def _prompt357_read_bool(
+    field_name: str,
+    *payloads: Mapping[str, Any] | None,
+    default: bool = False,
+) -> bool:
+    for payload in payloads:
+        if not isinstance(payload, Mapping) or field_name not in payload:
+            continue
+        return _prompt357_as_boolish(payload.get(field_name), default=default)
+    return default
+
+
+def _prompt357_read_list(
+    field_name: str,
+    *payloads: Mapping[str, Any] | None,
+) -> list[str]:
+    for payload in payloads:
+        if not isinstance(payload, Mapping) or field_name not in payload:
+            continue
+        values = _normalize_string_list(payload.get(field_name), sort_items=False)
+        if values or isinstance(payload.get(field_name), (list, tuple)):
+            return values
+    return []
+
+
+def _build_prompt357_evidence_snapshot(
+    *,
+    prompt355_payload: Mapping[str, Any] | None = None,
+    prompt356_payload: Mapping[str, Any] | None = None,
+    verification_payload: Mapping[str, Any] | None = None,
+    completion_payload: Mapping[str, Any] | None = None,
+    endgame_payload: Mapping[str, Any] | None = None,
+    summary_payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "prompt355_readiness_status": _prompt357_read_text(
+            "prompt355_readiness_status",
+            prompt355_payload,
+            prompt356_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt355_next_cycle_allowed": _prompt357_read_bool(
+            "prompt355_next_cycle_allowed",
+            prompt355_payload,
+            prompt356_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt355_next_action": _prompt357_read_text(
+            "prompt355_next_action",
+            prompt355_payload,
+            prompt356_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt355_manual_required": _prompt357_read_bool(
+            "prompt355_manual_required",
+            prompt355_payload,
+            prompt356_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt355_replan_required": _prompt357_read_bool(
+            "prompt355_replan_required",
+            prompt355_payload,
+            prompt356_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt356_alignment_status": _prompt357_read_text(
+            "prompt356_alignment_status",
+            prompt356_payload,
+            prompt355_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt356_next_cycle_safe": _prompt357_read_bool(
+            "prompt356_next_cycle_safe",
+            prompt356_payload,
+            prompt355_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt356_stale_blockers_present": _prompt357_read_bool(
+            "prompt356_stale_blockers_present",
+            prompt356_payload,
+            prompt355_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt356_stale_blockers_ignored": _prompt357_read_bool(
+            "prompt356_stale_blockers_ignored",
+            prompt356_payload,
+            prompt355_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt356_next_action": _prompt357_read_text(
+            "prompt356_next_action",
+            prompt356_payload,
+            prompt355_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt356_active_blocked_reason": _prompt357_read_text(
+            "prompt356_active_blocked_reason",
+            prompt356_payload,
+            prompt355_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt356_active_blocked_reasons": _prompt357_read_list(
+            "prompt356_active_blocked_reasons",
+            prompt356_payload,
+            prompt355_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt356_manual_required": _prompt357_read_bool(
+            "prompt356_manual_required",
+            prompt356_payload,
+            prompt355_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "prompt356_replan_required": _prompt357_read_bool(
+            "prompt356_replan_required",
+            prompt356_payload,
+            prompt355_payload,
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "verification_status": _prompt357_read_text(
+            "verification_status",
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "verification_outcome": _prompt357_read_text(
+            "verification_outcome",
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "verification_primary_reason": _prompt357_read_text(
+            "verification_primary_reason",
+            verification_payload,
+            completion_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "completion_status": _prompt357_read_text(
+            "completion_status",
+            completion_payload,
+            verification_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "safe_closure_status": _prompt357_read_text(
+            "safe_closure_status",
+            completion_payload,
+            verification_payload,
+            endgame_payload,
+            summary_payload,
+        ),
+        "endgame_closure_status": _prompt357_read_text(
+            "endgame_closure_status",
+            endgame_payload,
+            completion_payload,
+            verification_payload,
+            summary_payload,
+        ),
+        "terminal_success": _prompt357_read_bool(
+            "terminal_success",
+            endgame_payload,
+            completion_payload,
+            verification_payload,
+            summary_payload,
+        ),
+    }
+
+
+def _build_prompt357_current_runtime_regression_reasons(
+    evidence_snapshot: Mapping[str, Any],
+) -> list[str]:
+    reasons: list[str] = []
+
+    def _append(reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    if _normalize_text(
+        evidence_snapshot.get("prompt355_readiness_status"),
+        default="",
+    ) != "ready":
+        _append("prompt355_readiness_status_not_ready")
+    if not bool(evidence_snapshot.get("prompt355_next_cycle_allowed", False)):
+        _append("prompt355_next_cycle_not_allowed")
+    if _normalize_text(
+        evidence_snapshot.get("prompt355_next_action"),
+        default="",
+    ) != "proceed_to_next_local_cycle":
+        _append("prompt355_next_action_not_proceed_to_next_local_cycle")
+    if bool(evidence_snapshot.get("prompt355_manual_required", False)):
+        _append("prompt355_manual_required")
+    if bool(evidence_snapshot.get("prompt355_replan_required", False)):
+        _append("prompt355_replan_required")
+    if _normalize_text(
+        evidence_snapshot.get("prompt356_alignment_status"),
+        default="",
+    ) != "aligned":
+        _append("prompt356_alignment_status_not_aligned")
+    if not bool(evidence_snapshot.get("prompt356_next_cycle_safe", False)):
+        _append("prompt356_next_cycle_not_safe")
+    if bool(evidence_snapshot.get("prompt356_stale_blockers_present", False)) and not bool(
+        evidence_snapshot.get("prompt356_stale_blockers_ignored", False)
+    ):
+        _append("prompt356_stale_blockers_present_not_ignored")
+    prompt356_active_blocked_reason = _normalize_text(
+        evidence_snapshot.get("prompt356_active_blocked_reason"),
+        default="",
+    )
+    if prompt356_active_blocked_reason:
+        _append(prompt356_active_blocked_reason)
+    for reason in _normalize_string_list(
+        evidence_snapshot.get("prompt356_active_blocked_reasons"),
+        sort_items=False,
+    ):
+        _append(reason)
+    if bool(evidence_snapshot.get("prompt356_manual_required", False)):
+        _append("prompt356_manual_required")
+    if bool(evidence_snapshot.get("prompt356_replan_required", False)):
+        _append("prompt356_replan_required")
+    if _normalize_text(
+        evidence_snapshot.get("verification_status"),
+        default="",
+    ) != "verified_success":
+        _append("verification_status_not_verified_success")
+    if _normalize_text(
+        evidence_snapshot.get("verification_outcome"),
+        default="",
+    ) != "objective_satisfied":
+        _append("verification_outcome_not_objective_satisfied")
+    if _normalize_text(
+        evidence_snapshot.get("completion_status"),
+        default="",
+    ) != "done_and_safely_closed":
+        _append("completion_status_not_done_and_safely_closed")
+    if _normalize_text(
+        evidence_snapshot.get("endgame_closure_status"),
+        default="",
+    ) != "safely_closed" and not bool(
+        evidence_snapshot.get("terminal_success", False)
+    ):
+        _append("endgame_closure_not_safely_closed_or_terminal_success")
+    return reasons
+
+
+def _prompt357_current_runtime_evidence_is_ready(
+    evidence_snapshot: Mapping[str, Any],
+) -> bool:
+    return not _build_prompt357_current_runtime_regression_reasons(
+        evidence_snapshot
+    )
+
+
+def _build_prompt357_previous_success_evidence_missing(
+    evidence_snapshot: Mapping[str, Any],
+) -> list[str]:
+    missing: list[str] = []
+
+    def _append(reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in missing:
+            missing.append(normalized_reason)
+
+    if _normalize_text(
+        evidence_snapshot.get("prompt355_readiness_status"),
+        default="",
+    ) != "ready":
+        _append("prompt355_readiness_status_not_ready")
+    if not bool(evidence_snapshot.get("prompt355_next_cycle_allowed", False)):
+        _append("prompt355_next_cycle_not_allowed")
+    if _normalize_text(
+        evidence_snapshot.get("prompt355_next_action"),
+        default="",
+    ) != "proceed_to_next_local_cycle":
+        _append("prompt355_next_action_not_proceed_to_next_local_cycle")
+    if bool(evidence_snapshot.get("prompt355_manual_required", False)):
+        _append("prompt355_manual_required")
+    if bool(evidence_snapshot.get("prompt355_replan_required", False)):
+        _append("prompt355_replan_required")
+    if _normalize_text(
+        evidence_snapshot.get("prompt356_alignment_status"),
+        default="",
+    ) != "aligned":
+        _append("prompt356_alignment_status_not_aligned")
+    if not bool(evidence_snapshot.get("prompt356_next_cycle_safe", False)):
+        _append("prompt356_next_cycle_not_safe")
+    if not bool(evidence_snapshot.get("prompt356_stale_blockers_ignored", False)):
+        _append("prompt356_stale_blockers_not_ignored")
+    if _normalize_text(
+        evidence_snapshot.get("prompt356_next_action"),
+        default="",
+    ) != "proceed_to_next_local_cycle":
+        _append("prompt356_next_action_not_proceed_to_next_local_cycle")
+    if _normalize_text(
+        evidence_snapshot.get("prompt356_active_blocked_reason"),
+        default="",
+    ):
+        _append("prompt356_active_blocked_reason_present")
+    if _normalize_string_list(
+        evidence_snapshot.get("prompt356_active_blocked_reasons"),
+        sort_items=False,
+    ):
+        _append("prompt356_active_blocked_reasons_present")
+    if _normalize_text(
+        evidence_snapshot.get("verification_status"),
+        default="",
+    ) != "verified_success":
+        _append("verification_status_not_verified_success")
+    if _normalize_text(
+        evidence_snapshot.get("verification_outcome"),
+        default="",
+    ) != "objective_satisfied":
+        _append("verification_outcome_not_objective_satisfied")
+    if _normalize_text(
+        evidence_snapshot.get("verification_primary_reason"),
+        default="",
+    ) != "verified_success":
+        _append("verification_primary_reason_not_verified_success")
+    if _normalize_text(
+        evidence_snapshot.get("completion_status"),
+        default="",
+    ) != "done_and_safely_closed":
+        _append("completion_status_not_done_and_safely_closed")
+    if _normalize_text(
+        evidence_snapshot.get("safe_closure_status"),
+        default="",
+    ) != "safely_closed":
+        _append("safe_closure_status_not_safely_closed")
+    if _normalize_text(
+        evidence_snapshot.get("endgame_closure_status"),
+        default="",
+    ) != "safely_closed" and not bool(
+        evidence_snapshot.get("terminal_success", False)
+    ):
+        _append("endgame_closure_not_safely_closed_or_terminal_success")
+    return missing
+
+
+def _build_prompt357_previous_success_candidate(
+    *,
+    source_label: str,
+    source_priority: int,
+    source_path: Path | None = None,
+    prompt355_payload: Mapping[str, Any] | None = None,
+    prompt356_payload: Mapping[str, Any] | None = None,
+    verification_payload: Mapping[str, Any] | None = None,
+    completion_payload: Mapping[str, Any] | None = None,
+    endgame_payload: Mapping[str, Any] | None = None,
+    summary_payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    snapshot = _build_prompt357_evidence_snapshot(
+        prompt355_payload=prompt355_payload,
+        prompt356_payload=prompt356_payload,
+        verification_payload=verification_payload,
+        completion_payload=completion_payload,
+        endgame_payload=endgame_payload,
+        summary_payload=summary_payload,
+    )
+    source_timestamp = 0
+    if source_path is not None:
+        try:
+            source_timestamp = source_path.stat().st_mtime_ns
+        except OSError:
+            source_timestamp = 0
+    valid = not _build_prompt357_previous_success_evidence_missing(snapshot)
+    return {
+        "source_label": _normalize_text(source_label, default="previous_success_source"),
+        "source_priority": int(source_priority),
+        "source_timestamp": int(source_timestamp),
+        "source_path": str(source_path) if source_path is not None else "",
+        "snapshot": snapshot,
+        "valid": bool(valid),
+        "missing": _build_prompt357_previous_success_evidence_missing(snapshot),
+    }
+
+
+def _load_prompt357_previous_success_candidates_from_reference_payload(
+    *,
+    reference_payload: Mapping[str, Any] | None,
+    current_run_root: Path | None,
+) -> list[dict[str, Any]]:
+    payload = dict(reference_payload or {})
+    if not payload:
+        return []
+
+    def _resolved_path(path_text: Any) -> Path | None:
+        normalized_path = _normalize_text(path_text, default="")
+        if not normalized_path:
+            return None
+        path = Path(normalized_path)
+        if not path.exists():
+            return None
+        try:
+            resolved_path = path.resolve()
+        except OSError:
+            resolved_path = path
+        if current_run_root is not None:
+            try:
+                resolved_path.relative_to(current_run_root)
+                return None
+            except ValueError:
+                pass
+        return path
+
+    candidates: list[dict[str, Any]] = []
+    manifest_path = _resolved_path(
+        payload.get("manifest_path")
+        or payload.get("project_browser_autonomous_supplied_path_ingestion_interface_manifest_json_path")
+    )
+    if manifest_path is not None:
+        manifest_payload = _read_json_object_if_exists(manifest_path)
+        if isinstance(manifest_payload, Mapping):
+            manifest_run_state_summary = (
+                dict(manifest_payload.get("run_state_summary_compact"))
+                if isinstance(manifest_payload.get("run_state_summary_compact"), Mapping)
+                else dict(manifest_payload.get("run_state_summary"))
+                if isinstance(manifest_payload.get("run_state_summary"), Mapping)
+                else {}
+            )
+            candidates.append(
+                _build_prompt357_previous_success_candidate(
+                    source_label=f"reference_manifest_summary:{manifest_path}",
+                    source_priority=0,
+                    source_path=manifest_path,
+                    prompt355_payload=manifest_payload.get("prompt355_readiness_summary"),
+                    prompt356_payload=manifest_payload.get(
+                        "prompt356_stale_blocker_alignment_summary"
+                    ),
+                    verification_payload=manifest_run_state_summary,
+                    completion_payload=manifest_run_state_summary,
+                    endgame_payload=manifest_run_state_summary,
+                    summary_payload=manifest_run_state_summary,
+                )
+            )
+
+    run_state_path = _resolved_path(
+        payload.get("run_state_path")
+        or payload.get("project_browser_autonomous_supplied_path_ingestion_interface_run_state_json_path")
+    )
+    if run_state_path is not None:
+        run_state_payload = _read_json_object_if_exists(run_state_path)
+        if isinstance(run_state_payload, Mapping):
+            candidates.append(
+                _build_prompt357_previous_success_candidate(
+                    source_label=f"reference_run_state_summary:{run_state_path}",
+                    source_priority=0,
+                    source_path=run_state_path,
+                    prompt355_payload=run_state_payload,
+                    prompt356_payload=run_state_payload,
+                    verification_payload=run_state_payload,
+                    completion_payload=run_state_payload,
+                    endgame_payload=run_state_payload,
+                    summary_payload=run_state_payload,
+                )
+            )
+
+    return candidates
+
+
+def _resolve_prompt357_previous_success_fallback(
+    *,
+    run_root_path: str,
+    artifacts_dir_path: str,
+    prior_manifest_payload: Mapping[str, Any] | None,
+    prior_run_state_payload: Mapping[str, Any] | None,
+    prior_prompt355_readiness_payload: Mapping[str, Any] | None,
+    prior_prompt356_stale_blocker_alignment_payload: Mapping[str, Any] | None,
+    prior_verification_closure_contract_payload: Mapping[str, Any] | None,
+    prior_completion_contract_payload: Mapping[str, Any] | None,
+    prior_endgame_closure_contract_payload: Mapping[str, Any] | None,
+    reference_payloads: Sequence[Mapping[str, Any] | None],
+) -> dict[str, Any]:
+    current_run_root = Path(run_root_path) if _normalize_text(run_root_path, default="") else None
+    candidates: list[dict[str, Any]] = []
+
+    resolved_run_root = None
+    if current_run_root is not None:
+        try:
+            resolved_run_root = current_run_root.resolve()
+        except OSError:
+            resolved_run_root = current_run_root
+
+    if isinstance(prior_manifest_payload, Mapping):
+        prior_manifest_run_state_summary = (
+            dict(prior_manifest_payload.get("run_state_summary_compact"))
+            if isinstance(prior_manifest_payload.get("run_state_summary_compact"), Mapping)
+            else dict(prior_manifest_payload.get("run_state_summary"))
+            if isinstance(prior_manifest_payload.get("run_state_summary"), Mapping)
+            else {}
+        )
+        candidates.append(
+            _build_prompt357_previous_success_candidate(
+                source_label=f"prior_manifest_summary:{run_root_path}/manifest.json",
+                source_priority=0,
+                source_path=(current_run_root / "manifest.json") if current_run_root else None,
+                prompt355_payload=prior_manifest_payload.get("prompt355_readiness_summary"),
+                prompt356_payload=prior_manifest_payload.get(
+                    "prompt356_stale_blocker_alignment_summary"
+                ),
+                verification_payload=prior_manifest_run_state_summary,
+                completion_payload=prior_manifest_run_state_summary,
+                endgame_payload=prior_manifest_run_state_summary,
+                summary_payload=prior_manifest_run_state_summary,
+            )
+        )
+
+    if isinstance(prior_run_state_payload, Mapping):
+        candidates.append(
+            _build_prompt357_previous_success_candidate(
+                source_label=f"prior_run_state_summary:{run_root_path}/run_state.json",
+                source_priority=0,
+                source_path=(current_run_root / "run_state.json") if current_run_root else None,
+                prompt355_payload=prior_run_state_payload,
+                prompt356_payload=prior_run_state_payload,
+                verification_payload=prior_run_state_payload,
+                completion_payload=prior_run_state_payload,
+                endgame_payload=prior_run_state_payload,
+                summary_payload=prior_run_state_payload,
+            )
+        )
+
+    if any(
+        isinstance(payload, Mapping)
+        for payload in (
+            prior_prompt355_readiness_payload,
+            prior_prompt356_stale_blocker_alignment_payload,
+            prior_verification_closure_contract_payload,
+            prior_completion_contract_payload,
+            prior_endgame_closure_contract_payload,
+        )
+    ):
+        candidates.append(
+            _build_prompt357_previous_success_candidate(
+                source_label=f"prior_prompt356_prompt355_artifacts:{run_root_path}",
+                source_priority=1,
+                source_path=(
+                    current_run_root / "prompt356_stale_blocker_alignment.json"
+                    if current_run_root is not None
+                    else None
+                ),
+                prompt355_payload=prior_prompt355_readiness_payload,
+                prompt356_payload=prior_prompt356_stale_blocker_alignment_payload,
+                verification_payload=prior_verification_closure_contract_payload,
+                completion_payload=prior_completion_contract_payload,
+                endgame_payload=prior_endgame_closure_contract_payload,
+                summary_payload=prior_run_state_payload,
+            )
+        )
+
+    artifacts_dir = Path(artifacts_dir_path) if _normalize_text(artifacts_dir_path, default="") else None
+    if artifacts_dir is not None:
+        try:
+            resolved_artifacts_dir = artifacts_dir.resolve()
+        except OSError:
+            resolved_artifacts_dir = artifacts_dir
+        if resolved_run_root is None or resolved_artifacts_dir != resolved_run_root:
+            artifacts_manifest_payload = _read_json_object_if_exists(artifacts_dir / "manifest.json")
+            artifacts_run_state_payload = _read_json_object_if_exists(artifacts_dir / "run_state.json")
+            artifacts_manifest_summary = (
+                dict(artifacts_manifest_payload.get("run_state_summary_compact"))
+                if isinstance(artifacts_manifest_payload, Mapping)
+                and isinstance(artifacts_manifest_payload.get("run_state_summary_compact"), Mapping)
+                else dict(artifacts_manifest_payload.get("run_state_summary"))
+                if isinstance(artifacts_manifest_payload, Mapping)
+                and isinstance(artifacts_manifest_payload.get("run_state_summary"), Mapping)
+                else {}
+            )
+            if isinstance(artifacts_manifest_payload, Mapping) or isinstance(
+                artifacts_run_state_payload,
+                Mapping,
+            ):
+                candidates.append(
+                    _build_prompt357_previous_success_candidate(
+                        source_label=f"artifacts_dir_summary:{artifacts_dir}",
+                        source_priority=0,
+                        source_path=(artifacts_dir / "manifest.json"),
+                        prompt355_payload=(
+                            artifacts_manifest_payload.get("prompt355_readiness_summary")
+                            if isinstance(artifacts_manifest_payload, Mapping)
+                            else None
+                        ),
+                        prompt356_payload=(
+                            artifacts_manifest_payload.get(
+                                "prompt356_stale_blocker_alignment_summary"
+                            )
+                            if isinstance(artifacts_manifest_payload, Mapping)
+                            else None
+                        ),
+                        verification_payload=artifacts_manifest_summary
+                        or artifacts_run_state_payload,
+                        completion_payload=artifacts_manifest_summary
+                        or artifacts_run_state_payload,
+                        endgame_payload=artifacts_manifest_summary
+                        or artifacts_run_state_payload,
+                        summary_payload=artifacts_manifest_summary
+                        or artifacts_run_state_payload,
+                    )
+                )
+
+            artifacts_prompt355_payload = _read_json_object_if_exists(
+                artifacts_dir / "prompt355_readiness.json"
+            )
+            artifacts_prompt356_payload = _read_json_object_if_exists(
+                artifacts_dir / "prompt356_stale_blocker_alignment.json"
+            )
+            artifacts_verification_payload = _read_json_object_if_exists(
+                artifacts_dir / "verification_closure_contract.json"
+            )
+            artifacts_completion_payload = _read_json_object_if_exists(
+                artifacts_dir / "completion_contract.json"
+            )
+            artifacts_endgame_payload = _read_json_object_if_exists(
+                artifacts_dir / "endgame_closure_contract.json"
+            )
+            if any(
+                isinstance(payload, Mapping)
+                for payload in (
+                    artifacts_prompt355_payload,
+                    artifacts_prompt356_payload,
+                    artifacts_verification_payload,
+                    artifacts_completion_payload,
+                    artifacts_endgame_payload,
+                )
+            ):
+                candidates.append(
+                    _build_prompt357_previous_success_candidate(
+                        source_label=f"artifacts_dir_prompt356_prompt355_artifacts:{artifacts_dir}",
+                        source_priority=2,
+                        source_path=artifacts_dir / "prompt356_stale_blocker_alignment.json",
+                        prompt355_payload=artifacts_prompt355_payload,
+                        prompt356_payload=artifacts_prompt356_payload,
+                        verification_payload=artifacts_verification_payload,
+                        completion_payload=artifacts_completion_payload,
+                        endgame_payload=artifacts_endgame_payload,
+                        summary_payload=artifacts_run_state_payload,
+                    )
+                )
+
+    for reference_payload in reference_payloads:
+        candidates.extend(
+            _load_prompt357_previous_success_candidates_from_reference_payload(
+                reference_payload=reference_payload,
+                current_run_root=resolved_run_root,
+            )
+        )
+
+    valid_candidates = [candidate for candidate in candidates if bool(candidate.get("valid", False))]
+    if valid_candidates:
+        valid_candidates.sort(
+            key=lambda candidate: (
+                int(candidate.get("source_priority", 99)),
+                -int(candidate.get("source_timestamp", 0)),
+                _normalize_text(candidate.get("source_label"), default=""),
+            )
+        )
+        selected = valid_candidates[0]
+        return {
+            "valid": True,
+            "source": _normalize_text(selected.get("source_label"), default=""),
+            "missing": [],
+        }
+
+    if not candidates:
+        return {
+            "valid": False,
+            "source": "",
+            "missing": ["previous_success_source_unavailable"],
+        }
+
+    candidates.sort(
+        key=lambda candidate: (
+            int(candidate.get("source_priority", 99)),
+            -int(candidate.get("source_timestamp", 0)),
+            _normalize_text(candidate.get("source_label"), default=""),
+        )
+    )
+    best_candidate = candidates[0]
+    missing = _normalize_string_list(best_candidate.get("missing"), sort_items=False)
+    if not missing:
+        missing = ["previous_success_evidence_invalid"]
+    return {
+        "valid": False,
+        "source": "",
+        "missing": missing,
+    }
+
+
+def _collect_prompt357_local_git_diff_changed_files(
+    *,
+    execution_repo_path: str,
+) -> list[str]:
+    repo_path = _normalize_text(execution_repo_path, default="")
+    if not repo_path:
+        return []
+    repo_dir = Path(repo_path)
+    if not repo_dir.exists() or not repo_dir.is_dir():
+        return []
+
+    changed_files: set[str] = set()
+    for command in (["diff", "--name-only"], ["diff", "--cached", "--name-only"]):
+        result = _run_git(repo_path, command)
+        if result.returncode != 0:
+            continue
+        for raw_line in (result.stdout or "").splitlines():
+            path = raw_line.strip()
+            if path:
+                changed_files.add(path)
+
+    return _normalize_string_list(changed_files, sort_items=True)
+
+
+def _build_prompt357_suppressed_legacy_blockers(
+    *,
+    manifest_units: Sequence[Mapping[str, Any]],
+    prompt356_stale_blocker_alignment_payload: Mapping[str, Any] | None,
+) -> list[str]:
+    prompt356 = dict(prompt356_stale_blocker_alignment_payload or {})
+    suppressed_blockers: list[str] = []
+
+    def _append(reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in suppressed_blockers:
+            suppressed_blockers.append(normalized_reason)
+
+    for stale_reason in _normalize_string_list(
+        prompt356.get("prompt356_stale_blocker_reasons"),
+        sort_items=False,
+    ):
+        _append(
+            f"stale_blocker_ignored_for_local_only_next_cycle:{stale_reason}"
+        )
+
+    blocker_sources = (
+        ("push", "push_execution_summary"),
+        ("pr", "pr_execution_summary"),
+        ("merge", "merge_execution_summary"),
+        ("rollback", "rollback_execution_summary"),
+    )
+    blocker_field_names = (
+        "blocking_reasons",
+        "validation_blocked_reasons",
+        "authority_blocked_reasons",
+        "remote_github_blocked_reasons",
+        "rollback_aftermath_blocked_reasons",
+    )
+    blocker_reason_names = (
+        "failure_reason",
+        "validation_blocked_reason",
+        "authority_blocked_reason",
+        "remote_state_blocked_reason",
+        "remote_github_blocked_reason",
+        "rollback_aftermath_blocked_reason",
+    )
+    for entry in manifest_units:
+        unit_id = _normalize_text(
+            entry.get("pr_id"),
+            default=_normalize_text(entry.get("unit_id"), default="unknown_unit"),
+        )
+        for blocker_kind, summary_key in blocker_sources:
+            summary = entry.get(summary_key)
+            if not isinstance(summary, Mapping):
+                continue
+            reasons: list[str] = []
+            for field_name in blocker_field_names:
+                reasons.extend(
+                    _normalize_string_list(summary.get(field_name), sort_items=False)
+                )
+            for field_name in blocker_reason_names:
+                reason = _normalize_text(summary.get(field_name), default="")
+                if reason:
+                    reasons.append(reason)
+            if bool(summary.get("remote_state_blocked", False)):
+                reasons.append("remote_state_blocked")
+            if bool(summary.get("remote_github_blocked", False)):
+                reasons.append("remote_github_blocked")
+            if bool(summary.get("rollback_remote_followup_required", False)):
+                reasons.append("rollback_remote_followup_required")
+            if bool(summary.get("rollback_aftermath_blocked", False)):
+                reasons.append("rollback_aftermath_blocked")
+            if _normalize_text(summary.get("status"), default="") == "blocked" and not reasons:
+                reasons.append("blocked")
+            for reason in _normalize_string_list(reasons, sort_items=False):
+                _append(
+                    f"{blocker_kind}_blocker_not_required_for_local_only_continuation:{unit_id}:{reason}"
+                )
+
+    return suppressed_blockers
+
+
+def _build_prompt357_local_continuation_route_surface(
+    *,
+    run_state_payload: Mapping[str, Any],
+    decision_payload: Mapping[str, Any] | None,
+    prompt355_readiness_payload: Mapping[str, Any] | None,
+    prompt356_stale_blocker_alignment_payload: Mapping[str, Any] | None,
+    manifest_units: Sequence[Mapping[str, Any]],
+    execution_repo_path: str,
+    artifacts_dir_path: str,
+    run_root_path: str,
+    prior_manifest_payload: Mapping[str, Any] | None,
+    prior_run_state_payload: Mapping[str, Any] | None,
+    prior_prompt355_readiness_payload: Mapping[str, Any] | None,
+    prior_prompt356_stale_blocker_alignment_payload: Mapping[str, Any] | None,
+    prior_verification_closure_contract_payload: Mapping[str, Any] | None,
+    prior_completion_contract_payload: Mapping[str, Any] | None,
+    prior_endgame_closure_contract_payload: Mapping[str, Any] | None,
+    reference_payloads: Sequence[Mapping[str, Any] | None],
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    decision = dict(decision_payload or {})
+    prompt355 = dict(prompt355_readiness_payload or {})
+    prompt356 = dict(prompt356_stale_blocker_alignment_payload or {})
+
+    def _read_text(*values: Any, default: str = "") -> str:
+        for value in values:
+            text = _normalize_text(value, default="")
+            if text:
+                return text
+        return default
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    prompt355_readiness_status = _read_text(
+        prompt355.get("prompt355_readiness_status"),
+        run_state.get("prompt355_readiness_status"),
+    )
+    prompt355_next_cycle_allowed = _prompt357_as_boolish(
+        prompt355.get("prompt355_next_cycle_allowed")
+        if "prompt355_next_cycle_allowed" in prompt355
+        else run_state.get("prompt355_next_cycle_allowed")
+    )
+    prompt355_next_action = _read_text(
+        prompt355.get("prompt355_next_action"),
+        run_state.get("prompt355_next_action"),
+    )
+    prompt355_manual_required = _prompt357_as_boolish(
+        prompt355.get("prompt355_manual_required")
+        if "prompt355_manual_required" in prompt355
+        else run_state.get("prompt355_manual_required")
+    )
+    prompt355_replan_required = _prompt357_as_boolish(
+        prompt355.get("prompt355_replan_required")
+        if "prompt355_replan_required" in prompt355
+        else run_state.get("prompt355_replan_required")
+    )
+
+    prompt356_alignment_status = _read_text(
+        prompt356.get("prompt356_alignment_status"),
+        run_state.get("prompt356_alignment_status"),
+    )
+    prompt356_next_cycle_safe = _prompt357_as_boolish(
+        prompt356.get("prompt356_next_cycle_safe")
+        if "prompt356_next_cycle_safe" in prompt356
+        else run_state.get("prompt356_next_cycle_safe")
+    )
+    prompt356_stale_blockers_present = _prompt357_as_boolish(
+        prompt356.get("prompt356_stale_blockers_present")
+        if "prompt356_stale_blockers_present" in prompt356
+        else run_state.get("prompt356_stale_blockers_present")
+    )
+    prompt356_stale_blockers_ignored = _prompt357_as_boolish(
+        prompt356.get("prompt356_stale_blockers_ignored")
+        if "prompt356_stale_blockers_ignored" in prompt356
+        else run_state.get("prompt356_stale_blockers_ignored")
+    )
+    prompt356_active_blocked_reason = _read_text(
+        prompt356.get("prompt356_active_blocked_reason"),
+        run_state.get("prompt356_active_blocked_reason"),
+    )
+    prompt356_active_blocked_reasons = _normalize_string_list(
+        prompt356.get("prompt356_active_blocked_reasons")
+        if "prompt356_active_blocked_reasons" in prompt356
+        else run_state.get("prompt356_active_blocked_reasons"),
+        sort_items=False,
+    )
+    prompt356_manual_required = _prompt357_as_boolish(
+        prompt356.get("prompt356_manual_required")
+        if "prompt356_manual_required" in prompt356
+        else run_state.get("prompt356_manual_required")
+    )
+    prompt356_replan_required = _prompt357_as_boolish(
+        prompt356.get("prompt356_replan_required")
+        if "prompt356_replan_required" in prompt356
+        else run_state.get("prompt356_replan_required")
+    )
+
+    current_runtime_evidence = _build_prompt357_evidence_snapshot(
+        prompt355_payload=prompt355,
+        prompt356_payload=prompt356,
+        verification_payload=run_state,
+        completion_payload=run_state,
+        endgame_payload=run_state,
+        summary_payload=run_state,
+    )
+    verification_status = _normalize_text(
+        current_runtime_evidence.get("verification_status"),
+        default="",
+    )
+    verification_outcome = _normalize_text(
+        current_runtime_evidence.get("verification_outcome"),
+        default="",
+    )
+    completion_status = _normalize_text(
+        current_runtime_evidence.get("completion_status"),
+        default="",
+    )
+    endgame_closure_status = _normalize_text(
+        current_runtime_evidence.get("endgame_closure_status"),
+        default="",
+    )
+    terminal_success = bool(current_runtime_evidence.get("terminal_success", False))
+    legacy_next_action = _read_text(
+        decision.get("next_action"),
+        run_state.get("next_action"),
+        run_state.get("next_run_action"),
+    )
+    ready_evidence = _prompt357_current_runtime_evidence_is_ready(
+        current_runtime_evidence
+    )
+    active_blocked_reasons = _build_prompt357_current_runtime_regression_reasons(
+        current_runtime_evidence
+    )
+
+    prompt357_commit_execution_false_blocker_detected = False
+    prompt357_commit_execution_false_blocker_reason = ""
+    git_diff_changed_files = _collect_prompt357_local_git_diff_changed_files(
+        execution_repo_path=execution_repo_path,
+    )
+    if git_diff_changed_files:
+        for entry in manifest_units:
+            summary = entry.get("commit_execution_summary")
+            if not isinstance(summary, Mapping):
+                continue
+            blocking_reasons = _normalize_string_list(
+                summary.get("blocking_reasons"),
+                sort_items=False,
+            )
+            validation_blocked_reasons = _normalize_string_list(
+                summary.get("validation_blocked_reasons"),
+                sort_items=False,
+            )
+            if (
+                "result_changed_files_missing" in blocking_reasons
+                or "result_changed_files_missing" in validation_blocked_reasons
+            ):
+                prompt357_commit_execution_false_blocker_detected = True
+                prompt357_commit_execution_false_blocker_reason = (
+                    "result_changed_files_missing_but_git_diff_changed_files_present"
+                )
+                break
+
+    suppressed_legacy_next_action = (
+        "proceed_to_pr" if legacy_next_action == "proceed_to_pr" else ""
+    )
+    suppressed_legacy_blockers = _build_prompt357_suppressed_legacy_blockers(
+        manifest_units=manifest_units,
+        prompt356_stale_blocker_alignment_payload=prompt356,
+    )
+    if suppressed_legacy_next_action:
+        _append_reason(
+            suppressed_legacy_blockers,
+            "legacy_next_action_not_required_for_local_only_continuation:proceed_to_pr",
+        )
+
+    if ready_evidence:
+        route_status = "reconciled"
+        local_continuation_allowed = True
+        authoritative_next_action = "proceed_to_next_local_cycle"
+        next_action = "prepare_next_local_cycle"
+        evidence_source = "current_runtime"
+        current_runtime_regression_detected = False
+        current_runtime_regression_reasons: list[str] = []
+        previous_success_evidence_valid = False
+        previous_success_evidence_source = ""
+        previous_success_evidence_missing: list[str] = []
+        commit_tag_manual_step_allowed = True
+        manual_required = False
+        replan_required = False
+        active_blocked_reason = ""
+        active_blocked_reasons = []
+        authoritative_source = "prompt355_ready_prompt356_aligned_current_runtime"
+        summary = (
+            "Prompt357 reconciled: authoritative local-only continuation proceeds to "
+            "the next cycle."
+        )
+        if suppressed_legacy_blockers:
+            summary += " Suppressed legacy blockers: " + ", ".join(
+                suppressed_legacy_blockers
+            )
+    else:
+        current_runtime_regression_detected = bool(active_blocked_reasons) and (
+            prompt355_readiness_status != "ready"
+            or prompt356_alignment_status != "aligned"
+            or bool(prompt356_active_blocked_reason)
+            or bool(prompt356_active_blocked_reasons)
+        )
+        current_runtime_regression_reasons = list(active_blocked_reasons)
+        previous_success_fallback = (
+            _resolve_prompt357_previous_success_fallback(
+                run_root_path=run_root_path,
+                artifacts_dir_path=artifacts_dir_path,
+                prior_manifest_payload=prior_manifest_payload,
+                prior_run_state_payload=prior_run_state_payload,
+                prior_prompt355_readiness_payload=prior_prompt355_readiness_payload,
+                prior_prompt356_stale_blocker_alignment_payload=(
+                    prior_prompt356_stale_blocker_alignment_payload
+                ),
+                prior_verification_closure_contract_payload=(
+                    prior_verification_closure_contract_payload
+                ),
+                prior_completion_contract_payload=prior_completion_contract_payload,
+                prior_endgame_closure_contract_payload=(
+                    prior_endgame_closure_contract_payload
+                ),
+                reference_payloads=reference_payloads,
+            )
+            if current_runtime_regression_detected
+            else {
+                "valid": False,
+                "source": "",
+                "missing": ["current_runtime_regression_not_detected"],
+            }
+        )
+        previous_success_evidence_valid = bool(previous_success_fallback.get("valid", False))
+        previous_success_evidence_source = _normalize_text(
+            previous_success_fallback.get("source"),
+            default="",
+        )
+        previous_success_evidence_missing = _normalize_string_list(
+            previous_success_fallback.get("missing"),
+            sort_items=False,
+        )
+
+        if previous_success_evidence_valid:
+            route_status = "reconciled"
+            local_continuation_allowed = True
+            authoritative_next_action = "proceed_to_next_local_cycle"
+            next_action = "prepare_next_local_cycle"
+            evidence_source = "previous_success_artifact_fallback"
+            commit_tag_manual_step_allowed = True
+            manual_required = False
+            replan_required = False
+            active_blocked_reason = ""
+            active_blocked_reasons = []
+            authoritative_source = (
+                "prompt355_ready_prompt356_aligned_previous_success_fallback"
+            )
+            summary = (
+                "Prompt357 reconciled: current runtime Prompt355/356 regressed, so "
+                "authoritative fallback uses the most recent previous local-only "
+                f"Prompt356/Prompt355 success evidence from {previous_success_evidence_source}."
+            )
+            if current_runtime_regression_reasons:
+                summary += " Current regression reasons: " + ", ".join(
+                    current_runtime_regression_reasons
+                )
+            if suppressed_legacy_blockers:
+                summary += " Suppressed legacy blockers: " + ", ".join(
+                    suppressed_legacy_blockers
+                )
+        else:
+            route_status = "blocked"
+            local_continuation_allowed = False
+            authoritative_next_action = "hold_for_followup"
+            next_action = "hold_for_followup"
+            evidence_source = "current_runtime_only"
+            commit_tag_manual_step_allowed = False
+            manual_required = bool(
+                prompt355_manual_required
+                or prompt356_manual_required
+                or _prompt357_as_boolish(run_state.get("manual_intervention_required"))
+            )
+            replan_required = bool(
+                prompt355_replan_required
+                or prompt356_replan_required
+                or _prompt357_as_boolish(run_state.get("replan_required"))
+            )
+            combined_blocked_reasons = list(active_blocked_reasons)
+            for missing_reason in previous_success_evidence_missing:
+                _append_reason(combined_blocked_reasons, missing_reason)
+            active_blocked_reason = (
+                combined_blocked_reasons[0]
+                if combined_blocked_reasons
+                else "prompt357_authoritative_ready_evidence_missing"
+            )
+            if not combined_blocked_reasons:
+                combined_blocked_reasons = [active_blocked_reason]
+            active_blocked_reasons = combined_blocked_reasons
+            authoritative_source = (
+                "prompt355_ready_prompt356_aligned_current_runtime_unreconciled"
+            )
+            summary = "Prompt357 blocked: " + ", ".join(active_blocked_reasons)
+
+    return {
+        "prompt357_route_status": route_status,
+        "prompt357_local_continuation_allowed": bool(local_continuation_allowed),
+        "prompt357_authoritative_next_action": authoritative_next_action,
+        "prompt357_next_action": next_action,
+        "prompt357_evidence_source": evidence_source,
+        "prompt357_current_runtime_regression_detected": bool(
+            current_runtime_regression_detected
+        ),
+        "prompt357_current_runtime_regression_reasons": _normalize_string_list(
+            current_runtime_regression_reasons,
+            sort_items=False,
+        ),
+        "prompt357_previous_success_evidence_valid": bool(
+            previous_success_evidence_valid
+        ),
+        "prompt357_previous_success_evidence_source": (
+            previous_success_evidence_source
+        ),
+        "prompt357_previous_success_evidence_missing": _normalize_string_list(
+            previous_success_evidence_missing,
+            sort_items=False,
+        ),
+        "prompt357_suppressed_legacy_next_action": suppressed_legacy_next_action,
+        "prompt357_suppressed_legacy_blockers": _normalize_string_list(
+            suppressed_legacy_blockers,
+            sort_items=False,
+        ),
+        "prompt357_remote_operations_required": False,
+        "prompt357_github_operations_required": False,
+        "prompt357_push_required": False,
+        "prompt357_pr_required": False,
+        "prompt357_merge_required": False,
+        "prompt357_rollback_required": False,
+        "prompt357_commit_tag_automation_allowed": False,
+        "prompt357_commit_tag_manual_step_allowed": bool(
+            commit_tag_manual_step_allowed
+        ),
+        "prompt357_commit_execution_false_blocker_detected": bool(
+            prompt357_commit_execution_false_blocker_detected
+        ),
+        "prompt357_commit_execution_false_blocker_reason": (
+            prompt357_commit_execution_false_blocker_reason
+        ),
+        "prompt357_manual_required": bool(manual_required),
+        "prompt357_replan_required": bool(replan_required),
+        "prompt357_active_blocked_reason": active_blocked_reason,
+        "prompt357_active_blocked_reasons": _normalize_string_list(
+            active_blocked_reasons,
+            sort_items=False,
+        ),
+        "prompt357_authoritative_source": authoritative_source,
+        "prompt357_scope": "local_only",
+        "prompt357_summary": summary,
     }
 
 
@@ -202470,6 +203696,7 @@ class PlannedExecutionRunner:
         manifest["objective_contract_path"] = str(objective_contract_path)
 
         manifest_path = run_root / "manifest.json"
+        prior_manifest_payload = _read_json_object_if_exists(manifest_path)
         _write_json(manifest_path, manifest)
         decision_path = run_root / "next_action.json"
         decision_error = ""
@@ -202693,6 +203920,7 @@ class PlannedExecutionRunner:
             }
 
         run_state_path = run_root / "run_state.json"
+        prior_run_state_payload = _read_json_object_if_exists(run_state_path)
         run_state_payload = _build_run_state_payload(
             run_id=resolved_job_id,
             run_status=run_status,
@@ -203924,6 +205152,9 @@ class PlannedExecutionRunner:
             run_state_payload=run_state_payload,
         )
         completion_contract_path = run_root / "completion_contract.json"
+        prior_completion_contract_payload = _read_json_object_if_exists(
+            completion_contract_path
+        )
         completion_contract_payload = build_completion_contract_surface(
             run_id=resolved_job_id,
             objective_contract_payload=objective_contract_payload,
@@ -204263,6 +205494,9 @@ class PlannedExecutionRunner:
         )
 
         verification_closure_contract_path = run_root / "verification_closure_contract.json"
+        prior_verification_closure_contract_payload = _read_json_object_if_exists(
+            verification_closure_contract_path
+        )
         verification_closure_contract_payload = build_verification_closure_contract_surface(
             run_id=resolved_job_id,
             objective_contract_payload=objective_contract_payload,
@@ -204323,6 +205557,9 @@ class PlannedExecutionRunner:
             retry_reentry_loop_contract_payload=retry_reentry_loop_contract_payload,
         )
         endgame_closure_contract_path = run_root / "endgame_closure_contract.json"
+        prior_endgame_closure_contract_payload = _read_json_object_if_exists(
+            endgame_closure_contract_path
+        )
         endgame_closure_contract_payload = build_endgame_closure_contract_surface(
             run_id=resolved_job_id,
             completion_contract_payload=completion_contract_payload,
@@ -204993,6 +206230,9 @@ class PlannedExecutionRunner:
             approved_restart_execution_contract_payload,
         )
         prompt355_readiness_path = run_root / "prompt355_readiness.json"
+        prior_prompt355_readiness_payload = _read_json_object_if_exists(
+            prompt355_readiness_path
+        )
         prompt355_readiness_payload = (
             _build_prompt355_local_autonomous_continuation_readiness_surface(
                 run_state_payload=run_state_payload,
@@ -205011,6 +206251,9 @@ class PlannedExecutionRunner:
         }
         prompt356_stale_blocker_alignment_path = (
             run_root / "prompt356_stale_blocker_alignment.json"
+        )
+        prior_prompt356_stale_blocker_alignment_payload = _read_json_object_if_exists(
+            prompt356_stale_blocker_alignment_path
         )
         prompt356_stale_blocker_alignment_payload = (
             _build_prompt356_stale_blocker_alignment_surface(
@@ -205036,6 +206279,49 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt356_stale_blocker_alignment_payload,
+        }
+        prompt357_local_continuation_route_path = (
+            run_root / "prompt357_local_continuation_route.json"
+        )
+        prompt357_local_continuation_route_payload = (
+            _build_prompt357_local_continuation_route_surface(
+                run_state_payload=run_state_payload,
+                decision_payload=decision_payload,
+                prompt355_readiness_payload=prompt355_readiness_payload,
+                prompt356_stale_blocker_alignment_payload=(
+                    prompt356_stale_blocker_alignment_payload
+                ),
+                manifest_units=manifest_units,
+                execution_repo_path=resolved_execution_repo_path,
+                artifacts_dir_path=str(artifacts_root),
+                run_root_path=str(run_root),
+                prior_manifest_payload=prior_manifest_payload,
+                prior_run_state_payload=prior_run_state_payload,
+                prior_prompt355_readiness_payload=prior_prompt355_readiness_payload,
+                prior_prompt356_stale_blocker_alignment_payload=(
+                    prior_prompt356_stale_blocker_alignment_payload
+                ),
+                prior_verification_closure_contract_payload=(
+                    prior_verification_closure_contract_payload
+                ),
+                prior_completion_contract_payload=prior_completion_contract_payload,
+                prior_endgame_closure_contract_payload=(
+                    prior_endgame_closure_contract_payload
+                ),
+                reference_payloads=(
+                    prior_approved_restart_execution_contract_payload,
+                    approved_restart_payload_for_bounded_local_loop,
+                    approved_restart_execution_contract_payload,
+                ),
+            )
+        )
+        _write_json(
+            prompt357_local_continuation_route_path,
+            prompt357_local_continuation_route_payload,
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt357_local_continuation_route_payload,
         }
         run_state_payload = _augment_run_state_with_operator_explainability(
             run_state_payload=run_state_payload,
@@ -205122,6 +206408,12 @@ class PlannedExecutionRunner:
         )
         manifest["prompt356_stale_blocker_alignment_path"] = str(
             prompt356_stale_blocker_alignment_path
+        )
+        manifest["prompt357_local_continuation_route_summary"] = dict(
+            prompt357_local_continuation_route_payload
+        )
+        manifest["prompt357_local_continuation_route_path"] = str(
+            prompt357_local_continuation_route_path
         )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
@@ -205283,6 +206575,66 @@ class PlannedExecutionRunner:
                     False,
                 )
             ),
+            "prompt357_route_status": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_route_status"
+                ),
+                default="blocked",
+            ),
+            "prompt357_authoritative_next_action": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_authoritative_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt357_next_action": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt357_evidence_source": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_evidence_source"
+                ),
+                default="current_runtime_only",
+            ),
+            "prompt357_current_runtime_regression_detected": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_current_runtime_regression_detected",
+                    False,
+                )
+            ),
+            "prompt357_previous_success_evidence_valid": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_previous_success_evidence_valid",
+                    False,
+                )
+            ),
+            "prompt357_previous_success_evidence_source": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_previous_success_evidence_source"
+                ),
+                default="",
+            ),
+            "prompt357_suppressed_legacy_next_action": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_suppressed_legacy_next_action"
+                ),
+                default="",
+            ),
+            "prompt357_local_continuation_allowed": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_local_continuation_allowed",
+                    False,
+                )
+            ),
+            "prompt357_commit_execution_false_blocker_detected": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_commit_execution_false_blocker_detected",
+                    False,
+                )
+            ),
         }
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -205337,6 +206689,72 @@ class PlannedExecutionRunner:
                     "prompt356_active_blocked_reason"
                 ),
                 default="",
+            ),
+            "prompt357_route_status": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_route_status"
+                ),
+                default="blocked",
+            ),
+            "prompt357_local_continuation_allowed": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_local_continuation_allowed",
+                    False,
+                )
+            ),
+            "prompt357_commit_tag_manual_step_allowed": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_commit_tag_manual_step_allowed",
+                    False,
+                )
+            ),
+            "prompt357_evidence_source": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_evidence_source"
+                ),
+                default="current_runtime_only",
+            ),
+            "prompt357_current_runtime_regression_detected": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_current_runtime_regression_detected",
+                    False,
+                )
+            ),
+            "prompt357_previous_success_evidence_valid": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_previous_success_evidence_valid",
+                    False,
+                )
+            ),
+            "prompt357_previous_success_evidence_source": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_previous_success_evidence_source"
+                ),
+                default="",
+            ),
+            "prompt357_manual_required": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_manual_required",
+                    False,
+                )
+            ),
+            "prompt357_replan_required": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_replan_required",
+                    False,
+                )
+            ),
+            "prompt357_active_blocked_reason": _normalize_text(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt357_commit_execution_false_blocker_detected": bool(
+                prompt357_local_continuation_route_payload.get(
+                    "prompt357_commit_execution_false_blocker_detected",
+                    False,
+                )
             ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(
