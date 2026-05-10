@@ -342,6 +342,17 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt360_replan_required",
     "prompt360_active_blocked_reason",
     "prompt360_active_blocked_reasons",
+    "prompt360_recovered_prompt359_evidence_used",
+    "prompt360_recovered_prompt359_source",
+    "prompt360_recovered_prompt359_contract_status",
+    "prompt360_recovered_prompt359_selected_step_execution_contract_ready",
+    "prompt360_recovered_prompt359_selected_step_operation",
+    "prompt360_recovered_prompt359_authoritative_next_action",
+    "prompt360_recovered_prompt359_next_action",
+    "prompt360_recovered_prompt359_prompt358_recovered_evidence_used",
+    "prompt360_recovered_prompt359_prompt358_recovered_prompt355_source",
+    "prompt360_recovered_prompt359_prompt358_recovered_prompt356_source",
+    "prompt360_recovered_prompt359_prompt358_recovered_prompt357_source",
     "prompt360_summary",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
@@ -872,6 +883,9 @@ def select_manifest_run_state_summary_compact(
         "prompt360_codex_execution_allowed",
         "prompt360_manual_required",
         "prompt360_replan_required",
+        "prompt360_recovered_prompt359_evidence_used",
+        "prompt360_recovered_prompt359_selected_step_execution_contract_ready",
+        "prompt360_recovered_prompt359_prompt358_recovered_evidence_used",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
