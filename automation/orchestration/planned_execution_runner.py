@@ -22578,6 +22578,10 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     exec_plan_path = Path(
         "/tmp/codex-local-runner-decision/local_codex_execution_readiness/local_codex_exec_plan.sh"
     )
+    _refresh_one_cycle_controller_runtime_planning_artifacts(
+        one_cycle_controller_dir=one_cycle_controller_dir,
+        execution_repo_path=execution_repo_path,
+    )
 
     status = "one_cycle_controller_ready"
     next_action = "enable_one_cycle_controller_execution"
@@ -22628,6 +22632,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_targeted_contract_fix_prompt_next_action = "manual_review_contract_fix_route_intake"
     local_targeted_contract_fix_prompt_normalized_reason = ""
     local_targeted_contract_fix_prompt_lifecycle_issue_detected = False
+    local_targeted_contract_fix_prompt_state: dict[str, Any] | None = None
     local_contract_fix_cycle_coordination_status = "not_started"
     local_contract_fix_cycle_coordination_blocked_reason = "prompt336_not_started"
     local_contract_fix_cycle_coordination_ready = False
@@ -23739,477 +23744,6 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         post_execution_handoff.get(
             "local_post_codex_route_approve_commit_tag_allowed",
             local_post_codex_route_approve_commit_tag_allowed,
-        )
-    )
-    if local_targeted_contract_fix_prompt_state is None:
-        local_targeted_contract_fix_prompt_state = (
-            _build_local_targeted_contract_fix_prompt_artifacts(
-                one_cycle_controller_dir=one_cycle_controller_dir
-            )
-        )
-    local_targeted_contract_fix_route_intake_status = _normalize_text(
-        local_targeted_contract_fix_prompt_state.get("route_intake_status"),
-        default=local_targeted_contract_fix_route_intake_status,
-    )
-    local_targeted_contract_fix_route_intake_blocked_reason = _normalize_text(
-        local_targeted_contract_fix_prompt_state.get("route_intake_blocked_reason"),
-        default=local_targeted_contract_fix_route_intake_blocked_reason,
-    )
-    local_targeted_contract_fix_route_intake_signal_source = _normalize_text(
-        local_targeted_contract_fix_prompt_state.get("route_intake_signal_source"),
-        default=local_targeted_contract_fix_route_intake_signal_source,
-    )
-    local_targeted_contract_fix_prompt_plan_status = _normalize_text(
-        local_targeted_contract_fix_prompt_state.get("prompt_plan_status"),
-        default=local_targeted_contract_fix_prompt_plan_status,
-    )
-    local_targeted_contract_fix_prompt_plan_blocked_reason = _normalize_text(
-        local_targeted_contract_fix_prompt_state.get("prompt_plan_blocked_reason"),
-        default=local_targeted_contract_fix_prompt_plan_blocked_reason,
-    )
-    local_targeted_contract_fix_prompt_path_text = _normalize_text(
-        local_targeted_contract_fix_prompt_state.get("prompt_path"),
-        default=local_targeted_contract_fix_prompt_path_text,
-    )
-    local_targeted_contract_fix_prompt_ready = bool(
-        local_targeted_contract_fix_prompt_state.get(
-            "prompt_ready",
-            local_targeted_contract_fix_prompt_ready,
-        )
-    )
-    local_targeted_contract_fix_prompt_next_action = _normalize_text(
-        local_targeted_contract_fix_prompt_state.get("prompt_next_action"),
-        default=local_targeted_contract_fix_prompt_next_action,
-    )
-    local_targeted_contract_fix_prompt_normalized_reason = _normalize_text(
-        local_targeted_contract_fix_prompt_state.get("prompt_normalized_reason"),
-        default=local_targeted_contract_fix_prompt_normalized_reason,
-    )
-    local_targeted_contract_fix_prompt_lifecycle_issue_detected = bool(
-        local_targeted_contract_fix_prompt_state.get(
-            "prompt_lifecycle_issue_detected",
-            local_targeted_contract_fix_prompt_lifecycle_issue_detected,
-        )
-    )
-    local_contract_fix_cycle_coordination_state = (
-        _build_local_contract_fix_cycle_coordination_artifacts(
-            one_cycle_controller_dir=one_cycle_controller_dir
-        )
-    )
-    local_contract_fix_cycle_coordination_status = _normalize_text(
-        local_contract_fix_cycle_coordination_state.get("coordination_status"),
-        default=local_contract_fix_cycle_coordination_status,
-    )
-    local_contract_fix_cycle_coordination_blocked_reason = _normalize_text(
-        local_contract_fix_cycle_coordination_state.get("coordination_blocked_reason"),
-        default=local_contract_fix_cycle_coordination_blocked_reason,
-    )
-    local_contract_fix_cycle_coordination_ready = bool(
-        local_contract_fix_cycle_coordination_state.get(
-            "coordination_ready",
-            local_contract_fix_cycle_coordination_ready,
-        )
-    )
-    local_contract_fix_cycle_coordination_next_action = _normalize_text(
-        local_contract_fix_cycle_coordination_state.get("coordination_next_action"),
-        default=local_contract_fix_cycle_coordination_next_action,
-    )
-    local_contract_fix_cycle_prompt_path = _normalize_text(
-        local_contract_fix_cycle_coordination_state.get("coordination_prompt_path"),
-        default=local_contract_fix_cycle_prompt_path,
-    )
-    local_contract_fix_cycle_prompt_ready = bool(
-        local_contract_fix_cycle_coordination_state.get(
-            "coordination_prompt_ready",
-            local_contract_fix_cycle_prompt_ready,
-        )
-    )
-    local_contract_fix_cycle_normalized_reason = _normalize_text(
-        local_contract_fix_cycle_coordination_state.get("coordination_normalized_reason"),
-        default=local_contract_fix_cycle_normalized_reason,
-    )
-    local_contract_fix_cycle_selected_step_name = _normalize_text(
-        local_contract_fix_cycle_coordination_state.get("coordination_selected_step_name"),
-        default=local_contract_fix_cycle_selected_step_name,
-    )
-    local_contract_fix_cycle_handoff_status = _normalize_text(
-        local_contract_fix_cycle_coordination_state.get("handoff_status"),
-        default=local_contract_fix_cycle_handoff_status,
-    )
-    local_contract_fix_cycle_handoff_next_action = _normalize_text(
-        local_contract_fix_cycle_coordination_state.get("handoff_next_action"),
-        default=local_contract_fix_cycle_handoff_next_action,
-    )
-    local_daemon_lite_wrapper_state = _build_local_daemon_lite_wrapper_artifacts(
-        one_cycle_controller_dir=one_cycle_controller_dir
-    )
-    local_daemon_lite_wrapper_status = _normalize_text(
-        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_status"),
-        default=local_daemon_lite_wrapper_status,
-    )
-    local_daemon_lite_wrapper_blocked_reason = _normalize_text(
-        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_blocked_reason"),
-        default=local_daemon_lite_wrapper_blocked_reason,
-    )
-    local_daemon_lite_wrapper_ready = bool(
-        local_daemon_lite_wrapper_state.get(
-            "local_daemon_lite_wrapper_ready",
-            local_daemon_lite_wrapper_ready,
-        )
-    )
-    local_daemon_lite_wrapper_decision = _normalize_text(
-        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_decision"),
-        default=local_daemon_lite_wrapper_decision,
-    )
-    local_daemon_lite_wrapper_next_action = _normalize_text(
-        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_next_action"),
-        default=local_daemon_lite_wrapper_next_action,
-    )
-    local_daemon_lite_wrapper_selected_step_name = _normalize_text(
-        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_selected_step_name"),
-        default=local_daemon_lite_wrapper_selected_step_name,
-    )
-    local_daemon_lite_wrapper_prompt_path = _normalize_text(
-        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_prompt_path"),
-        default=local_daemon_lite_wrapper_prompt_path,
-    )
-    local_daemon_lite_wrapper_bounded_execution = bool(
-        local_daemon_lite_wrapper_state.get(
-            "local_daemon_lite_wrapper_bounded_execution",
-            local_daemon_lite_wrapper_bounded_execution,
-        )
-    )
-    local_daemon_lite_wrapper_total_codex_invocation_budget = _as_non_negative_int(
-        local_daemon_lite_wrapper_state.get(
-            "local_daemon_lite_wrapper_total_codex_invocation_budget"
-        ),
-        default=local_daemon_lite_wrapper_total_codex_invocation_budget,
-    )
-    local_targeted_contract_fix_execution_state = (
-        _build_local_targeted_contract_fix_execution_artifacts(
-            execution_repo_path=execution_repo_path,
-            one_cycle_controller_dir=one_cycle_controller_dir,
-        )
-    )
-    local_targeted_contract_fix_execution_status = _normalize_text(
-        local_targeted_contract_fix_execution_state.get(
-            "local_targeted_contract_fix_execution_status"
-        ),
-        default=local_targeted_contract_fix_execution_status,
-    )
-    local_targeted_contract_fix_execution_blocked_reason = _normalize_text(
-        local_targeted_contract_fix_execution_state.get(
-            "local_targeted_contract_fix_execution_blocked_reason"
-        ),
-        default=local_targeted_contract_fix_execution_blocked_reason,
-    )
-    local_targeted_contract_fix_execution_next_action = _normalize_text(
-        local_targeted_contract_fix_execution_state.get(
-            "local_targeted_contract_fix_execution_next_action"
-        ),
-        default=local_targeted_contract_fix_execution_next_action,
-    )
-    local_targeted_contract_fix_execution_codex_invoked = bool(
-        local_targeted_contract_fix_execution_state.get(
-            "local_targeted_contract_fix_execution_codex_invoked",
-            local_targeted_contract_fix_execution_codex_invoked,
-        )
-    )
-    local_targeted_contract_fix_execution_exit_code = _as_optional_int(
-        local_targeted_contract_fix_execution_state.get(
-            "local_targeted_contract_fix_execution_exit_code"
-        )
-    )
-    local_targeted_contract_fix_execution_changed_tracked_file_count = _as_non_negative_int(
-        local_targeted_contract_fix_execution_state.get(
-            "local_targeted_contract_fix_execution_changed_tracked_file_count"
-        ),
-        default=local_targeted_contract_fix_execution_changed_tracked_file_count,
-    )
-    local_targeted_contract_fix_execution_stdout_path_text = _normalize_text(
-        local_targeted_contract_fix_execution_state.get(
-            "local_targeted_contract_fix_execution_stdout_path"
-        ),
-        default=local_targeted_contract_fix_execution_stdout_path_text,
-    )
-    local_targeted_contract_fix_execution_stderr_path_text = _normalize_text(
-        local_targeted_contract_fix_execution_state.get(
-            "local_targeted_contract_fix_execution_stderr_path"
-        ),
-        default=local_targeted_contract_fix_execution_stderr_path_text,
-    )
-    local_post_targeted_contract_fix_review_state = (
-        _build_local_post_targeted_contract_fix_review_artifacts(
-            execution_repo_path=execution_repo_path,
-            one_cycle_controller_dir=one_cycle_controller_dir,
-        )
-    )
-    local_post_targeted_contract_fix_status = _normalize_text(
-        local_post_targeted_contract_fix_review_state.get(
-            "local_post_targeted_contract_fix_status"
-        ),
-        default=local_post_targeted_contract_fix_status,
-    )
-    local_post_targeted_contract_fix_blocked_reason = _normalize_text(
-        local_post_targeted_contract_fix_review_state.get(
-            "local_post_targeted_contract_fix_blocked_reason"
-        ),
-        default=local_post_targeted_contract_fix_blocked_reason,
-    )
-    local_post_targeted_contract_fix_classification = _normalize_text(
-        local_post_targeted_contract_fix_review_state.get(
-            "local_post_targeted_contract_fix_classification"
-        ),
-        default=local_post_targeted_contract_fix_classification,
-    )
-    local_post_targeted_contract_fix_route_decision = _normalize_text(
-        local_post_targeted_contract_fix_review_state.get(
-            "local_post_targeted_contract_fix_route_decision"
-        ),
-        default=local_post_targeted_contract_fix_route_decision,
-    )
-    local_post_targeted_contract_fix_next_action = _normalize_text(
-        local_post_targeted_contract_fix_review_state.get(
-            "local_post_targeted_contract_fix_next_action"
-        ),
-        default=local_post_targeted_contract_fix_next_action,
-    )
-    local_post_targeted_contract_fix_approve_commit_tag_ready = bool(
-        local_post_targeted_contract_fix_review_state.get(
-            "local_post_targeted_contract_fix_approve_commit_tag_ready",
-            local_post_targeted_contract_fix_approve_commit_tag_ready,
-        )
-    )
-    local_post_targeted_contract_fix_changed_tracked_file_count = _as_non_negative_int(
-        local_post_targeted_contract_fix_review_state.get(
-            "local_post_targeted_contract_fix_changed_tracked_file_count"
-        ),
-        default=local_post_targeted_contract_fix_changed_tracked_file_count,
-    )
-    local_post_targeted_contract_fix_unexpected_tracked_file_count = _as_non_negative_int(
-        local_post_targeted_contract_fix_review_state.get(
-            "local_post_targeted_contract_fix_unexpected_tracked_file_count"
-        ),
-        default=local_post_targeted_contract_fix_unexpected_tracked_file_count,
-    )
-    local_bounded_approve_commit_tag_state = (
-        _build_local_bounded_approve_commit_tag_execution_artifacts(
-            execution_repo_path=execution_repo_path,
-            one_cycle_controller_dir=one_cycle_controller_dir,
-        )
-    )
-    local_bounded_approve_commit_tag_status = _normalize_text(
-        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_status"),
-        default=local_bounded_approve_commit_tag_status,
-    )
-    local_bounded_approve_commit_tag_execution_status = _normalize_text(
-        local_bounded_approve_commit_tag_state.get(
-            "local_bounded_approve_commit_tag_execution_status"
-        ),
-        default=local_bounded_approve_commit_tag_execution_status,
-    )
-    local_bounded_approve_commit_tag_blocked_reason = _normalize_text(
-        local_bounded_approve_commit_tag_state.get(
-            "local_bounded_approve_commit_tag_blocked_reason"
-        ),
-        default=local_bounded_approve_commit_tag_blocked_reason,
-    )
-    local_bounded_approve_commit_tag_next_action = _normalize_text(
-        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_next_action"),
-        default=local_bounded_approve_commit_tag_next_action,
-    )
-    local_bounded_approve_commit_tag_commit_performed = bool(
-        local_bounded_approve_commit_tag_state.get(
-            "local_bounded_approve_commit_tag_commit_performed",
-            local_bounded_approve_commit_tag_commit_performed,
-        )
-    )
-    local_bounded_approve_commit_tag_tag_performed = bool(
-        local_bounded_approve_commit_tag_state.get(
-            "local_bounded_approve_commit_tag_tag_performed",
-            local_bounded_approve_commit_tag_tag_performed,
-        )
-    )
-    local_bounded_approve_commit_tag_commit_hash = _normalize_text(
-        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_commit_hash"),
-        default=local_bounded_approve_commit_tag_commit_hash,
-    )
-    local_bounded_approve_commit_tag_tag_name = _normalize_text(
-        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_tag_name"),
-        default=local_bounded_approve_commit_tag_tag_name,
-    )
-    local_bounded_approve_commit_tag_worktree_clean = bool(
-        local_bounded_approve_commit_tag_state.get(
-            "local_bounded_approve_commit_tag_worktree_clean",
-            local_bounded_approve_commit_tag_worktree_clean,
-        )
-    )
-    local_post_commit_cycle_closure_state = _build_local_post_commit_cycle_closure_artifacts(
-        execution_repo_path=execution_repo_path,
-        one_cycle_controller_dir=one_cycle_controller_dir,
-    )
-    local_post_commit_cycle_closure_status = _normalize_text(
-        local_post_commit_cycle_closure_state.get("local_post_commit_cycle_closure_status"),
-        default=local_post_commit_cycle_closure_status,
-    )
-    local_post_commit_cycle_closure_blocked_reason = _normalize_text(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_blocked_reason"
-        ),
-        default=local_post_commit_cycle_closure_blocked_reason,
-    )
-    local_post_commit_cycle_closure_cycle_closed = bool(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_cycle_closed",
-            local_post_commit_cycle_closure_cycle_closed,
-        )
-    )
-    local_post_commit_cycle_closure_reentry_allowed = bool(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_reentry_allowed",
-            local_post_commit_cycle_closure_reentry_allowed,
-        )
-    )
-    local_post_commit_cycle_closure_should_continue = bool(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_should_continue",
-            local_post_commit_cycle_closure_should_continue,
-        )
-    )
-    local_post_commit_cycle_closure_cycle_decision = _normalize_text(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_cycle_decision"
-        ),
-        default=local_post_commit_cycle_closure_cycle_decision,
-    )
-    local_post_commit_cycle_closure_next_action = _normalize_text(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_next_action"
-        ),
-        default=local_post_commit_cycle_closure_next_action,
-    )
-    local_post_commit_cycle_closure_commit_hash = _normalize_text(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_commit_hash"
-        ),
-        default=local_post_commit_cycle_closure_commit_hash,
-    )
-    local_post_commit_cycle_closure_tag_name = _normalize_text(
-        local_post_commit_cycle_closure_state.get("local_post_commit_cycle_closure_tag_name"),
-        default=local_post_commit_cycle_closure_tag_name,
-    )
-    local_post_commit_cycle_closure_no_change_cycle_closure = bool(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_no_change_cycle_closure",
-            local_post_commit_cycle_closure_no_change_cycle_closure,
-        )
-    )
-    local_post_commit_cycle_closure_commit_required = bool(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_commit_required",
-            local_post_commit_cycle_closure_commit_required,
-        )
-    )
-    local_post_commit_cycle_closure_tag_required = bool(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_tag_required",
-            local_post_commit_cycle_closure_tag_required,
-        )
-    )
-    local_post_commit_cycle_closure_local_commit_tag_complete = bool(
-        local_post_commit_cycle_closure_state.get(
-            "local_post_commit_cycle_closure_local_commit_tag_complete",
-            local_post_commit_cycle_closure_local_commit_tag_complete,
-        )
-    )
-    local_next_cycle_reentry_status = _normalize_text(
-        local_post_commit_cycle_closure_state.get("local_next_cycle_reentry_status"),
-        default=local_next_cycle_reentry_status,
-    )
-    local_next_cycle_reentry_next_action = _normalize_text(
-        local_post_commit_cycle_closure_state.get("local_next_cycle_reentry_next_action"),
-        default=local_next_cycle_reentry_next_action,
-    )
-    local_next_cycle_reentry_selected_step_name = _normalize_text(
-        local_post_commit_cycle_closure_state.get(
-            "local_next_cycle_reentry_selected_step_name"
-        ),
-        default=local_next_cycle_reentry_selected_step_name,
-    )
-    local_autonomous_continuation_state = _build_local_autonomous_continuation_artifacts(
-        execution_repo_path=execution_repo_path,
-        one_cycle_controller_dir=one_cycle_controller_dir,
-    )
-    local_autonomous_continuation_status = _normalize_text(
-        local_autonomous_continuation_state.get("local_autonomous_continuation_status"),
-        default=local_autonomous_continuation_status,
-    )
-    local_autonomous_continuation_blocked_reason = _normalize_text(
-        local_autonomous_continuation_state.get(
-            "local_autonomous_continuation_blocked_reason"
-        ),
-        default=local_autonomous_continuation_blocked_reason,
-    )
-    local_autonomous_continuation_next_action = _normalize_text(
-        local_autonomous_continuation_state.get("local_autonomous_continuation_next_action"),
-        default=local_autonomous_continuation_next_action,
-    )
-    local_autonomous_continuation_reentry_connected = bool(
-        local_autonomous_continuation_state.get(
-            "local_autonomous_continuation_reentry_connected",
-            local_autonomous_continuation_reentry_connected,
-        )
-    )
-    local_autonomous_continuation_next_cycle_ready = bool(
-        local_autonomous_continuation_state.get(
-            "local_autonomous_continuation_next_cycle_ready",
-            local_autonomous_continuation_next_cycle_ready,
-        )
-    )
-    local_autonomous_continuation_selected_step_name = _normalize_text(
-        local_autonomous_continuation_state.get(
-            "local_autonomous_continuation_selected_step_name"
-        ),
-        default=local_autonomous_continuation_selected_step_name,
-    )
-    local_autonomous_loop_completion_status = _normalize_text(
-        local_autonomous_continuation_state.get("local_autonomous_loop_completion_status"),
-        default=local_autonomous_loop_completion_status,
-    )
-    local_autonomous_loop_completion_final_decision = _normalize_text(
-        local_autonomous_continuation_state.get(
-            "local_autonomous_loop_completion_final_decision"
-        ),
-        default=local_autonomous_loop_completion_final_decision,
-    )
-    local_only_complete_autonomous_loop_ready = bool(
-        local_autonomous_continuation_state.get(
-            "local_only_complete_autonomous_loop_ready",
-            local_only_complete_autonomous_loop_ready,
-        )
-    )
-    local_autonomous_loop_complete = bool(
-        local_autonomous_continuation_state.get(
-            "local_autonomous_loop_complete",
-            local_autonomous_loop_complete,
-        )
-    )
-    local_autonomous_continuation_no_change_cycle_closure = bool(
-        local_autonomous_continuation_state.get(
-            "local_autonomous_continuation_no_change_cycle_closure",
-            local_autonomous_continuation_no_change_cycle_closure,
-        )
-    )
-    local_autonomous_continuation_commit_required = bool(
-        local_autonomous_continuation_state.get(
-            "local_autonomous_continuation_commit_required",
-            local_autonomous_continuation_commit_required,
-        )
-    )
-    local_autonomous_continuation_tag_required = bool(
-        local_autonomous_continuation_state.get(
-            "local_autonomous_continuation_tag_required",
-            local_autonomous_continuation_tag_required,
         )
     )
     review_handoff_decision_state = _build_one_cycle_review_handoff_decision_state(
@@ -26449,7 +25983,6 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             )
         except OSError:
             pass
-    local_targeted_contract_fix_prompt_state: dict[str, Any] | None = None
     (
         refreshed_post_execution_handoff,
         prompt334_post_write_reconciliation_state,
@@ -26464,6 +25997,7 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         one_cycle_controller_dir=one_cycle_controller_dir,
         completed_result_source_path=completed_result_source_path,
     )
+    post_write_post_execution_handoff = refreshed_post_execution_handoff
     if refreshed_post_execution_handoff is not None:
         prompt334_stale_post_codex_artifact_detected = bool(
             prompt334_post_write_reconciliation_state.get(
@@ -26489,101 +26023,579 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             ),
             default=prompt334_stale_post_codex_artifact_regeneration_status,
         )
-        next_action = _normalize_text(
-            refreshed_post_execution_handoff.get("next_action"),
-            default=next_action,
+    if post_write_post_execution_handoff is None:
+        post_write_post_execution_handoff = _build_one_cycle_post_execution_handoff(
+            execution_repo_path=execution_repo_path,
+            status=status,
+            stop_reason=stop_reason,
+            next_action=next_action,
+            execution_attempted=execution_attempted,
+            execution_exit_code=execution_exit_code,
+            exec_plan_execution_status=exec_plan_execution_status,
+            one_cycle_controller_dir=one_cycle_controller_dir,
+            completed_result_source_path=completed_result_source_path,
         )
-        diff_capture_status = _normalize_text(
-            refreshed_post_execution_handoff.get("diff_capture_status"),
-            default=diff_capture_status,
+    # Rebuild the Prompt334->Prompt342 chain from the post-write Prompt333 artifacts.
+    next_action = _normalize_text(
+        post_write_post_execution_handoff.get("next_action"),
+        default=next_action,
+    )
+    diff_capture_status = _normalize_text(
+        post_write_post_execution_handoff.get("diff_capture_status"),
+        default=diff_capture_status,
+    )
+    diff_capture_blocked_reason = _normalize_text(
+        post_write_post_execution_handoff.get("diff_capture_blocked_reason"),
+        default=diff_capture_blocked_reason,
+    )
+    review_request_status = _normalize_text(
+        post_write_post_execution_handoff.get("review_request_status"),
+        default=review_request_status,
+    )
+    review_request_blocked_reason = _normalize_text(
+        post_write_post_execution_handoff.get("review_request_blocked_reason"),
+        default=review_request_blocked_reason,
+    )
+    completed_result_source_status = _normalize_text(
+        post_write_post_execution_handoff.get("completed_result_source_status"),
+        default=completed_result_source_status,
+    )
+    local_post_codex_diff_capture_status = _normalize_text(
+        post_write_post_execution_handoff.get("local_post_codex_diff_capture_status"),
+        default=local_post_codex_diff_capture_status,
+    )
+    local_post_codex_diff_capture_blocked_reason = _normalize_text(
+        post_write_post_execution_handoff.get("local_post_codex_diff_capture_blocked_reason"),
+        default=local_post_codex_diff_capture_blocked_reason,
+    )
+    local_post_codex_diff_capture_next_action = _normalize_text(
+        post_write_post_execution_handoff.get("local_post_codex_diff_capture_next_action"),
+        default=local_post_codex_diff_capture_next_action,
+    )
+    local_post_codex_diff_capture_worktree_clean_for_tracked_files = bool(
+        post_write_post_execution_handoff.get(
+            "local_post_codex_diff_capture_worktree_clean_for_tracked_files",
+            local_post_codex_diff_capture_worktree_clean_for_tracked_files,
         )
-        diff_capture_blocked_reason = _normalize_text(
-            refreshed_post_execution_handoff.get("diff_capture_blocked_reason"),
-            default=diff_capture_blocked_reason,
+    )
+    local_post_codex_diff_capture_changed_tracked_file_count = _as_non_negative_int(
+        post_write_post_execution_handoff.get(
+            "local_post_codex_diff_capture_changed_tracked_file_count"
+        ),
+        default=local_post_codex_diff_capture_changed_tracked_file_count,
+    )
+    local_post_codex_outcome_status = _normalize_text(
+        post_write_post_execution_handoff.get("local_post_codex_outcome_status"),
+        default=local_post_codex_outcome_status,
+    )
+    local_post_codex_outcome_classification = _normalize_text(
+        post_write_post_execution_handoff.get("local_post_codex_outcome_classification"),
+        default=local_post_codex_outcome_classification,
+    )
+    local_post_codex_stdout_contains_blocked = bool(
+        post_write_post_execution_handoff.get(
+            "local_post_codex_stdout_contains_blocked",
+            local_post_codex_stdout_contains_blocked,
         )
-        review_request_status = _normalize_text(
-            refreshed_post_execution_handoff.get("review_request_status"),
-            default=review_request_status,
+    )
+    local_post_codex_stdout_blocked_reason = _normalize_text(
+        post_write_post_execution_handoff.get("local_post_codex_stdout_blocked_reason"),
+        default=local_post_codex_stdout_blocked_reason,
+    )
+    local_post_codex_route_status = _normalize_text(
+        post_write_post_execution_handoff.get("local_post_codex_route_status"),
+        default=local_post_codex_route_status,
+    )
+    local_post_codex_route_decision = _normalize_text(
+        post_write_post_execution_handoff.get("local_post_codex_route_decision"),
+        default=local_post_codex_route_decision,
+    )
+    local_post_codex_route_next_action = _normalize_text(
+        post_write_post_execution_handoff.get("local_post_codex_route_next_action"),
+        default=local_post_codex_route_next_action,
+    )
+    local_post_codex_route_targeted_contract_fix_recommended = bool(
+        post_write_post_execution_handoff.get(
+            "local_post_codex_route_targeted_contract_fix_recommended",
+            local_post_codex_route_targeted_contract_fix_recommended,
         )
-        review_request_blocked_reason = _normalize_text(
-            refreshed_post_execution_handoff.get("review_request_blocked_reason"),
-            default=review_request_blocked_reason,
+    )
+    local_post_codex_route_approve_commit_tag_allowed = bool(
+        post_write_post_execution_handoff.get(
+            "local_post_codex_route_approve_commit_tag_allowed",
+            local_post_codex_route_approve_commit_tag_allowed,
         )
-        completed_result_source_status = _normalize_text(
-            refreshed_post_execution_handoff.get("completed_result_source_status"),
-            default=completed_result_source_status,
+    )
+    local_targeted_contract_fix_prompt_state = (
+        _build_local_targeted_contract_fix_prompt_artifacts(
+            one_cycle_controller_dir=one_cycle_controller_dir
         )
-        local_post_codex_diff_capture_status = _normalize_text(
-            refreshed_post_execution_handoff.get("local_post_codex_diff_capture_status"),
-            default=local_post_codex_diff_capture_status,
+    )
+    local_targeted_contract_fix_route_intake_status = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("route_intake_status"),
+        default=local_targeted_contract_fix_route_intake_status,
+    )
+    local_targeted_contract_fix_route_intake_blocked_reason = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("route_intake_blocked_reason"),
+        default=local_targeted_contract_fix_route_intake_blocked_reason,
+    )
+    local_targeted_contract_fix_route_intake_signal_source = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("route_intake_signal_source"),
+        default=local_targeted_contract_fix_route_intake_signal_source,
+    )
+    local_targeted_contract_fix_prompt_plan_status = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_plan_status"),
+        default=local_targeted_contract_fix_prompt_plan_status,
+    )
+    local_targeted_contract_fix_prompt_plan_blocked_reason = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_plan_blocked_reason"),
+        default=local_targeted_contract_fix_prompt_plan_blocked_reason,
+    )
+    local_targeted_contract_fix_prompt_path_text = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_path"),
+        default=local_targeted_contract_fix_prompt_path_text,
+    )
+    local_targeted_contract_fix_prompt_ready = bool(
+        local_targeted_contract_fix_prompt_state.get(
+            "prompt_ready",
+            local_targeted_contract_fix_prompt_ready,
         )
-        local_post_codex_diff_capture_blocked_reason = _normalize_text(
-            refreshed_post_execution_handoff.get("local_post_codex_diff_capture_blocked_reason"),
-            default=local_post_codex_diff_capture_blocked_reason,
+    )
+    local_targeted_contract_fix_prompt_next_action = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_next_action"),
+        default=local_targeted_contract_fix_prompt_next_action,
+    )
+    local_targeted_contract_fix_prompt_normalized_reason = _normalize_text(
+        local_targeted_contract_fix_prompt_state.get("prompt_normalized_reason"),
+        default=local_targeted_contract_fix_prompt_normalized_reason,
+    )
+    local_targeted_contract_fix_prompt_lifecycle_issue_detected = bool(
+        local_targeted_contract_fix_prompt_state.get(
+            "prompt_lifecycle_issue_detected",
+            local_targeted_contract_fix_prompt_lifecycle_issue_detected,
         )
-        local_post_codex_diff_capture_next_action = _normalize_text(
-            refreshed_post_execution_handoff.get("local_post_codex_diff_capture_next_action"),
-            default=local_post_codex_diff_capture_next_action,
+    )
+    local_contract_fix_cycle_coordination_state = (
+        _build_local_contract_fix_cycle_coordination_artifacts(
+            one_cycle_controller_dir=one_cycle_controller_dir
         )
-        local_post_codex_diff_capture_worktree_clean_for_tracked_files = bool(
-            refreshed_post_execution_handoff.get(
-                "local_post_codex_diff_capture_worktree_clean_for_tracked_files",
-                local_post_codex_diff_capture_worktree_clean_for_tracked_files,
-            )
+    )
+    local_contract_fix_cycle_coordination_status = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_status"),
+        default=local_contract_fix_cycle_coordination_status,
+    )
+    local_contract_fix_cycle_coordination_blocked_reason = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_blocked_reason"),
+        default=local_contract_fix_cycle_coordination_blocked_reason,
+    )
+    local_contract_fix_cycle_coordination_ready = bool(
+        local_contract_fix_cycle_coordination_state.get(
+            "coordination_ready",
+            local_contract_fix_cycle_coordination_ready,
         )
-        local_post_codex_diff_capture_changed_tracked_file_count = _as_non_negative_int(
-            refreshed_post_execution_handoff.get(
-                "local_post_codex_diff_capture_changed_tracked_file_count"
-            ),
-            default=local_post_codex_diff_capture_changed_tracked_file_count,
+    )
+    local_contract_fix_cycle_coordination_next_action = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_next_action"),
+        default=local_contract_fix_cycle_coordination_next_action,
+    )
+    local_contract_fix_cycle_prompt_path = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_prompt_path"),
+        default=local_contract_fix_cycle_prompt_path,
+    )
+    local_contract_fix_cycle_prompt_ready = bool(
+        local_contract_fix_cycle_coordination_state.get(
+            "coordination_prompt_ready",
+            local_contract_fix_cycle_prompt_ready,
         )
-        local_post_codex_outcome_status = _normalize_text(
-            refreshed_post_execution_handoff.get("local_post_codex_outcome_status"),
-            default=local_post_codex_outcome_status,
+    )
+    local_contract_fix_cycle_normalized_reason = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_normalized_reason"),
+        default=local_contract_fix_cycle_normalized_reason,
+    )
+    local_contract_fix_cycle_selected_step_name = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("coordination_selected_step_name"),
+        default=local_contract_fix_cycle_selected_step_name,
+    )
+    local_contract_fix_cycle_handoff_status = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("handoff_status"),
+        default=local_contract_fix_cycle_handoff_status,
+    )
+    local_contract_fix_cycle_handoff_next_action = _normalize_text(
+        local_contract_fix_cycle_coordination_state.get("handoff_next_action"),
+        default=local_contract_fix_cycle_handoff_next_action,
+    )
+    local_daemon_lite_wrapper_state = _build_local_daemon_lite_wrapper_artifacts(
+        one_cycle_controller_dir=one_cycle_controller_dir
+    )
+    local_daemon_lite_wrapper_status = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_status"),
+        default=local_daemon_lite_wrapper_status,
+    )
+    local_daemon_lite_wrapper_blocked_reason = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_blocked_reason"),
+        default=local_daemon_lite_wrapper_blocked_reason,
+    )
+    local_daemon_lite_wrapper_ready = bool(
+        local_daemon_lite_wrapper_state.get(
+            "local_daemon_lite_wrapper_ready",
+            local_daemon_lite_wrapper_ready,
         )
-        local_post_codex_outcome_classification = _normalize_text(
-            refreshed_post_execution_handoff.get("local_post_codex_outcome_classification"),
-            default=local_post_codex_outcome_classification,
+    )
+    local_daemon_lite_wrapper_decision = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_decision"),
+        default=local_daemon_lite_wrapper_decision,
+    )
+    local_daemon_lite_wrapper_next_action = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_next_action"),
+        default=local_daemon_lite_wrapper_next_action,
+    )
+    local_daemon_lite_wrapper_selected_step_name = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_selected_step_name"),
+        default=local_daemon_lite_wrapper_selected_step_name,
+    )
+    local_daemon_lite_wrapper_prompt_path = _normalize_text(
+        local_daemon_lite_wrapper_state.get("local_daemon_lite_wrapper_prompt_path"),
+        default=local_daemon_lite_wrapper_prompt_path,
+    )
+    local_daemon_lite_wrapper_bounded_execution = bool(
+        local_daemon_lite_wrapper_state.get(
+            "local_daemon_lite_wrapper_bounded_execution",
+            local_daemon_lite_wrapper_bounded_execution,
         )
-        local_post_codex_stdout_contains_blocked = bool(
-            refreshed_post_execution_handoff.get(
-                "local_post_codex_stdout_contains_blocked",
-                local_post_codex_stdout_contains_blocked,
-            )
+    )
+    local_daemon_lite_wrapper_total_codex_invocation_budget = _as_non_negative_int(
+        local_daemon_lite_wrapper_state.get(
+            "local_daemon_lite_wrapper_total_codex_invocation_budget"
+        ),
+        default=local_daemon_lite_wrapper_total_codex_invocation_budget,
+    )
+    local_targeted_contract_fix_execution_state = (
+        _build_local_targeted_contract_fix_execution_artifacts(
+            execution_repo_path=execution_repo_path,
+            one_cycle_controller_dir=one_cycle_controller_dir,
         )
-        local_post_codex_stdout_blocked_reason = _normalize_text(
-            refreshed_post_execution_handoff.get("local_post_codex_stdout_blocked_reason"),
-            default=local_post_codex_stdout_blocked_reason,
+    )
+    local_targeted_contract_fix_execution_status = _normalize_text(
+        local_targeted_contract_fix_execution_state.get(
+            "local_targeted_contract_fix_execution_status"
+        ),
+        default=local_targeted_contract_fix_execution_status,
+    )
+    local_targeted_contract_fix_execution_blocked_reason = _normalize_text(
+        local_targeted_contract_fix_execution_state.get(
+            "local_targeted_contract_fix_execution_blocked_reason"
+        ),
+        default=local_targeted_contract_fix_execution_blocked_reason,
+    )
+    local_targeted_contract_fix_execution_next_action = _normalize_text(
+        local_targeted_contract_fix_execution_state.get(
+            "local_targeted_contract_fix_execution_next_action"
+        ),
+        default=local_targeted_contract_fix_execution_next_action,
+    )
+    local_targeted_contract_fix_execution_codex_invoked = bool(
+        local_targeted_contract_fix_execution_state.get(
+            "local_targeted_contract_fix_execution_codex_invoked",
+            local_targeted_contract_fix_execution_codex_invoked,
         )
-        local_post_codex_route_status = _normalize_text(
-            refreshed_post_execution_handoff.get("local_post_codex_route_status"),
-            default=local_post_codex_route_status,
+    )
+    local_targeted_contract_fix_execution_exit_code = _as_optional_int(
+        local_targeted_contract_fix_execution_state.get(
+            "local_targeted_contract_fix_execution_exit_code"
         )
-        local_post_codex_route_decision = _normalize_text(
-            refreshed_post_execution_handoff.get("local_post_codex_route_decision"),
-            default=local_post_codex_route_decision,
+    )
+    local_targeted_contract_fix_execution_changed_tracked_file_count = _as_non_negative_int(
+        local_targeted_contract_fix_execution_state.get(
+            "local_targeted_contract_fix_execution_changed_tracked_file_count"
+        ),
+        default=local_targeted_contract_fix_execution_changed_tracked_file_count,
+    )
+    local_targeted_contract_fix_execution_stdout_path_text = _normalize_text(
+        local_targeted_contract_fix_execution_state.get(
+            "local_targeted_contract_fix_execution_stdout_path"
+        ),
+        default=local_targeted_contract_fix_execution_stdout_path_text,
+    )
+    local_targeted_contract_fix_execution_stderr_path_text = _normalize_text(
+        local_targeted_contract_fix_execution_state.get(
+            "local_targeted_contract_fix_execution_stderr_path"
+        ),
+        default=local_targeted_contract_fix_execution_stderr_path_text,
+    )
+    local_post_targeted_contract_fix_review_state = (
+        _build_local_post_targeted_contract_fix_review_artifacts(
+            execution_repo_path=execution_repo_path,
+            one_cycle_controller_dir=one_cycle_controller_dir,
         )
-        local_post_codex_route_next_action = _normalize_text(
-            refreshed_post_execution_handoff.get("local_post_codex_route_next_action"),
-            default=local_post_codex_route_next_action,
+    )
+    local_post_targeted_contract_fix_status = _normalize_text(
+        local_post_targeted_contract_fix_review_state.get(
+            "local_post_targeted_contract_fix_status"
+        ),
+        default=local_post_targeted_contract_fix_status,
+    )
+    local_post_targeted_contract_fix_blocked_reason = _normalize_text(
+        local_post_targeted_contract_fix_review_state.get(
+            "local_post_targeted_contract_fix_blocked_reason"
+        ),
+        default=local_post_targeted_contract_fix_blocked_reason,
+    )
+    local_post_targeted_contract_fix_classification = _normalize_text(
+        local_post_targeted_contract_fix_review_state.get(
+            "local_post_targeted_contract_fix_classification"
+        ),
+        default=local_post_targeted_contract_fix_classification,
+    )
+    local_post_targeted_contract_fix_route_decision = _normalize_text(
+        local_post_targeted_contract_fix_review_state.get(
+            "local_post_targeted_contract_fix_route_decision"
+        ),
+        default=local_post_targeted_contract_fix_route_decision,
+    )
+    local_post_targeted_contract_fix_next_action = _normalize_text(
+        local_post_targeted_contract_fix_review_state.get(
+            "local_post_targeted_contract_fix_next_action"
+        ),
+        default=local_post_targeted_contract_fix_next_action,
+    )
+    local_post_targeted_contract_fix_approve_commit_tag_ready = bool(
+        local_post_targeted_contract_fix_review_state.get(
+            "local_post_targeted_contract_fix_approve_commit_tag_ready",
+            local_post_targeted_contract_fix_approve_commit_tag_ready,
         )
-        local_post_codex_route_targeted_contract_fix_recommended = bool(
-            refreshed_post_execution_handoff.get(
-                "local_post_codex_route_targeted_contract_fix_recommended",
-                local_post_codex_route_targeted_contract_fix_recommended,
-            )
+    )
+    local_post_targeted_contract_fix_changed_tracked_file_count = _as_non_negative_int(
+        local_post_targeted_contract_fix_review_state.get(
+            "local_post_targeted_contract_fix_changed_tracked_file_count"
+        ),
+        default=local_post_targeted_contract_fix_changed_tracked_file_count,
+    )
+    local_post_targeted_contract_fix_unexpected_tracked_file_count = _as_non_negative_int(
+        local_post_targeted_contract_fix_review_state.get(
+            "local_post_targeted_contract_fix_unexpected_tracked_file_count"
+        ),
+        default=local_post_targeted_contract_fix_unexpected_tracked_file_count,
+    )
+    local_bounded_approve_commit_tag_state = (
+        _build_local_bounded_approve_commit_tag_execution_artifacts(
+            execution_repo_path=execution_repo_path,
+            one_cycle_controller_dir=one_cycle_controller_dir,
         )
-        local_post_codex_route_approve_commit_tag_allowed = bool(
-            refreshed_post_execution_handoff.get(
-                "local_post_codex_route_approve_commit_tag_allowed",
-                local_post_codex_route_approve_commit_tag_allowed,
-            )
+    )
+    local_bounded_approve_commit_tag_status = _normalize_text(
+        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_status"),
+        default=local_bounded_approve_commit_tag_status,
+    )
+    local_bounded_approve_commit_tag_execution_status = _normalize_text(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_execution_status"
+        ),
+        default=local_bounded_approve_commit_tag_execution_status,
+    )
+    local_bounded_approve_commit_tag_blocked_reason = _normalize_text(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_blocked_reason"
+        ),
+        default=local_bounded_approve_commit_tag_blocked_reason,
+    )
+    local_bounded_approve_commit_tag_next_action = _normalize_text(
+        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_next_action"),
+        default=local_bounded_approve_commit_tag_next_action,
+    )
+    local_bounded_approve_commit_tag_commit_performed = bool(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_commit_performed",
+            local_bounded_approve_commit_tag_commit_performed,
         )
-        local_targeted_contract_fix_prompt_state = (
-            _build_local_targeted_contract_fix_prompt_artifacts(
-                one_cycle_controller_dir=one_cycle_controller_dir
-            )
+    )
+    local_bounded_approve_commit_tag_tag_performed = bool(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_tag_performed",
+            local_bounded_approve_commit_tag_tag_performed,
         )
+    )
+    local_bounded_approve_commit_tag_commit_hash = _normalize_text(
+        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_commit_hash"),
+        default=local_bounded_approve_commit_tag_commit_hash,
+    )
+    local_bounded_approve_commit_tag_tag_name = _normalize_text(
+        local_bounded_approve_commit_tag_state.get("local_bounded_approve_commit_tag_tag_name"),
+        default=local_bounded_approve_commit_tag_tag_name,
+    )
+    local_bounded_approve_commit_tag_worktree_clean = bool(
+        local_bounded_approve_commit_tag_state.get(
+            "local_bounded_approve_commit_tag_worktree_clean",
+            local_bounded_approve_commit_tag_worktree_clean,
+        )
+    )
+    local_post_commit_cycle_closure_state = _build_local_post_commit_cycle_closure_artifacts(
+        execution_repo_path=execution_repo_path,
+        one_cycle_controller_dir=one_cycle_controller_dir,
+    )
+    local_post_commit_cycle_closure_status = _normalize_text(
+        local_post_commit_cycle_closure_state.get("local_post_commit_cycle_closure_status"),
+        default=local_post_commit_cycle_closure_status,
+    )
+    local_post_commit_cycle_closure_blocked_reason = _normalize_text(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_blocked_reason"
+        ),
+        default=local_post_commit_cycle_closure_blocked_reason,
+    )
+    local_post_commit_cycle_closure_cycle_closed = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_cycle_closed",
+            local_post_commit_cycle_closure_cycle_closed,
+        )
+    )
+    local_post_commit_cycle_closure_reentry_allowed = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_reentry_allowed",
+            local_post_commit_cycle_closure_reentry_allowed,
+        )
+    )
+    local_post_commit_cycle_closure_should_continue = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_should_continue",
+            local_post_commit_cycle_closure_should_continue,
+        )
+    )
+    local_post_commit_cycle_closure_cycle_decision = _normalize_text(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_cycle_decision"
+        ),
+        default=local_post_commit_cycle_closure_cycle_decision,
+    )
+    local_post_commit_cycle_closure_next_action = _normalize_text(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_next_action"
+        ),
+        default=local_post_commit_cycle_closure_next_action,
+    )
+    local_post_commit_cycle_closure_commit_hash = _normalize_text(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_commit_hash"
+        ),
+        default=local_post_commit_cycle_closure_commit_hash,
+    )
+    local_post_commit_cycle_closure_tag_name = _normalize_text(
+        local_post_commit_cycle_closure_state.get("local_post_commit_cycle_closure_tag_name"),
+        default=local_post_commit_cycle_closure_tag_name,
+    )
+    local_post_commit_cycle_closure_no_change_cycle_closure = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_no_change_cycle_closure",
+            local_post_commit_cycle_closure_no_change_cycle_closure,
+        )
+    )
+    local_post_commit_cycle_closure_commit_required = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_commit_required",
+            local_post_commit_cycle_closure_commit_required,
+        )
+    )
+    local_post_commit_cycle_closure_tag_required = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_tag_required",
+            local_post_commit_cycle_closure_tag_required,
+        )
+    )
+    local_post_commit_cycle_closure_local_commit_tag_complete = bool(
+        local_post_commit_cycle_closure_state.get(
+            "local_post_commit_cycle_closure_local_commit_tag_complete",
+            local_post_commit_cycle_closure_local_commit_tag_complete,
+        )
+    )
+    local_next_cycle_reentry_status = _normalize_text(
+        local_post_commit_cycle_closure_state.get("local_next_cycle_reentry_status"),
+        default=local_next_cycle_reentry_status,
+    )
+    local_next_cycle_reentry_next_action = _normalize_text(
+        local_post_commit_cycle_closure_state.get("local_next_cycle_reentry_next_action"),
+        default=local_next_cycle_reentry_next_action,
+    )
+    local_next_cycle_reentry_selected_step_name = _normalize_text(
+        local_post_commit_cycle_closure_state.get(
+            "local_next_cycle_reentry_selected_step_name"
+        ),
+        default=local_next_cycle_reentry_selected_step_name,
+    )
+    local_autonomous_continuation_state = _build_local_autonomous_continuation_artifacts(
+        execution_repo_path=execution_repo_path,
+        one_cycle_controller_dir=one_cycle_controller_dir,
+    )
+    local_autonomous_continuation_status = _normalize_text(
+        local_autonomous_continuation_state.get("local_autonomous_continuation_status"),
+        default=local_autonomous_continuation_status,
+    )
+    local_autonomous_continuation_blocked_reason = _normalize_text(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_blocked_reason"
+        ),
+        default=local_autonomous_continuation_blocked_reason,
+    )
+    local_autonomous_continuation_next_action = _normalize_text(
+        local_autonomous_continuation_state.get("local_autonomous_continuation_next_action"),
+        default=local_autonomous_continuation_next_action,
+    )
+    local_autonomous_continuation_reentry_connected = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_reentry_connected",
+            local_autonomous_continuation_reentry_connected,
+        )
+    )
+    local_autonomous_continuation_next_cycle_ready = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_next_cycle_ready",
+            local_autonomous_continuation_next_cycle_ready,
+        )
+    )
+    local_autonomous_continuation_selected_step_name = _normalize_text(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_selected_step_name"
+        ),
+        default=local_autonomous_continuation_selected_step_name,
+    )
+    local_autonomous_loop_completion_status = _normalize_text(
+        local_autonomous_continuation_state.get("local_autonomous_loop_completion_status"),
+        default=local_autonomous_loop_completion_status,
+    )
+    local_autonomous_loop_completion_final_decision = _normalize_text(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_loop_completion_final_decision"
+        ),
+        default=local_autonomous_loop_completion_final_decision,
+    )
+    local_only_complete_autonomous_loop_ready = bool(
+        local_autonomous_continuation_state.get(
+            "local_only_complete_autonomous_loop_ready",
+            local_only_complete_autonomous_loop_ready,
+        )
+    )
+    local_autonomous_loop_complete = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_loop_complete",
+            local_autonomous_loop_complete,
+        )
+    )
+    local_autonomous_continuation_no_change_cycle_closure = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_no_change_cycle_closure",
+            local_autonomous_continuation_no_change_cycle_closure,
+        )
+    )
+    local_autonomous_continuation_commit_required = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_commit_required",
+            local_autonomous_continuation_commit_required,
+        )
+    )
+    local_autonomous_continuation_tag_required = bool(
+        local_autonomous_continuation_state.get(
+            "local_autonomous_continuation_tag_required",
+            local_autonomous_continuation_tag_required,
+        )
+    )
     local_codex_one_shot_execution_status = _normalize_text(
         local_codex_one_shot_execution_result_state.get("status"),
         default=local_codex_one_shot_execution_status,
@@ -30224,6 +30236,360 @@ def _read_json_object_if_exists(path: Path) -> dict[str, Any] | None:
     if not isinstance(payload, Mapping):
         return None
     return dict(payload)
+
+
+def _read_planning_artifact_bundle(artifacts_dir: Path) -> dict[str, dict[str, Any]]:
+    bundle: dict[str, dict[str, Any]] = {}
+    for filename, key in (
+        ("project_brief.json", "project_brief"),
+        ("repo_facts.json", "repo_facts"),
+        ("roadmap.json", "roadmap"),
+        ("pr_plan.json", "pr_plan"),
+    ):
+        payload = _read_json_object_if_exists(artifacts_dir / filename)
+        bundle[key] = dict(payload) if isinstance(payload, Mapping) else {}
+    return bundle
+
+
+def _planning_artifact_bundle_has_complete_objective(
+    bundle: Mapping[str, Any] | None,
+) -> bool:
+    payload = dict(bundle or {})
+    project_brief = (
+        dict(payload.get("project_brief"))
+        if isinstance(payload.get("project_brief"), Mapping)
+        else {}
+    )
+    pr_plan = (
+        dict(payload.get("pr_plan"))
+        if isinstance(payload.get("pr_plan"), Mapping)
+        else {}
+    )
+    roadmap = (
+        dict(payload.get("roadmap"))
+        if isinstance(payload.get("roadmap"), Mapping)
+        else {}
+    )
+    prs = pr_plan.get("prs") if isinstance(pr_plan.get("prs"), list) else []
+    first_pr = prs[0] if prs and isinstance(prs[0], Mapping) else {}
+    roadmap_items = roadmap.get("items") if isinstance(roadmap.get("items"), list) else []
+
+    return all(
+        [
+            bool(_normalize_text(project_brief.get("objective"), default="")),
+            bool(_normalize_text(project_brief.get("success_definition"), default="")),
+            bool(_normalize_text(project_brief.get("target_repo"), default="")),
+            bool(_normalize_text(project_brief.get("target_branch"), default="")),
+            bool(_normalize_text(first_pr.get("pr_id"), default="")),
+            bool(_normalize_text(first_pr.get("exact_scope"), default="")),
+            bool(_normalize_string_list(first_pr.get("touched_files"), sort_items=False)),
+            bool(_normalize_string_list(first_pr.get("forbidden_files"), sort_items=False)),
+            bool(_normalize_string_list(first_pr.get("acceptance_criteria"), sort_items=False)),
+            bool(_normalize_string_list(first_pr.get("validation_commands"), sort_items=False)),
+            bool(roadmap_items),
+        ]
+    )
+
+
+def _planning_artifact_bundle_is_prompt167_smoke_placeholder(
+    bundle: Mapping[str, Any] | None,
+) -> bool:
+    payload = dict(bundle or {})
+    project_brief = (
+        dict(payload.get("project_brief"))
+        if isinstance(payload.get("project_brief"), Mapping)
+        else {}
+    )
+    pr_plan = (
+        dict(payload.get("pr_plan"))
+        if isinstance(payload.get("pr_plan"), Mapping)
+        else {}
+    )
+    roadmap = (
+        dict(payload.get("roadmap"))
+        if isinstance(payload.get("roadmap"), Mapping)
+        else {}
+    )
+    prs = pr_plan.get("prs") if isinstance(pr_plan.get("prs"), list) else []
+    first_pr = prs[0] if prs and isinstance(prs[0], Mapping) else {}
+    roadmap_items = roadmap.get("items") if isinstance(roadmap.get("items"), list) else []
+    first_item = roadmap_items[0] if roadmap_items and isinstance(roadmap_items[0], Mapping) else {}
+
+    placeholder_markers = {
+        _normalize_text(project_brief.get("objective"), default=""),
+        _normalize_text(first_pr.get("pr_id"), default=""),
+        _normalize_text(first_pr.get("title"), default=""),
+        _normalize_text(roadmap.get("roadmap_id"), default=""),
+        _normalize_text(first_item.get("id"), default=""),
+        _normalize_text(first_item.get("title"), default=""),
+    }
+    return bool(
+        {
+            "Prompt167 smoke run",
+            "prompt167-smoke",
+            "prompt167-smoke-roadmap",
+        }
+        & placeholder_markers
+    )
+
+
+def _planning_artifact_bundle_is_incomplete_prompt167_smoke_placeholder(
+    bundle: Mapping[str, Any] | None,
+) -> bool:
+    payload = dict(bundle or {})
+    project_brief = (
+        dict(payload.get("project_brief"))
+        if isinstance(payload.get("project_brief"), Mapping)
+        else {}
+    )
+    pr_plan = (
+        dict(payload.get("pr_plan"))
+        if isinstance(payload.get("pr_plan"), Mapping)
+        else {}
+    )
+    prs = pr_plan.get("prs") if isinstance(pr_plan.get("prs"), list) else []
+    first_pr = prs[0] if prs and isinstance(prs[0], Mapping) else {}
+    return _planning_artifact_bundle_is_prompt167_smoke_placeholder(bundle) and not any(
+        [
+            bool(_normalize_text(project_brief.get("success_definition"), default="")),
+            bool(_normalize_text(project_brief.get("target_branch"), default="")),
+            bool(_normalize_text(first_pr.get("exact_scope"), default="")),
+            bool(_normalize_string_list(first_pr.get("touched_files"), sort_items=False)),
+            bool(_normalize_string_list(first_pr.get("acceptance_criteria"), sort_items=False)),
+            bool(_normalize_string_list(first_pr.get("validation_commands"), sort_items=False)),
+        ]
+    )
+
+
+def _is_one_cycle_controller_local_artifacts_dir(artifacts_dir: Path) -> bool:
+    try:
+        resolved = artifacts_dir.resolve()
+    except OSError:
+        resolved = artifacts_dir
+    return resolved in {
+        Path("/tmp/codex-local-runner-decision/one_cycle_controller").resolve(),
+        Path("/tmp/codex-local-runner-decision/artifacts").resolve(),
+    }
+
+
+def _build_prompt353_runtime_verification_planning_artifact_bundle(
+    *,
+    execution_repo_path: str,
+    one_cycle_controller_dir: Path,
+    local_autonomous_cycle_v2_decision: Mapping[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    command_summary: dict[str, Any] = {}
+    cycle_v2_decision_payload = (
+        dict(local_autonomous_cycle_v2_decision)
+        if isinstance(local_autonomous_cycle_v2_decision, Mapping)
+        else {}
+    )
+    detected_branch = ""
+    normalized_repo_path = _normalize_text(execution_repo_path, default="")
+    if normalized_repo_path:
+        try:
+            detected_branch = _resolve_current_branch(
+                normalized_repo_path,
+                command_summary=command_summary,
+            )
+        except (OSError, subprocess.SubprocessError):
+            detected_branch = ""
+    target_branch = detected_branch or "local/prompt299-one-cycle-controller-v1"
+    target_repo = (
+        Path(normalized_repo_path).name
+        if normalized_repo_path
+        else "codex-local-runner"
+    )
+    target_repo = _normalize_text(target_repo, default="codex-local-runner")
+    run_id = _normalize_text(
+        cycle_v2_decision_payload.get("run_id"),
+        default="prompt353-runtime-verification",
+    )
+    objective_summary = "Prompt353 local autonomous ordering repair runtime verification"
+    requested_outcome = (
+        "Verify that the local autonomous one-cycle controller can run past "
+        "Prompt333/Prompt334/Prompt335 ordering without "
+        "local_targeted_contract_fix_prompt_state UnboundLocalError and without selecting "
+        "the stale Prompt167 smoke objective fallback."
+    )
+    acceptance_criteria = [
+        "No UnboundLocalError or Traceback for local_targeted_contract_fix_prompt_state.",
+        "Prompt333 current-run execution artifacts are produced or explicitly accounted before Prompt334/335 downstream artifacts are built.",
+        "Prompt334/335/336-342 downstream surfaces use current-run or reconciled state, or block with an explicit current-run reason.",
+        "The planned step contract is explicitly bounded, local-only, and manual-review-safe.",
+    ]
+    in_scope = [
+        "automation/orchestration/planned_execution_runner.py",
+        str(one_cycle_controller_dir),
+    ]
+    out_of_scope = [
+        "GitHub write operations",
+        "push",
+        "PR creation",
+        "merge",
+        "rollback execution",
+        "unbounded retry loops",
+        "scheduler or daemon behavior",
+    ]
+    risk_tier = "local_only_bounded_manual_review_safe"
+    validation_command = (
+        "python -m py_compile automation/orchestration/planned_execution_runner.py "
+        "scripts/run_planned_execution.py "
+        "automation/orchestration/objective_contract.py "
+        "automation/planning/project_planner.py "
+        "automation/planning/planned_step_contract.py "
+        "automation/planning/prompt_compiler.py"
+    )
+    pr_id = "prompt353-local-autonomous-ordering-runtime-verification"
+
+    return {
+        "project_brief": {
+            "project_id": run_id,
+            "project_name": target_repo,
+            "objective": objective_summary,
+            "summary": requested_outcome,
+            "success_definition": requested_outcome,
+            "target_repo": target_repo,
+            "target_branch": target_branch,
+            "task_type": "runtime_verification",
+            "allowed_risk_level": risk_tier,
+            "constraints": [
+                "Local-only verification path.",
+                "Bounded single verification run only.",
+                "Manual-review-safe posture only.",
+            ],
+            "non_goals": list(out_of_scope),
+        },
+        "repo_facts": {
+            "repo": target_repo,
+            "default_branch": target_branch,
+            "relevant_paths": list(in_scope),
+            "build_commands": [validation_command],
+        },
+        "roadmap": {
+            "roadmap_id": f"{pr_id}-roadmap",
+            "estimated_risk": risk_tier,
+            "items": [
+                {
+                    "id": pr_id,
+                    "title": objective_summary,
+                    "status": "ready",
+                }
+            ],
+        },
+        "pr_plan": {
+            "plan_id": f"{pr_id}-plan",
+            "estimated_risk": risk_tier,
+            "prs": [
+                {
+                    "pr_id": pr_id,
+                    "title": objective_summary,
+                    "summary": requested_outcome,
+                    "exact_scope": requested_outcome,
+                    "touched_files": list(in_scope),
+                    "forbidden_files": list(out_of_scope),
+                    "acceptance_criteria": list(acceptance_criteria),
+                    "validation_commands": [validation_command],
+                    "rollback_notes": "Rollback execution remains out of scope for this local-only verification fallback.",
+                    "tier_category": "local_only_bounded_manual_review_safe",
+                    "depends_on": [],
+                    "risk": risk_tier,
+                    "status": "ready",
+                }
+            ],
+        },
+    }
+
+
+def _replace_one_cycle_controller_prompt167_placeholder_bundle(
+    *,
+    bundle: Mapping[str, Any] | None,
+    artifacts_dir: Path,
+    execution_repo_path: str,
+) -> tuple[dict[str, dict[str, Any]], bool]:
+    normalized_bundle = {
+        key: dict(value)
+        for key, value in dict(bundle or {}).items()
+        if isinstance(value, Mapping)
+    }
+    if not _is_one_cycle_controller_local_artifacts_dir(artifacts_dir):
+        return normalized_bundle, False
+    if _planning_artifact_bundle_has_complete_objective(normalized_bundle):
+        return normalized_bundle, False
+    if not _planning_artifact_bundle_is_incomplete_prompt167_smoke_placeholder(normalized_bundle):
+        return normalized_bundle, False
+
+    one_cycle_controller_dir = Path("/tmp/codex-local-runner-decision/one_cycle_controller")
+    local_autonomous_cycle_v2_decision = _read_json_object_if_exists(
+        one_cycle_controller_dir / "local_autonomous_cycle_v2_decision.json"
+    )
+    replacement_bundle = _build_prompt353_runtime_verification_planning_artifact_bundle(
+        execution_repo_path=execution_repo_path,
+        one_cycle_controller_dir=one_cycle_controller_dir,
+        local_autonomous_cycle_v2_decision=local_autonomous_cycle_v2_decision,
+    )
+    return replacement_bundle, True
+
+
+def _refresh_one_cycle_controller_runtime_planning_artifacts(
+    *,
+    one_cycle_controller_dir: Path,
+    execution_repo_path: str,
+) -> None:
+    shared_artifacts_dir = Path("/tmp/codex-local-runner-decision/artifacts")
+    artifact_dirs = (one_cycle_controller_dir, shared_artifacts_dir)
+    bundles_by_dir = {
+        artifacts_dir: _read_planning_artifact_bundle(artifacts_dir)
+        for artifacts_dir in artifact_dirs
+    }
+    controller_bundle = bundles_by_dir.get(one_cycle_controller_dir, {})
+    if _planning_artifact_bundle_has_complete_objective(controller_bundle):
+        return
+    complete_source_bundle: dict[str, dict[str, Any]] | None = None
+    placeholder_detected = False
+
+    for artifacts_dir in artifact_dirs:
+        bundle = bundles_by_dir[artifacts_dir]
+        if _planning_artifact_bundle_has_complete_objective(bundle):
+            if complete_source_bundle is None:
+                complete_source_bundle = bundle
+            continue
+        if _planning_artifact_bundle_is_prompt167_smoke_placeholder(bundle):
+            placeholder_detected = True
+
+    selected_bundle = complete_source_bundle
+    if selected_bundle is None:
+        if not placeholder_detected:
+            return
+        placeholder_bundle = next(
+            (
+                bundle
+                for bundle in (
+                    bundles_by_dir.get(one_cycle_controller_dir),
+                    bundles_by_dir.get(shared_artifacts_dir),
+                )
+                if _planning_artifact_bundle_is_incomplete_prompt167_smoke_placeholder(bundle)
+            ),
+            None,
+        )
+        selected_bundle, replaced = _replace_one_cycle_controller_prompt167_placeholder_bundle(
+            bundle=placeholder_bundle,
+            artifacts_dir=one_cycle_controller_dir,
+            execution_repo_path=execution_repo_path,
+        )
+        if not replaced:
+            return
+
+    one_cycle_controller_dir.mkdir(parents=True, exist_ok=True)
+    for filename, key in (
+        ("project_brief.json", "project_brief"),
+        ("repo_facts.json", "repo_facts"),
+        ("roadmap.json", "roadmap"),
+        ("pr_plan.json", "pr_plan"),
+    ):
+        payload = selected_bundle.get(key)
+        if isinstance(payload, Mapping):
+            _write_json(one_cycle_controller_dir / filename, payload)
 
 
 def _build_default_multi_cycle_history_payload(*, max_cycles_allowed: int) -> dict[str, Any]:
@@ -200856,12 +201222,34 @@ class PlannedExecutionRunner:
     ) -> dict[str, Any]:
         artifacts_root = Path(artifacts_input_dir)
         output_root = Path(output_dir)
+        resolved_execution_repo_path = _normalize_text(execution_repo_path, default="")
 
         artifacts = load_planning_artifacts(artifacts_root)
+        artifacts, replaced_prompt167_placeholder = _replace_one_cycle_controller_prompt167_placeholder_bundle(
+            bundle=artifacts,
+            artifacts_dir=artifacts_root,
+            execution_repo_path=resolved_execution_repo_path,
+        )
+        if replaced_prompt167_placeholder:
+            try:
+                resolved_artifacts_root = artifacts_root.resolve()
+            except OSError:
+                resolved_artifacts_root = artifacts_root
+            if resolved_artifacts_root == Path(
+                "/tmp/codex-local-runner-decision/one_cycle_controller"
+            ).resolve():
+                for filename, key in (
+                    ("project_brief.json", "project_brief"),
+                    ("repo_facts.json", "repo_facts"),
+                    ("roadmap.json", "roadmap"),
+                    ("pr_plan.json", "pr_plan"),
+                ):
+                    payload = artifacts.get(key)
+                    if isinstance(payload, Mapping):
+                        _write_json(artifacts_root / filename, payload)
         units = compile_prompt_units(artifacts)
         if not units:
             raise ValueError("no pr units found in planning artifacts")
-        resolved_execution_repo_path = _normalize_text(execution_repo_path, default="")
 
         pr_plan = artifacts.get("pr_plan", {})
         _validate_pr_unit_order(units, pr_plan=pr_plan)
