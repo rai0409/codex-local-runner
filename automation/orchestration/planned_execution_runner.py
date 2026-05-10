@@ -37978,6 +37978,598 @@ def _build_prompt357_local_continuation_route_surface(
     }
 
 
+def _prompt358_candidate_artifact_timestamp(path: Path) -> int:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
+def _prompt358_required_text_match(
+    payload: Mapping[str, Any],
+    field_name: str,
+    expected: str,
+) -> bool:
+    if field_name not in payload:
+        return False
+    return _normalize_text(payload.get(field_name), default="") == expected
+
+
+def _prompt358_required_bool_match(
+    payload: Mapping[str, Any],
+    field_name: str,
+    expected: bool,
+) -> bool:
+    if field_name not in payload:
+        return False
+    return _prompt357_as_boolish(payload.get(field_name)) is expected
+
+
+def _prompt358_valid_prior_prompt355_payload(
+    payload: Mapping[str, Any] | None,
+) -> bool:
+    if not isinstance(payload, Mapping):
+        return False
+    return all(
+        (
+            _prompt358_required_text_match(
+                payload,
+                "prompt355_readiness_status",
+                "ready",
+            ),
+            _prompt358_required_bool_match(
+                payload,
+                "prompt355_next_cycle_allowed",
+                True,
+            ),
+            _prompt358_required_text_match(
+                payload,
+                "prompt355_next_action",
+                "proceed_to_next_local_cycle",
+            ),
+            _prompt358_required_bool_match(
+                payload,
+                "prompt355_manual_required",
+                False,
+            ),
+        )
+    )
+
+
+def _prompt358_valid_prior_prompt356_payload(
+    payload: Mapping[str, Any] | None,
+) -> bool:
+    if not isinstance(payload, Mapping):
+        return False
+    return all(
+        (
+            _prompt358_required_text_match(
+                payload,
+                "prompt356_alignment_status",
+                "aligned",
+            ),
+            _prompt358_required_bool_match(
+                payload,
+                "prompt356_next_cycle_safe",
+                True,
+            ),
+            _prompt358_required_text_match(
+                payload,
+                "prompt356_next_action",
+                "proceed_to_next_local_cycle",
+            ),
+            _prompt358_required_bool_match(
+                payload,
+                "prompt356_manual_required",
+                False,
+            ),
+            _prompt358_required_bool_match(
+                payload,
+                "prompt356_stale_blockers_ignored",
+                True,
+            ),
+        )
+    )
+
+
+def _prompt358_valid_prior_prompt357_payload(
+    payload: Mapping[str, Any] | None,
+) -> bool:
+    if not isinstance(payload, Mapping):
+        return False
+    active_blocked_reasons = payload.get("prompt357_active_blocked_reasons")
+    return all(
+        (
+            _prompt358_required_text_match(
+                payload,
+                "prompt357_route_status",
+                "reconciled",
+            ),
+            _prompt358_required_bool_match(
+                payload,
+                "prompt357_local_continuation_allowed",
+                True,
+            ),
+            _prompt358_required_text_match(
+                payload,
+                "prompt357_authoritative_next_action",
+                "proceed_to_next_local_cycle",
+            ),
+            _prompt358_required_text_match(
+                payload,
+                "prompt357_next_action",
+                "prepare_next_local_cycle",
+            ),
+            _prompt358_required_bool_match(
+                payload,
+                "prompt357_manual_required",
+                False,
+            ),
+            _prompt358_required_bool_match(
+                payload,
+                "prompt357_replan_required",
+                False,
+            ),
+            "prompt357_active_blocked_reason" in payload,
+            _normalize_text(
+                payload.get("prompt357_active_blocked_reason"),
+                default="",
+            )
+            == "",
+            isinstance(active_blocked_reasons, list),
+            _normalize_string_list(active_blocked_reasons, sort_items=False) == [],
+        )
+    )
+
+
+def _prompt358_find_latest_valid_prior_artifact(
+    *,
+    filename: str,
+    validator: Callable[[Mapping[str, Any] | None], bool],
+) -> tuple[dict[str, Any] | None, str]:
+    recovery_root = Path("/tmp/codex-local-runner-checks")
+    if not recovery_root.exists() or not recovery_root.is_dir():
+        return None, ""
+
+    candidate_paths = sorted(
+        recovery_root.rglob(filename),
+        key=_prompt358_candidate_artifact_timestamp,
+        reverse=True,
+    )
+    for candidate_path in candidate_paths:
+        payload = _read_json_object_if_exists(candidate_path)
+        if validator(payload):
+            return payload, str(candidate_path)
+    return None, ""
+
+
+def _resolve_prompt358_recovered_local_continuation_evidence() -> dict[str, Any]:
+    _, prompt355_source = _prompt358_find_latest_valid_prior_artifact(
+        filename="prompt355_readiness.json",
+        validator=_prompt358_valid_prior_prompt355_payload,
+    )
+    _, prompt356_source = _prompt358_find_latest_valid_prior_artifact(
+        filename="prompt356_stale_blocker_alignment.json",
+        validator=_prompt358_valid_prior_prompt356_payload,
+    )
+    _, prompt357_source = _prompt358_find_latest_valid_prior_artifact(
+        filename="prompt357_local_continuation_route.json",
+        validator=_prompt358_valid_prior_prompt357_payload,
+    )
+    recovered_evidence_used = all(
+        (
+            bool(prompt355_source),
+            bool(prompt356_source),
+            bool(prompt357_source),
+        )
+    )
+    return {
+        "prompt358_recovered_evidence_used": bool(recovered_evidence_used),
+        "prompt358_recovered_prompt355_source": prompt355_source,
+        "prompt358_recovered_prompt356_source": prompt356_source,
+        "prompt358_recovered_prompt357_source": prompt357_source,
+    }
+
+
+def _build_prompt358_next_local_cycle_selection_surface(
+    *,
+    run_state_payload: Mapping[str, Any],
+    prompt355_readiness_payload: Mapping[str, Any] | None,
+    prompt356_stale_blocker_alignment_payload: Mapping[str, Any] | None,
+    prompt357_local_continuation_route_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    prompt355 = dict(prompt355_readiness_payload or {})
+    prompt356 = dict(prompt356_stale_blocker_alignment_payload or {})
+    prompt357 = dict(prompt357_local_continuation_route_payload or {})
+
+    def _read_text(*values: Any, default: str = "") -> str:
+        for value in values:
+            text = _normalize_text(value, default="")
+            if text:
+                return text
+        return default
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    prompt355_readiness_status = _read_text(
+        prompt355.get("prompt355_readiness_status"),
+        run_state.get("prompt355_readiness_status"),
+    )
+    prompt355_next_cycle_allowed = _prompt357_as_boolish(
+        prompt355.get("prompt355_next_cycle_allowed")
+        if "prompt355_next_cycle_allowed" in prompt355
+        else run_state.get("prompt355_next_cycle_allowed")
+    )
+    prompt355_manual_required = _prompt357_as_boolish(
+        prompt355.get("prompt355_manual_required")
+        if "prompt355_manual_required" in prompt355
+        else run_state.get("prompt355_manual_required")
+    )
+    prompt355_replan_required = _prompt357_as_boolish(
+        prompt355.get("prompt355_replan_required")
+        if "prompt355_replan_required" in prompt355
+        else run_state.get("prompt355_replan_required")
+    )
+
+    prompt356_alignment_status = _read_text(
+        prompt356.get("prompt356_alignment_status"),
+        run_state.get("prompt356_alignment_status"),
+    )
+    prompt356_next_cycle_safe = _prompt357_as_boolish(
+        prompt356.get("prompt356_next_cycle_safe")
+        if "prompt356_next_cycle_safe" in prompt356
+        else run_state.get("prompt356_next_cycle_safe")
+    )
+    prompt356_manual_required = _prompt357_as_boolish(
+        prompt356.get("prompt356_manual_required")
+        if "prompt356_manual_required" in prompt356
+        else run_state.get("prompt356_manual_required")
+    )
+    prompt356_replan_required = _prompt357_as_boolish(
+        prompt356.get("prompt356_replan_required")
+        if "prompt356_replan_required" in prompt356
+        else run_state.get("prompt356_replan_required")
+    )
+
+    prompt357_route_status = _read_text(
+        prompt357.get("prompt357_route_status"),
+        run_state.get("prompt357_route_status"),
+    )
+    prompt357_local_continuation_allowed = _prompt357_as_boolish(
+        prompt357.get("prompt357_local_continuation_allowed")
+        if "prompt357_local_continuation_allowed" in prompt357
+        else run_state.get("prompt357_local_continuation_allowed")
+    )
+    prompt357_authoritative_next_action = _read_text(
+        prompt357.get("prompt357_authoritative_next_action"),
+        run_state.get("prompt357_authoritative_next_action"),
+    )
+    prompt357_next_action = _read_text(
+        prompt357.get("prompt357_next_action"),
+        run_state.get("prompt357_next_action"),
+    )
+    prompt357_manual_required = _prompt357_as_boolish(
+        prompt357.get("prompt357_manual_required")
+        if "prompt357_manual_required" in prompt357
+        else run_state.get("prompt357_manual_required")
+    )
+    prompt357_replan_required = _prompt357_as_boolish(
+        prompt357.get("prompt357_replan_required")
+        if "prompt357_replan_required" in prompt357
+        else run_state.get("prompt357_replan_required")
+    )
+    prompt357_active_blocked_reason = _read_text(
+        prompt357.get("prompt357_active_blocked_reason"),
+        run_state.get("prompt357_active_blocked_reason"),
+    )
+    prompt357_active_blocked_reasons = _normalize_string_list(
+        prompt357.get("prompt357_active_blocked_reasons")
+        if "prompt357_active_blocked_reasons" in prompt357
+        else run_state.get("prompt357_active_blocked_reasons"),
+        sort_items=False,
+    )
+
+    ready_evidence = all(
+        (
+            prompt357_route_status == "reconciled",
+            prompt357_local_continuation_allowed,
+            prompt357_authoritative_next_action == "proceed_to_next_local_cycle",
+            prompt357_next_action == "prepare_next_local_cycle",
+            not prompt357_manual_required,
+            not prompt357_replan_required,
+            not prompt357_active_blocked_reason,
+            not prompt357_active_blocked_reasons,
+            prompt355_readiness_status == "ready",
+            prompt355_next_cycle_allowed,
+            prompt356_alignment_status == "aligned",
+            prompt356_next_cycle_safe,
+        )
+    )
+    recovered_evidence = {
+        "prompt358_recovered_evidence_used": False,
+        "prompt358_recovered_prompt355_source": "",
+        "prompt358_recovered_prompt356_source": "",
+        "prompt358_recovered_prompt357_source": "",
+    }
+
+    active_blocked_reasons: list[str] = []
+    if not ready_evidence:
+        if prompt357_route_status != "reconciled":
+            _append_reason(
+                active_blocked_reasons,
+                "prompt357_route_status_not_reconciled",
+            )
+        if not prompt357_local_continuation_allowed:
+            _append_reason(
+                active_blocked_reasons,
+                "prompt357_local_continuation_not_allowed",
+            )
+        if (
+            prompt357_authoritative_next_action
+            != "proceed_to_next_local_cycle"
+        ):
+            _append_reason(
+                active_blocked_reasons,
+                "prompt357_authoritative_next_action_not_proceed_to_next_local_cycle",
+            )
+        if prompt357_next_action != "prepare_next_local_cycle":
+            _append_reason(
+                active_blocked_reasons,
+                "prompt357_next_action_not_prepare_next_local_cycle",
+            )
+        if prompt357_manual_required:
+            _append_reason(active_blocked_reasons, "prompt357_manual_required")
+        if prompt357_replan_required:
+            _append_reason(active_blocked_reasons, "prompt357_replan_required")
+        if prompt357_active_blocked_reason:
+            _append_reason(
+                active_blocked_reasons,
+                "prompt357_active_blocked_reason_present",
+            )
+        if prompt357_active_blocked_reasons:
+            _append_reason(
+                active_blocked_reasons,
+                "prompt357_active_blocked_reasons_present",
+            )
+        if prompt355_readiness_status != "ready":
+            _append_reason(
+                active_blocked_reasons,
+                "prompt355_readiness_status_not_ready",
+            )
+        if not prompt355_next_cycle_allowed:
+            _append_reason(
+                active_blocked_reasons,
+                "prompt355_next_cycle_not_allowed",
+            )
+        if prompt356_alignment_status != "aligned":
+            _append_reason(
+                active_blocked_reasons,
+                "prompt356_alignment_status_not_aligned",
+            )
+        if not prompt356_next_cycle_safe:
+            _append_reason(
+                active_blocked_reasons,
+                "prompt356_next_cycle_not_safe",
+            )
+        recovered_evidence = _resolve_prompt358_recovered_local_continuation_evidence()
+
+    if ready_evidence or bool(recovered_evidence.get("prompt358_recovered_evidence_used", False)):
+        selection_status = "ready"
+        next_local_cycle_prepared = True
+        selected_step_operation = "emit_selected_prompt_contract"
+        authoritative_next_action = "emit_selected_prompt_contract"
+        next_action = "prepare_prompt359_contract"
+        commit_tag_manual_step_allowed = True
+        manual_required = False
+        replan_required = False
+        active_blocked_reason = ""
+        active_blocked_reasons = []
+        if bool(recovered_evidence.get("prompt358_recovered_evidence_used", False)):
+            summary = (
+                "Prompt358 ready: authoritative local-only continuation was recovered "
+                "from prior Prompt355/356/357 artifacts, and the Prompt359 "
+                "selected-step contract is emitted as metadata only."
+            )
+            authoritative_source = (
+                "prompt358_recovered_prompt355_prompt356_prompt357_artifacts"
+            )
+        else:
+            summary = (
+                "Prompt358 ready: next local-only autonomous cycle is prepared and the "
+                "Prompt359 selected-step contract is emitted as metadata only."
+            )
+            authoritative_source = "prompt357_local_continuation_reconciled"
+    else:
+        selection_status = "blocked"
+        next_local_cycle_prepared = False
+        selected_step_operation = "blocked"
+        authoritative_next_action = "hold_for_followup"
+        next_action = "hold_for_followup"
+        commit_tag_manual_step_allowed = False
+        manual_required = bool(
+            prompt357_manual_required
+            or prompt356_manual_required
+            or prompt355_manual_required
+        )
+        replan_required = bool(
+            prompt357_replan_required
+            or prompt356_replan_required
+            or prompt355_replan_required
+        )
+        active_blocked_reason = (
+            active_blocked_reasons[0]
+            if active_blocked_reasons
+            else "prompt358_ready_evidence_missing"
+        )
+        if not active_blocked_reasons:
+            active_blocked_reasons = [active_blocked_reason]
+        summary = "Prompt358 blocked: " + ", ".join(active_blocked_reasons)
+        authoritative_source = "prompt357_local_continuation_reconciled"
+
+    return {
+        "prompt358_selection_status": selection_status,
+        "prompt358_next_local_cycle_prepared": bool(next_local_cycle_prepared),
+        "prompt358_selected_prompt_id": "prompt359",
+        "prompt358_selected_prompt_title": (
+            "bounded_selected_step_execution_contract"
+        ),
+        "prompt358_selected_step_operation": selected_step_operation,
+        "prompt358_authoritative_next_action": authoritative_next_action,
+        "prompt358_next_action": next_action,
+        "prompt358_local_only": True,
+        "prompt358_remote_operations_required": False,
+        "prompt358_github_operations_required": False,
+        "prompt358_push_required": False,
+        "prompt358_pr_required": False,
+        "prompt358_merge_required": False,
+        "prompt358_rollback_required": False,
+        "prompt358_codex_execution_allowed": False,
+        "prompt358_selected_prompt_execution_allowed": False,
+        "prompt358_prompt_generation_execution_allowed": False,
+        "prompt358_commit_tag_automation_allowed": False,
+        "prompt358_commit_tag_manual_step_allowed": bool(
+            commit_tag_manual_step_allowed
+        ),
+        "prompt358_manual_required": bool(manual_required),
+        "prompt358_replan_required": bool(replan_required),
+        "prompt358_active_blocked_reason": active_blocked_reason,
+        "prompt358_active_blocked_reasons": _normalize_string_list(
+            active_blocked_reasons,
+            sort_items=False,
+        ),
+        "prompt358_authoritative_source": authoritative_source,
+        "prompt358_scope": "local_only",
+        "prompt358_summary": summary,
+        "prompt358_recovered_evidence_used": bool(
+            recovered_evidence.get("prompt358_recovered_evidence_used", False)
+        ),
+        "prompt358_recovered_prompt355_source": _normalize_text(
+            recovered_evidence.get("prompt358_recovered_prompt355_source"),
+            default="",
+        ),
+        "prompt358_recovered_prompt356_source": _normalize_text(
+            recovered_evidence.get("prompt358_recovered_prompt356_source"),
+            default="",
+        ),
+        "prompt358_recovered_prompt357_source": _normalize_text(
+            recovered_evidence.get("prompt358_recovered_prompt357_source"),
+            default="",
+        ),
+    }
+
+
+def _build_prompt358_selected_prompt_contract(
+    *,
+    prompt358_next_local_cycle_selection_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    prompt358 = dict(prompt358_next_local_cycle_selection_payload or {})
+
+    contract_status = (
+        "ready"
+        if _normalize_text(
+            prompt358.get("prompt358_selection_status"),
+            default="blocked",
+        )
+        == "ready"
+        else "blocked"
+    )
+
+    return {
+        "prompt358_contract_status": contract_status,
+        "prompt358_selected_prompt_id": "prompt359",
+        "prompt358_selected_prompt_title": (
+            "bounded_selected_step_execution_contract"
+        ),
+        "prompt358_selected_step_operation": "emit_selected_prompt_contract",
+        "prompt358_source_prompt": "prompt357",
+        "prompt358_source_action": "prepare_next_local_cycle",
+        "prompt358_local_only": True,
+        "prompt358_execution_allowed": False,
+        "prompt358_codex_execution_allowed": False,
+        "prompt358_selected_prompt_execution_allowed": False,
+        "prompt358_prompt_generation_execution_allowed": False,
+        "prompt358_selected_prompt_objective": (
+            "Emit a bounded selected-step execution contract that can later connect "
+            "the prepared local-only next cycle to live Codex execution, without "
+            "executing Codex, requiring remote GitHub operations, or mutating git."
+        ),
+        "prompt358_selected_prompt_constraints": [
+            "no Codex invocation from runner",
+            "no selected prompt execution",
+            "no prompt generation execution",
+            "no git mutation",
+            "no network",
+            "no daemon",
+            "no unbounded loop",
+            "no PR, push, merge, or rollback requirement",
+        ],
+        "prompt358_selected_prompt_success_criteria": [
+            "selected prompt contract emitted",
+            "local-only continuation evidence preserved",
+            "Prompt357 reconciled evidence preserved",
+            "execution remains disabled",
+        ],
+        "prompt358_active_blocked_reason": _normalize_text(
+            prompt358.get("prompt358_active_blocked_reason"),
+            default="",
+        ),
+        "prompt358_active_blocked_reasons": _normalize_string_list(
+            prompt358.get("prompt358_active_blocked_reasons"),
+            sort_items=False,
+        ),
+        "prompt358_recovered_evidence_used": bool(
+            prompt358.get("prompt358_recovered_evidence_used", False)
+        ),
+        "prompt358_recovered_prompt355_source": _normalize_text(
+            prompt358.get("prompt358_recovered_prompt355_source"),
+            default="",
+        ),
+        "prompt358_recovered_prompt356_source": _normalize_text(
+            prompt358.get("prompt358_recovered_prompt356_source"),
+            default="",
+        ),
+        "prompt358_recovered_prompt357_source": _normalize_text(
+            prompt358.get("prompt358_recovered_prompt357_source"),
+            default="",
+        ),
+        "prompt358_preserved_local_only_evidence": {
+            "prompt355_readiness_status": _normalize_text(
+                prompt358.get("prompt355_readiness_status"),
+                default="",
+            ),
+            "prompt355_next_cycle_allowed": bool(
+                prompt358.get("prompt355_next_cycle_allowed", False)
+            ),
+            "prompt356_alignment_status": _normalize_text(
+                prompt358.get("prompt356_alignment_status"),
+                default="",
+            ),
+            "prompt356_next_cycle_safe": bool(
+                prompt358.get("prompt356_next_cycle_safe", False)
+            ),
+            "prompt357_route_status": _normalize_text(
+                prompt358.get("prompt357_route_status"),
+                default="",
+            ),
+            "prompt357_local_continuation_allowed": bool(
+                prompt358.get("prompt357_local_continuation_allowed", False)
+            ),
+            "prompt357_authoritative_next_action": _normalize_text(
+                prompt358.get("prompt357_authoritative_next_action"),
+                default="",
+            ),
+            "prompt357_next_action": _normalize_text(
+                prompt358.get("prompt357_next_action"),
+                default="",
+            ),
+        },
+    }
+
+
 def _approval_delivery_noop_adapter(
     handoff_payload: Mapping[str, Any],
 ) -> Mapping[str, Any]:
@@ -206323,6 +206915,41 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt357_local_continuation_route_payload,
         }
+        prompt358_next_local_cycle_selection_path = (
+            run_root / "prompt358_next_local_cycle_selection.json"
+        )
+        prompt358_next_local_cycle_selection_payload = (
+            _build_prompt358_next_local_cycle_selection_surface(
+                run_state_payload=run_state_payload,
+                prompt355_readiness_payload=prompt355_readiness_payload,
+                prompt356_stale_blocker_alignment_payload=(
+                    prompt356_stale_blocker_alignment_payload
+                ),
+                prompt357_local_continuation_route_payload=(
+                    prompt357_local_continuation_route_payload
+                ),
+            )
+        )
+        _write_json(
+            prompt358_next_local_cycle_selection_path,
+            prompt358_next_local_cycle_selection_payload,
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt358_next_local_cycle_selection_payload,
+        }
+        prompt358_selected_prompt_contract_path = (
+            run_root / "prompt358_selected_prompt_contract.json"
+        )
+        prompt358_selected_prompt_contract_payload = (
+            _build_prompt358_selected_prompt_contract(
+                prompt358_next_local_cycle_selection_payload=run_state_payload,
+            )
+        )
+        _write_json(
+            prompt358_selected_prompt_contract_path,
+            prompt358_selected_prompt_contract_payload,
+        )
         run_state_payload = _augment_run_state_with_operator_explainability(
             run_state_payload=run_state_payload,
         )
@@ -206414,6 +207041,18 @@ class PlannedExecutionRunner:
         )
         manifest["prompt357_local_continuation_route_path"] = str(
             prompt357_local_continuation_route_path
+        )
+        manifest["prompt358_next_local_cycle_selection_summary"] = dict(
+            prompt358_next_local_cycle_selection_payload
+        )
+        manifest["prompt358_next_local_cycle_selection_path"] = str(
+            prompt358_next_local_cycle_selection_path
+        )
+        manifest["prompt358_selected_prompt_contract_summary"] = dict(
+            prompt358_selected_prompt_contract_payload
+        )
+        manifest["prompt358_selected_prompt_contract_path"] = str(
+            prompt358_selected_prompt_contract_path
         )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
@@ -206635,6 +207274,36 @@ class PlannedExecutionRunner:
                     False,
                 )
             ),
+            "prompt358_selection_status": _normalize_text(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_selection_status"
+                ),
+                default="blocked",
+            ),
+            "prompt358_selected_prompt_id": _normalize_text(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_selected_prompt_id"
+                ),
+                default="prompt359",
+            ),
+            "prompt358_selected_step_operation": _normalize_text(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_selected_step_operation"
+                ),
+                default="blocked",
+            ),
+            "prompt358_authoritative_next_action": _normalize_text(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_authoritative_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt358_next_action": _normalize_text(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_next_action"
+                ),
+                default="hold_for_followup",
+            ),
         }
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -206755,6 +207424,66 @@ class PlannedExecutionRunner:
                     "prompt357_commit_execution_false_blocker_detected",
                     False,
                 )
+            ),
+            "prompt358_selection_status": _normalize_text(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_selection_status"
+                ),
+                default="blocked",
+            ),
+            "prompt358_selected_prompt_id": _normalize_text(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_selected_prompt_id"
+                ),
+                default="prompt359",
+            ),
+            "prompt358_next_local_cycle_prepared": bool(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_next_local_cycle_prepared",
+                    False,
+                )
+            ),
+            "prompt358_codex_execution_allowed": bool(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt358_selected_prompt_execution_allowed": bool(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_selected_prompt_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt358_prompt_generation_execution_allowed": bool(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_prompt_generation_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt358_commit_tag_manual_step_allowed": bool(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_commit_tag_manual_step_allowed",
+                    False,
+                )
+            ),
+            "prompt358_manual_required": bool(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_manual_required",
+                    False,
+                )
+            ),
+            "prompt358_replan_required": bool(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_replan_required",
+                    False,
+                )
+            ),
+            "prompt358_active_blocked_reason": _normalize_text(
+                prompt358_next_local_cycle_selection_payload.get(
+                    "prompt358_active_blocked_reason"
+                ),
+                default="",
             ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(
