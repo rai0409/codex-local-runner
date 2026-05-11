@@ -3688,6 +3688,7 @@ _PROMPT368_IMPLEMENTATION_TRACKED_FILES: tuple[str, ...] = (
     "automation/orchestration/run_state_summary_contract.py",
 )
 _PROMPT369_SCHEMA_VERSION = "prompt369_targeted_fix_route_integration_v1"
+_PROMPT370_SCHEMA_VERSION = "prompt370_integrated_autonomous_cycle_runner_v1"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -3726,6 +3727,54 @@ _PROMPT369_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt369_active_blocked_reason",
     "prompt369_active_blocked_reasons",
     "prompt369_summary",
+)
+_PROMPT370_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt370_schema_version",
+    "prompt370_integrated_autonomous_cycle_runner_status",
+    "prompt370_prompt368_source_path",
+    "prompt370_prompt369_source_path",
+    "prompt370_prompt362_source_path",
+    "prompt370_prompt363_source_path",
+    "prompt370_prompt368_resume_ready",
+    "prompt370_prompt369_route_ready",
+    "prompt370_targeted_fix_required",
+    "prompt370_targeted_fix_route_ready",
+    "prompt370_approve_route_required",
+    "prompt370_approve_route_ready",
+    "prompt370_continue_next_cycle_ready",
+    "prompt370_stop_condition_present",
+    "prompt370_stop_condition_reasons",
+    "prompt370_current_next_action",
+    "prompt370_review_route_decision",
+    "prompt370_review_route_next_action",
+    "prompt370_dispatch_status",
+    "prompt370_dispatch_decision",
+    "prompt370_selected_route",
+    "prompt370_selected_next_action",
+    "prompt370_dispatch_reason",
+    "prompt370_dispatch_blocked_reason",
+    "prompt370_dispatch_blocked_reasons",
+    "prompt370_next_action_dispatch_ready",
+    "prompt370_integrated_autonomous_cycle_runner_path",
+    "prompt370_next_action_dispatch_plan_path",
+    "prompt370_dispatch_receipt_path",
+    "prompt370_execution_allowed",
+    "prompt370_execution_attempted",
+    "prompt370_execution_performed",
+    "prompt370_codex_execution_allowed",
+    "prompt370_codex_execution_attempted",
+    "prompt370_codex_execution_performed",
+    "prompt370_git_mutation_allowed",
+    "prompt370_git_mutation_attempted",
+    "prompt370_git_mutation_performed",
+    "prompt370_remote_mutation_allowed",
+    "prompt370_remote_mutation_attempted",
+    "prompt370_remote_mutation_performed",
+    "prompt370_authoritative_next_action",
+    "prompt370_next_action",
+    "prompt370_active_blocked_reason",
+    "prompt370_active_blocked_reasons",
+    "prompt370_summary",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -5420,6 +5469,23 @@ def _merge_prompt369_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT369_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt370_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt370_integrated_autonomous_cycle_runner_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt370_integrated_autonomous_cycle_runner_state)
+        if isinstance(prompt370_integrated_autonomous_cycle_runner_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT370_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -45518,6 +45584,636 @@ def _build_prompt369_targeted_fix_route_integration_state(
     }
 
 
+def _build_prompt370_integrated_autonomous_cycle_runner_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    current_prompt368_source_path: str = "",
+    current_prompt369_source_path: str = "",
+    current_prompt362_source_path: str = "",
+    current_prompt363_source_path: str = "",
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    runner_path = artifact_root / "prompt370_integrated_autonomous_cycle_runner.json"
+    dispatch_plan_path = artifact_root / "prompt370_next_action_dispatch_plan.json"
+    receipt_path = artifact_root / "prompt370_dispatch_receipt.json"
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt368_surface(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt368_next_cycle_resume_contract_ready": _prompt357_as_boolish(
+                source.get("prompt368_next_cycle_resume_contract_ready"),
+                default=False,
+            ),
+            "prompt368_integrated_loop_resume_ready": _prompt357_as_boolish(
+                source.get("prompt368_integrated_loop_resume_ready"),
+                default=False,
+            ),
+            "prompt368_resume_iteration_current": _as_non_negative_int(
+                source.get("prompt368_resume_iteration_current"),
+                default=0,
+            ),
+            "prompt368_resume_iteration_max": _as_non_negative_int(
+                source.get("prompt368_resume_iteration_max"),
+                default=0,
+            ),
+            "prompt368_next_action": _normalize_text(
+                source.get("prompt368_next_action"),
+                default="",
+            ),
+            "prompt368_authoritative_next_action": _normalize_text(
+                source.get("prompt368_authoritative_next_action"),
+                default="",
+            ),
+        }
+
+    def _normalize_prompt369_surface(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt369_targeted_fix_route_integration_status": _normalize_text(
+                source.get("prompt369_targeted_fix_route_integration_status"),
+                default="",
+            ),
+            "prompt369_targeted_fix_route_status": _normalize_text(
+                source.get("prompt369_targeted_fix_route_status"),
+                default="",
+            ),
+            "prompt369_prompt368_resume_ready": _prompt357_as_boolish(
+                source.get("prompt369_prompt368_resume_ready"),
+                default=False,
+            ),
+            "prompt369_targeted_fix_route_integrated": _prompt357_as_boolish(
+                source.get("prompt369_targeted_fix_route_integrated"),
+                default=False,
+            ),
+            "prompt369_targeted_fix_required": _prompt357_as_boolish(
+                source.get("prompt369_targeted_fix_required"),
+                default=False,
+            ),
+            "prompt369_targeted_fix_reentry_contract_ready": _prompt357_as_boolish(
+                source.get("prompt369_targeted_fix_reentry_contract_ready"),
+                default=False,
+            ),
+            "prompt369_review_route_evidence_decision": _normalize_text(
+                source.get("prompt369_review_route_evidence_decision"),
+                default="",
+            ),
+            "prompt369_review_route_evidence_next_action": _normalize_text(
+                source.get("prompt369_review_route_evidence_next_action"),
+                default="",
+            ),
+            "prompt369_next_action": _normalize_text(
+                source.get("prompt369_next_action"),
+                default="",
+            ),
+            "prompt369_authoritative_next_action": _normalize_text(
+                source.get("prompt369_authoritative_next_action"),
+                default="",
+            ),
+        }
+
+    def _normalize_prompt362_surface(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt362_route_decision": _normalize_text(
+                source.get("prompt362_route_decision"),
+                default="",
+            ),
+            "prompt362_approve_commit_tag_ready": _prompt357_as_boolish(
+                source.get("prompt362_approve_commit_tag_ready"),
+                default=False,
+            ),
+            "prompt362_requires_targeted_fix": _prompt357_as_boolish(
+                source.get("prompt362_requires_targeted_fix"),
+                default=False,
+            ),
+            "prompt362_next_action": _normalize_text(
+                source.get("prompt362_next_action"),
+                default="",
+            ),
+        }
+
+    def _normalize_prompt363_surface(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt363_boundary_status": _normalize_text(
+                source.get("prompt363_boundary_status"),
+                default="",
+            ),
+            "prompt363_approve_commit_tag_plan_ready": _prompt357_as_boolish(
+                source.get("prompt363_approve_commit_tag_plan_ready"),
+                default=False,
+            ),
+            "prompt363_next_action": _normalize_text(
+                source.get("prompt363_next_action"),
+                default="",
+            ),
+        }
+
+    def _repair_next_action_for(reason: str) -> str:
+        mapping = {
+            "prompt368_integrated_loop_resume_ready_not_true": (
+                "repair_prompt368_integrated_loop_resume_readiness"
+            ),
+            "prompt368_next_cycle_resume_contract_ready_not_true": (
+                "repair_prompt368_next_cycle_resume_contract"
+            ),
+            "prompt369_targeted_fix_route_integration_status_not_ready": (
+                "repair_prompt369_targeted_fix_route_integration_ready_state"
+            ),
+            "prompt369_targeted_fix_route_status_not_prepared": (
+                "repair_prompt369_targeted_fix_route_prepared_state"
+            ),
+            "prompt369_prompt368_resume_ready_not_true": (
+                "repair_prompt369_prompt368_resume_readiness"
+            ),
+            "prompt369_targeted_fix_route_integrated_not_true": (
+                "repair_prompt369_targeted_fix_route_integration"
+            ),
+            "prompt369_targeted_fix_reentry_contract_ready_not_true": (
+                "repair_prompt369_targeted_fix_reentry_contract"
+            ),
+            "prompt369_next_action_not_prepare_prompt370_integrated_autonomous_cycle_runner": (
+                "repair_prompt369_next_action_for_prompt370"
+            ),
+            "approve_commit_tag_route_not_ready": (
+                "repair_prompt363_approve_commit_tag_plan"
+            ),
+            "continue_next_cycle_route_not_ready": (
+                "repair_prompt370_continue_next_cycle_readiness"
+            ),
+            "no_safe_dispatch_route_selected": (
+                "repair_prompt370_dispatch_route_selection"
+            ),
+        }
+        return mapping.get(reason, "review_prompt370_dispatch_blocker")
+
+    prompt368_surface = _normalize_prompt368_surface(run_state)
+    prompt369_surface = _normalize_prompt369_surface(run_state)
+    prompt362_surface = _normalize_prompt362_surface(run_state)
+    prompt363_surface = _normalize_prompt363_surface(run_state)
+
+    ready_evidence_blockers: list[str] = []
+    if not bool(prompt368_surface.get("prompt368_integrated_loop_resume_ready", False)):
+        _append_reason(
+            ready_evidence_blockers,
+            "prompt368_integrated_loop_resume_ready_not_true",
+        )
+    if not bool(prompt368_surface.get("prompt368_next_cycle_resume_contract_ready", False)):
+        _append_reason(
+            ready_evidence_blockers,
+            "prompt368_next_cycle_resume_contract_ready_not_true",
+        )
+    if (
+        _normalize_text(
+            prompt369_surface.get("prompt369_targeted_fix_route_integration_status"),
+            default="",
+        )
+        != "ready"
+    ):
+        _append_reason(
+            ready_evidence_blockers,
+            "prompt369_targeted_fix_route_integration_status_not_ready",
+        )
+    if (
+        _normalize_text(
+            prompt369_surface.get("prompt369_targeted_fix_route_status"),
+            default="",
+        )
+        != "prepared"
+    ):
+        _append_reason(
+            ready_evidence_blockers,
+            "prompt369_targeted_fix_route_status_not_prepared",
+        )
+    if not bool(prompt369_surface.get("prompt369_prompt368_resume_ready", False)):
+        _append_reason(
+            ready_evidence_blockers,
+            "prompt369_prompt368_resume_ready_not_true",
+        )
+    if not bool(prompt369_surface.get("prompt369_targeted_fix_route_integrated", False)):
+        _append_reason(
+            ready_evidence_blockers,
+            "prompt369_targeted_fix_route_integrated_not_true",
+        )
+    if not bool(prompt369_surface.get("prompt369_targeted_fix_reentry_contract_ready", False)):
+        _append_reason(
+            ready_evidence_blockers,
+            "prompt369_targeted_fix_reentry_contract_ready_not_true",
+        )
+    if (
+        _normalize_text(prompt369_surface.get("prompt369_next_action"), default="")
+        != "prepare_prompt370_integrated_autonomous_cycle_runner"
+    ):
+        _append_reason(
+            ready_evidence_blockers,
+            "prompt369_next_action_not_prepare_prompt370_integrated_autonomous_cycle_runner",
+        )
+
+    prompt370_prompt368_resume_ready = not any(
+        reason.startswith("prompt368_") for reason in ready_evidence_blockers
+    )
+    prompt370_prompt369_route_ready = not any(
+        reason.startswith("prompt369_") for reason in ready_evidence_blockers
+    )
+
+    prompt370_targeted_fix_required = bool(
+        prompt369_surface.get("prompt369_targeted_fix_required", False)
+    )
+    prompt370_targeted_fix_route_ready = bool(
+        prompt370_prompt369_route_ready
+        and prompt369_surface.get("prompt369_targeted_fix_reentry_contract_ready", False)
+    )
+
+    prompt370_review_route_decision = _normalize_text(
+        prompt369_surface.get("prompt369_review_route_evidence_decision")
+        or prompt362_surface.get("prompt362_route_decision"),
+        default="",
+    )
+    prompt370_review_route_next_action = _normalize_text(
+        prompt369_surface.get("prompt369_review_route_evidence_next_action")
+        or prompt362_surface.get("prompt362_next_action"),
+        default="",
+    )
+    prompt370_current_next_action = _normalize_text(
+        prompt369_surface.get("prompt369_next_action")
+        or prompt368_surface.get("prompt368_next_action"),
+        default="",
+    )
+
+    prompt370_approve_route_required = bool(
+        (
+            _normalize_text(
+                prompt362_surface.get("prompt362_route_decision"),
+                default="",
+            )
+            == "approve_commit_tag"
+        )
+        or bool(prompt362_surface.get("prompt362_approve_commit_tag_ready", False))
+        or _normalize_text(
+            prompt362_surface.get("prompt362_next_action"),
+            default="",
+        )
+        == "prepare_approve_commit_tag"
+    )
+    prompt370_approve_route_ready = bool(
+        prompt370_approve_route_required
+        and bool(prompt362_surface.get("prompt362_approve_commit_tag_ready", False))
+        and _normalize_text(
+            prompt363_surface.get("prompt363_boundary_status"),
+            default="",
+        )
+        == "ready"
+        and bool(prompt363_surface.get("prompt363_approve_commit_tag_plan_ready", False))
+    )
+
+    prompt370_continue_next_cycle_ready = bool(
+        prompt370_prompt368_resume_ready
+        and prompt370_prompt369_route_ready
+        and not prompt370_targeted_fix_required
+    )
+
+    prompt370_resume_iteration_current = _as_non_negative_int(
+        prompt368_surface.get("prompt368_resume_iteration_current"),
+        default=0,
+    )
+    prompt370_resume_iteration_max = _as_non_negative_int(
+        prompt368_surface.get("prompt368_resume_iteration_max"),
+        default=0,
+    )
+
+    prompt370_stop_condition_reasons: list[str] = []
+    if _prompt357_as_boolish(run_state.get("global_stop"), default=False):
+        _append_reason(prompt370_stop_condition_reasons, "global_stop_true")
+    if _prompt357_as_boolish(run_state.get("terminal"), default=False):
+        _append_reason(prompt370_stop_condition_reasons, "terminal_true")
+    if (
+        prompt370_resume_iteration_max > 0
+        and prompt370_resume_iteration_current >= prompt370_resume_iteration_max
+    ):
+        _append_reason(
+            prompt370_stop_condition_reasons,
+            "prompt368_resume_iteration_limit_reached",
+        )
+    if prompt370_current_next_action == "manual_review_cycle_complete":
+        _append_reason(
+            prompt370_stop_condition_reasons,
+            "current_next_action_manual_review_cycle_complete",
+        )
+    prompt370_stop_condition_present = bool(prompt370_stop_condition_reasons)
+
+    prompt370_integrated_autonomous_cycle_runner_status = "blocked"
+    prompt370_dispatch_status = "blocked"
+    prompt370_dispatch_decision = "blocked"
+    prompt370_selected_route = "blocked"
+    prompt370_selected_next_action = ""
+    prompt370_dispatch_reason = ""
+    prompt370_dispatch_blocked_reason = ""
+    prompt370_dispatch_blocked_reasons: list[str] = []
+    prompt370_next_action_dispatch_ready = False
+
+    if ready_evidence_blockers:
+        prompt370_dispatch_blocked_reasons = _normalize_string_list(
+            ready_evidence_blockers,
+            sort_items=False,
+        )
+        prompt370_dispatch_blocked_reason = (
+            prompt370_dispatch_blocked_reasons[0]
+            if prompt370_dispatch_blocked_reasons
+            else "prompt370_required_ready_evidence_missing"
+        )
+        prompt370_selected_next_action = _repair_next_action_for(
+            prompt370_dispatch_blocked_reason
+        )
+        prompt370_dispatch_reason = (
+            "Prompt370 blocked dispatch because required Prompt368/Prompt369 ready evidence is missing."
+        )
+    elif prompt370_stop_condition_present:
+        prompt370_integrated_autonomous_cycle_runner_status = "ready"
+        prompt370_dispatch_status = "planned"
+        prompt370_dispatch_decision = "stop"
+        prompt370_selected_route = "stop"
+        prompt370_selected_next_action = "manual_review_cycle_complete"
+        prompt370_dispatch_reason = (
+            "Prompt370 selected the stop route because an explicit stop condition is present."
+        )
+        prompt370_next_action_dispatch_ready = True
+    elif prompt370_targeted_fix_required and prompt370_targeted_fix_route_ready:
+        prompt370_integrated_autonomous_cycle_runner_status = "ready"
+        prompt370_dispatch_status = "planned"
+        prompt370_dispatch_decision = "targeted_fix"
+        prompt370_selected_route = "targeted_fix"
+        prompt370_selected_next_action = (
+            "prepare_prompt371_bounded_one_cycle_execution_wiring"
+        )
+        prompt370_dispatch_reason = (
+            "Prompt370 selected the targeted-fix route from Prompt369 targeted-fix evidence."
+        )
+        prompt370_next_action_dispatch_ready = True
+    elif prompt370_approve_route_required and prompt370_approve_route_ready:
+        prompt370_integrated_autonomous_cycle_runner_status = "ready"
+        prompt370_dispatch_status = "planned"
+        prompt370_dispatch_decision = "approve_commit_tag"
+        prompt370_selected_route = "approve_commit_tag"
+        prompt370_selected_next_action = (
+            "prepare_prompt372_explicit_commit_tag_execution_verification"
+        )
+        prompt370_dispatch_reason = (
+            "Prompt370 selected the approve-commit-tag route from explicit Prompt362/Prompt363 approve evidence."
+        )
+        prompt370_next_action_dispatch_ready = True
+    elif prompt370_approve_route_required and not prompt370_approve_route_ready:
+        prompt370_dispatch_blocked_reasons = ["approve_commit_tag_route_not_ready"]
+        prompt370_dispatch_blocked_reason = "approve_commit_tag_route_not_ready"
+        prompt370_selected_next_action = _repair_next_action_for(
+            prompt370_dispatch_blocked_reason
+        )
+        prompt370_dispatch_reason = (
+            "Prompt370 blocked dispatch because approve-commit-tag was required but its ready evidence is incomplete."
+        )
+    elif prompt370_continue_next_cycle_ready:
+        prompt370_integrated_autonomous_cycle_runner_status = "ready"
+        prompt370_dispatch_status = "planned"
+        prompt370_dispatch_decision = "continue_next_cycle"
+        prompt370_selected_route = "continue_next_cycle"
+        prompt370_selected_next_action = (
+            "prepare_prompt371_bounded_one_cycle_execution_wiring"
+        )
+        prompt370_dispatch_reason = (
+            "Prompt370 selected the next-cycle continuation route from Prompt368 resume readiness and Prompt369 integrated route readiness."
+        )
+        prompt370_next_action_dispatch_ready = True
+    else:
+        prompt370_dispatch_blocked_reasons = ["no_safe_dispatch_route_selected"]
+        prompt370_dispatch_blocked_reason = "no_safe_dispatch_route_selected"
+        prompt370_selected_next_action = _repair_next_action_for(
+            prompt370_dispatch_blocked_reason
+        )
+        prompt370_dispatch_reason = (
+            "Prompt370 blocked dispatch because no safe route could be selected from the available metadata."
+        )
+
+    if not prompt370_next_action_dispatch_ready:
+        prompt370_integrated_autonomous_cycle_runner_status = "blocked"
+        prompt370_dispatch_status = "blocked"
+        prompt370_dispatch_decision = "blocked"
+        prompt370_selected_route = "blocked"
+
+    prompt370_execution_allowed = False
+    prompt370_execution_attempted = False
+    prompt370_execution_performed = False
+    prompt370_codex_execution_allowed = False
+    prompt370_codex_execution_attempted = False
+    prompt370_codex_execution_performed = False
+    prompt370_git_mutation_allowed = False
+    prompt370_git_mutation_attempted = False
+    prompt370_git_mutation_performed = False
+    prompt370_remote_mutation_allowed = False
+    prompt370_remote_mutation_attempted = False
+    prompt370_remote_mutation_performed = False
+
+    prompt370_authoritative_next_action = _normalize_text(
+        prompt370_selected_next_action,
+        default="",
+    )
+    prompt370_next_action = prompt370_authoritative_next_action
+    prompt370_active_blocked_reasons = (
+        _normalize_string_list(prompt370_dispatch_blocked_reasons, sort_items=False)
+        if not prompt370_next_action_dispatch_ready
+        else []
+    )
+    prompt370_active_blocked_reason = (
+        prompt370_active_blocked_reasons[0]
+        if prompt370_active_blocked_reasons
+        else ""
+    )
+    prompt370_summary = (
+        "Prompt370 prepared a metadata-only autonomous cycle dispatch plan without executing Codex, targeted-fix reentry, or git mutation."
+    )
+    if prompt370_selected_route == "targeted_fix":
+        prompt370_summary = (
+            "Prompt370 prepared a metadata-only targeted-fix dispatch plan for the next bounded cycle."
+        )
+    elif prompt370_selected_route == "approve_commit_tag":
+        prompt370_summary = (
+            "Prompt370 prepared a metadata-only approve-commit-tag dispatch plan for explicit verification follow-up."
+        )
+    elif prompt370_selected_route == "continue_next_cycle":
+        prompt370_summary = (
+            "Prompt370 prepared a metadata-only continue-next-cycle dispatch plan for bounded one-cycle execution wiring."
+        )
+    elif prompt370_selected_route == "stop":
+        prompt370_summary = (
+            "Prompt370 prepared a metadata-only stop dispatch because an explicit stop condition is present."
+        )
+    elif prompt370_selected_route == "blocked":
+        prompt370_summary = (
+            "Prompt370 is blocked because it could not safely dispatch the next route from current metadata."
+        )
+
+    route_candidates = {
+        "blocked": {
+            "eligible": bool(not prompt370_next_action_dispatch_ready),
+            "selected_next_action": _normalize_text(
+                prompt370_selected_next_action if not prompt370_next_action_dispatch_ready else "",
+                default="",
+            ),
+            "reason": _normalize_text(
+                prompt370_dispatch_blocked_reason if not prompt370_next_action_dispatch_ready else "",
+                default="",
+            ),
+        },
+        "stop": {
+            "eligible": prompt370_stop_condition_present,
+            "selected_next_action": "manual_review_cycle_complete",
+            "reason": (
+                "explicit_stop_condition_present"
+                if prompt370_stop_condition_present
+                else ""
+            ),
+        },
+        "targeted_fix": {
+            "eligible": bool(
+                prompt370_targeted_fix_required and prompt370_targeted_fix_route_ready
+            ),
+            "selected_next_action": "prepare_prompt371_bounded_one_cycle_execution_wiring",
+            "reason": (
+                "targeted_fix_required_and_route_ready"
+                if prompt370_targeted_fix_required and prompt370_targeted_fix_route_ready
+                else ""
+            ),
+        },
+        "approve_commit_tag": {
+            "eligible": prompt370_approve_route_ready,
+            "selected_next_action": (
+                "prepare_prompt372_explicit_commit_tag_execution_verification"
+            ),
+            "reason": (
+                "approve_commit_tag_required_and_ready"
+                if prompt370_approve_route_ready
+                else ""
+            ),
+        },
+        "continue_next_cycle": {
+            "eligible": prompt370_continue_next_cycle_ready,
+            "selected_next_action": "prepare_prompt371_bounded_one_cycle_execution_wiring",
+            "reason": (
+                "targeted_fix_not_required_and_resume_ready"
+                if prompt370_continue_next_cycle_ready
+                else ""
+            ),
+        },
+    }
+
+    state_payload: dict[str, Any] = {
+        "prompt370_schema_version": _PROMPT370_SCHEMA_VERSION,
+        "prompt370_integrated_autonomous_cycle_runner_status": (
+            prompt370_integrated_autonomous_cycle_runner_status
+        ),
+        "prompt370_prompt368_source_path": _normalize_text(
+            current_prompt368_source_path,
+            default="",
+        ),
+        "prompt370_prompt369_source_path": _normalize_text(
+            current_prompt369_source_path,
+            default="",
+        ),
+        "prompt370_prompt362_source_path": _normalize_text(
+            current_prompt362_source_path,
+            default="",
+        ),
+        "prompt370_prompt363_source_path": _normalize_text(
+            current_prompt363_source_path,
+            default="",
+        ),
+        "prompt370_prompt368_resume_ready": prompt370_prompt368_resume_ready,
+        "prompt370_prompt369_route_ready": prompt370_prompt369_route_ready,
+        "prompt370_targeted_fix_required": prompt370_targeted_fix_required,
+        "prompt370_targeted_fix_route_ready": prompt370_targeted_fix_route_ready,
+        "prompt370_approve_route_required": prompt370_approve_route_required,
+        "prompt370_approve_route_ready": prompt370_approve_route_ready,
+        "prompt370_continue_next_cycle_ready": prompt370_continue_next_cycle_ready,
+        "prompt370_stop_condition_present": prompt370_stop_condition_present,
+        "prompt370_stop_condition_reasons": _normalize_string_list(
+            prompt370_stop_condition_reasons,
+            sort_items=False,
+        ),
+        "prompt370_current_next_action": prompt370_current_next_action,
+        "prompt370_review_route_decision": prompt370_review_route_decision,
+        "prompt370_review_route_next_action": prompt370_review_route_next_action,
+        "prompt370_dispatch_status": prompt370_dispatch_status,
+        "prompt370_dispatch_decision": prompt370_dispatch_decision,
+        "prompt370_selected_route": prompt370_selected_route,
+        "prompt370_selected_next_action": prompt370_selected_next_action,
+        "prompt370_dispatch_reason": prompt370_dispatch_reason,
+        "prompt370_dispatch_blocked_reason": prompt370_dispatch_blocked_reason,
+        "prompt370_dispatch_blocked_reasons": _normalize_string_list(
+            prompt370_dispatch_blocked_reasons,
+            sort_items=False,
+        ),
+        "prompt370_next_action_dispatch_ready": prompt370_next_action_dispatch_ready,
+        "prompt370_integrated_autonomous_cycle_runner_path": str(runner_path),
+        "prompt370_next_action_dispatch_plan_path": str(dispatch_plan_path),
+        "prompt370_dispatch_receipt_path": str(receipt_path),
+        "prompt370_execution_allowed": prompt370_execution_allowed,
+        "prompt370_execution_attempted": prompt370_execution_attempted,
+        "prompt370_execution_performed": prompt370_execution_performed,
+        "prompt370_codex_execution_allowed": prompt370_codex_execution_allowed,
+        "prompt370_codex_execution_attempted": (
+            prompt370_codex_execution_attempted
+        ),
+        "prompt370_codex_execution_performed": (
+            prompt370_codex_execution_performed
+        ),
+        "prompt370_git_mutation_allowed": prompt370_git_mutation_allowed,
+        "prompt370_git_mutation_attempted": prompt370_git_mutation_attempted,
+        "prompt370_git_mutation_performed": prompt370_git_mutation_performed,
+        "prompt370_remote_mutation_allowed": prompt370_remote_mutation_allowed,
+        "prompt370_remote_mutation_attempted": (
+            prompt370_remote_mutation_attempted
+        ),
+        "prompt370_remote_mutation_performed": (
+            prompt370_remote_mutation_performed
+        ),
+        "prompt370_authoritative_next_action": prompt370_authoritative_next_action,
+        "prompt370_next_action": prompt370_next_action,
+        "prompt370_active_blocked_reason": prompt370_active_blocked_reason,
+        "prompt370_active_blocked_reasons": prompt370_active_blocked_reasons,
+        "prompt370_summary": prompt370_summary,
+    }
+    dispatch_plan_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "execution_allowed": False,
+        "route_candidates": route_candidates,
+    }
+    receipt_payload: dict[str, Any] = {
+        **state_payload,
+        "prompt368_source_excerpt": dict(prompt368_surface),
+        "prompt369_source_excerpt": dict(prompt369_surface),
+        "prompt362_source_excerpt": dict(prompt362_surface),
+        "prompt363_source_excerpt": dict(prompt363_surface),
+        "route_candidates": route_candidates,
+    }
+
+    runner_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(runner_path, state_payload)
+    _write_json(dispatch_plan_path, dispatch_plan_payload)
+    _write_json(receipt_path, receipt_payload)
+
+    return {
+        key: value
+        for key, value in state_payload.items()
+        if key.startswith("prompt370_")
+    }
+
+
 def _merge_prompt363_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -45693,6 +46389,76 @@ def _merge_prompt369_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt369_next_action"
             if _normalize_text(prompt369.get("prompt369_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt370_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt370_integrated_autonomous_cycle_runner_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt370 = (
+        dict(prompt370_integrated_autonomous_cycle_runner_payload)
+        if isinstance(prompt370_integrated_autonomous_cycle_runner_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT370_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt370 and prompt370.get(key) is not None:
+            payload[key] = prompt370.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt370_integrated_autonomous_cycle_runner_status"
+            if _normalize_text(
+                prompt370.get("prompt370_integrated_autonomous_cycle_runner_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt370_prompt368_resume_ready"
+            if bool(prompt370.get("prompt370_prompt368_resume_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt370_prompt369_route_ready"
+            if bool(prompt370.get("prompt370_prompt369_route_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt370_dispatch_status"
+            if _normalize_text(prompt370.get("prompt370_dispatch_status"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt370_selected_route"
+            if _normalize_text(prompt370.get("prompt370_selected_route"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt370_selected_next_action"
+            if _normalize_text(
+                prompt370.get("prompt370_selected_next_action"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt370_next_action_dispatch_plan_path"
+            if _normalize_text(
+                prompt370.get("prompt370_next_action_dispatch_plan_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt370_dispatch_receipt_path"
+            if _normalize_text(
+                prompt370.get("prompt370_dispatch_receipt_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt370_next_action"
+            if _normalize_text(prompt370.get("prompt370_next_action"), default="")
             else "",
         ]
     )
@@ -214395,6 +215161,15 @@ class PlannedExecutionRunner:
         prompt369_targeted_fix_route_receipt_path = (
             run_root / "prompt369_targeted_fix_route_receipt.json"
         )
+        prompt370_integrated_autonomous_cycle_runner_path = (
+            run_root / "prompt370_integrated_autonomous_cycle_runner.json"
+        )
+        prompt370_next_action_dispatch_plan_path = (
+            run_root / "prompt370_next_action_dispatch_plan.json"
+        )
+        prompt370_dispatch_receipt_path = (
+            run_root / "prompt370_dispatch_receipt.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -214480,6 +215255,28 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt369_targeted_fix_route_integration_payload,
         }
+        prompt370_integrated_autonomous_cycle_runner_payload = (
+            _build_prompt370_integrated_autonomous_cycle_runner_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                current_prompt368_source_path=str(
+                    prompt368_next_cycle_resume_contract_path
+                ),
+                current_prompt369_source_path=str(
+                    prompt369_targeted_fix_route_integration_path
+                ),
+                current_prompt362_source_path=str(
+                    prompt362_review_route_decision_path
+                ),
+                current_prompt363_source_path=str(
+                    prompt363_approve_commit_tag_plan_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt370_integrated_autonomous_cycle_runner_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -214523,6 +215320,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt369_targeted_fix_route_integration_state=(
                     prompt369_targeted_fix_route_integration_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt370_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt370_integrated_autonomous_cycle_runner_state=(
+                    prompt370_integrated_autonomous_cycle_runner_payload
                 ),
             )
         )
@@ -214581,6 +215386,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt369_targeted_fix_route_integration_payload=(
                     prompt369_targeted_fix_route_integration_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt370_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt370_integrated_autonomous_cycle_runner_payload=(
+                    prompt370_integrated_autonomous_cycle_runner_payload
                 ),
             )
         )
@@ -214803,6 +215618,24 @@ class PlannedExecutionRunner:
         manifest["prompt369_targeted_fix_route_receipt_path"] = str(
             prompt369_targeted_fix_route_receipt_path
         )
+        manifest["prompt370_integrated_autonomous_cycle_runner_summary"] = dict(
+            prompt370_integrated_autonomous_cycle_runner_payload
+        )
+        manifest["prompt370_integrated_autonomous_cycle_runner_path"] = str(
+            prompt370_integrated_autonomous_cycle_runner_path
+        )
+        manifest["prompt370_next_action_dispatch_plan_summary"] = dict(
+            prompt370_integrated_autonomous_cycle_runner_payload
+        )
+        manifest["prompt370_next_action_dispatch_plan_path"] = str(
+            prompt370_next_action_dispatch_plan_path
+        )
+        manifest["prompt370_dispatch_receipt_summary"] = dict(
+            prompt370_integrated_autonomous_cycle_runner_payload
+        )
+        manifest["prompt370_dispatch_receipt_path"] = str(
+            prompt370_dispatch_receipt_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -214884,6 +215717,15 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt369_targeted_fix_route_receipt"] = manifest.get(
             "prompt369_targeted_fix_route_receipt_summary"
         )
+        contract_summaries_by_role[
+            "prompt370_integrated_autonomous_cycle_runner"
+        ] = manifest.get("prompt370_integrated_autonomous_cycle_runner_summary")
+        contract_summaries_by_role["prompt370_next_action_dispatch_plan"] = manifest.get(
+            "prompt370_next_action_dispatch_plan_summary"
+        )
+        contract_summaries_by_role["prompt370_dispatch_receipt"] = manifest.get(
+            "prompt370_dispatch_receipt_summary"
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -214964,6 +215806,15 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["prompt369_targeted_fix_route_receipt"] = manifest.get(
             "prompt369_targeted_fix_route_receipt_path"
+        )
+        contract_paths_by_role["prompt370_integrated_autonomous_cycle_runner"] = manifest.get(
+            "prompt370_integrated_autonomous_cycle_runner_path"
+        )
+        contract_paths_by_role["prompt370_next_action_dispatch_plan"] = manifest.get(
+            "prompt370_next_action_dispatch_plan_path"
+        )
+        contract_paths_by_role["prompt370_dispatch_receipt"] = manifest.get(
+            "prompt370_dispatch_receipt_path"
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -215272,6 +216123,30 @@ class PlannedExecutionRunner:
             "prompt369_next_action": _normalize_text(
                 prompt369_targeted_fix_route_integration_payload.get(
                     "prompt369_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt370_dispatch_status": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_dispatch_status"
+                ),
+                default="blocked",
+            ),
+            "prompt370_selected_route": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_selected_route"
+                ),
+                default="blocked",
+            ),
+            "prompt370_selected_next_action": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_selected_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt370_next_action": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_next_action"
                 ),
                 default="hold_for_followup",
             ),
@@ -215879,6 +216754,78 @@ class PlannedExecutionRunner:
             "prompt369_active_blocked_reason": _normalize_text(
                 prompt369_targeted_fix_route_integration_payload.get(
                     "prompt369_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt370_integrated_autonomous_cycle_runner_status": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_integrated_autonomous_cycle_runner_status"
+                ),
+                default="blocked",
+            ),
+            "prompt370_prompt368_resume_ready": bool(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_prompt368_resume_ready",
+                    False,
+                )
+            ),
+            "prompt370_prompt369_route_ready": bool(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_prompt369_route_ready",
+                    False,
+                )
+            ),
+            "prompt370_targeted_fix_required": bool(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_targeted_fix_required",
+                    False,
+                )
+            ),
+            "prompt370_approve_route_ready": bool(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_approve_route_ready",
+                    False,
+                )
+            ),
+            "prompt370_continue_next_cycle_ready": bool(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_continue_next_cycle_ready",
+                    False,
+                )
+            ),
+            "prompt370_next_action_dispatch_ready": bool(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_next_action_dispatch_ready",
+                    False,
+                )
+            ),
+            "prompt370_dispatch_status": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_dispatch_status"
+                ),
+                default="blocked",
+            ),
+            "prompt370_selected_route": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_selected_route"
+                ),
+                default="blocked",
+            ),
+            "prompt370_selected_next_action": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_selected_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt370_next_action": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt370_active_blocked_reason": _normalize_text(
+                prompt370_integrated_autonomous_cycle_runner_payload.get(
+                    "prompt370_active_blocked_reason"
                 ),
                 default="",
             ),
