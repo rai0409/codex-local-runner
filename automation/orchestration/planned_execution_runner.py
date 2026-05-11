@@ -3687,8 +3687,45 @@ _PROMPT368_IMPLEMENTATION_TRACKED_FILES: tuple[str, ...] = (
     "automation/orchestration/planned_execution_runner.py",
     "automation/orchestration/run_state_summary_contract.py",
 )
+_PROMPT369_SCHEMA_VERSION = "prompt369_targeted_fix_route_integration_v1"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
-    "prompt369_targeted_fix_route_integration_contract.json"
+    "prompt369_targeted_fix_route_integration.json"
+)
+_PROMPT369_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt369_targeted_fix_route_integration_status",
+    "prompt369_targeted_fix_route_status",
+    "prompt369_source_prompt368_status",
+    "prompt369_source_prompt362_status",
+    "prompt369_prompt368_source_path",
+    "prompt369_prompt362_source_path",
+    "prompt369_prompt369_input_ready",
+    "prompt369_prompt368_resume_ready",
+    "prompt369_targeted_fix_route_integrated",
+    "prompt369_targeted_fix_required",
+    "prompt369_targeted_fix_required_evidence_source",
+    "prompt369_review_route_evidence_status",
+    "prompt369_review_route_evidence_decision",
+    "prompt369_review_route_evidence_next_action",
+    "prompt369_targeted_fix_reentry_contract_ready",
+    "prompt369_targeted_fix_reentry_execution_allowed",
+    "prompt369_targeted_fix_reentry_execution_attempted",
+    "prompt369_targeted_fix_reentry_execution_performed",
+    "prompt369_targeted_fix_route_integration_path",
+    "prompt369_targeted_fix_reentry_contract_path",
+    "prompt369_targeted_fix_route_receipt_path",
+    "prompt369_execution_allowed",
+    "prompt369_execution_attempted",
+    "prompt369_execution_performed",
+    "prompt369_codex_execution_performed",
+    "prompt369_git_mutation_performed",
+    "prompt369_remote_mutation_performed",
+    "prompt369_authoritative_next_action",
+    "prompt369_next_action",
+    "prompt369_manual_required",
+    "prompt369_replan_required",
+    "prompt369_active_blocked_reason",
+    "prompt369_active_blocked_reasons",
+    "prompt369_summary",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -5366,6 +5403,23 @@ def _merge_prompt364_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT364_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt369_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt369_targeted_fix_route_integration_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt369_targeted_fix_route_integration_state)
+        if isinstance(prompt369_targeted_fix_route_integration_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT369_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -44894,6 +44948,576 @@ def _build_prompt368_integrated_loop_resume_controller(
     }
 
 
+def _build_prompt369_targeted_fix_route_integration_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    current_prompt368_source_path: str = "",
+    current_prompt362_source_path: str = "",
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    integration_path = artifact_root / "prompt369_targeted_fix_route_integration.json"
+    reentry_contract_path = artifact_root / "prompt369_targeted_fix_reentry_contract.json"
+    receipt_path = artifact_root / "prompt369_targeted_fix_route_receipt.json"
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt369_input(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt_id": _normalize_text(source.get("prompt_id"), default=""),
+            "objective": _normalize_text(source.get("objective"), default=""),
+            "targeted_fix_trigger_route": _normalize_text(
+                source.get("targeted_fix_trigger_route"),
+                default="",
+            ),
+            "targeted_fix_prompt_required": _prompt357_as_boolish(
+                source.get("targeted_fix_prompt_required"),
+                default=False,
+            ),
+            "bounded_reentry_required": _prompt357_as_boolish(
+                source.get("bounded_reentry_required"),
+                default=False,
+            ),
+            "live_flags_required": _prompt357_as_boolish(
+                source.get("live_flags_required"),
+                default=False,
+            ),
+            "codex_reentry_execution_allowed_by_default": _prompt357_as_boolish(
+                source.get("codex_reentry_execution_allowed_by_default"),
+                default=False,
+            ),
+            "diff_capture_required": _prompt357_as_boolish(
+                source.get("diff_capture_required"),
+                default=False,
+            ),
+            "return_to_review_route_required": _prompt357_as_boolish(
+                source.get("return_to_review_route_required"),
+                default=False,
+            ),
+            "max_targeted_fix_attempts": _as_non_negative_int(
+                source.get("max_targeted_fix_attempts"),
+                default=0,
+            ),
+            "stop_on_failure": _prompt357_as_boolish(
+                source.get("stop_on_failure"),
+                default=False,
+            ),
+            "remote_operations_enabled": _prompt357_as_boolish(
+                source.get("remote_operations_enabled"),
+                default=False,
+            ),
+            "push_pr_merge_enabled": _prompt357_as_boolish(
+                source.get("push_pr_merge_enabled"),
+                default=False,
+            ),
+            "rollback_enabled": _prompt357_as_boolish(
+                source.get("rollback_enabled"),
+                default=False,
+            ),
+            "next_action_on_success": _normalize_text(
+                source.get("next_action_on_success"),
+                default="",
+            ),
+            "next_action_on_blocked": _normalize_text(
+                source.get("next_action_on_blocked"),
+                default="",
+            ),
+        }
+
+    def _normalize_prompt368_surface(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt368_resume_controller_status": _normalize_text(
+                source.get("prompt368_resume_controller_status"),
+                default="",
+            ),
+            "prompt368_resume_status": _normalize_text(
+                source.get("prompt368_resume_status"),
+                default="",
+            ),
+            "prompt368_next_cycle_resume_contract_ready": _prompt357_as_boolish(
+                source.get("prompt368_next_cycle_resume_contract_ready"),
+                default=False,
+            ),
+            "prompt368_integrated_loop_resume_ready": _prompt357_as_boolish(
+                source.get("prompt368_integrated_loop_resume_ready"),
+                default=False,
+            ),
+            "prompt368_next_action": _normalize_text(
+                source.get("prompt368_next_action"),
+                default="",
+            ),
+            "prompt368_selected_prompt_id": _normalize_text(
+                source.get("prompt368_selected_prompt_id"),
+                default="",
+            ),
+            "prompt368_selected_prompt_title": _normalize_text(
+                source.get("prompt368_selected_prompt_title"),
+                default="",
+            ),
+            "prompt368_selected_prompt_contract_ready": _prompt357_as_boolish(
+                source.get("prompt368_selected_prompt_contract_ready"),
+                default=False,
+            ),
+            "prompt368_selected_prompt_contract_path": _normalize_text(
+                source.get("prompt368_selected_prompt_contract_path"),
+                default="",
+            ),
+            "prompt368_active_blocked_reason": _normalize_text(
+                source.get("prompt368_active_blocked_reason"),
+                default="",
+            ),
+            "prompt368_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt368_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _normalize_prompt362_surface(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt362_review_status": _normalize_text(
+                source.get("prompt362_review_status"),
+                default="",
+            ),
+            "prompt362_route_decision": _normalize_text(
+                source.get("prompt362_route_decision"),
+                default="",
+            ),
+            "prompt362_review_handoff_ready": _prompt357_as_boolish(
+                source.get("prompt362_review_handoff_ready"),
+                default=False,
+            ),
+            "prompt362_requires_targeted_fix": _prompt357_as_boolish(
+                source.get("prompt362_requires_targeted_fix"),
+                default=False,
+            ),
+            "prompt362_next_action": _normalize_text(
+                source.get("prompt362_next_action"),
+                default="",
+            ),
+            "prompt362_active_blocked_reason": _normalize_text(
+                source.get("prompt362_active_blocked_reason"),
+                default="",
+            ),
+            "prompt362_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt362_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _normalize_legacy_review_route_surface(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "review_route_status": _normalize_text(
+                source.get("project_browser_autonomous_review_route_status"),
+                default="",
+            ),
+            "review_route_decision": _normalize_text(
+                source.get("project_browser_autonomous_review_route_decision"),
+                default="",
+            ),
+            "review_route_next_action": _normalize_text(
+                source.get("project_browser_autonomous_review_route_next_action"),
+                default="",
+            ),
+            "review_route_should_prepare_targeted_fix": _prompt357_as_boolish(
+                source.get("project_browser_autonomous_review_route_should_prepare_targeted_fix"),
+                default=False,
+            ),
+            "targeted_fix_post_reentry_route_status": _normalize_text(
+                source.get("project_browser_autonomous_targeted_fix_post_reentry_route_status"),
+                default="",
+            ),
+            "targeted_fix_post_reentry_route_decision": _normalize_text(
+                source.get("project_browser_autonomous_targeted_fix_post_reentry_route_decision"),
+                default="",
+            ),
+            "targeted_fix_post_reentry_next_action": _normalize_text(
+                source.get("project_browser_autonomous_targeted_fix_post_reentry_next_action"),
+                default="",
+            ),
+            "targeted_fix_post_reentry_targeted_fix_required": _prompt357_as_boolish(
+                source.get("project_browser_autonomous_targeted_fix_post_reentry_targeted_fix_required"),
+                default=False,
+            ),
+        }
+
+    def _is_prepare_targeted_fix_action(value: Any) -> bool:
+        action = _normalize_text(value, default="")
+        return bool(action and action.startswith("prepare_targeted_fix"))
+
+    def _blocked_next_action_for(reason: str) -> str:
+        mapping = {
+            "prompt368_resume_controller_not_ready": (
+                "repair_prompt368_resume_controller_ready_state"
+            ),
+            "prompt368_resume_status_not_prepared": (
+                "repair_prompt368_resume_prepared_state"
+            ),
+            "prompt368_next_cycle_resume_contract_not_ready": (
+                "repair_prompt368_next_cycle_resume_contract"
+            ),
+            "prompt368_integrated_loop_resume_not_ready": (
+                "repair_prompt368_integrated_loop_resume_readiness"
+            ),
+            "prompt368_next_action_not_prepare_prompt369_targeted_fix_route_integration": (
+                "repair_prompt368_next_action_for_prompt369"
+            ),
+        }
+        return mapping.get(
+            reason,
+            "review_prompt369_targeted_fix_route_integration_blocker",
+        )
+
+    prompt369_input = _normalize_prompt369_input(run_state.get("prompt369_input"))
+    prompt368_surface = _normalize_prompt368_surface(run_state)
+    prompt362_surface = _normalize_prompt362_surface(run_state)
+    legacy_review_route_surface = _normalize_legacy_review_route_surface(run_state)
+
+    prompt369_prompt369_input_ready = bool(
+        _normalize_text(prompt369_input.get("prompt_id"), default="") == "prompt369"
+        and _normalize_text(prompt369_input.get("objective"), default="")
+        == "targeted_fix_route_integration"
+    )
+    prompt369_prompt368_resume_ready = True
+    prompt369_prerequisite_blockers: list[str] = []
+    if (
+        _normalize_text(
+            prompt368_surface.get("prompt368_resume_controller_status"),
+            default="",
+        )
+        != "ready"
+    ):
+        prompt369_prompt368_resume_ready = False
+        _append_reason(
+            prompt369_prerequisite_blockers,
+            "prompt368_resume_controller_not_ready",
+        )
+    if (
+        _normalize_text(prompt368_surface.get("prompt368_resume_status"), default="")
+        != "prepared"
+    ):
+        prompt369_prompt368_resume_ready = False
+        _append_reason(
+            prompt369_prerequisite_blockers,
+            "prompt368_resume_status_not_prepared",
+        )
+    if not bool(prompt368_surface.get("prompt368_next_cycle_resume_contract_ready", False)):
+        prompt369_prompt368_resume_ready = False
+        _append_reason(
+            prompt369_prerequisite_blockers,
+            "prompt368_next_cycle_resume_contract_not_ready",
+        )
+    if not bool(prompt368_surface.get("prompt368_integrated_loop_resume_ready", False)):
+        prompt369_prompt368_resume_ready = False
+        _append_reason(
+            prompt369_prerequisite_blockers,
+            "prompt368_integrated_loop_resume_not_ready",
+        )
+    if (
+        _normalize_text(prompt368_surface.get("prompt368_next_action"), default="")
+        != "prepare_prompt369_targeted_fix_route_integration"
+    ):
+        prompt369_prompt368_resume_ready = False
+        _append_reason(
+            prompt369_prerequisite_blockers,
+            "prompt368_next_action_not_prepare_prompt369_targeted_fix_route_integration",
+        )
+
+    targeted_fix_required = False
+    targeted_fix_required_evidence_source = "none"
+    prompt369_review_route_evidence_status = "absent"
+    prompt369_review_route_evidence_decision = "none"
+    prompt369_review_route_evidence_next_action = ""
+
+    prompt362_route_decision = _normalize_text(
+        prompt362_surface.get("prompt362_route_decision"),
+        default="",
+    )
+    prompt362_next_action = _normalize_text(
+        prompt362_surface.get("prompt362_next_action"),
+        default="",
+    )
+    legacy_review_route_decision = _normalize_text(
+        legacy_review_route_surface.get("review_route_decision"),
+        default="",
+    )
+    legacy_review_route_next_action = _normalize_text(
+        legacy_review_route_surface.get("review_route_next_action"),
+        default="",
+    )
+    legacy_post_reentry_route_decision = _normalize_text(
+        legacy_review_route_surface.get("targeted_fix_post_reentry_route_decision"),
+        default="",
+    )
+    legacy_post_reentry_next_action = _normalize_text(
+        legacy_review_route_surface.get("targeted_fix_post_reentry_next_action"),
+        default="",
+    )
+
+    if (
+        bool(prompt362_surface.get("prompt362_requires_targeted_fix", False))
+        or prompt362_route_decision in {"targeted_fix_required", "targeted_fix"}
+        or _is_prepare_targeted_fix_action(prompt362_next_action)
+    ):
+        targeted_fix_required = True
+        targeted_fix_required_evidence_source = "prompt362_review_route_decision"
+        prompt369_review_route_evidence_status = _normalize_text(
+            prompt362_surface.get("prompt362_review_status"),
+            default="available",
+        ) or "available"
+        prompt369_review_route_evidence_decision = (
+            prompt362_route_decision or "targeted_fix_required"
+        )
+        prompt369_review_route_evidence_next_action = prompt362_next_action
+    elif (
+        legacy_review_route_decision == "targeted_fix"
+        or bool(
+            legacy_review_route_surface.get(
+                "review_route_should_prepare_targeted_fix",
+                False,
+            )
+        )
+        or _is_prepare_targeted_fix_action(legacy_review_route_next_action)
+    ):
+        targeted_fix_required = True
+        targeted_fix_required_evidence_source = "legacy_review_route"
+        prompt369_review_route_evidence_status = (
+            _normalize_text(
+                legacy_review_route_surface.get("review_route_status"),
+                default="available",
+            )
+            or "available"
+        )
+        prompt369_review_route_evidence_decision = (
+            legacy_review_route_decision or "targeted_fix"
+        )
+        prompt369_review_route_evidence_next_action = legacy_review_route_next_action
+    elif (
+        bool(
+            legacy_review_route_surface.get(
+                "targeted_fix_post_reentry_targeted_fix_required",
+                False,
+            )
+        )
+        or legacy_post_reentry_route_decision == "targeted_fix"
+        or _is_prepare_targeted_fix_action(legacy_post_reentry_next_action)
+    ):
+        targeted_fix_required = True
+        targeted_fix_required_evidence_source = "legacy_targeted_fix_post_reentry"
+        prompt369_review_route_evidence_status = (
+            _normalize_text(
+                legacy_review_route_surface.get(
+                    "targeted_fix_post_reentry_route_status"
+                ),
+                default="available",
+            )
+            or "available"
+        )
+        prompt369_review_route_evidence_decision = (
+            legacy_post_reentry_route_decision or "targeted_fix"
+        )
+        prompt369_review_route_evidence_next_action = legacy_post_reentry_next_action
+    elif prompt362_route_decision or prompt362_next_action:
+        prompt369_review_route_evidence_status = (
+            _normalize_text(
+                prompt362_surface.get("prompt362_review_status"),
+                default="available",
+            )
+            or "available"
+        )
+        prompt369_review_route_evidence_decision = (
+            prompt362_route_decision or "not_targeted_fix"
+        )
+        prompt369_review_route_evidence_next_action = prompt362_next_action
+    elif legacy_review_route_decision or legacy_review_route_next_action:
+        prompt369_review_route_evidence_status = (
+            _normalize_text(
+                legacy_review_route_surface.get("review_route_status"),
+                default="available",
+            )
+            or "available"
+        )
+        prompt369_review_route_evidence_decision = (
+            legacy_review_route_decision or "not_targeted_fix"
+        )
+        prompt369_review_route_evidence_next_action = legacy_review_route_next_action
+    elif legacy_post_reentry_route_decision or legacy_post_reentry_next_action:
+        prompt369_review_route_evidence_status = (
+            _normalize_text(
+                legacy_review_route_surface.get("targeted_fix_post_reentry_route_status"),
+                default="available",
+            )
+            or "available"
+        )
+        prompt369_review_route_evidence_decision = (
+            legacy_post_reentry_route_decision or "not_targeted_fix"
+        )
+        prompt369_review_route_evidence_next_action = legacy_post_reentry_next_action
+
+    blockers: list[str] = []
+    if not prompt369_prompt368_resume_ready:
+        for blocker in prompt369_prerequisite_blockers:
+            _append_reason(blockers, blocker)
+
+    prompt369_targeted_fix_route_integrated = not blockers
+    prompt369_targeted_fix_route_integration_status = (
+        "ready" if prompt369_targeted_fix_route_integrated else "blocked"
+    )
+    prompt369_targeted_fix_route_status = (
+        "prepared" if prompt369_targeted_fix_route_integrated else "not_prepared"
+    )
+    prompt369_targeted_fix_reentry_contract_ready = bool(
+        prompt369_targeted_fix_route_integrated
+    )
+    prompt369_targeted_fix_reentry_execution_allowed = False
+    prompt369_targeted_fix_reentry_execution_attempted = False
+    prompt369_targeted_fix_reentry_execution_performed = False
+    prompt369_execution_allowed = False
+    prompt369_execution_attempted = False
+    prompt369_execution_performed = False
+    prompt369_codex_execution_performed = False
+    prompt369_git_mutation_performed = False
+    prompt369_remote_mutation_performed = False
+    prompt369_manual_required = False
+    prompt369_replan_required = bool(blockers)
+    prompt369_active_blocked_reasons = _normalize_string_list(
+        blockers,
+        sort_items=False,
+    )
+    prompt369_active_blocked_reason = (
+        prompt369_active_blocked_reasons[0]
+        if prompt369_active_blocked_reasons
+        else ""
+    )
+    if prompt369_targeted_fix_route_integrated:
+        prompt369_authoritative_next_action = (
+            "prepare_prompt370_integrated_autonomous_cycle_runner"
+        )
+        prompt369_next_action = prompt369_authoritative_next_action
+        prompt369_summary = (
+            "Prompt369 prepared a metadata-only targeted-fix route integration handoff from Prompt368 resume readiness."
+        )
+        if targeted_fix_required:
+            prompt369_summary = (
+                "Prompt369 prepared a metadata-only targeted-fix reentry handoff from Prompt368 resume readiness and explicit targeted-fix review-route evidence."
+            )
+    else:
+        prompt369_authoritative_next_action = _blocked_next_action_for(
+            prompt369_active_blocked_reason
+        )
+        prompt369_next_action = prompt369_authoritative_next_action
+        prompt369_summary = (
+            "Prompt369 is blocked because required Prompt368 resume readiness evidence is missing."
+        )
+
+    integration_payload: dict[str, Any] = {
+        "prompt369_schema_version": _PROMPT369_SCHEMA_VERSION,
+        "prompt369_targeted_fix_route_integration_status": (
+            prompt369_targeted_fix_route_integration_status
+        ),
+        "prompt369_targeted_fix_route_status": prompt369_targeted_fix_route_status,
+        "prompt369_source_prompt368_status": _normalize_text(
+            prompt368_surface.get("prompt368_resume_controller_status"),
+            default="unavailable",
+        ),
+        "prompt369_source_prompt362_status": _normalize_text(
+            prompt362_surface.get("prompt362_review_status"),
+            default="unavailable",
+        ),
+        "prompt369_prompt368_source_path": _normalize_text(
+            current_prompt368_source_path,
+            default="",
+        ),
+        "prompt369_prompt362_source_path": _normalize_text(
+            current_prompt362_source_path,
+            default="",
+        ),
+        "prompt369_prompt369_input_ready": prompt369_prompt369_input_ready,
+        "prompt369_prompt368_resume_ready": prompt369_prompt368_resume_ready,
+        "prompt369_targeted_fix_route_integrated": (
+            prompt369_targeted_fix_route_integrated
+        ),
+        "prompt369_targeted_fix_required": targeted_fix_required,
+        "prompt369_targeted_fix_required_evidence_source": (
+            targeted_fix_required_evidence_source
+        ),
+        "prompt369_review_route_evidence_status": (
+            prompt369_review_route_evidence_status
+        ),
+        "prompt369_review_route_evidence_decision": (
+            prompt369_review_route_evidence_decision
+        ),
+        "prompt369_review_route_evidence_next_action": (
+            prompt369_review_route_evidence_next_action
+        ),
+        "prompt369_targeted_fix_reentry_contract_ready": (
+            prompt369_targeted_fix_reentry_contract_ready
+        ),
+        "prompt369_targeted_fix_reentry_execution_allowed": (
+            prompt369_targeted_fix_reentry_execution_allowed
+        ),
+        "prompt369_targeted_fix_reentry_execution_attempted": (
+            prompt369_targeted_fix_reentry_execution_attempted
+        ),
+        "prompt369_targeted_fix_reentry_execution_performed": (
+            prompt369_targeted_fix_reentry_execution_performed
+        ),
+        "prompt369_targeted_fix_route_integration_path": str(integration_path),
+        "prompt369_targeted_fix_reentry_contract_path": str(reentry_contract_path),
+        "prompt369_targeted_fix_route_receipt_path": str(receipt_path),
+        "prompt369_execution_allowed": prompt369_execution_allowed,
+        "prompt369_execution_attempted": prompt369_execution_attempted,
+        "prompt369_execution_performed": prompt369_execution_performed,
+        "prompt369_codex_execution_performed": prompt369_codex_execution_performed,
+        "prompt369_git_mutation_performed": prompt369_git_mutation_performed,
+        "prompt369_remote_mutation_performed": (
+            prompt369_remote_mutation_performed
+        ),
+        "prompt369_authoritative_next_action": prompt369_authoritative_next_action,
+        "prompt369_next_action": prompt369_next_action,
+        "prompt369_manual_required": prompt369_manual_required,
+        "prompt369_replan_required": prompt369_replan_required,
+        "prompt369_active_blocked_reason": prompt369_active_blocked_reason,
+        "prompt369_active_blocked_reasons": prompt369_active_blocked_reasons,
+        "prompt369_summary": prompt369_summary,
+    }
+
+    reentry_contract_payload: dict[str, Any] = {
+        **integration_payload,
+        "local_only": True,
+        "remote_operations_enabled": False,
+        "push_pr_merge_enabled": False,
+        "rollback_enabled": False,
+        "codex_reentry_execution_allowed_by_default": False,
+        "prompt369_input": dict(prompt369_input),
+    }
+    receipt_payload: dict[str, Any] = {
+        **integration_payload,
+        "prompt369_input": dict(prompt369_input),
+        "prompt368_source_excerpt": dict(prompt368_surface),
+        "prompt362_source_excerpt": dict(prompt362_surface),
+        "legacy_review_route_excerpt": dict(legacy_review_route_surface),
+    }
+
+    integration_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(integration_path, integration_payload)
+    _write_json(reentry_contract_path, reentry_contract_payload)
+    _write_json(receipt_path, receipt_payload)
+
+    return {
+        key: value
+        for key, value in integration_payload.items()
+        if key.startswith("prompt369_")
+    }
+
+
 def _merge_prompt363_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -44994,6 +45618,81 @@ def _merge_prompt364_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt364_next_action"
             if _normalize_text(prompt364.get("prompt364_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt369_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt369_targeted_fix_route_integration_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt369 = (
+        dict(prompt369_targeted_fix_route_integration_payload)
+        if isinstance(prompt369_targeted_fix_route_integration_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT369_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt369 and prompt369.get(key) is not None:
+            payload[key] = prompt369.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt369_targeted_fix_route_integration_status"
+            if _normalize_text(
+                prompt369.get("prompt369_targeted_fix_route_integration_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt369_prompt368_resume_ready"
+            if bool(prompt369.get("prompt369_prompt368_resume_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt369_targeted_fix_route_integrated"
+            if bool(prompt369.get("prompt369_targeted_fix_route_integrated", False))
+            else "",
+            "approved_restart_execution_contract.prompt369_targeted_fix_required"
+            if bool(prompt369.get("prompt369_targeted_fix_required", False))
+            else "",
+            "approved_restart_execution_contract.prompt369_targeted_fix_reentry_contract_ready"
+            if bool(
+                prompt369.get(
+                    "prompt369_targeted_fix_reentry_contract_ready",
+                    False,
+                )
+            )
+            else "",
+            "approved_restart_execution_contract.prompt369_targeted_fix_route_integration_path"
+            if _normalize_text(
+                prompt369.get("prompt369_targeted_fix_route_integration_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt369_targeted_fix_reentry_contract_path"
+            if _normalize_text(
+                prompt369.get("prompt369_targeted_fix_reentry_contract_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt369_targeted_fix_route_receipt_path"
+            if _normalize_text(
+                prompt369.get("prompt369_targeted_fix_route_receipt_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt369_next_action"
+            if _normalize_text(prompt369.get("prompt369_next_action"), default="")
             else "",
         ]
     )
@@ -213687,6 +214386,15 @@ class PlannedExecutionRunner:
             run_root / "prompt368_next_cycle_resume_contract.json"
         )
         prompt368_resume_receipt_path = run_root / "prompt368_resume_receipt.json"
+        prompt369_targeted_fix_route_integration_path = (
+            run_root / "prompt369_targeted_fix_route_integration.json"
+        )
+        prompt369_targeted_fix_reentry_contract_path = (
+            run_root / "prompt369_targeted_fix_reentry_contract.json"
+        )
+        prompt369_targeted_fix_route_receipt_path = (
+            run_root / "prompt369_targeted_fix_route_receipt.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -213756,6 +214464,22 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt368_integrated_loop_resume_controller_payload,
         }
+        prompt369_targeted_fix_route_integration_payload = (
+            _build_prompt369_targeted_fix_route_integration_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                current_prompt368_source_path=str(
+                    prompt368_next_cycle_resume_contract_path
+                ),
+                current_prompt362_source_path=str(
+                    prompt362_review_route_decision_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt369_targeted_fix_route_integration_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -213791,6 +214515,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt364_post_commit_tag_verification_state=(
                     prompt364_post_commit_tag_verification_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt369_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt369_targeted_fix_route_integration_state=(
+                    prompt369_targeted_fix_route_integration_payload
                 ),
             )
         )
@@ -213839,6 +214571,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt364_post_commit_tag_verification_payload=(
                     prompt364_post_commit_tag_verification_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt369_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt369_targeted_fix_route_integration_payload=(
+                    prompt369_targeted_fix_route_integration_payload
                 ),
             )
         )
@@ -214043,6 +214785,24 @@ class PlannedExecutionRunner:
         manifest["prompt368_resume_receipt_path"] = str(
             prompt368_resume_receipt_path
         )
+        manifest["prompt369_targeted_fix_route_integration_summary"] = dict(
+            prompt369_targeted_fix_route_integration_payload
+        )
+        manifest["prompt369_targeted_fix_route_integration_path"] = str(
+            prompt369_targeted_fix_route_integration_path
+        )
+        manifest["prompt369_targeted_fix_reentry_contract_summary"] = dict(
+            prompt369_targeted_fix_route_integration_payload
+        )
+        manifest["prompt369_targeted_fix_reentry_contract_path"] = str(
+            prompt369_targeted_fix_reentry_contract_path
+        )
+        manifest["prompt369_targeted_fix_route_receipt_summary"] = dict(
+            prompt369_targeted_fix_route_integration_payload
+        )
+        manifest["prompt369_targeted_fix_route_receipt_path"] = str(
+            prompt369_targeted_fix_route_receipt_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -214115,6 +214875,15 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt368_resume_receipt"] = manifest.get(
             "prompt368_resume_receipt_summary"
         )
+        contract_summaries_by_role["prompt369_targeted_fix_route_integration"] = manifest.get(
+            "prompt369_targeted_fix_route_integration_summary"
+        )
+        contract_summaries_by_role["prompt369_targeted_fix_reentry_contract"] = manifest.get(
+            "prompt369_targeted_fix_reentry_contract_summary"
+        )
+        contract_summaries_by_role["prompt369_targeted_fix_route_receipt"] = manifest.get(
+            "prompt369_targeted_fix_route_receipt_summary"
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -214186,6 +214955,15 @@ class PlannedExecutionRunner:
         ] = manifest.get("prompt368_next_cycle_resume_contract_path")
         contract_paths_by_role["prompt368_resume_receipt"] = manifest.get(
             "prompt368_resume_receipt_path"
+        )
+        contract_paths_by_role["prompt369_targeted_fix_route_integration"] = manifest.get(
+            "prompt369_targeted_fix_route_integration_path"
+        )
+        contract_paths_by_role["prompt369_targeted_fix_reentry_contract"] = manifest.get(
+            "prompt369_targeted_fix_reentry_contract_path"
+        )
+        contract_paths_by_role["prompt369_targeted_fix_route_receipt"] = manifest.get(
+            "prompt369_targeted_fix_route_receipt_path"
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -214464,6 +215242,36 @@ class PlannedExecutionRunner:
             "prompt363_next_action": _normalize_text(
                 prompt363_approve_commit_tag_boundary_payload.get(
                     "prompt363_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt368_resume_controller_status": _normalize_text(
+                prompt368_integrated_loop_resume_controller_payload.get(
+                    "prompt368_resume_controller_status"
+                ),
+                default="blocked",
+            ),
+            "prompt368_next_action": _normalize_text(
+                prompt368_integrated_loop_resume_controller_payload.get(
+                    "prompt368_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt369_targeted_fix_route_integration_status": _normalize_text(
+                prompt369_targeted_fix_route_integration_payload.get(
+                    "prompt369_targeted_fix_route_integration_status"
+                ),
+                default="blocked",
+            ),
+            "prompt369_targeted_fix_required": bool(
+                prompt369_targeted_fix_route_integration_payload.get(
+                    "prompt369_targeted_fix_required",
+                    False,
+                )
+            ),
+            "prompt369_next_action": _normalize_text(
+                prompt369_targeted_fix_route_integration_payload.get(
+                    "prompt369_next_action"
                 ),
                 default="hold_for_followup",
             ),
@@ -215011,6 +215819,66 @@ class PlannedExecutionRunner:
             "prompt366_active_blocked_reason": _normalize_text(
                 prompt366_local_autonomous_continuation_contract_payload.get(
                     "prompt366_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt368_resume_controller_status": _normalize_text(
+                prompt368_integrated_loop_resume_controller_payload.get(
+                    "prompt368_resume_controller_status"
+                ),
+                default="blocked",
+            ),
+            "prompt368_next_cycle_resume_contract_ready": bool(
+                prompt368_integrated_loop_resume_controller_payload.get(
+                    "prompt368_next_cycle_resume_contract_ready",
+                    False,
+                )
+            ),
+            "prompt368_integrated_loop_resume_ready": bool(
+                prompt368_integrated_loop_resume_controller_payload.get(
+                    "prompt368_integrated_loop_resume_ready",
+                    False,
+                )
+            ),
+            "prompt368_next_action": _normalize_text(
+                prompt368_integrated_loop_resume_controller_payload.get(
+                    "prompt368_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt369_targeted_fix_route_integration_status": _normalize_text(
+                prompt369_targeted_fix_route_integration_payload.get(
+                    "prompt369_targeted_fix_route_integration_status"
+                ),
+                default="blocked",
+            ),
+            "prompt369_targeted_fix_route_integrated": bool(
+                prompt369_targeted_fix_route_integration_payload.get(
+                    "prompt369_targeted_fix_route_integrated",
+                    False,
+                )
+            ),
+            "prompt369_targeted_fix_required": bool(
+                prompt369_targeted_fix_route_integration_payload.get(
+                    "prompt369_targeted_fix_required",
+                    False,
+                )
+            ),
+            "prompt369_targeted_fix_reentry_contract_ready": bool(
+                prompt369_targeted_fix_route_integration_payload.get(
+                    "prompt369_targeted_fix_reentry_contract_ready",
+                    False,
+                )
+            ),
+            "prompt369_next_action": _normalize_text(
+                prompt369_targeted_fix_route_integration_payload.get(
+                    "prompt369_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt369_active_blocked_reason": _normalize_text(
+                prompt369_targeted_fix_route_integration_payload.get(
+                    "prompt369_active_blocked_reason"
                 ),
                 default="",
             ),
