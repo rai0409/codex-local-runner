@@ -3636,7 +3636,10 @@ _PROMPT363_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt363_summary",
 )
 
-_PROMPT364_EXPECTED_TAG_NAME = "prompt363-approve-commit-tag-boundary"
+_PROMPT364_PREVIOUS_EXPECTED_TAG_NAME = "prompt363-approve-commit-tag-boundary"
+_PROMPT364_LEGACY_HEAD_TAG_NAME = "prompt364-post-commit-tag-verification-handoff"
+_PROMPT364_EXPECTED_HEAD_TAG_NAME = "prompt364-fix1-clean-rerun-tag-verification"
+_PROMPT364_EXPECTED_TAG_NAME = _PROMPT364_EXPECTED_HEAD_TAG_NAME
 _PROMPT364_ALLOWED_IMPLEMENTATION_FILES: tuple[str, ...] = (
     "automation/orchestration/planned_execution_runner.py",
     "automation/orchestration/run_state_summary_contract.py",
@@ -3648,6 +3651,10 @@ _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_head_short_sha",
     "prompt364_head_tags",
     "prompt364_head_tag_verified",
+    "prompt364_previous_tag_verified",
+    "prompt364_current_head_tag_verified",
+    "prompt364_previous_expected_tag_name",
+    "prompt364_expected_head_tag_name",
     "prompt364_expected_tag_name",
     "prompt364_changed_tracked_files",
     "prompt364_staged_tracked_files",
@@ -41942,6 +41949,8 @@ def _build_prompt364_post_commit_tag_verification(
     artifact_root = run_root if run_root is not None else Path(".")
     prompt364_verification_path = artifact_root / "prompt364_post_commit_tag_verification.json"
     prompt364_handoff_path = artifact_root / "prompt364_next_cycle_handoff.json"
+    previous_expected_tag_name = _PROMPT364_PREVIOUS_EXPECTED_TAG_NAME
+    expected_head_tag_name = _PROMPT364_EXPECTED_HEAD_TAG_NAME
     expected_tag_name = _PROMPT364_EXPECTED_TAG_NAME
     allowed_implementation_files = list(_PROMPT364_ALLOWED_IMPLEMENTATION_FILES)
 
@@ -41958,6 +41967,8 @@ def _build_prompt364_post_commit_tag_verification(
         head_short_sha: str,
         head_tags: list[str],
         head_tag_verified: bool,
+        previous_tag_verified: bool,
+        current_head_tag_verified: bool,
         changed_tracked_files: list[str],
         staged_tracked_files: list[str],
         next_cycle_handoff_ready: bool,
@@ -41981,6 +41992,12 @@ def _build_prompt364_post_commit_tag_verification(
             "prompt364_head_short_sha": _normalize_text(head_short_sha, default=""),
             "prompt364_head_tags": _normalize_string_list(head_tags, sort_items=True),
             "prompt364_head_tag_verified": bool(head_tag_verified),
+            "prompt364_previous_tag_verified": bool(previous_tag_verified),
+            "prompt364_current_head_tag_verified": bool(
+                current_head_tag_verified
+            ),
+            "prompt364_previous_expected_tag_name": previous_expected_tag_name,
+            "prompt364_expected_head_tag_name": expected_head_tag_name,
             "prompt364_expected_tag_name": expected_tag_name,
             "prompt364_changed_tracked_files": _normalize_string_list(
                 changed_tracked_files,
@@ -42028,7 +42045,8 @@ def _build_prompt364_post_commit_tag_verification(
         "head_short_sha": ["git", "rev-parse", "--short", "HEAD"],
         "recent_log": ["git", "log", "--oneline", "--decorate", "-n", "5"],
         "head_tags": ["git", "tag", "--points-at", "HEAD"],
-        "expected_tag_list": ["git", "tag", "--list", expected_tag_name],
+        "previous_tag_list": ["git", "tag", "--list", previous_expected_tag_name],
+        "expected_head_tag_list": ["git", "tag", "--list", expected_head_tag_name],
     }
     git_outputs: dict[str, str] = {}
     git_failed_reasons: list[str] = []
@@ -42054,7 +42072,8 @@ def _build_prompt364_post_commit_tag_verification(
     changed_tracked_files: list[str] = []
     staged_tracked_files: list[str] = []
     head_tags: list[str] = []
-    expected_tag_list: list[str] = []
+    previous_tag_list: list[str] = []
+    expected_head_tag_list: list[str] = []
     head_short_sha = ""
     if not git_failed_reasons:
         status_paths = [
@@ -42087,17 +42106,29 @@ def _build_prompt364_post_commit_tag_verification(
             (git_outputs.get("head_tags") or "").splitlines(),
             sort_items=True,
         )
-        expected_tag_list = _normalize_string_list(
-            (git_outputs.get("expected_tag_list") or "").splitlines(),
+        previous_tag_list = _normalize_string_list(
+            (git_outputs.get("previous_tag_list") or "").splitlines(),
+            sort_items=True,
+        )
+        expected_head_tag_list = _normalize_string_list(
+            (git_outputs.get("expected_head_tag_list") or "").splitlines(),
             sort_items=True,
         )
 
-    expected_tag_exists = expected_tag_name in expected_tag_list
-    head_tag_verified = expected_tag_name in head_tags
-    commit_tag_verified = expected_tag_exists and head_tag_verified
+    previous_tag_verified = previous_expected_tag_name in previous_tag_list
+    expected_head_tag_exists = expected_head_tag_name in expected_head_tag_list
+    legacy_head_tag_verified = _PROMPT364_LEGACY_HEAD_TAG_NAME in head_tags
+    current_head_tag_verified = expected_head_tag_name in head_tags
+    head_tag_verified = legacy_head_tag_verified or current_head_tag_verified
     worktree_clean = bool((not changed_tracked_files) and (not staged_tracked_files))
-    changed_files_within_allowed_set = bool(changed_tracked_files) and all(
-        path in allowed_implementation_files for path in changed_tracked_files
+    tracked_changes_present = bool(changed_tracked_files or staged_tracked_files)
+    changed_files_within_allowed_set = tracked_changes_present and all(
+        path in allowed_implementation_files
+        for path in (changed_tracked_files + staged_tracked_files)
+    )
+    unexpected_tracked_changes_present = tracked_changes_present and any(
+        path not in allowed_implementation_files
+        for path in (changed_tracked_files + staged_tracked_files)
     )
 
     if git_failed_reasons:
@@ -42108,6 +42139,8 @@ def _build_prompt364_post_commit_tag_verification(
             head_short_sha=head_short_sha,
             head_tags=head_tags,
             head_tag_verified=False,
+            previous_tag_verified=False,
+            current_head_tag_verified=False,
             changed_tracked_files=changed_tracked_files,
             staged_tracked_files=staged_tracked_files,
             next_cycle_handoff_ready=False,
@@ -42122,29 +42155,55 @@ def _build_prompt364_post_commit_tag_verification(
         _write_prompt364_artifacts(state)
         return state
 
-    if not commit_tag_verified:
+    if not previous_tag_verified:
         state = _build_state(
             verification_status="blocked",
             commit_tag_verified=False,
-            worktree_clean=False,
+            worktree_clean=worktree_clean,
             head_short_sha=head_short_sha,
             head_tags=head_tags,
-            head_tag_verified=False,
+            head_tag_verified=head_tag_verified,
+            previous_tag_verified=False,
+            current_head_tag_verified=current_head_tag_verified,
             changed_tracked_files=changed_tracked_files,
             staged_tracked_files=staged_tracked_files,
             next_cycle_handoff_ready=False,
-            next_action="tag_prompt363_commit",
+            next_action="restore_or_tag_prompt363_boundary",
             manual_required=True,
             replan_required=False,
-            blocked_reasons=["prompt363_head_tag_missing"],
+            blocked_reasons=["prompt363_boundary_tag_missing"],
             summary=(
-                "Prompt364 is blocked because the expected Prompt363 approve commit/tag boundary tag is missing or not attached to HEAD."
+                "Prompt364 is blocked because the Prompt363 approve-commit-tag boundary tag does not exist in the local repository."
             ),
         )
         _write_prompt364_artifacts(state)
         return state
 
-    if worktree_clean:
+    if unexpected_tracked_changes_present:
+        state = _build_state(
+            verification_status="blocked",
+            commit_tag_verified=True,
+            worktree_clean=False,
+            head_short_sha=head_short_sha,
+            head_tags=head_tags,
+            head_tag_verified=head_tag_verified,
+            previous_tag_verified=True,
+            current_head_tag_verified=current_head_tag_verified,
+            changed_tracked_files=changed_tracked_files,
+            staged_tracked_files=staged_tracked_files,
+            next_cycle_handoff_ready=False,
+            next_action="resolve_unexpected_tracked_changes",
+            manual_required=True,
+            replan_required=False,
+            blocked_reasons=["unexpected_tracked_changes_present"],
+            summary=(
+                "Prompt364 is blocked because tracked changes outside the allowed Prompt364 implementation files are present."
+            ),
+        )
+        _write_prompt364_artifacts(state)
+        return state
+
+    if worktree_clean and expected_head_tag_exists and current_head_tag_verified:
         state = _build_state(
             verification_status="verified",
             commit_tag_verified=True,
@@ -42152,6 +42211,8 @@ def _build_prompt364_post_commit_tag_verification(
             head_short_sha=head_short_sha,
             head_tags=head_tags,
             head_tag_verified=True,
+            previous_tag_verified=True,
+            current_head_tag_verified=True,
             changed_tracked_files=changed_tracked_files,
             staged_tracked_files=staged_tracked_files,
             next_cycle_handoff_ready=True,
@@ -42160,13 +42221,37 @@ def _build_prompt364_post_commit_tag_verification(
             replan_required=False,
             blocked_reasons=[],
             summary=(
-                "Prompt364 verified the Prompt363 commit/tag boundary on HEAD, confirmed a clean tracked worktree, and prepared the next local cycle handoff."
+                "Prompt364 verified that the Prompt363 boundary tag exists, the Prompt364 fix1 clean-rerun tag is attached to HEAD, and the tracked worktree is clean."
             ),
         )
         _write_prompt364_artifacts(state)
         return state
 
-    if changed_files_within_allowed_set:
+    if worktree_clean and not current_head_tag_verified:
+        state = _build_state(
+            verification_status="blocked",
+            commit_tag_verified=False,
+            worktree_clean=True,
+            head_short_sha=head_short_sha,
+            head_tags=head_tags,
+            head_tag_verified=head_tag_verified,
+            previous_tag_verified=True,
+            current_head_tag_verified=False,
+            changed_tracked_files=changed_tracked_files,
+            staged_tracked_files=staged_tracked_files,
+            next_cycle_handoff_ready=False,
+            next_action="tag_prompt364_commit",
+            manual_required=True,
+            replan_required=False,
+            blocked_reasons=["prompt364_head_tag_missing"],
+            summary=(
+                "Prompt364 is blocked because the tracked worktree is clean but HEAD does not carry the prompt364-fix1-clean-rerun-tag-verification tag."
+            ),
+        )
+        _write_prompt364_artifacts(state)
+        return state
+
+    if changed_files_within_allowed_set and head_tag_verified:
         state = _build_state(
             verification_status="implementation_in_progress",
             commit_tag_verified=True,
@@ -42174,15 +42259,17 @@ def _build_prompt364_post_commit_tag_verification(
             head_short_sha=head_short_sha,
             head_tags=head_tags,
             head_tag_verified=True,
+            previous_tag_verified=True,
+            current_head_tag_verified=current_head_tag_verified,
             changed_tracked_files=changed_tracked_files,
             staged_tracked_files=staged_tracked_files,
             next_cycle_handoff_ready=False,
-            next_action="commit_prompt364_then_clean_rerun",
+            next_action="commit_prompt364_fix1_then_clean_rerun",
             manual_required=False,
             replan_required=False,
-            blocked_reasons=["prompt364_implementation_changes_present"],
+            blocked_reasons=["prompt364_fix1_implementation_changes_present"],
             summary=(
-                "Prompt364 confirmed the Prompt363 commit/tag boundary on HEAD and detected only in-scope Prompt364 implementation changes, so next-cycle handoff remains deferred until a clean rerun."
+                "Prompt364 confirmed the Prompt363 boundary tag exists, accepted the current HEAD tag context, and detected only in-scope Prompt364 fix1 implementation changes."
             ),
         )
         _write_prompt364_artifacts(state)
@@ -42190,20 +42277,22 @@ def _build_prompt364_post_commit_tag_verification(
 
     state = _build_state(
         verification_status="blocked",
-        commit_tag_verified=True,
+        commit_tag_verified=False,
         worktree_clean=False,
         head_short_sha=head_short_sha,
         head_tags=head_tags,
-        head_tag_verified=True,
+        head_tag_verified=head_tag_verified,
+        previous_tag_verified=True,
+        current_head_tag_verified=current_head_tag_verified,
         changed_tracked_files=changed_tracked_files,
         staged_tracked_files=staged_tracked_files,
         next_cycle_handoff_ready=False,
-        next_action="resolve_unexpected_tracked_changes",
+        next_action="resolve_invalid_repo_state",
         manual_required=True,
         replan_required=False,
-        blocked_reasons=["unexpected_tracked_changes_present"],
+        blocked_reasons=["prompt364_expected_head_context_missing"],
         summary=(
-            "Prompt364 is blocked because tracked changes outside the allowed Prompt364 implementation files are present."
+            "Prompt364 is blocked because the local tracked changes are in-scope but HEAD is not aligned to the prompt364-post-commit-tag-verification-handoff tag or the prompt364-fix1-clean-rerun-tag-verification tag."
         ),
     )
     _write_prompt364_artifacts(state)
