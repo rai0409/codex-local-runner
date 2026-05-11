@@ -3681,6 +3681,15 @@ _PROMPT367_IMPLEMENTATION_TRACKED_FILES: tuple[str, ...] = (
     "automation/orchestration/planned_execution_runner.py",
     "automation/orchestration/run_state_summary_contract.py",
 )
+_PROMPT368_SCHEMA_VERSION = "prompt368_integrated_loop_resume_controller_v1"
+_PROMPT368_IMPLEMENTATION_TAG_NAME = "prompt368-integrated-loop-resume-controller"
+_PROMPT368_IMPLEMENTATION_TRACKED_FILES: tuple[str, ...] = (
+    "automation/orchestration/planned_execution_runner.py",
+    "automation/orchestration/run_state_summary_contract.py",
+)
+_PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
+    "prompt369_targeted_fix_route_integration_contract.json"
+)
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
     "prompt364_commit_tag_verified",
@@ -44098,6 +44107,790 @@ def _build_prompt367_bounded_commit_tag_execution_adapter(
         key: value
         for key, value in plan_payload.items()
         if key.startswith("prompt367_")
+    }
+
+
+def _build_prompt368_integrated_loop_resume_controller(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str = "",
+    current_prompt366_source_path: str = "",
+    current_prompt367_source_path: str = "",
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    controller_path = artifact_root / "prompt368_integrated_loop_resume_controller.json"
+    resume_contract_path = artifact_root / "prompt368_next_cycle_resume_contract.json"
+    receipt_path = artifact_root / "prompt368_resume_receipt.json"
+    selected_prompt_contract_path_default = (
+        artifact_root / _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME
+    )
+    run_state = dict(run_state_payload or {})
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=str(Path.cwd()),
+    )
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt368_input(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt_id": _normalize_text(source.get("prompt_id"), default=""),
+            "objective": _normalize_text(source.get("objective"), default=""),
+            "next_action_source_prompt": _normalize_text(
+                source.get("next_action_source_prompt"),
+                default="",
+            ),
+            "next_action_source_action": _normalize_text(
+                source.get("next_action_source_action"),
+                default="",
+            ),
+            "resume_action": _normalize_text(
+                source.get("resume_action"),
+                default="",
+            ),
+            "current_local_cycle": _as_non_negative_int(
+                source.get("current_local_cycle"),
+                default=_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+            ),
+            "max_local_cycles": _as_non_negative_int(
+                source.get("max_local_cycles"),
+                default=_LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+            ),
+            "selected_next_step": _normalize_text(
+                source.get("selected_next_step"),
+                default="",
+            ),
+            "selected_next_step_operation": _normalize_text(
+                source.get("selected_next_step_operation"),
+                default="",
+            ),
+            "selected_prompt_id": _normalize_text(
+                source.get("selected_prompt_id"),
+                default="",
+            ),
+            "selected_prompt_title": _normalize_text(
+                source.get("selected_prompt_title"),
+                default="",
+            ),
+            "selected_prompt_contract_path": _normalize_text(
+                source.get("selected_prompt_contract_path"),
+                default="",
+            ),
+            "selected_prompt_contract_ready": _prompt357_as_boolish(
+                source.get("selected_prompt_contract_ready"),
+                default=False,
+            ),
+            "selected_prompt_contract": (
+                dict(source.get("selected_prompt_contract"))
+                if isinstance(source.get("selected_prompt_contract"), Mapping)
+                else {}
+            ),
+            "next_action_on_success": _normalize_text(
+                source.get("next_action_on_success"),
+                default="continue_bounded_local_autonomous_loop",
+            ),
+            "next_action_on_blocked": _normalize_text(
+                source.get("next_action_on_blocked"),
+                default="review_prompt368_loop_resume_blocker",
+            ),
+        }
+
+    def _normalize_prompt369_input(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        normalized = dict(source)
+        normalized["prompt_id"] = _normalize_text(
+            source.get("prompt_id"),
+            default="",
+        )
+        normalized["objective"] = _normalize_text(
+            source.get("objective"),
+            default="",
+        )
+        normalized["next_action_on_success"] = _normalize_text(
+            source.get("next_action_on_success"),
+            default="",
+        )
+        normalized["next_action_on_blocked"] = _normalize_text(
+            source.get("next_action_on_blocked"),
+            default="",
+        )
+        normalized["remote_operations_enabled"] = _prompt357_as_boolish(
+            source.get("remote_operations_enabled"),
+            default=False,
+        )
+        normalized["push_pr_merge_enabled"] = _prompt357_as_boolish(
+            source.get("push_pr_merge_enabled"),
+            default=False,
+        )
+        normalized["rollback_enabled"] = _prompt357_as_boolish(
+            source.get("rollback_enabled"),
+            default=False,
+        )
+        return normalized
+
+    def _prompt368_objective_matches(value: Any) -> bool:
+        objective = _normalize_text(value, default="")
+        if objective in {
+            "integrated_next_action_loop_resume_controller",
+            "integrated_next_cycle_loop_resume_controller",
+            "integrated_loop_resume_controller",
+        }:
+            return True
+        return bool(
+            objective
+            and "integrated" in objective
+            and "resume" in objective
+            and "controller" in objective
+            and ("loop" in objective or "cycle" in objective)
+        )
+
+    def _valid_prompt368_prompt366_evidence(payload: Mapping[str, Any] | None) -> bool:
+        source = dict(payload) if isinstance(payload, Mapping) else {}
+        prompt368_input = _normalize_prompt368_input(source.get("prompt368_input"))
+        return bool(
+            _normalize_text(
+                source.get("prompt366_continuation_status"),
+                default="",
+            )
+            == "ready"
+            and _prompt357_as_boolish(
+                source.get("prompt366_next_cycle_restart_ready"),
+                default=False,
+            )
+            and _prompt357_as_boolish(
+                source.get("prompt366_prompt368_input_ready"),
+                default=False,
+            )
+            and _normalize_text(
+                source.get("prompt366_next_action"),
+                default="",
+            )
+            == "prepare_prompt367_bounded_commit_tag_execution_adapter"
+            and bool(prompt368_input)
+            and _prompt368_objective_matches(prompt368_input.get("objective"))
+        )
+
+    def _valid_prompt368_prompt367_evidence(payload: Mapping[str, Any] | None) -> bool:
+        source = dict(payload) if isinstance(payload, Mapping) else {}
+        return bool(
+            _normalize_text(
+                source.get("prompt367_execution_adapter_status"),
+                default="",
+            )
+            == "ready_for_explicit_execution"
+            and _normalize_text(
+                source.get("prompt367_execution_status"),
+                default="",
+            )
+            == "not_run"
+            and not _prompt357_as_boolish(
+                source.get("prompt367_execution_performed"),
+                default=False,
+            )
+            and not _prompt357_as_boolish(
+                source.get("prompt367_git_add_performed"),
+                default=False,
+            )
+            and not _prompt357_as_boolish(
+                source.get("prompt367_git_commit_performed"),
+                default=False,
+            )
+            and not _prompt357_as_boolish(
+                source.get("prompt367_git_tag_performed"),
+                default=False,
+            )
+            and _normalize_text(
+                source.get("prompt367_next_action"),
+                default="",
+            )
+            == "run_with_explicit_prompt367_commit_tag_execution_flags"
+            and _normalize_text(
+                source.get("prompt367_active_blocked_reason"),
+                default="",
+            )
+            == ""
+        )
+
+    def _recover_latest_valid_run_state(
+        validator: Callable[[Mapping[str, Any] | None], bool],
+    ) -> tuple[dict[str, Any], str]:
+        recovery_root = Path("/tmp/codex-local-runner-checks")
+        if not recovery_root.exists() or not recovery_root.is_dir():
+            return {}, ""
+
+        candidates: list[tuple[float, Path]] = []
+        for candidate_path in recovery_root.rglob("run_state.json"):
+            try:
+                candidate_mtime = candidate_path.stat().st_mtime
+            except OSError:
+                continue
+            candidates.append((candidate_mtime, candidate_path))
+
+        for _, candidate_path in sorted(candidates, key=lambda item: item[0], reverse=True):
+            try:
+                payload = _read_json_object_if_exists(candidate_path)
+            except (OSError, ValueError, json.JSONDecodeError):
+                payload = None
+            if validator(payload):
+                return dict(payload or {}), str(candidate_path)
+        return {}, ""
+
+    def _collect_git_state(
+        repo_path: str,
+    ) -> tuple[bool, list[str], list[str], list[str]]:
+        if not repo_path:
+            return False, [], [], []
+        try:
+            status_short = _run_git(
+                repo_path,
+                ["status", "--short", "--untracked-files=no"],
+                timeout_seconds=10,
+            )
+            unstaged_names = _run_git(
+                repo_path,
+                ["diff", "--name-only"],
+                timeout_seconds=10,
+            )
+            staged_names = _run_git(
+                repo_path,
+                ["diff", "--cached", "--name-only"],
+                timeout_seconds=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False, [], [], []
+
+        if (
+            status_short.returncode != 0
+            or unstaged_names.returncode != 0
+            or staged_names.returncode != 0
+        ):
+            return False, [], [], []
+
+        status_paths = [
+            path_text
+            for path_text in (
+                _parse_git_status_path(raw_line.rstrip("\n"))
+                for raw_line in (status_short.stdout or "").splitlines()
+            )
+            if path_text
+        ]
+        unstaged = _normalize_string_list(
+            [
+                line.strip()
+                for line in (unstaged_names.stdout or "").splitlines()
+                if line.strip()
+            ],
+            sort_items=True,
+        )
+        staged = _normalize_string_list(
+            [
+                line.strip()
+                for line in (staged_names.stdout or "").splitlines()
+                if line.strip()
+            ],
+            sort_items=True,
+        )
+        actual = _normalize_string_list(
+            sorted(set(status_paths) | set(unstaged) | set(staged)),
+            sort_items=True,
+        )
+        return True, actual, staged, unstaged
+
+    def _prompt368_tag_exists(tag_name: str) -> tuple[bool, bool]:
+        if not normalized_repo_path or not tag_name:
+            return False, False
+        try:
+            tag_exists_result = _run_git(
+                normalized_repo_path,
+                ["rev-parse", "--verify", f"refs/tags/{tag_name}"],
+                timeout_seconds=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False, False
+        if tag_exists_result.returncode == 0:
+            return True, True
+        if tag_exists_result.returncode == 128:
+            return True, False
+        return False, False
+
+    def _build_ready_next_action(prompt_id: str, prompt_title: str) -> str:
+        normalized_prompt_id = _normalize_text(prompt_id, default="")
+        normalized_prompt_title = _normalize_text(
+            prompt_title,
+            default="",
+        ).replace("-", "_")
+        if (
+            normalized_prompt_id == "prompt369"
+            and normalized_prompt_title == "targeted_fix_route_integration"
+        ):
+            return "prepare_prompt369_targeted_fix_route_integration"
+        if normalized_prompt_id and normalized_prompt_title:
+            return f"prepare_{normalized_prompt_id}_{normalized_prompt_title}"
+        if normalized_prompt_id:
+            return f"prepare_{normalized_prompt_id}"
+        return "prepare_next_local_cycle_selected_prompt_contract"
+
+    current_prompt366_evidence = dict(run_state)
+    current_prompt366_valid = _valid_prompt368_prompt366_evidence(
+        current_prompt366_evidence
+    )
+    recovered_prompt366_evidence: dict[str, Any] = {}
+    recovered_prompt366_source_path = ""
+    if not current_prompt366_valid:
+        (
+            recovered_prompt366_evidence,
+            recovered_prompt366_source_path,
+        ) = _recover_latest_valid_run_state(_valid_prompt368_prompt366_evidence)
+
+    current_prompt367_evidence = dict(run_state)
+    current_prompt367_valid = _valid_prompt368_prompt367_evidence(
+        current_prompt367_evidence
+    )
+    recovered_prompt367_evidence: dict[str, Any] = {}
+    recovered_prompt367_source_path = ""
+    if not current_prompt367_valid:
+        (
+            recovered_prompt367_evidence,
+            recovered_prompt367_source_path,
+        ) = _recover_latest_valid_run_state(_valid_prompt368_prompt367_evidence)
+
+    prompt368_recovered_prompt366_evidence_used = bool(
+        (not current_prompt366_valid) and recovered_prompt366_source_path
+    )
+    prompt368_recovered_prompt367_evidence_used = bool(
+        (not current_prompt367_valid) and recovered_prompt367_source_path
+    )
+    effective_prompt366 = (
+        recovered_prompt366_evidence
+        if prompt368_recovered_prompt366_evidence_used
+        else current_prompt366_evidence
+    )
+    effective_prompt367 = (
+        recovered_prompt367_evidence
+        if prompt368_recovered_prompt367_evidence_used
+        else current_prompt367_evidence
+    )
+    prompt368_prompt366_source_path = _normalize_text(
+        recovered_prompt366_source_path
+        if prompt368_recovered_prompt366_evidence_used
+        else current_prompt366_source_path,
+        default="",
+    )
+    prompt368_prompt367_source_path = _normalize_text(
+        recovered_prompt367_source_path
+        if prompt368_recovered_prompt367_evidence_used
+        else current_prompt367_source_path,
+        default="",
+    )
+
+    prompt366_ready_evidence_available = _valid_prompt368_prompt366_evidence(
+        effective_prompt366
+    )
+    prompt367_clean_ready_evidence_available = _valid_prompt368_prompt367_evidence(
+        effective_prompt367
+    )
+    prompt368_source_prompt366_status = _normalize_text(
+        effective_prompt366.get("prompt366_continuation_status"),
+        default="",
+    )
+    prompt368_source_prompt367_status = _normalize_text(
+        effective_prompt367.get("prompt367_execution_adapter_status"),
+        default="",
+    )
+
+    prompt368_input = _normalize_prompt368_input(effective_prompt366.get("prompt368_input"))
+    prompt369_input = _normalize_prompt369_input(effective_prompt366.get("prompt369_input"))
+    prompt368_prompt368_input_ready = bool(
+        prompt366_ready_evidence_available
+        and _prompt357_as_boolish(
+            effective_prompt366.get("prompt366_prompt368_input_ready"),
+            default=False,
+        )
+        and _normalize_text(prompt368_input.get("prompt_id"), default="") == "prompt368"
+        and _prompt368_objective_matches(prompt368_input.get("objective"))
+    )
+    prompt369_input_ready = bool(
+        prompt366_ready_evidence_available
+        and _prompt357_as_boolish(
+            effective_prompt366.get("prompt366_prompt369_input_ready"),
+            default=False,
+        )
+        and _normalize_text(prompt369_input.get("prompt_id"), default="") == "prompt369"
+        and _normalize_text(prompt369_input.get("objective"), default="")
+        == "targeted_fix_route_integration"
+    )
+
+    prompt368_resume_iteration_current = _as_non_negative_int(
+        prompt368_input.get("current_local_cycle"),
+        default=_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+    )
+    if prompt368_resume_iteration_current <= 0:
+        prompt368_resume_iteration_current = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
+    prompt368_resume_iteration_max = _as_non_negative_int(
+        prompt368_input.get("max_local_cycles"),
+        default=_LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+    )
+    if prompt368_resume_iteration_max <= 0:
+        prompt368_resume_iteration_max = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+    prompt368_resume_source_action = _normalize_text(
+        prompt368_input.get("resume_action")
+        or prompt368_input.get("next_action_source_action")
+        or effective_prompt366.get("prompt366_source_action"),
+        default="",
+    )
+
+    git_state_available, prompt368_actual_tracked_files, prompt368_staged_tracked_files, prompt368_unstaged_tracked_files = _collect_git_state(
+        normalized_repo_path
+    )
+    (
+        prompt368_implementation_tag_lookup_available,
+        prompt368_implementation_tag_already_exists,
+    ) = _prompt368_tag_exists(_PROMPT368_IMPLEMENTATION_TAG_NAME)
+    if not prompt368_implementation_tag_lookup_available:
+        prompt368_implementation_tag_already_exists = False
+    prompt368_worktree_clean = bool(
+        git_state_available
+        and not prompt368_actual_tracked_files
+        and not prompt368_staged_tracked_files
+        and not prompt368_unstaged_tracked_files
+    )
+    prompt368_implementation_changes_present = bool(
+        git_state_available
+        and not prompt368_staged_tracked_files
+        and bool(prompt368_unstaged_tracked_files)
+        and prompt368_actual_tracked_files == prompt368_unstaged_tracked_files
+        and set(prompt368_actual_tracked_files).issubset(
+            set(_PROMPT368_IMPLEMENTATION_TRACKED_FILES)
+        )
+        and "automation/orchestration/planned_execution_runner.py"
+        in prompt368_actual_tracked_files
+        and not prompt368_implementation_tag_already_exists
+    )
+
+    prompt368_selected_next_step = _normalize_text(
+        prompt368_input.get("selected_next_step"),
+        default="",
+    )
+    prompt368_selected_next_step_operation = _normalize_text(
+        prompt368_input.get("selected_next_step_operation"),
+        default="",
+    )
+    prompt368_selected_prompt_id = _normalize_text(
+        prompt368_input.get("selected_prompt_id"),
+        default="",
+    )
+    prompt368_selected_prompt_title = _normalize_text(
+        prompt368_input.get("selected_prompt_title"),
+        default="",
+    )
+    prompt368_selected_prompt_contract_path = _normalize_text(
+        prompt368_input.get("selected_prompt_contract_path"),
+        default="",
+    )
+    prompt368_selected_prompt_contract_payload = (
+        dict(prompt368_input.get("selected_prompt_contract"))
+        if isinstance(prompt368_input.get("selected_prompt_contract"), Mapping)
+        else {}
+    )
+
+    if not prompt368_selected_next_step:
+        prompt368_selected_next_step = (
+            "prepare_next_local_cycle_selected_prompt_contract"
+        )
+    if not prompt368_selected_next_step_operation:
+        prompt368_selected_next_step_operation = "emit_selected_prompt_contract"
+    if not prompt368_selected_prompt_id and prompt369_input_ready:
+        prompt368_selected_prompt_id = "prompt369"
+    if not prompt368_selected_prompt_title and prompt368_selected_prompt_id == "prompt369":
+        prompt368_selected_prompt_title = "targeted_fix_route_integration"
+    if (
+        not prompt368_selected_prompt_contract_path
+        and prompt368_selected_prompt_id == "prompt369"
+    ):
+        prompt368_selected_prompt_contract_path = str(
+            selected_prompt_contract_path_default
+        )
+    if (
+        not prompt368_selected_prompt_contract_payload
+        and prompt368_selected_prompt_id == "prompt369"
+        and prompt369_input_ready
+    ):
+        prompt368_selected_prompt_contract_payload = {
+            "selected_prompt_id": "prompt369",
+            "selected_prompt_title": "targeted_fix_route_integration",
+            "selected_next_step": prompt368_selected_next_step,
+            "selected_next_step_operation": (
+                prompt368_selected_next_step_operation
+            ),
+            "selected_prompt_contract_path": (
+                prompt368_selected_prompt_contract_path
+            ),
+            "source_prompt": "prompt368",
+            "source_action": "prepare_prompt369_targeted_fix_route_integration",
+            "prompt369_input": dict(prompt369_input),
+        }
+
+    prompt368_selected_prompt_contract_ready = bool(
+        prompt368_selected_next_step
+        and prompt368_selected_next_step_operation
+        and prompt368_selected_prompt_id
+        and prompt368_selected_prompt_title
+        and prompt368_selected_prompt_contract_path
+        and (
+            bool(prompt368_selected_prompt_contract_payload)
+            or _prompt357_as_boolish(
+                prompt368_input.get("selected_prompt_contract_ready"),
+                default=False,
+            )
+        )
+    )
+
+    prompt368_execution_allowed = False
+    prompt368_execution_attempted = False
+    prompt368_execution_performed = False
+    prompt368_codex_execution_performed = False
+    prompt368_git_mutation_performed = False
+    prompt368_remote_mutation_performed = False
+    prompt368_manual_required = False
+    prompt368_replan_required = False
+    prompt368_resume_controller_status = "blocked"
+    prompt368_resume_status = "not_prepared"
+    prompt368_next_cycle_resume_contract_ready = False
+    prompt368_integrated_loop_resume_ready = False
+    prompt368_active_blocked_reasons: list[str] = []
+    prompt368_active_blocked_reason = ""
+    prompt368_authoritative_next_action = ""
+    prompt368_next_action = ""
+
+    blockers: list[str] = []
+    if not prompt366_ready_evidence_available:
+        _append_reason(blockers, "prompt366_ready_evidence_missing")
+    if not prompt367_clean_ready_evidence_available:
+        _append_reason(blockers, "prompt367_clean_ready_evidence_missing")
+    if not prompt368_prompt368_input_ready:
+        _append_reason(blockers, "prompt368_input_missing")
+    if not prompt368_worktree_clean:
+        _append_reason(blockers, "prompt368_worktree_not_clean")
+    if (
+        not prompt368_selected_next_step
+        or not prompt368_selected_next_step_operation
+        or not prompt368_selected_prompt_id
+        or not prompt368_selected_prompt_title
+    ):
+        _append_reason(blockers, "prompt368_selected_next_step_missing")
+    if not prompt368_selected_prompt_contract_ready:
+        _append_reason(blockers, "prompt368_selected_prompt_contract_missing")
+
+    if prompt368_implementation_changes_present:
+        prompt368_resume_controller_status = "implementation_in_progress"
+        prompt368_resume_status = "not_prepared"
+        prompt368_authoritative_next_action = "commit_prompt368_then_clean_rerun"
+        prompt368_next_action = "commit_prompt368_then_clean_rerun"
+        prompt368_active_blocked_reasons = ["prompt368_implementation_changes_present"]
+        prompt368_active_blocked_reason = (
+            "prompt368_implementation_changes_present"
+        )
+    else:
+        prompt368_next_cycle_resume_contract_ready = not blockers
+        prompt368_integrated_loop_resume_ready = (
+            prompt368_next_cycle_resume_contract_ready
+        )
+        if prompt368_next_cycle_resume_contract_ready:
+            prompt368_resume_controller_status = "ready"
+            prompt368_resume_status = "prepared"
+            prompt368_authoritative_next_action = _build_ready_next_action(
+                prompt368_selected_prompt_id,
+                prompt368_selected_prompt_title,
+            )
+            prompt368_next_action = prompt368_authoritative_next_action
+            prompt368_active_blocked_reasons = []
+            prompt368_active_blocked_reason = ""
+        else:
+            _append_reason(blockers, "prompt368_resume_contract_not_ready")
+            prompt368_manual_required = "prompt368_worktree_not_clean" in blockers
+            prompt368_replan_required = any(
+                blocker
+                in {
+                    "prompt366_ready_evidence_missing",
+                    "prompt367_clean_ready_evidence_missing",
+                    "prompt368_input_missing",
+                    "prompt368_selected_next_step_missing",
+                    "prompt368_selected_prompt_contract_missing",
+                    "prompt368_resume_contract_not_ready",
+                }
+                for blocker in blockers
+            )
+            prompt368_active_blocked_reasons = _normalize_string_list(
+                blockers,
+                sort_items=False,
+            )
+            prompt368_active_blocked_reason = (
+                prompt368_active_blocked_reasons[0]
+                if prompt368_active_blocked_reasons
+                else ""
+            )
+            prompt368_authoritative_next_action = prompt368_active_blocked_reason
+            prompt368_next_action = prompt368_active_blocked_reason
+
+    controller_payload: dict[str, Any] = {
+        "prompt368_schema_version": _PROMPT368_SCHEMA_VERSION,
+        "prompt368_resume_controller_status": prompt368_resume_controller_status,
+        "prompt368_resume_status": prompt368_resume_status,
+        "prompt368_source_prompt366_status": prompt368_source_prompt366_status,
+        "prompt368_source_prompt367_status": prompt368_source_prompt367_status,
+        "prompt368_recovered_prompt366_evidence_used": (
+            prompt368_recovered_prompt366_evidence_used
+        ),
+        "prompt368_recovered_prompt367_evidence_used": (
+            prompt368_recovered_prompt367_evidence_used
+        ),
+        "prompt368_prompt366_source_path": prompt368_prompt366_source_path,
+        "prompt368_prompt367_source_path": prompt368_prompt367_source_path,
+        "prompt368_prompt368_input_ready": prompt368_prompt368_input_ready,
+        "prompt368_next_cycle_resume_contract_ready": (
+            prompt368_next_cycle_resume_contract_ready
+        ),
+        "prompt368_integrated_loop_resume_ready": (
+            prompt368_integrated_loop_resume_ready
+        ),
+        "prompt368_resume_iteration_current": (
+            prompt368_resume_iteration_current
+        ),
+        "prompt368_resume_iteration_max": prompt368_resume_iteration_max,
+        "prompt368_resume_source_action": prompt368_resume_source_action,
+        "prompt368_selected_next_step": prompt368_selected_next_step,
+        "prompt368_selected_next_step_operation": (
+            prompt368_selected_next_step_operation
+        ),
+        "prompt368_selected_prompt_id": prompt368_selected_prompt_id,
+        "prompt368_selected_prompt_title": prompt368_selected_prompt_title,
+        "prompt368_selected_prompt_contract_ready": (
+            prompt368_selected_prompt_contract_ready
+        ),
+        "prompt368_selected_prompt_contract_path": (
+            prompt368_selected_prompt_contract_path
+        ),
+        "prompt368_resume_contract_path": str(resume_contract_path),
+        "prompt368_controller_path": str(controller_path),
+        "prompt368_receipt_path": str(receipt_path),
+        "prompt368_execution_allowed": prompt368_execution_allowed,
+        "prompt368_execution_attempted": prompt368_execution_attempted,
+        "prompt368_execution_performed": prompt368_execution_performed,
+        "prompt368_codex_execution_performed": (
+            prompt368_codex_execution_performed
+        ),
+        "prompt368_git_mutation_performed": prompt368_git_mutation_performed,
+        "prompt368_remote_mutation_performed": (
+            prompt368_remote_mutation_performed
+        ),
+        "prompt368_authoritative_next_action": (
+            prompt368_authoritative_next_action
+        ),
+        "prompt368_next_action": prompt368_next_action,
+        "prompt368_manual_required": prompt368_manual_required,
+        "prompt368_replan_required": prompt368_replan_required,
+        "prompt368_active_blocked_reason": prompt368_active_blocked_reason,
+        "prompt368_active_blocked_reasons": prompt368_active_blocked_reasons,
+    }
+
+    resume_contract_payload: dict[str, Any] = {
+        **controller_payload,
+        "local_only": True,
+        "remote_operations_enabled": False,
+        "selected_prompt_contract": prompt368_selected_prompt_contract_payload,
+        "prompt368_input": dict(prompt368_input),
+        "prompt369_input": dict(prompt369_input),
+    }
+    receipt_payload: dict[str, Any] = {
+        **controller_payload,
+        "prompt368_input": dict(prompt368_input),
+        "prompt369_input": dict(prompt369_input),
+        "prompt366_source_excerpt": {
+            "prompt366_continuation_status": _normalize_text(
+                effective_prompt366.get("prompt366_continuation_status"),
+                default="",
+            ),
+            "prompt366_next_cycle_restart_ready": _prompt357_as_boolish(
+                effective_prompt366.get("prompt366_next_cycle_restart_ready"),
+                default=False,
+            ),
+            "prompt366_prompt368_input_ready": _prompt357_as_boolish(
+                effective_prompt366.get("prompt366_prompt368_input_ready"),
+                default=False,
+            ),
+            "prompt366_prompt369_input_ready": _prompt357_as_boolish(
+                effective_prompt366.get("prompt366_prompt369_input_ready"),
+                default=False,
+            ),
+            "prompt366_next_action": _normalize_text(
+                effective_prompt366.get("prompt366_next_action"),
+                default="",
+            ),
+        },
+        "prompt367_source_excerpt": {
+            "prompt367_execution_adapter_status": _normalize_text(
+                effective_prompt367.get("prompt367_execution_adapter_status"),
+                default="",
+            ),
+            "prompt367_execution_status": _normalize_text(
+                effective_prompt367.get("prompt367_execution_status"),
+                default="",
+            ),
+            "prompt367_execution_performed": _prompt357_as_boolish(
+                effective_prompt367.get("prompt367_execution_performed"),
+                default=False,
+            ),
+            "prompt367_git_add_performed": _prompt357_as_boolish(
+                effective_prompt367.get("prompt367_git_add_performed"),
+                default=False,
+            ),
+            "prompt367_git_commit_performed": _prompt357_as_boolish(
+                effective_prompt367.get("prompt367_git_commit_performed"),
+                default=False,
+            ),
+            "prompt367_git_tag_performed": _prompt357_as_boolish(
+                effective_prompt367.get("prompt367_git_tag_performed"),
+                default=False,
+            ),
+            "prompt367_next_action": _normalize_text(
+                effective_prompt367.get("prompt367_next_action"),
+                default="",
+            ),
+            "prompt367_active_blocked_reason": _normalize_text(
+                effective_prompt367.get("prompt367_active_blocked_reason"),
+                default="",
+            ),
+        },
+        "git_state": {
+            "git_state_available": git_state_available,
+            "actual_tracked_files": prompt368_actual_tracked_files,
+            "staged_tracked_files": prompt368_staged_tracked_files,
+            "unstaged_tracked_files": prompt368_unstaged_tracked_files,
+            "worktree_clean": prompt368_worktree_clean,
+            "implementation_changes_present": (
+                prompt368_implementation_changes_present
+            ),
+            "implementation_tag_already_exists": (
+                prompt368_implementation_tag_already_exists
+            ),
+            "untracked_files_ignored": True,
+        },
+    }
+
+    controller_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(controller_path, controller_payload)
+    _write_json(resume_contract_path, resume_contract_payload)
+    _write_json(receipt_path, receipt_payload)
+
+    return {
+        key: value
+        for key, value in controller_payload.items()
+        if key.startswith("prompt368_")
     }
 
 
@@ -212887,6 +213680,13 @@ class PlannedExecutionRunner:
         prompt367_bounded_commit_tag_execution_receipt_path = (
             run_root / "prompt367_bounded_commit_tag_execution_receipt.json"
         )
+        prompt368_integrated_loop_resume_controller_path = (
+            run_root / "prompt368_integrated_loop_resume_controller.json"
+        )
+        prompt368_next_cycle_resume_contract_path = (
+            run_root / "prompt368_next_cycle_resume_contract.json"
+        )
+        prompt368_resume_receipt_path = run_root / "prompt368_resume_receipt.json"
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -212938,6 +213738,23 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt367_bounded_commit_tag_execution_payload,
+        }
+        prompt368_integrated_loop_resume_controller_payload = (
+            _build_prompt368_integrated_loop_resume_controller(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+                current_prompt366_source_path=str(
+                    prompt366_local_autonomous_continuation_contract_path
+                ),
+                current_prompt367_source_path=str(
+                    prompt367_bounded_commit_tag_execution_plan_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt368_integrated_loop_resume_controller_payload,
         }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
@@ -213208,6 +214025,24 @@ class PlannedExecutionRunner:
         manifest["prompt367_bounded_commit_tag_execution_receipt_path"] = str(
             prompt367_bounded_commit_tag_execution_receipt_path
         )
+        manifest["prompt368_integrated_loop_resume_controller_summary"] = dict(
+            prompt368_integrated_loop_resume_controller_payload
+        )
+        manifest["prompt368_integrated_loop_resume_controller_path"] = str(
+            prompt368_integrated_loop_resume_controller_path
+        )
+        manifest["prompt368_next_cycle_resume_contract_summary"] = dict(
+            prompt368_integrated_loop_resume_controller_payload
+        )
+        manifest["prompt368_next_cycle_resume_contract_path"] = str(
+            prompt368_next_cycle_resume_contract_path
+        )
+        manifest["prompt368_resume_receipt_summary"] = dict(
+            prompt368_integrated_loop_resume_controller_payload
+        )
+        manifest["prompt368_resume_receipt_path"] = str(
+            prompt368_resume_receipt_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -213271,6 +214106,15 @@ class PlannedExecutionRunner:
         contract_summaries_by_role[
             "prompt367_bounded_commit_tag_execution_receipt"
         ] = manifest.get("prompt367_bounded_commit_tag_execution_receipt_summary")
+        contract_summaries_by_role[
+            "prompt368_integrated_loop_resume_controller"
+        ] = manifest.get("prompt368_integrated_loop_resume_controller_summary")
+        contract_summaries_by_role[
+            "prompt368_next_cycle_resume_contract"
+        ] = manifest.get("prompt368_next_cycle_resume_contract_summary")
+        contract_summaries_by_role["prompt368_resume_receipt"] = manifest.get(
+            "prompt368_resume_receipt_summary"
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -213334,6 +214178,15 @@ class PlannedExecutionRunner:
         contract_paths_by_role[
             "prompt367_bounded_commit_tag_execution_receipt"
         ] = manifest.get("prompt367_bounded_commit_tag_execution_receipt_path")
+        contract_paths_by_role[
+            "prompt368_integrated_loop_resume_controller"
+        ] = manifest.get("prompt368_integrated_loop_resume_controller_path")
+        contract_paths_by_role[
+            "prompt368_next_cycle_resume_contract"
+        ] = manifest.get("prompt368_next_cycle_resume_contract_path")
+        contract_paths_by_role["prompt368_resume_receipt"] = manifest.get(
+            "prompt368_resume_receipt_path"
+        )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,

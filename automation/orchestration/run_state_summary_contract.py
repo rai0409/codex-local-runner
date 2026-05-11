@@ -524,6 +524,41 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt367_replan_required",
     "prompt367_active_blocked_reason",
     "prompt367_active_blocked_reasons",
+    "prompt368_resume_controller_status",
+    "prompt368_resume_status",
+    "prompt368_source_prompt366_status",
+    "prompt368_source_prompt367_status",
+    "prompt368_recovered_prompt366_evidence_used",
+    "prompt368_recovered_prompt367_evidence_used",
+    "prompt368_prompt366_source_path",
+    "prompt368_prompt367_source_path",
+    "prompt368_prompt368_input_ready",
+    "prompt368_next_cycle_resume_contract_ready",
+    "prompt368_integrated_loop_resume_ready",
+    "prompt368_resume_iteration_current",
+    "prompt368_resume_iteration_max",
+    "prompt368_resume_source_action",
+    "prompt368_selected_next_step",
+    "prompt368_selected_next_step_operation",
+    "prompt368_selected_prompt_id",
+    "prompt368_selected_prompt_title",
+    "prompt368_selected_prompt_contract_ready",
+    "prompt368_selected_prompt_contract_path",
+    "prompt368_resume_contract_path",
+    "prompt368_controller_path",
+    "prompt368_receipt_path",
+    "prompt368_execution_allowed",
+    "prompt368_execution_attempted",
+    "prompt368_execution_performed",
+    "prompt368_codex_execution_performed",
+    "prompt368_git_mutation_performed",
+    "prompt368_remote_mutation_performed",
+    "prompt368_authoritative_next_action",
+    "prompt368_next_action",
+    "prompt368_manual_required",
+    "prompt368_replan_required",
+    "prompt368_active_blocked_reason",
+    "prompt368_active_blocked_reasons",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -1118,6 +1153,20 @@ def select_manifest_run_state_summary_compact(
         "prompt367_git_tag_performed",
         "prompt367_manual_required",
         "prompt367_replan_required",
+        "prompt368_recovered_prompt366_evidence_used",
+        "prompt368_recovered_prompt367_evidence_used",
+        "prompt368_prompt368_input_ready",
+        "prompt368_next_cycle_resume_contract_ready",
+        "prompt368_integrated_loop_resume_ready",
+        "prompt368_selected_prompt_contract_ready",
+        "prompt368_execution_allowed",
+        "prompt368_execution_attempted",
+        "prompt368_execution_performed",
+        "prompt368_codex_execution_performed",
+        "prompt368_git_mutation_performed",
+        "prompt368_remote_mutation_performed",
+        "prompt368_manual_required",
+        "prompt368_replan_required",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -1151,8 +1200,11 @@ def select_manifest_run_state_summary_compact(
         "prompt367_staged_tracked_files",
         "prompt367_execution_flags_required",
         "prompt367_active_blocked_reasons",
+        "prompt368_active_blocked_reasons",
     }
     int_fields.add("prompt367_returncode")
+    int_fields.add("prompt368_resume_iteration_current")
+    int_fields.add("prompt368_resume_iteration_max")
 
     summary: dict[str, Any] = {}
     for field in MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS:
