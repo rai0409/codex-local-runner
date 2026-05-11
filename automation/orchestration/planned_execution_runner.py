@@ -3690,6 +3690,7 @@ _PROMPT368_IMPLEMENTATION_TRACKED_FILES: tuple[str, ...] = (
 _PROMPT369_SCHEMA_VERSION = "prompt369_targeted_fix_route_integration_v1"
 _PROMPT370_SCHEMA_VERSION = "prompt370_integrated_autonomous_cycle_runner_v1"
 _PROMPT371_SCHEMA_VERSION = "prompt371_bounded_one_cycle_execution_wiring_v1"
+_PROMPT372_SCHEMA_VERSION = "prompt372_selected_step_execution_gate_v1"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -3816,6 +3817,57 @@ _PROMPT371_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt371_active_blocked_reason",
     "prompt371_active_blocked_reasons",
     "prompt371_summary",
+)
+_PROMPT372_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt372_schema_version",
+    "prompt372_selected_step_execution_gate_status",
+    "prompt372_gate_status",
+    "prompt372_prompt371_source_path",
+    "prompt372_prompt371_selected_step_contract_path",
+    "prompt372_prompt371_execution_gate_readiness_path",
+    "prompt372_prompt371_wiring_ready",
+    "prompt372_selected_route",
+    "prompt372_selected_step_kind",
+    "prompt372_selected_step_operation",
+    "prompt372_selected_next_action",
+    "prompt372_gate_ready",
+    "prompt372_gate_blocked_reason",
+    "prompt372_gate_blocked_reasons",
+    "prompt372_selected_step_contract_ready",
+    "prompt372_selected_prompt_contract_ready",
+    "prompt372_codex_execution_request_status",
+    "prompt372_codex_execution_request_ready",
+    "prompt372_live_execution_preflight_ready",
+    "prompt372_selected_step_execution_gate_path",
+    "prompt372_codex_execution_request_contract_path",
+    "prompt372_live_execution_preflight_receipt_path",
+    "prompt372_gate_receipt_path",
+    "prompt372_execution_allowed",
+    "prompt372_execution_attempted",
+    "prompt372_execution_performed",
+    "prompt372_codex_execution_allowed",
+    "prompt372_codex_execution_attempted",
+    "prompt372_codex_execution_performed",
+    "prompt372_live_execution_allowed",
+    "prompt372_live_execution_attempted",
+    "prompt372_live_execution_performed",
+    "prompt372_git_mutation_allowed",
+    "prompt372_git_mutation_attempted",
+    "prompt372_git_mutation_performed",
+    "prompt372_remote_mutation_allowed",
+    "prompt372_remote_mutation_attempted",
+    "prompt372_remote_mutation_performed",
+    "prompt372_targeted_fix_reentry_allowed",
+    "prompt372_targeted_fix_reentry_attempted",
+    "prompt372_targeted_fix_reentry_performed",
+    "prompt372_approve_commit_tag_allowed",
+    "prompt372_approve_commit_tag_attempted",
+    "prompt372_approve_commit_tag_performed",
+    "prompt372_authoritative_next_action",
+    "prompt372_next_action",
+    "prompt372_active_blocked_reason",
+    "prompt372_active_blocked_reasons",
+    "prompt372_summary",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -5544,6 +5596,23 @@ def _merge_prompt371_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT371_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt372_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt372_selected_step_execution_gate_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt372_selected_step_execution_gate_state)
+        if isinstance(prompt372_selected_step_execution_gate_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT372_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -46682,6 +46751,494 @@ def _build_prompt371_bounded_one_cycle_execution_wiring_state(
     }
 
 
+def _build_prompt372_selected_step_execution_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    current_prompt371_source_path: str = "",
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    gate_path = artifact_root / "prompt372_selected_step_execution_gate.json"
+    request_contract_path = artifact_root / "prompt372_codex_execution_request_contract.json"
+    preflight_receipt_path = (
+        artifact_root / "prompt372_live_execution_preflight_receipt.json"
+    )
+    receipt_path = artifact_root / "prompt372_gate_receipt.json"
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    prompt371_surface = {
+        "prompt371_bounded_one_cycle_execution_wiring_status": _normalize_text(
+            run_state.get("prompt371_bounded_one_cycle_execution_wiring_status"),
+            default="",
+        ),
+        "prompt371_one_cycle_plan_status": _normalize_text(
+            run_state.get("prompt371_one_cycle_plan_status"),
+            default="",
+        ),
+        "prompt371_prompt370_dispatch_ready": _prompt357_as_boolish(
+            run_state.get("prompt371_prompt370_dispatch_ready"),
+            default=False,
+        ),
+        "prompt371_selected_route": _normalize_text(
+            run_state.get("prompt371_selected_route"),
+            default="",
+        ),
+        "prompt371_selected_step_kind": _normalize_text(
+            run_state.get("prompt371_selected_step_kind"),
+            default="",
+        ),
+        "prompt371_selected_step_operation": _normalize_text(
+            run_state.get("prompt371_selected_step_operation"),
+            default="",
+        ),
+        "prompt371_selected_next_action": _normalize_text(
+            run_state.get("prompt371_selected_next_action"),
+            default="",
+        ),
+        "prompt371_one_cycle_plan_ready": _prompt357_as_boolish(
+            run_state.get("prompt371_one_cycle_plan_ready"),
+            default=False,
+        ),
+        "prompt371_selected_prompt_contract_ready": _prompt357_as_boolish(
+            run_state.get("prompt371_selected_prompt_contract_ready"),
+            default=False,
+        ),
+        "prompt371_execution_gate_ready": _prompt357_as_boolish(
+            run_state.get("prompt371_execution_gate_ready"),
+            default=False,
+        ),
+        "prompt371_max_cycles": _as_non_negative_int(
+            run_state.get("prompt371_max_cycles"),
+            default=0,
+        ),
+        "prompt371_next_action": _normalize_text(
+            run_state.get("prompt371_next_action"),
+            default="",
+        ),
+        "prompt371_selected_step_contract_path": _normalize_text(
+            run_state.get("prompt371_selected_step_contract_path"),
+            default="",
+        ),
+        "prompt371_execution_gate_readiness_path": _normalize_text(
+            run_state.get("prompt371_execution_gate_readiness_path"),
+            default="",
+        ),
+        "prompt371_wiring_receipt_path": _normalize_text(
+            run_state.get("prompt371_wiring_receipt_path"),
+            default="",
+        ),
+        "prompt371_active_blocked_reason": _normalize_text(
+            run_state.get("prompt371_active_blocked_reason"),
+            default="",
+        ),
+        "prompt371_active_blocked_reasons": _normalize_string_list(
+            run_state.get("prompt371_active_blocked_reasons"),
+            sort_items=False,
+        ),
+    }
+
+    prompt372_gate_blocked_reasons: list[str] = []
+    if (
+        prompt371_surface["prompt371_bounded_one_cycle_execution_wiring_status"]
+        != "ready"
+    ):
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_bounded_one_cycle_execution_wiring_status_not_ready",
+        )
+    if prompt371_surface["prompt371_one_cycle_plan_status"] != "planned":
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_one_cycle_plan_status_not_planned",
+        )
+    if not bool(prompt371_surface["prompt371_prompt370_dispatch_ready"]):
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_prompt370_dispatch_ready_not_true",
+        )
+    if prompt371_surface["prompt371_selected_route"] not in {
+        "continue_next_cycle",
+        "targeted_fix",
+        "approve_commit_tag",
+    }:
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_selected_route_not_supported_for_prompt372",
+        )
+    if not prompt371_surface["prompt371_selected_step_kind"]:
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_selected_step_kind_missing",
+        )
+    if (
+        prompt371_surface["prompt371_selected_step_operation"]
+        != "prepare_selected_step_execution_gate"
+    ):
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_selected_step_operation_not_prepare_selected_step_execution_gate",
+        )
+    if (
+        prompt371_surface["prompt371_selected_next_action"]
+        != "prepare_prompt372_selected_step_execution_gate"
+    ):
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_selected_next_action_not_prepare_prompt372_selected_step_execution_gate",
+        )
+    if not bool(prompt371_surface["prompt371_one_cycle_plan_ready"]):
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_one_cycle_plan_ready_not_true",
+        )
+    if not bool(prompt371_surface["prompt371_selected_prompt_contract_ready"]):
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_selected_prompt_contract_ready_not_true",
+        )
+    if not bool(prompt371_surface["prompt371_execution_gate_ready"]):
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_execution_gate_ready_not_true",
+        )
+    if prompt371_surface["prompt371_max_cycles"] != 1:
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_max_cycles_not_equal_1",
+        )
+    if (
+        prompt371_surface["prompt371_next_action"]
+        != "prepare_prompt372_selected_step_execution_gate"
+    ):
+        _append_reason(
+            prompt372_gate_blocked_reasons,
+            "prompt371_next_action_not_prepare_prompt372_selected_step_execution_gate",
+        )
+
+    prompt372_selected_step_execution_gate_status = "blocked"
+    prompt372_gate_status = "blocked"
+    prompt372_prompt371_wiring_ready = False
+    prompt372_selected_route = _normalize_text(
+        prompt371_surface["prompt371_selected_route"],
+        default="blocked",
+    )
+    prompt372_selected_step_kind = _normalize_text(
+        prompt371_surface["prompt371_selected_step_kind"],
+        default="blocked",
+    )
+    prompt372_selected_step_operation = _normalize_text(
+        prompt371_surface["prompt371_selected_step_operation"],
+        default="blocked",
+    )
+    prompt372_selected_next_action = "review_prompt371_selected_step_gate_blockers"
+    prompt372_gate_ready = False
+    prompt372_selected_step_contract_ready = False
+    prompt372_selected_prompt_contract_ready = False
+    prompt372_codex_execution_request_status = "not_prepared"
+    prompt372_codex_execution_request_ready = False
+    prompt372_live_execution_preflight_ready = False
+
+    if not prompt372_gate_blocked_reasons:
+        prompt372_selected_step_execution_gate_status = "ready"
+        prompt372_gate_status = "ready"
+        prompt372_prompt371_wiring_ready = True
+        prompt372_gate_ready = True
+        prompt372_selected_step_contract_ready = True
+        prompt372_selected_prompt_contract_ready = True
+        prompt372_codex_execution_request_status = "prepared"
+        prompt372_codex_execution_request_ready = True
+        prompt372_live_execution_preflight_ready = True
+        prompt372_selected_next_action = (
+            "prepare_prompt373_selected_step_live_codex_execution"
+        )
+
+    def _blocked_next_action_for(reason: str) -> str:
+        mapping = {
+            "prompt371_bounded_one_cycle_execution_wiring_status_not_ready": (
+                "repair_prompt371_bounded_one_cycle_execution_wiring_ready_state"
+            ),
+            "prompt371_one_cycle_plan_status_not_planned": (
+                "repair_prompt371_one_cycle_plan_state"
+            ),
+            "prompt371_prompt370_dispatch_ready_not_true": (
+                "repair_prompt371_prompt370_dispatch_readiness"
+            ),
+            "prompt371_selected_route_not_supported_for_prompt372": (
+                "review_prompt371_selected_route_before_prompt372"
+            ),
+            "prompt371_selected_step_kind_missing": (
+                "repair_prompt371_selected_step_kind_before_prompt372"
+            ),
+            "prompt371_selected_step_operation_not_prepare_selected_step_execution_gate": (
+                "repair_prompt371_selected_step_operation_before_prompt372"
+            ),
+            "prompt371_selected_next_action_not_prepare_prompt372_selected_step_execution_gate": (
+                "repair_prompt371_selected_next_action_before_prompt372"
+            ),
+            "prompt371_one_cycle_plan_ready_not_true": (
+                "repair_prompt371_one_cycle_plan_readiness"
+            ),
+            "prompt371_selected_prompt_contract_ready_not_true": (
+                "repair_prompt371_selected_prompt_contract_readiness"
+            ),
+            "prompt371_execution_gate_ready_not_true": (
+                "repair_prompt371_execution_gate_readiness"
+            ),
+            "prompt371_max_cycles_not_equal_1": (
+                "repair_prompt371_max_cycles_before_prompt372"
+            ),
+            "prompt371_next_action_not_prepare_prompt372_selected_step_execution_gate": (
+                "repair_prompt371_next_action_before_prompt372"
+            ),
+        }
+        return mapping.get(
+            reason,
+            "review_prompt372_selected_step_execution_gate_blocker",
+        )
+
+    prompt372_gate_blocked_reason = (
+        prompt372_gate_blocked_reasons[0] if prompt372_gate_blocked_reasons else ""
+    )
+    if prompt372_gate_blocked_reasons:
+        prompt372_selected_next_action = _blocked_next_action_for(
+            prompt372_gate_blocked_reason
+        )
+
+    prompt372_execution_allowed = False
+    prompt372_execution_attempted = False
+    prompt372_execution_performed = False
+    prompt372_codex_execution_allowed = False
+    prompt372_codex_execution_attempted = False
+    prompt372_codex_execution_performed = False
+    prompt372_live_execution_allowed = False
+    prompt372_live_execution_attempted = False
+    prompt372_live_execution_performed = False
+    prompt372_git_mutation_allowed = False
+    prompt372_git_mutation_attempted = False
+    prompt372_git_mutation_performed = False
+    prompt372_remote_mutation_allowed = False
+    prompt372_remote_mutation_attempted = False
+    prompt372_remote_mutation_performed = False
+    prompt372_targeted_fix_reentry_allowed = False
+    prompt372_targeted_fix_reentry_attempted = False
+    prompt372_targeted_fix_reentry_performed = False
+    prompt372_approve_commit_tag_allowed = False
+    prompt372_approve_commit_tag_attempted = False
+    prompt372_approve_commit_tag_performed = False
+    prompt372_authoritative_next_action = prompt372_selected_next_action
+    prompt372_next_action = prompt372_selected_next_action
+    prompt372_active_blocked_reason = prompt372_gate_blocked_reason
+    prompt372_active_blocked_reasons = list(prompt372_gate_blocked_reasons)
+
+    prompt372_summary = (
+        "Prompt372 is blocked because Prompt371 selected-step execution gate evidence is incomplete for metadata-only preflight."
+    )
+    if prompt372_gate_ready:
+        prompt372_summary = (
+            "Prompt372 evaluated the selected-step execution gate, prepared a metadata-only future Codex execution request contract, and deferred live execution to Prompt373."
+        )
+
+    state_payload: dict[str, Any] = {
+        "prompt372_schema_version": _PROMPT372_SCHEMA_VERSION,
+        "prompt372_selected_step_execution_gate_status": (
+            prompt372_selected_step_execution_gate_status
+        ),
+        "prompt372_gate_status": prompt372_gate_status,
+        "prompt372_prompt371_source_path": _normalize_text(
+            current_prompt371_source_path,
+            default="",
+        ),
+        "prompt372_prompt371_selected_step_contract_path": _normalize_text(
+            prompt371_surface["prompt371_selected_step_contract_path"],
+            default="",
+        ),
+        "prompt372_prompt371_execution_gate_readiness_path": _normalize_text(
+            prompt371_surface["prompt371_execution_gate_readiness_path"],
+            default="",
+        ),
+        "prompt372_prompt371_wiring_ready": prompt372_prompt371_wiring_ready,
+        "prompt372_selected_route": prompt372_selected_route,
+        "prompt372_selected_step_kind": prompt372_selected_step_kind,
+        "prompt372_selected_step_operation": prompt372_selected_step_operation,
+        "prompt372_selected_next_action": prompt372_selected_next_action,
+        "prompt372_gate_ready": prompt372_gate_ready,
+        "prompt372_gate_blocked_reason": prompt372_gate_blocked_reason,
+        "prompt372_gate_blocked_reasons": prompt372_gate_blocked_reasons,
+        "prompt372_selected_step_contract_ready": (
+            prompt372_selected_step_contract_ready
+        ),
+        "prompt372_selected_prompt_contract_ready": (
+            prompt372_selected_prompt_contract_ready
+        ),
+        "prompt372_codex_execution_request_status": (
+            prompt372_codex_execution_request_status
+        ),
+        "prompt372_codex_execution_request_ready": (
+            prompt372_codex_execution_request_ready
+        ),
+        "prompt372_live_execution_preflight_ready": (
+            prompt372_live_execution_preflight_ready
+        ),
+        "prompt372_selected_step_execution_gate_path": str(gate_path),
+        "prompt372_codex_execution_request_contract_path": str(
+            request_contract_path
+        ),
+        "prompt372_live_execution_preflight_receipt_path": str(
+            preflight_receipt_path
+        ),
+        "prompt372_gate_receipt_path": str(receipt_path),
+        "prompt372_execution_allowed": prompt372_execution_allowed,
+        "prompt372_execution_attempted": prompt372_execution_attempted,
+        "prompt372_execution_performed": prompt372_execution_performed,
+        "prompt372_codex_execution_allowed": prompt372_codex_execution_allowed,
+        "prompt372_codex_execution_attempted": (
+            prompt372_codex_execution_attempted
+        ),
+        "prompt372_codex_execution_performed": (
+            prompt372_codex_execution_performed
+        ),
+        "prompt372_live_execution_allowed": prompt372_live_execution_allowed,
+        "prompt372_live_execution_attempted": prompt372_live_execution_attempted,
+        "prompt372_live_execution_performed": prompt372_live_execution_performed,
+        "prompt372_git_mutation_allowed": prompt372_git_mutation_allowed,
+        "prompt372_git_mutation_attempted": prompt372_git_mutation_attempted,
+        "prompt372_git_mutation_performed": prompt372_git_mutation_performed,
+        "prompt372_remote_mutation_allowed": prompt372_remote_mutation_allowed,
+        "prompt372_remote_mutation_attempted": (
+            prompt372_remote_mutation_attempted
+        ),
+        "prompt372_remote_mutation_performed": (
+            prompt372_remote_mutation_performed
+        ),
+        "prompt372_targeted_fix_reentry_allowed": (
+            prompt372_targeted_fix_reentry_allowed
+        ),
+        "prompt372_targeted_fix_reentry_attempted": (
+            prompt372_targeted_fix_reentry_attempted
+        ),
+        "prompt372_targeted_fix_reentry_performed": (
+            prompt372_targeted_fix_reentry_performed
+        ),
+        "prompt372_approve_commit_tag_allowed": (
+            prompt372_approve_commit_tag_allowed
+        ),
+        "prompt372_approve_commit_tag_attempted": (
+            prompt372_approve_commit_tag_attempted
+        ),
+        "prompt372_approve_commit_tag_performed": (
+            prompt372_approve_commit_tag_performed
+        ),
+        "prompt372_authoritative_next_action": (
+            prompt372_authoritative_next_action
+        ),
+        "prompt372_next_action": prompt372_next_action,
+        "prompt372_active_blocked_reason": prompt372_active_blocked_reason,
+        "prompt372_active_blocked_reasons": prompt372_active_blocked_reasons,
+        "prompt372_summary": prompt372_summary,
+    }
+    gate_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "metadata_only": True,
+        "selected_route": prompt372_selected_route,
+        "selected_step_kind": prompt372_selected_step_kind,
+        "selected_step_operation": prompt372_selected_step_operation,
+        "selected_next_action": prompt372_selected_next_action,
+        "gate_status": prompt372_gate_status,
+        "gate_ready": prompt372_gate_ready,
+        "gate_blocked_reason": prompt372_gate_blocked_reason,
+        "gate_blocked_reasons": prompt372_gate_blocked_reasons,
+        "execution_allowed": False,
+        "execution_attempted": False,
+        "execution_performed": False,
+    }
+    request_contract_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "metadata_only": True,
+        "codex_execution_request_status": (
+            prompt372_codex_execution_request_status
+        ),
+        "codex_execution_request_ready": prompt372_codex_execution_request_ready,
+        "codex_execution_request_allowed": False,
+        "codex_execution_request_attempted": False,
+        "codex_execution_request_performed": False,
+        "selected_step_contract_ready": prompt372_selected_step_contract_ready,
+        "selected_prompt_contract_ready": (
+            prompt372_selected_prompt_contract_ready
+        ),
+        "live_execution_preflight_ready": (
+            prompt372_live_execution_preflight_ready
+        ),
+        "live_execution_allowed": False,
+        "live_execution_attempted": False,
+        "live_execution_performed": False,
+        "future_execution_contract_deferred_to": (
+            "prepare_prompt373_selected_step_live_codex_execution"
+            if prompt372_gate_ready
+            else prompt372_selected_next_action
+        ),
+    }
+    preflight_receipt_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "metadata_only": True,
+        "selected_step_gate_evaluated": True,
+        "future_codex_execution_request_prepared": bool(
+            prompt372_codex_execution_request_ready
+        ),
+        "codex_execution_deferred": True,
+        "codex_not_executed": True,
+        "git_not_mutated": True,
+        "remote_operations_not_performed": True,
+        "targeted_fix_reentry_not_performed": True,
+        "approve_commit_tag_not_performed": True,
+        "selected_route": prompt372_selected_route,
+        "selected_step_kind": prompt372_selected_step_kind,
+        "selected_step_operation": prompt372_selected_step_operation,
+        "selected_next_action": prompt372_selected_next_action,
+        "live_execution_allowed": False,
+        "live_execution_attempted": False,
+        "live_execution_performed": False,
+    }
+    receipt_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "metadata_only": True,
+        "gate_evaluation_completed": True,
+        "codex_execution_request_contract_prepared": bool(
+            prompt372_codex_execution_request_ready
+        ),
+        "live_execution_preflight_receipt_prepared": bool(
+            prompt372_live_execution_preflight_ready
+        ),
+        "prompt371_source_excerpt": dict(prompt371_surface),
+        "selected_route": prompt372_selected_route,
+        "selected_step_kind": prompt372_selected_step_kind,
+        "selected_step_operation": prompt372_selected_step_operation,
+        "selected_next_action": prompt372_selected_next_action,
+        "gate_status": prompt372_gate_status,
+        "gate_ready": prompt372_gate_ready,
+    }
+
+    gate_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(gate_path, gate_payload)
+    _write_json(request_contract_path, request_contract_payload)
+    _write_json(preflight_receipt_path, preflight_receipt_payload)
+    _write_json(receipt_path, receipt_payload)
+
+    return {
+        key: value
+        for key, value in state_payload.items()
+        if key.startswith("prompt372_")
+    }
+
+
 def _merge_prompt363_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -47027,6 +47584,137 @@ def _merge_prompt371_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt371_next_action"
             if _normalize_text(prompt371.get("prompt371_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt372_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt372_selected_step_execution_gate_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt372 = (
+        dict(prompt372_selected_step_execution_gate_payload)
+        if isinstance(prompt372_selected_step_execution_gate_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT372_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt372 and prompt372.get(key) is not None:
+            payload[key] = prompt372.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt372_selected_step_execution_gate_status"
+            if _normalize_text(
+                prompt372.get("prompt372_selected_step_execution_gate_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_gate_status"
+            if _normalize_text(
+                prompt372.get("prompt372_gate_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_prompt371_source_path"
+            if _normalize_text(
+                prompt372.get("prompt372_prompt371_source_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_prompt371_selected_step_contract_path"
+            if _normalize_text(
+                prompt372.get("prompt372_prompt371_selected_step_contract_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_prompt371_execution_gate_readiness_path"
+            if _normalize_text(
+                prompt372.get("prompt372_prompt371_execution_gate_readiness_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_prompt371_wiring_ready"
+            if bool(prompt372.get("prompt372_prompt371_wiring_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt372_selected_route"
+            if _normalize_text(prompt372.get("prompt372_selected_route"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt372_selected_step_kind"
+            if _normalize_text(
+                prompt372.get("prompt372_selected_step_kind"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_selected_step_operation"
+            if _normalize_text(
+                prompt372.get("prompt372_selected_step_operation"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_selected_next_action"
+            if _normalize_text(
+                prompt372.get("prompt372_selected_next_action"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_gate_ready"
+            if bool(prompt372.get("prompt372_gate_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt372_codex_execution_request_status"
+            if _normalize_text(
+                prompt372.get("prompt372_codex_execution_request_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_codex_execution_request_ready"
+            if bool(
+                prompt372.get("prompt372_codex_execution_request_ready", False)
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_live_execution_preflight_ready"
+            if bool(
+                prompt372.get("prompt372_live_execution_preflight_ready", False)
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_selected_step_execution_gate_path"
+            if _normalize_text(
+                prompt372.get("prompt372_selected_step_execution_gate_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_codex_execution_request_contract_path"
+            if _normalize_text(
+                prompt372.get("prompt372_codex_execution_request_contract_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_live_execution_preflight_receipt_path"
+            if _normalize_text(
+                prompt372.get("prompt372_live_execution_preflight_receipt_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_gate_receipt_path"
+            if _normalize_text(
+                prompt372.get("prompt372_gate_receipt_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt372_next_action"
+            if _normalize_text(prompt372.get("prompt372_next_action"), default="")
             else "",
         ]
     )
@@ -215753,6 +216441,18 @@ class PlannedExecutionRunner:
         prompt371_wiring_receipt_path = (
             run_root / "prompt371_wiring_receipt.json"
         )
+        prompt372_selected_step_execution_gate_path = (
+            run_root / "prompt372_selected_step_execution_gate.json"
+        )
+        prompt372_codex_execution_request_contract_path = (
+            run_root / "prompt372_codex_execution_request_contract.json"
+        )
+        prompt372_live_execution_preflight_receipt_path = (
+            run_root / "prompt372_live_execution_preflight_receipt.json"
+        )
+        prompt372_gate_receipt_path = (
+            run_root / "prompt372_gate_receipt.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -215873,6 +216573,19 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt371_bounded_one_cycle_execution_wiring_payload,
         }
+        prompt372_selected_step_execution_gate_payload = (
+            _build_prompt372_selected_step_execution_gate_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                current_prompt371_source_path=str(
+                    prompt371_selected_step_contract_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt372_selected_step_execution_gate_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -215932,6 +216645,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt371_bounded_one_cycle_execution_wiring_state=(
                     prompt371_bounded_one_cycle_execution_wiring_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt372_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt372_selected_step_execution_gate_state=(
+                    prompt372_selected_step_execution_gate_payload
                 ),
             )
         )
@@ -216010,6 +216731,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt371_bounded_one_cycle_execution_wiring_payload=(
                     prompt371_bounded_one_cycle_execution_wiring_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt372_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt372_selected_step_execution_gate_payload=(
+                    prompt372_selected_step_execution_gate_payload
                 ),
             )
         )
@@ -216280,6 +217011,28 @@ class PlannedExecutionRunner:
         manifest["prompt371_wiring_receipt_path"] = str(
             prompt371_wiring_receipt_path
         )
+        manifest["prompt372_selected_step_execution_gate_summary"] = dict(
+            prompt372_selected_step_execution_gate_payload
+        )
+        manifest["prompt372_selected_step_execution_gate_path"] = str(
+            prompt372_selected_step_execution_gate_path
+        )
+        manifest["prompt372_codex_execution_request_contract_summary"] = dict(
+            prompt372_selected_step_execution_gate_payload
+        )
+        manifest["prompt372_codex_execution_request_contract_path"] = str(
+            prompt372_codex_execution_request_contract_path
+        )
+        manifest["prompt372_live_execution_preflight_receipt_summary"] = dict(
+            prompt372_selected_step_execution_gate_payload
+        )
+        manifest["prompt372_live_execution_preflight_receipt_path"] = str(
+            prompt372_live_execution_preflight_receipt_path
+        )
+        manifest["prompt372_gate_receipt_summary"] = dict(
+            prompt372_selected_step_execution_gate_payload
+        )
+        manifest["prompt372_gate_receipt_path"] = str(prompt372_gate_receipt_path)
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -216385,6 +217138,18 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt371_wiring_receipt"] = manifest.get(
             "prompt371_wiring_receipt_summary"
         )
+        contract_summaries_by_role["prompt372_selected_step_execution_gate"] = manifest.get(
+            "prompt372_selected_step_execution_gate_summary"
+        )
+        contract_summaries_by_role["prompt372_codex_execution_request_contract"] = manifest.get(
+            "prompt372_codex_execution_request_contract_summary"
+        )
+        contract_summaries_by_role["prompt372_live_execution_preflight_receipt"] = manifest.get(
+            "prompt372_live_execution_preflight_receipt_summary"
+        )
+        contract_summaries_by_role["prompt372_gate_receipt"] = manifest.get(
+            "prompt372_gate_receipt_summary"
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -216489,6 +217254,18 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["prompt371_wiring_receipt"] = manifest.get(
             "prompt371_wiring_receipt_path"
+        )
+        contract_paths_by_role["prompt372_selected_step_execution_gate"] = manifest.get(
+            "prompt372_selected_step_execution_gate_path"
+        )
+        contract_paths_by_role["prompt372_codex_execution_request_contract"] = manifest.get(
+            "prompt372_codex_execution_request_contract_path"
+        )
+        contract_paths_by_role["prompt372_live_execution_preflight_receipt"] = manifest.get(
+            "prompt372_live_execution_preflight_receipt_path"
+        )
+        contract_paths_by_role["prompt372_gate_receipt"] = manifest.get(
+            "prompt372_gate_receipt_path"
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -217614,6 +218391,300 @@ class PlannedExecutionRunner:
             "prompt371_active_blocked_reason": _normalize_text(
                 prompt371_bounded_one_cycle_execution_wiring_payload.get(
                     "prompt371_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt372_schema_version": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_schema_version"
+                ),
+                default="",
+            ),
+            "prompt372_selected_step_execution_gate_status": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_selected_step_execution_gate_status"
+                ),
+                default="blocked",
+            ),
+            "prompt372_gate_status": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_gate_status"
+                ),
+                default="blocked",
+            ),
+            "prompt372_prompt371_wiring_ready": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_prompt371_wiring_ready",
+                    False,
+                )
+            ),
+            "prompt372_selected_route": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_selected_route"
+                ),
+                default="blocked",
+            ),
+            "prompt372_selected_step_kind": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_selected_step_kind"
+                ),
+                default="blocked",
+            ),
+            "prompt372_selected_step_operation": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_selected_step_operation"
+                ),
+                default="blocked",
+            ),
+            "prompt372_selected_next_action": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_selected_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt372_gate_ready": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_gate_ready",
+                    False,
+                )
+            ),
+            "prompt372_selected_step_contract_ready": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_selected_step_contract_ready",
+                    False,
+                )
+            ),
+            "prompt372_selected_prompt_contract_ready": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_selected_prompt_contract_ready",
+                    False,
+                )
+            ),
+            "prompt372_codex_execution_request_status": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_codex_execution_request_status"
+                ),
+                default="not_prepared",
+            ),
+            "prompt372_codex_execution_request_ready": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_codex_execution_request_ready",
+                    False,
+                )
+            ),
+            "prompt372_live_execution_preflight_ready": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_live_execution_preflight_ready",
+                    False,
+                )
+            ),
+            "prompt372_execution_allowed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt372_execution_attempted": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt372_execution_performed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_execution_performed",
+                    False,
+                )
+            ),
+            "prompt372_codex_execution_allowed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt372_codex_execution_attempted": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_codex_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt372_codex_execution_performed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt372_live_execution_allowed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_live_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt372_live_execution_attempted": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_live_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt372_live_execution_performed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_live_execution_performed",
+                    False,
+                )
+            ),
+            "prompt372_git_mutation_allowed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_git_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt372_git_mutation_attempted": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_git_mutation_attempted",
+                    False,
+                )
+            ),
+            "prompt372_git_mutation_performed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt372_remote_mutation_allowed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt372_remote_mutation_attempted": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_remote_mutation_attempted",
+                    False,
+                )
+            ),
+            "prompt372_remote_mutation_performed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt372_targeted_fix_reentry_allowed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_targeted_fix_reentry_allowed",
+                    False,
+                )
+            ),
+            "prompt372_targeted_fix_reentry_attempted": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_targeted_fix_reentry_attempted",
+                    False,
+                )
+            ),
+            "prompt372_targeted_fix_reentry_performed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_targeted_fix_reentry_performed",
+                    False,
+                )
+            ),
+            "prompt372_approve_commit_tag_allowed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_approve_commit_tag_allowed",
+                    False,
+                )
+            ),
+            "prompt372_approve_commit_tag_attempted": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_approve_commit_tag_attempted",
+                    False,
+                )
+            ),
+            "prompt372_approve_commit_tag_performed": bool(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_approve_commit_tag_performed",
+                    False,
+                )
+            ),
+            "prompt372_next_action": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt372_active_blocked_reason": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt372_authoritative_next_action": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_authoritative_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt372_active_blocked_reasons": _normalize_string_list(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt372_gate_blocked_reason": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_gate_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt372_gate_blocked_reasons": _normalize_string_list(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_gate_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt372_prompt371_source_path": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_prompt371_source_path"
+                ),
+                default="",
+            ),
+            "prompt372_prompt371_selected_step_contract_path": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_prompt371_selected_step_contract_path"
+                ),
+                default="",
+            ),
+            "prompt372_prompt371_execution_gate_readiness_path": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_prompt371_execution_gate_readiness_path"
+                ),
+                default="",
+            ),
+            "prompt372_selected_step_execution_gate_path": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_selected_step_execution_gate_path"
+                ),
+                default="",
+            ),
+            "prompt372_codex_execution_request_contract_path": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_codex_execution_request_contract_path"
+                ),
+                default="",
+            ),
+            "prompt372_live_execution_preflight_receipt_path": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_live_execution_preflight_receipt_path"
+                ),
+                default="",
+            ),
+            "prompt372_gate_receipt_path": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_gate_receipt_path"
+                ),
+                default="",
+            ),
+            "prompt372_summary": _normalize_text(
+                prompt372_selected_step_execution_gate_payload.get(
+                    "prompt372_summary"
                 ),
                 default="",
             ),
