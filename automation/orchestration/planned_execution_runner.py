@@ -3672,6 +3672,15 @@ _PROMPT366_ALLOWED_HEAD_TAG_NAMES: tuple[str, ...] = (
     _PROMPT366_IMPLEMENTATION_FIX1_HEAD_TAG_NAME,
 )
 _PROMPT366_PREVIOUS_SOURCE_TAG_NAME = "prompt365-dry-run-source-mutation-guard"
+_PROMPT367_SCHEMA_VERSION = "prompt367_bounded_local_commit_tag_execution_adapter_v1"
+_PROMPT367_IMPLEMENTATION_COMMIT_MESSAGE = (
+    "Add Prompt367 bounded commit tag execution adapter"
+)
+_PROMPT367_IMPLEMENTATION_TAG_NAME = "prompt367-bounded-commit-tag-execution-adapter"
+_PROMPT367_IMPLEMENTATION_TRACKED_FILES: tuple[str, ...] = (
+    "automation/orchestration/planned_execution_runner.py",
+    "automation/orchestration/run_state_summary_contract.py",
+)
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
     "prompt364_commit_tag_verified",
@@ -43413,6 +43422,683 @@ def _build_prompt366_local_autonomous_continuation_contract(
     _write_json(prompt366_contract_path, prompt366_contract_payload)
     _write_json(prompt366_restart_contract_path, prompt366_restart_contract_payload)
     return prompt366_contract_payload, prompt366_restart_contract_payload
+
+
+def _build_prompt367_bounded_commit_tag_execution_adapter(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str = "",
+    current_prompt366_source_path: str = "",
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    plan_path = artifact_root / "prompt367_bounded_commit_tag_execution_plan.json"
+    receipt_path = artifact_root / "prompt367_bounded_commit_tag_execution_receipt.json"
+    stdout_path = artifact_root / "prompt367_bounded_commit_tag_execution_stdout.txt"
+    stderr_path = artifact_root / "prompt367_bounded_commit_tag_execution_stderr.txt"
+    run_state = dict(run_state_payload or {})
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=str(Path.cwd()),
+    )
+    current_source_path = _normalize_text(current_prompt366_source_path, default="")
+    minimum_required_flags = [
+        "project_browser_autonomous_approve_commit_tag_execution_enabled",
+        "project_browser_autonomous_approve_commit_tag_execution_confirmed",
+    ]
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _unique_string_list(values: Sequence[str]) -> list[str]:
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for value in values:
+            normalized = _normalize_text(value, default="")
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            ordered.append(normalized)
+        return ordered
+
+    def _normalize_prompt367_input(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(payload) if isinstance(payload, Mapping) else {}
+        required_flags = _normalize_string_list(
+            source.get("required_execution_flags"),
+            sort_items=False,
+        )
+        required_flags = _unique_string_list([*required_flags, *minimum_required_flags])
+        return {
+            "prompt_id": _normalize_text(source.get("prompt_id"), default=""),
+            "objective": _normalize_text(source.get("objective"), default=""),
+            "approve_commit_tag_source_prompt": _normalize_text(
+                source.get("approve_commit_tag_source_prompt"),
+                default="",
+            ),
+            "approve_commit_tag_route_decision": _normalize_text(
+                source.get("approve_commit_tag_route_decision"),
+                default="",
+            ),
+            "approve_commit_tag_plan_source_path": _normalize_text(
+                source.get("approve_commit_tag_plan_source_path"),
+                default="",
+            ),
+            "approve_commit_tag_commands_source_path": _normalize_text(
+                source.get("approve_commit_tag_commands_source_path"),
+                default="",
+            ),
+            "expected_commit_message": _normalize_text(
+                source.get("expected_commit_message"),
+                default="",
+            ),
+            "expected_tag_name": _normalize_text(
+                source.get("expected_tag_name"),
+                default="",
+            ),
+            "expected_tracked_files": _normalize_string_list(
+                source.get("expected_tracked_files"),
+                sort_items=True,
+            ),
+            "execution_flags_required": _prompt357_as_boolish(
+                source.get("execution_flags_required"),
+                default=True,
+            ),
+            "required_execution_flags": required_flags,
+            "commit_tag_execution_allowed_by_default": _prompt357_as_boolish(
+                source.get("commit_tag_execution_allowed_by_default"),
+                default=False,
+            ),
+            "remote_operations_enabled": _prompt357_as_boolish(
+                source.get("remote_operations_enabled"),
+                default=False,
+            ),
+            "push_pr_merge_enabled": _prompt357_as_boolish(
+                source.get("push_pr_merge_enabled"),
+                default=False,
+            ),
+            "pr_merge_enabled": _prompt357_as_boolish(
+                source.get("pr_merge_enabled"),
+                default=False,
+            ),
+            "rollback_enabled": _prompt357_as_boolish(
+                source.get("rollback_enabled"),
+                default=False,
+            ),
+            "next_action_on_success": _normalize_text(
+                source.get("next_action_on_success"),
+                default="run_prompt367_clean_rerun_verification",
+            ),
+            "next_action_on_blocked": _normalize_text(
+                source.get("next_action_on_blocked"),
+                default="review_prompt367_commit_tag_blocker",
+            ),
+        }
+
+    def _valid_prompt367_prompt366_evidence(payload: Mapping[str, Any] | None) -> bool:
+        source = dict(payload) if isinstance(payload, Mapping) else {}
+        prompt367_input = _normalize_prompt367_input(source.get("prompt367_input"))
+        return bool(
+            _normalize_text(
+                source.get("prompt366_continuation_status"),
+                default="",
+            )
+            == "ready"
+            and _prompt357_as_boolish(
+                source.get("prompt366_next_cycle_restart_ready"),
+                default=False,
+            )
+            and _prompt357_as_boolish(
+                source.get("prompt366_prompt367_input_ready"),
+                default=False,
+            )
+            and _normalize_text(
+                source.get("prompt366_next_action"),
+                default="",
+            )
+            == "prepare_prompt367_bounded_commit_tag_execution_adapter"
+            and bool(prompt367_input)
+            and prompt367_input.get("objective")
+            == "bounded_local_commit_tag_execution_adapter"
+        )
+
+    def _recover_latest_valid_prompt366_evidence() -> tuple[dict[str, Any], str]:
+        recovery_root = Path("/tmp/codex-local-runner-checks")
+        if not recovery_root.exists() or not recovery_root.is_dir():
+            return {}, ""
+
+        candidates: list[tuple[float, Path]] = []
+        for pattern in ("run_state.json", "prompt366_local_autonomous_continuation_contract.json"):
+            for candidate_path in recovery_root.rglob(pattern):
+                try:
+                    candidate_mtime = candidate_path.stat().st_mtime
+                except OSError:
+                    continue
+                candidates.append((candidate_mtime, candidate_path))
+
+        for _, candidate_path in sorted(candidates, key=lambda item: item[0], reverse=True):
+            try:
+                payload = _read_json_object_if_exists(candidate_path)
+            except (OSError, ValueError, json.JSONDecodeError):
+                payload = None
+            if _valid_prompt367_prompt366_evidence(payload):
+                return dict(payload or {}), str(candidate_path)
+        return {}, ""
+
+    def _collect_git_state(
+        repo_path: str,
+    ) -> tuple[bool, list[str], list[str], list[str]]:
+        if not repo_path:
+            return False, [], [], []
+        try:
+            status_short = _run_git(
+                repo_path,
+                ["status", "--short", "--untracked-files=no"],
+                timeout_seconds=10,
+            )
+            unstaged_names = _run_git(
+                repo_path,
+                ["diff", "--name-only"],
+                timeout_seconds=10,
+            )
+            staged_names = _run_git(
+                repo_path,
+                ["diff", "--cached", "--name-only"],
+                timeout_seconds=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False, [], [], []
+
+        if (
+            status_short.returncode != 0
+            or unstaged_names.returncode != 0
+            or staged_names.returncode != 0
+        ):
+            return False, [], [], []
+
+        status_paths = [
+            path_text
+            for path_text in (
+                _parse_git_status_path(raw_line.rstrip("\n"))
+                for raw_line in (status_short.stdout or "").splitlines()
+            )
+            if path_text
+        ]
+        unstaged = _normalize_string_list(
+            [
+                line.strip()
+                for line in (unstaged_names.stdout or "").splitlines()
+                if line.strip()
+            ],
+            sort_items=True,
+        )
+        staged = _normalize_string_list(
+            [
+                line.strip()
+                for line in (staged_names.stdout or "").splitlines()
+                if line.strip()
+            ],
+            sort_items=True,
+        )
+        actual = _normalize_string_list(
+            sorted(set(status_paths) | set(unstaged) | set(staged)),
+            sort_items=True,
+        )
+        return True, actual, staged, unstaged
+
+    current_prompt366_evidence = dict(run_state)
+    current_prompt366_valid = _valid_prompt367_prompt366_evidence(current_prompt366_evidence)
+    recovered_prompt366_evidence: dict[str, Any] = {}
+    recovered_prompt366_source_path = ""
+    if not current_prompt366_valid:
+        (
+            recovered_prompt366_evidence,
+            recovered_prompt366_source_path,
+        ) = _recover_latest_valid_prompt366_evidence()
+
+    recovered_prompt366_evidence_used = bool(
+        (not current_prompt366_valid) and recovered_prompt366_source_path
+    )
+    effective_prompt366 = (
+        recovered_prompt366_evidence
+        if recovered_prompt366_evidence_used
+        else current_prompt366_evidence
+    )
+    prompt366_source_path = _normalize_text(
+        recovered_prompt366_source_path if recovered_prompt366_evidence_used else current_source_path,
+        default="",
+    )
+    prompt366_ready_evidence_available = _valid_prompt367_prompt366_evidence(
+        effective_prompt366
+    )
+
+    prompt367_input = _normalize_prompt367_input(effective_prompt366.get("prompt367_input"))
+    prompt367_source_prompt = _normalize_text(
+        effective_prompt366.get("prompt366_source_prompt"),
+        default="",
+    )
+    prompt367_source_action = _normalize_text(
+        effective_prompt366.get("prompt366_source_action"),
+        default="",
+    )
+    prompt367_expected_tracked_files = _normalize_string_list(
+        prompt367_input.get("expected_tracked_files"),
+        sort_items=True,
+    )
+    prompt367_expected_commit_message = _normalize_text(
+        prompt367_input.get("expected_commit_message"),
+        default="",
+    )
+    prompt367_expected_tag_name = _normalize_text(
+        prompt367_input.get("expected_tag_name"),
+        default="",
+    )
+    prompt367_implementation_tracked_files = _normalize_string_list(
+        _PROMPT367_IMPLEMENTATION_TRACKED_FILES,
+        sort_items=True,
+    )
+    prompt367_implementation_commit_message = _PROMPT367_IMPLEMENTATION_COMMIT_MESSAGE
+    prompt367_implementation_tag_name = _PROMPT367_IMPLEMENTATION_TAG_NAME
+    prompt367_execution_flags_required = _unique_string_list(
+        _normalize_string_list(
+            prompt367_input.get("required_execution_flags"),
+            sort_items=False,
+        )
+        or minimum_required_flags
+    )
+    prompt367_execution_enabled = _prompt357_as_boolish(
+        run_state.get("project_browser_autonomous_approve_commit_tag_execution_enabled"),
+        default=False,
+    )
+    prompt367_execution_confirmed = _prompt357_as_boolish(
+        run_state.get("project_browser_autonomous_approve_commit_tag_execution_confirmed"),
+        default=False,
+    )
+    prompt367_execution_requested = bool(
+        prompt367_execution_enabled and prompt367_execution_confirmed
+    )
+    prompt367_prompt367_input_ready = bool(
+        prompt366_ready_evidence_available
+        and prompt367_input.get("objective") == "bounded_local_commit_tag_execution_adapter"
+        and _normalize_text(prompt367_input.get("prompt_id"), default="") == "prompt367"
+    )
+    prompt367_approve_commit_tag_plan_ready = bool(
+        prompt367_prompt367_input_ready
+        and _normalize_text(
+            prompt367_input.get("approve_commit_tag_plan_source_path"),
+            default="",
+        )
+        and _normalize_text(
+            prompt367_input.get("approve_commit_tag_commands_source_path"),
+            default="",
+        )
+        and _normalize_text(
+            prompt367_input.get("approve_commit_tag_source_prompt"),
+            default="",
+        )
+    )
+
+    git_state_available, prompt367_actual_tracked_files, prompt367_staged_tracked_files, prompt367_unstaged_tracked_files = _collect_git_state(
+        normalized_repo_path
+    )
+
+    def _prompt367_tag_exists(tag_name: str) -> tuple[bool, bool]:
+        if not git_state_available or not tag_name:
+            return git_state_available, False
+        try:
+            tag_exists_result = _run_git(
+                normalized_repo_path,
+                ["rev-parse", "--verify", f"refs/tags/{tag_name}"],
+                timeout_seconds=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False, False
+        if tag_exists_result.returncode == 0:
+            return True, True
+        if tag_exists_result.returncode == 128:
+            return True, False
+        return False, False
+
+    prompt367_tag_lookup_available, prompt367_tag_already_exists = _prompt367_tag_exists(
+        prompt367_expected_tag_name
+    )
+    (
+        prompt367_implementation_tag_lookup_available,
+        prompt367_implementation_tag_already_exists,
+    ) = _prompt367_tag_exists(prompt367_implementation_tag_name)
+    if not prompt367_tag_lookup_available or not prompt367_implementation_tag_lookup_available:
+        git_state_available = False
+        prompt367_actual_tracked_files = []
+        prompt367_staged_tracked_files = []
+        prompt367_unstaged_tracked_files = []
+
+    prompt367_implementation_changes_present = bool(
+        not prompt367_execution_requested
+        and git_state_available
+        and not prompt367_staged_tracked_files
+        and prompt367_actual_tracked_files == prompt367_implementation_tracked_files
+        and not prompt367_implementation_tag_already_exists
+    )
+    if prompt367_implementation_changes_present:
+        prompt367_expected_tracked_files = list(prompt367_implementation_tracked_files)
+        prompt367_expected_commit_message = prompt367_implementation_commit_message
+        prompt367_expected_tag_name = prompt367_implementation_tag_name
+        prompt367_tag_already_exists = prompt367_implementation_tag_already_exists
+
+    blockers: list[str] = []
+    if not prompt366_ready_evidence_available:
+        _append_reason(blockers, "prompt366_ready_evidence_missing")
+    if not prompt367_input:
+        _append_reason(blockers, "prompt367_input_missing")
+    if not prompt367_expected_tracked_files:
+        _append_reason(blockers, "prompt367_expected_tracked_files_missing")
+    if not prompt367_expected_commit_message:
+        _append_reason(blockers, "prompt367_expected_commit_message_missing")
+    if not prompt367_expected_tag_name:
+        _append_reason(blockers, "prompt367_expected_tag_name_missing")
+    if not git_state_available:
+        _append_reason(blockers, "prompt367_git_state_unavailable")
+    if git_state_available and prompt367_staged_tracked_files:
+        _append_reason(blockers, "prompt367_staged_tracked_files_present")
+    if git_state_available:
+        if prompt367_execution_requested:
+            if prompt367_unstaged_tracked_files != prompt367_expected_tracked_files:
+                _append_reason(blockers, "prompt367_tracked_files_do_not_match_expected")
+        elif (
+            not prompt367_implementation_changes_present
+            and prompt367_actual_tracked_files
+            and prompt367_actual_tracked_files != prompt367_expected_tracked_files
+        ):
+            _append_reason(blockers, "prompt367_tracked_files_do_not_match_expected")
+    if git_state_available and prompt367_execution_requested and prompt367_tag_already_exists:
+        _append_reason(blockers, "prompt367_tag_already_exists")
+
+    command_sequence: list[list[str]] = [
+        ["git", "add", "--", *prompt367_expected_tracked_files],
+        ["git", "commit", "-m", prompt367_expected_commit_message],
+        ["git", "tag", prompt367_expected_tag_name],
+    ]
+    command_results: list[dict[str, Any]] = []
+    stdout_sections: list[str] = []
+    stderr_sections: list[str] = []
+    prompt367_execution_adapter_status = "blocked"
+    prompt367_execution_status = "not_run"
+    prompt367_execution_allowed = False
+    prompt367_execution_attempted = False
+    prompt367_execution_performed = False
+    prompt367_git_add_performed = False
+    prompt367_git_commit_performed = False
+    prompt367_git_tag_performed = False
+    prompt367_commit_sha = ""
+    prompt367_tag_name = ""
+    prompt367_returncode: int | None = None
+    prompt367_authoritative_next_action = ""
+    prompt367_next_action = ""
+    prompt367_manual_required = False
+    prompt367_replan_required = False
+    prompt367_active_blocked_reasons: list[str] = []
+    prompt367_active_blocked_reason = ""
+
+    if blockers:
+        prompt367_execution_adapter_status = "blocked"
+        prompt367_execution_status = "not_run"
+        prompt367_execution_allowed = False
+        prompt367_execution_attempted = False
+        prompt367_execution_performed = False
+        prompt367_git_add_performed = False
+        prompt367_git_commit_performed = False
+        prompt367_git_tag_performed = False
+        prompt367_active_blocked_reasons = _normalize_string_list(
+            blockers,
+            sort_items=False,
+        )
+        prompt367_active_blocked_reason = (
+            prompt367_active_blocked_reasons[0]
+            if prompt367_active_blocked_reasons
+            else ""
+        )
+        prompt367_authoritative_next_action = prompt367_active_blocked_reason
+        prompt367_next_action = prompt367_active_blocked_reason
+    elif prompt367_implementation_changes_present:
+        prompt367_execution_adapter_status = "implementation_in_progress"
+        prompt367_execution_status = "not_run"
+        prompt367_execution_allowed = False
+        prompt367_execution_attempted = False
+        prompt367_execution_performed = False
+        prompt367_git_add_performed = False
+        prompt367_git_commit_performed = False
+        prompt367_git_tag_performed = False
+        prompt367_active_blocked_reasons = ["prompt367_implementation_changes_present"]
+        prompt367_active_blocked_reason = "prompt367_implementation_changes_present"
+        prompt367_authoritative_next_action = "commit_prompt367_then_clean_rerun"
+        prompt367_next_action = "commit_prompt367_then_clean_rerun"
+    elif not prompt367_execution_requested:
+        prompt367_execution_adapter_status = "ready_for_explicit_execution"
+        prompt367_execution_status = "not_run"
+        prompt367_execution_allowed = False
+        prompt367_execution_attempted = False
+        prompt367_execution_performed = False
+        prompt367_git_add_performed = False
+        prompt367_git_commit_performed = False
+        prompt367_git_tag_performed = False
+        prompt367_active_blocked_reasons = []
+        prompt367_active_blocked_reason = ""
+        prompt367_authoritative_next_action = (
+            "run_with_explicit_prompt367_commit_tag_execution_flags"
+        )
+        prompt367_next_action = "run_with_explicit_prompt367_commit_tag_execution_flags"
+    else:
+        prompt367_execution_adapter_status = "blocked"
+        prompt367_execution_status = "failed"
+        prompt367_execution_allowed = True
+        prompt367_execution_attempted = True
+
+        def _record_command_result(
+            label: str,
+            command: list[str],
+            result: subprocess.CompletedProcess[str] | None,
+            error_text: str = "",
+        ) -> int:
+            stdout_text = _normalize_text(
+                "" if result is None else result.stdout,
+                default="",
+            )
+            stderr_text = _normalize_text(
+                error_text or ("" if result is None else result.stderr),
+                default="",
+            )
+            returncode = (
+                int(result.returncode)
+                if result is not None
+                else 1
+            )
+            command_results.append(
+                {
+                    "label": label,
+                    "command": list(command),
+                    "returncode": returncode,
+                }
+            )
+            stdout_sections.append(
+                f"$ {' '.join(command)}\n{stdout_text}".rstrip() + "\n"
+            )
+            stderr_sections.append(
+                f"$ {' '.join(command)}\n{stderr_text}".rstrip() + "\n"
+            )
+            return returncode
+
+        try:
+            add_result = _run_git(
+                normalized_repo_path,
+                ["add", "--", *prompt367_expected_tracked_files],
+                timeout_seconds=30,
+            )
+            prompt367_git_add_performed = True
+            prompt367_returncode = _record_command_result(
+                "git_add",
+                command_sequence[0],
+                add_result,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            prompt367_git_add_performed = True
+            prompt367_returncode = _record_command_result(
+                "git_add",
+                command_sequence[0],
+                None,
+                error_text=str(exc),
+            )
+        else:
+            if add_result.returncode == 0:
+                try:
+                    commit_result = _run_git(
+                        normalized_repo_path,
+                        ["commit", "-m", prompt367_expected_commit_message],
+                        timeout_seconds=30,
+                    )
+                    prompt367_git_commit_performed = True
+                    prompt367_returncode = _record_command_result(
+                        "git_commit",
+                        command_sequence[1],
+                        commit_result,
+                    )
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    prompt367_git_commit_performed = True
+                    prompt367_returncode = _record_command_result(
+                        "git_commit",
+                        command_sequence[1],
+                        None,
+                        error_text=str(exc),
+                    )
+                else:
+                    if commit_result.returncode == 0:
+                        try:
+                            head_result = _run_git(
+                                normalized_repo_path,
+                                ["rev-parse", "HEAD"],
+                                timeout_seconds=10,
+                            )
+                        except (OSError, subprocess.TimeoutExpired):
+                            head_result = None
+                        if head_result is not None and head_result.returncode == 0:
+                            prompt367_commit_sha = _normalize_text(
+                                head_result.stdout,
+                                default="",
+                            )
+                        try:
+                            tag_result = _run_git(
+                                normalized_repo_path,
+                                ["tag", prompt367_expected_tag_name],
+                                timeout_seconds=30,
+                            )
+                            prompt367_git_tag_performed = True
+                            prompt367_returncode = _record_command_result(
+                                "git_tag",
+                                command_sequence[2],
+                                tag_result,
+                            )
+                        except (OSError, subprocess.TimeoutExpired) as exc:
+                            prompt367_git_tag_performed = True
+                            prompt367_returncode = _record_command_result(
+                                "git_tag",
+                                command_sequence[2],
+                                None,
+                                error_text=str(exc),
+                            )
+                        else:
+                            if tag_result.returncode == 0:
+                                prompt367_tag_name = prompt367_expected_tag_name
+                                prompt367_execution_adapter_status = "executed"
+                                prompt367_execution_status = "completed"
+                                prompt367_execution_performed = True
+                                prompt367_authoritative_next_action = (
+                                    "run_prompt367_clean_rerun_verification"
+                                )
+                                prompt367_next_action = (
+                                    "run_prompt367_clean_rerun_verification"
+                                )
+                                prompt367_active_blocked_reasons = []
+                                prompt367_active_blocked_reason = ""
+        if prompt367_execution_status != "completed":
+            prompt367_execution_performed = bool(prompt367_git_add_performed)
+            prompt367_authoritative_next_action = "prompt367_execution_failed"
+            prompt367_next_action = "prompt367_execution_failed"
+            prompt367_active_blocked_reasons = ["prompt367_execution_failed"]
+            prompt367_active_blocked_reason = "prompt367_execution_failed"
+
+    final_git_state_available, final_actual_tracked_files, final_staged_tracked_files, final_unstaged_tracked_files = _collect_git_state(
+        normalized_repo_path
+    )
+    final_git_state = {
+        "git_state_available": final_git_state_available,
+        "actual_tracked_files": final_actual_tracked_files,
+        "staged_tracked_files": final_staged_tracked_files,
+        "unstaged_tracked_files": final_unstaged_tracked_files,
+        "untracked_files_ignored": True,
+    }
+
+    if prompt367_returncode is None and prompt367_execution_status == "not_run":
+        prompt367_returncode = None
+
+    plan_payload: dict[str, Any] = {
+        "prompt367_schema_version": _PROMPT367_SCHEMA_VERSION,
+        "prompt367_execution_adapter_status": prompt367_execution_adapter_status,
+        "prompt367_execution_status": prompt367_execution_status,
+        "prompt367_source_prompt": prompt367_source_prompt,
+        "prompt367_source_action": prompt367_source_action,
+        "prompt367_recovered_prompt366_evidence_used": recovered_prompt366_evidence_used,
+        "prompt367_prompt366_source_path": prompt366_source_path,
+        "prompt367_prompt367_input_ready": prompt367_prompt367_input_ready,
+        "prompt367_approve_commit_tag_plan_ready": prompt367_approve_commit_tag_plan_ready,
+        "prompt367_expected_tracked_files": prompt367_expected_tracked_files,
+        "prompt367_actual_tracked_files": prompt367_actual_tracked_files,
+        "prompt367_staged_tracked_files": prompt367_staged_tracked_files,
+        "prompt367_untracked_files_ignored": True,
+        "prompt367_expected_commit_message": prompt367_expected_commit_message,
+        "prompt367_expected_tag_name": prompt367_expected_tag_name,
+        "prompt367_execution_flags_required": prompt367_execution_flags_required,
+        "prompt367_execution_enabled": prompt367_execution_enabled,
+        "prompt367_execution_confirmed": prompt367_execution_confirmed,
+        "prompt367_execution_allowed": prompt367_execution_allowed,
+        "prompt367_execution_attempted": prompt367_execution_attempted,
+        "prompt367_execution_performed": prompt367_execution_performed,
+        "prompt367_git_add_performed": prompt367_git_add_performed,
+        "prompt367_git_commit_performed": prompt367_git_commit_performed,
+        "prompt367_git_tag_performed": prompt367_git_tag_performed,
+        "prompt367_commit_sha": prompt367_commit_sha,
+        "prompt367_tag_name": prompt367_tag_name,
+        "prompt367_returncode": prompt367_returncode,
+        "prompt367_stdout_path": str(stdout_path),
+        "prompt367_stderr_path": str(stderr_path),
+        "prompt367_plan_path": str(plan_path),
+        "prompt367_receipt_path": str(receipt_path),
+        "prompt367_authoritative_next_action": prompt367_authoritative_next_action,
+        "prompt367_next_action": prompt367_next_action,
+        "prompt367_manual_required": prompt367_manual_required,
+        "prompt367_replan_required": prompt367_replan_required,
+        "prompt367_active_blocked_reason": prompt367_active_blocked_reason,
+        "prompt367_active_blocked_reasons": prompt367_active_blocked_reasons,
+        "prompt367_command_sequence": command_sequence,
+        "prompt367_pre_execution_unstaged_tracked_files": prompt367_unstaged_tracked_files,
+        "prompt367_target_tag_already_exists": prompt367_tag_already_exists,
+    }
+    receipt_payload: dict[str, Any] = {
+        **plan_payload,
+        "commands": command_results,
+        "final_git_state": final_git_state,
+    }
+
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_path.write_text("".join(stdout_sections), encoding="utf-8")
+    stderr_path.write_text("".join(stderr_sections), encoding="utf-8")
+    _write_json(plan_path, plan_payload)
+    _write_json(receipt_path, receipt_payload)
+
+    return {
+        key: value
+        for key, value in plan_payload.items()
+        if key.startswith("prompt367_")
+    }
 
 
 def _merge_prompt363_surface_into_approved_restart_execution_contract(
@@ -212195,6 +212881,12 @@ class PlannedExecutionRunner:
         prompt366_next_cycle_restart_contract_path = (
             run_root / "prompt366_next_cycle_restart_contract.json"
         )
+        prompt367_bounded_commit_tag_execution_plan_path = (
+            run_root / "prompt367_bounded_commit_tag_execution_plan.json"
+        )
+        prompt367_bounded_commit_tag_execution_receipt_path = (
+            run_root / "prompt367_bounded_commit_tag_execution_receipt.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -212232,6 +212924,20 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt366_local_autonomous_continuation_contract_payload,
+        }
+        prompt367_bounded_commit_tag_execution_payload = (
+            _build_prompt367_bounded_commit_tag_execution_adapter(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+                current_prompt366_source_path=str(
+                    prompt366_local_autonomous_continuation_contract_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt367_bounded_commit_tag_execution_payload,
         }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
@@ -212490,6 +213196,18 @@ class PlannedExecutionRunner:
         manifest["prompt366_next_cycle_restart_contract_path"] = str(
             prompt366_next_cycle_restart_contract_path
         )
+        manifest["prompt367_bounded_commit_tag_execution_plan_summary"] = dict(
+            prompt367_bounded_commit_tag_execution_payload
+        )
+        manifest["prompt367_bounded_commit_tag_execution_plan_path"] = str(
+            prompt367_bounded_commit_tag_execution_plan_path
+        )
+        manifest["prompt367_bounded_commit_tag_execution_receipt_summary"] = dict(
+            prompt367_bounded_commit_tag_execution_payload
+        )
+        manifest["prompt367_bounded_commit_tag_execution_receipt_path"] = str(
+            prompt367_bounded_commit_tag_execution_receipt_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -212547,6 +213265,12 @@ class PlannedExecutionRunner:
         contract_summaries_by_role[
             "prompt366_next_cycle_restart_contract"
         ] = manifest.get("prompt366_next_cycle_restart_contract_summary")
+        contract_summaries_by_role[
+            "prompt367_bounded_commit_tag_execution_plan"
+        ] = manifest.get("prompt367_bounded_commit_tag_execution_plan_summary")
+        contract_summaries_by_role[
+            "prompt367_bounded_commit_tag_execution_receipt"
+        ] = manifest.get("prompt367_bounded_commit_tag_execution_receipt_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -212604,6 +213328,12 @@ class PlannedExecutionRunner:
         contract_paths_by_role[
             "prompt366_next_cycle_restart_contract"
         ] = manifest.get("prompt366_next_cycle_restart_contract_path")
+        contract_paths_by_role[
+            "prompt367_bounded_commit_tag_execution_plan"
+        ] = manifest.get("prompt367_bounded_commit_tag_execution_plan_path")
+        contract_paths_by_role[
+            "prompt367_bounded_commit_tag_execution_receipt"
+        ] = manifest.get("prompt367_bounded_commit_tag_execution_receipt_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
