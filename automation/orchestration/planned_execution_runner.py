@@ -3689,6 +3689,7 @@ _PROMPT368_IMPLEMENTATION_TRACKED_FILES: tuple[str, ...] = (
 )
 _PROMPT369_SCHEMA_VERSION = "prompt369_targeted_fix_route_integration_v1"
 _PROMPT370_SCHEMA_VERSION = "prompt370_integrated_autonomous_cycle_runner_v1"
+_PROMPT371_SCHEMA_VERSION = "prompt371_bounded_one_cycle_execution_wiring_v1"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -3775,6 +3776,46 @@ _PROMPT370_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt370_active_blocked_reason",
     "prompt370_active_blocked_reasons",
     "prompt370_summary",
+)
+_PROMPT371_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt371_schema_version",
+    "prompt371_bounded_one_cycle_execution_wiring_status",
+    "prompt371_one_cycle_plan_status",
+    "prompt371_prompt370_source_path",
+    "prompt371_prompt370_dispatch_ready",
+    "prompt371_selected_route",
+    "prompt371_selected_step_id",
+    "prompt371_selected_step_kind",
+    "prompt371_selected_step_operation",
+    "prompt371_selected_prompt_contract_id",
+    "prompt371_selected_next_action",
+    "prompt371_one_cycle_plan_ready",
+    "prompt371_selected_prompt_contract_ready",
+    "prompt371_execution_gate_ready",
+    "prompt371_cycle_index",
+    "prompt371_max_cycles",
+    "prompt371_bounded_one_cycle_execution_wiring_path",
+    "prompt371_one_cycle_execution_plan_path",
+    "prompt371_selected_step_contract_path",
+    "prompt371_execution_gate_readiness_path",
+    "prompt371_wiring_receipt_path",
+    "prompt371_execution_allowed",
+    "prompt371_execution_attempted",
+    "prompt371_execution_performed",
+    "prompt371_codex_execution_allowed",
+    "prompt371_codex_execution_attempted",
+    "prompt371_codex_execution_performed",
+    "prompt371_git_mutation_allowed",
+    "prompt371_git_mutation_attempted",
+    "prompt371_git_mutation_performed",
+    "prompt371_remote_mutation_allowed",
+    "prompt371_remote_mutation_attempted",
+    "prompt371_remote_mutation_performed",
+    "prompt371_authoritative_next_action",
+    "prompt371_next_action",
+    "prompt371_active_blocked_reason",
+    "prompt371_active_blocked_reasons",
+    "prompt371_summary",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -5486,6 +5527,23 @@ def _merge_prompt370_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT370_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt371_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt371_bounded_one_cycle_execution_wiring_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt371_bounded_one_cycle_execution_wiring_state)
+        if isinstance(prompt371_bounded_one_cycle_execution_wiring_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT371_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -46214,6 +46272,416 @@ def _build_prompt370_integrated_autonomous_cycle_runner_state(
     }
 
 
+def _build_prompt371_bounded_one_cycle_execution_wiring_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    current_prompt370_source_path: str = "",
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    wiring_path = artifact_root / "prompt371_bounded_one_cycle_execution_wiring.json"
+    plan_path = artifact_root / "prompt371_one_cycle_execution_plan.json"
+    selected_step_contract_path = artifact_root / "prompt371_selected_step_contract.json"
+    execution_gate_readiness_path = artifact_root / "prompt371_execution_gate_readiness.json"
+    receipt_path = artifact_root / "prompt371_wiring_receipt.json"
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt370_surface(value: Any) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt370_integrated_autonomous_cycle_runner_status": _normalize_text(
+                source.get("prompt370_integrated_autonomous_cycle_runner_status"),
+                default="",
+            ),
+            "prompt370_dispatch_status": _normalize_text(
+                source.get("prompt370_dispatch_status"),
+                default="",
+            ),
+            "prompt370_next_action_dispatch_ready": _prompt357_as_boolish(
+                source.get("prompt370_next_action_dispatch_ready"),
+                default=False,
+            ),
+            "prompt370_selected_route": _normalize_text(
+                source.get("prompt370_selected_route"),
+                default="",
+            ),
+            "prompt370_selected_next_action": _normalize_text(
+                source.get("prompt370_selected_next_action"),
+                default="",
+            ),
+            "prompt370_next_action": _normalize_text(
+                source.get("prompt370_next_action"),
+                default="",
+            ),
+            "prompt370_authoritative_next_action": _normalize_text(
+                source.get("prompt370_authoritative_next_action"),
+                default="",
+            ),
+            "prompt370_active_blocked_reason": _normalize_text(
+                source.get("prompt370_active_blocked_reason"),
+                default="",
+            ),
+            "prompt370_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt370_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _blocked_next_action_for(reason: str) -> str:
+        mapping = {
+            "prompt370_integrated_autonomous_cycle_runner_status_not_ready": (
+                "repair_prompt370_integrated_autonomous_cycle_runner_ready_state"
+            ),
+            "prompt370_dispatch_status_not_planned": (
+                "repair_prompt370_dispatch_plan_state"
+            ),
+            "prompt370_next_action_dispatch_ready_not_true": (
+                "repair_prompt370_next_action_dispatch_readiness"
+            ),
+            "prompt370_selected_route_blocked": (
+                "repair_prompt370_selected_route_before_prompt371"
+            ),
+            "prompt370_selected_route_stop_not_supported_for_prompt371": (
+                "review_stop_route_before_prompt371"
+            ),
+            "prompt370_selected_route_not_supported_for_prompt371": (
+                "repair_prompt370_selected_route_before_prompt371"
+            ),
+            "prompt370_selected_next_action_not_prompt371_or_safe_prompt372_boundary": (
+                "repair_prompt370_selected_next_action_for_prompt371"
+            ),
+            "prompt370_next_action_not_prompt371_or_safe_prompt372_boundary": (
+                "repair_prompt370_next_action_for_prompt371"
+            ),
+            "prompt370_authoritative_next_action_not_prompt371_or_safe_prompt372_boundary": (
+                "repair_prompt370_authoritative_next_action_for_prompt371"
+            ),
+        }
+        return mapping.get(
+            reason,
+            "review_prompt371_bounded_one_cycle_execution_wiring_blocker",
+        )
+
+    def _expected_prompt370_actions_for(route: str) -> set[str]:
+        if route == "approve_commit_tag":
+            return {
+                "prepare_prompt371_bounded_one_cycle_execution_wiring",
+                "prepare_prompt372_explicit_commit_tag_execution_verification",
+            }
+        return {"prepare_prompt371_bounded_one_cycle_execution_wiring"}
+
+    prompt370_surface = _normalize_prompt370_surface(run_state)
+    normalized_selected_route = _normalize_text(
+        prompt370_surface.get("prompt370_selected_route"),
+        default="",
+    )
+    prompt370_blockers: list[str] = []
+    if (
+        _normalize_text(
+            prompt370_surface.get(
+                "prompt370_integrated_autonomous_cycle_runner_status"
+            ),
+            default="",
+        )
+        != "ready"
+    ):
+        _append_reason(
+            prompt370_blockers,
+            "prompt370_integrated_autonomous_cycle_runner_status_not_ready",
+        )
+    if (
+        _normalize_text(
+            prompt370_surface.get("prompt370_dispatch_status"),
+            default="",
+        )
+        != "planned"
+    ):
+        _append_reason(prompt370_blockers, "prompt370_dispatch_status_not_planned")
+    if not bool(prompt370_surface.get("prompt370_next_action_dispatch_ready", False)):
+        _append_reason(
+            prompt370_blockers,
+            "prompt370_next_action_dispatch_ready_not_true",
+        )
+    if normalized_selected_route == "blocked":
+        _append_reason(prompt370_blockers, "prompt370_selected_route_blocked")
+    elif normalized_selected_route == "stop":
+        _append_reason(
+            prompt370_blockers,
+            "prompt370_selected_route_stop_not_supported_for_prompt371",
+        )
+    elif normalized_selected_route not in {
+        "continue_next_cycle",
+        "targeted_fix",
+        "approve_commit_tag",
+    }:
+        _append_reason(
+            prompt370_blockers,
+            "prompt370_selected_route_not_supported_for_prompt371",
+        )
+
+    expected_prompt370_actions = _expected_prompt370_actions_for(
+        normalized_selected_route
+    )
+    if (
+        expected_prompt370_actions
+        and _normalize_text(
+            prompt370_surface.get("prompt370_selected_next_action"),
+            default="",
+        )
+        not in expected_prompt370_actions
+    ):
+        _append_reason(
+            prompt370_blockers,
+            "prompt370_selected_next_action_not_prompt371_or_safe_prompt372_boundary",
+        )
+    if (
+        expected_prompt370_actions
+        and _normalize_text(prompt370_surface.get("prompt370_next_action"), default="")
+        not in expected_prompt370_actions
+    ):
+        _append_reason(
+            prompt370_blockers,
+            "prompt370_next_action_not_prompt371_or_safe_prompt372_boundary",
+        )
+    if (
+        expected_prompt370_actions
+        and _normalize_text(
+            prompt370_surface.get("prompt370_authoritative_next_action"),
+            default="",
+        )
+        not in expected_prompt370_actions
+    ):
+        _append_reason(
+            prompt370_blockers,
+            "prompt370_authoritative_next_action_not_prompt371_or_safe_prompt372_boundary",
+        )
+
+    prompt371_prompt370_dispatch_ready = not prompt370_blockers
+    prompt371_cycle_index = _as_non_negative_int(
+        run_state.get("prompt368_resume_iteration_current"),
+        default=_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+    )
+    if prompt371_cycle_index <= 0:
+        prompt371_cycle_index = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
+    prompt371_max_cycles = 1
+
+    prompt371_bounded_one_cycle_execution_wiring_status = "blocked"
+    prompt371_one_cycle_plan_status = "blocked"
+    prompt371_selected_route = "blocked"
+    prompt371_selected_step_id = 0
+    prompt371_selected_step_kind = "blocked"
+    prompt371_selected_step_operation = "blocked"
+    prompt371_selected_prompt_contract_id = ""
+    prompt371_selected_next_action = ""
+    prompt371_one_cycle_plan_ready = False
+    prompt371_selected_prompt_contract_ready = False
+    prompt371_execution_gate_ready = False
+
+    if prompt371_prompt370_dispatch_ready:
+        prompt371_bounded_one_cycle_execution_wiring_status = "ready"
+        prompt371_one_cycle_plan_status = "planned"
+        prompt371_selected_route = normalized_selected_route
+        prompt371_one_cycle_plan_ready = True
+        prompt371_selected_prompt_contract_ready = True
+        prompt371_execution_gate_ready = True
+        if normalized_selected_route == "continue_next_cycle":
+            prompt371_selected_step_id = 1
+            prompt371_selected_step_kind = "bounded_one_cycle"
+            prompt371_selected_step_operation = (
+                "prepare_selected_step_execution_gate"
+            )
+            prompt371_selected_prompt_contract_id = (
+                "prompt372_selected_step_execution_gate"
+            )
+            prompt371_selected_next_action = (
+                "prepare_prompt372_selected_step_execution_gate"
+            )
+        elif normalized_selected_route == "targeted_fix":
+            prompt371_selected_step_id = 2
+            prompt371_selected_step_kind = "targeted_fix_bounded_one_cycle"
+            prompt371_selected_step_operation = (
+                "prepare_selected_step_execution_gate"
+            )
+            prompt371_selected_prompt_contract_id = (
+                "prompt372_selected_step_execution_gate"
+            )
+            prompt371_selected_next_action = (
+                "prepare_prompt372_selected_step_execution_gate"
+            )
+        else:
+            prompt371_selected_step_id = 3
+            prompt371_selected_step_kind = "explicit_commit_tag_verification"
+            prompt371_selected_step_operation = (
+                "prepare_explicit_commit_tag_execution_verification"
+            )
+            prompt371_selected_prompt_contract_id = (
+                "prompt372_explicit_commit_tag_execution_verification"
+            )
+            prompt371_selected_next_action = (
+                "prepare_prompt372_explicit_commit_tag_execution_verification"
+            )
+    else:
+        prompt371_selected_next_action = _blocked_next_action_for(
+            prompt370_blockers[0]
+            if prompt370_blockers
+            else "prompt370_selected_route_not_supported_for_prompt371"
+        )
+
+    prompt371_execution_allowed = False
+    prompt371_execution_attempted = False
+    prompt371_execution_performed = False
+    prompt371_codex_execution_allowed = False
+    prompt371_codex_execution_attempted = False
+    prompt371_codex_execution_performed = False
+    prompt371_git_mutation_allowed = False
+    prompt371_git_mutation_attempted = False
+    prompt371_git_mutation_performed = False
+    prompt371_remote_mutation_allowed = False
+    prompt371_remote_mutation_attempted = False
+    prompt371_remote_mutation_performed = False
+    prompt371_authoritative_next_action = _normalize_text(
+        prompt371_selected_next_action,
+        default="",
+    )
+    prompt371_next_action = prompt371_authoritative_next_action
+    prompt371_active_blocked_reasons = (
+        _normalize_string_list(prompt370_blockers, sort_items=False)
+        if not prompt371_prompt370_dispatch_ready
+        else []
+    )
+    prompt371_active_blocked_reason = (
+        prompt371_active_blocked_reasons[0]
+        if prompt371_active_blocked_reasons
+        else ""
+    )
+    prompt371_summary = (
+        "Prompt371 is blocked because Prompt370 dispatch evidence is incomplete or not safe for bounded one-cycle execution wiring."
+    )
+    if prompt371_selected_route == "continue_next_cycle":
+        prompt371_summary = (
+            "Prompt371 prepared a metadata-only bounded one-cycle execution wiring handoff for continue-next-cycle up to the Prompt372 selected-step execution gate."
+        )
+    elif prompt371_selected_route == "targeted_fix":
+        prompt371_summary = (
+            "Prompt371 prepared a metadata-only bounded one-cycle execution wiring handoff for the targeted-fix route up to the Prompt372 selected-step execution gate."
+        )
+    elif prompt371_selected_route == "approve_commit_tag":
+        prompt371_summary = (
+            "Prompt371 prepared a metadata-only bounded one-cycle execution wiring handoff for explicit commit/tag verification without executing git."
+        )
+
+    state_payload: dict[str, Any] = {
+        "prompt371_schema_version": _PROMPT371_SCHEMA_VERSION,
+        "prompt371_bounded_one_cycle_execution_wiring_status": (
+            prompt371_bounded_one_cycle_execution_wiring_status
+        ),
+        "prompt371_one_cycle_plan_status": prompt371_one_cycle_plan_status,
+        "prompt371_prompt370_source_path": _normalize_text(
+            current_prompt370_source_path,
+            default="",
+        ),
+        "prompt371_prompt370_dispatch_ready": prompt371_prompt370_dispatch_ready,
+        "prompt371_selected_route": prompt371_selected_route,
+        "prompt371_selected_step_id": prompt371_selected_step_id,
+        "prompt371_selected_step_kind": prompt371_selected_step_kind,
+        "prompt371_selected_step_operation": prompt371_selected_step_operation,
+        "prompt371_selected_prompt_contract_id": (
+            prompt371_selected_prompt_contract_id
+        ),
+        "prompt371_selected_next_action": prompt371_selected_next_action,
+        "prompt371_one_cycle_plan_ready": prompt371_one_cycle_plan_ready,
+        "prompt371_selected_prompt_contract_ready": (
+            prompt371_selected_prompt_contract_ready
+        ),
+        "prompt371_execution_gate_ready": prompt371_execution_gate_ready,
+        "prompt371_cycle_index": prompt371_cycle_index,
+        "prompt371_max_cycles": prompt371_max_cycles,
+        "prompt371_bounded_one_cycle_execution_wiring_path": str(wiring_path),
+        "prompt371_one_cycle_execution_plan_path": str(plan_path),
+        "prompt371_selected_step_contract_path": str(selected_step_contract_path),
+        "prompt371_execution_gate_readiness_path": str(
+            execution_gate_readiness_path
+        ),
+        "prompt371_wiring_receipt_path": str(receipt_path),
+        "prompt371_execution_allowed": prompt371_execution_allowed,
+        "prompt371_execution_attempted": prompt371_execution_attempted,
+        "prompt371_execution_performed": prompt371_execution_performed,
+        "prompt371_codex_execution_allowed": prompt371_codex_execution_allowed,
+        "prompt371_codex_execution_attempted": (
+            prompt371_codex_execution_attempted
+        ),
+        "prompt371_codex_execution_performed": (
+            prompt371_codex_execution_performed
+        ),
+        "prompt371_git_mutation_allowed": prompt371_git_mutation_allowed,
+        "prompt371_git_mutation_attempted": prompt371_git_mutation_attempted,
+        "prompt371_git_mutation_performed": prompt371_git_mutation_performed,
+        "prompt371_remote_mutation_allowed": prompt371_remote_mutation_allowed,
+        "prompt371_remote_mutation_attempted": (
+            prompt371_remote_mutation_attempted
+        ),
+        "prompt371_remote_mutation_performed": (
+            prompt371_remote_mutation_performed
+        ),
+        "prompt371_authoritative_next_action": (
+            prompt371_authoritative_next_action
+        ),
+        "prompt371_next_action": prompt371_next_action,
+        "prompt371_active_blocked_reason": prompt371_active_blocked_reason,
+        "prompt371_active_blocked_reasons": prompt371_active_blocked_reasons,
+        "prompt371_summary": prompt371_summary,
+    }
+    plan_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "plan_kind": "bounded_one_cycle_execution_wiring",
+    }
+    selected_step_contract_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "contract_status": prompt371_one_cycle_plan_status,
+        "source_prompt": "prompt371",
+        "source_action": "prepare_prompt371_bounded_one_cycle_execution_wiring",
+        "selected_step_constraints": [
+            "metadata-only",
+            "execution remains disabled",
+            "no Codex invocation",
+            "no git mutation",
+            "no remote operations",
+            "max_cycles must remain 1",
+        ],
+    }
+    execution_gate_readiness_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "execution_gate_status": (
+            "ready" if prompt371_execution_gate_ready else "blocked"
+        ),
+    }
+    receipt_payload: dict[str, Any] = {
+        **state_payload,
+        "prompt370_source_excerpt": dict(prompt370_surface),
+    }
+
+    wiring_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(wiring_path, state_payload)
+    _write_json(plan_path, plan_payload)
+    _write_json(selected_step_contract_path, selected_step_contract_payload)
+    _write_json(execution_gate_readiness_path, execution_gate_readiness_payload)
+    _write_json(receipt_path, receipt_payload)
+
+    return {
+        key: value
+        for key, value in state_payload.items()
+        if key.startswith("prompt371_")
+    }
+
+
 def _merge_prompt363_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -46459,6 +46927,106 @@ def _merge_prompt370_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt370_next_action"
             if _normalize_text(prompt370.get("prompt370_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt371_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt371_bounded_one_cycle_execution_wiring_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt371 = (
+        dict(prompt371_bounded_one_cycle_execution_wiring_payload)
+        if isinstance(prompt371_bounded_one_cycle_execution_wiring_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT371_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt371 and prompt371.get(key) is not None:
+            payload[key] = prompt371.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt371_bounded_one_cycle_execution_wiring_status"
+            if _normalize_text(
+                prompt371.get("prompt371_bounded_one_cycle_execution_wiring_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt371_prompt370_dispatch_ready"
+            if bool(prompt371.get("prompt371_prompt370_dispatch_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt371_selected_route"
+            if _normalize_text(prompt371.get("prompt371_selected_route"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt371_selected_step_kind"
+            if _normalize_text(
+                prompt371.get("prompt371_selected_step_kind"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt371_selected_step_operation"
+            if _normalize_text(
+                prompt371.get("prompt371_selected_step_operation"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt371_selected_prompt_contract_id"
+            if _normalize_text(
+                prompt371.get("prompt371_selected_prompt_contract_id"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt371_selected_next_action"
+            if _normalize_text(
+                prompt371.get("prompt371_selected_next_action"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt371_one_cycle_plan_ready"
+            if bool(prompt371.get("prompt371_one_cycle_plan_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt371_execution_gate_ready"
+            if bool(prompt371.get("prompt371_execution_gate_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt371_one_cycle_execution_plan_path"
+            if _normalize_text(
+                prompt371.get("prompt371_one_cycle_execution_plan_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt371_selected_step_contract_path"
+            if _normalize_text(
+                prompt371.get("prompt371_selected_step_contract_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt371_execution_gate_readiness_path"
+            if _normalize_text(
+                prompt371.get("prompt371_execution_gate_readiness_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt371_wiring_receipt_path"
+            if _normalize_text(
+                prompt371.get("prompt371_wiring_receipt_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt371_next_action"
+            if _normalize_text(prompt371.get("prompt371_next_action"), default="")
             else "",
         ]
     )
@@ -215170,6 +215738,21 @@ class PlannedExecutionRunner:
         prompt370_dispatch_receipt_path = (
             run_root / "prompt370_dispatch_receipt.json"
         )
+        prompt371_bounded_one_cycle_execution_wiring_path = (
+            run_root / "prompt371_bounded_one_cycle_execution_wiring.json"
+        )
+        prompt371_one_cycle_execution_plan_path = (
+            run_root / "prompt371_one_cycle_execution_plan.json"
+        )
+        prompt371_selected_step_contract_path = (
+            run_root / "prompt371_selected_step_contract.json"
+        )
+        prompt371_execution_gate_readiness_path = (
+            run_root / "prompt371_execution_gate_readiness.json"
+        )
+        prompt371_wiring_receipt_path = (
+            run_root / "prompt371_wiring_receipt.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -215277,6 +215860,19 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt370_integrated_autonomous_cycle_runner_payload,
         }
+        prompt371_bounded_one_cycle_execution_wiring_payload = (
+            _build_prompt371_bounded_one_cycle_execution_wiring_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                current_prompt370_source_path=str(
+                    prompt370_next_action_dispatch_plan_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt371_bounded_one_cycle_execution_wiring_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -215328,6 +215924,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt370_integrated_autonomous_cycle_runner_state=(
                     prompt370_integrated_autonomous_cycle_runner_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt371_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt371_bounded_one_cycle_execution_wiring_state=(
+                    prompt371_bounded_one_cycle_execution_wiring_payload
                 ),
             )
         )
@@ -215396,6 +216000,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt370_integrated_autonomous_cycle_runner_payload=(
                     prompt370_integrated_autonomous_cycle_runner_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt371_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt371_bounded_one_cycle_execution_wiring_payload=(
+                    prompt371_bounded_one_cycle_execution_wiring_payload
                 ),
             )
         )
@@ -215636,6 +216250,36 @@ class PlannedExecutionRunner:
         manifest["prompt370_dispatch_receipt_path"] = str(
             prompt370_dispatch_receipt_path
         )
+        manifest["prompt371_bounded_one_cycle_execution_wiring_summary"] = dict(
+            prompt371_bounded_one_cycle_execution_wiring_payload
+        )
+        manifest["prompt371_bounded_one_cycle_execution_wiring_path"] = str(
+            prompt371_bounded_one_cycle_execution_wiring_path
+        )
+        manifest["prompt371_one_cycle_execution_plan_summary"] = dict(
+            prompt371_bounded_one_cycle_execution_wiring_payload
+        )
+        manifest["prompt371_one_cycle_execution_plan_path"] = str(
+            prompt371_one_cycle_execution_plan_path
+        )
+        manifest["prompt371_selected_step_contract_summary"] = dict(
+            prompt371_bounded_one_cycle_execution_wiring_payload
+        )
+        manifest["prompt371_selected_step_contract_path"] = str(
+            prompt371_selected_step_contract_path
+        )
+        manifest["prompt371_execution_gate_readiness_summary"] = dict(
+            prompt371_bounded_one_cycle_execution_wiring_payload
+        )
+        manifest["prompt371_execution_gate_readiness_path"] = str(
+            prompt371_execution_gate_readiness_path
+        )
+        manifest["prompt371_wiring_receipt_summary"] = dict(
+            prompt371_bounded_one_cycle_execution_wiring_payload
+        )
+        manifest["prompt371_wiring_receipt_path"] = str(
+            prompt371_wiring_receipt_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -215726,6 +216370,21 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt370_dispatch_receipt"] = manifest.get(
             "prompt370_dispatch_receipt_summary"
         )
+        contract_summaries_by_role[
+            "prompt371_bounded_one_cycle_execution_wiring"
+        ] = manifest.get("prompt371_bounded_one_cycle_execution_wiring_summary")
+        contract_summaries_by_role["prompt371_one_cycle_execution_plan"] = manifest.get(
+            "prompt371_one_cycle_execution_plan_summary"
+        )
+        contract_summaries_by_role["prompt371_selected_step_contract"] = manifest.get(
+            "prompt371_selected_step_contract_summary"
+        )
+        contract_summaries_by_role["prompt371_execution_gate_readiness"] = manifest.get(
+            "prompt371_execution_gate_readiness_summary"
+        )
+        contract_summaries_by_role["prompt371_wiring_receipt"] = manifest.get(
+            "prompt371_wiring_receipt_summary"
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -215815,6 +216474,21 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["prompt370_dispatch_receipt"] = manifest.get(
             "prompt370_dispatch_receipt_path"
+        )
+        contract_paths_by_role["prompt371_bounded_one_cycle_execution_wiring"] = manifest.get(
+            "prompt371_bounded_one_cycle_execution_wiring_path"
+        )
+        contract_paths_by_role["prompt371_one_cycle_execution_plan"] = manifest.get(
+            "prompt371_one_cycle_execution_plan_path"
+        )
+        contract_paths_by_role["prompt371_selected_step_contract"] = manifest.get(
+            "prompt371_selected_step_contract_path"
+        )
+        contract_paths_by_role["prompt371_execution_gate_readiness"] = manifest.get(
+            "prompt371_execution_gate_readiness_path"
+        )
+        contract_paths_by_role["prompt371_wiring_receipt"] = manifest.get(
+            "prompt371_wiring_receipt_path"
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -216147,6 +216821,42 @@ class PlannedExecutionRunner:
             "prompt370_next_action": _normalize_text(
                 prompt370_integrated_autonomous_cycle_runner_payload.get(
                     "prompt370_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt371_bounded_one_cycle_execution_wiring_status": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_bounded_one_cycle_execution_wiring_status"
+                ),
+                default="blocked",
+            ),
+            "prompt371_selected_route": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_selected_route"
+                ),
+                default="blocked",
+            ),
+            "prompt371_selected_step_kind": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_selected_step_kind"
+                ),
+                default="blocked",
+            ),
+            "prompt371_selected_step_operation": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_selected_step_operation"
+                ),
+                default="blocked",
+            ),
+            "prompt371_selected_next_action": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_selected_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt371_next_action": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_next_action"
                 ),
                 default="hold_for_followup",
             ),
@@ -216826,6 +217536,84 @@ class PlannedExecutionRunner:
             "prompt370_active_blocked_reason": _normalize_text(
                 prompt370_integrated_autonomous_cycle_runner_payload.get(
                     "prompt370_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt371_bounded_one_cycle_execution_wiring_status": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_bounded_one_cycle_execution_wiring_status"
+                ),
+                default="blocked",
+            ),
+            "prompt371_prompt370_dispatch_ready": bool(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_prompt370_dispatch_ready",
+                    False,
+                )
+            ),
+            "prompt371_selected_route": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_selected_route"
+                ),
+                default="blocked",
+            ),
+            "prompt371_selected_step_kind": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_selected_step_kind"
+                ),
+                default="blocked",
+            ),
+            "prompt371_selected_step_operation": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_selected_step_operation"
+                ),
+                default="blocked",
+            ),
+            "prompt371_selected_next_action": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_selected_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt371_one_cycle_plan_ready": bool(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_one_cycle_plan_ready",
+                    False,
+                )
+            ),
+            "prompt371_selected_prompt_contract_ready": bool(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_selected_prompt_contract_ready",
+                    False,
+                )
+            ),
+            "prompt371_execution_gate_ready": bool(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_execution_gate_ready",
+                    False,
+                )
+            ),
+            "prompt371_cycle_index": _as_non_negative_int(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_cycle_index"
+                ),
+                default=_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+            ),
+            "prompt371_max_cycles": _as_non_negative_int(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_max_cycles"
+                ),
+                default=1,
+            ),
+            "prompt371_next_action": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt371_active_blocked_reason": _normalize_text(
+                prompt371_bounded_one_cycle_execution_wiring_payload.get(
+                    "prompt371_active_blocked_reason"
                 ),
                 default="",
             ),
