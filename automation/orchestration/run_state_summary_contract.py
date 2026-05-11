@@ -453,6 +453,16 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt364_active_blocked_reason",
     "prompt364_active_blocked_reasons",
     "prompt364_summary",
+    "prompt365_runtime_source_mutation_guard_status",
+    "prompt365_dry_run_source_mutation_detected",
+    "prompt365_mutation_capable_path_blocked",
+    "prompt365_before_changed_tracked_files",
+    "prompt365_after_changed_tracked_files",
+    "prompt365_new_changed_tracked_files",
+    "prompt365_blocked_reason",
+    "prompt365_next_action",
+    "prompt365_manual_required",
+    "prompt365_summary",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -1015,6 +1025,9 @@ def select_manifest_run_state_summary_compact(
         "prompt364_next_cycle_handoff_ready",
         "prompt364_manual_required",
         "prompt364_replan_required",
+        "prompt365_dry_run_source_mutation_detected",
+        "prompt365_mutation_capable_path_blocked",
+        "prompt365_manual_required",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -1039,6 +1052,9 @@ def select_manifest_run_state_summary_compact(
         "prompt364_staged_tracked_files",
         "prompt364_allowed_implementation_files",
         "prompt364_active_blocked_reasons",
+        "prompt365_before_changed_tracked_files",
+        "prompt365_after_changed_tracked_files",
+        "prompt365_new_changed_tracked_files",
     }
 
     summary: dict[str, Any] = {}

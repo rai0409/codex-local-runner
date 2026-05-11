@@ -3530,6 +3530,7 @@ _LOCAL_CODEX_EXECUTION_READINESS_SURFACE_KEYS: tuple[str, ...] = (
 
 _PROMPT360_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt360_gate_status",
+    "prompt360_transport_mode",
     "prompt360_live_execution_attempted",
     "prompt360_live_execution_allowed",
     "prompt360_codex_execution_allowed",
@@ -3638,11 +3639,26 @@ _PROMPT363_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
 
 _PROMPT364_PREVIOUS_EXPECTED_TAG_NAME = "prompt363-approve-commit-tag-boundary"
 _PROMPT364_LEGACY_HEAD_TAG_NAME = "prompt364-post-commit-tag-verification-handoff"
-_PROMPT364_EXPECTED_HEAD_TAG_NAME = "prompt364-fix1-clean-rerun-tag-verification"
+_PROMPT364_IMPLEMENTATION_IN_PROGRESS_HEAD_TAG_NAME = (
+    "prompt364-fix1-clean-rerun-tag-verification"
+)
+_PROMPT364_EXPECTED_HEAD_TAG_NAME = "prompt365-dry-run-source-mutation-guard"
 _PROMPT364_EXPECTED_TAG_NAME = _PROMPT364_EXPECTED_HEAD_TAG_NAME
 _PROMPT364_ALLOWED_IMPLEMENTATION_FILES: tuple[str, ...] = (
     "automation/orchestration/planned_execution_runner.py",
     "automation/orchestration/run_state_summary_contract.py",
+)
+_PROMPT365_DRY_RUN_BLOCKED_REASON = (
+    "dry_run_mutation_capable_execution_path_blocked"
+)
+_PROMPT365_DRY_RUN_BLOCKED_NEXT_ACTION = (
+    "run_with_explicit_live_transport_or_fix_route"
+)
+_PROMPT365_DRY_RUN_MUTATION_DETECTED_REASON = (
+    "dry_run_tracked_source_mutation_detected"
+)
+_PROMPT365_DRY_RUN_MUTATION_DETECTED_NEXT_ACTION = (
+    "restore_tracked_source_and_fix_mutation_path"
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -17230,6 +17246,87 @@ def _build_selected_step_live_execution_receipt_state(
     }
 
 
+def _build_dry_run_selected_step_live_execution_gate_state(
+    *,
+    gate_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    state = dict(gate_state) if isinstance(gate_state, Mapping) else {}
+    prior_ready = bool(
+        _normalize_text(state.get("status"), default="blocked") == "ready"
+        and _normalize_text(state.get("gate_status"), default="blocked") == "ready"
+        and bool(state.get("live_execution_allowed", False))
+    )
+    if prior_ready:
+        state.update(
+            {
+                "status": "blocked",
+                "gate_status": "blocked",
+                "blocked_reason": "selected_step_live_execution_dry_run_bypassed",
+                "live_execution_ready": False,
+                "live_execution_allowed": False,
+                "execution_performed": False,
+                "codex_invoked": False,
+                "next_action": "prepare_selected_step_execution_result_route",
+                "summary": (
+                    "Selected-step live execution is bypassed in dry-run so downstream mutation-capable execution remains disabled."
+                ),
+            }
+        )
+    else:
+        state.update(
+            {
+                "live_execution_ready": False,
+                "live_execution_allowed": False,
+                "execution_performed": False,
+                "codex_invoked": False,
+            }
+        )
+    return state
+
+
+def _build_dry_run_selected_step_live_execution_operation_state(
+    *,
+    gate_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    gate = dict(gate_state) if isinstance(gate_state, Mapping) else {}
+    selected_step_id = _as_non_negative_int(gate.get("selected_step_id"), default=1)
+    if selected_step_id <= 0:
+        selected_step_id = 1
+    selected_step_name = _normalize_text(
+        gate.get("selected_step_name"),
+        default="read_current_state",
+    )
+    selected_step_operation = _normalize_text(
+        gate.get("selected_step_operation"),
+        default=selected_step_name or "read_current_state",
+    )
+    return {
+        "status": "blocked",
+        "blocked_reason": _normalize_text(
+            gate.get("blocked_reason"),
+            default="selected_step_live_execution_dry_run_bypassed",
+        ),
+        "live_execution_performed": False,
+        "execution_performed": False,
+        "read_current_state_completed": False,
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name or "read_current_state",
+        "selected_step_operation": selected_step_operation or "read_current_state",
+        "current_branch": _normalize_text(gate.get("current_branch"), default=""),
+        "head_short": _normalize_text(gate.get("head_short"), default=""),
+        "head_tags": _normalize_string_list(gate.get("head_tags")),
+        "worktree_clean": bool(gate.get("worktree_clean", False)),
+        "changed_tracked_files": _normalize_string_list(
+            gate.get("changed_tracked_files")
+        ),
+        "artifact_status_summary": {},
+        "next_action": _normalize_text(
+            gate.get("next_action"),
+            default="prepare_selected_step_execution_result_route",
+        ),
+    }
+
+
 def _build_selected_step_execution_result_route_capture_state(
     *,
     gate_path: Path,
@@ -18667,6 +18764,172 @@ def _build_local_codex_one_shot_execution_receipt(
         "targeted_fix_allowed": bool(state.get("targeted_fix_allowed", False)),
         "rollback_allowed": bool(state.get("rollback_allowed", False)),
         "rollback_performed": bool(state.get("rollback_performed", False)),
+    }
+
+
+def _build_dry_run_local_codex_one_shot_execution_result_state(
+    *,
+    handoff_state: Mapping[str, Any] | None,
+    handoff_receipt_state: Mapping[str, Any] | None,
+    prompt_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    result_path: Path,
+) -> dict[str, Any]:
+    handoff = dict(handoff_state) if isinstance(handoff_state, Mapping) else {}
+    receipt = (
+        dict(handoff_receipt_state)
+        if isinstance(handoff_receipt_state, Mapping)
+        else {}
+    )
+    run_id = _normalize_text(
+        handoff.get("run_id"),
+        default=_normalize_text(receipt.get("run_id"), default="local-autonomous-v2"),
+    )
+    cycle_id = _normalize_text(
+        handoff.get("cycle_id"),
+        default=_normalize_text(
+            receipt.get("cycle_id"),
+            default="local-autonomous-v2-cycle-1",
+        ),
+    )
+    current_cycle = _as_non_negative_int(
+        handoff.get("current_cycle"),
+        default=_as_non_negative_int(
+            receipt.get("current_cycle"),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE,
+        ),
+    )
+    max_cycles = _as_non_negative_int(
+        handoff.get("max_cycles"),
+        default=_as_non_negative_int(
+            receipt.get("max_cycles"),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+        ),
+    )
+    selected_step_id = _as_optional_int(
+        handoff.get("selected_step_id")
+        if "selected_step_id" in handoff
+        else receipt.get("selected_step_id")
+    )
+    selected_step_name = (
+        _normalize_text(
+            handoff.get("selected_step_name"),
+            default=_normalize_text(receipt.get("selected_step_name"), default=""),
+        )
+        or None
+    )
+    selected_step_operation = (
+        _normalize_text(
+            handoff.get("selected_step_operation"),
+            default=_normalize_text(
+                receipt.get("selected_step_operation"),
+                default="",
+            ),
+        )
+        or None
+    )
+    handoff_ready = bool(
+        _normalize_text(handoff.get("status"), default="blocked") == "ready"
+        and _normalize_text(handoff.get("handoff_status"), default="blocked") == "ready"
+        and bool(handoff.get("codex_prompt_ready", False))
+        and bool(handoff.get("codex_execution_command_ready", False))
+        and bool(handoff.get("codex_invocation_allowed", False))
+        and bool(handoff.get("execution_allowed", False))
+    )
+    blocked_reason = _normalize_text(
+        handoff.get("blocked_reason"),
+        default=_normalize_text(
+            receipt.get("blocked_reason"),
+            default="local_codex_one_shot_handoff_not_valid_for_execution",
+        ),
+    )
+    readiness_reason = _normalize_text(
+        handoff.get("readiness_reason"),
+        default=_normalize_text(
+            receipt.get("readiness_reason"),
+            default="local_codex_one_shot_handoff_not_valid_for_execution",
+        ),
+    )
+    next_action = _normalize_text(
+        handoff.get("next_action"),
+        default=_normalize_text(
+            receipt.get("next_action"),
+            default="manual_review_local_codex_one_shot_handoff_before_execution",
+        ),
+    )
+    if handoff_ready:
+        blocked_reason = _PROMPT365_DRY_RUN_BLOCKED_REASON
+        readiness_reason = "dry_run_local_codex_one_shot_execution_bypassed"
+        next_action = _PROMPT365_DRY_RUN_BLOCKED_NEXT_ACTION
+    prompt_path_text = _normalize_text(
+        handoff.get("prompt_path"),
+        default=str(prompt_path),
+    )
+    if not prompt_path_text:
+        prompt_path_text = str(prompt_path)
+    return {
+        "schema_version": _LOCAL_AUTONOMOUS_CYCLE_V2_SCHEMA_VERSION,
+        "execution_schema_version": _LOCAL_CODEX_ONE_SHOT_EXECUTION_SCHEMA_VERSION,
+        "source_prompt": "prompt333",
+        "source_handoff_schema_version": _LOCAL_CODEX_ONE_SHOT_HANDOFF_SCHEMA_VERSION,
+        "run_id": run_id,
+        "cycle_id": cycle_id,
+        "current_cycle": current_cycle,
+        "max_cycles": max_cycles,
+        "source_step_id": 2,
+        "source_step_name": "generate_next_codex_task",
+        "source_step_operation": "generate_next_codex_task",
+        "status": "blocked",
+        "execution_status": "blocked",
+        "blocked_reason": blocked_reason,
+        "readiness_reason": readiness_reason,
+        "execution_result": "not_run",
+        "codex_invoked": False,
+        "codex_invocation_allowed": False,
+        "execution_allowed": False,
+        "execution_attempted": False,
+        "execution_completed": False,
+        "execution_exit_code": None,
+        "stdout_path": str(stdout_path),
+        "stderr_path": str(stderr_path),
+        "result_path": str(result_path),
+        "selected_step_id": selected_step_id,
+        "selected_step_name": selected_step_name,
+        "selected_step_operation": selected_step_operation,
+        "command_argv": [],
+        "prompt_path": prompt_path_text,
+        "prompt_exists": prompt_path.exists(),
+        "prompt_non_empty": False,
+        "max_codex_invocations": 1,
+        "codex_invocation_count": 0,
+        "changed_tracked_files": [],
+        "changed_tracked_files_after_execution": [],
+        "validation_errors": _normalize_string_list(
+            handoff.get("validation_errors")
+            if isinstance(handoff.get("validation_errors"), list)
+            else receipt.get("validation_errors")
+        ),
+        "should_continue": False,
+        "next_action": next_action,
+        "stdout_chars_total": 0,
+        "stderr_chars_total": 0,
+        "stdout_chars_written": 0,
+        "stderr_chars_written": 0,
+        "stdout_truncated": False,
+        "stderr_truncated": False,
+        "output_max_chars": _LOCAL_CODEX_ONE_SHOT_EXECUTION_OUTPUT_MAX_CHARS,
+        "commit_allowed": False,
+        "tag_allowed": False,
+        "commit_performed": False,
+        "tag_performed": False,
+        "push_pr_merge_enabled": False,
+        "push_performed": False,
+        "pr_created": False,
+        "merge_performed": False,
+        "targeted_fix_allowed": False,
+        "rollback_allowed": False,
+        "rollback_performed": False,
     }
 
 
@@ -22689,6 +22952,36 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             return False
         return default
 
+    def _read_text_value(key: str, *, default: str = "") -> str:
+        value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
+        return _normalize_text(value, default=default)
+
+    def _resolve_prompt365_runtime_transport_mode() -> str:
+        for candidate in (
+            _read_text_value("prompt360_transport_mode"),
+            _read_text_value("transport_mode"),
+        ):
+            normalized_candidate = _normalize_text(candidate, default="").lower()
+            if normalized_candidate == "dry-run":
+                return "dry-run"
+            if normalized_candidate == "live":
+                return "live"
+        return "dry-run" if bool(dry_run) or _read_flag("dry_run", default=False) else "live"
+
+    def _resolve_prompt365_effective_dry_run() -> bool:
+        if bool(dry_run):
+            return True
+        if _resolve_prompt365_runtime_transport_mode() == "dry-run":
+            return True
+        if _read_flag("dry_run", default=False):
+            return True
+        if _read_text_value("prompt360_transport_mode", default="").lower() == "dry-run":
+            return True
+        for key in ("manifest_dry_run", "run_dry_run"):
+            if _read_flag(key, default=False):
+                return True
+        return False
+
     def _read_non_negative_int_flag(key: str, *, default: int) -> int:
         value = prior_payload.get(key) if key in prior_payload else approved_restart.get(key)
         return _as_non_negative_int(value, default=default)
@@ -23507,6 +23800,42 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
     local_codex_one_shot_execution_cycle_id = "local-autonomous-v2-cycle-1"
     local_codex_one_shot_execution_current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
     local_codex_one_shot_execution_max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+    prompt365_effective_dry_run = _resolve_prompt365_effective_dry_run()
+    prompt365_runtime_source_mutation_guard_status = (
+        "clean" if prompt365_effective_dry_run else "not_applicable"
+    )
+    prompt365_dry_run_source_mutation_detected = False
+    prompt365_mutation_capable_path_blocked = False
+    prompt365_before_changed_tracked_files: list[str] = []
+    prompt365_after_changed_tracked_files: list[str] = []
+    prompt365_new_changed_tracked_files: list[str] = []
+    prompt365_blocked_reason = ""
+    prompt365_next_action = "continue"
+    prompt365_manual_required = False
+    prompt365_summary = (
+        "Prompt365 dry-run source mutation guard applies only to dry-run transport mode."
+    )
+    prompt365_git_state_available = True
+    prompt365_mutation_capable_dry_run_attempted = False
+    normalized_execution_repo_path = _normalize_text(
+        execution_repo_path,
+        default=_APPROVE_COMMIT_TAG_EXECUTION_REPO_PATH,
+    )
+    if prompt365_effective_dry_run:
+        (
+            prompt365_git_state_available,
+            prompt365_before_changed_tracked_files,
+        ) = _collect_changed_tracked_files(normalized_execution_repo_path)
+        if not prompt365_git_state_available:
+            prompt365_runtime_source_mutation_guard_status = "blocked"
+            prompt365_blocked_reason = (
+                "dry_run_source_mutation_guard_git_state_unavailable"
+            )
+            prompt365_next_action = "review_dry_run_source_mutation_guard_git_state"
+            prompt365_manual_required = True
+            prompt365_summary = (
+                "Prompt365 blocked dry-run source mutation verification because tracked git state could not be collected before the guarded runtime segment."
+            )
     completed_result_source_status = "not_completed"
     stop_reason = "execution_not_enabled"
     enabled = _read_flag(
@@ -25609,12 +25938,24 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         one_cycle_controller_dir=one_cycle_controller_dir,
         expected_head_tag=_SELECTED_STEP_LIVE_EXECUTION_EXPECTED_HEAD_TAG,
     )
-    selected_step_live_execution_operation_state = (
-        _run_selected_step_read_current_state_if_allowed(
-            gate_state=selected_step_live_execution_gate_state,
-            one_cycle_controller_dir=one_cycle_controller_dir,
+    if dry_run:
+        selected_step_live_execution_gate_state = (
+            _build_dry_run_selected_step_live_execution_gate_state(
+                gate_state=selected_step_live_execution_gate_state,
+            )
         )
-    )
+        selected_step_live_execution_operation_state = (
+            _build_dry_run_selected_step_live_execution_operation_state(
+                gate_state=selected_step_live_execution_gate_state,
+            )
+        )
+    else:
+        selected_step_live_execution_operation_state = (
+            _run_selected_step_read_current_state_if_allowed(
+                gate_state=selected_step_live_execution_gate_state,
+                one_cycle_controller_dir=one_cycle_controller_dir,
+            )
+        )
     selected_step_live_execution_result_state = _build_selected_step_live_execution_result_state(
         gate_state=selected_step_live_execution_gate_state,
         execution_state=selected_step_live_execution_operation_state,
@@ -26343,17 +26684,29 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         local_codex_one_shot_handoff_state.get("max_cycles"),
         default=local_codex_one_shot_handoff_max_cycles,
     )
-    local_codex_one_shot_execution_result_state = (
-        _build_local_codex_one_shot_execution_result_state(
-            execution_repo_path=str(execution_repo_path),
-            handoff_path=local_codex_one_shot_execution_handoff_path,
-            handoff_receipt_path=local_codex_one_shot_execution_receipt_path,
-            prompt_path=local_codex_one_shot_prompt_path,
-            stdout_path=local_codex_one_shot_execution_stdout_path,
-            stderr_path=local_codex_one_shot_execution_stderr_path,
-            result_path=local_codex_one_shot_execution_result_path,
+    if dry_run:
+        local_codex_one_shot_execution_result_state = (
+            _build_dry_run_local_codex_one_shot_execution_result_state(
+                handoff_state=local_codex_one_shot_handoff_state,
+                handoff_receipt_state=local_codex_one_shot_execution_receipt_state,
+                prompt_path=local_codex_one_shot_prompt_path,
+                stdout_path=local_codex_one_shot_execution_stdout_path,
+                stderr_path=local_codex_one_shot_execution_stderr_path,
+                result_path=local_codex_one_shot_execution_result_path,
+            )
         )
-    )
+    else:
+        local_codex_one_shot_execution_result_state = (
+            _build_local_codex_one_shot_execution_result_state(
+                execution_repo_path=str(execution_repo_path),
+                handoff_path=local_codex_one_shot_execution_handoff_path,
+                handoff_receipt_path=local_codex_one_shot_execution_receipt_path,
+                prompt_path=local_codex_one_shot_prompt_path,
+                stdout_path=local_codex_one_shot_execution_stdout_path,
+                stderr_path=local_codex_one_shot_execution_stderr_path,
+                result_path=local_codex_one_shot_execution_result_path,
+            )
+        )
     local_codex_one_shot_execution_receipt_v2_state = (
         _build_local_codex_one_shot_execution_receipt_v2(
             result_state=local_codex_one_shot_execution_result_state,
@@ -27126,6 +27479,108 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
         local_codex_one_shot_execution_result_state.get("max_cycles"),
         default=local_codex_one_shot_execution_max_cycles,
     )
+    if prompt365_effective_dry_run:
+        prompt365_mutation_capable_dry_run_attempted = bool(
+            bool(selected_step_live_execution_operation_state.get("execution_performed", False))
+            or bool(
+                selected_step_live_execution_operation_state.get(
+                    "live_execution_performed",
+                    False,
+                )
+            )
+            or bool(selected_step_live_execution_result_state.get("execution_performed", False))
+            or bool(
+                selected_step_live_execution_result_state.get(
+                    "live_execution_performed",
+                    False,
+                )
+            )
+            or bool(local_codex_one_shot_execution_result_state.get("execution_attempted", False))
+            or bool(local_codex_one_shot_execution_result_state.get("execution_completed", False))
+            or bool(local_codex_one_shot_execution_result_state.get("codex_invoked", False))
+            or bool(local_codex_one_shot_execution_result_state.get("commit_performed", False))
+            or bool(local_codex_one_shot_execution_result_state.get("tag_performed", False))
+            or bool(local_codex_one_shot_execution_result_state.get("push_performed", False))
+            or bool(local_codex_one_shot_execution_result_state.get("pr_created", False))
+            or bool(local_codex_one_shot_execution_result_state.get("merge_performed", False))
+            or bool(local_codex_one_shot_execution_result_state.get("rollback_performed", False))
+        )
+        (
+            prompt365_git_state_available_after,
+            prompt365_after_changed_tracked_files,
+        ) = _collect_changed_tracked_files(normalized_execution_repo_path)
+        prompt365_git_state_available = bool(
+            prompt365_git_state_available and prompt365_git_state_available_after
+        )
+        prompt365_new_changed_tracked_files = sorted(
+            set(prompt365_after_changed_tracked_files)
+            - set(prompt365_before_changed_tracked_files)
+        )
+        if not prompt365_git_state_available:
+            prompt365_runtime_source_mutation_guard_status = "blocked"
+            prompt365_blocked_reason = (
+                "dry_run_source_mutation_guard_git_state_unavailable"
+            )
+            prompt365_next_action = "review_dry_run_source_mutation_guard_git_state"
+            prompt365_manual_required = True
+            prompt365_summary = (
+                "Prompt365 blocked dry-run source mutation verification because tracked git state could not be collected across the guarded runtime segment."
+            )
+        elif prompt365_new_changed_tracked_files:
+            prompt365_runtime_source_mutation_guard_status = "blocked"
+            prompt365_dry_run_source_mutation_detected = True
+            prompt365_blocked_reason = _PROMPT365_DRY_RUN_MUTATION_DETECTED_REASON
+            prompt365_next_action = _PROMPT365_DRY_RUN_MUTATION_DETECTED_NEXT_ACTION
+            prompt365_manual_required = True
+            prompt365_summary = (
+                "Prompt365 detected new tracked source mutations during dry-run runtime and blocked continuation."
+            )
+        elif prompt365_mutation_capable_dry_run_attempted:
+            prompt365_runtime_source_mutation_guard_status = "blocked"
+            prompt365_mutation_capable_path_blocked = True
+            prompt365_blocked_reason = _PROMPT365_DRY_RUN_BLOCKED_REASON
+            prompt365_next_action = _PROMPT365_DRY_RUN_BLOCKED_NEXT_ACTION
+            prompt365_manual_required = True
+            prompt365_summary = (
+                "Prompt365 blocked continuation because a mutation-capable dry-run execution path was attempted."
+            )
+        else:
+            prompt365_summary = (
+                "Prompt365 confirmed that dry-run runtime did not introduce new tracked source mutations."
+            )
+    if prompt365_effective_dry_run:
+        if not prompt365_git_state_available:
+            prompt365_runtime_source_mutation_guard_status = "blocked"
+            prompt365_blocked_reason = "dry_run_source_mutation_guard_git_state_unavailable"
+            prompt365_next_action = "review_dry_run_source_mutation_guard_git_state"
+            prompt365_manual_required = True
+            prompt365_summary = (
+                "Prompt365 blocked dry-run source mutation verification because tracked git state could not be collected across the guarded runtime segment."
+            )
+        elif prompt365_dry_run_source_mutation_detected:
+            prompt365_runtime_source_mutation_guard_status = "blocked"
+            prompt365_blocked_reason = _PROMPT365_DRY_RUN_MUTATION_DETECTED_REASON
+            prompt365_next_action = _PROMPT365_DRY_RUN_MUTATION_DETECTED_NEXT_ACTION
+            prompt365_manual_required = True
+            prompt365_summary = (
+                "Prompt365 detected new tracked source mutations during dry-run runtime and blocked continuation."
+            )
+        elif prompt365_mutation_capable_path_blocked:
+            prompt365_runtime_source_mutation_guard_status = "blocked"
+            prompt365_blocked_reason = _PROMPT365_DRY_RUN_BLOCKED_REASON
+            prompt365_next_action = _PROMPT365_DRY_RUN_BLOCKED_NEXT_ACTION
+            prompt365_manual_required = True
+            prompt365_summary = (
+                "Prompt365 blocked continuation because a mutation-capable dry-run execution path was attempted."
+            )
+        else:
+            prompt365_runtime_source_mutation_guard_status = "clean"
+            prompt365_blocked_reason = ""
+            prompt365_next_action = "continue"
+            prompt365_manual_required = False
+            prompt365_summary = (
+                "Prompt365 confirmed that dry-run runtime did not introduce new tracked source mutations."
+            )
 
     result_payload = {
         "status": status,
@@ -27627,6 +28082,24 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
             local_codex_one_shot_execution_current_cycle
         ),
         "local_codex_one_shot_execution_max_cycles": local_codex_one_shot_execution_max_cycles,
+        "prompt365_runtime_source_mutation_guard_status": (
+            prompt365_runtime_source_mutation_guard_status
+        ),
+        "prompt365_dry_run_source_mutation_detected": (
+            prompt365_dry_run_source_mutation_detected
+        ),
+        "prompt365_mutation_capable_path_blocked": (
+            prompt365_mutation_capable_path_blocked
+        ),
+        "prompt365_before_changed_tracked_files": (
+            prompt365_before_changed_tracked_files
+        ),
+        "prompt365_after_changed_tracked_files": prompt365_after_changed_tracked_files,
+        "prompt365_new_changed_tracked_files": prompt365_new_changed_tracked_files,
+        "prompt365_blocked_reason": prompt365_blocked_reason,
+        "prompt365_next_action": prompt365_next_action,
+        "prompt365_manual_required": prompt365_manual_required,
+        "prompt365_summary": prompt365_summary,
         "local_post_codex_diff_capture_status": local_post_codex_diff_capture_status,
         "local_post_codex_diff_capture_blocked_reason": local_post_codex_diff_capture_blocked_reason,
         "local_post_codex_diff_capture_next_action": local_post_codex_diff_capture_next_action,
@@ -32765,6 +33238,31 @@ def _run_git(
         capture_output=True,
         timeout=timeout_seconds,
     )
+
+
+def _collect_changed_tracked_files(
+    repo_path: str,
+    *,
+    timeout_seconds: float | None = 10,
+) -> tuple[bool, list[str]]:
+    try:
+        status_short_cmd = _run_git(
+            repo_path,
+            ["status", "--short", "--untracked-files=no"],
+            timeout_seconds=timeout_seconds,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, []
+    if status_short_cmd.returncode != 0:
+        return False, []
+    changed = sorted(
+        {
+            _parse_git_status_path(line)
+            for line in (status_short_cmd.stdout or "").splitlines()
+            if line.strip() and _parse_git_status_path(line)
+        }
+    )
+    return True, changed
 
 
 def _parse_git_status_path(line: str) -> str:
@@ -42118,8 +42616,15 @@ def _build_prompt364_post_commit_tag_verification(
     previous_tag_verified = previous_expected_tag_name in previous_tag_list
     expected_head_tag_exists = expected_head_tag_name in expected_head_tag_list
     legacy_head_tag_verified = _PROMPT364_LEGACY_HEAD_TAG_NAME in head_tags
+    implementation_in_progress_head_tag_verified = (
+        _PROMPT364_IMPLEMENTATION_IN_PROGRESS_HEAD_TAG_NAME in head_tags
+    )
     current_head_tag_verified = expected_head_tag_name in head_tags
-    head_tag_verified = legacy_head_tag_verified or current_head_tag_verified
+    head_tag_verified = (
+        legacy_head_tag_verified
+        or implementation_in_progress_head_tag_verified
+        or current_head_tag_verified
+    )
     worktree_clean = bool((not changed_tracked_files) and (not staged_tracked_files))
     tracked_changes_present = bool(changed_tracked_files or staged_tracked_files)
     changed_files_within_allowed_set = tracked_changes_present and all(
@@ -42221,7 +42726,7 @@ def _build_prompt364_post_commit_tag_verification(
             replan_required=False,
             blocked_reasons=[],
             summary=(
-                "Prompt364 verified that the Prompt363 boundary tag exists, the Prompt364 fix1 clean-rerun tag is attached to HEAD, and the tracked worktree is clean."
+                "Prompt364 verified that the Prompt363 boundary tag exists in repository history, the Prompt365 dry-run source mutation guard tag is attached to HEAD, and the tracked worktree is clean."
             ),
         )
         _write_prompt364_artifacts(state)
@@ -42240,12 +42745,12 @@ def _build_prompt364_post_commit_tag_verification(
             changed_tracked_files=changed_tracked_files,
             staged_tracked_files=staged_tracked_files,
             next_cycle_handoff_ready=False,
-            next_action="tag_prompt364_commit",
+            next_action="tag_prompt365_commit",
             manual_required=True,
             replan_required=False,
             blocked_reasons=["prompt364_head_tag_missing"],
             summary=(
-                "Prompt364 is blocked because the tracked worktree is clean but HEAD does not carry the prompt364-fix1-clean-rerun-tag-verification tag."
+                "Prompt364 is blocked because the tracked worktree is clean but HEAD does not carry the prompt365-dry-run-source-mutation-guard tag."
             ),
         )
         _write_prompt364_artifacts(state)
@@ -42264,12 +42769,12 @@ def _build_prompt364_post_commit_tag_verification(
             changed_tracked_files=changed_tracked_files,
             staged_tracked_files=staged_tracked_files,
             next_cycle_handoff_ready=False,
-            next_action="commit_prompt364_fix1_then_clean_rerun",
+            next_action="commit_prompt365_then_clean_rerun",
             manual_required=False,
             replan_required=False,
-            blocked_reasons=["prompt364_fix1_implementation_changes_present"],
+            blocked_reasons=["prompt365_implementation_changes_present"],
             summary=(
-                "Prompt364 confirmed the Prompt363 boundary tag exists, accepted the current HEAD tag context, and detected only in-scope Prompt364 fix1 implementation changes."
+                "Prompt364 confirmed the Prompt363 boundary tag exists in repository history, accepted the current implementation-in-progress HEAD tag context, and detected only in-scope Prompt365 implementation changes."
             ),
         )
         _write_prompt364_artifacts(state)
@@ -42292,7 +42797,7 @@ def _build_prompt364_post_commit_tag_verification(
         replan_required=False,
         blocked_reasons=["prompt364_expected_head_context_missing"],
         summary=(
-            "Prompt364 is blocked because the local tracked changes are in-scope but HEAD is not aligned to the prompt364-post-commit-tag-verification-handoff tag or the prompt364-fix1-clean-rerun-tag-verification tag."
+            "Prompt364 is blocked because the local tracked changes are in-scope but HEAD is not aligned to an allowed Prompt364 implementation tag context or the prompt365-dry-run-source-mutation-guard tag."
         ),
     )
     _write_prompt364_artifacts(state)
@@ -210610,6 +211115,204 @@ class PlannedExecutionRunner:
                 dry_run=bool(dry_run),
             )
         )
+        def _read_prompt365_projection_flag(
+            value: Any,
+            *,
+            default: bool = False,
+        ) -> bool:
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, int):
+                return value != 0
+            normalized_value = _normalize_text(value, default="").strip().lower()
+            if normalized_value in {"1", "true", "yes", "on", "enabled"}:
+                return True
+            if normalized_value in {"0", "false", "no", "off", "disabled"}:
+                return False
+            return default
+
+        def _resolve_prompt365_final_run_state_projection() -> dict[str, Any]:
+            prompt365_controller_state = (
+                dict(project_browser_autonomous_one_cycle_controller_state)
+                if isinstance(
+                    project_browser_autonomous_one_cycle_controller_state,
+                    Mapping,
+                )
+                else {}
+            )
+            approved_restart_execution_contract_state = (
+                approved_restart_payload_for_bounded_local_loop.get(
+                    "approved_restart_execution_contract"
+                )
+                if isinstance(approved_restart_payload_for_bounded_local_loop, Mapping)
+                else None
+            )
+            prompt365_runtime_source_mutation_guard_status = _normalize_text(
+                prompt365_controller_state.get(
+                    "prompt365_runtime_source_mutation_guard_status"
+                ),
+                default="",
+            )
+            prompt365_dry_run_source_mutation_detected = (
+                _read_prompt365_projection_flag(
+                    prompt365_controller_state.get(
+                        "prompt365_dry_run_source_mutation_detected"
+                    ),
+                    default=False,
+                )
+            )
+            prompt365_mutation_capable_path_blocked = _read_prompt365_projection_flag(
+                prompt365_controller_state.get(
+                    "prompt365_mutation_capable_path_blocked"
+                ),
+                default=False,
+            )
+            prompt365_runtime_is_dry_run = any(
+                (
+                    bool(dry_run),
+                    _read_prompt365_projection_flag(
+                        run_state_payload.get("dry_run"),
+                        default=False,
+                    ),
+                    _normalize_text(
+                        run_state_payload.get("prompt360_transport_mode"),
+                        default="",
+                    ).lower()
+                    == "dry-run",
+                    _read_prompt365_projection_flag(
+                        approved_restart_payload_for_bounded_local_loop.get("dry_run")
+                        if isinstance(
+                            approved_restart_payload_for_bounded_local_loop,
+                            Mapping,
+                        )
+                        else None,
+                        default=False,
+                    ),
+                    _normalize_text(
+                        approved_restart_payload_for_bounded_local_loop.get(
+                            "prompt360_transport_mode"
+                        )
+                        if isinstance(
+                            approved_restart_payload_for_bounded_local_loop,
+                            Mapping,
+                        )
+                        else None,
+                        default="",
+                    ).lower()
+                    == "dry-run",
+                    _read_prompt365_projection_flag(
+                        approved_restart_execution_contract_state.get("dry_run")
+                        if isinstance(
+                            approved_restart_execution_contract_state,
+                            Mapping,
+                        )
+                        else None,
+                        default=False,
+                    ),
+                )
+            )
+            if prompt365_runtime_source_mutation_guard_status == "blocked":
+                prompt365_final_status = "blocked"
+            elif prompt365_dry_run_source_mutation_detected:
+                prompt365_final_status = "blocked"
+            elif prompt365_mutation_capable_path_blocked:
+                prompt365_final_status = "blocked"
+            elif prompt365_runtime_is_dry_run:
+                prompt365_final_status = "clean"
+            else:
+                prompt365_final_status = "not_applicable"
+            prompt365_blocked_reason = _normalize_text(
+                prompt365_controller_state.get("prompt365_blocked_reason"),
+                default="",
+            )
+            prompt365_next_action = _normalize_text(
+                prompt365_controller_state.get("prompt365_next_action"),
+                default="",
+            )
+            prompt365_manual_required = _read_prompt365_projection_flag(
+                prompt365_controller_state.get("prompt365_manual_required"),
+                default=False,
+            )
+            prompt365_summary = _normalize_text(
+                prompt365_controller_state.get("prompt365_summary"),
+                default="",
+            )
+            if prompt365_final_status == "blocked":
+                if prompt365_dry_run_source_mutation_detected:
+                    if not prompt365_blocked_reason:
+                        prompt365_blocked_reason = (
+                            _PROMPT365_DRY_RUN_MUTATION_DETECTED_REASON
+                        )
+                    if not prompt365_next_action:
+                        prompt365_next_action = (
+                            _PROMPT365_DRY_RUN_MUTATION_DETECTED_NEXT_ACTION
+                        )
+                    prompt365_manual_required = True
+                    if not prompt365_summary:
+                        prompt365_summary = (
+                            "Dry-run runtime source mutation guard detected "
+                            "tracked source mutations."
+                        )
+                elif prompt365_mutation_capable_path_blocked:
+                    if not prompt365_blocked_reason:
+                        prompt365_blocked_reason = _PROMPT365_DRY_RUN_BLOCKED_REASON
+                    if not prompt365_next_action:
+                        prompt365_next_action = _PROMPT365_DRY_RUN_BLOCKED_NEXT_ACTION
+                    prompt365_manual_required = True
+                    if not prompt365_summary:
+                        prompt365_summary = (
+                            "Dry-run runtime source mutation guard blocked a "
+                            "mutation-capable path."
+                        )
+            elif prompt365_final_status == "clean":
+                prompt365_blocked_reason = ""
+                prompt365_next_action = "continue"
+                prompt365_manual_required = False
+                if not prompt365_summary:
+                    prompt365_summary = (
+                        "Dry-run runtime source mutation guard completed "
+                        "without tracked source mutations."
+                    )
+            elif not prompt365_next_action:
+                prompt365_next_action = "continue"
+            return {
+                "prompt365_runtime_source_mutation_guard_status": (
+                    prompt365_final_status
+                ),
+                "prompt365_dry_run_source_mutation_detected": (
+                    prompt365_dry_run_source_mutation_detected
+                ),
+                "prompt365_mutation_capable_path_blocked": (
+                    prompt365_mutation_capable_path_blocked
+                ),
+                "prompt365_before_changed_tracked_files": _normalize_string_list(
+                    prompt365_controller_state.get(
+                        "prompt365_before_changed_tracked_files"
+                    )
+                ),
+                "prompt365_after_changed_tracked_files": _normalize_string_list(
+                    prompt365_controller_state.get(
+                        "prompt365_after_changed_tracked_files"
+                    )
+                ),
+                "prompt365_new_changed_tracked_files": _normalize_string_list(
+                    prompt365_controller_state.get(
+                        "prompt365_new_changed_tracked_files"
+                    )
+                ),
+                "prompt365_blocked_reason": prompt365_blocked_reason,
+                "prompt365_next_action": _normalize_text(
+                    prompt365_next_action,
+                    default="",
+                ),
+                "prompt365_manual_required": prompt365_manual_required,
+                "prompt365_summary": prompt365_summary,
+            }
+
+        run_state_payload = {
+            **run_state_payload,
+            **_resolve_prompt365_final_run_state_projection(),
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_one_cycle_controller_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
