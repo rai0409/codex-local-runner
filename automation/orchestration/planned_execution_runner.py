@@ -3636,6 +3636,33 @@ _PROMPT363_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt363_summary",
 )
 
+_PROMPT364_EXPECTED_TAG_NAME = "prompt363-approve-commit-tag-boundary"
+_PROMPT364_ALLOWED_IMPLEMENTATION_FILES: tuple[str, ...] = (
+    "automation/orchestration/planned_execution_runner.py",
+    "automation/orchestration/run_state_summary_contract.py",
+)
+_PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt364_verification_status",
+    "prompt364_commit_tag_verified",
+    "prompt364_worktree_clean",
+    "prompt364_head_short_sha",
+    "prompt364_head_tags",
+    "prompt364_head_tag_verified",
+    "prompt364_expected_tag_name",
+    "prompt364_changed_tracked_files",
+    "prompt364_staged_tracked_files",
+    "prompt364_allowed_implementation_files",
+    "prompt364_untracked_files_ignored",
+    "prompt364_next_cycle_handoff_ready",
+    "prompt364_authoritative_next_action",
+    "prompt364_next_action",
+    "prompt364_manual_required",
+    "prompt364_replan_required",
+    "prompt364_active_blocked_reason",
+    "prompt364_active_blocked_reasons",
+    "prompt364_summary",
+)
+
 _ONE_CYCLE_CONTROLLER_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_one_cycle_controller_status",
     "project_browser_autonomous_one_cycle_controller_next_action",
@@ -5269,6 +5296,23 @@ def _merge_prompt363_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT363_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt364_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt364_post_commit_tag_verification_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt364_post_commit_tag_verification_state)
+        if isinstance(prompt364_post_commit_tag_verification_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT364_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -41890,6 +41934,282 @@ def _build_prompt363_approve_commit_tag_boundary(
     return state
 
 
+def _build_prompt364_post_commit_tag_verification(
+    *,
+    run_root: Path | None = None,
+    execution_repo_path: str = "",
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt364_verification_path = artifact_root / "prompt364_post_commit_tag_verification.json"
+    prompt364_handoff_path = artifact_root / "prompt364_next_cycle_handoff.json"
+    expected_tag_name = _PROMPT364_EXPECTED_TAG_NAME
+    allowed_implementation_files = list(_PROMPT364_ALLOWED_IMPLEMENTATION_FILES)
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _build_state(
+        *,
+        verification_status: str,
+        commit_tag_verified: bool,
+        worktree_clean: bool,
+        head_short_sha: str,
+        head_tags: list[str],
+        head_tag_verified: bool,
+        changed_tracked_files: list[str],
+        staged_tracked_files: list[str],
+        next_cycle_handoff_ready: bool,
+        next_action: str,
+        manual_required: bool,
+        replan_required: bool,
+        blocked_reasons: list[str],
+        summary: str,
+    ) -> dict[str, Any]:
+        normalized_blocked_reasons = _normalize_string_list(
+            blocked_reasons,
+            sort_items=False,
+        )
+        return {
+            "prompt364_verification_status": _normalize_text(
+                verification_status,
+                default="blocked",
+            ),
+            "prompt364_commit_tag_verified": bool(commit_tag_verified),
+            "prompt364_worktree_clean": bool(worktree_clean),
+            "prompt364_head_short_sha": _normalize_text(head_short_sha, default=""),
+            "prompt364_head_tags": _normalize_string_list(head_tags, sort_items=True),
+            "prompt364_head_tag_verified": bool(head_tag_verified),
+            "prompt364_expected_tag_name": expected_tag_name,
+            "prompt364_changed_tracked_files": _normalize_string_list(
+                changed_tracked_files,
+                sort_items=True,
+            ),
+            "prompt364_staged_tracked_files": _normalize_string_list(
+                staged_tracked_files,
+                sort_items=True,
+            ),
+            "prompt364_allowed_implementation_files": list(
+                allowed_implementation_files
+            ),
+            "prompt364_untracked_files_ignored": True,
+            "prompt364_next_cycle_handoff_ready": bool(next_cycle_handoff_ready),
+            "prompt364_authoritative_next_action": _normalize_text(
+                next_action,
+                default="hold_for_followup",
+            ),
+            "prompt364_next_action": _normalize_text(
+                next_action,
+                default="hold_for_followup",
+            ),
+            "prompt364_manual_required": bool(manual_required),
+            "prompt364_replan_required": bool(replan_required),
+            "prompt364_active_blocked_reason": (
+                normalized_blocked_reasons[0] if normalized_blocked_reasons else ""
+            ),
+            "prompt364_active_blocked_reasons": normalized_blocked_reasons,
+            "prompt364_summary": _normalize_text(summary, default=""),
+        }
+
+    def _write_prompt364_artifacts(state: Mapping[str, Any]) -> None:
+        prompt364_verification_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(prompt364_verification_path, state)
+        _write_json(prompt364_handoff_path, state)
+
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=str(Path.cwd()),
+    )
+    git_commands = {
+        "status_short": ["git", "status", "--short", "--untracked-files=no"],
+        "diff_name_only": ["git", "diff", "--name-only"],
+        "diff_cached_name_only": ["git", "diff", "--cached", "--name-only"],
+        "head_short_sha": ["git", "rev-parse", "--short", "HEAD"],
+        "recent_log": ["git", "log", "--oneline", "--decorate", "-n", "5"],
+        "head_tags": ["git", "tag", "--points-at", "HEAD"],
+        "expected_tag_list": ["git", "tag", "--list", expected_tag_name],
+    }
+    git_outputs: dict[str, str] = {}
+    git_failed_reasons: list[str] = []
+    if not normalized_repo_path:
+        _append_reason(git_failed_reasons, "prompt364_execution_repo_path_missing")
+    else:
+        for command_key, command in git_commands.items():
+            completed = subprocess.run(
+                command,
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=normalized_repo_path,
+                shell=False,
+            )
+            git_outputs[command_key] = completed.stdout or ""
+            if completed.returncode != 0:
+                _append_reason(
+                    git_failed_reasons,
+                    f"prompt364_{command_key}_command_failed",
+                )
+
+    changed_tracked_files: list[str] = []
+    staged_tracked_files: list[str] = []
+    head_tags: list[str] = []
+    expected_tag_list: list[str] = []
+    head_short_sha = ""
+    if not git_failed_reasons:
+        status_paths = [
+            path_text
+            for path_text in (
+                _parse_git_status_path(raw_line.rstrip("\n"))
+                for raw_line in (git_outputs.get("status_short") or "").splitlines()
+            )
+            if path_text
+        ]
+        unstaged_paths = [
+            line.strip()
+            for line in (git_outputs.get("diff_name_only") or "").splitlines()
+            if line.strip()
+        ]
+        staged_tracked_files = _normalize_string_list(
+            [
+                line.strip()
+                for line in (git_outputs.get("diff_cached_name_only") or "").splitlines()
+                if line.strip()
+            ],
+            sort_items=True,
+        )
+        changed_tracked_files = _normalize_string_list(
+            sorted(set(status_paths + unstaged_paths + staged_tracked_files)),
+            sort_items=True,
+        )
+        head_short_sha = _normalize_text(git_outputs.get("head_short_sha"), default="")
+        head_tags = _normalize_string_list(
+            (git_outputs.get("head_tags") or "").splitlines(),
+            sort_items=True,
+        )
+        expected_tag_list = _normalize_string_list(
+            (git_outputs.get("expected_tag_list") or "").splitlines(),
+            sort_items=True,
+        )
+
+    expected_tag_exists = expected_tag_name in expected_tag_list
+    head_tag_verified = expected_tag_name in head_tags
+    commit_tag_verified = expected_tag_exists and head_tag_verified
+    worktree_clean = bool((not changed_tracked_files) and (not staged_tracked_files))
+    changed_files_within_allowed_set = bool(changed_tracked_files) and all(
+        path in allowed_implementation_files for path in changed_tracked_files
+    )
+
+    if git_failed_reasons:
+        state = _build_state(
+            verification_status="blocked",
+            commit_tag_verified=False,
+            worktree_clean=False,
+            head_short_sha=head_short_sha,
+            head_tags=head_tags,
+            head_tag_verified=False,
+            changed_tracked_files=changed_tracked_files,
+            staged_tracked_files=staged_tracked_files,
+            next_cycle_handoff_ready=False,
+            next_action="resolve_invalid_repo_state",
+            manual_required=True,
+            replan_required=False,
+            blocked_reasons=git_failed_reasons,
+            summary=(
+                "Prompt364 is blocked because bounded read-only git verification could not complete successfully."
+            ),
+        )
+        _write_prompt364_artifacts(state)
+        return state
+
+    if not commit_tag_verified:
+        state = _build_state(
+            verification_status="blocked",
+            commit_tag_verified=False,
+            worktree_clean=False,
+            head_short_sha=head_short_sha,
+            head_tags=head_tags,
+            head_tag_verified=False,
+            changed_tracked_files=changed_tracked_files,
+            staged_tracked_files=staged_tracked_files,
+            next_cycle_handoff_ready=False,
+            next_action="tag_prompt363_commit",
+            manual_required=True,
+            replan_required=False,
+            blocked_reasons=["prompt363_head_tag_missing"],
+            summary=(
+                "Prompt364 is blocked because the expected Prompt363 approve commit/tag boundary tag is missing or not attached to HEAD."
+            ),
+        )
+        _write_prompt364_artifacts(state)
+        return state
+
+    if worktree_clean:
+        state = _build_state(
+            verification_status="verified",
+            commit_tag_verified=True,
+            worktree_clean=True,
+            head_short_sha=head_short_sha,
+            head_tags=head_tags,
+            head_tag_verified=True,
+            changed_tracked_files=changed_tracked_files,
+            staged_tracked_files=staged_tracked_files,
+            next_cycle_handoff_ready=True,
+            next_action="prepare_next_local_cycle",
+            manual_required=False,
+            replan_required=False,
+            blocked_reasons=[],
+            summary=(
+                "Prompt364 verified the Prompt363 commit/tag boundary on HEAD, confirmed a clean tracked worktree, and prepared the next local cycle handoff."
+            ),
+        )
+        _write_prompt364_artifacts(state)
+        return state
+
+    if changed_files_within_allowed_set:
+        state = _build_state(
+            verification_status="implementation_in_progress",
+            commit_tag_verified=True,
+            worktree_clean=False,
+            head_short_sha=head_short_sha,
+            head_tags=head_tags,
+            head_tag_verified=True,
+            changed_tracked_files=changed_tracked_files,
+            staged_tracked_files=staged_tracked_files,
+            next_cycle_handoff_ready=False,
+            next_action="commit_prompt364_then_clean_rerun",
+            manual_required=False,
+            replan_required=False,
+            blocked_reasons=["prompt364_implementation_changes_present"],
+            summary=(
+                "Prompt364 confirmed the Prompt363 commit/tag boundary on HEAD and detected only in-scope Prompt364 implementation changes, so next-cycle handoff remains deferred until a clean rerun."
+            ),
+        )
+        _write_prompt364_artifacts(state)
+        return state
+
+    state = _build_state(
+        verification_status="blocked",
+        commit_tag_verified=True,
+        worktree_clean=False,
+        head_short_sha=head_short_sha,
+        head_tags=head_tags,
+        head_tag_verified=True,
+        changed_tracked_files=changed_tracked_files,
+        staged_tracked_files=staged_tracked_files,
+        next_cycle_handoff_ready=False,
+        next_action="resolve_unexpected_tracked_changes",
+        manual_required=True,
+        replan_required=False,
+        blocked_reasons=["unexpected_tracked_changes_present"],
+        summary=(
+            "Prompt364 is blocked because tracked changes outside the allowed Prompt364 implementation files are present."
+        ),
+    )
+    _write_prompt364_artifacts(state)
+    return state
+
+
 def _merge_prompt363_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -41941,6 +42261,55 @@ def _merge_prompt363_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt363_commands_path"
             if _normalize_text(prompt363.get("prompt363_commands_path"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt364_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt364_post_commit_tag_verification_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt364 = (
+        dict(prompt364_post_commit_tag_verification_payload)
+        if isinstance(prompt364_post_commit_tag_verification_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT364_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt364 and prompt364.get(key) is not None:
+            payload[key] = prompt364.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt364_verification_status"
+            if _normalize_text(prompt364.get("prompt364_verification_status"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt364_commit_tag_verified"
+            if bool(prompt364.get("prompt364_commit_tag_verified", False))
+            else "",
+            "approved_restart_execution_contract.prompt364_head_short_sha"
+            if _normalize_text(prompt364.get("prompt364_head_short_sha"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt364_head_tag_verified"
+            if bool(prompt364.get("prompt364_head_tag_verified", False))
+            else "",
+            "approved_restart_execution_contract.prompt364_next_cycle_handoff_ready"
+            if bool(prompt364.get("prompt364_next_cycle_handoff_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt364_next_action"
+            if _normalize_text(prompt364.get("prompt364_next_action"), default="")
             else "",
         ]
     )
@@ -210411,6 +210780,12 @@ class PlannedExecutionRunner:
         prompt363_approve_commit_tag_commands_path = (
             run_root / "prompt363_approve_commit_tag_commands.sh"
         )
+        prompt364_post_commit_tag_verification_path = (
+            run_root / "prompt364_post_commit_tag_verification.json"
+        )
+        prompt364_next_cycle_handoff_path = (
+            run_root / "prompt364_next_cycle_handoff.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -210424,6 +210799,16 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt363_approve_commit_tag_boundary_payload,
+        }
+        prompt364_post_commit_tag_verification_payload = (
+            _build_prompt364_post_commit_tag_verification(
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt364_post_commit_tag_verification_payload,
         }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
@@ -210452,6 +210837,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt363_approve_commit_tag_boundary_state=(
                     prompt363_approve_commit_tag_boundary_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt364_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt364_post_commit_tag_verification_state=(
+                    prompt364_post_commit_tag_verification_payload
                 ),
             )
         )
@@ -210490,6 +210883,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt363_approve_commit_tag_boundary_payload=(
                     prompt363_approve_commit_tag_boundary_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt364_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt364_post_commit_tag_verification_payload=(
+                    prompt364_post_commit_tag_verification_payload
                 ),
             )
         )
@@ -210640,6 +211043,18 @@ class PlannedExecutionRunner:
         manifest["prompt363_approve_commit_tag_commands_path"] = str(
             prompt363_approve_commit_tag_commands_path
         )
+        manifest["prompt364_post_commit_tag_verification_summary"] = dict(
+            prompt364_post_commit_tag_verification_payload
+        )
+        manifest["prompt364_post_commit_tag_verification_path"] = str(
+            prompt364_post_commit_tag_verification_path
+        )
+        manifest["prompt364_next_cycle_handoff_summary"] = dict(
+            prompt364_post_commit_tag_verification_payload
+        )
+        manifest["prompt364_next_cycle_handoff_path"] = str(
+            prompt364_next_cycle_handoff_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -210685,6 +211100,12 @@ class PlannedExecutionRunner:
         contract_summaries_by_role[
             "prompt363_approve_commit_tag_plan"
         ] = manifest.get("prompt363_approve_commit_tag_plan_summary")
+        contract_summaries_by_role[
+            "prompt364_post_commit_tag_verification"
+        ] = manifest.get("prompt364_post_commit_tag_verification_summary")
+        contract_summaries_by_role[
+            "prompt364_next_cycle_handoff"
+        ] = manifest.get("prompt364_next_cycle_handoff_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -210730,6 +211151,12 @@ class PlannedExecutionRunner:
         contract_paths_by_role[
             "prompt363_approve_commit_tag_plan"
         ] = manifest.get("prompt363_approve_commit_tag_plan_path")
+        contract_paths_by_role[
+            "prompt364_post_commit_tag_verification"
+        ] = manifest.get("prompt364_post_commit_tag_verification_path")
+        contract_paths_by_role[
+            "prompt364_next_cycle_handoff"
+        ] = manifest.get("prompt364_next_cycle_handoff_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -211452,6 +211879,48 @@ class PlannedExecutionRunner:
             "prompt363_active_blocked_reason": _normalize_text(
                 prompt363_approve_commit_tag_boundary_payload.get(
                     "prompt363_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt364_verification_status": _normalize_text(
+                prompt364_post_commit_tag_verification_payload.get(
+                    "prompt364_verification_status"
+                ),
+                default="blocked",
+            ),
+            "prompt364_commit_tag_verified": bool(
+                prompt364_post_commit_tag_verification_payload.get(
+                    "prompt364_commit_tag_verified",
+                    False,
+                )
+            ),
+            "prompt364_worktree_clean": bool(
+                prompt364_post_commit_tag_verification_payload.get(
+                    "prompt364_worktree_clean",
+                    False,
+                )
+            ),
+            "prompt364_head_tag_verified": bool(
+                prompt364_post_commit_tag_verification_payload.get(
+                    "prompt364_head_tag_verified",
+                    False,
+                )
+            ),
+            "prompt364_next_cycle_handoff_ready": bool(
+                prompt364_post_commit_tag_verification_payload.get(
+                    "prompt364_next_cycle_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt364_next_action": _normalize_text(
+                prompt364_post_commit_tag_verification_payload.get(
+                    "prompt364_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt364_active_blocked_reason": _normalize_text(
+                prompt364_post_commit_tag_verification_payload.get(
+                    "prompt364_active_blocked_reason"
                 ),
                 default="",
             ),

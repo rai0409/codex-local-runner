@@ -430,6 +430,25 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt363_active_blocked_reason",
     "prompt363_active_blocked_reasons",
     "prompt363_summary",
+    "prompt364_verification_status",
+    "prompt364_commit_tag_verified",
+    "prompt364_worktree_clean",
+    "prompt364_head_short_sha",
+    "prompt364_head_tags",
+    "prompt364_head_tag_verified",
+    "prompt364_expected_tag_name",
+    "prompt364_changed_tracked_files",
+    "prompt364_staged_tracked_files",
+    "prompt364_allowed_implementation_files",
+    "prompt364_untracked_files_ignored",
+    "prompt364_next_cycle_handoff_ready",
+    "prompt364_authoritative_next_action",
+    "prompt364_next_action",
+    "prompt364_manual_required",
+    "prompt364_replan_required",
+    "prompt364_active_blocked_reason",
+    "prompt364_active_blocked_reasons",
+    "prompt364_summary",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -983,6 +1002,13 @@ def select_manifest_run_state_summary_compact(
         "prompt363_untracked_files_ignored",
         "prompt363_manual_required",
         "prompt363_replan_required",
+        "prompt364_commit_tag_verified",
+        "prompt364_worktree_clean",
+        "prompt364_head_tag_verified",
+        "prompt364_untracked_files_ignored",
+        "prompt364_next_cycle_handoff_ready",
+        "prompt364_manual_required",
+        "prompt364_replan_required",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -1002,6 +1028,11 @@ def select_manifest_run_state_summary_compact(
         "prompt363_expected_tracked_files",
         "prompt363_actual_tracked_files",
         "prompt363_active_blocked_reasons",
+        "prompt364_head_tags",
+        "prompt364_changed_tracked_files",
+        "prompt364_staged_tracked_files",
+        "prompt364_allowed_implementation_files",
+        "prompt364_active_blocked_reasons",
     }
 
     summary: dict[str, Any] = {}
