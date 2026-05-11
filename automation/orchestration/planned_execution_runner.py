@@ -3661,6 +3661,17 @@ _PROMPT365_DRY_RUN_MUTATION_DETECTED_NEXT_ACTION = (
     "restore_tracked_source_and_fix_mutation_path"
 )
 _PROMPT366_SCHEMA_VERSION = "prompt366_local_autonomous_continuation_v1"
+_PROMPT366_EXPECTED_HEAD_TAG_NAME = (
+    "prompt366-local-autonomous-continuation-contract"
+)
+_PROMPT366_IMPLEMENTATION_FIX1_HEAD_TAG_NAME = (
+    "prompt366-fix1-head-tag-verification"
+)
+_PROMPT366_ALLOWED_HEAD_TAG_NAMES: tuple[str, ...] = (
+    _PROMPT366_EXPECTED_HEAD_TAG_NAME,
+    _PROMPT366_IMPLEMENTATION_FIX1_HEAD_TAG_NAME,
+)
+_PROMPT366_PREVIOUS_SOURCE_TAG_NAME = "prompt365-dry-run-source-mutation-guard"
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
     "prompt364_commit_tag_verified",
@@ -42821,7 +42832,9 @@ def _build_prompt366_local_autonomous_continuation_contract(
         artifact_root / "prompt366_next_cycle_restart_contract.json"
     )
     run_state = dict(run_state_payload or {})
-    expected_head_tag_name = _PROMPT364_EXPECTED_HEAD_TAG_NAME
+    expected_head_tag_name = _PROMPT366_EXPECTED_HEAD_TAG_NAME
+    allowed_head_tag_names = _PROMPT366_ALLOWED_HEAD_TAG_NAMES
+    previous_source_tag_name = _PROMPT366_PREVIOUS_SOURCE_TAG_NAME
     normalized_repo_path = _normalize_text(
         execution_repo_path,
         default=str(Path.cwd()),
@@ -43062,6 +43075,7 @@ def _build_prompt366_local_autonomous_continuation_contract(
     unstaged_tracked_files: list[str] = []
     changed_tracked_files: list[str] = []
     head_tags: list[str] = []
+    previous_source_tag_list: list[str] = []
     if not normalized_repo_path:
         git_state_available = False
     else:
@@ -43086,6 +43100,11 @@ def _build_prompt366_local_autonomous_continuation_contract(
                 ["tag", "--points-at", "HEAD"],
                 timeout_seconds=10,
             )
+            previous_source_tag_list_cmd = _run_git(
+                normalized_repo_path,
+                ["tag", "--list", previous_source_tag_name],
+                timeout_seconds=10,
+            )
         except (OSError, subprocess.TimeoutExpired):
             git_state_available = False
         else:
@@ -43096,6 +43115,7 @@ def _build_prompt366_local_autonomous_continuation_contract(
                     diff_name_only_cmd,
                     diff_cached_name_only_cmd,
                     head_tags_cmd,
+                    previous_source_tag_list_cmd,
                 )
             ):
                 git_state_available = False
@@ -43136,6 +43156,10 @@ def _build_prompt366_local_autonomous_continuation_contract(
                     (head_tags_cmd.stdout or "").splitlines(),
                     sort_items=True,
                 )
+                previous_source_tag_list = _normalize_string_list(
+                    (previous_source_tag_list_cmd.stdout or "").splitlines(),
+                    sort_items=True,
+                )
 
     prompt366_worktree_clean = bool(
         git_state_available
@@ -43143,8 +43167,12 @@ def _build_prompt366_local_autonomous_continuation_contract(
         and not staged_tracked_files
         and not unstaged_tracked_files
     )
+    prompt366_previous_source_tag_verified = bool(
+        git_state_available and previous_source_tag_name in previous_source_tag_list
+    )
     prompt366_head_tag_verified = bool(
-        git_state_available and expected_head_tag_name in head_tags
+        git_state_available
+        and any(tag_name in head_tags for tag_name in allowed_head_tag_names)
     )
 
     prompt367_required_execution_flags = [
@@ -43259,6 +43287,8 @@ def _build_prompt366_local_autonomous_continuation_contract(
         _append_reason(blockers, "prompt365_clean_source_mutation_guard_missing")
     if not prompt367_input_ready:
         _append_reason(blockers, "prompt367_approve_commit_tag_plan_missing")
+    if git_state_available and not prompt366_previous_source_tag_verified:
+        _append_reason(blockers, "prompt366_previous_source_tag_missing")
     if git_state_available and not prompt366_head_tag_verified:
         _append_reason(blockers, "prompt366_head_tag_missing")
     if git_state_available and not prompt366_worktree_clean:
@@ -43291,6 +43321,7 @@ def _build_prompt366_local_autonomous_continuation_contract(
             blocker
             in {
                 "prompt366_git_state_unavailable",
+                "prompt366_previous_source_tag_missing",
                 "prompt366_head_tag_missing",
                 "prompt366_tracked_worktree_not_clean",
                 "prompt366_staged_tracked_files_present",
@@ -43317,6 +43348,7 @@ def _build_prompt366_local_autonomous_continuation_contract(
         "source_prompt": "prompt364",
         "source_action": "prepare_next_local_cycle",
         "source_head_tag": expected_head_tag_name,
+        "previous_source_tag": previous_source_tag_name,
         "local_only": True,
         "remote_operations_enabled": False,
         "codex_execution_performed": False,
@@ -43339,6 +43371,9 @@ def _build_prompt366_local_autonomous_continuation_contract(
         "prompt366_prompt364_verified": prompt366_prompt364_verified,
         "prompt366_prompt365_guard_clean": prompt366_prompt365_guard_clean,
         "prompt366_worktree_clean": prompt366_worktree_clean,
+        "prompt366_previous_source_tag_verified": (
+            prompt366_previous_source_tag_verified
+        ),
         "prompt366_head_tag_verified": prompt366_head_tag_verified,
         "prompt366_recovered_prompt364_evidence_used": (
             prompt366_recovered_prompt364_evidence_used
