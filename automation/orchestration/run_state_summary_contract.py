@@ -766,6 +766,37 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt373_active_blocked_reason",
     "prompt373_active_blocked_reasons",
     "prompt373_summary",
+    "prompt374_post_execution_diff_capture_status",
+    "prompt374_prompt373_execution_evidence_ready",
+    "prompt374_prompt373_execution_status",
+    "prompt374_prompt373_returncode",
+    "prompt374_prompt373_returncode_classification",
+    "prompt374_prompt373_stdout_path",
+    "prompt374_prompt373_stderr_path",
+    "prompt374_tracked_diff_capture_ready",
+    "prompt374_tracked_diff_present",
+    "prompt374_changed_tracked_files",
+    "prompt374_changed_tracked_file_count",
+    "prompt374_post_execution_diff_classification",
+    "prompt374_review_route",
+    "prompt374_review_route_handoff_ready",
+    "prompt374_execution_allowed",
+    "prompt374_execution_attempted",
+    "prompt374_execution_performed",
+    "prompt374_codex_execution_allowed",
+    "prompt374_codex_execution_attempted",
+    "prompt374_codex_execution_performed",
+    "prompt374_git_mutation_allowed",
+    "prompt374_git_mutation_attempted",
+    "prompt374_git_mutation_performed",
+    "prompt374_remote_mutation_allowed",
+    "prompt374_remote_mutation_attempted",
+    "prompt374_remote_mutation_performed",
+    "prompt374_authoritative_next_action",
+    "prompt374_next_action",
+    "prompt374_active_blocked_reason",
+    "prompt374_active_blocked_reasons",
+    "prompt374_summary",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -1472,6 +1503,22 @@ def select_manifest_run_state_summary_compact(
         "prompt373_remote_mutation_attempted",
         "prompt373_remote_mutation_performed",
         "prompt373_post_execution_diff_capture_handoff_ready",
+        "prompt374_prompt373_execution_evidence_ready",
+        "prompt374_tracked_diff_capture_ready",
+        "prompt374_tracked_diff_present",
+        "prompt374_review_route_handoff_ready",
+        "prompt374_execution_allowed",
+        "prompt374_execution_attempted",
+        "prompt374_execution_performed",
+        "prompt374_codex_execution_allowed",
+        "prompt374_codex_execution_attempted",
+        "prompt374_codex_execution_performed",
+        "prompt374_git_mutation_allowed",
+        "prompt374_git_mutation_attempted",
+        "prompt374_git_mutation_performed",
+        "prompt374_remote_mutation_allowed",
+        "prompt374_remote_mutation_attempted",
+        "prompt374_remote_mutation_performed",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -1514,6 +1561,8 @@ def select_manifest_run_state_summary_compact(
         "prompt372_gate_blocked_reasons",
         "prompt372_active_blocked_reasons",
         "prompt373_active_blocked_reasons",
+        "prompt374_changed_tracked_files",
+        "prompt374_active_blocked_reasons",
     }
     int_fields.add("prompt367_returncode")
     int_fields.add("prompt368_resume_iteration_current")
@@ -1521,6 +1570,7 @@ def select_manifest_run_state_summary_compact(
     int_fields.add("prompt371_selected_step_id")
     int_fields.add("prompt371_cycle_index")
     int_fields.add("prompt371_max_cycles")
+    int_fields.add("prompt374_changed_tracked_file_count")
 
     summary: dict[str, Any] = {}
     for field in MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS:
