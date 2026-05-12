@@ -907,6 +907,41 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt377_next_action",
     "prompt377_active_blocked_reason",
     "prompt377_active_blocked_reasons",
+    "prompt378_chatgpt_generated_prompt_intake_status",
+    "prompt378_prompt377_evidence_ready",
+    "prompt378_prompt377_prompt_generation_request_status",
+    "prompt378_prompt377_prompt_generation_owner",
+    "prompt378_prompt377_chatgpt_prompt_generation_request_ready",
+    "prompt378_next_cycle_index",
+    "prompt378_max_cycles",
+    "prompt378_success_path_only",
+    "prompt378_generated_prompt_supplied",
+    "prompt378_generated_prompt_ready",
+    "prompt378_generated_prompt_path",
+    "prompt378_generated_prompt_content_length",
+    "prompt378_generated_prompt_checksum",
+    "prompt378_generated_prompt_validation_status",
+    "prompt378_generated_prompt_validation_reasons",
+    "prompt378_generated_prompt_execution_handoff_ready",
+    "prompt378_chatgpt_call_allowed",
+    "prompt378_chatgpt_call_attempted",
+    "prompt378_chatgpt_call_performed",
+    "prompt378_execution_allowed",
+    "prompt378_execution_attempted",
+    "prompt378_execution_performed",
+    "prompt378_codex_execution_allowed",
+    "prompt378_codex_execution_attempted",
+    "prompt378_codex_execution_performed",
+    "prompt378_git_mutation_allowed",
+    "prompt378_git_mutation_attempted",
+    "prompt378_git_mutation_performed",
+    "prompt378_remote_mutation_allowed",
+    "prompt378_remote_mutation_attempted",
+    "prompt378_remote_mutation_performed",
+    "prompt378_authoritative_next_action",
+    "prompt378_next_action",
+    "prompt378_active_blocked_reason",
+    "prompt378_active_blocked_reasons",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -1702,6 +1737,27 @@ def select_manifest_run_state_summary_compact(
         "prompt377_remote_mutation_allowed",
         "prompt377_remote_mutation_attempted",
         "prompt377_remote_mutation_performed",
+        "prompt378_prompt377_evidence_ready",
+        "prompt378_prompt377_chatgpt_prompt_generation_request_ready",
+        "prompt378_success_path_only",
+        "prompt378_generated_prompt_supplied",
+        "prompt378_generated_prompt_ready",
+        "prompt378_generated_prompt_execution_handoff_ready",
+        "prompt378_chatgpt_call_allowed",
+        "prompt378_chatgpt_call_attempted",
+        "prompt378_chatgpt_call_performed",
+        "prompt378_execution_allowed",
+        "prompt378_execution_attempted",
+        "prompt378_execution_performed",
+        "prompt378_codex_execution_allowed",
+        "prompt378_codex_execution_attempted",
+        "prompt378_codex_execution_performed",
+        "prompt378_git_mutation_allowed",
+        "prompt378_git_mutation_attempted",
+        "prompt378_git_mutation_performed",
+        "prompt378_remote_mutation_allowed",
+        "prompt378_remote_mutation_attempted",
+        "prompt378_remote_mutation_performed",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -1750,6 +1806,8 @@ def select_manifest_run_state_summary_compact(
         "prompt375_active_blocked_reasons",
         "prompt376_active_blocked_reasons",
         "prompt377_active_blocked_reasons",
+        "prompt378_generated_prompt_validation_reasons",
+        "prompt378_active_blocked_reasons",
     }
     int_fields.add("prompt367_returncode")
     int_fields.add("prompt368_resume_iteration_current")
@@ -1766,6 +1824,9 @@ def select_manifest_run_state_summary_compact(
     int_fields.add("prompt377_prompt376_max_cycles")
     int_fields.add("prompt377_next_cycle_index")
     int_fields.add("prompt377_max_cycles")
+    int_fields.add("prompt378_next_cycle_index")
+    int_fields.add("prompt378_max_cycles")
+    int_fields.add("prompt378_generated_prompt_content_length")
 
     summary: dict[str, Any] = {}
     for field in MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS:
