@@ -3944,6 +3944,43 @@ _PROMPT374_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt374_active_blocked_reasons",
     "prompt374_summary",
 )
+_PROMPT375_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt375_no_diff_review_route_decision_status",
+    "prompt375_prompt374_evidence_ready",
+    "prompt375_prompt374_post_execution_diff_capture_status",
+    "prompt375_prompt374_post_execution_diff_classification",
+    "prompt375_prompt374_review_route",
+    "prompt375_prompt374_tracked_diff_present",
+    "prompt375_prompt374_changed_tracked_files",
+    "prompt375_prompt374_changed_tracked_file_count",
+    "prompt375_no_diff_confirmed",
+    "prompt375_review_decision",
+    "prompt375_cycle_continuation_allowed",
+    "prompt375_cycle_continuation_handoff_ready",
+    "prompt375_cycle_closure_allowed",
+    "prompt375_approve_commit_tag_allowed",
+    "prompt375_commit_tag_required",
+    "prompt375_targeted_fix_allowed",
+    "prompt375_targeted_fix_required",
+    "prompt375_replan_required",
+    "prompt375_execution_allowed",
+    "prompt375_execution_attempted",
+    "prompt375_execution_performed",
+    "prompt375_codex_execution_allowed",
+    "prompt375_codex_execution_attempted",
+    "prompt375_codex_execution_performed",
+    "prompt375_git_mutation_allowed",
+    "prompt375_git_mutation_attempted",
+    "prompt375_git_mutation_performed",
+    "prompt375_remote_mutation_allowed",
+    "prompt375_remote_mutation_attempted",
+    "prompt375_remote_mutation_performed",
+    "prompt375_authoritative_next_action",
+    "prompt375_next_action",
+    "prompt375_active_blocked_reason",
+    "prompt375_active_blocked_reasons",
+    "prompt375_summary",
+)
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
     "prompt364_commit_tag_verified",
@@ -5722,6 +5759,23 @@ def _merge_prompt374_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT374_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt375_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt375_no_diff_review_route_decision_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt375_no_diff_review_route_decision_state)
+        if isinstance(prompt375_no_diff_review_route_decision_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT375_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -49141,6 +49195,784 @@ def _merge_prompt374_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt374_next_action"
             if _normalize_text(prompt374.get("prompt374_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _build_prompt375_no_diff_review_route_decision_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    current_prompt374_source_path: str = "",
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt375_route_path = artifact_root / "prompt375_no_diff_review_route_decision.json"
+    prompt375_evidence_path = artifact_root / "prompt375_prompt374_evidence.json"
+    prompt375_handoff_path = artifact_root / "prompt375_cycle_continuation_handoff.json"
+    prompt375_receipt_path = artifact_root / "prompt375_no_diff_review_receipt.json"
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _path_is_readable_file(path_text: str) -> bool:
+        normalized_path = _normalize_text(path_text, default="")
+        if not normalized_path:
+            return False
+        path_obj = Path(normalized_path)
+        return path_obj.exists() and path_obj.is_file()
+
+    def _normalize_prompt374_surface(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(payload) if isinstance(payload, Mapping) else {}
+        return {
+            "prompt374_post_execution_diff_capture_status": _normalize_text(
+                source.get("prompt374_post_execution_diff_capture_status"),
+                default="",
+            ),
+            "prompt374_prompt373_execution_evidence_ready": _prompt357_as_boolish(
+                source.get("prompt374_prompt373_execution_evidence_ready"),
+                default=False,
+            ),
+            "prompt374_prompt373_execution_status": _normalize_text(
+                source.get("prompt374_prompt373_execution_status"),
+                default="",
+            ),
+            "prompt374_prompt373_returncode": source.get("prompt374_prompt373_returncode"),
+            "prompt374_prompt373_returncode_classification": _normalize_text(
+                source.get("prompt374_prompt373_returncode_classification"),
+                default="",
+            ),
+            "prompt374_prompt373_stdout_path": _normalize_text(
+                source.get("prompt374_prompt373_stdout_path"),
+                default="",
+            ),
+            "prompt374_prompt373_stderr_path": _normalize_text(
+                source.get("prompt374_prompt373_stderr_path"),
+                default="",
+            ),
+            "prompt374_tracked_diff_capture_ready": _prompt357_as_boolish(
+                source.get("prompt374_tracked_diff_capture_ready"),
+                default=False,
+            ),
+            "prompt374_tracked_diff_present": _prompt357_as_boolish(
+                source.get("prompt374_tracked_diff_present"),
+                default=False,
+            ),
+            "prompt374_changed_tracked_files": _normalize_string_list(
+                source.get("prompt374_changed_tracked_files"),
+                sort_items=False,
+            ),
+            "prompt374_changed_tracked_file_count": _as_non_negative_int(
+                source.get("prompt374_changed_tracked_file_count"),
+                default=0,
+            ),
+            "prompt374_post_execution_diff_classification": _normalize_text(
+                source.get("prompt374_post_execution_diff_classification"),
+                default="",
+            ),
+            "prompt374_review_route": _normalize_text(
+                source.get("prompt374_review_route"),
+                default="",
+            ),
+            "prompt374_review_route_handoff_ready": _prompt357_as_boolish(
+                source.get("prompt374_review_route_handoff_ready"),
+                default=False,
+            ),
+            "prompt374_execution_allowed": _prompt357_as_boolish(
+                source.get("prompt374_execution_allowed"),
+                default=False,
+            ),
+            "prompt374_execution_attempted": _prompt357_as_boolish(
+                source.get("prompt374_execution_attempted"),
+                default=False,
+            ),
+            "prompt374_execution_performed": _prompt357_as_boolish(
+                source.get("prompt374_execution_performed"),
+                default=False,
+            ),
+            "prompt374_codex_execution_allowed": _prompt357_as_boolish(
+                source.get("prompt374_codex_execution_allowed"),
+                default=False,
+            ),
+            "prompt374_codex_execution_attempted": _prompt357_as_boolish(
+                source.get("prompt374_codex_execution_attempted"),
+                default=False,
+            ),
+            "prompt374_codex_execution_performed": _prompt357_as_boolish(
+                source.get("prompt374_codex_execution_performed"),
+                default=False,
+            ),
+            "prompt374_git_mutation_allowed": _prompt357_as_boolish(
+                source.get("prompt374_git_mutation_allowed"),
+                default=False,
+            ),
+            "prompt374_git_mutation_attempted": _prompt357_as_boolish(
+                source.get("prompt374_git_mutation_attempted"),
+                default=False,
+            ),
+            "prompt374_git_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt374_git_mutation_performed"),
+                default=False,
+            ),
+            "prompt374_remote_mutation_allowed": _prompt357_as_boolish(
+                source.get("prompt374_remote_mutation_allowed"),
+                default=False,
+            ),
+            "prompt374_remote_mutation_attempted": _prompt357_as_boolish(
+                source.get("prompt374_remote_mutation_attempted"),
+                default=False,
+            ),
+            "prompt374_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt374_remote_mutation_performed"),
+                default=False,
+            ),
+            "prompt374_next_action": _normalize_text(
+                source.get("prompt374_next_action"),
+                default="",
+            ),
+            "prompt374_authoritative_next_action": _normalize_text(
+                source.get("prompt374_authoritative_next_action"),
+                default="",
+            ),
+            "prompt374_active_blocked_reason": _normalize_text(
+                source.get("prompt374_active_blocked_reason"),
+                default="",
+            ),
+            "prompt374_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt374_active_blocked_reasons"),
+                sort_items=False,
+            ),
+            "prompt374_summary": _normalize_text(
+                source.get("prompt374_summary"),
+                default="",
+            ),
+        }
+
+    def _prompt375_prompt374_invalid_reasons(
+        surface: Mapping[str, Any] | None,
+        *,
+        fallback_missing_reason: str,
+    ) -> list[str]:
+        normalized = _normalize_prompt374_surface(surface)
+        reasons: list[str] = []
+        if (
+            _normalize_text(
+                normalized.get("prompt374_post_execution_diff_capture_status"),
+                default="",
+            )
+            != "completed"
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_post_execution_diff_capture_status_not_completed",
+            )
+        if not bool(normalized.get("prompt374_prompt373_execution_evidence_ready", False)):
+            _append_reason(
+                reasons,
+                "prompt374_prompt373_execution_evidence_ready_not_true",
+            )
+        if (
+            _normalize_text(
+                normalized.get("prompt374_prompt373_execution_status"),
+                default="",
+            )
+            != "completed"
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_prompt373_execution_status_not_completed",
+            )
+        if (
+            _as_non_negative_int(
+                normalized.get("prompt374_prompt373_returncode"),
+                default=-1,
+            )
+            != 0
+        ):
+            _append_reason(reasons, "prompt374_prompt373_returncode_not_zero")
+        if (
+            _normalize_text(
+                normalized.get("prompt374_prompt373_returncode_classification"),
+                default="",
+            )
+            != "success"
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_prompt373_returncode_classification_not_success",
+            )
+        if not _path_is_readable_file(
+            _normalize_text(
+                normalized.get("prompt374_prompt373_stdout_path"),
+                default="",
+            )
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_prompt373_stdout_path_missing_or_unreadable",
+            )
+        if not _path_is_readable_file(
+            _normalize_text(
+                normalized.get("prompt374_prompt373_stderr_path"),
+                default="",
+            )
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_prompt373_stderr_path_missing_or_unreadable",
+            )
+        if not bool(normalized.get("prompt374_tracked_diff_capture_ready", False)):
+            _append_reason(
+                reasons,
+                "prompt374_tracked_diff_capture_ready_not_true",
+            )
+        if bool(normalized.get("prompt374_tracked_diff_present", False)):
+            _append_reason(reasons, "prompt374_tracked_diff_present_not_false")
+        if _normalize_string_list(
+            normalized.get("prompt374_changed_tracked_files"),
+            sort_items=False,
+        ) != []:
+            _append_reason(reasons, "prompt374_changed_tracked_files_not_empty")
+        if (
+            _as_non_negative_int(
+                normalized.get("prompt374_changed_tracked_file_count"),
+                default=-1,
+            )
+            != 0
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_changed_tracked_file_count_not_zero",
+            )
+        if (
+            _normalize_text(
+                normalized.get("prompt374_post_execution_diff_classification"),
+                default="",
+            )
+            != "no_tracked_diff"
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_post_execution_diff_classification_not_no_tracked_diff",
+            )
+        if (
+            _normalize_text(normalized.get("prompt374_review_route"), default="")
+            != "no_diff_review_or_cycle_continuation"
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_review_route_not_no_diff_review_or_cycle_continuation",
+            )
+        if not bool(normalized.get("prompt374_review_route_handoff_ready", False)):
+            _append_reason(
+                reasons,
+                "prompt374_review_route_handoff_ready_not_true",
+            )
+        if bool(normalized.get("prompt374_execution_allowed", False)):
+            _append_reason(reasons, "prompt374_execution_allowed_not_false")
+        if bool(normalized.get("prompt374_execution_attempted", False)):
+            _append_reason(reasons, "prompt374_execution_attempted_not_false")
+        if bool(normalized.get("prompt374_execution_performed", False)):
+            _append_reason(reasons, "prompt374_execution_performed_not_false")
+        if bool(normalized.get("prompt374_codex_execution_allowed", False)):
+            _append_reason(reasons, "prompt374_codex_execution_allowed_not_false")
+        if bool(normalized.get("prompt374_codex_execution_attempted", False)):
+            _append_reason(reasons, "prompt374_codex_execution_attempted_not_false")
+        if bool(normalized.get("prompt374_codex_execution_performed", False)):
+            _append_reason(reasons, "prompt374_codex_execution_performed_not_false")
+        if bool(normalized.get("prompt374_git_mutation_allowed", False)):
+            _append_reason(reasons, "prompt374_git_mutation_allowed_not_false")
+        if bool(normalized.get("prompt374_git_mutation_attempted", False)):
+            _append_reason(reasons, "prompt374_git_mutation_attempted_not_false")
+        if bool(normalized.get("prompt374_git_mutation_performed", False)):
+            _append_reason(reasons, "prompt374_git_mutation_performed_not_false")
+        if bool(normalized.get("prompt374_remote_mutation_allowed", False)):
+            _append_reason(reasons, "prompt374_remote_mutation_allowed_not_false")
+        if bool(normalized.get("prompt374_remote_mutation_attempted", False)):
+            _append_reason(reasons, "prompt374_remote_mutation_attempted_not_false")
+        if bool(normalized.get("prompt374_remote_mutation_performed", False)):
+            _append_reason(reasons, "prompt374_remote_mutation_performed_not_false")
+        if (
+            _normalize_text(normalized.get("prompt374_next_action"), default="")
+            != "prepare_prompt375_no_diff_review_route_decision"
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_next_action_not_prepare_prompt375_no_diff_review_route_decision",
+            )
+        if (
+            _normalize_text(
+                normalized.get("prompt374_authoritative_next_action"),
+                default="",
+            )
+            != "prepare_prompt375_no_diff_review_route_decision"
+        ):
+            _append_reason(
+                reasons,
+                "prompt374_authoritative_next_action_not_prepare_prompt375_no_diff_review_route_decision",
+            )
+        if _normalize_text(
+            normalized.get("prompt374_active_blocked_reason"),
+            default="",
+        ):
+            _append_reason(reasons, "prompt374_active_blocked_reason_not_empty")
+        if _normalize_string_list(
+            normalized.get("prompt374_active_blocked_reasons"),
+            sort_items=False,
+        ) != []:
+            _append_reason(reasons, "prompt374_active_blocked_reasons_not_empty")
+        if not reasons and not isinstance(surface, Mapping):
+            _append_reason(reasons, fallback_missing_reason)
+        return reasons
+
+    def _valid_prompt374_no_diff_evidence(payload: Mapping[str, Any] | None) -> bool:
+        return not _prompt375_prompt374_invalid_reasons(
+            payload,
+            fallback_missing_reason="prompt374_no_diff_evidence_unavailable",
+        )
+
+    def _read_candidate_prompt374_artifact(path_text: str) -> tuple[dict[str, Any], str]:
+        normalized_path = _normalize_text(path_text, default="")
+        if not normalized_path:
+            return {}, ""
+        path_obj = Path(normalized_path)
+        payload = _read_json_object_if_exists(path_obj)
+        if _valid_prompt374_no_diff_evidence(payload):
+            return _normalize_prompt374_surface(payload), str(path_obj)
+        return {}, ""
+
+    def _recover_latest_valid_prompt374_no_diff_evidence() -> tuple[
+        dict[str, Any],
+        str,
+        dict[str, str],
+    ]:
+        recovery_root = Path("/tmp/codex-local-runner-checks")
+        if not recovery_root.exists() or not recovery_root.is_dir():
+            return {}, "", {}
+
+        candidate_bundle_dirs: list[Path] = []
+        for prompt374_root in sorted(
+            recovery_root.glob("prompt374_*"),
+            key=_prompt358_candidate_artifact_timestamp,
+            reverse=True,
+        ):
+            if not prompt374_root.is_dir():
+                continue
+            candidate_bundle_dirs.append(prompt374_root)
+            try:
+                prompt374_root_entries = list(prompt374_root.iterdir())
+            except OSError:
+                prompt374_root_entries = []
+            nested_prompt374_dirs = sorted(
+                [
+                    path
+                    for path in prompt374_root_entries
+                    if path.is_dir() and path.name.startswith("prompt374-")
+                ],
+                key=_prompt358_candidate_artifact_timestamp,
+                reverse=True,
+            )
+            candidate_bundle_dirs.extend(nested_prompt374_dirs)
+
+        seen_bundle_dirs: set[Path] = set()
+        bundle_candidates: list[tuple[int, Path]] = []
+        for candidate_dir in candidate_bundle_dirs:
+            try:
+                resolved_candidate_dir = candidate_dir.resolve()
+            except OSError:
+                resolved_candidate_dir = candidate_dir
+            if resolved_candidate_dir in seen_bundle_dirs:
+                continue
+            seen_bundle_dirs.add(resolved_candidate_dir)
+            artifact_paths = (
+                candidate_dir / "prompt374_post_execution_diff_capture_handoff.json",
+                candidate_dir / "prompt374_diff_capture_receipt.json",
+                candidate_dir / "run_state.json",
+            )
+            newest_artifact_timestamp = max(
+                (
+                    _prompt358_candidate_artifact_timestamp(artifact_path)
+                    for artifact_path in artifact_paths
+                    if artifact_path.exists() and artifact_path.is_file()
+                ),
+                default=0,
+            )
+            if newest_artifact_timestamp > 0:
+                bundle_candidates.append((newest_artifact_timestamp, candidate_dir))
+
+        for _, candidate_dir in sorted(
+            bundle_candidates,
+            key=lambda item: item[0],
+            reverse=True,
+        )[:8]:
+            companion_paths = {
+                "prompt375_prompt374_recovered_handoff_path": str(
+                    candidate_dir / "prompt374_post_execution_diff_capture_handoff.json"
+                ),
+                "prompt375_prompt374_recovered_evidence_path": str(
+                    candidate_dir / "prompt374_prompt373_execution_evidence.json"
+                ),
+                "prompt375_prompt374_recovered_tracked_diff_state_path": str(
+                    candidate_dir / "prompt374_tracked_diff_state.json"
+                ),
+                "prompt375_prompt374_recovered_review_route_handoff_path": str(
+                    candidate_dir / "prompt374_post_execution_review_route_handoff.json"
+                ),
+                "prompt375_prompt374_recovered_receipt_path": str(
+                    candidate_dir / "prompt374_diff_capture_receipt.json"
+                ),
+                "prompt375_prompt374_recovered_run_state_path": str(
+                    candidate_dir / "run_state.json"
+                ),
+            }
+            for artifact_key in (
+                "prompt375_prompt374_recovered_handoff_path",
+                "prompt375_prompt374_recovered_receipt_path",
+                "prompt375_prompt374_recovered_run_state_path",
+            ):
+                artifact_surface, artifact_source = _read_candidate_prompt374_artifact(
+                    companion_paths[artifact_key]
+                )
+                if artifact_source:
+                    return artifact_surface, artifact_source, companion_paths
+        return {}, "", {}
+
+    def _resolve_prompt375_prompt374_evidence() -> tuple[
+        dict[str, Any],
+        str,
+        bool,
+        dict[str, str],
+    ]:
+        current_surface = _normalize_prompt374_surface(run_state)
+        if _valid_prompt374_no_diff_evidence(current_surface):
+            return (
+                current_surface,
+                _normalize_text(current_prompt374_source_path, default=""),
+                False,
+                {},
+            )
+
+        candidate_surface, candidate_source = _read_candidate_prompt374_artifact(
+            current_prompt374_source_path
+        )
+        if candidate_source:
+            return candidate_surface, candidate_source, False, {}
+
+        (
+            recovered_surface,
+            recovered_source,
+            recovered_companion_paths,
+        ) = _recover_latest_valid_prompt374_no_diff_evidence()
+        if recovered_source:
+            return recovered_surface, recovered_source, True, recovered_companion_paths
+
+        return (
+            current_surface,
+            _normalize_text(current_prompt374_source_path, default=""),
+            False,
+            {},
+        )
+
+    def _prompt375_next_action_for_non_no_diff(
+        prompt374_surface: Mapping[str, Any] | None,
+    ) -> str:
+        normalized = _normalize_prompt374_surface(prompt374_surface)
+        prompt374_next_action = _normalize_text(
+            normalized.get("prompt374_authoritative_next_action"),
+            default="",
+        )
+        if prompt374_next_action in {
+            "prepare_prompt375_post_execution_review_route_decision",
+            "prepare_prompt375_execution_failure_review_route_decision",
+        }:
+            return prompt374_next_action
+        return "repair_prompt374_no_diff_evidence_before_prompt375"
+
+    def _build_prompt375_state(
+        *,
+        status: str,
+        prompt374_surface: Mapping[str, Any],
+        prompt374_evidence_ready: bool,
+        no_diff_confirmed: bool,
+        review_decision: str,
+        cycle_continuation_allowed: bool,
+        cycle_continuation_handoff_ready: bool,
+        cycle_closure_allowed: bool,
+        approve_commit_tag_allowed: bool,
+        commit_tag_required: bool,
+        targeted_fix_allowed: bool,
+        targeted_fix_required: bool,
+        replan_required: bool,
+        next_action: str,
+        blocked_reasons: list[str],
+        summary: str,
+    ) -> dict[str, Any]:
+        normalized_blocked_reasons = _normalize_string_list(
+            blocked_reasons,
+            sort_items=False,
+        )
+        changed_tracked_files = _normalize_string_list(
+            prompt374_surface.get("prompt374_changed_tracked_files"),
+            sort_items=False,
+        )
+        return {
+            "prompt375_no_diff_review_route_decision_status": _normalize_text(
+                status,
+                default="blocked",
+            ),
+            "prompt375_prompt374_evidence_ready": bool(prompt374_evidence_ready),
+            "prompt375_prompt374_post_execution_diff_capture_status": _normalize_text(
+                prompt374_surface.get("prompt374_post_execution_diff_capture_status"),
+                default="",
+            ),
+            "prompt375_prompt374_post_execution_diff_classification": _normalize_text(
+                prompt374_surface.get("prompt374_post_execution_diff_classification"),
+                default="",
+            ),
+            "prompt375_prompt374_review_route": _normalize_text(
+                prompt374_surface.get("prompt374_review_route"),
+                default="",
+            ),
+            "prompt375_prompt374_tracked_diff_present": bool(
+                prompt374_surface.get("prompt374_tracked_diff_present", False)
+            ),
+            "prompt375_prompt374_changed_tracked_files": changed_tracked_files,
+            "prompt375_prompt374_changed_tracked_file_count": _as_non_negative_int(
+                prompt374_surface.get("prompt374_changed_tracked_file_count"),
+                default=len(changed_tracked_files),
+            ),
+            "prompt375_no_diff_confirmed": bool(no_diff_confirmed),
+            "prompt375_review_decision": _normalize_text(
+                review_decision,
+                default="blocked",
+            ),
+            "prompt375_cycle_continuation_allowed": bool(cycle_continuation_allowed),
+            "prompt375_cycle_continuation_handoff_ready": bool(
+                cycle_continuation_handoff_ready
+            ),
+            "prompt375_cycle_closure_allowed": bool(cycle_closure_allowed),
+            "prompt375_approve_commit_tag_allowed": bool(
+                approve_commit_tag_allowed
+            ),
+            "prompt375_commit_tag_required": bool(commit_tag_required),
+            "prompt375_targeted_fix_allowed": bool(targeted_fix_allowed),
+            "prompt375_targeted_fix_required": bool(targeted_fix_required),
+            "prompt375_replan_required": bool(replan_required),
+            "prompt375_execution_allowed": False,
+            "prompt375_execution_attempted": False,
+            "prompt375_execution_performed": False,
+            "prompt375_codex_execution_allowed": False,
+            "prompt375_codex_execution_attempted": False,
+            "prompt375_codex_execution_performed": False,
+            "prompt375_git_mutation_allowed": False,
+            "prompt375_git_mutation_attempted": False,
+            "prompt375_git_mutation_performed": False,
+            "prompt375_remote_mutation_allowed": False,
+            "prompt375_remote_mutation_attempted": False,
+            "prompt375_remote_mutation_performed": False,
+            "prompt375_next_action": _normalize_text(
+                next_action,
+                default="repair_prompt374_no_diff_evidence_before_prompt375",
+            ),
+            "prompt375_authoritative_next_action": _normalize_text(
+                next_action,
+                default="repair_prompt374_no_diff_evidence_before_prompt375",
+            ),
+            "prompt375_active_blocked_reason": (
+                normalized_blocked_reasons[0] if normalized_blocked_reasons else ""
+            ),
+            "prompt375_active_blocked_reasons": normalized_blocked_reasons,
+            "prompt375_summary": _normalize_text(summary, default=""),
+        }
+
+    (
+        prompt374_surface,
+        prompt374_source_path,
+        prompt374_recovered_evidence_used,
+        prompt374_recovered_companion_paths,
+    ) = _resolve_prompt375_prompt374_evidence()
+    prompt374_evidence_ready = _valid_prompt374_no_diff_evidence(prompt374_surface)
+    prompt374_invalid_reasons = (
+        []
+        if prompt374_evidence_ready
+        else _prompt375_prompt374_invalid_reasons(
+            prompt374_surface,
+            fallback_missing_reason="prompt374_no_diff_evidence_unavailable",
+        )
+    )
+
+    if prompt374_evidence_ready:
+        prompt375_state = _build_prompt375_state(
+            status="completed",
+            prompt374_surface=prompt374_surface,
+            prompt374_evidence_ready=True,
+            no_diff_confirmed=True,
+            review_decision="continue_next_cycle_after_no_diff",
+            cycle_continuation_allowed=True,
+            cycle_continuation_handoff_ready=True,
+            cycle_closure_allowed=False,
+            approve_commit_tag_allowed=False,
+            commit_tag_required=False,
+            targeted_fix_allowed=False,
+            targeted_fix_required=False,
+            replan_required=False,
+            next_action="prepare_prompt376_no_diff_cycle_continuation_handoff",
+            blocked_reasons=[],
+            summary=(
+                "Prompt375 confirmed Prompt374 completed no-diff evidence and prepared the Prompt376 cycle continuation handoff without execution or mutation."
+            ),
+        )
+    else:
+        next_action = _prompt375_next_action_for_non_no_diff(prompt374_surface)
+        prompt375_state = _build_prompt375_state(
+            status="blocked",
+            prompt374_surface=prompt374_surface,
+            prompt374_evidence_ready=False,
+            no_diff_confirmed=False,
+            review_decision="blocked",
+            cycle_continuation_allowed=False,
+            cycle_continuation_handoff_ready=False,
+            cycle_closure_allowed=False,
+            approve_commit_tag_allowed=False,
+            commit_tag_required=False,
+            targeted_fix_allowed=False,
+            targeted_fix_required=False,
+            replan_required=False,
+            next_action=next_action,
+            blocked_reasons=(
+                prompt374_invalid_reasons
+                or ["prompt374_no_diff_evidence_unavailable"]
+            ),
+            summary=(
+                "Prompt375 is blocked because valid Prompt374 completed no-diff evidence is unavailable or indicates a different downstream review route."
+            ),
+        )
+
+    prompt375_evidence_payload: dict[str, Any] = {
+        "local_only": True,
+        "prompt375_prompt374_evidence_ready": bool(
+            prompt375_state.get("prompt375_prompt374_evidence_ready", False)
+        ),
+        "prompt375_prompt374_recovered_evidence_used": bool(
+            prompt374_recovered_evidence_used
+        ),
+        "prompt375_prompt374_evidence_source_path": _normalize_text(
+            prompt374_source_path,
+            default="",
+        ),
+        "prompt375_prompt374_recovered_handoff_path": _normalize_text(
+            prompt374_recovered_companion_paths.get(
+                "prompt375_prompt374_recovered_handoff_path"
+            ),
+            default="",
+        ),
+        "prompt375_prompt374_recovered_evidence_path": _normalize_text(
+            prompt374_recovered_companion_paths.get(
+                "prompt375_prompt374_recovered_evidence_path"
+            ),
+            default="",
+        ),
+        "prompt375_prompt374_recovered_tracked_diff_state_path": _normalize_text(
+            prompt374_recovered_companion_paths.get(
+                "prompt375_prompt374_recovered_tracked_diff_state_path"
+            ),
+            default="",
+        ),
+        "prompt375_prompt374_recovered_review_route_handoff_path": _normalize_text(
+            prompt374_recovered_companion_paths.get(
+                "prompt375_prompt374_recovered_review_route_handoff_path"
+            ),
+            default="",
+        ),
+        "prompt375_prompt374_recovered_receipt_path": _normalize_text(
+            prompt374_recovered_companion_paths.get(
+                "prompt375_prompt374_recovered_receipt_path"
+            ),
+            default="",
+        ),
+        "prompt375_prompt374_recovered_run_state_path": _normalize_text(
+            prompt374_recovered_companion_paths.get(
+                "prompt375_prompt374_recovered_run_state_path"
+            ),
+            default="",
+        ),
+        "prompt375_prompt374_validation_reasons": list(prompt374_invalid_reasons),
+        **prompt374_surface,
+    }
+    prompt375_handoff_payload: dict[str, Any] = {
+        "local_only": True,
+        **prompt375_state,
+    }
+    prompt375_receipt_payload: dict[str, Any] = {
+        "local_only": True,
+        **prompt375_state,
+    }
+
+    prompt375_route_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt375_route_path, prompt375_state)
+    _write_json(prompt375_evidence_path, prompt375_evidence_payload)
+    _write_json(prompt375_handoff_path, prompt375_handoff_payload)
+    _write_json(prompt375_receipt_path, prompt375_receipt_payload)
+    return {
+        key: value for key, value in prompt375_state.items() if key.startswith("prompt375_")
+    }
+
+
+def _merge_prompt375_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt375_no_diff_review_route_decision_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt375 = (
+        dict(prompt375_no_diff_review_route_decision_payload)
+        if isinstance(prompt375_no_diff_review_route_decision_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT375_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt375 and prompt375.get(key) is not None:
+            payload[key] = prompt375.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt375_no_diff_review_route_decision_status"
+            if _normalize_text(
+                prompt375.get("prompt375_no_diff_review_route_decision_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt375_prompt374_evidence_ready"
+            if bool(prompt375.get("prompt375_prompt374_evidence_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt375_no_diff_confirmed"
+            if bool(prompt375.get("prompt375_no_diff_confirmed", False))
+            else "",
+            "approved_restart_execution_contract.prompt375_review_decision"
+            if _normalize_text(prompt375.get("prompt375_review_decision"), default="")
+            else "",
+            "approved_restart_execution_contract.prompt375_cycle_continuation_allowed"
+            if bool(prompt375.get("prompt375_cycle_continuation_allowed", False))
+            else "",
+            "approved_restart_execution_contract.prompt375_cycle_continuation_handoff_ready"
+            if bool(
+                prompt375.get("prompt375_cycle_continuation_handoff_ready", False)
+            )
+            else "",
+            "approved_restart_execution_contract.prompt375_next_action"
+            if _normalize_text(prompt375.get("prompt375_next_action"), default="")
             else "",
         ]
     )
@@ -218490,6 +219322,18 @@ class PlannedExecutionRunner:
         prompt374_diff_capture_receipt_path = (
             run_root / "prompt374_diff_capture_receipt.json"
         )
+        prompt375_no_diff_review_route_decision_path = (
+            run_root / "prompt375_no_diff_review_route_decision.json"
+        )
+        prompt375_prompt374_evidence_path = (
+            run_root / "prompt375_prompt374_evidence.json"
+        )
+        prompt375_cycle_continuation_handoff_path = (
+            run_root / "prompt375_cycle_continuation_handoff.json"
+        )
+        prompt375_no_diff_review_receipt_path = (
+            run_root / "prompt375_no_diff_review_receipt.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -218650,6 +219494,19 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt374_post_execution_diff_capture_handoff_payload,
         }
+        prompt375_no_diff_review_route_decision_payload = (
+            _build_prompt375_no_diff_review_route_decision_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                current_prompt374_source_path=str(
+                    prompt374_post_execution_diff_capture_handoff_path
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt375_no_diff_review_route_decision_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -218733,6 +219590,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt374_post_execution_diff_capture_handoff_state=(
                     prompt374_post_execution_diff_capture_handoff_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt375_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt375_no_diff_review_route_decision_state=(
+                    prompt375_no_diff_review_route_decision_payload
                 ),
             )
         )
@@ -218841,6 +219706,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt374_post_execution_diff_capture_handoff_payload=(
                     prompt374_post_execution_diff_capture_handoff_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt375_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt375_no_diff_review_route_decision_payload=(
+                    prompt375_no_diff_review_route_decision_payload
                 ),
             )
         )
@@ -219199,6 +220074,30 @@ class PlannedExecutionRunner:
         manifest["prompt374_diff_capture_receipt_path"] = str(
             prompt374_diff_capture_receipt_path
         )
+        manifest["prompt375_no_diff_review_route_decision_summary"] = dict(
+            prompt375_no_diff_review_route_decision_payload
+        )
+        manifest["prompt375_no_diff_review_route_decision_path"] = str(
+            prompt375_no_diff_review_route_decision_path
+        )
+        manifest["prompt375_prompt374_evidence_summary"] = dict(
+            prompt375_no_diff_review_route_decision_payload
+        )
+        manifest["prompt375_prompt374_evidence_path"] = str(
+            prompt375_prompt374_evidence_path
+        )
+        manifest["prompt375_cycle_continuation_handoff_summary"] = dict(
+            prompt375_no_diff_review_route_decision_payload
+        )
+        manifest["prompt375_cycle_continuation_handoff_path"] = str(
+            prompt375_cycle_continuation_handoff_path
+        )
+        manifest["prompt375_no_diff_review_receipt_summary"] = dict(
+            prompt375_no_diff_review_route_decision_payload
+        )
+        manifest["prompt375_no_diff_review_receipt_path"] = str(
+            prompt375_no_diff_review_receipt_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -219349,6 +220248,18 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt374_diff_capture_receipt"] = manifest.get(
             "prompt374_diff_capture_receipt_summary"
         )
+        contract_summaries_by_role[
+            "prompt375_no_diff_review_route_decision"
+        ] = manifest.get("prompt375_no_diff_review_route_decision_summary")
+        contract_summaries_by_role["prompt375_prompt374_evidence"] = manifest.get(
+            "prompt375_prompt374_evidence_summary"
+        )
+        contract_summaries_by_role["prompt375_cycle_continuation_handoff"] = manifest.get(
+            "prompt375_cycle_continuation_handoff_summary"
+        )
+        contract_summaries_by_role["prompt375_no_diff_review_receipt"] = manifest.get(
+            "prompt375_no_diff_review_receipt_summary"
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -219498,6 +220409,18 @@ class PlannedExecutionRunner:
         ] = manifest.get("prompt374_post_execution_review_route_handoff_path")
         contract_paths_by_role["prompt374_diff_capture_receipt"] = manifest.get(
             "prompt374_diff_capture_receipt_path"
+        )
+        contract_paths_by_role[
+            "prompt375_no_diff_review_route_decision"
+        ] = manifest.get("prompt375_no_diff_review_route_decision_path")
+        contract_paths_by_role["prompt375_prompt374_evidence"] = manifest.get(
+            "prompt375_prompt374_evidence_path"
+        )
+        contract_paths_by_role["prompt375_cycle_continuation_handoff"] = manifest.get(
+            "prompt375_cycle_continuation_handoff_path"
+        )
+        contract_paths_by_role["prompt375_no_diff_review_receipt"] = manifest.get(
+            "prompt375_no_diff_review_receipt_path"
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -221335,6 +222258,216 @@ class PlannedExecutionRunner:
             "prompt374_summary": _normalize_text(
                 prompt374_post_execution_diff_capture_handoff_payload.get(
                     "prompt374_summary"
+                ),
+                default="",
+            ),
+            "prompt375_no_diff_review_route_decision_status": _normalize_text(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_no_diff_review_route_decision_status"
+                ),
+                default="blocked",
+            ),
+            "prompt375_prompt374_evidence_ready": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_prompt374_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt375_prompt374_post_execution_diff_capture_status": _normalize_text(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_prompt374_post_execution_diff_capture_status"
+                ),
+                default="",
+            ),
+            "prompt375_prompt374_post_execution_diff_classification": _normalize_text(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_prompt374_post_execution_diff_classification"
+                ),
+                default="",
+            ),
+            "prompt375_prompt374_review_route": _normalize_text(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_prompt374_review_route"
+                ),
+                default="",
+            ),
+            "prompt375_prompt374_tracked_diff_present": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_prompt374_tracked_diff_present",
+                    False,
+                )
+            ),
+            "prompt375_prompt374_changed_tracked_files": _normalize_string_list(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_prompt374_changed_tracked_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt375_prompt374_changed_tracked_file_count": _as_non_negative_int(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_prompt374_changed_tracked_file_count"
+                ),
+                default=0,
+            ),
+            "prompt375_no_diff_confirmed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_no_diff_confirmed",
+                    False,
+                )
+            ),
+            "prompt375_review_decision": _normalize_text(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_review_decision"
+                ),
+                default="blocked",
+            ),
+            "prompt375_cycle_continuation_allowed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_cycle_continuation_allowed",
+                    False,
+                )
+            ),
+            "prompt375_cycle_continuation_handoff_ready": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_cycle_continuation_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt375_cycle_closure_allowed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_cycle_closure_allowed",
+                    False,
+                )
+            ),
+            "prompt375_approve_commit_tag_allowed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_approve_commit_tag_allowed",
+                    False,
+                )
+            ),
+            "prompt375_commit_tag_required": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_commit_tag_required",
+                    False,
+                )
+            ),
+            "prompt375_targeted_fix_allowed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_targeted_fix_allowed",
+                    False,
+                )
+            ),
+            "prompt375_targeted_fix_required": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_targeted_fix_required",
+                    False,
+                )
+            ),
+            "prompt375_replan_required": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_replan_required",
+                    False,
+                )
+            ),
+            "prompt375_execution_allowed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt375_execution_attempted": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt375_execution_performed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_execution_performed",
+                    False,
+                )
+            ),
+            "prompt375_codex_execution_allowed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt375_codex_execution_attempted": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_codex_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt375_codex_execution_performed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt375_git_mutation_allowed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_git_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt375_git_mutation_attempted": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_git_mutation_attempted",
+                    False,
+                )
+            ),
+            "prompt375_git_mutation_performed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt375_remote_mutation_allowed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt375_remote_mutation_attempted": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_remote_mutation_attempted",
+                    False,
+                )
+            ),
+            "prompt375_remote_mutation_performed": bool(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt375_next_action": _normalize_text(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_next_action"
+                ),
+                default="repair_prompt374_no_diff_evidence_before_prompt375",
+            ),
+            "prompt375_authoritative_next_action": _normalize_text(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_authoritative_next_action"
+                ),
+                default="repair_prompt374_no_diff_evidence_before_prompt375",
+            ),
+            "prompt375_active_blocked_reason": _normalize_text(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt375_active_blocked_reasons": _normalize_string_list(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt375_summary": _normalize_text(
+                prompt375_no_diff_review_route_decision_payload.get(
+                    "prompt375_summary"
                 ),
                 default="",
             ),
