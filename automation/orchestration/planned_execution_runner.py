@@ -213983,6 +213983,8 @@ class PlannedExecutionRunner:
         approval_response_input: Mapping[str, Any] | None = None,
         github_read_evidence: Mapping[str, Any] | None = None,
         execution_repo_path: str | Path | None = None,
+        prompt373_live_execution_requested: bool = False,
+        prompt373_live_execution_confirmed: bool = False,
     ) -> dict[str, Any]:
         artifacts_root = Path(artifacts_input_dir)
         output_root = Path(output_dir)
@@ -214655,6 +214657,11 @@ class PlannedExecutionRunner:
             total_units_planned=total_units_planned,
             manifest_units=manifest_units,
         )
+        run_state_payload = {
+            **run_state_payload,
+            "prompt373_live_execution_requested": bool(prompt373_live_execution_requested),
+            "prompt373_live_execution_confirmed": bool(prompt373_live_execution_confirmed),
+        }
         run_state_payload = _augment_run_state_with_objective_contract_summary(
             run_state_payload=run_state_payload,
             objective_contract_payload=objective_contract_payload,
