@@ -3691,6 +3691,7 @@ _PROMPT369_SCHEMA_VERSION = "prompt369_targeted_fix_route_integration_v1"
 _PROMPT370_SCHEMA_VERSION = "prompt370_integrated_autonomous_cycle_runner_v1"
 _PROMPT371_SCHEMA_VERSION = "prompt371_bounded_one_cycle_execution_wiring_v1"
 _PROMPT372_SCHEMA_VERSION = "prompt372_selected_step_execution_gate_v1"
+_PROMPT373_SCHEMA_VERSION = "prompt373_selected_step_live_codex_execution_v1"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -3868,6 +3869,47 @@ _PROMPT372_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt372_active_blocked_reason",
     "prompt372_active_blocked_reasons",
     "prompt372_summary",
+)
+_PROMPT373_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt373_schema_version",
+    "prompt373_selected_step_live_codex_execution_status",
+    "prompt373_execution_status",
+    "prompt373_prompt372_preflight_ready",
+    "prompt373_live_execution_gate_ready",
+    "prompt373_selected_route",
+    "prompt373_selected_step_kind",
+    "prompt373_selected_step_operation",
+    "prompt373_live_execution_requested",
+    "prompt373_live_execution_confirmed",
+    "prompt373_live_execution_allowed",
+    "prompt373_execution_allowed",
+    "prompt373_execution_attempted",
+    "prompt373_execution_performed",
+    "prompt373_codex_execution_allowed",
+    "prompt373_codex_execution_attempted",
+    "prompt373_codex_execution_performed",
+    "prompt373_git_mutation_allowed",
+    "prompt373_git_mutation_attempted",
+    "prompt373_git_mutation_performed",
+    "prompt373_remote_mutation_allowed",
+    "prompt373_remote_mutation_attempted",
+    "prompt373_remote_mutation_performed",
+    "prompt373_returncode",
+    "prompt373_returncode_classification",
+    "prompt373_stdout_path",
+    "prompt373_stderr_path",
+    "prompt373_post_execution_diff_capture_handoff_ready",
+    "prompt373_selected_step_live_codex_execution_gate_path",
+    "prompt373_codex_execution_request_path",
+    "prompt373_codex_execution_receipt_path",
+    "prompt373_execution_output_paths_path",
+    "prompt373_returncode_classification_path",
+    "prompt373_post_execution_diff_capture_handoff_path",
+    "prompt373_next_action",
+    "prompt373_authoritative_next_action",
+    "prompt373_active_blocked_reason",
+    "prompt373_active_blocked_reasons",
+    "prompt373_summary",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -5613,6 +5655,23 @@ def _merge_prompt372_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT372_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt373_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt373_selected_step_live_codex_execution_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt373_selected_step_live_codex_execution_state)
+        if isinstance(prompt373_selected_step_live_codex_execution_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT373_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -47239,6 +47298,841 @@ def _build_prompt372_selected_step_execution_gate_state(
     }
 
 
+def _build_prompt373_selected_step_live_codex_execution_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str = "",
+    job_id: str = "",
+    now: Callable[[], datetime] = datetime.now,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    gate_path = artifact_root / "prompt373_selected_step_live_codex_execution_gate.json"
+    request_path = artifact_root / "prompt373_codex_execution_request.json"
+    receipt_path = artifact_root / "prompt373_codex_execution_receipt.json"
+    output_paths_path = artifact_root / "prompt373_execution_output_paths.json"
+    classification_path = artifact_root / "prompt373_returncode_classification.json"
+    handoff_path = artifact_root / "prompt373_post_execution_diff_capture_handoff.json"
+    stdout_capture_path = artifact_root / "prompt373_codex_execution_stdout.txt"
+    stderr_capture_path = artifact_root / "prompt373_codex_execution_stderr.txt"
+    run_state = dict(run_state_payload or {})
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=str(Path.cwd()),
+    )
+    timeout_seconds = 600
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt372_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt372_selected_step_execution_gate_status": _normalize_text(
+                source.get("prompt372_selected_step_execution_gate_status"),
+                default="",
+            ),
+            "prompt372_gate_status": _normalize_text(
+                source.get("prompt372_gate_status"),
+                default="",
+            ),
+            "prompt372_prompt371_wiring_ready": _prompt357_as_boolish(
+                source.get("prompt372_prompt371_wiring_ready"),
+                default=False,
+            ),
+            "prompt372_selected_route": _normalize_text(
+                source.get("prompt372_selected_route"),
+                default="",
+            ),
+            "prompt372_selected_step_kind": _normalize_text(
+                source.get("prompt372_selected_step_kind"),
+                default="",
+            ),
+            "prompt372_selected_step_operation": _normalize_text(
+                source.get("prompt372_selected_step_operation"),
+                default="",
+            ),
+            "prompt372_selected_next_action": _normalize_text(
+                source.get("prompt372_selected_next_action"),
+                default="",
+            ),
+            "prompt372_gate_ready": _prompt357_as_boolish(
+                source.get("prompt372_gate_ready"),
+                default=False,
+            ),
+            "prompt372_selected_step_contract_ready": _prompt357_as_boolish(
+                source.get("prompt372_selected_step_contract_ready"),
+                default=False,
+            ),
+            "prompt372_selected_prompt_contract_ready": _prompt357_as_boolish(
+                source.get("prompt372_selected_prompt_contract_ready"),
+                default=False,
+            ),
+            "prompt372_codex_execution_request_status": _normalize_text(
+                source.get("prompt372_codex_execution_request_status"),
+                default="",
+            ),
+            "prompt372_codex_execution_request_ready": _prompt357_as_boolish(
+                source.get("prompt372_codex_execution_request_ready"),
+                default=False,
+            ),
+            "prompt372_live_execution_preflight_ready": _prompt357_as_boolish(
+                source.get("prompt372_live_execution_preflight_ready"),
+                default=False,
+            ),
+            "prompt372_next_action": _normalize_text(
+                source.get("prompt372_next_action"),
+                default="",
+            ),
+            "prompt372_selected_step_execution_gate_path": _normalize_text(
+                source.get("prompt372_selected_step_execution_gate_path"),
+                default="",
+            ),
+            "prompt372_codex_execution_request_contract_path": _normalize_text(
+                source.get("prompt372_codex_execution_request_contract_path"),
+                default="",
+            ),
+        }
+
+    def _blocked_next_action_for(reason: str) -> str:
+        mapping = {
+            "prompt372_selected_step_execution_gate_status_not_ready": (
+                "repair_prompt372_selected_step_execution_gate_status"
+            ),
+            "prompt372_gate_status_not_ready": "repair_prompt372_gate_status",
+            "prompt372_prompt371_wiring_ready_not_true": (
+                "repair_prompt372_prompt371_wiring_readiness"
+            ),
+            "prompt372_selected_route_not_supported_for_prompt373": (
+                "review_prompt372_selected_route_before_prompt373"
+            ),
+            "prompt372_selected_step_kind_missing": (
+                "repair_prompt372_selected_step_kind_before_prompt373"
+            ),
+            "prompt372_selected_step_operation_not_prepare_selected_step_execution_gate": (
+                "repair_prompt372_selected_step_operation_before_prompt373"
+            ),
+            "prompt372_selected_next_action_not_prepare_prompt373_selected_step_live_codex_execution": (
+                "repair_prompt372_selected_next_action_before_prompt373"
+            ),
+            "prompt372_gate_ready_not_true": (
+                "repair_prompt372_selected_step_gate_readiness"
+            ),
+            "prompt372_selected_step_contract_ready_not_true": (
+                "repair_prompt372_selected_step_contract_readiness"
+            ),
+            "prompt372_selected_prompt_contract_ready_not_true": (
+                "repair_prompt372_selected_prompt_contract_readiness"
+            ),
+            "prompt372_codex_execution_request_status_not_prepared": (
+                "repair_prompt372_codex_execution_request_status"
+            ),
+            "prompt372_codex_execution_request_ready_not_true": (
+                "repair_prompt372_codex_execution_request_readiness"
+            ),
+            "prompt372_live_execution_preflight_ready_not_true": (
+                "repair_prompt372_live_execution_preflight_readiness"
+            ),
+            "prompt372_next_action_not_prepare_prompt373_selected_step_live_codex_execution": (
+                "repair_prompt372_next_action_before_prompt373"
+            ),
+        }
+        return mapping.get(
+            reason,
+            "review_prompt373_selected_step_live_codex_execution_blocker",
+        )
+
+    def _resolve_prompt_source(route: str) -> dict[str, str]:
+        source_candidates: list[tuple[str, str]] = []
+        normalized_route = _normalize_text(route, default="")
+        fallback_result: dict[str, str] | None = None
+        if normalized_route == "targeted_fix":
+            source_candidates.extend(
+                [
+                    (
+                        "prompt369_targeted_fix_reentry_contract_path",
+                        _normalize_text(
+                            run_state.get("prompt369_targeted_fix_reentry_contract_path"),
+                            default="",
+                        ),
+                    ),
+                    (
+                        "prompt368_selected_prompt_contract_path",
+                        _normalize_text(
+                            run_state.get("prompt368_selected_prompt_contract_path"),
+                            default="",
+                        ),
+                    ),
+                ]
+            )
+        elif normalized_route == "approve_commit_tag":
+            source_candidates.append(
+                (
+                    "prompt363_approve_commit_tag_plan_path",
+                    _normalize_text(
+                        run_state.get("prompt363_approve_commit_tag_plan_path"),
+                        default="",
+                    ),
+                )
+            )
+        source_candidates.extend(
+            [
+                (
+                    "prompt359_prompt358_selected_prompt_contract_path",
+                    _normalize_text(
+                        run_state.get("prompt359_prompt358_selected_prompt_contract_path"),
+                        default="",
+                    ),
+                ),
+                (
+                    "prompt358_selected_prompt_contract_path",
+                    _normalize_text(
+                        run_state.get("prompt358_selected_prompt_contract_path"),
+                        default="",
+                    ),
+                ),
+            ]
+        )
+        for source_field, source_path in source_candidates:
+            if not source_path:
+                continue
+            path_obj = Path(source_path)
+            if not path_obj.exists() or not path_obj.is_file():
+                if fallback_result is None:
+                    fallback_result = {
+                        "prompt_source_field": source_field,
+                        "prompt_source_path": source_path,
+                        "prompt_source_status": "missing",
+                        "prompt_source_text": "",
+                    }
+                continue
+            try:
+                prompt_source_text = path_obj.read_text(encoding="utf-8")
+            except OSError:
+                if fallback_result is None:
+                    fallback_result = {
+                        "prompt_source_field": source_field,
+                        "prompt_source_path": source_path,
+                        "prompt_source_status": "read_error",
+                        "prompt_source_text": "",
+                    }
+                continue
+            if not prompt_source_text.strip():
+                if fallback_result is None:
+                    fallback_result = {
+                        "prompt_source_field": source_field,
+                        "prompt_source_path": source_path,
+                        "prompt_source_status": "empty",
+                        "prompt_source_text": "",
+                    }
+                continue
+            return {
+                "prompt_source_field": source_field,
+                "prompt_source_path": source_path,
+                "prompt_source_status": "ready",
+                "prompt_source_text": prompt_source_text,
+            }
+        if fallback_result is not None:
+            return fallback_result
+        return {
+            "prompt_source_field": "",
+            "prompt_source_path": "",
+            "prompt_source_status": "missing",
+            "prompt_source_text": "",
+        }
+
+    def _classify_returncode(
+        *,
+        returncode: int | None,
+        timed_out: bool,
+    ) -> tuple[str, str]:
+        if returncode == 0:
+            return "success", "completed"
+        if timed_out and returncode is None:
+            return "timeout", "failed"
+        return "nonzero_exit", "failed"
+
+    def _valid_prompt372_ready_surface(value: Mapping[str, Any] | None) -> bool:
+        surface = _normalize_prompt372_surface(value)
+        return bool(
+            surface["prompt372_selected_step_execution_gate_status"] == "ready"
+            and surface["prompt372_gate_status"] == "ready"
+            and bool(surface["prompt372_prompt371_wiring_ready"])
+            and surface["prompt372_selected_route"]
+            in {"continue_next_cycle", "targeted_fix", "approve_commit_tag"}
+            and bool(surface["prompt372_selected_step_kind"])
+            and (
+                surface["prompt372_selected_step_operation"]
+                == "prepare_selected_step_execution_gate"
+            )
+            and (
+                surface["prompt372_selected_next_action"]
+                == "prepare_prompt373_selected_step_live_codex_execution"
+            )
+            and bool(surface["prompt372_gate_ready"])
+            and bool(surface["prompt372_selected_step_contract_ready"])
+            and bool(surface["prompt372_selected_prompt_contract_ready"])
+            and (
+                surface["prompt372_codex_execution_request_status"] == "prepared"
+            )
+            and bool(surface["prompt372_codex_execution_request_ready"])
+            and bool(surface["prompt372_live_execution_preflight_ready"])
+            and (
+                surface["prompt372_next_action"]
+                == "prepare_prompt373_selected_step_live_codex_execution"
+            )
+        )
+
+    def _resolve_effective_prompt372_surface() -> dict[str, Any]:
+        current_surface = _normalize_prompt372_surface(run_state)
+        if _valid_prompt372_ready_surface(current_surface):
+            return current_surface
+
+        recovered_payload, _ = _prompt358_find_latest_valid_prior_artifact(
+            filename="prompt372_selected_step_execution_gate.json",
+            validator=_valid_prompt372_ready_surface,
+        )
+        if not isinstance(recovered_payload, Mapping):
+            recovered_payload, _ = _prompt358_find_latest_valid_prior_artifact(
+                filename="run_state.json",
+                validator=_valid_prompt372_ready_surface,
+            )
+        if isinstance(recovered_payload, Mapping):
+            return _normalize_prompt372_surface(recovered_payload)
+        return current_surface
+
+    prompt372_surface = _resolve_effective_prompt372_surface()
+    prompt373_preflight_blocked_reasons: list[str] = []
+    if (
+        prompt372_surface["prompt372_selected_step_execution_gate_status"]
+        != "ready"
+    ):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_selected_step_execution_gate_status_not_ready",
+        )
+    if prompt372_surface["prompt372_gate_status"] != "ready":
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_gate_status_not_ready",
+        )
+    if not bool(prompt372_surface["prompt372_prompt371_wiring_ready"]):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_prompt371_wiring_ready_not_true",
+        )
+    if prompt372_surface["prompt372_selected_route"] not in {
+        "continue_next_cycle",
+        "targeted_fix",
+        "approve_commit_tag",
+    }:
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_selected_route_not_supported_for_prompt373",
+        )
+    if not prompt372_surface["prompt372_selected_step_kind"]:
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_selected_step_kind_missing",
+        )
+    if (
+        prompt372_surface["prompt372_selected_step_operation"]
+        != "prepare_selected_step_execution_gate"
+    ):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_selected_step_operation_not_prepare_selected_step_execution_gate",
+        )
+    if (
+        prompt372_surface["prompt372_selected_next_action"]
+        != "prepare_prompt373_selected_step_live_codex_execution"
+    ):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_selected_next_action_not_prepare_prompt373_selected_step_live_codex_execution",
+        )
+    if not bool(prompt372_surface["prompt372_gate_ready"]):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_gate_ready_not_true",
+        )
+    if not bool(prompt372_surface["prompt372_selected_step_contract_ready"]):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_selected_step_contract_ready_not_true",
+        )
+    if not bool(prompt372_surface["prompt372_selected_prompt_contract_ready"]):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_selected_prompt_contract_ready_not_true",
+        )
+    if (
+        prompt372_surface["prompt372_codex_execution_request_status"]
+        != "prepared"
+    ):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_codex_execution_request_status_not_prepared",
+        )
+    if not bool(prompt372_surface["prompt372_codex_execution_request_ready"]):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_codex_execution_request_ready_not_true",
+        )
+    if not bool(prompt372_surface["prompt372_live_execution_preflight_ready"]):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_live_execution_preflight_ready_not_true",
+        )
+    if (
+        prompt372_surface["prompt372_next_action"]
+        != "prepare_prompt373_selected_step_live_codex_execution"
+    ):
+        _append_reason(
+            prompt373_preflight_blocked_reasons,
+            "prompt372_next_action_not_prepare_prompt373_selected_step_live_codex_execution",
+        )
+
+    prompt373_prompt372_preflight_ready = not prompt373_preflight_blocked_reasons
+    prompt373_live_execution_gate_ready = prompt373_prompt372_preflight_ready
+    prompt373_selected_route = _normalize_text(
+        prompt372_surface["prompt372_selected_route"],
+        default="blocked",
+    )
+    prompt373_selected_step_kind = _normalize_text(
+        prompt372_surface["prompt372_selected_step_kind"],
+        default="blocked",
+    )
+    prompt373_selected_step_operation = _normalize_text(
+        prompt372_surface["prompt372_selected_step_operation"],
+        default="blocked",
+    )
+
+    prompt373_live_execution_enabled = _prompt357_as_boolish(
+        run_state.get("project_browser_autonomous_selected_step_live_execution_enabled"),
+        default=False,
+    )
+    prompt373_live_execution_confirmed_flag = _prompt357_as_boolish(
+        run_state.get("project_browser_autonomous_selected_step_live_execution_confirmed"),
+        default=False,
+    )
+    prompt373_live_execution_requested = _prompt357_as_boolish(
+        run_state.get("prompt373_live_execution_requested"),
+        default=prompt373_live_execution_enabled,
+    ) or prompt373_live_execution_enabled
+    prompt373_live_execution_confirmed = bool(
+        prompt373_live_execution_confirmed_flag
+        or _prompt357_as_boolish(
+            run_state.get("prompt373_live_execution_confirmed"),
+            default=False,
+        )
+    )
+
+    prompt_source = _resolve_prompt_source(prompt373_selected_route)
+    prompt373_prompt_source_field = _normalize_text(
+        prompt_source.get("prompt_source_field"),
+        default="",
+    )
+    prompt373_prompt_source_path = _normalize_text(
+        prompt_source.get("prompt_source_path"),
+        default="",
+    )
+    prompt373_prompt_source_status = _normalize_text(
+        prompt_source.get("prompt_source_status"),
+        default="missing",
+    )
+    prompt373_prompt_source_text = prompt_source.get("prompt_source_text", "")
+    repo_path_obj = Path(normalized_repo_path) if normalized_repo_path else None
+    prompt373_execution_repo_ready = bool(
+        repo_path_obj is not None
+        and repo_path_obj.exists()
+        and repo_path_obj.is_dir()
+    )
+
+    prompt373_selected_step_live_codex_execution_status = "blocked"
+    prompt373_execution_status = "blocked"
+    prompt373_live_execution_allowed = False
+    prompt373_execution_allowed = False
+    prompt373_execution_attempted = False
+    prompt373_execution_performed = False
+    prompt373_codex_execution_allowed = False
+    prompt373_codex_execution_attempted = False
+    prompt373_codex_execution_performed = False
+    prompt373_git_mutation_allowed = False
+    prompt373_git_mutation_attempted = False
+    prompt373_git_mutation_performed = False
+    prompt373_remote_mutation_allowed = False
+    prompt373_remote_mutation_attempted = False
+    prompt373_remote_mutation_performed = False
+    prompt373_returncode: int | None = None
+    prompt373_returncode_classification = "not_run"
+    prompt373_stdout_path = ""
+    prompt373_stderr_path = ""
+    prompt373_post_execution_diff_capture_handoff_ready = False
+    prompt373_active_blocked_reason = ""
+    prompt373_active_blocked_reasons: list[str] = []
+    prompt373_next_action = ""
+    prompt373_authoritative_next_action = ""
+    execution_started_at = ""
+    execution_finished_at = ""
+    prompt373_summary = (
+        "Prompt373 is blocked because Prompt372 selected-step live execution preflight evidence is incomplete."
+    )
+
+    command_argv_metadata = [
+        "codex",
+        "exec",
+        "--skip-git-repo-check",
+        (
+            f"<prompt_from:{prompt373_prompt_source_field}>"
+            if prompt373_prompt_source_field
+            else "<prompt_from:missing>"
+        ),
+    ]
+
+    if not prompt373_prompt372_preflight_ready:
+        prompt373_active_blocked_reasons = _normalize_string_list(
+            prompt373_preflight_blocked_reasons,
+            sort_items=False,
+        )
+        prompt373_active_blocked_reason = (
+            prompt373_active_blocked_reasons[0]
+            if prompt373_active_blocked_reasons
+            else "prompt373_prompt372_preflight_not_ready"
+        )
+        prompt373_next_action = _blocked_next_action_for(
+            prompt373_active_blocked_reason
+        )
+        prompt373_authoritative_next_action = prompt373_next_action
+    elif not (prompt373_live_execution_requested and prompt373_live_execution_confirmed):
+        prompt373_selected_step_live_codex_execution_status = (
+            "ready_for_explicit_execution"
+        )
+        prompt373_execution_status = "not_run"
+        prompt373_active_blocked_reason = (
+            "prompt373_live_execution_not_explicitly_enabled"
+        )
+        prompt373_active_blocked_reasons = [
+            "prompt373_live_execution_not_explicitly_enabled"
+        ]
+        prompt373_next_action = "run_with_explicit_prompt373_live_execution_flags"
+        prompt373_authoritative_next_action = prompt373_next_action
+        prompt373_summary = (
+            "Prompt373 validated Prompt372 preflight and prepared a bounded selected-step live Codex execution request, but execution remains disabled until explicit Prompt373 flags are enabled."
+        )
+    elif not prompt373_execution_repo_ready:
+        prompt373_active_blocked_reason = "prompt373_execution_repo_path_not_ready"
+        prompt373_active_blocked_reasons = [
+            "prompt373_execution_repo_path_not_ready"
+        ]
+        prompt373_next_action = "repair_prompt373_execution_repo_path"
+        prompt373_authoritative_next_action = prompt373_next_action
+        prompt373_summary = (
+            "Prompt373 explicit live execution is blocked because the execution repository path is unavailable."
+        )
+    elif prompt373_prompt_source_status != "ready":
+        prompt373_active_blocked_reason = (
+            f"prompt373_prompt_source_{prompt373_prompt_source_status}"
+        )
+        prompt373_active_blocked_reasons = [prompt373_active_blocked_reason]
+        prompt373_next_action = (
+            "repair_prompt373_codex_execution_request_prompt_source"
+        )
+        prompt373_authoritative_next_action = prompt373_next_action
+        prompt373_summary = (
+            "Prompt373 explicit live execution is blocked because the bounded selected-step prompt source is not ready."
+        )
+    else:
+        prompt373_selected_step_live_codex_execution_status = "failed"
+        prompt373_execution_status = "failed"
+        prompt373_live_execution_allowed = True
+        prompt373_execution_allowed = True
+        prompt373_codex_execution_allowed = True
+        prompt373_execution_attempted = True
+        prompt373_codex_execution_attempted = True
+        execution_started_at = _iso_now(now)
+        prompt373_stdout_path = str(stdout_capture_path)
+        prompt373_stderr_path = str(stderr_capture_path)
+
+        runtime_argv = [
+            "codex",
+            "exec",
+            "--skip-git-repo-check",
+            str(prompt373_prompt_source_text),
+        ]
+        stdout_text = ""
+        stderr_text = ""
+        timed_out = False
+        try:
+            completed = subprocess.run(
+                runtime_argv,
+                text=True,
+                capture_output=True,
+                cwd=normalized_repo_path,
+                shell=False,
+                timeout=timeout_seconds,
+            )
+            prompt373_execution_performed = True
+            prompt373_codex_execution_performed = True
+            prompt373_returncode = completed.returncode
+            stdout_text = completed.stdout or ""
+            stderr_text = completed.stderr or ""
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            prompt373_execution_performed = True
+            prompt373_codex_execution_performed = True
+            prompt373_returncode = None
+            timeout_stdout = exc.stdout if exc.stdout is not None else exc.output
+            if isinstance(timeout_stdout, bytes):
+                stdout_text = timeout_stdout.decode("utf-8", errors="replace")
+            else:
+                stdout_text = _normalize_text(timeout_stdout, default="")
+            timeout_stderr = exc.stderr
+            if isinstance(timeout_stderr, bytes):
+                stderr_text = timeout_stderr.decode("utf-8", errors="replace")
+            else:
+                stderr_text = _normalize_text(timeout_stderr, default="")
+            timeout_message = f"Codex timed out after {timeout_seconds} seconds."
+            stderr_text = (
+                f"{stderr_text}\n{timeout_message}".strip()
+                if stderr_text
+                else timeout_message
+            )
+        except FileNotFoundError as exc:
+            prompt373_returncode = 127
+            stderr_text = (
+                f"Failed to run Codex CLI ({type(exc).__name__}): {exc}"
+            )
+        except Exception as exc:
+            prompt373_returncode = 1
+            stderr_text = (
+                f"Failed to run Codex CLI ({type(exc).__name__}): {exc}"
+            )
+
+        execution_finished_at = _iso_now(now)
+        stdout_capture_path.write_text(stdout_text, encoding="utf-8")
+        stderr_capture_path.write_text(stderr_text, encoding="utf-8")
+        (
+            prompt373_returncode_classification,
+            prompt373_execution_status,
+        ) = _classify_returncode(
+            returncode=prompt373_returncode,
+            timed_out=timed_out,
+        )
+        prompt373_post_execution_diff_capture_handoff_ready = True
+        prompt373_next_action = "prepare_prompt374_post_execution_diff_capture_handoff"
+        prompt373_authoritative_next_action = prompt373_next_action
+        if prompt373_execution_status == "completed":
+            prompt373_selected_step_live_codex_execution_status = "completed"
+            prompt373_active_blocked_reason = ""
+            prompt373_active_blocked_reasons = []
+            prompt373_summary = (
+                "Prompt373 performed one bounded selected-step live Codex execution attempt, captured receipts and output paths, and emitted a Prompt374 diff-capture handoff."
+            )
+        else:
+            prompt373_selected_step_live_codex_execution_status = "failed"
+            prompt373_active_blocked_reason = (
+                "prompt373_codex_execution_timeout"
+                if prompt373_returncode_classification == "timeout"
+                else "prompt373_codex_execution_nonzero_exit"
+            )
+            prompt373_active_blocked_reasons = [prompt373_active_blocked_reason]
+            prompt373_summary = (
+                "Prompt373 attempted one bounded selected-step live Codex execution, captured receipts and output paths, and emitted a Prompt374 diff-capture handoff after a failed execution result."
+            )
+
+    state_payload: dict[str, Any] = {
+        "prompt373_schema_version": _PROMPT373_SCHEMA_VERSION,
+        "prompt373_selected_step_live_codex_execution_status": (
+            prompt373_selected_step_live_codex_execution_status
+        ),
+        "prompt373_execution_status": prompt373_execution_status,
+        "prompt373_prompt372_preflight_ready": (
+            prompt373_prompt372_preflight_ready
+        ),
+        "prompt373_live_execution_gate_ready": (
+            prompt373_live_execution_gate_ready
+        ),
+        "prompt373_selected_route": prompt373_selected_route,
+        "prompt373_selected_step_kind": prompt373_selected_step_kind,
+        "prompt373_selected_step_operation": prompt373_selected_step_operation,
+        "prompt373_live_execution_requested": prompt373_live_execution_requested,
+        "prompt373_live_execution_confirmed": prompt373_live_execution_confirmed,
+        "prompt373_live_execution_allowed": prompt373_live_execution_allowed,
+        "prompt373_execution_allowed": prompt373_execution_allowed,
+        "prompt373_execution_attempted": prompt373_execution_attempted,
+        "prompt373_execution_performed": prompt373_execution_performed,
+        "prompt373_codex_execution_allowed": prompt373_codex_execution_allowed,
+        "prompt373_codex_execution_attempted": (
+            prompt373_codex_execution_attempted
+        ),
+        "prompt373_codex_execution_performed": (
+            prompt373_codex_execution_performed
+        ),
+        "prompt373_git_mutation_allowed": prompt373_git_mutation_allowed,
+        "prompt373_git_mutation_attempted": (
+            prompt373_git_mutation_attempted
+        ),
+        "prompt373_git_mutation_performed": (
+            prompt373_git_mutation_performed
+        ),
+        "prompt373_remote_mutation_allowed": (
+            prompt373_remote_mutation_allowed
+        ),
+        "prompt373_remote_mutation_attempted": (
+            prompt373_remote_mutation_attempted
+        ),
+        "prompt373_remote_mutation_performed": (
+            prompt373_remote_mutation_performed
+        ),
+        "prompt373_returncode": prompt373_returncode,
+        "prompt373_returncode_classification": (
+            prompt373_returncode_classification
+        ),
+        "prompt373_stdout_path": prompt373_stdout_path,
+        "prompt373_stderr_path": prompt373_stderr_path,
+        "prompt373_post_execution_diff_capture_handoff_ready": (
+            prompt373_post_execution_diff_capture_handoff_ready
+        ),
+        "prompt373_selected_step_live_codex_execution_gate_path": str(gate_path),
+        "prompt373_codex_execution_request_path": str(request_path),
+        "prompt373_codex_execution_receipt_path": str(receipt_path),
+        "prompt373_execution_output_paths_path": str(output_paths_path),
+        "prompt373_returncode_classification_path": str(classification_path),
+        "prompt373_post_execution_diff_capture_handoff_path": str(handoff_path),
+        "prompt373_next_action": prompt373_next_action,
+        "prompt373_authoritative_next_action": (
+            prompt373_authoritative_next_action
+        ),
+        "prompt373_active_blocked_reason": prompt373_active_blocked_reason,
+        "prompt373_active_blocked_reasons": prompt373_active_blocked_reasons,
+        "prompt373_summary": prompt373_summary,
+    }
+    gate_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "selected_route": prompt373_selected_route,
+        "selected_step_kind": prompt373_selected_step_kind,
+        "selected_step_operation": prompt373_selected_step_operation,
+        "prompt372_selected_step_execution_gate_path": _normalize_text(
+            prompt372_surface.get("prompt372_selected_step_execution_gate_path"),
+            default="",
+        ),
+        "prompt372_codex_execution_request_contract_path": _normalize_text(
+            prompt372_surface.get("prompt372_codex_execution_request_contract_path"),
+            default="",
+        ),
+        "prompt373_prompt_source_field": prompt373_prompt_source_field,
+        "prompt373_prompt_source_path": prompt373_prompt_source_path,
+        "prompt373_prompt_source_status": prompt373_prompt_source_status,
+    }
+    request_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "prompt373_execution_repo_path": normalized_repo_path,
+        "prompt373_execution_repo_ready": prompt373_execution_repo_ready,
+        "prompt373_prompt_source_field": prompt373_prompt_source_field,
+        "prompt373_prompt_source_path": prompt373_prompt_source_path,
+        "prompt373_prompt_source_status": prompt373_prompt_source_status,
+        "prompt373_timeout_seconds": timeout_seconds,
+        "prompt373_shell": False,
+        "prompt373_safe_subprocess_invocation": True,
+        "prompt373_codex_command_argv": command_argv_metadata,
+        "prompt373_prompt372_selected_step_execution_gate_path": _normalize_text(
+            prompt372_surface.get("prompt372_selected_step_execution_gate_path"),
+            default="",
+        ),
+        "prompt373_prompt372_codex_execution_request_contract_path": _normalize_text(
+            prompt372_surface.get("prompt372_codex_execution_request_contract_path"),
+            default="",
+        ),
+    }
+    receipt_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "execution_status": prompt373_execution_status,
+        "selected_route": prompt373_selected_route,
+        "selected_step_kind": prompt373_selected_step_kind,
+        "selected_step_operation": prompt373_selected_step_operation,
+        "selected_step_contract_ready": bool(
+            prompt372_surface.get("prompt372_selected_step_contract_ready", False)
+        ),
+        "selected_prompt_contract_ready": bool(
+            prompt372_surface.get("prompt372_selected_prompt_contract_ready", False)
+        ),
+        "execution_attempted": prompt373_execution_attempted,
+        "execution_performed": prompt373_execution_performed,
+        "codex_execution_attempted": prompt373_codex_execution_attempted,
+        "codex_execution_performed": prompt373_codex_execution_performed,
+        "execution_started_at": execution_started_at,
+        "execution_finished_at": execution_finished_at,
+        "timeout_seconds": timeout_seconds,
+        "stdout_path": prompt373_stdout_path,
+        "stderr_path": prompt373_stderr_path,
+        "returncode": prompt373_returncode,
+        "returncode_classification": prompt373_returncode_classification,
+        "git_mutation_performed": False,
+        "remote_mutation_performed": False,
+        "prompt373_codex_command_argv": command_argv_metadata,
+        "prompt373_prompt_source_field": prompt373_prompt_source_field,
+        "prompt373_prompt_source_path": prompt373_prompt_source_path,
+        "prompt373_execution_repo_path": normalized_repo_path,
+        "job_id": _normalize_text(job_id, default=""),
+    }
+    output_paths_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "prompt373_stdout_path": prompt373_stdout_path,
+        "prompt373_stderr_path": prompt373_stderr_path,
+        "prompt373_output_paths_captured": bool(
+            prompt373_execution_attempted
+            and prompt373_stdout_path
+            and prompt373_stderr_path
+        ),
+    }
+    classification_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "returncode": prompt373_returncode,
+        "returncode_classification": prompt373_returncode_classification,
+        "execution_status": prompt373_execution_status,
+    }
+    handoff_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "selected_route": prompt373_selected_route,
+        "selected_step_kind": prompt373_selected_step_kind,
+        "selected_step_operation": prompt373_selected_step_operation,
+        "prompt373_post_execution_diff_capture_handoff_ready": (
+            prompt373_post_execution_diff_capture_handoff_ready
+        ),
+        "prompt373_post_execution_diff_capture_handoff_status": (
+            "ready"
+            if prompt373_post_execution_diff_capture_handoff_ready
+            else "not_ready"
+        ),
+        "prompt373_post_execution_diff_capture_next_action": (
+            prompt373_authoritative_next_action
+        ),
+    }
+
+    gate_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(gate_path, gate_payload)
+    _write_json(request_path, request_payload)
+    _write_json(receipt_path, receipt_payload)
+    _write_json(output_paths_path, output_paths_payload)
+    _write_json(classification_path, classification_payload)
+    _write_json(handoff_path, handoff_payload)
+
+    return {
+        key: value
+        for key, value in state_payload.items()
+        if key.startswith("prompt373_")
+    }
+
+
 def _merge_prompt363_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -47715,6 +48609,94 @@ def _merge_prompt372_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt372_next_action"
             if _normalize_text(prompt372.get("prompt372_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt373_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt373_selected_step_live_codex_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt373 = (
+        dict(prompt373_selected_step_live_codex_execution_payload)
+        if isinstance(prompt373_selected_step_live_codex_execution_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT373_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt373 and prompt373.get(key) is not None:
+            payload[key] = prompt373.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt373_selected_step_live_codex_execution_status"
+            if _normalize_text(
+                prompt373.get("prompt373_selected_step_live_codex_execution_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt373_execution_status"
+            if _normalize_text(
+                prompt373.get("prompt373_execution_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt373_prompt372_preflight_ready"
+            if bool(prompt373.get("prompt373_prompt372_preflight_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt373_live_execution_gate_ready"
+            if bool(prompt373.get("prompt373_live_execution_gate_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt373_selected_route"
+            if _normalize_text(
+                prompt373.get("prompt373_selected_route"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt373_selected_step_kind"
+            if _normalize_text(
+                prompt373.get("prompt373_selected_step_kind"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt373_selected_step_operation"
+            if _normalize_text(
+                prompt373.get("prompt373_selected_step_operation"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt373_codex_execution_request_path"
+            if _normalize_text(
+                prompt373.get("prompt373_codex_execution_request_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt373_codex_execution_receipt_path"
+            if _normalize_text(
+                prompt373.get("prompt373_codex_execution_receipt_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt373_post_execution_diff_capture_handoff_path"
+            if _normalize_text(
+                prompt373.get("prompt373_post_execution_diff_capture_handoff_path"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt373_next_action"
+            if _normalize_text(prompt373.get("prompt373_next_action"), default="")
             else "",
         ]
     )
@@ -216453,6 +217435,24 @@ class PlannedExecutionRunner:
         prompt372_gate_receipt_path = (
             run_root / "prompt372_gate_receipt.json"
         )
+        prompt373_selected_step_live_codex_execution_gate_path = (
+            run_root / "prompt373_selected_step_live_codex_execution_gate.json"
+        )
+        prompt373_codex_execution_request_path = (
+            run_root / "prompt373_codex_execution_request.json"
+        )
+        prompt373_codex_execution_receipt_path = (
+            run_root / "prompt373_codex_execution_receipt.json"
+        )
+        prompt373_execution_output_paths_path = (
+            run_root / "prompt373_execution_output_paths.json"
+        )
+        prompt373_returncode_classification_path = (
+            run_root / "prompt373_returncode_classification.json"
+        )
+        prompt373_post_execution_diff_capture_handoff_path = (
+            run_root / "prompt373_post_execution_diff_capture_handoff.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -216586,6 +217586,19 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt372_selected_step_execution_gate_payload,
         }
+        prompt373_selected_step_live_codex_execution_payload = (
+            _build_prompt373_selected_step_live_codex_execution_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+                job_id=resolved_job_id,
+                now=self.now,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt373_selected_step_live_codex_execution_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -216653,6 +217666,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt372_selected_step_execution_gate_state=(
                     prompt372_selected_step_execution_gate_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt373_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt373_selected_step_live_codex_execution_state=(
+                    prompt373_selected_step_live_codex_execution_payload
                 ),
             )
         )
@@ -216741,6 +217762,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt372_selected_step_execution_gate_payload=(
                     prompt372_selected_step_execution_gate_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt373_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt373_selected_step_live_codex_execution_payload=(
+                    prompt373_selected_step_live_codex_execution_payload
                 ),
             )
         )
@@ -217033,6 +218064,42 @@ class PlannedExecutionRunner:
             prompt372_selected_step_execution_gate_payload
         )
         manifest["prompt372_gate_receipt_path"] = str(prompt372_gate_receipt_path)
+        manifest["prompt373_selected_step_live_codex_execution_gate_summary"] = dict(
+            prompt373_selected_step_live_codex_execution_payload
+        )
+        manifest["prompt373_selected_step_live_codex_execution_gate_path"] = str(
+            prompt373_selected_step_live_codex_execution_gate_path
+        )
+        manifest["prompt373_codex_execution_request_summary"] = dict(
+            prompt373_selected_step_live_codex_execution_payload
+        )
+        manifest["prompt373_codex_execution_request_path"] = str(
+            prompt373_codex_execution_request_path
+        )
+        manifest["prompt373_codex_execution_receipt_summary"] = dict(
+            prompt373_selected_step_live_codex_execution_payload
+        )
+        manifest["prompt373_codex_execution_receipt_path"] = str(
+            prompt373_codex_execution_receipt_path
+        )
+        manifest["prompt373_execution_output_paths_summary"] = dict(
+            prompt373_selected_step_live_codex_execution_payload
+        )
+        manifest["prompt373_execution_output_paths_path"] = str(
+            prompt373_execution_output_paths_path
+        )
+        manifest["prompt373_returncode_classification_summary"] = dict(
+            prompt373_selected_step_live_codex_execution_payload
+        )
+        manifest["prompt373_returncode_classification_path"] = str(
+            prompt373_returncode_classification_path
+        )
+        manifest["prompt373_post_execution_diff_capture_handoff_summary"] = dict(
+            prompt373_selected_step_live_codex_execution_payload
+        )
+        manifest["prompt373_post_execution_diff_capture_handoff_path"] = str(
+            prompt373_post_execution_diff_capture_handoff_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -217150,6 +218217,24 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt372_gate_receipt"] = manifest.get(
             "prompt372_gate_receipt_summary"
         )
+        contract_summaries_by_role[
+            "prompt373_selected_step_live_codex_execution_gate"
+        ] = manifest.get("prompt373_selected_step_live_codex_execution_gate_summary")
+        contract_summaries_by_role["prompt373_codex_execution_request"] = manifest.get(
+            "prompt373_codex_execution_request_summary"
+        )
+        contract_summaries_by_role["prompt373_codex_execution_receipt"] = manifest.get(
+            "prompt373_codex_execution_receipt_summary"
+        )
+        contract_summaries_by_role["prompt373_execution_output_paths"] = manifest.get(
+            "prompt373_execution_output_paths_summary"
+        )
+        contract_summaries_by_role["prompt373_returncode_classification"] = manifest.get(
+            "prompt373_returncode_classification_summary"
+        )
+        contract_summaries_by_role[
+            "prompt373_post_execution_diff_capture_handoff"
+        ] = manifest.get("prompt373_post_execution_diff_capture_handoff_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -217267,6 +218352,24 @@ class PlannedExecutionRunner:
         contract_paths_by_role["prompt372_gate_receipt"] = manifest.get(
             "prompt372_gate_receipt_path"
         )
+        contract_paths_by_role[
+            "prompt373_selected_step_live_codex_execution_gate"
+        ] = manifest.get("prompt373_selected_step_live_codex_execution_gate_path")
+        contract_paths_by_role["prompt373_codex_execution_request"] = manifest.get(
+            "prompt373_codex_execution_request_path"
+        )
+        contract_paths_by_role["prompt373_codex_execution_receipt"] = manifest.get(
+            "prompt373_codex_execution_receipt_path"
+        )
+        contract_paths_by_role["prompt373_execution_output_paths"] = manifest.get(
+            "prompt373_execution_output_paths_path"
+        )
+        contract_paths_by_role["prompt373_returncode_classification"] = manifest.get(
+            "prompt373_returncode_classification_path"
+        )
+        contract_paths_by_role[
+            "prompt373_post_execution_diff_capture_handoff"
+        ] = manifest.get("prompt373_post_execution_diff_capture_handoff_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -218685,6 +219788,239 @@ class PlannedExecutionRunner:
             "prompt372_summary": _normalize_text(
                 prompt372_selected_step_execution_gate_payload.get(
                     "prompt372_summary"
+                ),
+                default="",
+            ),
+            "prompt373_schema_version": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_schema_version"
+                ),
+                default="",
+            ),
+            "prompt373_selected_step_live_codex_execution_status": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_selected_step_live_codex_execution_status"
+                ),
+                default="blocked",
+            ),
+            "prompt373_execution_status": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_execution_status"
+                ),
+                default="blocked",
+            ),
+            "prompt373_prompt372_preflight_ready": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_prompt372_preflight_ready",
+                    False,
+                )
+            ),
+            "prompt373_live_execution_gate_ready": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_live_execution_gate_ready",
+                    False,
+                )
+            ),
+            "prompt373_selected_route": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_selected_route"
+                ),
+                default="blocked",
+            ),
+            "prompt373_selected_step_kind": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_selected_step_kind"
+                ),
+                default="blocked",
+            ),
+            "prompt373_selected_step_operation": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_selected_step_operation"
+                ),
+                default="blocked",
+            ),
+            "prompt373_live_execution_requested": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_live_execution_requested",
+                    False,
+                )
+            ),
+            "prompt373_live_execution_confirmed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_live_execution_confirmed",
+                    False,
+                )
+            ),
+            "prompt373_live_execution_allowed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_live_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt373_execution_allowed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt373_execution_attempted": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt373_execution_performed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_execution_performed",
+                    False,
+                )
+            ),
+            "prompt373_codex_execution_allowed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt373_codex_execution_attempted": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_codex_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt373_codex_execution_performed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt373_git_mutation_allowed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_git_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt373_git_mutation_attempted": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_git_mutation_attempted",
+                    False,
+                )
+            ),
+            "prompt373_git_mutation_performed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt373_remote_mutation_allowed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt373_remote_mutation_attempted": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_remote_mutation_attempted",
+                    False,
+                )
+            ),
+            "prompt373_remote_mutation_performed": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt373_returncode": (
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_returncode"
+                )
+            ),
+            "prompt373_returncode_classification": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_returncode_classification"
+                ),
+                default="not_run",
+            ),
+            "prompt373_stdout_path": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_stdout_path"
+                ),
+                default="",
+            ),
+            "prompt373_stderr_path": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_stderr_path"
+                ),
+                default="",
+            ),
+            "prompt373_post_execution_diff_capture_handoff_ready": bool(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_post_execution_diff_capture_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt373_selected_step_live_codex_execution_gate_path": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_selected_step_live_codex_execution_gate_path"
+                ),
+                default="",
+            ),
+            "prompt373_codex_execution_request_path": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_codex_execution_request_path"
+                ),
+                default="",
+            ),
+            "prompt373_codex_execution_receipt_path": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_codex_execution_receipt_path"
+                ),
+                default="",
+            ),
+            "prompt373_execution_output_paths_path": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_execution_output_paths_path"
+                ),
+                default="",
+            ),
+            "prompt373_returncode_classification_path": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_returncode_classification_path"
+                ),
+                default="",
+            ),
+            "prompt373_post_execution_diff_capture_handoff_path": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_post_execution_diff_capture_handoff_path"
+                ),
+                default="",
+            ),
+            "prompt373_next_action": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt373_authoritative_next_action": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_authoritative_next_action"
+                ),
+                default="hold_for_followup",
+            ),
+            "prompt373_active_blocked_reason": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt373_active_blocked_reasons": _normalize_string_list(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt373_summary": _normalize_text(
+                prompt373_selected_step_live_codex_execution_payload.get(
+                    "prompt373_summary"
                 ),
                 default="",
             ),
