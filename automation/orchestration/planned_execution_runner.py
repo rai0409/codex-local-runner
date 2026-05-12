@@ -48304,6 +48304,14 @@ def _build_prompt374_post_execution_diff_capture_handoff_state(
                 source.get("prompt373_authoritative_next_action"),
                 default="",
             ),
+            "prompt373_active_blocked_reason": _normalize_text(
+                source.get("prompt373_active_blocked_reason"),
+                default="",
+            ),
+            "prompt373_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt373_active_blocked_reasons"),
+                sort_items=False,
+            ),
             "prompt373_post_execution_diff_capture_handoff_path": _normalize_text(
                 source.get("prompt373_post_execution_diff_capture_handoff_path"),
                 default="",
@@ -48322,12 +48330,21 @@ def _build_prompt374_post_execution_diff_capture_handoff_state(
         surface: Mapping[str, Any] | None,
         *,
         fallback_missing_reason: str,
+        require_success: bool = False,
     ) -> list[str]:
         normalized = _normalize_prompt373_surface(surface)
         reasons: list[str] = []
         returncode_classification = _normalize_text(
             normalized.get("prompt373_returncode_classification"),
             default="",
+        )
+        active_blocked_reason = _normalize_text(
+            normalized.get("prompt373_active_blocked_reason"),
+            default="",
+        )
+        active_blocked_reasons = _normalize_string_list(
+            normalized.get("prompt373_active_blocked_reasons"),
+            sort_items=False,
         )
         if not _normalize_text(
             normalized.get("prompt373_selected_step_live_codex_execution_status"),
@@ -48342,7 +48359,39 @@ def _build_prompt374_post_execution_diff_capture_handoff_state(
             default="",
         ):
             _append_reason(reasons, "prompt373_execution_status_missing")
-        if returncode_classification not in {"success", "nonzero_exit", "timeout"}:
+        if require_success:
+            if returncode_classification != "success":
+                _append_reason(
+                    reasons,
+                    "prompt373_returncode_classification_invalid_for_prompt374",
+                )
+            if normalized.get("prompt373_returncode") != 0:
+                _append_reason(reasons, "prompt373_returncode_not_zero")
+            if (
+                _normalize_text(
+                    normalized.get(
+                        "prompt373_selected_step_live_codex_execution_status"
+                    ),
+                    default="",
+                )
+                != "completed"
+            ):
+                _append_reason(
+                    reasons,
+                    "prompt373_selected_step_live_codex_execution_status_not_completed",
+                )
+            if (
+                _normalize_text(
+                    normalized.get("prompt373_execution_status"),
+                    default="",
+                )
+                != "completed"
+            ):
+                _append_reason(
+                    reasons,
+                    "prompt373_execution_status_not_completed",
+                )
+        elif returncode_classification not in {"success", "nonzero_exit", "timeout"}:
             _append_reason(
                 reasons,
                 "prompt373_returncode_classification_invalid_for_prompt374",
@@ -48443,34 +48492,150 @@ def _build_prompt374_post_execution_diff_capture_handoff_state(
                 reasons,
                 "prompt373_next_action_not_prepare_prompt374_post_execution_diff_capture_handoff",
             )
-        if not reasons:
+        if require_success and (
+            _normalize_text(
+                normalized.get("prompt373_authoritative_next_action"),
+                default="",
+            )
+            != "prepare_prompt374_post_execution_diff_capture_handoff"
+        ):
+            _append_reason(
+                reasons,
+                "prompt373_authoritative_next_action_not_prepare_prompt374_post_execution_diff_capture_handoff",
+            )
+        if require_success and active_blocked_reason:
+            _append_reason(reasons, "prompt373_active_blocked_reason_not_empty")
+        if require_success and active_blocked_reasons != []:
+            _append_reason(reasons, "prompt373_active_blocked_reasons_not_empty")
+        if not reasons and not isinstance(surface, Mapping):
             _append_reason(reasons, fallback_missing_reason)
         return reasons
 
-    def _valid_prompt373_execution_evidence(payload: Mapping[str, Any] | None) -> bool:
+    def _valid_prompt373_execution_evidence(
+        payload: Mapping[str, Any] | None,
+        *,
+        require_success: bool = False,
+    ) -> bool:
         return not _prompt374_prompt373_invalid_reasons(
             payload,
             fallback_missing_reason="prompt373_execution_evidence_unavailable",
+            require_success=require_success,
         )
 
-    def _read_candidate_prompt373_artifact(path_text: str) -> tuple[dict[str, Any], str]:
+    def _read_candidate_prompt373_artifact(
+        path_text: str,
+        *,
+        require_success: bool = False,
+    ) -> tuple[dict[str, Any], str]:
         normalized_path = _normalize_text(path_text, default="")
         if not normalized_path:
             return {}, ""
         path_obj = Path(normalized_path)
         payload = _read_json_object_if_exists(path_obj)
-        if _valid_prompt373_execution_evidence(payload):
+        if _valid_prompt373_execution_evidence(
+            payload,
+            require_success=require_success,
+        ):
             return _normalize_prompt373_surface(payload), str(path_obj)
         return {}, ""
 
-    def _resolve_prompt374_prompt373_execution_evidence() -> tuple[dict[str, Any], str]:
+    def _recover_latest_valid_prompt373_live_execution_evidence() -> tuple[
+        dict[str, Any],
+        str,
+        dict[str, str],
+    ]:
+        recovery_root = Path("/tmp/codex-local-runner-checks")
+        if not recovery_root.exists() or not recovery_root.is_dir():
+            return {}, "", {}
+
+        candidate_bundle_dirs: list[Path] = []
+        for live_root in sorted(
+            recovery_root.glob("prompt373_live_execution_*"),
+            key=_prompt358_candidate_artifact_timestamp,
+            reverse=True,
+        ):
+            if not live_root.is_dir():
+                continue
+            candidate_bundle_dirs.append(live_root)
+            nested_live_dirs = sorted(
+                [
+                    path
+                    for path in live_root.glob("prompt373-live-execution-*")
+                    if path.is_dir()
+                ],
+                key=_prompt358_candidate_artifact_timestamp,
+                reverse=True,
+            )
+            candidate_bundle_dirs.extend(nested_live_dirs)
+
+        seen_bundle_dirs: set[Path] = set()
+        bundle_candidates: list[tuple[int, Path]] = []
+        for candidate_dir in candidate_bundle_dirs:
+            try:
+                resolved_candidate_dir = candidate_dir.resolve()
+            except OSError:
+                resolved_candidate_dir = candidate_dir
+            if resolved_candidate_dir in seen_bundle_dirs:
+                continue
+            seen_bundle_dirs.add(resolved_candidate_dir)
+            artifact_paths = (
+                candidate_dir / "prompt373_post_execution_diff_capture_handoff.json",
+                candidate_dir / "prompt373_codex_execution_receipt.json",
+                candidate_dir / "run_state.json",
+            )
+            newest_artifact_timestamp = max(
+                (
+                    _prompt358_candidate_artifact_timestamp(artifact_path)
+                    for artifact_path in artifact_paths
+                    if artifact_path.exists() and artifact_path.is_file()
+                ),
+                default=0,
+            )
+            if newest_artifact_timestamp > 0:
+                bundle_candidates.append((newest_artifact_timestamp, candidate_dir))
+
+        for _, candidate_dir in sorted(
+            bundle_candidates,
+            key=lambda item: item[0],
+            reverse=True,
+        ):
+            companion_paths = {
+                "prompt374_prompt373_recovered_handoff_path": str(
+                    candidate_dir / "prompt373_post_execution_diff_capture_handoff.json"
+                ),
+                "prompt374_prompt373_recovered_receipt_path": str(
+                    candidate_dir / "prompt373_codex_execution_receipt.json"
+                ),
+                "prompt374_prompt373_recovered_run_state_path": str(
+                    candidate_dir / "run_state.json"
+                ),
+            }
+            for artifact_key in (
+                "prompt374_prompt373_recovered_handoff_path",
+                "prompt374_prompt373_recovered_receipt_path",
+                "prompt374_prompt373_recovered_run_state_path",
+            ):
+                artifact_surface, artifact_source = _read_candidate_prompt373_artifact(
+                    companion_paths[artifact_key],
+                    require_success=True,
+                )
+                if artifact_source:
+                    return artifact_surface, artifact_source, companion_paths
+        return {}, "", {}
+
+    def _resolve_prompt374_prompt373_execution_evidence() -> tuple[
+        dict[str, Any],
+        str,
+        bool,
+        dict[str, str],
+    ]:
         current_surface = _normalize_prompt373_surface(run_state)
         if _valid_prompt373_execution_evidence(current_surface):
             return current_surface, _normalize_text(
                 current_prompt373_source_path
                 or current_surface.get("prompt373_post_execution_diff_capture_handoff_path"),
                 default="",
-            )
+            ), False, {}
 
         for candidate_path in (
             current_prompt373_source_path,
@@ -48491,28 +48656,21 @@ def _build_prompt374_post_execution_diff_capture_handoff_state(
                 candidate_path
             )
             if candidate_source:
-                return candidate_surface, candidate_source
+                return candidate_surface, candidate_source, False, {}
 
-        recovered_payload, recovered_source = _prompt358_find_latest_valid_prior_artifact(
-            filename="prompt373_post_execution_diff_capture_handoff.json",
-            validator=_valid_prompt373_execution_evidence,
-        )
-        if isinstance(recovered_payload, Mapping):
-            return _normalize_prompt373_surface(recovered_payload), _normalize_text(
+        (
+            recovered_surface,
+            recovered_source,
+            recovered_companion_paths,
+        ) = _recover_latest_valid_prompt373_live_execution_evidence()
+        if recovered_source:
+            return (
+                recovered_surface,
                 recovered_source,
-                default="",
+                True,
+                recovered_companion_paths,
             )
-
-        recovered_payload, recovered_source = _prompt358_find_latest_valid_prior_artifact(
-            filename="run_state.json",
-            validator=_valid_prompt373_execution_evidence,
-        )
-        if isinstance(recovered_payload, Mapping):
-            return _normalize_prompt373_surface(recovered_payload), _normalize_text(
-                recovered_source,
-                default="",
-            )
-        return current_surface, ""
+        return current_surface, "", False, {}
 
     def _build_prompt374_state(
         *,
@@ -48597,7 +48755,12 @@ def _build_prompt374_post_execution_diff_capture_handoff_state(
             "prompt374_summary": _normalize_text(summary, default=""),
         }
 
-    prompt373_surface, prompt373_source_path = (
+    (
+        prompt373_surface,
+        prompt373_source_path,
+        prompt373_recovered_evidence_used,
+        prompt373_recovered_companion_paths,
+    ) = (
         _resolve_prompt374_prompt373_execution_evidence()
     )
     prompt373_execution_evidence_ready = _valid_prompt373_execution_evidence(
@@ -48870,8 +49033,29 @@ def _build_prompt374_post_execution_diff_capture_handoff_state(
         "prompt374_prompt373_execution_evidence_ready": bool(
             prompt374_state.get("prompt374_prompt373_execution_evidence_ready", False)
         ),
+        "prompt374_prompt373_recovered_evidence_used": bool(
+            prompt373_recovered_evidence_used
+        ),
         "prompt374_prompt373_execution_evidence_source_path": _normalize_text(
             prompt373_source_path,
+            default="",
+        ),
+        "prompt374_prompt373_recovered_run_state_path": _normalize_text(
+            prompt373_recovered_companion_paths.get(
+                "prompt374_prompt373_recovered_run_state_path"
+            ),
+            default="",
+        ),
+        "prompt374_prompt373_recovered_receipt_path": _normalize_text(
+            prompt373_recovered_companion_paths.get(
+                "prompt374_prompt373_recovered_receipt_path"
+            ),
+            default="",
+        ),
+        "prompt374_prompt373_recovered_handoff_path": _normalize_text(
+            prompt373_recovered_companion_paths.get(
+                "prompt374_prompt373_recovered_handoff_path"
+            ),
             default="",
         ),
         "prompt374_prompt373_execution_validation_reasons": list(
