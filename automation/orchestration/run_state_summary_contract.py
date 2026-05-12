@@ -832,6 +832,42 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt375_active_blocked_reason",
     "prompt375_active_blocked_reasons",
     "prompt375_summary",
+    "prompt376_no_diff_cycle_continuation_status",
+    "prompt376_prompt375_evidence_ready",
+    "prompt376_prompt375_review_decision",
+    "prompt376_prompt375_no_diff_confirmed",
+    "prompt376_prompt375_cycle_continuation_allowed",
+    "prompt376_no_diff_continuation_confirmed",
+    "prompt376_success_path_only",
+    "prompt376_next_cycle_allowed",
+    "prompt376_current_cycle_index",
+    "prompt376_next_cycle_index",
+    "prompt376_max_cycles",
+    "prompt376_cycle_limit_reached",
+    "prompt376_next_cycle_contract_ready",
+    "prompt376_cycle_state_ready",
+    "prompt376_continuation_handoff_ready",
+    "prompt376_chatgpt_prompt_generation_request_allowed",
+    "prompt376_approve_commit_tag_allowed",
+    "prompt376_targeted_fix_allowed",
+    "prompt376_replan_required",
+    "prompt376_execution_allowed",
+    "prompt376_execution_attempted",
+    "prompt376_execution_performed",
+    "prompt376_codex_execution_allowed",
+    "prompt376_codex_execution_attempted",
+    "prompt376_codex_execution_performed",
+    "prompt376_git_mutation_allowed",
+    "prompt376_git_mutation_attempted",
+    "prompt376_git_mutation_performed",
+    "prompt376_remote_mutation_allowed",
+    "prompt376_remote_mutation_attempted",
+    "prompt376_remote_mutation_performed",
+    "prompt376_authoritative_next_action",
+    "prompt376_next_action",
+    "prompt376_active_blocked_reason",
+    "prompt376_active_blocked_reasons",
+    "prompt376_summary",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -1577,6 +1613,32 @@ def select_manifest_run_state_summary_compact(
         "prompt375_remote_mutation_allowed",
         "prompt375_remote_mutation_attempted",
         "prompt375_remote_mutation_performed",
+        "prompt376_prompt375_evidence_ready",
+        "prompt376_prompt375_no_diff_confirmed",
+        "prompt376_prompt375_cycle_continuation_allowed",
+        "prompt376_no_diff_continuation_confirmed",
+        "prompt376_success_path_only",
+        "prompt376_next_cycle_allowed",
+        "prompt376_cycle_limit_reached",
+        "prompt376_next_cycle_contract_ready",
+        "prompt376_cycle_state_ready",
+        "prompt376_continuation_handoff_ready",
+        "prompt376_chatgpt_prompt_generation_request_allowed",
+        "prompt376_approve_commit_tag_allowed",
+        "prompt376_targeted_fix_allowed",
+        "prompt376_replan_required",
+        "prompt376_execution_allowed",
+        "prompt376_execution_attempted",
+        "prompt376_execution_performed",
+        "prompt376_codex_execution_allowed",
+        "prompt376_codex_execution_attempted",
+        "prompt376_codex_execution_performed",
+        "prompt376_git_mutation_allowed",
+        "prompt376_git_mutation_attempted",
+        "prompt376_git_mutation_performed",
+        "prompt376_remote_mutation_allowed",
+        "prompt376_remote_mutation_attempted",
+        "prompt376_remote_mutation_performed",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -1623,6 +1685,7 @@ def select_manifest_run_state_summary_compact(
         "prompt374_active_blocked_reasons",
         "prompt375_prompt374_changed_tracked_files",
         "prompt375_active_blocked_reasons",
+        "prompt376_active_blocked_reasons",
     }
     int_fields.add("prompt367_returncode")
     int_fields.add("prompt368_resume_iteration_current")
@@ -1632,6 +1695,9 @@ def select_manifest_run_state_summary_compact(
     int_fields.add("prompt371_max_cycles")
     int_fields.add("prompt374_changed_tracked_file_count")
     int_fields.add("prompt375_prompt374_changed_tracked_file_count")
+    int_fields.add("prompt376_current_cycle_index")
+    int_fields.add("prompt376_next_cycle_index")
+    int_fields.add("prompt376_max_cycles")
 
     summary: dict[str, Any] = {}
     for field in MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS:
