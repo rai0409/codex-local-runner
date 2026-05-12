@@ -868,6 +868,45 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt376_active_blocked_reason",
     "prompt376_active_blocked_reasons",
     "prompt376_summary",
+    "prompt377_chatgpt_prompt_generation_request_status",
+    "prompt377_prompt376_evidence_ready",
+    "prompt377_prompt376_no_diff_cycle_continuation_status",
+    "prompt377_prompt376_next_cycle_allowed",
+    "prompt377_prompt376_next_cycle_index",
+    "prompt377_prompt376_max_cycles",
+    "prompt377_next_cycle_index",
+    "prompt377_max_cycles",
+    "prompt377_success_path_only",
+    "prompt377_prompt_generation_target",
+    "prompt377_prompt_generation_owner",
+    "prompt377_runner_role",
+    "prompt377_codex_role",
+    "prompt377_chatgpt_prompt_generation_request_ready",
+    "prompt377_prompt_generation_context_ready",
+    "prompt377_prompt_generation_constraints_ready",
+    "prompt377_generated_prompt_intake_contract_ready",
+    "prompt377_generated_prompt_validation_contract_ready",
+    "prompt377_generated_prompt_ready",
+    "prompt377_generated_prompt_path",
+    "prompt377_chatgpt_call_allowed",
+    "prompt377_chatgpt_call_attempted",
+    "prompt377_chatgpt_call_performed",
+    "prompt377_execution_allowed",
+    "prompt377_execution_attempted",
+    "prompt377_execution_performed",
+    "prompt377_codex_execution_allowed",
+    "prompt377_codex_execution_attempted",
+    "prompt377_codex_execution_performed",
+    "prompt377_git_mutation_allowed",
+    "prompt377_git_mutation_attempted",
+    "prompt377_git_mutation_performed",
+    "prompt377_remote_mutation_allowed",
+    "prompt377_remote_mutation_attempted",
+    "prompt377_remote_mutation_performed",
+    "prompt377_authoritative_next_action",
+    "prompt377_next_action",
+    "prompt377_active_blocked_reason",
+    "prompt377_active_blocked_reasons",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -1639,6 +1678,30 @@ def select_manifest_run_state_summary_compact(
         "prompt376_remote_mutation_allowed",
         "prompt376_remote_mutation_attempted",
         "prompt376_remote_mutation_performed",
+        "prompt377_prompt376_evidence_ready",
+        "prompt377_prompt376_next_cycle_allowed",
+        "prompt377_success_path_only",
+        "prompt377_chatgpt_prompt_generation_request_ready",
+        "prompt377_prompt_generation_context_ready",
+        "prompt377_prompt_generation_constraints_ready",
+        "prompt377_generated_prompt_intake_contract_ready",
+        "prompt377_generated_prompt_validation_contract_ready",
+        "prompt377_generated_prompt_ready",
+        "prompt377_chatgpt_call_allowed",
+        "prompt377_chatgpt_call_attempted",
+        "prompt377_chatgpt_call_performed",
+        "prompt377_execution_allowed",
+        "prompt377_execution_attempted",
+        "prompt377_execution_performed",
+        "prompt377_codex_execution_allowed",
+        "prompt377_codex_execution_attempted",
+        "prompt377_codex_execution_performed",
+        "prompt377_git_mutation_allowed",
+        "prompt377_git_mutation_attempted",
+        "prompt377_git_mutation_performed",
+        "prompt377_remote_mutation_allowed",
+        "prompt377_remote_mutation_attempted",
+        "prompt377_remote_mutation_performed",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -1686,6 +1749,7 @@ def select_manifest_run_state_summary_compact(
         "prompt375_prompt374_changed_tracked_files",
         "prompt375_active_blocked_reasons",
         "prompt376_active_blocked_reasons",
+        "prompt377_active_blocked_reasons",
     }
     int_fields.add("prompt367_returncode")
     int_fields.add("prompt368_resume_iteration_current")
@@ -1698,6 +1762,10 @@ def select_manifest_run_state_summary_compact(
     int_fields.add("prompt376_current_cycle_index")
     int_fields.add("prompt376_next_cycle_index")
     int_fields.add("prompt376_max_cycles")
+    int_fields.add("prompt377_prompt376_next_cycle_index")
+    int_fields.add("prompt377_prompt376_max_cycles")
+    int_fields.add("prompt377_next_cycle_index")
+    int_fields.add("prompt377_max_cycles")
 
     summary: dict[str, Any] = {}
     for field in MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS:
