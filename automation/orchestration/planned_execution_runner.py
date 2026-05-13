@@ -3699,6 +3699,9 @@ _PROMPT382_SCHEMA_VERSION = "prompt382_approve_commit_tag_execution_gate_v1"
 _PROMPT383_SCHEMA_VERSION = "prompt383_explicit_approve_commit_tag_execution_v1"
 _PROMPT384_SCHEMA_VERSION = "prompt384_commit_tag_reconciliation_success_cycle_closure_v1"
 _PROMPT385_SCHEMA_VERSION = "prompt385_success_path_next_cycle_handoff_v1"
+_PROMPT386_SCHEMA_VERSION = (
+    "prompt386_success_path_bounded_autonomous_loop_controller_readiness_v1"
+)
 _PROMPT382_COMMIT_MESSAGE = "Add Prompt382 approve commit tag execution gate"
 _PROMPT382_TAG_NAME = "prompt382-approve-commit-tag-execution-gate"
 _PROMPT385_GENERATED_PROMPT_INTAKE_METHOD = "prompt378_generated_prompt_path"
@@ -3707,6 +3710,25 @@ _PROMPT385_GENERATED_PROMPT_EXPECTED_PATH_FIELD = (
     "prompt378_generated_prompt_path"
 )
 _PROMPT385_NEXT_PROMPT_GENERATION_OWNER = "chatgpt"
+_PROMPT386_MAX_CYCLES_ALLOWED = 2
+_PROMPT386_REQUIRED_NEXT_PROMPT_ID = "prompt387"
+_PROMPT386_REQUIRED_NEXT_PROMPT = (
+    "prompt387_success_path_loop_dispatch_execution_wiring_bridge"
+)
+_PROMPT386_REQUIRED_NEXT_PROMPT_GOAL = (
+    "success_path_loop_dispatch_execution_wiring_bridge"
+)
+_PROMPT386_ORDERED_LOOP_STAGES: tuple[str, ...] = (
+    "prompt385_next_prompt_generation_request",
+    "prompt378_generated_prompt_intake",
+    "prompt379_generated_prompt_codex_execution_bridge",
+    "prompt380_prompt379_result_review_route_decision",
+    "prompt381_approve_candidate_boundary",
+    "prompt382_approve_commit_tag_execution_gate",
+    "prompt383_explicit_approve_commit_tag_execution",
+    "prompt384_commit_tag_reconciliation",
+    "prompt385_success_path_next_cycle_handoff",
+)
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -4236,6 +4258,55 @@ _PROMPT385_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt385_authoritative_next_action",
     "prompt385_active_blocked_reason",
     "prompt385_active_blocked_reasons",
+)
+_PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt386_success_path_bounded_loop_controller_status",
+    "prompt386_prompt385_evidence_ready",
+    "prompt386_prompt385_next_cycle_handoff_ready",
+    "prompt386_prompt385_next_prompt_generation_request_ready",
+    "prompt386_prompt385_generated_prompt_intake_expected",
+    "prompt386_prompt385_remote_mutation_performed",
+    "prompt386_prompt385_codex_execution_performed",
+    "prompt386_prompt385_git_mutation_performed",
+    "prompt386_success_path_only",
+    "prompt386_local_only",
+    "prompt386_bounded",
+    "prompt386_current_cycle_index",
+    "prompt386_next_cycle_index",
+    "prompt386_max_cycles",
+    "prompt386_max_cycles_allowed",
+    "prompt386_loop_controller_ready",
+    "prompt386_loop_plan_ready",
+    "prompt386_loop_readiness_ready",
+    "prompt386_loop_dispatch_allowed",
+    "prompt386_loop_dispatch_attempted",
+    "prompt386_loop_dispatch_performed",
+    "prompt386_codex_execution_allowed",
+    "prompt386_codex_execution_attempted",
+    "prompt386_codex_execution_performed",
+    "prompt386_chatgpt_invocation_allowed",
+    "prompt386_chatgpt_invocation_attempted",
+    "prompt386_chatgpt_invocation_performed",
+    "prompt386_git_mutation_allowed",
+    "prompt386_git_mutation_performed",
+    "prompt386_remote_mutation_allowed",
+    "prompt386_remote_mutation_performed",
+    "prompt386_failure_route_supported",
+    "prompt386_retry_route_supported",
+    "prompt386_rollback_supported",
+    "prompt386_remote_route_supported",
+    "prompt386_ordered_loop_stages",
+    "prompt386_ordered_loop_stage_count",
+    "prompt386_required_next_prompt",
+    "prompt386_required_next_prompt_id",
+    "prompt386_required_next_prompt_goal",
+    "prompt386_next_action",
+    "prompt386_authoritative_next_action",
+    "prompt386_active_blocked_reason",
+    "prompt386_active_blocked_reasons",
+    "prompt386_loop_controller_path",
+    "prompt386_loop_plan_path",
+    "prompt386_loop_readiness_path",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -6134,6 +6205,23 @@ def _merge_prompt385_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT385_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt386_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt386_success_path_bounded_loop_controller_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt386_success_path_bounded_loop_controller_state)
+        if isinstance(prompt386_success_path_bounded_loop_controller_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT386_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -56675,6 +56763,434 @@ def _build_prompt385_success_path_next_cycle_handoff_state(
     }
 
 
+def _build_prompt386_success_path_bounded_loop_controller_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt386_loop_controller_path = (
+        artifact_root / "prompt386_success_path_bounded_loop_controller.json"
+    )
+    prompt386_loop_plan_path = (
+        artifact_root / "prompt386_success_path_bounded_loop_plan.json"
+    )
+    prompt386_loop_readiness_path = (
+        artifact_root / "prompt386_success_path_loop_readiness.json"
+    )
+    prompt385_handoff_path = (
+        artifact_root / "prompt385_success_path_next_cycle_handoff.json"
+    )
+    prompt385_request_path = (
+        artifact_root / "prompt385_next_prompt_generation_request.json"
+    )
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt385_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt385_success_path_next_cycle_handoff_status": _normalize_text(
+                source.get("prompt385_success_path_next_cycle_handoff_status"),
+                default="blocked",
+            ),
+            "prompt385_current_cycle_index": _as_non_negative_int(
+                source.get("prompt385_current_cycle_index"),
+                default=0,
+            ),
+            "prompt385_next_cycle_index": _as_non_negative_int(
+                source.get("prompt385_next_cycle_index"),
+                default=0,
+            ),
+            "prompt385_max_cycles": _as_non_negative_int(
+                source.get("prompt385_max_cycles"),
+                default=0,
+            ),
+            "prompt385_next_cycle_handoff_ready": _prompt357_as_boolish(
+                source.get("prompt385_next_cycle_handoff_ready"),
+                default=False,
+            ),
+            "prompt385_next_prompt_generation_request_ready": (
+                _prompt357_as_boolish(
+                    source.get("prompt385_next_prompt_generation_request_ready"),
+                    default=False,
+                )
+            ),
+            "prompt385_generated_prompt_intake_expected": _prompt357_as_boolish(
+                source.get("prompt385_generated_prompt_intake_expected"),
+                default=False,
+            ),
+            "prompt385_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt385_remote_mutation_performed"),
+                default=False,
+            ),
+            "prompt385_codex_execution_performed": _prompt357_as_boolish(
+                source.get("prompt385_codex_execution_performed"),
+                default=False,
+            ),
+            "prompt385_git_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt385_git_mutation_performed"),
+                default=False,
+            ),
+            "prompt385_next_action": _normalize_text(
+                source.get("prompt385_next_action"),
+                default="wait_for_prompt384_success_cycle_closure",
+            ),
+            "prompt385_authoritative_next_action": _normalize_text(
+                source.get("prompt385_authoritative_next_action"),
+                default="wait_for_prompt384_success_cycle_closure",
+            ),
+            "prompt385_active_blocked_reason": _normalize_text(
+                source.get("prompt385_active_blocked_reason"),
+                default="",
+            ),
+            "prompt385_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt385_active_blocked_reasons"),
+                sort_items=False,
+            ),
+            "prompt385_next_prompt_generation_request_path": _normalize_text(
+                source.get("prompt385_next_prompt_generation_request_path"),
+                default="",
+            ),
+            "prompt385_next_cycle_handoff_path": _normalize_text(
+                source.get("prompt385_next_cycle_handoff_path"),
+                default="",
+            ),
+        }
+
+    def _has_prompt385_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        required_keys = (
+            "prompt385_success_path_next_cycle_handoff_status",
+            "prompt385_current_cycle_index",
+            "prompt385_next_cycle_index",
+            "prompt385_max_cycles",
+            "prompt385_next_cycle_handoff_ready",
+            "prompt385_next_prompt_generation_request_ready",
+            "prompt385_generated_prompt_intake_expected",
+            "prompt385_remote_mutation_performed",
+            "prompt385_codex_execution_performed",
+            "prompt385_git_mutation_performed",
+            "prompt385_next_action",
+            "prompt385_authoritative_next_action",
+            "prompt385_active_blocked_reason",
+            "prompt385_active_blocked_reasons",
+            "prompt385_next_prompt_generation_request_path",
+            "prompt385_next_cycle_handoff_path",
+        )
+        return all(key in raw_payload for key in required_keys)
+
+    def _resolve_prompt385_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt385_evidence(run_state):
+            return _normalize_prompt385_surface(run_state), ""
+
+        prompt385_handoff_payload = _read_json_object_if_exists(prompt385_handoff_path)
+        if _has_prompt385_evidence(prompt385_handoff_payload):
+            return _normalize_prompt385_surface(prompt385_handoff_payload), str(
+                prompt385_handoff_path
+            )
+
+        prompt385_request_payload = _read_json_object_if_exists(prompt385_request_path)
+        if _has_prompt385_evidence(prompt385_request_payload):
+            return _normalize_prompt385_surface(prompt385_request_payload), str(
+                prompt385_request_path
+            )
+
+        return _normalize_prompt385_surface(run_state), ""
+
+    prompt385_surface, prompt385_source_path = _resolve_prompt385_surface()
+    prompt386_prompt385_evidence_ready = bool(
+        prompt385_source_path or _has_prompt385_evidence(run_state)
+    )
+    prompt386_prompt385_next_cycle_handoff_ready = bool(
+        prompt385_surface.get("prompt385_next_cycle_handoff_ready", False)
+    )
+    prompt386_prompt385_next_prompt_generation_request_ready = bool(
+        prompt385_surface.get("prompt385_next_prompt_generation_request_ready", False)
+    )
+    prompt386_prompt385_generated_prompt_intake_expected = bool(
+        prompt385_surface.get("prompt385_generated_prompt_intake_expected", False)
+    )
+    prompt386_prompt385_remote_mutation_performed = bool(
+        prompt385_surface.get("prompt385_remote_mutation_performed", False)
+    )
+    prompt386_prompt385_codex_execution_performed = bool(
+        prompt385_surface.get("prompt385_codex_execution_performed", False)
+    )
+    prompt386_prompt385_git_mutation_performed = bool(
+        prompt385_surface.get("prompt385_git_mutation_performed", False)
+    )
+
+    prompt386_success_path_only = True
+    prompt386_local_only = True
+    prompt386_bounded = True
+    prompt386_current_cycle_index = _as_non_negative_int(
+        prompt385_surface.get("prompt385_current_cycle_index"),
+        default=0,
+    )
+    prompt386_next_cycle_index = _as_non_negative_int(
+        prompt385_surface.get("prompt385_next_cycle_index"),
+        default=0,
+    )
+    prompt386_max_cycles = min(
+        _as_non_negative_int(
+            prompt385_surface.get("prompt385_max_cycles"),
+            default=_PROMPT386_MAX_CYCLES_ALLOWED,
+        )
+        or _PROMPT386_MAX_CYCLES_ALLOWED,
+        _PROMPT386_MAX_CYCLES_ALLOWED,
+    )
+    prompt386_max_cycles_allowed = _PROMPT386_MAX_CYCLES_ALLOWED
+    prompt386_ordered_loop_stages = list(_PROMPT386_ORDERED_LOOP_STAGES)
+    prompt386_ordered_loop_stage_count = len(prompt386_ordered_loop_stages)
+
+    prompt386_success_path_bounded_loop_controller_status = "blocked"
+    prompt386_loop_controller_ready = False
+    prompt386_loop_plan_ready = False
+    prompt386_loop_readiness_ready = False
+    prompt386_loop_dispatch_allowed = False
+    prompt386_loop_dispatch_attempted = False
+    prompt386_loop_dispatch_performed = False
+    prompt386_codex_execution_allowed = False
+    prompt386_codex_execution_attempted = False
+    prompt386_codex_execution_performed = False
+    prompt386_chatgpt_invocation_allowed = False
+    prompt386_chatgpt_invocation_attempted = False
+    prompt386_chatgpt_invocation_performed = False
+    prompt386_git_mutation_allowed = False
+    prompt386_git_mutation_performed = False
+    prompt386_remote_mutation_allowed = False
+    prompt386_remote_mutation_performed = False
+    prompt386_failure_route_supported = False
+    prompt386_retry_route_supported = False
+    prompt386_rollback_supported = False
+    prompt386_remote_route_supported = False
+    prompt386_required_next_prompt = _PROMPT386_REQUIRED_NEXT_PROMPT
+    prompt386_required_next_prompt_id = _PROMPT386_REQUIRED_NEXT_PROMPT_ID
+    prompt386_required_next_prompt_goal = _PROMPT386_REQUIRED_NEXT_PROMPT_GOAL
+    prompt386_next_action = "wait_for_prompt385_next_cycle_handoff_ready"
+    prompt386_authoritative_next_action = prompt386_next_action
+    prompt386_active_blocked_reasons: list[str] = []
+
+    if not prompt386_prompt385_evidence_ready:
+        _append_reason(prompt386_active_blocked_reasons, "prompt385_evidence_missing")
+        prompt386_next_action = "wait_for_prompt385_evidence"
+    else:
+        if not prompt386_prompt385_next_cycle_handoff_ready:
+            _append_reason(
+                prompt386_active_blocked_reasons,
+                "prompt385_next_cycle_handoff_not_ready",
+            )
+            prompt386_next_action = "wait_for_prompt385_next_cycle_handoff_ready"
+        if not prompt386_prompt385_next_prompt_generation_request_ready:
+            had_prior_reasons = bool(prompt386_active_blocked_reasons)
+            _append_reason(
+                prompt386_active_blocked_reasons,
+                "prompt385_next_prompt_generation_request_not_ready",
+            )
+            if not had_prior_reasons:
+                prompt386_next_action = (
+                    "wait_for_prompt385_next_prompt_generation_request_ready"
+                )
+        if not prompt386_prompt385_generated_prompt_intake_expected:
+            had_prior_reasons = bool(prompt386_active_blocked_reasons)
+            _append_reason(
+                prompt386_active_blocked_reasons,
+                "prompt385_generated_prompt_intake_not_expected",
+            )
+            if not had_prior_reasons:
+                prompt386_next_action = (
+                    "wait_for_prompt385_generated_prompt_intake_expected"
+                )
+        if prompt386_prompt385_remote_mutation_performed:
+            had_prior_reasons = bool(prompt386_active_blocked_reasons)
+            _append_reason(
+                prompt386_active_blocked_reasons,
+                "prompt385_remote_mutation_performed",
+            )
+            if not had_prior_reasons:
+                prompt386_next_action = "review_prompt385_remote_mutation_violation"
+        if prompt386_prompt385_codex_execution_performed:
+            had_prior_reasons = bool(prompt386_active_blocked_reasons)
+            _append_reason(
+                prompt386_active_blocked_reasons,
+                "prompt385_codex_execution_performed",
+            )
+            if not had_prior_reasons:
+                prompt386_next_action = "review_prompt385_codex_execution_violation"
+        if prompt386_prompt385_git_mutation_performed:
+            had_prior_reasons = bool(prompt386_active_blocked_reasons)
+            _append_reason(
+                prompt386_active_blocked_reasons,
+                "prompt385_git_mutation_performed",
+            )
+            if not had_prior_reasons:
+                prompt386_next_action = "review_prompt385_git_mutation_violation"
+
+    if not prompt386_active_blocked_reasons:
+        prompt386_success_path_bounded_loop_controller_status = "ready"
+        prompt386_loop_controller_ready = True
+        prompt386_loop_plan_ready = True
+        prompt386_loop_readiness_ready = True
+        prompt386_next_action = "prepare_prompt387_success_path_loop_dispatch_bridge"
+
+    prompt386_authoritative_next_action = prompt386_next_action
+    prompt386_active_blocked_reason = (
+        prompt386_active_blocked_reasons[0]
+        if prompt386_active_blocked_reasons
+        else ""
+    )
+
+    prompt386_state: dict[str, Any] = {
+        "prompt386_schema_version": _PROMPT386_SCHEMA_VERSION,
+        "source_prompt": "prompt386",
+        "prompt386_prompt385_source_path": prompt385_source_path,
+        "prompt386_prompt385_next_prompt_generation_request_source_path": (
+            _normalize_text(
+                prompt385_surface.get("prompt385_next_prompt_generation_request_path"),
+                default=str(prompt385_request_path),
+            )
+        ),
+        "prompt386_prompt385_next_cycle_handoff_source_path": _normalize_text(
+            prompt385_surface.get("prompt385_next_cycle_handoff_path"),
+            default=str(prompt385_handoff_path),
+        ),
+        "prompt386_success_path_bounded_loop_controller_status": (
+            prompt386_success_path_bounded_loop_controller_status
+        ),
+        "prompt386_prompt385_evidence_ready": prompt386_prompt385_evidence_ready,
+        "prompt386_prompt385_next_cycle_handoff_ready": (
+            prompt386_prompt385_next_cycle_handoff_ready
+        ),
+        "prompt386_prompt385_next_prompt_generation_request_ready": (
+            prompt386_prompt385_next_prompt_generation_request_ready
+        ),
+        "prompt386_prompt385_generated_prompt_intake_expected": (
+            prompt386_prompt385_generated_prompt_intake_expected
+        ),
+        "prompt386_prompt385_remote_mutation_performed": (
+            prompt386_prompt385_remote_mutation_performed
+        ),
+        "prompt386_prompt385_codex_execution_performed": (
+            prompt386_prompt385_codex_execution_performed
+        ),
+        "prompt386_prompt385_git_mutation_performed": (
+            prompt386_prompt385_git_mutation_performed
+        ),
+        "prompt386_success_path_only": prompt386_success_path_only,
+        "prompt386_local_only": prompt386_local_only,
+        "prompt386_bounded": prompt386_bounded,
+        "prompt386_current_cycle_index": prompt386_current_cycle_index,
+        "prompt386_next_cycle_index": prompt386_next_cycle_index,
+        "prompt386_max_cycles": prompt386_max_cycles,
+        "prompt386_max_cycles_allowed": prompt386_max_cycles_allowed,
+        "prompt386_loop_controller_ready": prompt386_loop_controller_ready,
+        "prompt386_loop_plan_ready": prompt386_loop_plan_ready,
+        "prompt386_loop_readiness_ready": prompt386_loop_readiness_ready,
+        "prompt386_loop_dispatch_allowed": prompt386_loop_dispatch_allowed,
+        "prompt386_loop_dispatch_attempted": prompt386_loop_dispatch_attempted,
+        "prompt386_loop_dispatch_performed": prompt386_loop_dispatch_performed,
+        "prompt386_codex_execution_allowed": prompt386_codex_execution_allowed,
+        "prompt386_codex_execution_attempted": prompt386_codex_execution_attempted,
+        "prompt386_codex_execution_performed": prompt386_codex_execution_performed,
+        "prompt386_chatgpt_invocation_allowed": (
+            prompt386_chatgpt_invocation_allowed
+        ),
+        "prompt386_chatgpt_invocation_attempted": (
+            prompt386_chatgpt_invocation_attempted
+        ),
+        "prompt386_chatgpt_invocation_performed": (
+            prompt386_chatgpt_invocation_performed
+        ),
+        "prompt386_git_mutation_allowed": prompt386_git_mutation_allowed,
+        "prompt386_git_mutation_performed": prompt386_git_mutation_performed,
+        "prompt386_remote_mutation_allowed": prompt386_remote_mutation_allowed,
+        "prompt386_remote_mutation_performed": prompt386_remote_mutation_performed,
+        "prompt386_failure_route_supported": prompt386_failure_route_supported,
+        "prompt386_retry_route_supported": prompt386_retry_route_supported,
+        "prompt386_rollback_supported": prompt386_rollback_supported,
+        "prompt386_remote_route_supported": prompt386_remote_route_supported,
+        "prompt386_ordered_loop_stages": list(prompt386_ordered_loop_stages),
+        "prompt386_ordered_loop_stage_count": prompt386_ordered_loop_stage_count,
+        "prompt386_required_next_prompt": prompt386_required_next_prompt,
+        "prompt386_required_next_prompt_id": prompt386_required_next_prompt_id,
+        "prompt386_required_next_prompt_goal": prompt386_required_next_prompt_goal,
+        "prompt386_next_action": prompt386_next_action,
+        "prompt386_authoritative_next_action": prompt386_authoritative_next_action,
+        "prompt386_active_blocked_reason": prompt386_active_blocked_reason,
+        "prompt386_active_blocked_reasons": list(prompt386_active_blocked_reasons),
+        "prompt386_loop_controller_path": str(prompt386_loop_controller_path),
+        "prompt386_loop_plan_path": str(prompt386_loop_plan_path),
+        "prompt386_loop_readiness_path": str(prompt386_loop_readiness_path),
+    }
+
+    prompt386_controller_payload: dict[str, Any] = {
+        "local_only": True,
+        "success_path_only": True,
+        "bounded": True,
+        "controller_type": "success_path_bounded_loop_controller",
+        "next_required_prompt": _PROMPT386_REQUIRED_NEXT_PROMPT_ID,
+        **prompt386_state,
+    }
+    prompt386_plan_payload: dict[str, Any] = {
+        "local_only": True,
+        "success_path_only": True,
+        "bounded": True,
+        "plan_type": "success_path_bounded_loop_plan",
+        "max_cycles": prompt386_max_cycles,
+        "max_cycles_allowed": prompt386_max_cycles_allowed,
+        "current_cycle_index": prompt386_current_cycle_index,
+        "next_cycle_index": prompt386_next_cycle_index,
+        "ordered_loop_stages": list(prompt386_ordered_loop_stages),
+        "stage_count": prompt386_ordered_loop_stage_count,
+        "first_stage": prompt386_ordered_loop_stages[0],
+        "generated_prompt_intake_stage": "prompt378_generated_prompt_intake",
+        "codex_execution_stage": "prompt379_generated_prompt_codex_execution_bridge",
+        "route_decision_stage": "prompt380_prompt379_result_review_route_decision",
+        "approve_candidate_stage": "prompt381_approve_candidate_boundary",
+        "commit_tag_gate_stage": "prompt382_approve_commit_tag_execution_gate",
+        "commit_tag_execution_stage": (
+            "prompt383_explicit_approve_commit_tag_execution"
+        ),
+        "reconciliation_stage": "prompt384_commit_tag_reconciliation",
+        "next_cycle_handoff_stage": "prompt385_success_path_next_cycle_handoff",
+        "failure_route_supported": False,
+        "retry_route_supported": False,
+        "rollback_supported": False,
+        "remote_route_supported": False,
+        "dispatch_allowed": False,
+        "dispatch_attempted": False,
+        "dispatch_performed": False,
+        "next_required_prompt": _PROMPT386_REQUIRED_NEXT_PROMPT_ID,
+        **prompt386_state,
+    }
+    prompt386_readiness_payload: dict[str, Any] = {
+        "local_only": True,
+        "success_path_only": True,
+        "bounded": True,
+        "readiness_type": "success_path_loop_readiness",
+        "loop_controller_ready": prompt386_loop_controller_ready,
+        "loop_plan_ready": prompt386_loop_plan_ready,
+        "loop_readiness_ready": prompt386_loop_readiness_ready,
+        "loop_dispatch_allowed": False,
+        "dispatch_bridge_required": _PROMPT386_REQUIRED_NEXT_PROMPT_ID,
+        **prompt386_state,
+    }
+
+    prompt386_loop_controller_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt386_loop_controller_path, prompt386_controller_payload)
+    _write_json(prompt386_loop_plan_path, prompt386_plan_payload)
+    _write_json(prompt386_loop_readiness_path, prompt386_readiness_payload)
+    return {
+        key: value for key, value in prompt386_state.items() if key.startswith("prompt386_")
+    }
+
+
 def _merge_prompt376_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -57058,6 +57574,87 @@ def _merge_prompt385_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt385_next_action"
             if _normalize_text(prompt385.get("prompt385_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt386_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt386_success_path_bounded_loop_controller_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt386 = (
+        dict(prompt386_success_path_bounded_loop_controller_payload)
+        if isinstance(prompt386_success_path_bounded_loop_controller_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT386_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt386 and prompt386.get(key) is not None:
+            payload[key] = prompt386.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt386_success_path_bounded_loop_controller_status"
+            if _normalize_text(
+                prompt386.get(
+                    "prompt386_success_path_bounded_loop_controller_status"
+                ),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt386_prompt385_evidence_ready"
+            if bool(prompt386.get("prompt386_prompt385_evidence_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt386_prompt385_next_cycle_handoff_ready"
+            if bool(
+                prompt386.get("prompt386_prompt385_next_cycle_handoff_ready", False)
+            )
+            else "",
+            "approved_restart_execution_contract.prompt386_prompt385_next_prompt_generation_request_ready"
+            if bool(
+                prompt386.get(
+                    "prompt386_prompt385_next_prompt_generation_request_ready",
+                    False,
+                )
+            )
+            else "",
+            "approved_restart_execution_contract.prompt386_prompt385_generated_prompt_intake_expected"
+            if bool(
+                prompt386.get(
+                    "prompt386_prompt385_generated_prompt_intake_expected",
+                    False,
+                )
+            )
+            else "",
+            "approved_restart_execution_contract.prompt386_loop_controller_ready"
+            if bool(prompt386.get("prompt386_loop_controller_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt386_loop_plan_ready"
+            if bool(prompt386.get("prompt386_loop_plan_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt386_loop_readiness_ready"
+            if bool(prompt386.get("prompt386_loop_readiness_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt386_required_next_prompt_id"
+            if _normalize_text(
+                prompt386.get("prompt386_required_next_prompt_id"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt386_next_action"
+            if _normalize_text(prompt386.get("prompt386_next_action"), default="")
             else "",
         ]
     )
@@ -226538,6 +227135,15 @@ class PlannedExecutionRunner:
         prompt385_next_prompt_generation_request_path = (
             run_root / "prompt385_next_prompt_generation_request.json"
         )
+        prompt386_success_path_bounded_loop_controller_path = (
+            run_root / "prompt386_success_path_bounded_loop_controller.json"
+        )
+        prompt386_success_path_bounded_loop_plan_path = (
+            run_root / "prompt386_success_path_bounded_loop_plan.json"
+        )
+        prompt386_success_path_loop_readiness_path = (
+            run_root / "prompt386_success_path_loop_readiness.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -226841,6 +227447,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt385_success_path_next_cycle_handoff_payload,
         }
+        prompt386_success_path_bounded_loop_controller_payload = (
+            _build_prompt386_success_path_bounded_loop_controller_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt386_success_path_bounded_loop_controller_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -226980,6 +227596,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt385_success_path_next_cycle_handoff_state=(
                     prompt385_success_path_next_cycle_handoff_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt386_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt386_success_path_bounded_loop_controller_state=(
+                    prompt386_success_path_bounded_loop_controller_payload
                 ),
             )
         )
@@ -227158,6 +227782,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt385_success_path_next_cycle_handoff_payload=(
                     prompt385_success_path_next_cycle_handoff_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt386_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt386_success_path_bounded_loop_controller_payload=(
+                    prompt386_success_path_bounded_loop_controller_payload
                 ),
             )
         )
@@ -227718,6 +228352,24 @@ class PlannedExecutionRunner:
         manifest["prompt385_next_prompt_generation_request_path"] = str(
             prompt385_next_prompt_generation_request_path
         )
+        manifest["prompt386_success_path_bounded_loop_controller_summary"] = dict(
+            prompt386_success_path_bounded_loop_controller_payload
+        )
+        manifest["prompt386_success_path_bounded_loop_controller_path"] = str(
+            prompt386_success_path_bounded_loop_controller_path
+        )
+        manifest["prompt386_success_path_bounded_loop_plan_summary"] = dict(
+            prompt386_success_path_bounded_loop_controller_payload
+        )
+        manifest["prompt386_success_path_bounded_loop_plan_path"] = str(
+            prompt386_success_path_bounded_loop_plan_path
+        )
+        manifest["prompt386_success_path_loop_readiness_summary"] = dict(
+            prompt386_success_path_bounded_loop_controller_payload
+        )
+        manifest["prompt386_success_path_loop_readiness_path"] = str(
+            prompt386_success_path_loop_readiness_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -227967,6 +228619,15 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt385_next_prompt_generation_request"] = (
             manifest.get("prompt385_next_prompt_generation_request_summary")
         )
+        contract_summaries_by_role[
+            "prompt386_success_path_bounded_loop_controller"
+        ] = manifest.get("prompt386_success_path_bounded_loop_controller_summary")
+        contract_summaries_by_role["prompt386_success_path_bounded_loop_plan"] = (
+            manifest.get("prompt386_success_path_bounded_loop_plan_summary")
+        )
+        contract_summaries_by_role["prompt386_success_path_loop_readiness"] = (
+            manifest.get("prompt386_success_path_loop_readiness_summary")
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -228215,6 +228876,15 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["prompt385_next_prompt_generation_request"] = (
             manifest.get("prompt385_next_prompt_generation_request_path")
+        )
+        contract_paths_by_role["prompt386_success_path_bounded_loop_controller"] = (
+            manifest.get("prompt386_success_path_bounded_loop_controller_path")
+        )
+        contract_paths_by_role["prompt386_success_path_bounded_loop_plan"] = (
+            manifest.get("prompt386_success_path_bounded_loop_plan_path")
+        )
+        contract_paths_by_role["prompt386_success_path_loop_readiness"] = (
+            manifest.get("prompt386_success_path_loop_readiness_path")
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -232116,6 +232786,288 @@ class PlannedExecutionRunner:
                     "prompt385_active_blocked_reasons"
                 ),
                 sort_items=False,
+            ),
+            "prompt386_success_path_bounded_loop_controller_status": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_success_path_bounded_loop_controller_status"
+                ),
+                default="blocked",
+            ),
+            "prompt386_prompt385_evidence_ready": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_prompt385_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt386_prompt385_next_cycle_handoff_ready": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_prompt385_next_cycle_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt386_prompt385_next_prompt_generation_request_ready": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_prompt385_next_prompt_generation_request_ready",
+                    False,
+                )
+            ),
+            "prompt386_prompt385_generated_prompt_intake_expected": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_prompt385_generated_prompt_intake_expected",
+                    False,
+                )
+            ),
+            "prompt386_prompt385_remote_mutation_performed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_prompt385_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt386_prompt385_codex_execution_performed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_prompt385_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt386_prompt385_git_mutation_performed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_prompt385_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt386_success_path_only": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_success_path_only",
+                    False,
+                )
+            ),
+            "prompt386_local_only": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_local_only",
+                    False,
+                )
+            ),
+            "prompt386_bounded": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_bounded",
+                    False,
+                )
+            ),
+            "prompt386_current_cycle_index": _as_non_negative_int(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_current_cycle_index"
+                ),
+                default=0,
+            ),
+            "prompt386_next_cycle_index": _as_non_negative_int(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_next_cycle_index"
+                ),
+                default=0,
+            ),
+            "prompt386_max_cycles": _as_non_negative_int(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_max_cycles"
+                ),
+                default=_PROMPT386_MAX_CYCLES_ALLOWED,
+            ),
+            "prompt386_max_cycles_allowed": _as_non_negative_int(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_max_cycles_allowed"
+                ),
+                default=_PROMPT386_MAX_CYCLES_ALLOWED,
+            ),
+            "prompt386_loop_controller_ready": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_loop_controller_ready",
+                    False,
+                )
+            ),
+            "prompt386_loop_plan_ready": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_loop_plan_ready",
+                    False,
+                )
+            ),
+            "prompt386_loop_readiness_ready": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_loop_readiness_ready",
+                    False,
+                )
+            ),
+            "prompt386_loop_dispatch_allowed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_loop_dispatch_allowed",
+                    False,
+                )
+            ),
+            "prompt386_loop_dispatch_attempted": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_loop_dispatch_attempted",
+                    False,
+                )
+            ),
+            "prompt386_loop_dispatch_performed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_loop_dispatch_performed",
+                    False,
+                )
+            ),
+            "prompt386_codex_execution_allowed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt386_codex_execution_attempted": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_codex_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt386_codex_execution_performed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt386_chatgpt_invocation_allowed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_chatgpt_invocation_allowed",
+                    False,
+                )
+            ),
+            "prompt386_chatgpt_invocation_attempted": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_chatgpt_invocation_attempted",
+                    False,
+                )
+            ),
+            "prompt386_chatgpt_invocation_performed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_chatgpt_invocation_performed",
+                    False,
+                )
+            ),
+            "prompt386_git_mutation_allowed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_git_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt386_git_mutation_performed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt386_remote_mutation_allowed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt386_remote_mutation_performed": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt386_failure_route_supported": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_failure_route_supported",
+                    False,
+                )
+            ),
+            "prompt386_retry_route_supported": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_retry_route_supported",
+                    False,
+                )
+            ),
+            "prompt386_rollback_supported": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_rollback_supported",
+                    False,
+                )
+            ),
+            "prompt386_remote_route_supported": bool(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_remote_route_supported",
+                    False,
+                )
+            ),
+            "prompt386_ordered_loop_stages": _normalize_string_list(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_ordered_loop_stages"
+                ),
+                sort_items=False,
+            ),
+            "prompt386_ordered_loop_stage_count": _as_non_negative_int(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_ordered_loop_stage_count"
+                ),
+                default=0,
+            ),
+            "prompt386_required_next_prompt": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_required_next_prompt"
+                ),
+                default="",
+            ),
+            "prompt386_required_next_prompt_id": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_required_next_prompt_id"
+                ),
+                default="",
+            ),
+            "prompt386_required_next_prompt_goal": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_required_next_prompt_goal"
+                ),
+                default="",
+            ),
+            "prompt386_next_action": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_next_action"
+                ),
+                default="wait_for_prompt385_next_cycle_handoff_ready",
+            ),
+            "prompt386_authoritative_next_action": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_authoritative_next_action"
+                ),
+                default="wait_for_prompt385_next_cycle_handoff_ready",
+            ),
+            "prompt386_active_blocked_reason": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt386_active_blocked_reasons": _normalize_string_list(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt386_loop_controller_path": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_loop_controller_path"
+                ),
+                default="",
+            ),
+            "prompt386_loop_plan_path": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_loop_plan_path"
+                ),
+                default="",
+            ),
+            "prompt386_loop_readiness_path": _normalize_text(
+                prompt386_success_path_bounded_loop_controller_payload.get(
+                    "prompt386_loop_readiness_path"
+                ),
+                default="",
             ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(

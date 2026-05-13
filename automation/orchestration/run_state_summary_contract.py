@@ -1141,6 +1141,53 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt385_next_action",
     "prompt385_active_blocked_reason",
     "prompt385_active_blocked_reasons",
+    "prompt386_success_path_bounded_loop_controller_status",
+    "prompt386_prompt385_evidence_ready",
+    "prompt386_prompt385_next_cycle_handoff_ready",
+    "prompt386_prompt385_next_prompt_generation_request_ready",
+    "prompt386_prompt385_generated_prompt_intake_expected",
+    "prompt386_prompt385_remote_mutation_performed",
+    "prompt386_prompt385_codex_execution_performed",
+    "prompt386_prompt385_git_mutation_performed",
+    "prompt386_success_path_only",
+    "prompt386_local_only",
+    "prompt386_bounded",
+    "prompt386_current_cycle_index",
+    "prompt386_next_cycle_index",
+    "prompt386_max_cycles",
+    "prompt386_max_cycles_allowed",
+    "prompt386_loop_controller_ready",
+    "prompt386_loop_plan_ready",
+    "prompt386_loop_readiness_ready",
+    "prompt386_loop_dispatch_allowed",
+    "prompt386_loop_dispatch_attempted",
+    "prompt386_loop_dispatch_performed",
+    "prompt386_codex_execution_allowed",
+    "prompt386_codex_execution_attempted",
+    "prompt386_codex_execution_performed",
+    "prompt386_chatgpt_invocation_allowed",
+    "prompt386_chatgpt_invocation_attempted",
+    "prompt386_chatgpt_invocation_performed",
+    "prompt386_git_mutation_allowed",
+    "prompt386_git_mutation_performed",
+    "prompt386_remote_mutation_allowed",
+    "prompt386_remote_mutation_performed",
+    "prompt386_failure_route_supported",
+    "prompt386_retry_route_supported",
+    "prompt386_rollback_supported",
+    "prompt386_remote_route_supported",
+    "prompt386_ordered_loop_stages",
+    "prompt386_ordered_loop_stage_count",
+    "prompt386_required_next_prompt",
+    "prompt386_required_next_prompt_id",
+    "prompt386_required_next_prompt_goal",
+    "prompt386_authoritative_next_action",
+    "prompt386_next_action",
+    "prompt386_active_blocked_reason",
+    "prompt386_active_blocked_reasons",
+    "prompt386_loop_controller_path",
+    "prompt386_loop_plan_path",
+    "prompt386_loop_readiness_path",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -2063,6 +2110,36 @@ def select_manifest_run_state_summary_compact(
         "prompt385_codex_execution_performed",
         "prompt385_git_mutation_allowed",
         "prompt385_git_mutation_performed",
+        "prompt386_prompt385_evidence_ready",
+        "prompt386_prompt385_next_cycle_handoff_ready",
+        "prompt386_prompt385_next_prompt_generation_request_ready",
+        "prompt386_prompt385_generated_prompt_intake_expected",
+        "prompt386_prompt385_remote_mutation_performed",
+        "prompt386_prompt385_codex_execution_performed",
+        "prompt386_prompt385_git_mutation_performed",
+        "prompt386_success_path_only",
+        "prompt386_local_only",
+        "prompt386_bounded",
+        "prompt386_loop_controller_ready",
+        "prompt386_loop_plan_ready",
+        "prompt386_loop_readiness_ready",
+        "prompt386_loop_dispatch_allowed",
+        "prompt386_loop_dispatch_attempted",
+        "prompt386_loop_dispatch_performed",
+        "prompt386_codex_execution_allowed",
+        "prompt386_codex_execution_attempted",
+        "prompt386_codex_execution_performed",
+        "prompt386_chatgpt_invocation_allowed",
+        "prompt386_chatgpt_invocation_attempted",
+        "prompt386_chatgpt_invocation_performed",
+        "prompt386_git_mutation_allowed",
+        "prompt386_git_mutation_performed",
+        "prompt386_remote_mutation_allowed",
+        "prompt386_remote_mutation_performed",
+        "prompt386_failure_route_supported",
+        "prompt386_retry_route_supported",
+        "prompt386_rollback_supported",
+        "prompt386_remote_route_supported",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -2134,6 +2211,8 @@ def select_manifest_run_state_summary_compact(
         "prompt384_active_blocked_reasons",
         "prompt385_previous_cycle_committed_files",
         "prompt385_active_blocked_reasons",
+        "prompt386_ordered_loop_stages",
+        "prompt386_active_blocked_reasons",
     }
     int_fields.add("prompt367_returncode")
     int_fields.add("prompt368_resume_iteration_current")
@@ -2156,6 +2235,11 @@ def select_manifest_run_state_summary_compact(
     int_fields.add("prompt385_current_cycle_index")
     int_fields.add("prompt385_next_cycle_index")
     int_fields.add("prompt385_max_cycles")
+    int_fields.add("prompt386_current_cycle_index")
+    int_fields.add("prompt386_next_cycle_index")
+    int_fields.add("prompt386_max_cycles")
+    int_fields.add("prompt386_max_cycles_allowed")
+    int_fields.add("prompt386_ordered_loop_stage_count")
 
     summary: dict[str, Any] = {}
     for field in MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS:
