@@ -644,12 +644,18 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--prompt379-codex-execution-requested",
         action="store_true",
-        help="Explicitly request Prompt379 generated-prompt Codex execution",
+        help=(
+            "Explicitly request local-only Prompt379 generated-prompt Codex execution. "
+            "Prompt379 stays in ready_for_explicit_execution unless both Prompt379 flags are set."
+        ),
     )
     parser.add_argument(
         "--prompt379-codex-execution-confirmed",
         action="store_true",
-        help="Explicitly confirm Prompt379 generated-prompt Codex execution",
+        help=(
+            "Explicitly confirm local-only Prompt379 generated-prompt Codex execution. "
+            "Without both Prompt379 flags, Codex is not executed."
+        ),
     )
     parser.add_argument("--stop-on-failure", action="store_true", default=True, help="Stop when a unit fails")
     parser.add_argument("--continue-on-failure", action="store_true", help="Continue processing units after failures")

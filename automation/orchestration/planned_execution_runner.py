@@ -220120,6 +220120,12 @@ class PlannedExecutionRunner:
                 "approved_restart_contract": "approved_restart_contract.json",
                 "approval_safety_contract": "approval_safety_contract.json",
                 "approved_restart_execution_contract": "approved_restart_execution_contract.json",
+                "prompt379_generated_prompt_codex_execution_bridge": (
+                    "prompt379_generated_prompt_codex_execution_bridge.json"
+                ),
+                "prompt379_generated_prompt_codex_execution_receipt": (
+                    "prompt379_generated_prompt_codex_execution_receipt.json"
+                ),
             },
             "pr_units": manifest_units,
         }

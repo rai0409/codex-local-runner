@@ -1776,6 +1776,16 @@ def select_manifest_run_state_summary_compact(
         "prompt378_remote_mutation_allowed",
         "prompt378_remote_mutation_attempted",
         "prompt378_remote_mutation_performed",
+        "prompt379_prompt378_generated_prompt_ready",
+        "prompt379_codex_execution_ready",
+        "prompt379_codex_execution_allowed",
+        "prompt379_codex_execution_attempted",
+        "prompt379_codex_execution_performed",
+        "prompt379_execution_allowed",
+        "prompt379_execution_attempted",
+        "prompt379_execution_performed",
+        "prompt379_git_mutation_performed",
+        "prompt379_remote_mutation_performed",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -1826,6 +1836,7 @@ def select_manifest_run_state_summary_compact(
         "prompt377_active_blocked_reasons",
         "prompt378_generated_prompt_validation_reasons",
         "prompt378_active_blocked_reasons",
+        "prompt379_active_blocked_reasons",
     }
     int_fields.add("prompt367_returncode")
     int_fields.add("prompt368_resume_iteration_current")
