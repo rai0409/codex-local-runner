@@ -3696,6 +3696,7 @@ _PROMPT379_SCHEMA_VERSION = "prompt379_generated_prompt_codex_execution_bridge_v
 _PROMPT380_SCHEMA_VERSION = "prompt380_prompt379_result_review_route_decision_v1"
 _PROMPT381_SCHEMA_VERSION = "prompt381_approve_candidate_boundary_v1"
 _PROMPT382_SCHEMA_VERSION = "prompt382_approve_commit_tag_execution_gate_v1"
+_PROMPT383_SCHEMA_VERSION = "prompt383_explicit_approve_commit_tag_execution_v1"
 _PROMPT382_COMMIT_MESSAGE = "Add Prompt382 approve commit tag execution gate"
 _PROMPT382_TAG_NAME = "prompt382-approve-commit-tag-execution-gate"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
@@ -4103,6 +4104,54 @@ _PROMPT378_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt378_next_action",
     "prompt378_active_blocked_reason",
     "prompt378_active_blocked_reasons",
+)
+_PROMPT383_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt383_explicit_approve_commit_tag_execution_status",
+    "prompt383_prompt382_evidence_ready",
+    "prompt383_prompt382_plan_ready",
+    "prompt383_prompt382_execution_ready",
+    "prompt383_prompt382_execution_allowed",
+    "prompt383_prompt382_commit_message",
+    "prompt383_prompt382_tag_name",
+    "prompt383_prompt382_approved_paths",
+    "prompt383_approve_commit_tag_requested",
+    "prompt383_approve_commit_tag_confirmed",
+    "prompt383_execution_ready",
+    "prompt383_execution_allowed",
+    "prompt383_execution_attempted",
+    "prompt383_execution_performed",
+    "prompt383_git_add_allowed",
+    "prompt383_git_add_attempted",
+    "prompt383_git_add_performed",
+    "prompt383_git_commit_allowed",
+    "prompt383_git_commit_attempted",
+    "prompt383_git_commit_performed",
+    "prompt383_git_tag_allowed",
+    "prompt383_git_tag_attempted",
+    "prompt383_git_tag_performed",
+    "prompt383_remote_mutation_allowed",
+    "prompt383_remote_mutation_performed",
+    "prompt383_commit_message",
+    "prompt383_tag_name",
+    "prompt383_committed_files",
+    "prompt383_approved_paths_validation_status",
+    "prompt383_approved_paths_validation_reasons",
+    "prompt383_tag_preexistence_checked",
+    "prompt383_tag_preexisting",
+    "prompt383_git_add_argv",
+    "prompt383_git_commit_argv",
+    "prompt383_git_tag_argv",
+    "prompt383_git_add_returncode",
+    "prompt383_git_commit_returncode",
+    "prompt383_git_tag_returncode",
+    "prompt383_returncode_classification",
+    "prompt383_receipt_path",
+    "prompt383_stdout_path",
+    "prompt383_stderr_path",
+    "prompt383_authoritative_next_action",
+    "prompt383_next_action",
+    "prompt383_active_blocked_reason",
+    "prompt383_active_blocked_reasons",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -5950,6 +5999,23 @@ def _merge_prompt378_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT378_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt383_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt383_explicit_approve_commit_tag_execution_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt383_explicit_approve_commit_tag_execution_state)
+        if isinstance(prompt383_explicit_approve_commit_tag_execution_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT383_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -54627,6 +54693,824 @@ def _build_prompt382_approve_commit_tag_execution_gate_state(
     }
 
 
+def _build_prompt383_explicit_approve_commit_tag_execution_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str | Path | None = None,
+    prompt383_approve_commit_tag_requested: bool = False,
+    prompt383_approve_commit_tag_confirmed: bool = False,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt383_gate_path = (
+        artifact_root / "prompt383_explicit_approve_commit_tag_execution_gate.json"
+    )
+    prompt383_receipt_path = (
+        artifact_root / "prompt383_explicit_approve_commit_tag_execution_receipt.json"
+    )
+    prompt383_stdout_path = (
+        artifact_root / "prompt383_explicit_approve_commit_tag_execution_stdout.txt"
+    )
+    prompt383_stderr_path = (
+        artifact_root / "prompt383_explicit_approve_commit_tag_execution_stderr.txt"
+    )
+    prompt382_gate_path = (
+        artifact_root / "prompt382_approve_commit_tag_execution_gate.json"
+    )
+    prompt382_plan_path = (
+        artifact_root / "prompt382_approve_commit_tag_execution_plan.json"
+    )
+    run_state = dict(run_state_payload or {})
+    normalized_repo_path = _normalize_text(execution_repo_path, default="")
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_argv(value: Any) -> list[str]:
+        if not isinstance(value, (list, tuple)):
+            return []
+        normalized: list[str] = []
+        for item in value:
+            text = _normalize_text(item, default="")
+            if text:
+                normalized.append(text)
+        return normalized
+
+    def _normalize_prompt382_gate_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt382_approve_commit_tag_execution_gate_status": _normalize_text(
+                source.get("prompt382_approve_commit_tag_execution_gate_status"),
+                default="",
+            ),
+            "prompt382_prompt381_evidence_ready": _prompt357_as_boolish(
+                source.get("prompt382_prompt381_evidence_ready"),
+                default=False,
+            ),
+            "prompt382_prompt381_approve_candidate_ready": _prompt357_as_boolish(
+                source.get("prompt382_prompt381_approve_candidate_ready"),
+                default=False,
+            ),
+            "prompt382_prompt381_approve_candidate_contract_ready": _prompt357_as_boolish(
+                source.get("prompt382_prompt381_approve_candidate_contract_ready"),
+                default=False,
+            ),
+            "prompt382_prompt381_changed_files": _normalize_string_list(
+                source.get("prompt382_prompt381_changed_files"),
+                sort_items=False,
+            ),
+            "prompt382_commit_message": _normalize_text(
+                source.get("prompt382_commit_message"),
+                default="",
+            ),
+            "prompt382_tag_name": _normalize_text(
+                source.get("prompt382_tag_name"),
+                default="",
+            ),
+            "prompt382_execution_ready": _prompt357_as_boolish(
+                source.get("prompt382_execution_ready"),
+                default=False,
+            ),
+            "prompt382_execution_allowed": _prompt357_as_boolish(
+                source.get("prompt382_execution_allowed"),
+                default=False,
+            ),
+            "prompt382_execution_attempted": _prompt357_as_boolish(
+                source.get("prompt382_execution_attempted"),
+                default=False,
+            ),
+            "prompt382_execution_performed": _prompt357_as_boolish(
+                source.get("prompt382_execution_performed"),
+                default=False,
+            ),
+            "prompt382_git_add_allowed": _prompt357_as_boolish(
+                source.get("prompt382_git_add_allowed"),
+                default=False,
+            ),
+            "prompt382_git_add_performed": _prompt357_as_boolish(
+                source.get("prompt382_git_add_performed"),
+                default=False,
+            ),
+            "prompt382_git_commit_allowed": _prompt357_as_boolish(
+                source.get("prompt382_git_commit_allowed"),
+                default=False,
+            ),
+            "prompt382_git_commit_performed": _prompt357_as_boolish(
+                source.get("prompt382_git_commit_performed"),
+                default=False,
+            ),
+            "prompt382_git_tag_allowed": _prompt357_as_boolish(
+                source.get("prompt382_git_tag_allowed"),
+                default=False,
+            ),
+            "prompt382_git_tag_performed": _prompt357_as_boolish(
+                source.get("prompt382_git_tag_performed"),
+                default=False,
+            ),
+            "prompt382_remote_mutation_allowed": _prompt357_as_boolish(
+                source.get("prompt382_remote_mutation_allowed"),
+                default=False,
+            ),
+            "prompt382_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt382_remote_mutation_performed"),
+                default=False,
+            ),
+            "prompt382_next_action": _normalize_text(
+                source.get("prompt382_next_action"),
+                default="",
+            ),
+            "prompt382_authoritative_next_action": _normalize_text(
+                source.get("prompt382_authoritative_next_action"),
+                default="",
+            ),
+            "prompt382_active_blocked_reason": _normalize_text(
+                source.get("prompt382_active_blocked_reason"),
+                default="",
+            ),
+            "prompt382_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt382_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _has_prompt382_gate_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        required_keys = (
+            "prompt382_approve_commit_tag_execution_gate_status",
+            "prompt382_prompt381_evidence_ready",
+            "prompt382_prompt381_approve_candidate_ready",
+            "prompt382_prompt381_approve_candidate_contract_ready",
+            "prompt382_prompt381_changed_files",
+            "prompt382_commit_message",
+            "prompt382_tag_name",
+            "prompt382_execution_ready",
+            "prompt382_execution_allowed",
+            "prompt382_execution_attempted",
+            "prompt382_execution_performed",
+            "prompt382_git_add_allowed",
+            "prompt382_git_add_performed",
+            "prompt382_git_commit_allowed",
+            "prompt382_git_commit_performed",
+            "prompt382_git_tag_allowed",
+            "prompt382_git_tag_performed",
+            "prompt382_remote_mutation_allowed",
+            "prompt382_remote_mutation_performed",
+            "prompt382_next_action",
+            "prompt382_authoritative_next_action",
+            "prompt382_active_blocked_reason",
+            "prompt382_active_blocked_reasons",
+        )
+        return all(key in raw_payload for key in required_keys)
+
+    def _resolve_prompt382_gate_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt382_gate_evidence(run_state):
+            return _normalize_prompt382_gate_surface(run_state), ""
+
+        prompt382_gate_payload = _read_json_object_if_exists(prompt382_gate_path)
+        if _has_prompt382_gate_evidence(prompt382_gate_payload):
+            return _normalize_prompt382_gate_surface(prompt382_gate_payload), str(
+                prompt382_gate_path
+            )
+
+        return _normalize_prompt382_gate_surface(run_state), ""
+
+    def _normalize_prompt382_plan_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt382_plan_type": _normalize_text(
+                source.get("prompt382_plan_type"),
+                default="",
+            ),
+            "prompt382_follow_on_prompt": _normalize_text(
+                source.get("prompt382_follow_on_prompt"),
+                default="",
+            ),
+            "prompt382_commit_message": _normalize_text(
+                source.get("prompt382_commit_message"),
+                default="",
+            ),
+            "prompt382_tag_name": _normalize_text(
+                source.get("prompt382_tag_name"),
+                default="",
+            ),
+            "prompt382_execution_ready": _prompt357_as_boolish(
+                source.get("prompt382_execution_ready"),
+                default=False,
+            ),
+            "prompt382_planned_git_add_paths": _normalize_string_list(
+                source.get("prompt382_planned_git_add_paths"),
+                sort_items=False,
+            ),
+            "prompt382_planned_git_add_argv": _normalize_argv(
+                source.get("prompt382_planned_git_add_argv")
+            ),
+            "prompt382_planned_git_commit_argv": _normalize_argv(
+                source.get("prompt382_planned_git_commit_argv")
+            ),
+            "prompt382_planned_git_tag_argv": _normalize_argv(
+                source.get("prompt382_planned_git_tag_argv")
+            ),
+        }
+
+    prompt382_gate_surface, prompt382_gate_source_path = _resolve_prompt382_gate_surface()
+    prompt382_plan_payload = _read_json_object_if_exists(prompt382_plan_path)
+    prompt382_plan_surface = _normalize_prompt382_plan_surface(prompt382_plan_payload)
+    prompt383_prompt382_evidence_ready = bool(
+        prompt382_gate_source_path or _has_prompt382_gate_evidence(run_state)
+    )
+    prompt383_prompt382_execution_ready = bool(
+        prompt382_gate_surface.get("prompt382_execution_ready", False)
+    )
+    prompt383_prompt382_execution_allowed = bool(
+        prompt382_gate_surface.get("prompt382_execution_allowed", False)
+    )
+    prompt383_prompt382_commit_message = _normalize_text(
+        prompt382_plan_surface.get("prompt382_commit_message"),
+        default=_normalize_text(
+            prompt382_gate_surface.get("prompt382_commit_message"),
+            default="",
+        ),
+    )
+    prompt383_prompt382_tag_name = _normalize_text(
+        prompt382_plan_surface.get("prompt382_tag_name"),
+        default=_normalize_text(
+            prompt382_gate_surface.get("prompt382_tag_name"),
+            default="",
+        ),
+    )
+    prompt383_prompt382_approved_paths = _normalize_string_list(
+        prompt382_plan_surface.get("prompt382_planned_git_add_paths"),
+        sort_items=False,
+    )
+
+    prompt382_plan_ready = bool(prompt382_plan_payload)
+    prompt382_plan_reasons: list[str] = []
+    planned_git_add_argv = _normalize_argv(
+        prompt382_plan_surface.get("prompt382_planned_git_add_argv")
+    )
+    planned_git_commit_argv = _normalize_argv(
+        prompt382_plan_surface.get("prompt382_planned_git_commit_argv")
+    )
+    planned_git_tag_argv = _normalize_argv(
+        prompt382_plan_surface.get("prompt382_planned_git_tag_argv")
+    )
+    if not prompt382_plan_ready:
+        _append_reason(prompt382_plan_reasons, "prompt382_plan_missing")
+    else:
+        if (
+            _normalize_text(prompt382_plan_surface.get("prompt382_plan_type"), default="")
+            != "approve_commit_tag_execution_plan"
+        ):
+            _append_reason(
+                prompt382_plan_reasons,
+                "prompt382_plan_type_invalid",
+            )
+        if (
+            _normalize_text(
+                prompt382_plan_surface.get("prompt382_follow_on_prompt"),
+                default="",
+            )
+            != "prompt383"
+        ):
+            _append_reason(
+                prompt382_plan_reasons,
+                "prompt382_plan_follow_on_prompt_invalid",
+            )
+        if not prompt383_prompt382_commit_message:
+            _append_reason(prompt382_plan_reasons, "prompt382_plan_commit_message_missing")
+        if not prompt383_prompt382_tag_name:
+            _append_reason(prompt382_plan_reasons, "prompt382_plan_tag_name_missing")
+        expected_commit_argv = [
+            "git",
+            "commit",
+            "-m",
+            prompt383_prompt382_commit_message,
+        ]
+        expected_tag_argv = ["git", "tag", prompt383_prompt382_tag_name]
+        if planned_git_commit_argv != expected_commit_argv:
+            _append_reason(
+                prompt382_plan_reasons,
+                "prompt382_plan_git_commit_argv_invalid",
+            )
+        if planned_git_tag_argv != expected_tag_argv:
+            _append_reason(
+                prompt382_plan_reasons,
+                "prompt382_plan_git_tag_argv_invalid",
+            )
+        if planned_git_add_argv[:2] != ["git", "add"]:
+            if planned_git_add_argv:
+                _append_reason(
+                    prompt382_plan_reasons,
+                    "prompt382_plan_git_add_argv_invalid",
+                )
+        else:
+            add_tail = planned_git_add_argv[2:]
+            if add_tail and add_tail[0] == "--":
+                add_tail = add_tail[1:]
+            if add_tail != prompt383_prompt382_approved_paths:
+                _append_reason(
+                    prompt382_plan_reasons,
+                    "prompt382_plan_git_add_argv_invalid",
+                )
+        if prompt383_prompt382_evidence_ready:
+            gate_commit_message = _normalize_text(
+                prompt382_gate_surface.get("prompt382_commit_message"),
+                default="",
+            )
+            gate_tag_name = _normalize_text(
+                prompt382_gate_surface.get("prompt382_tag_name"),
+                default="",
+            )
+            if gate_commit_message and gate_commit_message != prompt383_prompt382_commit_message:
+                _append_reason(
+                    prompt382_plan_reasons,
+                    "prompt382_plan_commit_message_mismatch",
+                )
+            if gate_tag_name and gate_tag_name != prompt383_prompt382_tag_name:
+                _append_reason(
+                    prompt382_plan_reasons,
+                    "prompt382_plan_tag_name_mismatch",
+                )
+            if bool(prompt382_plan_surface.get("prompt382_execution_ready", False)) != bool(
+                prompt382_gate_surface.get("prompt382_execution_ready", False)
+            ):
+                _append_reason(
+                    prompt382_plan_reasons,
+                    "prompt382_plan_execution_ready_mismatch",
+                )
+    prompt383_prompt382_plan_ready = prompt382_plan_ready and not prompt382_plan_reasons
+
+    prompt383_approve_commit_tag_requested = bool(
+        prompt383_approve_commit_tag_requested
+    )
+    prompt383_approve_commit_tag_confirmed = bool(
+        prompt383_approve_commit_tag_confirmed
+    )
+
+    prompt383_status = "blocked"
+    prompt383_execution_ready = False
+    prompt383_execution_allowed = False
+    prompt383_execution_attempted = False
+    prompt383_execution_performed = False
+    prompt383_git_add_allowed = False
+    prompt383_git_add_attempted = False
+    prompt383_git_add_performed = False
+    prompt383_git_commit_allowed = False
+    prompt383_git_commit_attempted = False
+    prompt383_git_commit_performed = False
+    prompt383_git_tag_allowed = False
+    prompt383_git_tag_attempted = False
+    prompt383_git_tag_performed = False
+    prompt383_remote_mutation_allowed = False
+    prompt383_remote_mutation_performed = False
+    prompt383_commit_message = prompt383_prompt382_commit_message
+    prompt383_tag_name = prompt383_prompt382_tag_name
+    prompt383_committed_files: list[str] = []
+    prompt383_approved_paths_validation_status = "not_evaluated"
+    prompt383_approved_paths_validation_reasons: list[str] = []
+    prompt383_tag_preexistence_checked = False
+    prompt383_tag_preexisting = False
+    prompt383_git_add_argv: list[str] = []
+    prompt383_git_commit_argv: list[str] = []
+    prompt383_git_tag_argv: list[str] = []
+    prompt383_git_add_returncode: int | None = None
+    prompt383_git_commit_returncode: int | None = None
+    prompt383_git_tag_returncode: int | None = None
+    prompt383_returncode_classification = "not_run"
+    prompt383_next_action = "wait_for_prompt382_approve_commit_tag_execution_ready"
+    prompt383_authoritative_next_action = prompt383_next_action
+    prompt383_active_blocked_reasons: list[str] = []
+
+    def _make_command_result(
+        argv: list[str],
+        *,
+        returncode: int,
+        stdout: str = "",
+        stderr: str = "",
+        performed: bool,
+    ) -> dict[str, Any]:
+        return {
+            "argv": list(argv),
+            "returncode": int(returncode),
+            "stdout": stdout,
+            "stderr": stderr,
+            "performed": bool(performed),
+        }
+
+    def _run_local_git_command(argv: list[str]) -> dict[str, Any]:
+        try:
+            completed = subprocess.run(
+                argv,
+                cwd=normalized_repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+                shell=False,
+            )
+        except OSError as exc:
+            return _make_command_result(
+                argv,
+                returncode=127,
+                stderr=str(exc),
+                performed=False,
+            )
+        except Exception as exc:
+            return _make_command_result(
+                argv,
+                returncode=1,
+                stderr=str(exc),
+                performed=False,
+            )
+        return _make_command_result(
+            argv,
+            returncode=int(completed.returncode),
+            stdout=_normalize_text(completed.stdout, default=""),
+            stderr=_normalize_text(completed.stderr, default=""),
+            performed=True,
+        )
+
+    command_results: dict[str, dict[str, Any]] = {}
+    stdout_sections: list[str] = []
+    stderr_sections: list[str] = []
+
+    def _record_command_result(name: str, result: Mapping[str, Any]) -> None:
+        command_results[name] = dict(result)
+        stdout_text = _normalize_text(result.get("stdout"), default="")
+        stderr_text = _normalize_text(result.get("stderr"), default="")
+        if stdout_text:
+            stdout_sections.append(
+                f"$ {' '.join(_normalize_argv(result.get('argv')))}\n{stdout_text}"
+            )
+        if stderr_text:
+            stderr_sections.append(
+                f"$ {' '.join(_normalize_argv(result.get('argv')))}\n{stderr_text}"
+            )
+
+    if not prompt383_prompt382_evidence_ready:
+        _append_reason(prompt383_active_blocked_reasons, "prompt382_evidence_missing")
+        prompt383_next_action = "prepare_prompt382_explicit_approve_commit_tag_execution_gate"
+    elif not prompt383_prompt382_plan_ready:
+        for reason in prompt382_plan_reasons or ["prompt382_plan_missing"]:
+            _append_reason(prompt383_active_blocked_reasons, reason)
+        prompt383_next_action = "prepare_prompt382_approve_commit_tag_execution_plan"
+    elif not prompt383_prompt382_execution_ready:
+        _append_reason(prompt383_active_blocked_reasons, "prompt382_execution_not_ready")
+        prompt383_next_action = "wait_for_prompt382_approve_commit_tag_execution_ready"
+    elif not prompt383_prompt382_approved_paths:
+        _append_reason(
+            prompt383_active_blocked_reasons,
+            "prompt382_plan_approved_paths_empty",
+        )
+        prompt383_next_action = "prepare_prompt382_approve_commit_tag_execution_plan"
+    else:
+        prompt383_execution_ready = True
+        if not (
+            prompt383_approve_commit_tag_requested
+            and prompt383_approve_commit_tag_confirmed
+        ):
+            prompt383_status = "ready_for_explicit_execution"
+            prompt383_active_blocked_reasons = [
+                "prompt383_explicit_execution_flags_not_enabled"
+            ]
+            prompt383_next_action = (
+                "run_with_explicit_prompt383_approve_commit_tag_execution_flags"
+            )
+            prompt383_authoritative_next_action = prompt383_next_action
+        else:
+            validation_reasons: list[str] = []
+            validated_paths: list[str] = []
+            if not normalized_repo_path:
+                _append_reason(validation_reasons, "prompt383_execution_repo_path_missing")
+            else:
+                repo_root = Path(normalized_repo_path)
+                if not repo_root.exists() or not repo_root.is_dir():
+                    _append_reason(
+                        validation_reasons,
+                        "prompt383_execution_repo_path_not_ready",
+                    )
+                else:
+                    repo_root_resolved = repo_root.resolve()
+                    seen_paths: set[str] = set()
+                    for raw_path in prompt383_prompt382_approved_paths:
+                        normalized_path = _normalize_text(raw_path, default="").replace(
+                            "\\",
+                            "/",
+                        )
+                        if normalized_path.startswith("./"):
+                            normalized_path = normalized_path[2:]
+                        pure_path = PurePosixPath(normalized_path)
+                        if not normalized_path:
+                            _append_reason(
+                                prompt383_approved_paths_validation_reasons,
+                                "prompt383_approved_path_empty",
+                            )
+                            continue
+                        if pure_path.is_absolute():
+                            _append_reason(
+                                prompt383_approved_paths_validation_reasons,
+                                f"prompt383_approved_path_absolute:{normalized_path}",
+                            )
+                            continue
+                        if ".." in pure_path.parts:
+                            _append_reason(
+                                prompt383_approved_paths_validation_reasons,
+                                f"prompt383_approved_path_traversal:{normalized_path}",
+                            )
+                            continue
+                        if normalized_path.startswith("artifacts/runtime_commands/"):
+                            _append_reason(
+                                prompt383_approved_paths_validation_reasons,
+                                f"prompt383_approved_path_runtime_commands:{normalized_path}",
+                            )
+                            continue
+                        candidate = repo_root_resolved / Path(*pure_path.parts)
+                        try:
+                            candidate.resolve().relative_to(repo_root_resolved)
+                        except ValueError:
+                            _append_reason(
+                                prompt383_approved_paths_validation_reasons,
+                                f"prompt383_approved_path_outside_repo:{normalized_path}",
+                            )
+                            continue
+                        if normalized_path in seen_paths:
+                            _append_reason(
+                                prompt383_approved_paths_validation_reasons,
+                                f"prompt383_approved_path_duplicate:{normalized_path}",
+                            )
+                            continue
+                        tracked_check = _run_local_git_command(
+                            [
+                                "git",
+                                "ls-files",
+                                "--error-unmatch",
+                                "--",
+                                normalized_path,
+                            ]
+                        )
+                        _record_command_result(
+                            f"tracked_check:{normalized_path}",
+                            tracked_check,
+                        )
+                        if tracked_check.get("returncode") != 0:
+                            _append_reason(
+                                prompt383_approved_paths_validation_reasons,
+                                f"prompt383_approved_path_not_tracked:{normalized_path}",
+                            )
+                            continue
+                        seen_paths.add(normalized_path)
+                        validated_paths.append(normalized_path)
+            if not validated_paths:
+                _append_reason(
+                    prompt383_approved_paths_validation_reasons,
+                    "prompt383_approved_paths_empty_after_validation",
+                )
+            prompt383_approved_paths_validation_status = (
+                "valid"
+                if not prompt383_approved_paths_validation_reasons and validated_paths
+                else "invalid"
+            )
+            for reason in prompt383_approved_paths_validation_reasons:
+                _append_reason(validation_reasons, reason)
+
+            if not prompt383_commit_message:
+                _append_reason(validation_reasons, "prompt383_commit_message_missing")
+            if not prompt383_tag_name:
+                _append_reason(validation_reasons, "prompt383_tag_name_missing")
+
+            prompt383_git_add_argv = ["git", "add", "--", *validated_paths] if validated_paths else []
+            prompt383_git_commit_argv = (
+                ["git", "commit", "-m", prompt383_commit_message]
+                if prompt383_commit_message
+                else []
+            )
+            prompt383_git_tag_argv = (
+                ["git", "tag", prompt383_tag_name]
+                if prompt383_tag_name
+                else []
+            )
+
+            if not validation_reasons and normalized_repo_path:
+                prompt383_tag_preexistence_checked = True
+                tag_check_result = _run_local_git_command(
+                    [
+                        "git",
+                        "rev-parse",
+                        "--verify",
+                        "--quiet",
+                        f"refs/tags/{prompt383_tag_name}",
+                    ]
+                )
+                _record_command_result("tag_preexistence_check", tag_check_result)
+                if tag_check_result.get("returncode") == 0:
+                    prompt383_tag_preexisting = True
+                    _append_reason(
+                        validation_reasons,
+                        "prompt383_tag_already_exists",
+                    )
+                elif tag_check_result.get("returncode") not in {1}:
+                    _append_reason(
+                        validation_reasons,
+                        "prompt383_tag_preexistence_check_failed",
+                    )
+
+            if validation_reasons:
+                prompt383_active_blocked_reasons = _normalize_string_list(
+                    validation_reasons,
+                    sort_items=False,
+                )
+                prompt383_next_action = {
+                    "prompt383_tag_already_exists": "review_prompt383_existing_tag_blocker",
+                    "prompt383_tag_preexistence_check_failed": "review_prompt383_git_tag_precheck_failure",
+                    "prompt383_commit_message_missing": "repair_prompt382_commit_message_before_prompt383",
+                    "prompt383_tag_name_missing": "repair_prompt382_tag_name_before_prompt383",
+                }.get(
+                    prompt383_active_blocked_reasons[0],
+                    "review_prompt383_explicit_approve_commit_tag_execution_preflight",
+                )
+                prompt383_authoritative_next_action = prompt383_next_action
+            else:
+                prompt383_status = "failed"
+                prompt383_execution_allowed = True
+                prompt383_execution_attempted = True
+                prompt383_git_add_allowed = True
+                prompt383_git_commit_allowed = True
+                prompt383_git_tag_allowed = True
+
+                add_result = _run_local_git_command(prompt383_git_add_argv)
+                _record_command_result("git_add", add_result)
+                prompt383_git_add_attempted = True
+                prompt383_git_add_performed = bool(add_result.get("performed", False))
+                prompt383_git_add_returncode = int(add_result.get("returncode", 1))
+                prompt383_execution_performed = prompt383_git_add_performed
+                if prompt383_git_add_returncode != 0:
+                    prompt383_returncode_classification = "nonzero_exit"
+                    prompt383_active_blocked_reasons = ["prompt383_git_add_failed"]
+                    prompt383_next_action = "review_prompt383_git_add_failure"
+                    prompt383_authoritative_next_action = prompt383_next_action
+                else:
+                    commit_result = _run_local_git_command(prompt383_git_commit_argv)
+                    _record_command_result("git_commit", commit_result)
+                    prompt383_git_commit_attempted = True
+                    prompt383_git_commit_performed = bool(
+                        commit_result.get("performed", False)
+                    )
+                    prompt383_git_commit_returncode = int(
+                        commit_result.get("returncode", 1)
+                    )
+                    prompt383_execution_performed = bool(
+                        prompt383_execution_performed
+                        or prompt383_git_commit_performed
+                    )
+                    if prompt383_git_commit_returncode != 0:
+                        prompt383_returncode_classification = "nonzero_exit"
+                        prompt383_active_blocked_reasons = [
+                            "prompt383_git_commit_failed"
+                        ]
+                        prompt383_next_action = "review_prompt383_git_commit_failure"
+                        prompt383_authoritative_next_action = prompt383_next_action
+                    else:
+                        prompt383_committed_files = list(validated_paths)
+                        tag_result = _run_local_git_command(prompt383_git_tag_argv)
+                        _record_command_result("git_tag", tag_result)
+                        prompt383_git_tag_attempted = True
+                        prompt383_git_tag_performed = bool(
+                            tag_result.get("performed", False)
+                        )
+                        prompt383_git_tag_returncode = int(
+                            tag_result.get("returncode", 1)
+                        )
+                        prompt383_execution_performed = bool(
+                            prompt383_execution_performed
+                            or prompt383_git_tag_performed
+                        )
+                        if prompt383_git_tag_returncode != 0:
+                            prompt383_returncode_classification = "nonzero_exit"
+                            prompt383_active_blocked_reasons = [
+                                "prompt383_git_tag_failed"
+                            ]
+                            prompt383_next_action = "review_prompt383_git_tag_failure"
+                            prompt383_authoritative_next_action = prompt383_next_action
+                        else:
+                            prompt383_status = "completed"
+                            prompt383_returncode_classification = "success"
+                            prompt383_active_blocked_reasons = []
+                            prompt383_next_action = (
+                                "prompt383_explicit_approve_commit_tag_execution_completed"
+                            )
+                            prompt383_authoritative_next_action = prompt383_next_action
+
+    prompt383_active_blocked_reason = (
+        prompt383_active_blocked_reasons[0]
+        if prompt383_active_blocked_reasons
+        else ""
+    )
+    prompt383_summary = {
+        "blocked": (
+            "Prompt383 blocked because the Prompt382 explicit approve commit/tag execution source of truth is not execution-safe yet."
+            if prompt383_active_blocked_reason
+            else "Prompt383 blocked."
+        ),
+        "ready_for_explicit_execution": (
+            "Prompt383 validated the Prompt382 gate and plan and is waiting for explicit local-only execution flags."
+        ),
+        "failed": (
+            "Prompt383 attempted local-only approve commit/tag execution but a git command failed before completion."
+        ),
+        "completed": (
+            "Prompt383 staged only the Prompt382-approved tracked paths, created the local commit, and created the local tag without any remote mutation."
+        ),
+    }.get(prompt383_status, "Prompt383 execution state recorded.")
+
+    prompt383_gate_payload: dict[str, Any] = {
+        "prompt383_schema_version": _PROMPT383_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt383",
+        "prompt383_prompt382_gate_source_path": prompt382_gate_source_path,
+        "prompt383_prompt382_plan_source_path": (
+            str(prompt382_plan_path) if prompt382_plan_payload else ""
+        ),
+        "prompt383_explicit_approve_commit_tag_execution_status": prompt383_status,
+        "prompt383_prompt382_evidence_ready": prompt383_prompt382_evidence_ready,
+        "prompt383_prompt382_plan_ready": prompt383_prompt382_plan_ready,
+        "prompt383_prompt382_execution_ready": prompt383_prompt382_execution_ready,
+        "prompt383_prompt382_execution_allowed": prompt383_prompt382_execution_allowed,
+        "prompt383_prompt382_commit_message": prompt383_prompt382_commit_message,
+        "prompt383_prompt382_tag_name": prompt383_prompt382_tag_name,
+        "prompt383_prompt382_approved_paths": list(prompt383_prompt382_approved_paths),
+        "prompt383_approve_commit_tag_requested": (
+            prompt383_approve_commit_tag_requested
+        ),
+        "prompt383_approve_commit_tag_confirmed": (
+            prompt383_approve_commit_tag_confirmed
+        ),
+        "prompt383_execution_ready": prompt383_execution_ready,
+        "prompt383_execution_allowed": prompt383_execution_allowed,
+        "prompt383_execution_attempted": prompt383_execution_attempted,
+        "prompt383_execution_performed": prompt383_execution_performed,
+        "prompt383_git_add_allowed": prompt383_git_add_allowed,
+        "prompt383_git_add_attempted": prompt383_git_add_attempted,
+        "prompt383_git_add_performed": prompt383_git_add_performed,
+        "prompt383_git_commit_allowed": prompt383_git_commit_allowed,
+        "prompt383_git_commit_attempted": prompt383_git_commit_attempted,
+        "prompt383_git_commit_performed": prompt383_git_commit_performed,
+        "prompt383_git_tag_allowed": prompt383_git_tag_allowed,
+        "prompt383_git_tag_attempted": prompt383_git_tag_attempted,
+        "prompt383_git_tag_performed": prompt383_git_tag_performed,
+        "prompt383_remote_mutation_allowed": prompt383_remote_mutation_allowed,
+        "prompt383_remote_mutation_performed": prompt383_remote_mutation_performed,
+        "prompt383_commit_message": prompt383_commit_message,
+        "prompt383_tag_name": prompt383_tag_name,
+        "prompt383_committed_files": list(prompt383_committed_files),
+        "prompt383_approved_paths_validation_status": (
+            prompt383_approved_paths_validation_status
+        ),
+        "prompt383_approved_paths_validation_reasons": list(
+            prompt383_approved_paths_validation_reasons
+        ),
+        "prompt383_tag_preexistence_checked": prompt383_tag_preexistence_checked,
+        "prompt383_tag_preexisting": prompt383_tag_preexisting,
+        "prompt383_git_add_argv": list(prompt383_git_add_argv),
+        "prompt383_git_commit_argv": list(prompt383_git_commit_argv),
+        "prompt383_git_tag_argv": list(prompt383_git_tag_argv),
+        "prompt383_git_add_returncode": prompt383_git_add_returncode,
+        "prompt383_git_commit_returncode": prompt383_git_commit_returncode,
+        "prompt383_git_tag_returncode": prompt383_git_tag_returncode,
+        "prompt383_returncode_classification": prompt383_returncode_classification,
+        "prompt383_receipt_path": str(prompt383_receipt_path),
+        "prompt383_stdout_path": str(prompt383_stdout_path),
+        "prompt383_stderr_path": str(prompt383_stderr_path),
+        "prompt383_next_action": prompt383_next_action,
+        "prompt383_authoritative_next_action": prompt383_authoritative_next_action,
+        "prompt383_active_blocked_reason": prompt383_active_blocked_reason,
+        "prompt383_active_blocked_reasons": prompt383_active_blocked_reasons,
+        "prompt383_summary": prompt383_summary,
+    }
+    prompt383_receipt_payload: dict[str, Any] = {
+        **prompt383_gate_payload,
+        "prompt383_command_results": command_results,
+    }
+
+    prompt383_gate_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt383_gate_path, prompt383_gate_payload)
+    _write_json(prompt383_receipt_path, prompt383_receipt_payload)
+    prompt383_stdout_path.write_text(
+        ("\n\n".join(stdout_sections) + "\n") if stdout_sections else "",
+        encoding="utf-8",
+    )
+    prompt383_stderr_path.write_text(
+        ("\n\n".join(stderr_sections) + "\n") if stderr_sections else "",
+        encoding="utf-8",
+    )
+    return {
+        key: value
+        for key, value in prompt383_gate_payload.items()
+        if key.startswith("prompt383_")
+    }
+
+
 def _merge_prompt376_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -54804,6 +55688,73 @@ def _merge_prompt378_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt378_next_action"
             if _normalize_text(prompt378.get("prompt378_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt383_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt383_explicit_approve_commit_tag_execution_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt383 = (
+        dict(prompt383_explicit_approve_commit_tag_execution_payload)
+        if isinstance(prompt383_explicit_approve_commit_tag_execution_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT383_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt383 and prompt383.get(key) is not None:
+            payload[key] = prompt383.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt383_explicit_approve_commit_tag_execution_status"
+            if _normalize_text(
+                prompt383.get("prompt383_explicit_approve_commit_tag_execution_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt383_prompt382_evidence_ready"
+            if bool(prompt383.get("prompt383_prompt382_evidence_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt383_prompt382_plan_ready"
+            if bool(prompt383.get("prompt383_prompt382_plan_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt383_prompt382_execution_ready"
+            if bool(prompt383.get("prompt383_prompt382_execution_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt383_execution_ready"
+            if bool(prompt383.get("prompt383_execution_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt383_execution_allowed"
+            if bool(prompt383.get("prompt383_execution_allowed", False))
+            else "",
+            "approved_restart_execution_contract.prompt383_execution_attempted"
+            if bool(prompt383.get("prompt383_execution_attempted", False))
+            else "",
+            "approved_restart_execution_contract.prompt383_execution_performed"
+            if bool(prompt383.get("prompt383_execution_performed", False))
+            else "",
+            "approved_restart_execution_contract.prompt383_git_tag_performed"
+            if bool(prompt383.get("prompt383_git_tag_performed", False))
+            else "",
+            "approved_restart_execution_contract.prompt383_remote_mutation_performed"
+            if bool(prompt383.get("prompt383_remote_mutation_performed", False))
+            else "",
+            "approved_restart_execution_contract.prompt383_next_action"
+            if _normalize_text(prompt383.get("prompt383_next_action"), default="")
             else "",
         ]
     )
@@ -220666,6 +221617,8 @@ class PlannedExecutionRunner:
         prompt378_generated_prompt_path: str | None = None,
         prompt379_codex_execution_requested: bool = False,
         prompt379_codex_execution_confirmed: bool = False,
+        prompt383_approve_commit_tag_requested: bool = False,
+        prompt383_approve_commit_tag_confirmed: bool = False,
     ) -> dict[str, Any]:
         artifacts_root = Path(artifacts_input_dir)
         output_root = Path(output_dir)
@@ -221359,6 +222312,12 @@ class PlannedExecutionRunner:
             "prompt373_live_execution_confirmed": bool(prompt373_live_execution_confirmed),
             "prompt379_codex_execution_requested": bool(prompt379_codex_execution_requested),
             "prompt379_codex_execution_confirmed": bool(prompt379_codex_execution_confirmed),
+            "prompt383_approve_commit_tag_requested": bool(
+                prompt383_approve_commit_tag_requested
+            ),
+            "prompt383_approve_commit_tag_confirmed": bool(
+                prompt383_approve_commit_tag_confirmed
+            ),
         }
         run_state_payload = _augment_run_state_with_objective_contract_summary(
             run_state_payload=run_state_payload,
@@ -224249,6 +225208,18 @@ class PlannedExecutionRunner:
         prompt382_approve_commit_tag_execution_plan_path = (
             run_root / "prompt382_approve_commit_tag_execution_plan.json"
         )
+        prompt383_explicit_approve_commit_tag_execution_gate_path = (
+            run_root / "prompt383_explicit_approve_commit_tag_execution_gate.json"
+        )
+        prompt383_explicit_approve_commit_tag_execution_receipt_path = (
+            run_root / "prompt383_explicit_approve_commit_tag_execution_receipt.json"
+        )
+        prompt383_explicit_approve_commit_tag_execution_stdout_path = (
+            run_root / "prompt383_explicit_approve_commit_tag_execution_stdout.txt"
+        )
+        prompt383_explicit_approve_commit_tag_execution_stderr_path = (
+            run_root / "prompt383_explicit_approve_commit_tag_execution_stderr.txt"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -224514,6 +225485,23 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt382_approve_commit_tag_execution_gate_payload,
         }
+        prompt383_explicit_approve_commit_tag_execution_payload = (
+            _build_prompt383_explicit_approve_commit_tag_execution_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+                prompt383_approve_commit_tag_requested=bool(
+                    prompt383_approve_commit_tag_requested
+                ),
+                prompt383_approve_commit_tag_confirmed=bool(
+                    prompt383_approve_commit_tag_confirmed
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt383_explicit_approve_commit_tag_execution_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -224629,6 +225617,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt378_chatgpt_generated_prompt_intake_state=(
                     prompt378_chatgpt_generated_prompt_intake_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt383_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt383_explicit_approve_commit_tag_execution_state=(
+                    prompt383_explicit_approve_commit_tag_execution_payload
                 ),
             )
         )
@@ -224777,6 +225773,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt378_chatgpt_generated_prompt_intake_payload=(
                     prompt378_chatgpt_generated_prompt_intake_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt383_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt383_explicit_approve_commit_tag_execution_payload=(
+                    prompt383_explicit_approve_commit_tag_execution_payload
                 ),
             )
         )
@@ -225289,6 +226295,24 @@ class PlannedExecutionRunner:
         manifest["prompt382_approve_commit_tag_execution_plan_path"] = str(
             prompt382_approve_commit_tag_execution_plan_path
         )
+        manifest["prompt383_explicit_approve_commit_tag_execution_gate_summary"] = dict(
+            prompt383_explicit_approve_commit_tag_execution_payload
+        )
+        manifest["prompt383_explicit_approve_commit_tag_execution_gate_path"] = str(
+            prompt383_explicit_approve_commit_tag_execution_gate_path
+        )
+        manifest["prompt383_explicit_approve_commit_tag_execution_receipt_summary"] = dict(
+            prompt383_explicit_approve_commit_tag_execution_payload
+        )
+        manifest["prompt383_explicit_approve_commit_tag_execution_receipt_path"] = str(
+            prompt383_explicit_approve_commit_tag_execution_receipt_path
+        )
+        manifest["prompt383_explicit_approve_commit_tag_execution_stdout_path"] = str(
+            prompt383_explicit_approve_commit_tag_execution_stdout_path
+        )
+        manifest["prompt383_explicit_approve_commit_tag_execution_stderr_path"] = str(
+            prompt383_explicit_approve_commit_tag_execution_stderr_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -225517,6 +226541,12 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt382_approve_commit_tag_execution_plan"] = (
             manifest.get("prompt382_approve_commit_tag_execution_plan_summary")
         )
+        contract_summaries_by_role["prompt383_explicit_approve_commit_tag_execution_gate"] = (
+            manifest.get("prompt383_explicit_approve_commit_tag_execution_gate_summary")
+        )
+        contract_summaries_by_role["prompt383_explicit_approve_commit_tag_execution_receipt"] = (
+            manifest.get("prompt383_explicit_approve_commit_tag_execution_receipt_summary")
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -225744,6 +226774,12 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["prompt382_approve_commit_tag_execution_plan"] = (
             manifest.get("prompt382_approve_commit_tag_execution_plan_path")
+        )
+        contract_paths_by_role["prompt383_explicit_approve_commit_tag_execution_gate"] = (
+            manifest.get("prompt383_explicit_approve_commit_tag_execution_gate_path")
+        )
+        contract_paths_by_role["prompt383_explicit_approve_commit_tag_execution_receipt"] = (
+            manifest.get("prompt383_explicit_approve_commit_tag_execution_receipt_path")
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -228938,6 +229974,279 @@ class PlannedExecutionRunner:
             "prompt382_active_blocked_reasons": _normalize_string_list(
                 prompt382_approve_commit_tag_execution_gate_payload.get(
                     "prompt382_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt383_explicit_approve_commit_tag_execution_status": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_explicit_approve_commit_tag_execution_status"
+                ),
+                default="blocked",
+            ),
+            "prompt383_prompt382_evidence_ready": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_prompt382_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt383_prompt382_plan_ready": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_prompt382_plan_ready",
+                    False,
+                )
+            ),
+            "prompt383_prompt382_execution_ready": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_prompt382_execution_ready",
+                    False,
+                )
+            ),
+            "prompt383_prompt382_execution_allowed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_prompt382_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt383_prompt382_commit_message": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_prompt382_commit_message"
+                ),
+                default="",
+            ),
+            "prompt383_prompt382_tag_name": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_prompt382_tag_name"
+                ),
+                default="",
+            ),
+            "prompt383_prompt382_approved_paths": _normalize_string_list(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_prompt382_approved_paths"
+                ),
+                sort_items=False,
+            ),
+            "prompt383_approve_commit_tag_requested": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_approve_commit_tag_requested",
+                    False,
+                )
+            ),
+            "prompt383_approve_commit_tag_confirmed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_approve_commit_tag_confirmed",
+                    False,
+                )
+            ),
+            "prompt383_execution_ready": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_execution_ready",
+                    False,
+                )
+            ),
+            "prompt383_execution_allowed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt383_execution_attempted": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt383_execution_performed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_execution_performed",
+                    False,
+                )
+            ),
+            "prompt383_git_add_allowed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_add_allowed",
+                    False,
+                )
+            ),
+            "prompt383_git_add_attempted": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_add_attempted",
+                    False,
+                )
+            ),
+            "prompt383_git_add_performed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_add_performed",
+                    False,
+                )
+            ),
+            "prompt383_git_commit_allowed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_commit_allowed",
+                    False,
+                )
+            ),
+            "prompt383_git_commit_attempted": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_commit_attempted",
+                    False,
+                )
+            ),
+            "prompt383_git_commit_performed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_commit_performed",
+                    False,
+                )
+            ),
+            "prompt383_git_tag_allowed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_tag_allowed",
+                    False,
+                )
+            ),
+            "prompt383_git_tag_attempted": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_tag_attempted",
+                    False,
+                )
+            ),
+            "prompt383_git_tag_performed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_tag_performed",
+                    False,
+                )
+            ),
+            "prompt383_remote_mutation_allowed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt383_remote_mutation_performed": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt383_commit_message": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_commit_message"
+                ),
+                default="",
+            ),
+            "prompt383_tag_name": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_tag_name"
+                ),
+                default="",
+            ),
+            "prompt383_committed_files": _normalize_string_list(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_committed_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt383_approved_paths_validation_status": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_approved_paths_validation_status"
+                ),
+                default="not_evaluated",
+            ),
+            "prompt383_approved_paths_validation_reasons": _normalize_string_list(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_approved_paths_validation_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt383_tag_preexistence_checked": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_tag_preexistence_checked",
+                    False,
+                )
+            ),
+            "prompt383_tag_preexisting": bool(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_tag_preexisting",
+                    False,
+                )
+            ),
+            "prompt383_git_add_argv": _normalize_string_list(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_add_argv"
+                ),
+                sort_items=False,
+            ),
+            "prompt383_git_commit_argv": _normalize_string_list(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_commit_argv"
+                ),
+                sort_items=False,
+            ),
+            "prompt383_git_tag_argv": _normalize_string_list(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_tag_argv"
+                ),
+                sort_items=False,
+            ),
+            "prompt383_git_add_returncode": (
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_add_returncode"
+                )
+            ),
+            "prompt383_git_commit_returncode": (
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_commit_returncode"
+                )
+            ),
+            "prompt383_git_tag_returncode": (
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_git_tag_returncode"
+                )
+            ),
+            "prompt383_returncode_classification": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_returncode_classification"
+                ),
+                default="not_run",
+            ),
+            "prompt383_receipt_path": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_receipt_path"
+                ),
+                default="",
+            ),
+            "prompt383_stdout_path": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_stdout_path"
+                ),
+                default="",
+            ),
+            "prompt383_stderr_path": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_stderr_path"
+                ),
+                default="",
+            ),
+            "prompt383_next_action": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_next_action"
+                ),
+                default="wait_for_prompt382_approve_commit_tag_execution_ready",
+            ),
+            "prompt383_authoritative_next_action": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_authoritative_next_action"
+                ),
+                default="wait_for_prompt382_approve_commit_tag_execution_ready",
+            ),
+            "prompt383_active_blocked_reason": _normalize_text(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt383_active_blocked_reasons": _normalize_string_list(
+                prompt383_explicit_approve_commit_tag_execution_payload.get(
+                    "prompt383_active_blocked_reasons"
                 ),
                 sort_items=False,
             ),

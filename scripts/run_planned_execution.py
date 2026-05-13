@@ -657,6 +657,22 @@ def _build_parser() -> argparse.ArgumentParser:
             "Without both Prompt379 flags, Codex is not executed."
         ),
     )
+    parser.add_argument(
+        "--prompt383-approve-commit-tag-requested",
+        action="store_true",
+        help=(
+            "Explicitly request local-only Prompt383 approve commit/tag execution. "
+            "Without both Prompt383 flags, Prompt383 stays in ready_for_explicit_execution."
+        ),
+    )
+    parser.add_argument(
+        "--prompt383-approve-commit-tag-confirmed",
+        action="store_true",
+        help=(
+            "Explicitly confirm local-only Prompt383 approve commit/tag execution. "
+            "Without both Prompt383 flags, no local git mutation is attempted."
+        ),
+    )
     parser.add_argument("--stop-on-failure", action="store_true", default=True, help="Stop when a unit fails")
     parser.add_argument("--continue-on-failure", action="store_true", help="Continue processing units after failures")
     parser.add_argument("--json", action="store_true", dest="as_json")
@@ -737,6 +753,12 @@ def main(argv: list[str] | None = None) -> int:
             ),
             prompt379_codex_execution_confirmed=bool(
                 args.prompt379_codex_execution_confirmed
+            ),
+            prompt383_approve_commit_tag_requested=bool(
+                args.prompt383_approve_commit_tag_requested
+            ),
+            prompt383_approve_commit_tag_confirmed=bool(
+                args.prompt383_approve_commit_tag_confirmed
             ),
         )
         manifest = _refresh_result_accounting_surfaces(
