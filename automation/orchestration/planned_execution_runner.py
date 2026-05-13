@@ -53601,6 +53601,9 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
         "prompt379_codex_execution_allowed": prompt379_codex_execution_allowed,
         "prompt379_codex_execution_attempted": prompt379_codex_execution_attempted,
         "prompt379_codex_execution_performed": prompt379_codex_execution_performed,
+        "prompt379_execution_allowed": prompt379_codex_execution_allowed,
+        "prompt379_execution_attempted": prompt379_codex_execution_attempted,
+        "prompt379_execution_performed": prompt379_codex_execution_performed,
         "prompt379_git_mutation_performed": prompt379_git_mutation_performed,
         "prompt379_remote_mutation_performed": prompt379_remote_mutation_performed,
         "prompt379_next_action": prompt379_next_action,
@@ -227411,6 +227414,33 @@ class PlannedExecutionRunner:
                 prompt379_generated_prompt_codex_execution_bridge_payload.get(
                     "prompt379_codex_execution_performed",
                     False,
+                )
+            ),
+            "prompt379_execution_allowed": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_execution_allowed",
+                    prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                        "prompt379_codex_execution_allowed",
+                        False,
+                    ),
+                )
+            ),
+            "prompt379_execution_attempted": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_execution_attempted",
+                    prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                        "prompt379_codex_execution_attempted",
+                        False,
+                    ),
+                )
+            ),
+            "prompt379_execution_performed": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_execution_performed",
+                    prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                        "prompt379_codex_execution_performed",
+                        False,
+                    ),
                 )
             ),
             "prompt379_git_mutation_performed": bool(
