@@ -3693,6 +3693,7 @@ _PROMPT371_SCHEMA_VERSION = "prompt371_bounded_one_cycle_execution_wiring_v1"
 _PROMPT372_SCHEMA_VERSION = "prompt372_selected_step_execution_gate_v1"
 _PROMPT373_SCHEMA_VERSION = "prompt373_selected_step_live_codex_execution_v1"
 _PROMPT379_SCHEMA_VERSION = "prompt379_generated_prompt_codex_execution_bridge_v1"
+_PROMPT380_SCHEMA_VERSION = "prompt380_prompt379_result_review_route_decision_v1"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -53658,6 +53659,273 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
         key: value
         for key, value in state_payload.items()
         if key.startswith("prompt379_")
+    }
+
+
+def _build_prompt380_prompt379_result_review_route_decision_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt380_route_path = artifact_root / "prompt380_prompt379_result_review_route_decision.json"
+    prompt379_bridge_path = artifact_root / "prompt379_generated_prompt_codex_execution_bridge.json"
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt379_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        prompt379_codex_execution_performed = _prompt357_as_boolish(
+            source.get("prompt379_codex_execution_performed"),
+            default=False,
+        )
+        return {
+            "prompt379_generated_prompt_codex_execution_bridge_status": _normalize_text(
+                source.get("prompt379_generated_prompt_codex_execution_bridge_status"),
+                default="",
+            ),
+            "prompt379_codex_execution_ready": _prompt357_as_boolish(
+                source.get("prompt379_codex_execution_ready"),
+                default=False,
+            ),
+            "prompt379_codex_execution_performed": prompt379_codex_execution_performed,
+            "prompt379_execution_performed": _prompt357_as_boolish(
+                source.get("prompt379_execution_performed"),
+                default=prompt379_codex_execution_performed,
+            ),
+            "prompt379_returncode": source.get("prompt379_returncode"),
+            "prompt379_returncode_classification": _normalize_text(
+                source.get("prompt379_returncode_classification"),
+                default="",
+            ),
+            "prompt379_pre_execution_tracked_source_diff_empty": _prompt357_as_boolish(
+                source.get("prompt379_pre_execution_tracked_source_diff_empty"),
+                default=False,
+            ),
+            "prompt379_post_execution_tracked_source_diff_empty": _prompt357_as_boolish(
+                source.get("prompt379_post_execution_tracked_source_diff_empty"),
+                default=False,
+            ),
+            "prompt379_post_execution_tracked_source_changed_files": _normalize_string_list(
+                source.get("prompt379_post_execution_tracked_source_changed_files"),
+                sort_items=False,
+            ),
+            "prompt379_active_blocked_reason": _normalize_text(
+                source.get("prompt379_active_blocked_reason"),
+                default="",
+            ),
+            "prompt379_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt379_active_blocked_reasons"),
+                sort_items=False,
+            ),
+            "prompt379_next_action": _normalize_text(
+                source.get("prompt379_next_action"),
+                default="",
+            ),
+            "prompt379_authoritative_next_action": _normalize_text(
+                source.get("prompt379_authoritative_next_action"),
+                default="",
+            ),
+        }
+
+    def _has_prompt379_reviewable_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        required_keys = (
+            "prompt379_generated_prompt_codex_execution_bridge_status",
+            "prompt379_codex_execution_ready",
+            "prompt379_codex_execution_performed",
+            "prompt379_execution_performed",
+            "prompt379_returncode",
+            "prompt379_returncode_classification",
+            "prompt379_pre_execution_tracked_source_diff_empty",
+            "prompt379_post_execution_tracked_source_diff_empty",
+            "prompt379_post_execution_tracked_source_changed_files",
+            "prompt379_active_blocked_reason",
+            "prompt379_next_action",
+        )
+        return all(key in raw_payload for key in required_keys)
+
+    def _resolve_prompt379_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt379_reviewable_evidence(run_state):
+            return _normalize_prompt379_surface(run_state), ""
+
+        prompt379_bridge_payload = _read_json_object_if_exists(prompt379_bridge_path)
+        if _has_prompt379_reviewable_evidence(prompt379_bridge_payload):
+            return _normalize_prompt379_surface(prompt379_bridge_payload), str(prompt379_bridge_path)
+
+        return _normalize_prompt379_surface(run_state), ""
+
+    prompt379_surface, prompt379_source_path = _resolve_prompt379_surface()
+    prompt380_prompt379_evidence_ready = bool(
+        prompt379_source_path or _has_prompt379_reviewable_evidence(run_state)
+    )
+    prompt380_prompt379_execution_performed = bool(
+        prompt379_surface.get("prompt379_execution_performed", False)
+    )
+    prompt380_prompt379_returncode = prompt379_surface.get("prompt379_returncode")
+    prompt380_prompt379_returncode_classification = _normalize_text(
+        prompt379_surface.get("prompt379_returncode_classification"),
+        default="not_run",
+    )
+    prompt380_prompt379_post_execution_tracked_diff_empty = bool(
+        prompt379_surface.get("prompt379_post_execution_tracked_source_diff_empty", False)
+    )
+    prompt380_prompt379_post_execution_changed_files = _normalize_string_list(
+        prompt379_surface.get("prompt379_post_execution_tracked_source_changed_files"),
+        sort_items=False,
+    )
+
+    prompt380_prompt379_result_review_status = "blocked"
+    prompt380_route_decision = "blocked_retry_or_review"
+    prompt380_approve_candidate = False
+    prompt380_no_diff_continuation_allowed = False
+    prompt380_retry_or_manual_review_required = True
+    prompt380_git_mutation_allowed = False
+    prompt380_git_mutation_performed = False
+    prompt380_remote_mutation_allowed = False
+    prompt380_remote_mutation_performed = False
+    prompt380_next_action = "review_prompt379_execution_result_before_retry"
+    prompt380_authoritative_next_action = prompt380_next_action
+    prompt380_active_blocked_reasons: list[str] = []
+
+    prompt379_execution_success = bool(
+        prompt380_prompt379_returncode_classification == "success"
+        or prompt380_prompt379_returncode == 0
+    )
+    prompt379_codex_execution_performed = bool(
+        prompt379_surface.get("prompt379_codex_execution_performed", False)
+    )
+
+    if not prompt380_prompt379_evidence_ready:
+        _append_reason(
+            prompt380_active_blocked_reasons,
+            "prompt379_execution_evidence_missing",
+        )
+    elif not prompt380_prompt379_execution_performed:
+        _append_reason(
+            prompt380_active_blocked_reasons,
+            "prompt379_execution_not_performed",
+        )
+    else:
+        if prompt379_codex_execution_performed != prompt380_prompt379_execution_performed:
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_execution_performed_state_inconsistent",
+            )
+        if not prompt379_execution_success:
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_returncode_not_success",
+            )
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                _normalize_text(
+                    prompt379_surface.get("prompt379_active_blocked_reason"),
+                    default="",
+                ),
+            )
+        elif (
+            prompt380_prompt379_returncode is not None
+            and prompt380_prompt379_returncode != 0
+        ):
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_success_state_inconsistent_with_returncode",
+            )
+        elif (
+            prompt380_prompt379_post_execution_tracked_diff_empty
+            and prompt380_prompt379_post_execution_changed_files
+        ):
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_post_execution_tracked_diff_state_inconsistent",
+            )
+        elif (
+            not prompt380_prompt379_post_execution_tracked_diff_empty
+            and not prompt380_prompt379_post_execution_changed_files
+        ):
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_post_execution_tracked_diff_state_inconsistent",
+            )
+
+    if not prompt380_active_blocked_reasons:
+        prompt380_prompt379_result_review_status = "completed"
+        prompt380_retry_or_manual_review_required = False
+        if prompt380_prompt379_post_execution_tracked_diff_empty:
+            prompt380_route_decision = "no_diff_continuation"
+            prompt380_no_diff_continuation_allowed = True
+            prompt380_next_action = "prepare_next_cycle_after_prompt379_no_diff"
+            prompt380_authoritative_next_action = prompt380_next_action
+        else:
+            prompt380_route_decision = "approve_candidate"
+            prompt380_approve_candidate = True
+            prompt380_next_action = "prepare_prompt381_approve_candidate_boundary"
+            prompt380_authoritative_next_action = prompt380_next_action
+
+    prompt380_active_blocked_reason = (
+        prompt380_active_blocked_reasons[0] if prompt380_active_blocked_reasons else ""
+    )
+    prompt380_summary = (
+        "Prompt380 reviewed Prompt379 execution metadata and selected the approve-candidate route."
+        if prompt380_route_decision == "approve_candidate"
+        else (
+            "Prompt380 reviewed Prompt379 execution metadata and selected the no-diff continuation route."
+            if prompt380_route_decision == "no_diff_continuation"
+            else (
+                "Prompt380 reviewed Prompt379 execution metadata and blocked continuation pending retry or manual review."
+            )
+        )
+    )
+
+    prompt380_payload: dict[str, Any] = {
+        "prompt380_schema_version": _PROMPT380_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt380",
+        "prompt380_prompt379_source_path": prompt379_source_path,
+        "prompt380_prompt379_result_review_status": prompt380_prompt379_result_review_status,
+        "prompt380_prompt379_evidence_ready": prompt380_prompt379_evidence_ready,
+        "prompt380_prompt379_execution_performed": prompt380_prompt379_execution_performed,
+        "prompt380_prompt379_returncode": prompt380_prompt379_returncode,
+        "prompt380_prompt379_returncode_classification": (
+            prompt380_prompt379_returncode_classification
+        ),
+        "prompt380_prompt379_post_execution_tracked_diff_empty": (
+            prompt380_prompt379_post_execution_tracked_diff_empty
+        ),
+        "prompt380_prompt379_post_execution_changed_files": (
+            prompt380_prompt379_post_execution_changed_files
+        ),
+        "prompt380_route_decision": prompt380_route_decision,
+        "prompt380_approve_candidate": prompt380_approve_candidate,
+        "prompt380_no_diff_continuation_allowed": (
+            prompt380_no_diff_continuation_allowed
+        ),
+        "prompt380_retry_or_manual_review_required": (
+            prompt380_retry_or_manual_review_required
+        ),
+        "prompt380_git_mutation_allowed": prompt380_git_mutation_allowed,
+        "prompt380_git_mutation_performed": prompt380_git_mutation_performed,
+        "prompt380_remote_mutation_allowed": prompt380_remote_mutation_allowed,
+        "prompt380_remote_mutation_performed": prompt380_remote_mutation_performed,
+        "prompt380_next_action": prompt380_next_action,
+        "prompt380_authoritative_next_action": prompt380_authoritative_next_action,
+        "prompt380_active_blocked_reason": prompt380_active_blocked_reason,
+        "prompt380_active_blocked_reasons": prompt380_active_blocked_reasons,
+        "prompt380_summary": prompt380_summary,
+    }
+
+    prompt380_route_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt380_route_path, prompt380_payload)
+    return {
+        key: value
+        for key, value in prompt380_payload.items()
+        if key.startswith("prompt380_")
     }
 
 
@@ -220126,6 +220394,9 @@ class PlannedExecutionRunner:
                 "prompt379_generated_prompt_codex_execution_receipt": (
                     "prompt379_generated_prompt_codex_execution_receipt.json"
                 ),
+                "prompt380_prompt379_result_review_route_decision": (
+                    "prompt380_prompt379_result_review_route_decision.json"
+                ),
             },
             "pr_units": manifest_units,
         }
@@ -223259,6 +223530,9 @@ class PlannedExecutionRunner:
         prompt379_generated_prompt_codex_execution_receipt_path = (
             run_root / "prompt379_generated_prompt_codex_execution_receipt.json"
         )
+        prompt380_prompt379_result_review_route_decision_path = (
+            run_root / "prompt380_prompt379_result_review_route_decision.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -223493,6 +223767,16 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt379_generated_prompt_codex_execution_bridge_payload,
+        }
+        prompt380_prompt379_result_review_route_decision_payload = (
+            _build_prompt380_prompt379_result_review_route_decision_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt380_prompt379_result_review_route_decision_payload,
         }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
@@ -224239,6 +224523,12 @@ class PlannedExecutionRunner:
         manifest["prompt379_generated_prompt_codex_execution_receipt_path"] = str(
             prompt379_generated_prompt_codex_execution_receipt_path
         )
+        manifest["prompt380_prompt379_result_review_route_decision_summary"] = dict(
+            prompt380_prompt379_result_review_route_decision_payload
+        )
+        manifest["prompt380_prompt379_result_review_route_decision_path"] = str(
+            prompt380_prompt379_result_review_route_decision_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -224452,6 +224742,9 @@ class PlannedExecutionRunner:
         contract_summaries_by_role[
             "prompt379_generated_prompt_codex_execution_receipt"
         ] = manifest.get("prompt379_generated_prompt_codex_execution_receipt_summary")
+        contract_summaries_by_role[
+            "prompt380_prompt379_result_review_route_decision"
+        ] = manifest.get("prompt380_prompt379_result_review_route_decision_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -224665,6 +224958,9 @@ class PlannedExecutionRunner:
         contract_paths_by_role[
             "prompt379_generated_prompt_codex_execution_receipt"
         ] = manifest.get("prompt379_generated_prompt_codex_execution_receipt_path")
+        contract_paths_by_role[
+            "prompt380_prompt379_result_review_route_decision"
+        ] = manifest.get("prompt380_prompt379_result_review_route_decision_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -227482,6 +227778,119 @@ class PlannedExecutionRunner:
             "prompt379_active_blocked_reasons": _normalize_string_list(
                 prompt379_generated_prompt_codex_execution_bridge_payload.get(
                     "prompt379_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt380_prompt379_result_review_status": _normalize_text(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_prompt379_result_review_status"
+                ),
+                default="blocked",
+            ),
+            "prompt380_prompt379_evidence_ready": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_prompt379_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt380_prompt379_execution_performed": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_prompt379_execution_performed",
+                    False,
+                )
+            ),
+            "prompt380_prompt379_returncode": (
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_prompt379_returncode"
+                )
+            ),
+            "prompt380_prompt379_returncode_classification": _normalize_text(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_prompt379_returncode_classification"
+                ),
+                default="not_run",
+            ),
+            "prompt380_prompt379_post_execution_tracked_diff_empty": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_prompt379_post_execution_tracked_diff_empty",
+                    False,
+                )
+            ),
+            "prompt380_prompt379_post_execution_changed_files": _normalize_string_list(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_prompt379_post_execution_changed_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt380_route_decision": _normalize_text(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_route_decision"
+                ),
+                default="blocked_retry_or_review",
+            ),
+            "prompt380_approve_candidate": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_approve_candidate",
+                    False,
+                )
+            ),
+            "prompt380_no_diff_continuation_allowed": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_no_diff_continuation_allowed",
+                    False,
+                )
+            ),
+            "prompt380_retry_or_manual_review_required": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_retry_or_manual_review_required",
+                    True,
+                )
+            ),
+            "prompt380_git_mutation_allowed": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_git_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt380_git_mutation_performed": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt380_remote_mutation_allowed": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt380_remote_mutation_performed": bool(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt380_next_action": _normalize_text(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_next_action"
+                ),
+                default="review_prompt379_execution_result_before_retry",
+            ),
+            "prompt380_authoritative_next_action": _normalize_text(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_authoritative_next_action"
+                ),
+                default="review_prompt379_execution_result_before_retry",
+            ),
+            "prompt380_active_blocked_reason": _normalize_text(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt380_active_blocked_reasons": _normalize_string_list(
+                prompt380_prompt379_result_review_route_decision_payload.get(
+                    "prompt380_active_blocked_reasons"
                 ),
                 sort_items=False,
             ),
