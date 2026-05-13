@@ -3694,6 +3694,7 @@ _PROMPT372_SCHEMA_VERSION = "prompt372_selected_step_execution_gate_v1"
 _PROMPT373_SCHEMA_VERSION = "prompt373_selected_step_live_codex_execution_v1"
 _PROMPT379_SCHEMA_VERSION = "prompt379_generated_prompt_codex_execution_bridge_v1"
 _PROMPT380_SCHEMA_VERSION = "prompt380_prompt379_result_review_route_decision_v1"
+_PROMPT381_SCHEMA_VERSION = "prompt381_approve_candidate_boundary_v1"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -53926,6 +53927,326 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
         key: value
         for key, value in prompt380_payload.items()
         if key.startswith("prompt380_")
+    }
+
+
+def _build_prompt381_approve_candidate_boundary_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt381_boundary_path = (
+        artifact_root / "prompt381_approve_candidate_boundary.json"
+    )
+    prompt381_contract_path = (
+        artifact_root / "prompt381_approve_candidate_contract.json"
+    )
+    prompt380_route_path = (
+        artifact_root / "prompt380_prompt379_result_review_route_decision.json"
+    )
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt380_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt380_prompt379_result_review_status": _normalize_text(
+                source.get("prompt380_prompt379_result_review_status"),
+                default="",
+            ),
+            "prompt380_prompt379_evidence_ready": _prompt357_as_boolish(
+                source.get("prompt380_prompt379_evidence_ready"),
+                default=False,
+            ),
+            "prompt380_prompt379_execution_performed": _prompt357_as_boolish(
+                source.get("prompt380_prompt379_execution_performed"),
+                default=False,
+            ),
+            "prompt380_prompt379_returncode": source.get(
+                "prompt380_prompt379_returncode"
+            ),
+            "prompt380_prompt379_returncode_classification": _normalize_text(
+                source.get("prompt380_prompt379_returncode_classification"),
+                default="",
+            ),
+            "prompt380_prompt379_post_execution_tracked_diff_empty": (
+                _prompt357_as_boolish(
+                    source.get("prompt380_prompt379_post_execution_tracked_diff_empty"),
+                    default=False,
+                )
+            ),
+            "prompt380_prompt379_post_execution_changed_files": (
+                _normalize_string_list(
+                    source.get("prompt380_prompt379_post_execution_changed_files"),
+                    sort_items=False,
+                )
+            ),
+            "prompt380_route_decision": _normalize_text(
+                source.get("prompt380_route_decision"),
+                default="",
+            ),
+            "prompt380_approve_candidate": _prompt357_as_boolish(
+                source.get("prompt380_approve_candidate"),
+                default=False,
+            ),
+            "prompt380_no_diff_continuation_allowed": _prompt357_as_boolish(
+                source.get("prompt380_no_diff_continuation_allowed"),
+                default=False,
+            ),
+            "prompt380_retry_or_manual_review_required": _prompt357_as_boolish(
+                source.get("prompt380_retry_or_manual_review_required"),
+                default=True,
+            ),
+            "prompt380_git_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt380_git_mutation_performed"),
+                default=False,
+            ),
+            "prompt380_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt380_remote_mutation_performed"),
+                default=False,
+            ),
+            "prompt380_next_action": _normalize_text(
+                source.get("prompt380_next_action"),
+                default="",
+            ),
+            "prompt380_active_blocked_reason": _normalize_text(
+                source.get("prompt380_active_blocked_reason"),
+                default="",
+            ),
+            "prompt380_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt380_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _has_prompt380_boundary_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        required_keys = (
+            "prompt380_prompt379_result_review_status",
+            "prompt380_prompt379_evidence_ready",
+            "prompt380_prompt379_execution_performed",
+            "prompt380_prompt379_returncode",
+            "prompt380_prompt379_returncode_classification",
+            "prompt380_prompt379_post_execution_tracked_diff_empty",
+            "prompt380_prompt379_post_execution_changed_files",
+            "prompt380_route_decision",
+            "prompt380_approve_candidate",
+            "prompt380_no_diff_continuation_allowed",
+            "prompt380_retry_or_manual_review_required",
+            "prompt380_git_mutation_performed",
+            "prompt380_remote_mutation_performed",
+            "prompt380_next_action",
+            "prompt380_active_blocked_reason",
+            "prompt380_active_blocked_reasons",
+        )
+        return all(key in raw_payload for key in required_keys)
+
+    def _resolve_prompt380_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt380_boundary_evidence(run_state):
+            return _normalize_prompt380_surface(run_state), ""
+
+        prompt380_route_payload = _read_json_object_if_exists(prompt380_route_path)
+        if _has_prompt380_boundary_evidence(prompt380_route_payload):
+            return _normalize_prompt380_surface(prompt380_route_payload), str(
+                prompt380_route_path
+            )
+
+        return _normalize_prompt380_surface(run_state), ""
+
+    prompt380_surface, prompt380_source_path = _resolve_prompt380_surface()
+    prompt381_prompt380_evidence_ready = bool(
+        prompt380_source_path or _has_prompt380_boundary_evidence(run_state)
+    )
+    prompt381_prompt380_route_decision = _normalize_text(
+        prompt380_surface.get("prompt380_route_decision"),
+        default="blocked_retry_or_review",
+    )
+    prompt381_prompt380_approve_candidate = bool(
+        prompt380_surface.get("prompt380_approve_candidate", False)
+    )
+    prompt381_prompt379_execution_performed = bool(
+        prompt380_surface.get("prompt380_prompt379_execution_performed", False)
+    )
+    prompt381_prompt379_returncode = prompt380_surface.get(
+        "prompt380_prompt379_returncode"
+    )
+    prompt381_prompt379_returncode_classification = _normalize_text(
+        prompt380_surface.get("prompt380_prompt379_returncode_classification"),
+        default="not_run",
+    )
+    prompt381_prompt379_post_execution_tracked_diff_empty = bool(
+        prompt380_surface.get(
+            "prompt380_prompt379_post_execution_tracked_diff_empty",
+            False,
+        )
+    )
+    prompt381_prompt379_post_execution_changed_files = _normalize_string_list(
+        prompt380_surface.get("prompt380_prompt379_post_execution_changed_files"),
+        sort_items=False,
+    )
+
+    prompt381_approve_candidate_boundary_status = "blocked"
+    prompt381_approve_candidate_ready = False
+    prompt381_approve_candidate_contract_ready = False
+    prompt381_approve_commit_tag_allowed = False
+    prompt381_approve_commit_tag_performed = False
+    prompt381_git_mutation_allowed = False
+    prompt381_git_mutation_performed = False
+    prompt381_remote_mutation_allowed = False
+    prompt381_remote_mutation_performed = False
+    prompt381_next_action = "wait_for_prompt380_approve_candidate_route"
+    prompt381_authoritative_next_action = prompt381_next_action
+    prompt381_active_blocked_reasons: list[str] = []
+
+    prompt379_execution_success = bool(
+        prompt381_prompt379_returncode_classification == "success"
+        or prompt381_prompt379_returncode == 0
+    )
+
+    if not prompt381_prompt380_evidence_ready:
+        _append_reason(prompt381_active_blocked_reasons, "prompt380_evidence_missing")
+    if prompt381_prompt380_route_decision != "approve_candidate":
+        _append_reason(
+            prompt381_active_blocked_reasons,
+            "prompt380_route_not_approve_candidate",
+        )
+    if not prompt381_prompt380_approve_candidate:
+        _append_reason(
+            prompt381_active_blocked_reasons,
+            "prompt380_approve_candidate_not_true",
+        )
+    if not prompt381_prompt379_execution_performed:
+        _append_reason(
+            prompt381_active_blocked_reasons,
+            "prompt379_execution_not_performed",
+        )
+    if not prompt379_execution_success:
+        _append_reason(
+            prompt381_active_blocked_reasons,
+            "prompt379_returncode_not_success",
+        )
+    elif (
+        prompt381_prompt379_returncode is not None
+        and prompt381_prompt379_returncode != 0
+        and prompt381_prompt379_returncode_classification != "success"
+    ):
+        _append_reason(
+            prompt381_active_blocked_reasons,
+            "prompt379_success_state_inconsistent_with_returncode",
+        )
+    if prompt381_prompt379_post_execution_tracked_diff_empty:
+        _append_reason(
+            prompt381_active_blocked_reasons,
+            "prompt379_post_execution_tracked_diff_empty",
+        )
+    if not prompt381_prompt379_post_execution_changed_files:
+        _append_reason(
+            prompt381_active_blocked_reasons,
+            "prompt379_post_execution_changed_files_empty",
+        )
+    if bool(prompt380_surface.get("prompt380_git_mutation_performed", False)):
+        _append_reason(
+            prompt381_active_blocked_reasons,
+            "prompt380_git_mutation_performed",
+        )
+    if bool(prompt380_surface.get("prompt380_remote_mutation_performed", False)):
+        _append_reason(
+            prompt381_active_blocked_reasons,
+            "prompt380_remote_mutation_performed",
+        )
+
+    if not prompt381_active_blocked_reasons:
+        prompt381_approve_candidate_boundary_status = "ready"
+        prompt381_approve_candidate_ready = True
+        prompt381_approve_candidate_contract_ready = True
+        prompt381_next_action = (
+            "prepare_prompt382_explicit_approve_commit_tag_execution_gate"
+        )
+        prompt381_authoritative_next_action = prompt381_next_action
+
+    prompt381_active_blocked_reason = (
+        prompt381_active_blocked_reasons[0] if prompt381_active_blocked_reasons else ""
+    )
+    prompt381_summary = (
+        "Prompt381 prepared the metadata-only approve-candidate boundary for later explicit approve/commit/tag gating."
+        if prompt381_approve_candidate_ready
+        else (
+            "Prompt381 blocked because Prompt380 did not provide a valid approve-candidate route boundary."
+        )
+    )
+
+    prompt381_boundary_payload: dict[str, Any] = {
+        "prompt381_schema_version": _PROMPT381_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt381",
+        "prompt381_prompt380_source_path": prompt380_source_path,
+        "prompt381_approve_candidate_boundary_status": (
+            prompt381_approve_candidate_boundary_status
+        ),
+        "prompt381_prompt380_evidence_ready": prompt381_prompt380_evidence_ready,
+        "prompt381_prompt380_route_decision": prompt381_prompt380_route_decision,
+        "prompt381_prompt380_approve_candidate": (
+            prompt381_prompt380_approve_candidate
+        ),
+        "prompt381_prompt379_execution_performed": (
+            prompt381_prompt379_execution_performed
+        ),
+        "prompt381_prompt379_returncode": prompt381_prompt379_returncode,
+        "prompt381_prompt379_returncode_classification": (
+            prompt381_prompt379_returncode_classification
+        ),
+        "prompt381_prompt379_post_execution_tracked_diff_empty": (
+            prompt381_prompt379_post_execution_tracked_diff_empty
+        ),
+        "prompt381_prompt379_post_execution_changed_files": (
+            prompt381_prompt379_post_execution_changed_files
+        ),
+        "prompt381_approve_candidate_ready": prompt381_approve_candidate_ready,
+        "prompt381_approve_candidate_contract_ready": (
+            prompt381_approve_candidate_contract_ready
+        ),
+        "prompt381_approve_commit_tag_allowed": prompt381_approve_commit_tag_allowed,
+        "prompt381_approve_commit_tag_performed": (
+            prompt381_approve_commit_tag_performed
+        ),
+        "prompt381_git_mutation_allowed": prompt381_git_mutation_allowed,
+        "prompt381_git_mutation_performed": prompt381_git_mutation_performed,
+        "prompt381_remote_mutation_allowed": prompt381_remote_mutation_allowed,
+        "prompt381_remote_mutation_performed": (
+            prompt381_remote_mutation_performed
+        ),
+        "prompt381_next_action": prompt381_next_action,
+        "prompt381_authoritative_next_action": (
+            prompt381_authoritative_next_action
+        ),
+        "prompt381_active_blocked_reason": prompt381_active_blocked_reason,
+        "prompt381_active_blocked_reasons": prompt381_active_blocked_reasons,
+        "prompt381_summary": prompt381_summary,
+    }
+    prompt381_contract_payload: dict[str, Any] = {
+        **prompt381_boundary_payload,
+        "prompt381_contract_type": "approve_candidate_contract",
+        "prompt381_follow_on_prompt": "prompt382",
+        "prompt381_contract_records_eligibility_only": True,
+        "prompt381_contract_permits_commit_or_tag_execution": False,
+        "prompt381_eligible_changed_files": list(
+            prompt381_prompt379_post_execution_changed_files
+        ),
+    }
+
+    prompt381_boundary_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt381_boundary_path, prompt381_boundary_payload)
+    _write_json(prompt381_contract_path, prompt381_contract_payload)
+    return {
+        key: value
+        for key, value in prompt381_boundary_payload.items()
+        if key.startswith("prompt381_")
     }
 
 
@@ -220397,6 +220718,12 @@ class PlannedExecutionRunner:
                 "prompt380_prompt379_result_review_route_decision": (
                     "prompt380_prompt379_result_review_route_decision.json"
                 ),
+                "prompt381_approve_candidate_boundary": (
+                    "prompt381_approve_candidate_boundary.json"
+                ),
+                "prompt381_approve_candidate_contract": (
+                    "prompt381_approve_candidate_contract.json"
+                ),
             },
             "pr_units": manifest_units,
         }
@@ -223533,6 +223860,12 @@ class PlannedExecutionRunner:
         prompt380_prompt379_result_review_route_decision_path = (
             run_root / "prompt380_prompt379_result_review_route_decision.json"
         )
+        prompt381_approve_candidate_boundary_path = (
+            run_root / "prompt381_approve_candidate_boundary.json"
+        )
+        prompt381_approve_candidate_contract_path = (
+            run_root / "prompt381_approve_candidate_contract.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -223777,6 +224110,16 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt380_prompt379_result_review_route_decision_payload,
+        }
+        prompt381_approve_candidate_boundary_payload = (
+            _build_prompt381_approve_candidate_boundary_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt381_approve_candidate_boundary_payload,
         }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
@@ -224529,6 +224872,18 @@ class PlannedExecutionRunner:
         manifest["prompt380_prompt379_result_review_route_decision_path"] = str(
             prompt380_prompt379_result_review_route_decision_path
         )
+        manifest["prompt381_approve_candidate_boundary_summary"] = dict(
+            prompt381_approve_candidate_boundary_payload
+        )
+        manifest["prompt381_approve_candidate_boundary_path"] = str(
+            prompt381_approve_candidate_boundary_path
+        )
+        manifest["prompt381_approve_candidate_contract_summary"] = dict(
+            prompt381_approve_candidate_boundary_payload
+        )
+        manifest["prompt381_approve_candidate_contract_path"] = str(
+            prompt381_approve_candidate_contract_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -224745,6 +225100,12 @@ class PlannedExecutionRunner:
         contract_summaries_by_role[
             "prompt380_prompt379_result_review_route_decision"
         ] = manifest.get("prompt380_prompt379_result_review_route_decision_summary")
+        contract_summaries_by_role["prompt381_approve_candidate_boundary"] = (
+            manifest.get("prompt381_approve_candidate_boundary_summary")
+        )
+        contract_summaries_by_role["prompt381_approve_candidate_contract"] = (
+            manifest.get("prompt381_approve_candidate_contract_summary")
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -224961,6 +225322,12 @@ class PlannedExecutionRunner:
         contract_paths_by_role[
             "prompt380_prompt379_result_review_route_decision"
         ] = manifest.get("prompt380_prompt379_result_review_route_decision_path")
+        contract_paths_by_role["prompt381_approve_candidate_boundary"] = (
+            manifest.get("prompt381_approve_candidate_boundary_path")
+        )
+        contract_paths_by_role["prompt381_approve_candidate_contract"] = (
+            manifest.get("prompt381_approve_candidate_contract_path")
+        )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -227891,6 +228258,131 @@ class PlannedExecutionRunner:
             "prompt380_active_blocked_reasons": _normalize_string_list(
                 prompt380_prompt379_result_review_route_decision_payload.get(
                     "prompt380_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt381_approve_candidate_boundary_status": _normalize_text(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_approve_candidate_boundary_status"
+                ),
+                default="blocked",
+            ),
+            "prompt381_prompt380_evidence_ready": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_prompt380_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt381_prompt380_route_decision": _normalize_text(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_prompt380_route_decision"
+                ),
+                default="blocked_retry_or_review",
+            ),
+            "prompt381_prompt380_approve_candidate": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_prompt380_approve_candidate",
+                    False,
+                )
+            ),
+            "prompt381_prompt379_execution_performed": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_prompt379_execution_performed",
+                    False,
+                )
+            ),
+            "prompt381_prompt379_returncode": (
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_prompt379_returncode"
+                )
+            ),
+            "prompt381_prompt379_returncode_classification": _normalize_text(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_prompt379_returncode_classification"
+                ),
+                default="not_run",
+            ),
+            "prompt381_prompt379_post_execution_tracked_diff_empty": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_prompt379_post_execution_tracked_diff_empty",
+                    False,
+                )
+            ),
+            "prompt381_prompt379_post_execution_changed_files": _normalize_string_list(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_prompt379_post_execution_changed_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt381_approve_candidate_ready": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_approve_candidate_ready",
+                    False,
+                )
+            ),
+            "prompt381_approve_candidate_contract_ready": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_approve_candidate_contract_ready",
+                    False,
+                )
+            ),
+            "prompt381_approve_commit_tag_allowed": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_approve_commit_tag_allowed",
+                    False,
+                )
+            ),
+            "prompt381_approve_commit_tag_performed": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_approve_commit_tag_performed",
+                    False,
+                )
+            ),
+            "prompt381_git_mutation_allowed": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_git_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt381_git_mutation_performed": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt381_remote_mutation_allowed": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt381_remote_mutation_performed": bool(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt381_next_action": _normalize_text(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_next_action"
+                ),
+                default="wait_for_prompt380_approve_candidate_route",
+            ),
+            "prompt381_authoritative_next_action": _normalize_text(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_authoritative_next_action"
+                ),
+                default="wait_for_prompt380_approve_candidate_route",
+            ),
+            "prompt381_active_blocked_reason": _normalize_text(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt381_active_blocked_reasons": _normalize_string_list(
+                prompt381_approve_candidate_boundary_payload.get(
+                    "prompt381_active_blocked_reasons"
                 ),
                 sort_items=False,
             ),
