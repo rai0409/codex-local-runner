@@ -3697,6 +3697,7 @@ _PROMPT380_SCHEMA_VERSION = "prompt380_prompt379_result_review_route_decision_v1
 _PROMPT381_SCHEMA_VERSION = "prompt381_approve_candidate_boundary_v1"
 _PROMPT382_SCHEMA_VERSION = "prompt382_approve_commit_tag_execution_gate_v1"
 _PROMPT383_SCHEMA_VERSION = "prompt383_explicit_approve_commit_tag_execution_v1"
+_PROMPT384_SCHEMA_VERSION = "prompt384_commit_tag_reconciliation_success_cycle_closure_v1"
 _PROMPT382_COMMIT_MESSAGE = "Add Prompt382 approve commit tag execution gate"
 _PROMPT382_TAG_NAME = "prompt382-approve-commit-tag-execution-gate"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
@@ -4152,6 +4153,42 @@ _PROMPT383_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt383_next_action",
     "prompt383_active_blocked_reason",
     "prompt383_active_blocked_reasons",
+)
+_PROMPT384_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt384_commit_tag_reconciliation_status",
+    "prompt384_prompt383_evidence_ready",
+    "prompt384_prompt383_execution_performed",
+    "prompt384_prompt383_git_add_performed",
+    "prompt384_prompt383_git_commit_performed",
+    "prompt384_prompt383_git_tag_performed",
+    "prompt384_prompt383_remote_mutation_performed",
+    "prompt384_prompt383_returncode_classification",
+    "prompt384_prompt383_commit_message",
+    "prompt384_prompt383_tag_name",
+    "prompt384_prompt383_committed_files",
+    "prompt384_prompt383_receipt_path",
+    "prompt384_reconciliation_attempted",
+    "prompt384_reconciliation_performed",
+    "prompt384_current_head",
+    "prompt384_expected_tag_name",
+    "prompt384_tag_exists",
+    "prompt384_tag_points_at_head",
+    "prompt384_worktree_tracked_clean",
+    "prompt384_index_clean",
+    "prompt384_committed_files",
+    "prompt384_committed_files_non_empty",
+    "prompt384_committed_files_match_prompt383",
+    "prompt384_remote_mutation_absent",
+    "prompt384_success_cycle_closure_ready",
+    "prompt384_success_cycle_closed",
+    "prompt384_reconciliation_reasons",
+    "prompt384_reconciliation_blocked_reasons",
+    "prompt384_next_action",
+    "prompt384_authoritative_next_action",
+    "prompt384_active_blocked_reason",
+    "prompt384_active_blocked_reasons",
+    "prompt384_reconciliation_path",
+    "prompt384_success_cycle_closure_path",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -6016,6 +6053,23 @@ def _merge_prompt383_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT383_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt384_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt384_commit_tag_reconciliation_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt384_commit_tag_reconciliation_state)
+        if isinstance(prompt384_commit_tag_reconciliation_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT384_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -55511,6 +55565,565 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
     }
 
 
+def _build_prompt384_commit_tag_reconciliation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt384_reconciliation_path = (
+        artifact_root / "prompt384_commit_tag_reconciliation.json"
+    )
+    prompt384_success_cycle_closure_path = (
+        artifact_root / "prompt384_success_cycle_closure.json"
+    )
+    prompt383_gate_path = (
+        artifact_root / "prompt383_explicit_approve_commit_tag_execution_gate.json"
+    )
+    prompt383_receipt_path = (
+        artifact_root / "prompt383_explicit_approve_commit_tag_execution_receipt.json"
+    )
+    run_state = dict(run_state_payload or {})
+    normalized_repo_path = _normalize_text(execution_repo_path, default="")
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt383_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt383_explicit_approve_commit_tag_execution_status": _normalize_text(
+                source.get("prompt383_explicit_approve_commit_tag_execution_status"),
+                default="",
+            ),
+            "prompt383_prompt382_approved_paths": _normalize_string_list(
+                source.get("prompt383_prompt382_approved_paths"),
+                sort_items=False,
+            ),
+            "prompt383_execution_performed": _prompt357_as_boolish(
+                source.get("prompt383_execution_performed"),
+                default=False,
+            ),
+            "prompt383_git_add_performed": _prompt357_as_boolish(
+                source.get("prompt383_git_add_performed"),
+                default=False,
+            ),
+            "prompt383_git_commit_performed": _prompt357_as_boolish(
+                source.get("prompt383_git_commit_performed"),
+                default=False,
+            ),
+            "prompt383_git_tag_performed": _prompt357_as_boolish(
+                source.get("prompt383_git_tag_performed"),
+                default=False,
+            ),
+            "prompt383_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt383_remote_mutation_performed"),
+                default=False,
+            ),
+            "prompt383_commit_message": _normalize_text(
+                source.get("prompt383_commit_message"),
+                default="",
+            ),
+            "prompt383_tag_name": _normalize_text(
+                source.get("prompt383_tag_name"),
+                default="",
+            ),
+            "prompt383_committed_files": _normalize_string_list(
+                source.get("prompt383_committed_files"),
+                sort_items=False,
+            ),
+            "prompt383_returncode_classification": _normalize_text(
+                source.get("prompt383_returncode_classification"),
+                default="not_run",
+            ),
+            "prompt383_receipt_path": _normalize_text(
+                source.get("prompt383_receipt_path"),
+                default="",
+            ),
+            "prompt383_next_action": _normalize_text(
+                source.get("prompt383_next_action"),
+                default="",
+            ),
+            "prompt383_active_blocked_reason": _normalize_text(
+                source.get("prompt383_active_blocked_reason"),
+                default="",
+            ),
+            "prompt383_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt383_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _has_prompt383_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        required_keys = (
+            "prompt383_explicit_approve_commit_tag_execution_status",
+            "prompt383_prompt382_approved_paths",
+            "prompt383_execution_performed",
+            "prompt383_git_add_performed",
+            "prompt383_git_commit_performed",
+            "prompt383_git_tag_performed",
+            "prompt383_remote_mutation_performed",
+            "prompt383_commit_message",
+            "prompt383_tag_name",
+            "prompt383_committed_files",
+            "prompt383_returncode_classification",
+            "prompt383_receipt_path",
+            "prompt383_next_action",
+            "prompt383_active_blocked_reason",
+            "prompt383_active_blocked_reasons",
+        )
+        return all(key in raw_payload for key in required_keys)
+
+    def _resolve_prompt383_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt383_evidence(run_state):
+            return _normalize_prompt383_surface(run_state), ""
+
+        prompt383_gate_payload = _read_json_object_if_exists(prompt383_gate_path)
+        if _has_prompt383_evidence(prompt383_gate_payload):
+            return _normalize_prompt383_surface(prompt383_gate_payload), str(
+                prompt383_gate_path
+            )
+
+        prompt383_receipt_payload = _read_json_object_if_exists(prompt383_receipt_path)
+        if _has_prompt383_evidence(prompt383_receipt_payload):
+            return _normalize_prompt383_surface(prompt383_receipt_payload), str(
+                prompt383_receipt_path
+            )
+
+        return _normalize_prompt383_surface(run_state), ""
+
+    def _run_read_only_git_command(
+        repo_root: Path,
+        argv: list[str],
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            argv,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            shell=False,
+        )
+
+    def _normalize_git_name_only_output(stdout: str) -> list[str]:
+        paths: list[str] = []
+        seen: set[str] = set()
+        for line in stdout.splitlines():
+            normalized = _normalize_text(line, default="").replace("\\", "/")
+            if normalized.startswith("./"):
+                normalized = normalized[2:]
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            paths.append(normalized)
+        return paths
+
+    prompt383_surface, prompt383_source_path = _resolve_prompt383_surface()
+    prompt384_prompt383_evidence_ready = bool(
+        prompt383_source_path or _has_prompt383_evidence(run_state)
+    )
+    prompt384_prompt383_execution_performed = bool(
+        prompt383_surface.get("prompt383_execution_performed", False)
+    )
+    prompt384_prompt383_git_add_performed = bool(
+        prompt383_surface.get("prompt383_git_add_performed", False)
+    )
+    prompt384_prompt383_git_commit_performed = bool(
+        prompt383_surface.get("prompt383_git_commit_performed", False)
+    )
+    prompt384_prompt383_git_tag_performed = bool(
+        prompt383_surface.get("prompt383_git_tag_performed", False)
+    )
+    prompt384_prompt383_remote_mutation_performed = bool(
+        prompt383_surface.get("prompt383_remote_mutation_performed", False)
+    )
+    prompt384_prompt383_returncode_classification = _normalize_text(
+        prompt383_surface.get("prompt383_returncode_classification"),
+        default="not_run",
+    )
+    prompt384_prompt383_commit_message = _normalize_text(
+        prompt383_surface.get("prompt383_commit_message"),
+        default="",
+    )
+    prompt384_prompt383_tag_name = _normalize_text(
+        prompt383_surface.get("prompt383_tag_name"),
+        default="",
+    )
+    prompt384_prompt383_committed_files = _normalize_string_list(
+        prompt383_surface.get("prompt383_committed_files"),
+        sort_items=False,
+    )
+    prompt384_prompt383_receipt_path = _normalize_text(
+        prompt383_surface.get("prompt383_receipt_path"),
+        default="",
+    )
+    prompt383_prompt382_approved_paths = _normalize_string_list(
+        prompt383_surface.get("prompt383_prompt382_approved_paths"),
+        sort_items=False,
+    )
+
+    prompt384_commit_tag_reconciliation_status = "blocked"
+    prompt384_reconciliation_attempted = False
+    prompt384_reconciliation_performed = False
+    prompt384_current_head = ""
+    prompt384_expected_tag_name = prompt384_prompt383_tag_name
+    prompt384_tag_exists = False
+    prompt384_tag_points_at_head = False
+    prompt384_worktree_tracked_clean = False
+    prompt384_index_clean = False
+    prompt384_committed_files: list[str] = []
+    prompt384_committed_files_non_empty = False
+    prompt384_committed_files_match_prompt383 = False
+    prompt384_remote_mutation_absent = not prompt384_prompt383_remote_mutation_performed
+    prompt384_success_cycle_closure_ready = False
+    prompt384_success_cycle_closed = False
+    prompt384_reconciliation_reasons: list[str] = []
+    prompt384_reconciliation_blocked_reasons: list[str] = []
+    prompt384_next_action = "wait_for_prompt383_commit_tag_execution"
+    prompt384_authoritative_next_action = prompt384_next_action
+
+    if not prompt384_prompt383_evidence_ready:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_evidence_missing",
+        )
+        prompt384_next_action = "wait_for_prompt383_execution_evidence"
+    elif not prompt384_prompt383_execution_performed:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_execution_not_performed",
+        )
+        prompt384_next_action = "wait_for_prompt383_commit_tag_execution"
+    elif not prompt384_prompt383_git_add_performed:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_git_add_not_performed",
+        )
+    elif not prompt384_prompt383_git_commit_performed:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_git_commit_not_performed",
+        )
+    elif not prompt384_prompt383_git_tag_performed:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_git_tag_not_performed",
+        )
+    elif prompt384_prompt383_remote_mutation_performed:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_remote_mutation_performed",
+        )
+        prompt384_next_action = "review_prompt383_remote_mutation_violation"
+    elif not prompt384_prompt383_commit_message:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_commit_message_missing",
+        )
+        prompt384_next_action = "repair_prompt383_commit_metadata"
+    elif not prompt384_prompt383_tag_name:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_tag_name_missing",
+        )
+        prompt384_next_action = "repair_prompt383_tag_metadata"
+    elif not prompt384_prompt383_receipt_path:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_receipt_path_missing",
+        )
+        prompt384_next_action = "repair_prompt383_receipt_metadata"
+    elif not prompt384_prompt383_committed_files:
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_committed_files_missing",
+        )
+        prompt384_next_action = "repair_prompt383_committed_files_metadata"
+    elif (
+        prompt384_prompt383_returncode_classification
+        and prompt384_prompt383_returncode_classification not in {"success", "not_run"}
+    ):
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_returncode_classification_not_success",
+        )
+        prompt384_next_action = "review_prompt383_failed_returncode_classification"
+    elif prompt384_prompt383_returncode_classification != "success":
+        _append_reason(
+            prompt384_reconciliation_blocked_reasons,
+            "prompt383_returncode_classification_not_success",
+        )
+        prompt384_next_action = "review_prompt383_failed_returncode_classification"
+    else:
+        prompt384_reconciliation_attempted = True
+        repo_root = Path(normalized_repo_path) if normalized_repo_path else None
+        if repo_root is None:
+            _append_reason(
+                prompt384_reconciliation_blocked_reasons,
+                "prompt384_execution_repo_path_missing",
+            )
+            prompt384_next_action = "repair_prompt384_execution_repo_path"
+        elif not repo_root.exists() or not repo_root.is_dir():
+            _append_reason(
+                prompt384_reconciliation_blocked_reasons,
+                "prompt384_execution_repo_path_not_ready",
+            )
+            prompt384_next_action = "repair_prompt384_execution_repo_path"
+        else:
+            head_result = _run_read_only_git_command(
+                repo_root,
+                ["git", "rev-parse", "--short", "HEAD"],
+            )
+            if head_result.returncode != 0:
+                _append_reason(
+                    prompt384_reconciliation_blocked_reasons,
+                    "prompt384_current_head_read_failed",
+                )
+            else:
+                prompt384_current_head = _normalize_text(
+                    head_result.stdout,
+                    default="",
+                )
+
+            tag_result = _run_read_only_git_command(
+                repo_root,
+                ["git", "rev-parse", prompt384_expected_tag_name],
+            )
+            prompt384_tag_exists = tag_result.returncode == 0
+            if not prompt384_tag_exists:
+                _append_reason(
+                    prompt384_reconciliation_blocked_reasons,
+                    "prompt384_expected_tag_missing",
+                )
+
+            tag_points_result = _run_read_only_git_command(
+                repo_root,
+                ["git", "tag", "--points-at", "HEAD"],
+            )
+            if tag_points_result.returncode != 0:
+                _append_reason(
+                    prompt384_reconciliation_blocked_reasons,
+                    "prompt384_head_tag_listing_failed",
+                )
+            else:
+                prompt384_tag_points_at_head = (
+                    prompt384_expected_tag_name in {
+                        line.strip()
+                        for line in (tag_points_result.stdout or "").splitlines()
+                        if line.strip()
+                    }
+                )
+                if not prompt384_tag_points_at_head:
+                    _append_reason(
+                        prompt384_reconciliation_blocked_reasons,
+                        "prompt384_tag_not_pointing_at_head",
+                    )
+
+            worktree_result = _run_read_only_git_command(
+                repo_root,
+                ["git", "diff", "--name-only"],
+            )
+            if worktree_result.returncode != 0:
+                _append_reason(
+                    prompt384_reconciliation_blocked_reasons,
+                    "prompt384_worktree_diff_read_failed",
+                )
+            else:
+                prompt384_worktree_tracked_clean = not _normalize_git_name_only_output(
+                    worktree_result.stdout
+                )
+                if not prompt384_worktree_tracked_clean:
+                    _append_reason(
+                        prompt384_reconciliation_blocked_reasons,
+                        "prompt384_worktree_tracked_not_clean",
+                    )
+
+            index_result = _run_read_only_git_command(
+                repo_root,
+                ["git", "diff", "--cached", "--name-only"],
+            )
+            if index_result.returncode != 0:
+                _append_reason(
+                    prompt384_reconciliation_blocked_reasons,
+                    "prompt384_index_diff_read_failed",
+                )
+            else:
+                prompt384_index_clean = not _normalize_git_name_only_output(
+                    index_result.stdout
+                )
+                if not prompt384_index_clean:
+                    _append_reason(
+                        prompt384_reconciliation_blocked_reasons,
+                        "prompt384_index_not_clean",
+                    )
+
+            if prompt384_current_head:
+                show_result = _run_read_only_git_command(
+                    repo_root,
+                    [
+                        "git",
+                        "show",
+                        "--name-only",
+                        "--format=",
+                        prompt384_current_head,
+                    ],
+                )
+                if show_result.returncode != 0:
+                    _append_reason(
+                        prompt384_reconciliation_blocked_reasons,
+                        "prompt384_committed_files_read_failed",
+                    )
+                else:
+                    prompt384_committed_files = _normalize_git_name_only_output(
+                        show_result.stdout
+                    )
+                    prompt384_committed_files_non_empty = bool(
+                        prompt384_committed_files
+                    )
+                    if not prompt384_committed_files_non_empty:
+                        _append_reason(
+                            prompt384_reconciliation_blocked_reasons,
+                            "prompt384_committed_files_empty",
+                        )
+            else:
+                _append_reason(
+                    prompt384_reconciliation_blocked_reasons,
+                    "prompt384_current_head_missing",
+                )
+
+            prompt384_committed_files_match_prompt383 = bool(
+                prompt384_committed_files_non_empty
+                and set(prompt384_committed_files)
+                == set(prompt384_prompt383_committed_files)
+                and (
+                    not prompt383_prompt382_approved_paths
+                    or set(prompt384_committed_files)
+                    == set(prompt383_prompt382_approved_paths)
+                )
+            )
+            if not prompt384_committed_files_match_prompt383:
+                _append_reason(
+                    prompt384_reconciliation_blocked_reasons,
+                    "prompt384_committed_files_mismatch_prompt383",
+                )
+
+            if not prompt384_remote_mutation_absent:
+                _append_reason(
+                    prompt384_reconciliation_blocked_reasons,
+                    "prompt383_remote_mutation_performed",
+                )
+
+        if not prompt384_reconciliation_blocked_reasons:
+            prompt384_commit_tag_reconciliation_status = "completed"
+            prompt384_reconciliation_performed = True
+            prompt384_success_cycle_closure_ready = True
+            prompt384_success_cycle_closed = True
+            prompt384_next_action = "prepare_success_path_next_cycle_handoff"
+            prompt384_authoritative_next_action = prompt384_next_action
+            prompt384_reconciliation_reasons = [
+                "prompt383_execution_evidence_verified",
+                "prompt384_current_head_verified",
+                "prompt384_tag_exists",
+                "prompt384_tag_points_at_head",
+                "prompt384_worktree_tracked_clean",
+                "prompt384_index_clean",
+                "prompt384_committed_files_verified",
+                "prompt384_remote_mutation_absent",
+                "prompt384_success_cycle_closed",
+            ]
+        elif prompt384_next_action == "wait_for_prompt383_commit_tag_execution":
+            prompt384_next_action = "review_prompt384_commit_tag_reconciliation_blockers"
+
+    prompt384_authoritative_next_action = prompt384_next_action
+    prompt384_active_blocked_reason = (
+        prompt384_reconciliation_blocked_reasons[0]
+        if prompt384_reconciliation_blocked_reasons
+        else ""
+    )
+    prompt384_active_blocked_reasons = list(prompt384_reconciliation_blocked_reasons)
+
+    prompt384_payload: dict[str, Any] = {
+        "prompt384_schema_version": _PROMPT384_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt384",
+        "prompt384_prompt383_source_path": prompt383_source_path,
+        "prompt384_commit_tag_reconciliation_status": (
+            prompt384_commit_tag_reconciliation_status
+        ),
+        "prompt384_prompt383_evidence_ready": prompt384_prompt383_evidence_ready,
+        "prompt384_prompt383_execution_performed": (
+            prompt384_prompt383_execution_performed
+        ),
+        "prompt384_prompt383_git_add_performed": (
+            prompt384_prompt383_git_add_performed
+        ),
+        "prompt384_prompt383_git_commit_performed": (
+            prompt384_prompt383_git_commit_performed
+        ),
+        "prompt384_prompt383_git_tag_performed": (
+            prompt384_prompt383_git_tag_performed
+        ),
+        "prompt384_prompt383_remote_mutation_performed": (
+            prompt384_prompt383_remote_mutation_performed
+        ),
+        "prompt384_prompt383_returncode_classification": (
+            prompt384_prompt383_returncode_classification
+        ),
+        "prompt384_prompt383_commit_message": prompt384_prompt383_commit_message,
+        "prompt384_prompt383_tag_name": prompt384_prompt383_tag_name,
+        "prompt384_prompt383_committed_files": list(
+            prompt384_prompt383_committed_files
+        ),
+        "prompt384_prompt383_receipt_path": prompt384_prompt383_receipt_path,
+        "prompt384_reconciliation_attempted": prompt384_reconciliation_attempted,
+        "prompt384_reconciliation_performed": prompt384_reconciliation_performed,
+        "prompt384_current_head": prompt384_current_head,
+        "prompt384_expected_tag_name": prompt384_expected_tag_name,
+        "prompt384_tag_exists": prompt384_tag_exists,
+        "prompt384_tag_points_at_head": prompt384_tag_points_at_head,
+        "prompt384_worktree_tracked_clean": prompt384_worktree_tracked_clean,
+        "prompt384_index_clean": prompt384_index_clean,
+        "prompt384_committed_files": list(prompt384_committed_files),
+        "prompt384_committed_files_non_empty": prompt384_committed_files_non_empty,
+        "prompt384_committed_files_match_prompt383": (
+            prompt384_committed_files_match_prompt383
+        ),
+        "prompt384_remote_mutation_absent": prompt384_remote_mutation_absent,
+        "prompt384_success_cycle_closure_ready": (
+            prompt384_success_cycle_closure_ready
+        ),
+        "prompt384_success_cycle_closed": prompt384_success_cycle_closed,
+        "prompt384_reconciliation_reasons": list(prompt384_reconciliation_reasons),
+        "prompt384_reconciliation_blocked_reasons": list(
+            prompt384_reconciliation_blocked_reasons
+        ),
+        "prompt384_next_action": prompt384_next_action,
+        "prompt384_authoritative_next_action": (
+            prompt384_authoritative_next_action
+        ),
+        "prompt384_active_blocked_reason": prompt384_active_blocked_reason,
+        "prompt384_active_blocked_reasons": list(prompt384_active_blocked_reasons),
+        "prompt384_reconciliation_path": str(prompt384_reconciliation_path),
+        "prompt384_success_cycle_closure_path": str(
+            prompt384_success_cycle_closure_path
+        ),
+    }
+
+    prompt384_reconciliation_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt384_reconciliation_path, prompt384_payload)
+    _write_json(prompt384_success_cycle_closure_path, prompt384_payload)
+    return {
+        key: value
+        for key, value in prompt384_payload.items()
+        if key.startswith("prompt384_")
+    }
+
+
 def _merge_prompt376_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -55755,6 +56368,72 @@ def _merge_prompt383_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt383_next_action"
             if _normalize_text(prompt383.get("prompt383_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt384_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt384_commit_tag_reconciliation_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt384 = (
+        dict(prompt384_commit_tag_reconciliation_payload)
+        if isinstance(prompt384_commit_tag_reconciliation_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT384_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt384 and prompt384.get(key) is not None:
+            payload[key] = prompt384.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt384_commit_tag_reconciliation_status"
+            if _normalize_text(
+                prompt384.get("prompt384_commit_tag_reconciliation_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt384_prompt383_evidence_ready"
+            if bool(prompt384.get("prompt384_prompt383_evidence_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt384_reconciliation_attempted"
+            if bool(prompt384.get("prompt384_reconciliation_attempted", False))
+            else "",
+            "approved_restart_execution_contract.prompt384_reconciliation_performed"
+            if bool(prompt384.get("prompt384_reconciliation_performed", False))
+            else "",
+            "approved_restart_execution_contract.prompt384_tag_points_at_head"
+            if bool(prompt384.get("prompt384_tag_points_at_head", False))
+            else "",
+            "approved_restart_execution_contract.prompt384_worktree_tracked_clean"
+            if bool(prompt384.get("prompt384_worktree_tracked_clean", False))
+            else "",
+            "approved_restart_execution_contract.prompt384_index_clean"
+            if bool(prompt384.get("prompt384_index_clean", False))
+            else "",
+            "approved_restart_execution_contract.prompt384_committed_files_match_prompt383"
+            if bool(
+                prompt384.get("prompt384_committed_files_match_prompt383", False)
+            )
+            else "",
+            "approved_restart_execution_contract.prompt384_success_cycle_closed"
+            if bool(prompt384.get("prompt384_success_cycle_closed", False))
+            else "",
+            "approved_restart_execution_contract.prompt384_next_action"
+            if _normalize_text(prompt384.get("prompt384_next_action"), default="")
             else "",
         ]
     )
@@ -225220,6 +225899,12 @@ class PlannedExecutionRunner:
         prompt383_explicit_approve_commit_tag_execution_stderr_path = (
             run_root / "prompt383_explicit_approve_commit_tag_execution_stderr.txt"
         )
+        prompt384_commit_tag_reconciliation_path = (
+            run_root / "prompt384_commit_tag_reconciliation.json"
+        )
+        prompt384_success_cycle_closure_path = (
+            run_root / "prompt384_success_cycle_closure.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -225502,6 +226187,17 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt383_explicit_approve_commit_tag_execution_payload,
         }
+        prompt384_commit_tag_reconciliation_payload = (
+            _build_prompt384_commit_tag_reconciliation_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt384_commit_tag_reconciliation_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -225625,6 +226321,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt383_explicit_approve_commit_tag_execution_state=(
                     prompt383_explicit_approve_commit_tag_execution_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt384_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt384_commit_tag_reconciliation_state=(
+                    prompt384_commit_tag_reconciliation_payload
                 ),
             )
         )
@@ -225783,6 +226487,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt383_explicit_approve_commit_tag_execution_payload=(
                     prompt383_explicit_approve_commit_tag_execution_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt384_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt384_commit_tag_reconciliation_payload=(
+                    prompt384_commit_tag_reconciliation_payload
                 ),
             )
         )
@@ -226313,6 +227027,18 @@ class PlannedExecutionRunner:
         manifest["prompt383_explicit_approve_commit_tag_execution_stderr_path"] = str(
             prompt383_explicit_approve_commit_tag_execution_stderr_path
         )
+        manifest["prompt384_commit_tag_reconciliation_summary"] = dict(
+            prompt384_commit_tag_reconciliation_payload
+        )
+        manifest["prompt384_commit_tag_reconciliation_path"] = str(
+            prompt384_commit_tag_reconciliation_path
+        )
+        manifest["prompt384_success_cycle_closure_summary"] = dict(
+            prompt384_commit_tag_reconciliation_payload
+        )
+        manifest["prompt384_success_cycle_closure_path"] = str(
+            prompt384_success_cycle_closure_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -226547,6 +227273,12 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt383_explicit_approve_commit_tag_execution_receipt"] = (
             manifest.get("prompt383_explicit_approve_commit_tag_execution_receipt_summary")
         )
+        contract_summaries_by_role["prompt384_commit_tag_reconciliation"] = (
+            manifest.get("prompt384_commit_tag_reconciliation_summary")
+        )
+        contract_summaries_by_role["prompt384_success_cycle_closure"] = (
+            manifest.get("prompt384_success_cycle_closure_summary")
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -226780,6 +227512,12 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["prompt383_explicit_approve_commit_tag_execution_receipt"] = (
             manifest.get("prompt383_explicit_approve_commit_tag_execution_receipt_path")
+        )
+        contract_paths_by_role["prompt384_commit_tag_reconciliation"] = (
+            manifest.get("prompt384_commit_tag_reconciliation_path")
+        )
+        contract_paths_by_role["prompt384_success_cycle_closure"] = (
+            manifest.get("prompt384_success_cycle_closure_path")
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -230249,6 +230987,210 @@ class PlannedExecutionRunner:
                     "prompt383_active_blocked_reasons"
                 ),
                 sort_items=False,
+            ),
+            "prompt384_commit_tag_reconciliation_status": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_commit_tag_reconciliation_status"
+                ),
+                default="blocked",
+            ),
+            "prompt384_prompt383_evidence_ready": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt384_prompt383_execution_performed": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_execution_performed",
+                    False,
+                )
+            ),
+            "prompt384_prompt383_git_add_performed": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_git_add_performed",
+                    False,
+                )
+            ),
+            "prompt384_prompt383_git_commit_performed": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_git_commit_performed",
+                    False,
+                )
+            ),
+            "prompt384_prompt383_git_tag_performed": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_git_tag_performed",
+                    False,
+                )
+            ),
+            "prompt384_prompt383_remote_mutation_performed": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt384_prompt383_returncode_classification": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_returncode_classification"
+                ),
+                default="not_run",
+            ),
+            "prompt384_prompt383_commit_message": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_commit_message"
+                ),
+                default="",
+            ),
+            "prompt384_prompt383_tag_name": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_tag_name"
+                ),
+                default="",
+            ),
+            "prompt384_prompt383_committed_files": _normalize_string_list(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_committed_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt384_prompt383_receipt_path": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_prompt383_receipt_path"
+                ),
+                default="",
+            ),
+            "prompt384_reconciliation_attempted": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_reconciliation_attempted",
+                    False,
+                )
+            ),
+            "prompt384_reconciliation_performed": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_reconciliation_performed",
+                    False,
+                )
+            ),
+            "prompt384_current_head": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_current_head"
+                ),
+                default="",
+            ),
+            "prompt384_expected_tag_name": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_expected_tag_name"
+                ),
+                default="",
+            ),
+            "prompt384_tag_exists": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_tag_exists",
+                    False,
+                )
+            ),
+            "prompt384_tag_points_at_head": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_tag_points_at_head",
+                    False,
+                )
+            ),
+            "prompt384_worktree_tracked_clean": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_worktree_tracked_clean",
+                    False,
+                )
+            ),
+            "prompt384_index_clean": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_index_clean",
+                    False,
+                )
+            ),
+            "prompt384_committed_files": _normalize_string_list(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_committed_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt384_committed_files_non_empty": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_committed_files_non_empty",
+                    False,
+                )
+            ),
+            "prompt384_committed_files_match_prompt383": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_committed_files_match_prompt383",
+                    False,
+                )
+            ),
+            "prompt384_remote_mutation_absent": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_remote_mutation_absent",
+                    False,
+                )
+            ),
+            "prompt384_success_cycle_closure_ready": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_success_cycle_closure_ready",
+                    False,
+                )
+            ),
+            "prompt384_success_cycle_closed": bool(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_success_cycle_closed",
+                    False,
+                )
+            ),
+            "prompt384_reconciliation_reasons": _normalize_string_list(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_reconciliation_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt384_reconciliation_blocked_reasons": _normalize_string_list(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_reconciliation_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt384_next_action": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_next_action"
+                ),
+                default="wait_for_prompt383_commit_tag_execution",
+            ),
+            "prompt384_authoritative_next_action": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_authoritative_next_action"
+                ),
+                default="wait_for_prompt383_commit_tag_execution",
+            ),
+            "prompt384_active_blocked_reason": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt384_active_blocked_reasons": _normalize_string_list(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt384_reconciliation_path": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_reconciliation_path"
+                ),
+                default="",
+            ),
+            "prompt384_success_cycle_closure_path": _normalize_text(
+                prompt384_commit_tag_reconciliation_payload.get(
+                    "prompt384_success_cycle_closure_path"
+                ),
+                default="",
             ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(
