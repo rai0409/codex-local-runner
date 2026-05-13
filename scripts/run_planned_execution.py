@@ -636,6 +636,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Explicitly confirm Prompt373 live Codex execution",
     )
+    parser.add_argument(
+        "--prompt378-generated-prompt-path",
+        default=None,
+        help="Optional file path for the ChatGPT-generated Prompt consumed by Prompt378 intake",
+    )
     parser.add_argument("--stop-on-failure", action="store_true", default=True, help="Stop when a unit fails")
     parser.add_argument("--continue-on-failure", action="store_true", help="Continue processing units after failures")
     parser.add_argument("--json", action="store_true", dest="as_json")
@@ -710,6 +715,7 @@ def main(argv: list[str] | None = None) -> int:
             execution_repo_path=str(Path(args.repo_path).resolve()) if args.repo_path else None,
             prompt373_live_execution_requested=bool(args.prompt373_live_execution_requested),
             prompt373_live_execution_confirmed=bool(args.prompt373_live_execution_confirmed),
+            prompt378_generated_prompt_path=args.prompt378_generated_prompt_path,
         )
         manifest = _refresh_result_accounting_surfaces(
             manifest=manifest,

@@ -4069,6 +4069,7 @@ _PROMPT378_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt378_next_cycle_index",
     "prompt378_max_cycles",
     "prompt378_success_path_only",
+    "prompt378_generated_prompt_input_path",
     "prompt378_generated_prompt_supplied",
     "prompt378_generated_prompt_ready",
     "prompt378_generated_prompt_path",
@@ -51884,6 +51885,7 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
     run_root: Path | None = None,
     retry_context: Mapping[str, Any] | None = None,
     current_prompt377_source_path: str = "",
+    prompt378_generated_prompt_path: str = "",
 ) -> dict[str, Any]:
     artifact_root = run_root if run_root is not None else Path(".")
     prompt378_intake_path = (
@@ -52337,10 +52339,10 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             merged.update(retry_payload)
         return merged
 
-    def _read_supplied_prompt_text(path_text: str) -> tuple[str, str]:
+    def _read_supplied_prompt_text(path_text: str) -> tuple[str, str, str]:
         normalized_path = _normalize_text(path_text, default="")
         if not normalized_path:
-            return "", ""
+            return "", "", ""
         candidate_path = Path(normalized_path).expanduser()
         if not candidate_path.is_absolute():
             candidate_path = Path.cwd() / candidate_path
@@ -52348,14 +52350,22 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             resolved_path = candidate_path.resolve()
         except OSError:
             resolved_path = candidate_path
-        if not resolved_path.exists() or not resolved_path.is_file():
-            return "", str(resolved_path)
+        resolved_path_text = str(resolved_path)
+        if not resolved_path.exists():
+            return "", resolved_path_text, "chatgpt_generated_prompt_input_path_not_found"
+        if not resolved_path.is_file():
+            return "", resolved_path_text, "chatgpt_generated_prompt_input_path_not_file"
         try:
-            return _normalize_multiline_text(
+            prompt_text = _normalize_multiline_text(
                 resolved_path.read_text(encoding="utf-8")
-            ), str(resolved_path)
-        except (OSError, UnicodeDecodeError):
-            return "", str(resolved_path)
+            )
+        except UnicodeDecodeError:
+            return "", resolved_path_text, "chatgpt_generated_prompt_input_path_not_utf8_text"
+        except OSError:
+            return "", resolved_path_text, "chatgpt_generated_prompt_input_path_unreadable"
+        if not prompt_text.strip():
+            return prompt_text, resolved_path_text, "chatgpt_generated_prompt_input_path_empty"
+        return prompt_text, resolved_path_text, ""
 
     def _persist_generated_prompt(prompt_text: str) -> tuple[str, str]:
         normalized_prompt = _normalize_multiline_text(prompt_text)
@@ -52529,6 +52539,7 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
         status: str,
         prompt377_surface: Mapping[str, Any],
         prompt377_evidence_ready: bool,
+        generated_prompt_input_path: str,
         generated_prompt_supplied: bool,
         generated_prompt_ready: bool,
         generated_prompt_path: str,
@@ -52578,6 +52589,10 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             ),
             "prompt378_success_path_only": bool(
                 prompt377_surface.get("prompt377_success_path_only", False)
+            ),
+            "prompt378_generated_prompt_input_path": _normalize_text(
+                generated_prompt_input_path,
+                default="",
             ),
             "prompt378_generated_prompt_supplied": bool(generated_prompt_supplied),
             "prompt378_generated_prompt_ready": bool(generated_prompt_ready),
@@ -52649,20 +52664,11 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
     )
 
     input_surface = _coalesce_generated_prompt_inputs()
-    supplied_prompt_body = _normalize_multiline_text(
-        input_surface.get("chatgpt_generated_prompt_body")
-        if "chatgpt_generated_prompt_body" in input_surface
-        else (
-            input_surface.get("generated_prompt_body")
-            if "generated_prompt_body" in input_surface
-            else (
-                input_surface.get("chatgpt_generated_prompt_text")
-                if "chatgpt_generated_prompt_text" in input_surface
-                else input_surface.get("generated_prompt_text")
-            )
-        )
+    cli_supplied_prompt_input_path = _normalize_text(
+        prompt378_generated_prompt_path,
+        default="",
     )
-    supplied_prompt_input_path = _normalize_text(
+    retry_context_supplied_prompt_input_path = _normalize_text(
         input_surface.get("chatgpt_generated_prompt_path")
         if "chatgpt_generated_prompt_path" in input_surface
         else (
@@ -52672,13 +52678,35 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
         ),
         default="",
     )
+    supplied_prompt_input_path = (
+        cli_supplied_prompt_input_path or retry_context_supplied_prompt_input_path
+    )
+    supplied_prompt_body = (
+        ""
+        if supplied_prompt_input_path
+        else _normalize_multiline_text(
+            input_surface.get("chatgpt_generated_prompt_body")
+            if "chatgpt_generated_prompt_body" in input_surface
+            else (
+                input_surface.get("generated_prompt_body")
+                if "generated_prompt_body" in input_surface
+                else (
+                    input_surface.get("chatgpt_generated_prompt_text")
+                    if "chatgpt_generated_prompt_text" in input_surface
+                    else input_surface.get("generated_prompt_text")
+                )
+            )
+        )
+    )
     generated_prompt_supplied = bool(supplied_prompt_body.strip() or supplied_prompt_input_path)
     generated_prompt_source_text = supplied_prompt_body
     resolved_supplied_prompt_path = ""
+    supplied_prompt_path_error = ""
     if not generated_prompt_source_text.strip() and supplied_prompt_input_path:
         (
             generated_prompt_source_text,
             resolved_supplied_prompt_path,
+            supplied_prompt_path_error,
         ) = _read_supplied_prompt_text(supplied_prompt_input_path)
 
     prompt377_validation_contract_payload = _read_json_object_if_exists(
@@ -52732,6 +52760,7 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             status="blocked",
             prompt377_surface=prompt377_surface,
             prompt377_evidence_ready=False,
+            generated_prompt_input_path=supplied_prompt_input_path,
             generated_prompt_supplied=False,
             generated_prompt_ready=False,
             generated_prompt_path="",
@@ -52752,6 +52781,7 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             status="ready_for_generated_prompt",
             prompt377_surface=prompt377_surface,
             prompt377_evidence_ready=True,
+            generated_prompt_input_path=supplied_prompt_input_path,
             generated_prompt_supplied=False,
             generated_prompt_ready=False,
             generated_prompt_path="",
@@ -52764,11 +52794,9 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             blocked_reasons=prompt_validation_reasons,
         )
     else:
-        if not supplied_prompt_body.strip() and supplied_prompt_input_path and not generated_prompt_source_text:
-            _append_reason(
-                prompt_validation_reasons,
-                "chatgpt_generated_prompt_supplied_path_unreadable_or_missing",
-            )
+        generated_prompt_state_path = resolved_supplied_prompt_path
+        if supplied_prompt_input_path and supplied_prompt_path_error:
+            _append_reason(prompt_validation_reasons, supplied_prompt_path_error)
         if (
             normalized_generated_prompt_target_prompt_id
             and expected_target_prompt_id
@@ -52789,6 +52817,8 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             generated_prompt_checksum = hashlib.sha256(
                 generated_prompt_source_text.encode("utf-8")
             ).hexdigest()
+            if not generated_prompt_state_path:
+                generated_prompt_state_path = persisted_prompt_path
             prompt_validation_reasons.extend(
                 _validate_generated_prompt(
                     prompt_text=generated_prompt_source_text,
@@ -52800,9 +52830,10 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
                 status="blocked",
                 prompt377_surface=prompt377_surface,
                 prompt377_evidence_ready=True,
+                generated_prompt_input_path=supplied_prompt_input_path,
                 generated_prompt_supplied=True,
                 generated_prompt_ready=False,
-                generated_prompt_path=persisted_prompt_path,
+                generated_prompt_path=generated_prompt_state_path,
                 generated_prompt_content_length=generated_prompt_content_length,
                 generated_prompt_checksum=generated_prompt_checksum,
                 generated_prompt_validation_status="invalid",
@@ -52816,9 +52847,10 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
                 status="completed",
                 prompt377_surface=prompt377_surface,
                 prompt377_evidence_ready=True,
+                generated_prompt_input_path=supplied_prompt_input_path,
                 generated_prompt_supplied=True,
                 generated_prompt_ready=True,
-                generated_prompt_path=persisted_prompt_path,
+                generated_prompt_path=generated_prompt_state_path,
                 generated_prompt_content_length=generated_prompt_content_length,
                 generated_prompt_checksum=generated_prompt_checksum,
                 generated_prompt_validation_status="valid",
@@ -52890,7 +52922,16 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
         if generated_prompt_source_text
         else 0,
         "prompt378_generated_prompt_checksum_sha256": generated_prompt_checksum,
-        "prompt378_generated_prompt_input_mechanism": "retry_context",
+        "prompt378_generated_prompt_input_mechanism": (
+            "cli_path"
+            if cli_supplied_prompt_input_path
+            else (
+                "retry_context_path"
+                if retry_context_supplied_prompt_input_path
+                else ("retry_context_body" if supplied_prompt_body.strip() else "not_supplied")
+            )
+        ),
+        "prompt378_generated_prompt_cli_input_path": cli_supplied_prompt_input_path,
         "prompt378_generated_prompt_retry_context_keys_checked": [
             "chatgpt_generated_prompt_body",
             "generated_prompt_body",
@@ -219027,6 +219068,7 @@ class PlannedExecutionRunner:
         execution_repo_path: str | Path | None = None,
         prompt373_live_execution_requested: bool = False,
         prompt373_live_execution_confirmed: bool = False,
+        prompt378_generated_prompt_path: str | None = None,
     ) -> dict[str, Any]:
         artifacts_root = Path(artifacts_input_dir)
         output_root = Path(output_dir)
@@ -222778,6 +222820,10 @@ class PlannedExecutionRunner:
                 retry_context=effective_retry_context,
                 current_prompt377_source_path=str(
                     prompt377_chatgpt_prompt_generation_request_path
+                ),
+                prompt378_generated_prompt_path=_normalize_text(
+                    prompt378_generated_prompt_path,
+                    default="",
                 ),
             )
         )

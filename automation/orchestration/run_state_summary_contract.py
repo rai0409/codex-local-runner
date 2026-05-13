@@ -915,6 +915,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt378_next_cycle_index",
     "prompt378_max_cycles",
     "prompt378_success_path_only",
+    "prompt378_generated_prompt_input_path",
     "prompt378_generated_prompt_supplied",
     "prompt378_generated_prompt_ready",
     "prompt378_generated_prompt_path",
