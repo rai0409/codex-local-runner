@@ -3698,8 +3698,15 @@ _PROMPT381_SCHEMA_VERSION = "prompt381_approve_candidate_boundary_v1"
 _PROMPT382_SCHEMA_VERSION = "prompt382_approve_commit_tag_execution_gate_v1"
 _PROMPT383_SCHEMA_VERSION = "prompt383_explicit_approve_commit_tag_execution_v1"
 _PROMPT384_SCHEMA_VERSION = "prompt384_commit_tag_reconciliation_success_cycle_closure_v1"
+_PROMPT385_SCHEMA_VERSION = "prompt385_success_path_next_cycle_handoff_v1"
 _PROMPT382_COMMIT_MESSAGE = "Add Prompt382 approve commit tag execution gate"
 _PROMPT382_TAG_NAME = "prompt382-approve-commit-tag-execution-gate"
+_PROMPT385_GENERATED_PROMPT_INTAKE_METHOD = "prompt378_generated_prompt_path"
+_PROMPT385_GENERATED_PROMPT_EXPECTED_FLAG = "--prompt378-generated-prompt-path"
+_PROMPT385_GENERATED_PROMPT_EXPECTED_PATH_FIELD = (
+    "prompt378_generated_prompt_path"
+)
+_PROMPT385_NEXT_PROMPT_GENERATION_OWNER = "chatgpt"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -4189,6 +4196,46 @@ _PROMPT384_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt384_active_blocked_reasons",
     "prompt384_reconciliation_path",
     "prompt384_success_cycle_closure_path",
+)
+_PROMPT385_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt385_success_path_next_cycle_handoff_status",
+    "prompt385_prompt384_evidence_ready",
+    "prompt385_prompt384_reconciliation_status",
+    "prompt385_prompt384_success_cycle_closure_ready",
+    "prompt385_prompt384_success_cycle_closed",
+    "prompt385_prompt384_remote_mutation_absent",
+    "prompt385_previous_cycle_closed",
+    "prompt385_previous_cycle_commit",
+    "prompt385_previous_cycle_tag",
+    "prompt385_previous_cycle_committed_files",
+    "prompt385_current_cycle_index",
+    "prompt385_next_cycle_index",
+    "prompt385_max_cycles",
+    "prompt385_success_path_only",
+    "prompt385_next_cycle_handoff_ready",
+    "prompt385_next_cycle_contract_ready",
+    "prompt385_next_prompt_generation_request_ready",
+    "prompt385_generated_prompt_intake_expected",
+    "prompt385_generated_prompt_intake_method",
+    "prompt385_generated_prompt_expected_flag",
+    "prompt385_generated_prompt_expected_path_field",
+    "prompt385_next_prompt_generation_owner",
+    "prompt385_next_prompt_generation_context_ready",
+    "prompt385_next_prompt_generation_constraints_ready",
+    "prompt385_next_prompt_generation_request_path",
+    "prompt385_next_cycle_handoff_path",
+    "prompt385_next_cycle_contract_path",
+    "prompt385_remote_mutation_allowed",
+    "prompt385_remote_mutation_performed",
+    "prompt385_codex_execution_allowed",
+    "prompt385_codex_execution_attempted",
+    "prompt385_codex_execution_performed",
+    "prompt385_git_mutation_allowed",
+    "prompt385_git_mutation_performed",
+    "prompt385_next_action",
+    "prompt385_authoritative_next_action",
+    "prompt385_active_blocked_reason",
+    "prompt385_active_blocked_reasons",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -6070,6 +6117,23 @@ def _merge_prompt384_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT384_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt385_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt385_success_path_next_cycle_handoff_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt385_success_path_next_cycle_handoff_state)
+        if isinstance(prompt385_success_path_next_cycle_handoff_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT385_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -56124,6 +56188,493 @@ def _build_prompt384_commit_tag_reconciliation_state(
     }
 
 
+def _build_prompt385_success_path_next_cycle_handoff_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt385_handoff_path = (
+        artifact_root / "prompt385_success_path_next_cycle_handoff.json"
+    )
+    prompt385_contract_path = artifact_root / "prompt385_next_cycle_contract.json"
+    prompt385_request_path = (
+        artifact_root / "prompt385_next_prompt_generation_request.json"
+    )
+    prompt384_reconciliation_path = (
+        artifact_root / "prompt384_commit_tag_reconciliation.json"
+    )
+    prompt384_success_cycle_closure_path = (
+        artifact_root / "prompt384_success_cycle_closure.json"
+    )
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt384_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt384_commit_tag_reconciliation_status": _normalize_text(
+                source.get("prompt384_commit_tag_reconciliation_status"),
+                default="blocked",
+            ),
+            "prompt384_prompt383_evidence_ready": _prompt357_as_boolish(
+                source.get("prompt384_prompt383_evidence_ready"),
+                default=False,
+            ),
+            "prompt384_prompt383_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt384_prompt383_remote_mutation_performed"),
+                default=False,
+            ),
+            "prompt384_current_head": _normalize_text(
+                source.get("prompt384_current_head"),
+                default="",
+            ),
+            "prompt384_expected_tag_name": _normalize_text(
+                source.get("prompt384_expected_tag_name"),
+                default="",
+            ),
+            "prompt384_committed_files": _normalize_string_list(
+                source.get("prompt384_committed_files"),
+                sort_items=False,
+            ),
+            "prompt384_remote_mutation_absent": _prompt357_as_boolish(
+                source.get("prompt384_remote_mutation_absent"),
+                default=False,
+            ),
+            "prompt384_success_cycle_closure_ready": _prompt357_as_boolish(
+                source.get("prompt384_success_cycle_closure_ready"),
+                default=False,
+            ),
+            "prompt384_success_cycle_closed": _prompt357_as_boolish(
+                source.get("prompt384_success_cycle_closed"),
+                default=False,
+            ),
+            "prompt384_next_action": _normalize_text(
+                source.get("prompt384_next_action"),
+                default="wait_for_prompt383_commit_tag_execution",
+            ),
+            "prompt384_authoritative_next_action": _normalize_text(
+                source.get("prompt384_authoritative_next_action"),
+                default="wait_for_prompt383_commit_tag_execution",
+            ),
+            "prompt384_active_blocked_reason": _normalize_text(
+                source.get("prompt384_active_blocked_reason"),
+                default="",
+            ),
+            "prompt384_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt384_active_blocked_reasons"),
+                sort_items=False,
+            ),
+            "prompt384_reconciliation_path": _normalize_text(
+                source.get("prompt384_reconciliation_path"),
+                default="",
+            ),
+            "prompt384_success_cycle_closure_path": _normalize_text(
+                source.get("prompt384_success_cycle_closure_path"),
+                default="",
+            ),
+        }
+
+    def _has_prompt384_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        required_keys = (
+            "prompt384_commit_tag_reconciliation_status",
+            "prompt384_prompt383_evidence_ready",
+            "prompt384_prompt383_remote_mutation_performed",
+            "prompt384_current_head",
+            "prompt384_expected_tag_name",
+            "prompt384_committed_files",
+            "prompt384_remote_mutation_absent",
+            "prompt384_success_cycle_closure_ready",
+            "prompt384_success_cycle_closed",
+            "prompt384_next_action",
+            "prompt384_authoritative_next_action",
+            "prompt384_active_blocked_reason",
+            "prompt384_active_blocked_reasons",
+            "prompt384_reconciliation_path",
+            "prompt384_success_cycle_closure_path",
+        )
+        return all(key in raw_payload for key in required_keys)
+
+    def _resolve_prompt384_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt384_evidence(run_state):
+            return _normalize_prompt384_surface(run_state), ""
+
+        prompt384_success_cycle_closure_payload = _read_json_object_if_exists(
+            prompt384_success_cycle_closure_path
+        )
+        if _has_prompt384_evidence(prompt384_success_cycle_closure_payload):
+            return _normalize_prompt384_surface(prompt384_success_cycle_closure_payload), str(
+                prompt384_success_cycle_closure_path
+            )
+
+        prompt384_reconciliation_payload = _read_json_object_if_exists(
+            prompt384_reconciliation_path
+        )
+        if _has_prompt384_evidence(prompt384_reconciliation_payload):
+            return _normalize_prompt384_surface(prompt384_reconciliation_payload), str(
+                prompt384_reconciliation_path
+            )
+
+        return _normalize_prompt384_surface(run_state), ""
+
+    def _resolve_cycle_state() -> tuple[int, int, int]:
+        current_cycle_index = _as_non_negative_int(
+            run_state.get("prompt378_next_cycle_index"),
+            default=0,
+        )
+        if current_cycle_index <= 0:
+            current_cycle_index = _as_non_negative_int(
+                run_state.get("prompt377_next_cycle_index"),
+                default=0,
+            )
+        if current_cycle_index <= 0:
+            current_cycle_index = _as_non_negative_int(
+                run_state.get("prompt376_next_cycle_index"),
+                default=0,
+            )
+        if current_cycle_index <= 0:
+            current_cycle_index = _as_non_negative_int(
+                run_state.get(
+                    "project_browser_autonomous_multi_cycle_controller_current_cycle_index"
+                ),
+                default=0,
+            )
+        if current_cycle_index <= 0:
+            current_cycle_index = _as_non_negative_int(
+                run_state.get(
+                    "project_browser_autonomous_multi_cycle_controller_cycle_index"
+                ),
+                default=0,
+            )
+        if current_cycle_index <= 0:
+            current_cycle_index = _as_non_negative_int(
+                run_state.get("prompt371_cycle_index"),
+                default=1,
+            )
+        if current_cycle_index <= 0:
+            current_cycle_index = 1
+
+        max_cycles = _as_non_negative_int(
+            run_state.get("prompt378_max_cycles"),
+            default=0,
+        )
+        if max_cycles <= 0:
+            max_cycles = _as_non_negative_int(
+                run_state.get("prompt377_max_cycles"),
+                default=0,
+            )
+        if max_cycles <= 0:
+            max_cycles = _as_non_negative_int(
+                run_state.get("prompt376_max_cycles"),
+                default=0,
+            )
+        if max_cycles <= 0:
+            max_cycles = _as_non_negative_int(
+                run_state.get(
+                    "project_browser_autonomous_multi_cycle_controller_max_cycles_allowed"
+                ),
+                default=0,
+            )
+        if max_cycles <= 0:
+            max_cycles = _as_non_negative_int(
+                run_state.get(
+                    "project_browser_autonomous_multi_cycle_controller_max_cycles"
+                ),
+                default=0,
+            )
+        if max_cycles <= 0:
+            max_cycles = _as_non_negative_int(
+                run_state.get(
+                    "project_browser_autonomous_bounded_continuation_controller_max_cycles"
+                ),
+                default=_LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES,
+            )
+        if max_cycles <= 0:
+            max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+
+        next_cycle_index = current_cycle_index + 1
+        return current_cycle_index, next_cycle_index, max_cycles
+
+    prompt384_surface, prompt384_source_path = _resolve_prompt384_surface()
+    prompt385_prompt384_evidence_ready = bool(
+        prompt384_source_path or _has_prompt384_evidence(run_state)
+    )
+    prompt385_prompt384_reconciliation_status = _normalize_text(
+        prompt384_surface.get("prompt384_commit_tag_reconciliation_status"),
+        default="blocked",
+    )
+    prompt385_prompt384_success_cycle_closure_ready = bool(
+        prompt384_surface.get("prompt384_success_cycle_closure_ready", False)
+    )
+    prompt385_prompt384_success_cycle_closed = bool(
+        prompt384_surface.get("prompt384_success_cycle_closed", False)
+    )
+    prompt385_prompt384_remote_mutation_absent = bool(
+        prompt384_surface.get("prompt384_remote_mutation_absent", False)
+    )
+    prompt385_prompt384_remote_mutation_performed = bool(
+        prompt384_surface.get("prompt384_prompt383_remote_mutation_performed", False)
+    )
+    prompt385_previous_cycle_commit = _normalize_text(
+        prompt384_surface.get("prompt384_current_head"),
+        default="",
+    )
+    prompt385_previous_cycle_tag = _normalize_text(
+        prompt384_surface.get("prompt384_expected_tag_name"),
+        default="",
+    )
+    prompt385_previous_cycle_committed_files = _normalize_string_list(
+        prompt384_surface.get("prompt384_committed_files"),
+        sort_items=False,
+    )
+    prompt385_current_cycle_index, prompt385_next_cycle_index, prompt385_max_cycles = (
+        _resolve_cycle_state()
+    )
+    prompt385_success_path_next_cycle_handoff_status = "blocked"
+    prompt385_success_path_only = True
+    prompt385_previous_cycle_closed = bool(prompt385_prompt384_success_cycle_closed)
+    prompt385_next_cycle_handoff_ready = False
+    prompt385_next_cycle_contract_ready = False
+    prompt385_next_prompt_generation_request_ready = False
+    prompt385_generated_prompt_intake_expected = False
+    prompt385_next_prompt_generation_context_ready = False
+    prompt385_next_prompt_generation_constraints_ready = False
+    prompt385_remote_mutation_allowed = False
+    prompt385_remote_mutation_performed = False
+    prompt385_codex_execution_allowed = False
+    prompt385_codex_execution_attempted = False
+    prompt385_codex_execution_performed = False
+    prompt385_git_mutation_allowed = False
+    prompt385_git_mutation_performed = False
+    prompt385_next_action = "wait_for_prompt384_success_cycle_closure"
+    prompt385_authoritative_next_action = prompt385_next_action
+    prompt385_active_blocked_reasons: list[str] = []
+
+    if not prompt385_prompt384_evidence_ready:
+        _append_reason(prompt385_active_blocked_reasons, "prompt384_evidence_missing")
+    else:
+        if not prompt385_prompt384_success_cycle_closed:
+            _append_reason(
+                prompt385_active_blocked_reasons,
+                "prompt384_success_cycle_not_closed",
+            )
+        if not prompt385_prompt384_success_cycle_closure_ready:
+            _append_reason(
+                prompt385_active_blocked_reasons,
+                "prompt384_success_cycle_closure_not_ready",
+            )
+        if (
+            prompt385_prompt384_remote_mutation_performed
+            or not prompt385_prompt384_remote_mutation_absent
+        ):
+            _append_reason(
+                prompt385_active_blocked_reasons,
+                "prompt384_remote_mutation_detected",
+            )
+            prompt385_next_action = "review_prompt384_remote_mutation_violation"
+
+    if not prompt385_active_blocked_reasons:
+        prompt385_success_path_next_cycle_handoff_status = "completed"
+        prompt385_previous_cycle_closed = True
+        prompt385_next_cycle_handoff_ready = True
+        prompt385_next_cycle_contract_ready = True
+        prompt385_next_prompt_generation_request_ready = True
+        prompt385_generated_prompt_intake_expected = True
+        prompt385_next_prompt_generation_context_ready = True
+        prompt385_next_prompt_generation_constraints_ready = True
+        prompt385_next_action = "supply_generated_prompt_for_next_success_path_cycle"
+
+    prompt385_authoritative_next_action = prompt385_next_action
+    prompt385_active_blocked_reason = (
+        prompt385_active_blocked_reasons[0]
+        if prompt385_active_blocked_reasons
+        else ""
+    )
+    previous_cycle_summary = (
+        f"Previous success cycle closed locally at commit "
+        f"{prompt385_previous_cycle_commit or '<missing>'} with tag "
+        f"{prompt385_previous_cycle_tag or '<missing>'}; "
+        f"{len(prompt385_previous_cycle_committed_files)} committed file(s) were "
+        f"reconciled through Prompt384."
+    )
+
+    prompt385_state: dict[str, Any] = {
+        "prompt385_schema_version": _PROMPT385_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt385",
+        "prompt385_prompt384_source_path": prompt384_source_path,
+        "prompt385_success_path_next_cycle_handoff_status": (
+            prompt385_success_path_next_cycle_handoff_status
+        ),
+        "prompt385_prompt384_evidence_ready": prompt385_prompt384_evidence_ready,
+        "prompt385_prompt384_reconciliation_status": (
+            prompt385_prompt384_reconciliation_status
+        ),
+        "prompt385_prompt384_success_cycle_closure_ready": (
+            prompt385_prompt384_success_cycle_closure_ready
+        ),
+        "prompt385_prompt384_success_cycle_closed": (
+            prompt385_prompt384_success_cycle_closed
+        ),
+        "prompt385_prompt384_remote_mutation_absent": (
+            prompt385_prompt384_remote_mutation_absent
+        ),
+        "prompt385_previous_cycle_closed": prompt385_previous_cycle_closed,
+        "prompt385_previous_cycle_commit": prompt385_previous_cycle_commit,
+        "prompt385_previous_cycle_tag": prompt385_previous_cycle_tag,
+        "prompt385_previous_cycle_committed_files": list(
+            prompt385_previous_cycle_committed_files
+        ),
+        "prompt385_current_cycle_index": prompt385_current_cycle_index,
+        "prompt385_next_cycle_index": prompt385_next_cycle_index,
+        "prompt385_max_cycles": prompt385_max_cycles,
+        "prompt385_success_path_only": prompt385_success_path_only,
+        "prompt385_next_cycle_handoff_ready": prompt385_next_cycle_handoff_ready,
+        "prompt385_next_cycle_contract_ready": prompt385_next_cycle_contract_ready,
+        "prompt385_next_prompt_generation_request_ready": (
+            prompt385_next_prompt_generation_request_ready
+        ),
+        "prompt385_generated_prompt_intake_expected": (
+            prompt385_generated_prompt_intake_expected
+        ),
+        "prompt385_generated_prompt_intake_method": (
+            _PROMPT385_GENERATED_PROMPT_INTAKE_METHOD
+        ),
+        "prompt385_generated_prompt_expected_flag": (
+            _PROMPT385_GENERATED_PROMPT_EXPECTED_FLAG
+        ),
+        "prompt385_generated_prompt_expected_path_field": (
+            _PROMPT385_GENERATED_PROMPT_EXPECTED_PATH_FIELD
+        ),
+        "prompt385_next_prompt_generation_owner": (
+            _PROMPT385_NEXT_PROMPT_GENERATION_OWNER
+        ),
+        "prompt385_next_prompt_generation_context_ready": (
+            prompt385_next_prompt_generation_context_ready
+        ),
+        "prompt385_next_prompt_generation_constraints_ready": (
+            prompt385_next_prompt_generation_constraints_ready
+        ),
+        "prompt385_next_prompt_generation_request_path": str(prompt385_request_path),
+        "prompt385_next_cycle_handoff_path": str(prompt385_handoff_path),
+        "prompt385_next_cycle_contract_path": str(prompt385_contract_path),
+        "prompt385_remote_mutation_allowed": prompt385_remote_mutation_allowed,
+        "prompt385_remote_mutation_performed": prompt385_remote_mutation_performed,
+        "prompt385_codex_execution_allowed": prompt385_codex_execution_allowed,
+        "prompt385_codex_execution_attempted": prompt385_codex_execution_attempted,
+        "prompt385_codex_execution_performed": prompt385_codex_execution_performed,
+        "prompt385_git_mutation_allowed": prompt385_git_mutation_allowed,
+        "prompt385_git_mutation_performed": prompt385_git_mutation_performed,
+        "prompt385_next_action": prompt385_next_action,
+        "prompt385_authoritative_next_action": prompt385_authoritative_next_action,
+        "prompt385_active_blocked_reason": prompt385_active_blocked_reason,
+        "prompt385_active_blocked_reasons": list(prompt385_active_blocked_reasons),
+    }
+    prompt385_handoff_payload: dict[str, Any] = {
+        "local_only": True,
+        **prompt385_state,
+        "prompt385_previous_cycle_summary": previous_cycle_summary,
+        "prompt385_prompt384_reconciliation_path": _normalize_text(
+            prompt384_surface.get("prompt384_reconciliation_path"),
+            default=str(prompt384_reconciliation_path),
+        ),
+        "prompt385_prompt384_success_cycle_closure_path": _normalize_text(
+            prompt384_surface.get("prompt384_success_cycle_closure_path"),
+            default=str(prompt384_success_cycle_closure_path),
+        ),
+        "prompt385_generated_prompt_intake_contract": {
+            "generated_prompt_intake_expected": bool(
+                prompt385_generated_prompt_intake_expected
+            ),
+            "generated_prompt_intake_method": (
+                _PROMPT385_GENERATED_PROMPT_INTAKE_METHOD
+            ),
+            "generated_prompt_expected_flag": (
+                _PROMPT385_GENERATED_PROMPT_EXPECTED_FLAG
+            ),
+            "generated_prompt_expected_path_field": (
+                _PROMPT385_GENERATED_PROMPT_EXPECTED_PATH_FIELD
+            ),
+            "next_prompt_generation_owner": (
+                _PROMPT385_NEXT_PROMPT_GENERATION_OWNER
+            ),
+        },
+    }
+    prompt385_contract_payload: dict[str, Any] = {
+        "local_only": True,
+        **prompt385_state,
+        "contract_type": "success_path_next_cycle_contract",
+        "prompt385_previous_cycle_summary": previous_cycle_summary,
+        "prompt385_next_prompt_generation_owner_expected": (
+            _PROMPT385_NEXT_PROMPT_GENERATION_OWNER
+        ),
+        "prompt385_runner_generates_next_prompt_text": False,
+        "prompt385_chatgpt_generates_next_prompt_text": bool(
+            prompt385_next_prompt_generation_request_ready
+        ),
+        "prompt385_generated_prompt_intake_path": (
+            _PROMPT385_GENERATED_PROMPT_INTAKE_METHOD
+        ),
+        "prompt385_generated_prompt_intake_flag": (
+            _PROMPT385_GENERATED_PROMPT_EXPECTED_FLAG
+        ),
+        "prompt385_generated_prompt_intake_path_field": (
+            _PROMPT385_GENERATED_PROMPT_EXPECTED_PATH_FIELD
+        ),
+        "prompt385_remote_mutation_allowed": False,
+        "prompt385_git_mutation_allowed": False,
+        "prompt385_codex_execution_allowed": False,
+    }
+    prompt385_request_payload: dict[str, Any] = {
+        "request_status": (
+            "ready" if prompt385_next_prompt_generation_request_ready else "blocked"
+        ),
+        "request_owner": _PROMPT385_NEXT_PROMPT_GENERATION_OWNER,
+        "success_path_only": True,
+        "local_only": True,
+        "remote_mutation_allowed": False,
+        "failure_retry_required": False,
+        "rollback_required": False,
+        "next_cycle_index": prompt385_next_cycle_index,
+        "max_cycles": prompt385_max_cycles,
+        "previous_cycle_commit": prompt385_previous_cycle_commit,
+        "previous_cycle_tag": prompt385_previous_cycle_tag,
+        "previous_cycle_summary": previous_cycle_summary,
+        "required_next_prompt_output_kind": "generated_prompt_md",
+        "required_next_prompt_intake_flag": (
+            _PROMPT385_GENERATED_PROMPT_EXPECTED_FLAG
+        ),
+        "required_next_prompt_intake_path_field": (
+            _PROMPT385_GENERATED_PROMPT_EXPECTED_PATH_FIELD
+        ),
+        "next_prompt_constraints": [
+            "no docs unless explicitly required",
+            "no tests unless explicitly required",
+            "keep diff minimal and localized",
+            "preserve local-only safety",
+            "no git add/commit/tag unless a later explicit execution gate allows it",
+            "no remote push/PR/merge",
+            "no rollback",
+            "no unbounded loop",
+        ],
+        **prompt385_state,
+    }
+
+    prompt385_handoff_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt385_handoff_path, prompt385_handoff_payload)
+    _write_json(prompt385_contract_path, prompt385_contract_payload)
+    _write_json(prompt385_request_path, prompt385_request_payload)
+    return {
+        key: value for key, value in prompt385_state.items() if key.startswith("prompt385_")
+    }
+
+
 def _merge_prompt376_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -56434,6 +56985,79 @@ def _merge_prompt384_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt384_next_action"
             if _normalize_text(prompt384.get("prompt384_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt385_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt385_success_path_next_cycle_handoff_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt385 = (
+        dict(prompt385_success_path_next_cycle_handoff_payload)
+        if isinstance(prompt385_success_path_next_cycle_handoff_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT385_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt385 and prompt385.get(key) is not None:
+            payload[key] = prompt385.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt385_success_path_next_cycle_handoff_status"
+            if _normalize_text(
+                prompt385.get("prompt385_success_path_next_cycle_handoff_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt385_prompt384_evidence_ready"
+            if bool(prompt385.get("prompt385_prompt384_evidence_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt385_prompt384_success_cycle_closure_ready"
+            if bool(
+                prompt385.get(
+                    "prompt385_prompt384_success_cycle_closure_ready",
+                    False,
+                )
+            )
+            else "",
+            "approved_restart_execution_contract.prompt385_prompt384_success_cycle_closed"
+            if bool(prompt385.get("prompt385_prompt384_success_cycle_closed", False))
+            else "",
+            "approved_restart_execution_contract.prompt385_next_cycle_handoff_ready"
+            if bool(prompt385.get("prompt385_next_cycle_handoff_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt385_next_cycle_contract_ready"
+            if bool(prompt385.get("prompt385_next_cycle_contract_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt385_next_prompt_generation_request_ready"
+            if bool(
+                prompt385.get(
+                    "prompt385_next_prompt_generation_request_ready",
+                    False,
+                )
+            )
+            else "",
+            "approved_restart_execution_contract.prompt385_generated_prompt_intake_expected"
+            if bool(
+                prompt385.get("prompt385_generated_prompt_intake_expected", False)
+            )
+            else "",
+            "approved_restart_execution_contract.prompt385_next_action"
+            if _normalize_text(prompt385.get("prompt385_next_action"), default="")
             else "",
         ]
     )
@@ -225905,6 +226529,15 @@ class PlannedExecutionRunner:
         prompt384_success_cycle_closure_path = (
             run_root / "prompt384_success_cycle_closure.json"
         )
+        prompt385_success_path_next_cycle_handoff_path = (
+            run_root / "prompt385_success_path_next_cycle_handoff.json"
+        )
+        prompt385_next_cycle_contract_path = (
+            run_root / "prompt385_next_cycle_contract.json"
+        )
+        prompt385_next_prompt_generation_request_path = (
+            run_root / "prompt385_next_prompt_generation_request.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -226198,6 +226831,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt384_commit_tag_reconciliation_payload,
         }
+        prompt385_success_path_next_cycle_handoff_payload = (
+            _build_prompt385_success_path_next_cycle_handoff_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt385_success_path_next_cycle_handoff_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -226329,6 +226972,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt384_commit_tag_reconciliation_state=(
                     prompt384_commit_tag_reconciliation_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt385_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt385_success_path_next_cycle_handoff_state=(
+                    prompt385_success_path_next_cycle_handoff_payload
                 ),
             )
         )
@@ -226497,6 +227148,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt384_commit_tag_reconciliation_payload=(
                     prompt384_commit_tag_reconciliation_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt385_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt385_success_path_next_cycle_handoff_payload=(
+                    prompt385_success_path_next_cycle_handoff_payload
                 ),
             )
         )
@@ -227039,6 +227700,24 @@ class PlannedExecutionRunner:
         manifest["prompt384_success_cycle_closure_path"] = str(
             prompt384_success_cycle_closure_path
         )
+        manifest["prompt385_success_path_next_cycle_handoff_summary"] = dict(
+            prompt385_success_path_next_cycle_handoff_payload
+        )
+        manifest["prompt385_success_path_next_cycle_handoff_path"] = str(
+            prompt385_success_path_next_cycle_handoff_path
+        )
+        manifest["prompt385_next_cycle_contract_summary"] = dict(
+            prompt385_success_path_next_cycle_handoff_payload
+        )
+        manifest["prompt385_next_cycle_contract_path"] = str(
+            prompt385_next_cycle_contract_path
+        )
+        manifest["prompt385_next_prompt_generation_request_summary"] = dict(
+            prompt385_success_path_next_cycle_handoff_payload
+        )
+        manifest["prompt385_next_prompt_generation_request_path"] = str(
+            prompt385_next_prompt_generation_request_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -227279,6 +227958,15 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt384_success_cycle_closure"] = (
             manifest.get("prompt384_success_cycle_closure_summary")
         )
+        contract_summaries_by_role["prompt385_success_path_next_cycle_handoff"] = (
+            manifest.get("prompt385_success_path_next_cycle_handoff_summary")
+        )
+        contract_summaries_by_role["prompt385_next_cycle_contract"] = (
+            manifest.get("prompt385_next_cycle_contract_summary")
+        )
+        contract_summaries_by_role["prompt385_next_prompt_generation_request"] = (
+            manifest.get("prompt385_next_prompt_generation_request_summary")
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -227518,6 +228206,15 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["prompt384_success_cycle_closure"] = (
             manifest.get("prompt384_success_cycle_closure_path")
+        )
+        contract_paths_by_role["prompt385_success_path_next_cycle_handoff"] = (
+            manifest.get("prompt385_success_path_next_cycle_handoff_path")
+        )
+        contract_paths_by_role["prompt385_next_cycle_contract"] = (
+            manifest.get("prompt385_next_cycle_contract_path")
+        )
+        contract_paths_by_role["prompt385_next_prompt_generation_request"] = (
+            manifest.get("prompt385_next_prompt_generation_request_path")
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -231191,6 +231888,234 @@ class PlannedExecutionRunner:
                     "prompt384_success_cycle_closure_path"
                 ),
                 default="",
+            ),
+            "prompt385_success_path_next_cycle_handoff_status": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_success_path_next_cycle_handoff_status"
+                ),
+                default="blocked",
+            ),
+            "prompt385_prompt384_evidence_ready": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_prompt384_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt385_prompt384_reconciliation_status": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_prompt384_reconciliation_status"
+                ),
+                default="blocked",
+            ),
+            "prompt385_prompt384_success_cycle_closure_ready": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_prompt384_success_cycle_closure_ready",
+                    False,
+                )
+            ),
+            "prompt385_prompt384_success_cycle_closed": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_prompt384_success_cycle_closed",
+                    False,
+                )
+            ),
+            "prompt385_prompt384_remote_mutation_absent": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_prompt384_remote_mutation_absent",
+                    False,
+                )
+            ),
+            "prompt385_previous_cycle_closed": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_previous_cycle_closed",
+                    False,
+                )
+            ),
+            "prompt385_previous_cycle_commit": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_previous_cycle_commit"
+                ),
+                default="",
+            ),
+            "prompt385_previous_cycle_tag": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_previous_cycle_tag"
+                ),
+                default="",
+            ),
+            "prompt385_previous_cycle_committed_files": _normalize_string_list(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_previous_cycle_committed_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt385_current_cycle_index": _as_non_negative_int(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_current_cycle_index"
+                ),
+                default=0,
+            ),
+            "prompt385_next_cycle_index": _as_non_negative_int(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_cycle_index"
+                ),
+                default=0,
+            ),
+            "prompt385_max_cycles": _as_non_negative_int(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_max_cycles"
+                ),
+                default=0,
+            ),
+            "prompt385_success_path_only": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_success_path_only",
+                    False,
+                )
+            ),
+            "prompt385_next_cycle_handoff_ready": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_cycle_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt385_next_cycle_contract_ready": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_cycle_contract_ready",
+                    False,
+                )
+            ),
+            "prompt385_next_prompt_generation_request_ready": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_prompt_generation_request_ready",
+                    False,
+                )
+            ),
+            "prompt385_generated_prompt_intake_expected": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_generated_prompt_intake_expected",
+                    False,
+                )
+            ),
+            "prompt385_generated_prompt_intake_method": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_generated_prompt_intake_method"
+                ),
+                default="",
+            ),
+            "prompt385_generated_prompt_expected_flag": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_generated_prompt_expected_flag"
+                ),
+                default="",
+            ),
+            "prompt385_generated_prompt_expected_path_field": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_generated_prompt_expected_path_field"
+                ),
+                default="",
+            ),
+            "prompt385_next_prompt_generation_owner": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_prompt_generation_owner"
+                ),
+                default="",
+            ),
+            "prompt385_next_prompt_generation_context_ready": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_prompt_generation_context_ready",
+                    False,
+                )
+            ),
+            "prompt385_next_prompt_generation_constraints_ready": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_prompt_generation_constraints_ready",
+                    False,
+                )
+            ),
+            "prompt385_next_prompt_generation_request_path": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_prompt_generation_request_path"
+                ),
+                default="",
+            ),
+            "prompt385_next_cycle_handoff_path": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_cycle_handoff_path"
+                ),
+                default="",
+            ),
+            "prompt385_next_cycle_contract_path": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_cycle_contract_path"
+                ),
+                default="",
+            ),
+            "prompt385_remote_mutation_allowed": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt385_remote_mutation_performed": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt385_codex_execution_allowed": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt385_codex_execution_attempted": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_codex_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt385_codex_execution_performed": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt385_git_mutation_allowed": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_git_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt385_git_mutation_performed": bool(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt385_next_action": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_next_action"
+                ),
+                default="wait_for_prompt384_success_cycle_closure",
+            ),
+            "prompt385_authoritative_next_action": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_authoritative_next_action"
+                ),
+                default="wait_for_prompt384_success_cycle_closure",
+            ),
+            "prompt385_active_blocked_reason": _normalize_text(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt385_active_blocked_reasons": _normalize_string_list(
+                prompt385_success_path_next_cycle_handoff_payload.get(
+                    "prompt385_active_blocked_reasons"
+                ),
+                sort_items=False,
             ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(

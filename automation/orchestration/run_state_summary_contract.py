@@ -1103,6 +1103,44 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt384_active_blocked_reasons",
     "prompt384_reconciliation_path",
     "prompt384_success_cycle_closure_path",
+    "prompt385_success_path_next_cycle_handoff_status",
+    "prompt385_prompt384_evidence_ready",
+    "prompt385_prompt384_reconciliation_status",
+    "prompt385_prompt384_success_cycle_closure_ready",
+    "prompt385_prompt384_success_cycle_closed",
+    "prompt385_prompt384_remote_mutation_absent",
+    "prompt385_previous_cycle_closed",
+    "prompt385_previous_cycle_commit",
+    "prompt385_previous_cycle_tag",
+    "prompt385_previous_cycle_committed_files",
+    "prompt385_current_cycle_index",
+    "prompt385_next_cycle_index",
+    "prompt385_max_cycles",
+    "prompt385_success_path_only",
+    "prompt385_next_cycle_handoff_ready",
+    "prompt385_next_cycle_contract_ready",
+    "prompt385_next_prompt_generation_request_ready",
+    "prompt385_generated_prompt_intake_expected",
+    "prompt385_generated_prompt_intake_method",
+    "prompt385_generated_prompt_expected_flag",
+    "prompt385_generated_prompt_expected_path_field",
+    "prompt385_next_prompt_generation_owner",
+    "prompt385_next_prompt_generation_context_ready",
+    "prompt385_next_prompt_generation_constraints_ready",
+    "prompt385_next_prompt_generation_request_path",
+    "prompt385_next_cycle_handoff_path",
+    "prompt385_next_cycle_contract_path",
+    "prompt385_remote_mutation_allowed",
+    "prompt385_remote_mutation_performed",
+    "prompt385_codex_execution_allowed",
+    "prompt385_codex_execution_attempted",
+    "prompt385_codex_execution_performed",
+    "prompt385_git_mutation_allowed",
+    "prompt385_git_mutation_performed",
+    "prompt385_authoritative_next_action",
+    "prompt385_next_action",
+    "prompt385_active_blocked_reason",
+    "prompt385_active_blocked_reasons",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)
@@ -2006,6 +2044,25 @@ def select_manifest_run_state_summary_compact(
         "prompt384_remote_mutation_absent",
         "prompt384_success_cycle_closure_ready",
         "prompt384_success_cycle_closed",
+        "prompt385_prompt384_evidence_ready",
+        "prompt385_prompt384_success_cycle_closure_ready",
+        "prompt385_prompt384_success_cycle_closed",
+        "prompt385_prompt384_remote_mutation_absent",
+        "prompt385_previous_cycle_closed",
+        "prompt385_success_path_only",
+        "prompt385_next_cycle_handoff_ready",
+        "prompt385_next_cycle_contract_ready",
+        "prompt385_next_prompt_generation_request_ready",
+        "prompt385_generated_prompt_intake_expected",
+        "prompt385_next_prompt_generation_context_ready",
+        "prompt385_next_prompt_generation_constraints_ready",
+        "prompt385_remote_mutation_allowed",
+        "prompt385_remote_mutation_performed",
+        "prompt385_codex_execution_allowed",
+        "prompt385_codex_execution_attempted",
+        "prompt385_codex_execution_performed",
+        "prompt385_git_mutation_allowed",
+        "prompt385_git_mutation_performed",
     }
     list_fields = {
         "prompt356_stale_blocker_reasons",
@@ -2075,6 +2132,8 @@ def select_manifest_run_state_summary_compact(
         "prompt384_reconciliation_reasons",
         "prompt384_reconciliation_blocked_reasons",
         "prompt384_active_blocked_reasons",
+        "prompt385_previous_cycle_committed_files",
+        "prompt385_active_blocked_reasons",
     }
     int_fields.add("prompt367_returncode")
     int_fields.add("prompt368_resume_iteration_current")
@@ -2094,6 +2153,9 @@ def select_manifest_run_state_summary_compact(
     int_fields.add("prompt378_next_cycle_index")
     int_fields.add("prompt378_max_cycles")
     int_fields.add("prompt378_generated_prompt_content_length")
+    int_fields.add("prompt385_current_cycle_index")
+    int_fields.add("prompt385_next_cycle_index")
+    int_fields.add("prompt385_max_cycles")
 
     summary: dict[str, Any] = {}
     for field in MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS:
