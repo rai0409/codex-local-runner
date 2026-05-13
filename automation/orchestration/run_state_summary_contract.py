@@ -943,6 +943,20 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt378_next_action",
     "prompt378_active_blocked_reason",
     "prompt378_active_blocked_reasons",
+    "prompt379_generated_prompt_codex_execution_bridge_status",
+    "prompt379_prompt378_generated_prompt_ready",
+    "prompt379_generated_prompt_path",
+    "prompt379_generated_prompt_checksum",
+    "prompt379_codex_execution_ready",
+    "prompt379_codex_execution_allowed",
+    "prompt379_codex_execution_attempted",
+    "prompt379_codex_execution_performed",
+    "prompt379_git_mutation_performed",
+    "prompt379_remote_mutation_performed",
+    "prompt379_authoritative_next_action",
+    "prompt379_next_action",
+    "prompt379_active_blocked_reason",
+    "prompt379_active_blocked_reasons",
 )
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = tuple(
     dict.fromkeys(MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS)

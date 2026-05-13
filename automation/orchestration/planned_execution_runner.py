@@ -3692,6 +3692,7 @@ _PROMPT370_SCHEMA_VERSION = "prompt370_integrated_autonomous_cycle_runner_v1"
 _PROMPT371_SCHEMA_VERSION = "prompt371_bounded_one_cycle_execution_wiring_v1"
 _PROMPT372_SCHEMA_VERSION = "prompt372_selected_step_execution_gate_v1"
 _PROMPT373_SCHEMA_VERSION = "prompt373_selected_step_live_codex_execution_v1"
+_PROMPT379_SCHEMA_VERSION = "prompt379_generated_prompt_codex_execution_bridge_v1"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -53029,6 +53030,631 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
     _write_json(prompt378_receipt_path, prompt378_receipt_payload)
     return {
         key: value for key, value in prompt378_state.items() if key.startswith("prompt378_")
+    }
+
+
+def _build_prompt379_generated_prompt_codex_execution_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str = "",
+    prompt379_codex_execution_requested: bool = False,
+    prompt379_codex_execution_confirmed: bool = False,
+    now: Callable[[], datetime] = datetime.now,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    bridge_path = artifact_root / "prompt379_generated_prompt_codex_execution_bridge.json"
+    receipt_path = artifact_root / "prompt379_generated_prompt_codex_execution_receipt.json"
+    prompt378_handoff_path = artifact_root / "prompt378_generated_prompt_execution_handoff.json"
+    run_state = dict(run_state_payload or {})
+    normalized_repo_path = _normalize_text(
+        execution_repo_path,
+        default=str(Path.cwd()),
+    )
+    timeout_seconds = 600
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt378_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt378_chatgpt_generated_prompt_intake_status": _normalize_text(
+                source.get("prompt378_chatgpt_generated_prompt_intake_status"),
+                default="",
+            ),
+            "prompt378_generated_prompt_ready": _prompt357_as_boolish(
+                source.get("prompt378_generated_prompt_ready"),
+                default=False,
+            ),
+            "prompt378_generated_prompt_path": _normalize_text(
+                source.get("prompt378_generated_prompt_path"),
+                default="",
+            ),
+            "prompt378_generated_prompt_checksum": _normalize_text(
+                source.get("prompt378_generated_prompt_checksum"),
+                default="",
+            ),
+            "prompt378_generated_prompt_execution_handoff_ready": _prompt357_as_boolish(
+                source.get("prompt378_generated_prompt_execution_handoff_ready"),
+                default=False,
+            ),
+            "prompt378_next_action": _normalize_text(
+                source.get("prompt378_next_action"),
+                default="",
+            ),
+            "prompt378_authoritative_next_action": _normalize_text(
+                source.get("prompt378_authoritative_next_action"),
+                default="",
+            ),
+        }
+
+    def _valid_prompt378_surface(value: Mapping[str, Any] | None) -> bool:
+        surface = _normalize_prompt378_surface(value)
+        return bool(
+            surface["prompt378_chatgpt_generated_prompt_intake_status"] == "completed"
+            and bool(surface["prompt378_generated_prompt_ready"])
+            and bool(surface["prompt378_generated_prompt_execution_handoff_ready"])
+            and bool(surface["prompt378_generated_prompt_path"])
+            and bool(surface["prompt378_generated_prompt_checksum"])
+            and (
+                surface["prompt378_next_action"]
+                == "prepare_prompt379_generated_prompt_codex_execution_bridge"
+            )
+            and (
+                surface["prompt378_authoritative_next_action"]
+                == "prepare_prompt379_generated_prompt_codex_execution_bridge"
+            )
+        )
+
+    def _resolve_prompt378_surface() -> dict[str, Any]:
+        current_surface = _normalize_prompt378_surface(run_state)
+        if _valid_prompt378_surface(current_surface):
+            return current_surface
+        recovered = _read_json_object_if_exists(prompt378_handoff_path)
+        if _valid_prompt378_surface(recovered):
+            return _normalize_prompt378_surface(recovered)
+        return current_surface
+
+    def _read_generated_prompt(
+        path_text: str,
+    ) -> tuple[str, str, str, int]:
+        normalized_path = _normalize_text(path_text, default="")
+        if not normalized_path:
+            return "", "", "prompt379_generated_prompt_path_missing", 0
+        path_obj = Path(normalized_path)
+        if not path_obj.exists() or not path_obj.is_file():
+            return "", normalized_path, "prompt379_generated_prompt_path_not_readable", 0
+        try:
+            prompt_text = path_obj.read_text(encoding="utf-8")
+        except OSError:
+            return "", normalized_path, "prompt379_generated_prompt_path_not_readable", 0
+        if not prompt_text.strip():
+            return "", normalized_path, "prompt379_generated_prompt_body_empty", 0
+        return prompt_text, normalized_path, "", len(prompt_text)
+
+    def _collect_tracked_source_diff(
+        repo_path_text: str,
+    ) -> dict[str, Any]:
+        normalized_path = _normalize_text(repo_path_text, default="")
+        if not normalized_path:
+            return {
+                "available": False,
+                "reason": "prompt379_execution_repo_path_not_ready",
+                "changed_files": [],
+            }
+        repo_path_obj = Path(normalized_path)
+        if not repo_path_obj.exists() or not repo_path_obj.is_dir():
+            return {
+                "available": False,
+                "reason": "prompt379_execution_repo_path_not_ready",
+                "changed_files": [],
+            }
+
+        changed_files: list[str] = []
+        for git_args in (
+            ["git", "diff", "--name-only"],
+            ["git", "diff", "--cached", "--name-only"],
+        ):
+            try:
+                completed = subprocess.run(
+                    git_args,
+                    cwd=normalized_path,
+                    text=True,
+                    capture_output=True,
+                    shell=False,
+                    timeout=30,
+                )
+            except FileNotFoundError:
+                return {
+                    "available": False,
+                    "reason": "prompt379_git_command_unavailable",
+                    "changed_files": [],
+                }
+            except subprocess.TimeoutExpired:
+                return {
+                    "available": False,
+                    "reason": "prompt379_git_diff_timed_out",
+                    "changed_files": [],
+                }
+            except Exception:
+                return {
+                    "available": False,
+                    "reason": "prompt379_git_diff_capture_failed",
+                    "changed_files": [],
+                }
+            if completed.returncode != 0:
+                return {
+                    "available": False,
+                    "reason": "prompt379_git_diff_capture_failed",
+                    "changed_files": [],
+                    "stderr": _normalize_text(completed.stderr, default=""),
+                }
+            for line in completed.stdout.splitlines():
+                normalized_line = _normalize_text(line, default="")
+                if normalized_line:
+                    changed_files.append(normalized_line.replace("\\", "/"))
+        normalized_changed_files = sorted(set(changed_files))
+        return {
+            "available": True,
+            "reason": "",
+            "changed_files": normalized_changed_files,
+            "diff_empty": not normalized_changed_files,
+        }
+
+    prompt378_surface = _resolve_prompt378_surface()
+    prompt379_prompt378_generated_prompt_ready = bool(
+        prompt378_surface.get("prompt378_generated_prompt_ready", False)
+    )
+    prompt379_generated_prompt_path = _normalize_text(
+        prompt378_surface.get("prompt378_generated_prompt_path"),
+        default="",
+    )
+    prompt379_generated_prompt_checksum = _normalize_text(
+        prompt378_surface.get("prompt378_generated_prompt_checksum"),
+        default="",
+    )
+    prompt379_codex_execution_requested = bool(prompt379_codex_execution_requested)
+    prompt379_codex_execution_confirmed = bool(prompt379_codex_execution_confirmed)
+
+    prompt379_generated_prompt_codex_execution_bridge_status = "blocked"
+    prompt379_codex_execution_ready = False
+    prompt379_codex_execution_allowed = False
+    prompt379_codex_execution_attempted = False
+    prompt379_codex_execution_performed = False
+    prompt379_git_mutation_performed = False
+    prompt379_remote_mutation_performed = False
+    prompt379_next_action = "repair_prompt378_generated_prompt_handoff_before_prompt379"
+    prompt379_authoritative_next_action = prompt379_next_action
+    prompt379_active_blocked_reason = ""
+    prompt379_active_blocked_reasons: list[str] = []
+    prompt379_returncode: int | None = None
+    prompt379_returncode_classification = "not_run"
+    prompt379_execution_started_at = ""
+    prompt379_execution_finished_at = ""
+    prompt379_generated_prompt_content_length = 0
+    prompt379_generated_prompt_body_present = False
+    prompt379_generated_prompt_checksum_valid = False
+    prompt379_execution_repo_ready = bool(
+        normalized_repo_path
+        and Path(normalized_repo_path).exists()
+        and Path(normalized_repo_path).is_dir()
+    )
+    prompt379_pre_execution_tracked_source_changed_files: list[str] = []
+    prompt379_post_execution_tracked_source_changed_files: list[str] = []
+    prompt379_pre_execution_tracked_source_diff_empty = False
+    prompt379_post_execution_tracked_source_diff_empty = False
+    prompt379_summary = (
+        "Prompt379 is blocked because the Prompt378 generated prompt handoff is not ready."
+    )
+    command_argv_metadata = [
+        "codex",
+        "exec",
+        "--skip-git-repo-check",
+        "<prompt_from:prompt378_generated_prompt_path>",
+    ]
+
+    preflight_blocked_reasons: list[str] = []
+    if (
+        _normalize_text(
+            prompt378_surface.get("prompt378_chatgpt_generated_prompt_intake_status"),
+            default="",
+        )
+        != "completed"
+    ):
+        _append_reason(
+            preflight_blocked_reasons,
+            "prompt378_chatgpt_generated_prompt_intake_status_not_completed",
+        )
+    if not prompt379_prompt378_generated_prompt_ready:
+        _append_reason(
+            preflight_blocked_reasons,
+            "prompt378_generated_prompt_ready_not_true",
+        )
+    if not bool(
+        prompt378_surface.get("prompt378_generated_prompt_execution_handoff_ready", False)
+    ):
+        _append_reason(
+            preflight_blocked_reasons,
+            "prompt378_generated_prompt_execution_handoff_ready_not_true",
+        )
+    if (
+        _normalize_text(prompt378_surface.get("prompt378_next_action"), default="")
+        != "prepare_prompt379_generated_prompt_codex_execution_bridge"
+    ):
+        _append_reason(
+            preflight_blocked_reasons,
+            "prompt378_next_action_not_prepare_prompt379_generated_prompt_codex_execution_bridge",
+        )
+    if (
+        _normalize_text(
+            prompt378_surface.get("prompt378_authoritative_next_action"),
+            default="",
+        )
+        != "prepare_prompt379_generated_prompt_codex_execution_bridge"
+    ):
+        _append_reason(
+            preflight_blocked_reasons,
+            "prompt378_authoritative_next_action_not_prepare_prompt379_generated_prompt_codex_execution_bridge",
+        )
+    if not prompt379_generated_prompt_path:
+        _append_reason(
+            preflight_blocked_reasons,
+            "prompt378_generated_prompt_path_missing",
+        )
+    if not prompt379_generated_prompt_checksum:
+        _append_reason(
+            preflight_blocked_reasons,
+            "prompt378_generated_prompt_checksum_missing",
+        )
+
+    generated_prompt_text = ""
+    generated_prompt_read_error = ""
+    if not preflight_blocked_reasons:
+        (
+            generated_prompt_text,
+            prompt379_generated_prompt_path,
+            generated_prompt_read_error,
+            prompt379_generated_prompt_content_length,
+        ) = _read_generated_prompt(prompt379_generated_prompt_path)
+        prompt379_generated_prompt_body_present = bool(generated_prompt_text.strip())
+        if generated_prompt_read_error:
+            _append_reason(preflight_blocked_reasons, generated_prompt_read_error)
+        else:
+            actual_checksum = hashlib.sha256(
+                generated_prompt_text.encode("utf-8")
+            ).hexdigest()
+            prompt379_generated_prompt_checksum_valid = (
+                actual_checksum == prompt379_generated_prompt_checksum
+            )
+            if not prompt379_generated_prompt_checksum_valid:
+                _append_reason(
+                    preflight_blocked_reasons,
+                    "prompt379_generated_prompt_checksum_mismatch",
+                )
+
+    pre_execution_diff = {"available": False, "reason": "", "changed_files": []}
+    if not preflight_blocked_reasons:
+        if not prompt379_execution_repo_ready:
+            _append_reason(
+                preflight_blocked_reasons,
+                "prompt379_execution_repo_path_not_ready",
+            )
+        else:
+            pre_execution_diff = _collect_tracked_source_diff(normalized_repo_path)
+            prompt379_pre_execution_tracked_source_changed_files = _normalize_string_list(
+                pre_execution_diff.get("changed_files"),
+                sort_items=True,
+            )
+            prompt379_pre_execution_tracked_source_diff_empty = bool(
+                pre_execution_diff.get("diff_empty", False)
+            )
+            if not bool(pre_execution_diff.get("available", False)):
+                _append_reason(
+                    preflight_blocked_reasons,
+                    _normalize_text(
+                        pre_execution_diff.get("reason"),
+                        default="prompt379_git_diff_capture_failed",
+                    ),
+                )
+            elif prompt379_pre_execution_tracked_source_changed_files:
+                _append_reason(
+                    preflight_blocked_reasons,
+                    "prompt379_tracked_source_diff_not_empty_before_execution",
+                )
+
+    if preflight_blocked_reasons:
+        prompt379_generated_prompt_codex_execution_bridge_status = "blocked"
+        prompt379_active_blocked_reasons = _normalize_string_list(
+            preflight_blocked_reasons,
+            sort_items=False,
+        )
+        prompt379_active_blocked_reason = (
+            prompt379_active_blocked_reasons[0]
+            if prompt379_active_blocked_reasons
+            else "prompt379_preflight_not_ready"
+        )
+        blocked_next_action_mapping = {
+            "prompt378_chatgpt_generated_prompt_intake_status_not_completed": (
+                "repair_prompt378_generated_prompt_intake_status_before_prompt379"
+            ),
+            "prompt378_generated_prompt_ready_not_true": (
+                "repair_prompt378_generated_prompt_readiness_before_prompt379"
+            ),
+            "prompt378_generated_prompt_execution_handoff_ready_not_true": (
+                "repair_prompt378_generated_prompt_execution_handoff_before_prompt379"
+            ),
+            "prompt378_next_action_not_prepare_prompt379_generated_prompt_codex_execution_bridge": (
+                "repair_prompt378_next_action_before_prompt379"
+            ),
+            "prompt378_authoritative_next_action_not_prepare_prompt379_generated_prompt_codex_execution_bridge": (
+                "repair_prompt378_authoritative_next_action_before_prompt379"
+            ),
+            "prompt378_generated_prompt_path_missing": (
+                "repair_prompt378_generated_prompt_path_before_prompt379"
+            ),
+            "prompt378_generated_prompt_checksum_missing": (
+                "repair_prompt378_generated_prompt_checksum_before_prompt379"
+            ),
+            "prompt379_generated_prompt_path_missing": (
+                "repair_prompt379_generated_prompt_path"
+            ),
+            "prompt379_generated_prompt_path_not_readable": (
+                "repair_prompt379_generated_prompt_path"
+            ),
+            "prompt379_generated_prompt_body_empty": (
+                "repair_prompt379_generated_prompt_body"
+            ),
+            "prompt379_generated_prompt_checksum_mismatch": (
+                "repair_prompt379_generated_prompt_checksum"
+            ),
+            "prompt379_execution_repo_path_not_ready": (
+                "repair_prompt379_execution_repo_path"
+            ),
+            "prompt379_git_command_unavailable": (
+                "repair_prompt379_git_diff_capture"
+            ),
+            "prompt379_git_diff_timed_out": "repair_prompt379_git_diff_capture",
+            "prompt379_git_diff_capture_failed": "repair_prompt379_git_diff_capture",
+            "prompt379_tracked_source_diff_not_empty_before_execution": (
+                "resolve_prompt379_tracked_source_diff_before_execution"
+            ),
+        }
+        prompt379_next_action = blocked_next_action_mapping.get(
+            prompt379_active_blocked_reason,
+            "review_prompt379_generated_prompt_codex_execution_bridge_blocker",
+        )
+        prompt379_authoritative_next_action = prompt379_next_action
+        prompt379_summary = (
+            "Prompt379 is blocked because the validated Prompt378 generated prompt handoff is not execution-safe yet."
+        )
+    else:
+        prompt379_codex_execution_ready = True
+        if not (
+            prompt379_codex_execution_requested
+            and prompt379_codex_execution_confirmed
+        ):
+            prompt379_generated_prompt_codex_execution_bridge_status = (
+                "ready_for_explicit_execution"
+            )
+            prompt379_active_blocked_reason = (
+                "prompt379_codex_execution_not_explicitly_enabled"
+            )
+            prompt379_active_blocked_reasons = [
+                "prompt379_codex_execution_not_explicitly_enabled"
+            ]
+            prompt379_next_action = "run_with_explicit_prompt379_codex_execution_flags"
+            prompt379_authoritative_next_action = prompt379_next_action
+            prompt379_summary = (
+                "Prompt379 validated the Prompt378 generated prompt handoff and a clean tracked source tree, but local Codex execution remains disabled until explicit Prompt379 flags are enabled."
+            )
+        else:
+            prompt379_generated_prompt_codex_execution_bridge_status = "failed"
+            prompt379_codex_execution_allowed = True
+            prompt379_codex_execution_attempted = True
+            prompt379_execution_started_at = _iso_now(now)
+            runtime_argv = [
+                "codex",
+                "exec",
+                "--skip-git-repo-check",
+                str(generated_prompt_text),
+            ]
+            timed_out = False
+            try:
+                completed = subprocess.run(
+                    runtime_argv,
+                    text=True,
+                    capture_output=True,
+                    cwd=normalized_repo_path,
+                    shell=False,
+                    timeout=timeout_seconds,
+                )
+                prompt379_codex_execution_performed = True
+                prompt379_returncode = int(completed.returncode)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                prompt379_codex_execution_performed = True
+                prompt379_returncode = None
+            except FileNotFoundError:
+                prompt379_returncode = 127
+            except Exception:
+                prompt379_returncode = 1
+            prompt379_execution_finished_at = _iso_now(now)
+            if prompt379_returncode == 0:
+                prompt379_returncode_classification = "success"
+            elif timed_out and prompt379_returncode is None:
+                prompt379_returncode_classification = "timeout"
+            else:
+                prompt379_returncode_classification = "nonzero_exit"
+
+            post_execution_diff = _collect_tracked_source_diff(normalized_repo_path)
+            prompt379_post_execution_tracked_source_changed_files = _normalize_string_list(
+                post_execution_diff.get("changed_files"),
+                sort_items=True,
+            )
+            prompt379_post_execution_tracked_source_diff_empty = bool(
+                post_execution_diff.get("diff_empty", False)
+            )
+
+            execution_blocked_reasons: list[str] = []
+            if prompt379_returncode_classification != "success":
+                _append_reason(
+                    execution_blocked_reasons,
+                    (
+                        "prompt379_codex_execution_timeout"
+                        if prompt379_returncode_classification == "timeout"
+                        else "prompt379_codex_execution_nonzero_exit"
+                    ),
+                )
+            if not bool(post_execution_diff.get("available", False)):
+                _append_reason(
+                    execution_blocked_reasons,
+                    _normalize_text(
+                        post_execution_diff.get("reason"),
+                        default="prompt379_git_diff_capture_failed_after_execution",
+                    ),
+                )
+            elif prompt379_post_execution_tracked_source_changed_files:
+                _append_reason(
+                    execution_blocked_reasons,
+                    "prompt379_tracked_source_diff_not_empty_after_execution",
+                )
+
+            if not execution_blocked_reasons:
+                prompt379_generated_prompt_codex_execution_bridge_status = "completed"
+                prompt379_active_blocked_reason = ""
+                prompt379_active_blocked_reasons = []
+                prompt379_next_action = "prompt379_success_path_satisfied"
+                prompt379_authoritative_next_action = prompt379_next_action
+                prompt379_summary = (
+                    "Prompt379 executed the validated generated prompt locally and confirmed a zero returncode with an empty tracked source diff."
+                )
+            else:
+                prompt379_generated_prompt_codex_execution_bridge_status = (
+                    "failed"
+                    if any(
+                        reason in execution_blocked_reasons
+                        for reason in (
+                            "prompt379_codex_execution_nonzero_exit",
+                            "prompt379_codex_execution_timeout",
+                        )
+                    )
+                    else "blocked"
+                )
+                prompt379_active_blocked_reasons = _normalize_string_list(
+                    execution_blocked_reasons,
+                    sort_items=False,
+                )
+                prompt379_active_blocked_reason = (
+                    prompt379_active_blocked_reasons[0]
+                    if prompt379_active_blocked_reasons
+                    else "prompt379_execution_blocked"
+                )
+                execution_next_action_mapping = {
+                    "prompt379_codex_execution_nonzero_exit": (
+                        "review_prompt379_codex_execution_failure"
+                    ),
+                    "prompt379_codex_execution_timeout": (
+                        "review_prompt379_codex_execution_timeout"
+                    ),
+                    "prompt379_execution_repo_path_not_ready": (
+                        "repair_prompt379_execution_repo_path"
+                    ),
+                    "prompt379_git_command_unavailable": (
+                        "repair_prompt379_git_diff_capture"
+                    ),
+                    "prompt379_git_diff_timed_out": (
+                        "repair_prompt379_git_diff_capture"
+                    ),
+                    "prompt379_git_diff_capture_failed": (
+                        "repair_prompt379_git_diff_capture"
+                    ),
+                    "prompt379_git_diff_capture_failed_after_execution": (
+                        "repair_prompt379_git_diff_capture"
+                    ),
+                    "prompt379_tracked_source_diff_not_empty_after_execution": (
+                        "resolve_prompt379_tracked_source_diff_before_retry"
+                    ),
+                }
+                prompt379_next_action = execution_next_action_mapping.get(
+                    prompt379_active_blocked_reason,
+                    "review_prompt379_generated_prompt_codex_execution_bridge_blocker",
+                )
+                prompt379_authoritative_next_action = prompt379_next_action
+                prompt379_summary = (
+                    "Prompt379 attempted local generated-prompt Codex execution, but the success path did not hold because execution failed or the tracked source diff was not empty afterward."
+                )
+
+    state_payload: dict[str, Any] = {
+        "prompt379_schema_version": _PROMPT379_SCHEMA_VERSION,
+        "prompt379_generated_prompt_codex_execution_bridge_status": (
+            prompt379_generated_prompt_codex_execution_bridge_status
+        ),
+        "prompt379_prompt378_generated_prompt_ready": (
+            prompt379_prompt378_generated_prompt_ready
+        ),
+        "prompt379_generated_prompt_path": prompt379_generated_prompt_path,
+        "prompt379_generated_prompt_checksum": prompt379_generated_prompt_checksum,
+        "prompt379_codex_execution_ready": prompt379_codex_execution_ready,
+        "prompt379_codex_execution_allowed": prompt379_codex_execution_allowed,
+        "prompt379_codex_execution_attempted": prompt379_codex_execution_attempted,
+        "prompt379_codex_execution_performed": prompt379_codex_execution_performed,
+        "prompt379_git_mutation_performed": prompt379_git_mutation_performed,
+        "prompt379_remote_mutation_performed": prompt379_remote_mutation_performed,
+        "prompt379_next_action": prompt379_next_action,
+        "prompt379_authoritative_next_action": prompt379_authoritative_next_action,
+        "prompt379_active_blocked_reason": prompt379_active_blocked_reason,
+        "prompt379_active_blocked_reasons": prompt379_active_blocked_reasons,
+    }
+    bridge_payload: dict[str, Any] = {
+        **state_payload,
+        "local_only": True,
+        "prompt379_execution_repo_path": normalized_repo_path,
+        "prompt379_execution_repo_ready": prompt379_execution_repo_ready,
+        "prompt379_generated_prompt_content_length": prompt379_generated_prompt_content_length,
+        "prompt379_generated_prompt_body_present": prompt379_generated_prompt_body_present,
+        "prompt379_generated_prompt_checksum_valid": prompt379_generated_prompt_checksum_valid,
+        "prompt379_prompt378_generated_prompt_execution_handoff_path": str(
+            prompt378_handoff_path
+        ),
+        "prompt379_pre_execution_tracked_source_diff_empty": (
+            prompt379_pre_execution_tracked_source_diff_empty
+        ),
+        "prompt379_pre_execution_tracked_source_changed_files": (
+            prompt379_pre_execution_tracked_source_changed_files
+        ),
+        "prompt379_codex_execution_requested": prompt379_codex_execution_requested,
+        "prompt379_codex_execution_confirmed": prompt379_codex_execution_confirmed,
+        "prompt379_timeout_seconds": timeout_seconds,
+        "prompt379_codex_command_argv": command_argv_metadata,
+        "prompt379_returncode": prompt379_returncode,
+        "prompt379_returncode_classification": prompt379_returncode_classification,
+        "prompt379_post_execution_tracked_source_diff_empty": (
+            prompt379_post_execution_tracked_source_diff_empty
+        ),
+        "prompt379_post_execution_tracked_source_changed_files": (
+            prompt379_post_execution_tracked_source_changed_files
+        ),
+        "prompt379_execution_started_at": prompt379_execution_started_at,
+        "prompt379_execution_finished_at": prompt379_execution_finished_at,
+        "prompt379_summary": prompt379_summary,
+    }
+    receipt_payload: dict[str, Any] = {
+        **bridge_payload,
+        "source_prompt": "prompt379",
+        "prompt379_generated_prompt_codex_execution_bridge_path": str(bridge_path),
+        "prompt379_generated_prompt_codex_execution_receipt_path": str(receipt_path),
+    }
+
+    bridge_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(bridge_path, bridge_payload)
+    _write_json(receipt_path, receipt_payload)
+    return {
+        key: value
+        for key, value in state_payload.items()
+        if key.startswith("prompt379_")
     }
 
 
@@ -219069,6 +219695,8 @@ class PlannedExecutionRunner:
         prompt373_live_execution_requested: bool = False,
         prompt373_live_execution_confirmed: bool = False,
         prompt378_generated_prompt_path: str | None = None,
+        prompt379_codex_execution_requested: bool = False,
+        prompt379_codex_execution_confirmed: bool = False,
     ) -> dict[str, Any]:
         artifacts_root = Path(artifacts_input_dir)
         output_root = Path(output_dir)
@@ -219745,6 +220373,8 @@ class PlannedExecutionRunner:
             **run_state_payload,
             "prompt373_live_execution_requested": bool(prompt373_live_execution_requested),
             "prompt373_live_execution_confirmed": bool(prompt373_live_execution_confirmed),
+            "prompt379_codex_execution_requested": bool(prompt379_codex_execution_requested),
+            "prompt379_codex_execution_confirmed": bool(prompt379_codex_execution_confirmed),
         }
         run_state_payload = _augment_run_state_with_objective_contract_summary(
             run_state_payload=run_state_payload,
@@ -222614,6 +223244,12 @@ class PlannedExecutionRunner:
         prompt378_generated_prompt_intake_receipt_path = (
             run_root / "prompt378_generated_prompt_intake_receipt.json"
         )
+        prompt379_generated_prompt_codex_execution_bridge_path = (
+            run_root / "prompt379_generated_prompt_codex_execution_bridge.json"
+        )
+        prompt379_generated_prompt_codex_execution_receipt_path = (
+            run_root / "prompt379_generated_prompt_codex_execution_receipt.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -222830,6 +223466,24 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt378_chatgpt_generated_prompt_intake_payload,
+        }
+        prompt379_generated_prompt_codex_execution_bridge_payload = (
+            _build_prompt379_generated_prompt_codex_execution_bridge_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+                prompt379_codex_execution_requested=bool(
+                    prompt379_codex_execution_requested
+                ),
+                prompt379_codex_execution_confirmed=bool(
+                    prompt379_codex_execution_confirmed
+                ),
+                now=self.now,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt379_generated_prompt_codex_execution_bridge_payload,
         }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
@@ -223564,6 +224218,18 @@ class PlannedExecutionRunner:
         manifest["prompt378_generated_prompt_intake_receipt_path"] = str(
             prompt378_generated_prompt_intake_receipt_path
         )
+        manifest["prompt379_generated_prompt_codex_execution_bridge_summary"] = dict(
+            prompt379_generated_prompt_codex_execution_bridge_payload
+        )
+        manifest["prompt379_generated_prompt_codex_execution_bridge_path"] = str(
+            prompt379_generated_prompt_codex_execution_bridge_path
+        )
+        manifest["prompt379_generated_prompt_codex_execution_receipt_summary"] = dict(
+            prompt379_generated_prompt_codex_execution_bridge_payload
+        )
+        manifest["prompt379_generated_prompt_codex_execution_receipt_path"] = str(
+            prompt379_generated_prompt_codex_execution_receipt_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -223771,6 +224437,12 @@ class PlannedExecutionRunner:
         contract_summaries_by_role[
             "prompt378_generated_prompt_intake_receipt"
         ] = manifest.get("prompt378_generated_prompt_intake_receipt_summary")
+        contract_summaries_by_role[
+            "prompt379_generated_prompt_codex_execution_bridge"
+        ] = manifest.get("prompt379_generated_prompt_codex_execution_bridge_summary")
+        contract_summaries_by_role[
+            "prompt379_generated_prompt_codex_execution_receipt"
+        ] = manifest.get("prompt379_generated_prompt_codex_execution_receipt_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -223978,6 +224650,12 @@ class PlannedExecutionRunner:
         contract_paths_by_role[
             "prompt378_generated_prompt_intake_receipt"
         ] = manifest.get("prompt378_generated_prompt_intake_receipt_path")
+        contract_paths_by_role[
+            "prompt379_generated_prompt_codex_execution_bridge"
+        ] = manifest.get("prompt379_generated_prompt_codex_execution_bridge_path")
+        contract_paths_by_role[
+            "prompt379_generated_prompt_codex_execution_receipt"
+        ] = manifest.get("prompt379_generated_prompt_codex_execution_receipt_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -226684,6 +227362,90 @@ class PlannedExecutionRunner:
             "prompt378_active_blocked_reasons": _normalize_string_list(
                 prompt378_chatgpt_generated_prompt_intake_payload.get(
                     "prompt378_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt379_generated_prompt_codex_execution_bridge_status": _normalize_text(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_generated_prompt_codex_execution_bridge_status"
+                ),
+                default="blocked",
+            ),
+            "prompt379_prompt378_generated_prompt_ready": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_prompt378_generated_prompt_ready",
+                    False,
+                )
+            ),
+            "prompt379_generated_prompt_path": _normalize_text(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_generated_prompt_path"
+                ),
+                default="",
+            ),
+            "prompt379_generated_prompt_checksum": _normalize_text(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_generated_prompt_checksum"
+                ),
+                default="",
+            ),
+            "prompt379_codex_execution_ready": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_codex_execution_ready",
+                    False,
+                )
+            ),
+            "prompt379_codex_execution_allowed": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt379_codex_execution_attempted": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_codex_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt379_codex_execution_performed": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt379_git_mutation_performed": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt379_remote_mutation_performed": bool(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt379_next_action": _normalize_text(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_next_action"
+                ),
+                default="run_with_explicit_prompt379_codex_execution_flags",
+            ),
+            "prompt379_authoritative_next_action": _normalize_text(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_authoritative_next_action"
+                ),
+                default="run_with_explicit_prompt379_codex_execution_flags",
+            ),
+            "prompt379_active_blocked_reason": _normalize_text(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt379_active_blocked_reasons": _normalize_string_list(
+                prompt379_generated_prompt_codex_execution_bridge_payload.get(
+                    "prompt379_active_blocked_reasons"
                 ),
                 sort_items=False,
             ),
