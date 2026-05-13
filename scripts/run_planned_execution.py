@@ -673,6 +673,14 @@ def _build_parser() -> argparse.ArgumentParser:
             "Without both Prompt383 flags, no local git mutation is attempted."
         ),
     )
+    parser.add_argument(
+        "--enable-prompt387-success-path-dispatch",
+        action="store_true",
+        help=(
+            "Surface Prompt387 success-path dispatch permission in metadata only. "
+            "Prompt387 remains dry-run plan-only and does not execute Codex, ChatGPT, or git."
+        ),
+    )
     parser.add_argument("--stop-on-failure", action="store_true", default=True, help="Stop when a unit fails")
     parser.add_argument("--continue-on-failure", action="store_true", help="Continue processing units after failures")
     parser.add_argument("--json", action="store_true", dest="as_json")
@@ -759,6 +767,9 @@ def main(argv: list[str] | None = None) -> int:
             ),
             prompt383_approve_commit_tag_confirmed=bool(
                 args.prompt383_approve_commit_tag_confirmed
+            ),
+            prompt387_success_path_dispatch_enabled=bool(
+                args.enable_prompt387_success_path_dispatch
             ),
         )
         manifest = _refresh_result_accounting_surfaces(
