@@ -3695,6 +3695,9 @@ _PROMPT373_SCHEMA_VERSION = "prompt373_selected_step_live_codex_execution_v1"
 _PROMPT379_SCHEMA_VERSION = "prompt379_generated_prompt_codex_execution_bridge_v1"
 _PROMPT380_SCHEMA_VERSION = "prompt380_prompt379_result_review_route_decision_v1"
 _PROMPT381_SCHEMA_VERSION = "prompt381_approve_candidate_boundary_v1"
+_PROMPT382_SCHEMA_VERSION = "prompt382_approve_commit_tag_execution_gate_v1"
+_PROMPT382_COMMIT_MESSAGE = "Add Prompt382 approve commit tag execution gate"
+_PROMPT382_TAG_NAME = "prompt382-approve-commit-tag-execution-gate"
 _PROMPT368_DEFAULT_SELECTED_PROMPT_CONTRACT_FILENAME = (
     "prompt369_targeted_fix_route_integration.json"
 )
@@ -54247,6 +54250,380 @@ def _build_prompt381_approve_candidate_boundary_state(
         key: value
         for key, value in prompt381_boundary_payload.items()
         if key.startswith("prompt381_")
+    }
+
+
+def _build_prompt382_approve_commit_tag_execution_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt382_gate_path = (
+        artifact_root / "prompt382_approve_commit_tag_execution_gate.json"
+    )
+    prompt382_plan_path = (
+        artifact_root / "prompt382_approve_commit_tag_execution_plan.json"
+    )
+    prompt381_boundary_path = (
+        artifact_root / "prompt381_approve_candidate_boundary.json"
+    )
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt381_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt381_approve_candidate_boundary_status": _normalize_text(
+                source.get("prompt381_approve_candidate_boundary_status"),
+                default="",
+            ),
+            "prompt381_prompt380_evidence_ready": _prompt357_as_boolish(
+                source.get("prompt381_prompt380_evidence_ready"),
+                default=False,
+            ),
+            "prompt381_prompt380_route_decision": _normalize_text(
+                source.get("prompt381_prompt380_route_decision"),
+                default="",
+            ),
+            "prompt381_prompt380_approve_candidate": _prompt357_as_boolish(
+                source.get("prompt381_prompt380_approve_candidate"),
+                default=False,
+            ),
+            "prompt381_prompt379_execution_performed": _prompt357_as_boolish(
+                source.get("prompt381_prompt379_execution_performed"),
+                default=False,
+            ),
+            "prompt381_prompt379_returncode": source.get(
+                "prompt381_prompt379_returncode"
+            ),
+            "prompt381_prompt379_returncode_classification": _normalize_text(
+                source.get("prompt381_prompt379_returncode_classification"),
+                default="",
+            ),
+            "prompt381_prompt379_post_execution_tracked_diff_empty": (
+                _prompt357_as_boolish(
+                    source.get("prompt381_prompt379_post_execution_tracked_diff_empty"),
+                    default=False,
+                )
+            ),
+            "prompt381_prompt379_post_execution_changed_files": (
+                _normalize_string_list(
+                    source.get("prompt381_prompt379_post_execution_changed_files"),
+                    sort_items=False,
+                )
+            ),
+            "prompt381_approve_candidate_ready": _prompt357_as_boolish(
+                source.get("prompt381_approve_candidate_ready"),
+                default=False,
+            ),
+            "prompt381_approve_candidate_contract_ready": _prompt357_as_boolish(
+                source.get("prompt381_approve_candidate_contract_ready"),
+                default=False,
+            ),
+            "prompt381_approve_commit_tag_allowed": _prompt357_as_boolish(
+                source.get("prompt381_approve_commit_tag_allowed"),
+                default=False,
+            ),
+            "prompt381_approve_commit_tag_performed": _prompt357_as_boolish(
+                source.get("prompt381_approve_commit_tag_performed"),
+                default=False,
+            ),
+            "prompt381_git_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt381_git_mutation_performed"),
+                default=False,
+            ),
+            "prompt381_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt381_remote_mutation_performed"),
+                default=False,
+            ),
+            "prompt381_next_action": _normalize_text(
+                source.get("prompt381_next_action"),
+                default="",
+            ),
+            "prompt381_active_blocked_reason": _normalize_text(
+                source.get("prompt381_active_blocked_reason"),
+                default="",
+            ),
+            "prompt381_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt381_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _has_prompt381_gate_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        required_keys = (
+            "prompt381_approve_candidate_boundary_status",
+            "prompt381_prompt380_evidence_ready",
+            "prompt381_prompt380_route_decision",
+            "prompt381_prompt380_approve_candidate",
+            "prompt381_prompt379_execution_performed",
+            "prompt381_prompt379_returncode",
+            "prompt381_prompt379_returncode_classification",
+            "prompt381_prompt379_post_execution_tracked_diff_empty",
+            "prompt381_prompt379_post_execution_changed_files",
+            "prompt381_approve_candidate_ready",
+            "prompt381_approve_candidate_contract_ready",
+            "prompt381_approve_commit_tag_allowed",
+            "prompt381_approve_commit_tag_performed",
+            "prompt381_git_mutation_performed",
+            "prompt381_remote_mutation_performed",
+            "prompt381_next_action",
+            "prompt381_active_blocked_reason",
+            "prompt381_active_blocked_reasons",
+        )
+        return all(key in raw_payload for key in required_keys)
+
+    def _resolve_prompt381_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt381_gate_evidence(run_state):
+            return _normalize_prompt381_surface(run_state), ""
+
+        prompt381_boundary_payload = _read_json_object_if_exists(prompt381_boundary_path)
+        if _has_prompt381_gate_evidence(prompt381_boundary_payload):
+            return _normalize_prompt381_surface(prompt381_boundary_payload), str(
+                prompt381_boundary_path
+            )
+
+        return _normalize_prompt381_surface(run_state), ""
+
+    prompt381_surface, prompt381_source_path = _resolve_prompt381_surface()
+    prompt382_prompt381_evidence_ready = bool(
+        prompt381_source_path or _has_prompt381_gate_evidence(run_state)
+    )
+    prompt382_prompt381_approve_candidate_ready = bool(
+        prompt381_surface.get("prompt381_approve_candidate_ready", False)
+    )
+    prompt382_prompt381_approve_candidate_contract_ready = bool(
+        prompt381_surface.get("prompt381_approve_candidate_contract_ready", False)
+    )
+    prompt382_prompt381_changed_files = _normalize_string_list(
+        prompt381_surface.get("prompt381_prompt379_post_execution_changed_files"),
+        sort_items=False,
+    )
+
+    prompt382_approve_commit_tag_execution_gate_status = "blocked"
+    prompt382_execution_ready = False
+    prompt382_execution_allowed = False
+    prompt382_execution_attempted = False
+    prompt382_execution_performed = False
+    prompt382_git_add_allowed = False
+    prompt382_git_add_performed = False
+    prompt382_git_commit_allowed = False
+    prompt382_git_commit_performed = False
+    prompt382_git_tag_allowed = False
+    prompt382_git_tag_performed = False
+    prompt382_remote_mutation_allowed = False
+    prompt382_remote_mutation_performed = False
+    prompt382_next_action = "wait_for_prompt381_approve_candidate_ready"
+    prompt382_authoritative_next_action = prompt382_next_action
+    prompt382_active_blocked_reasons: list[str] = []
+
+    prompt381_boundary_status = _normalize_text(
+        prompt381_surface.get("prompt381_approve_candidate_boundary_status"),
+        default="blocked",
+    )
+    prompt379_execution_performed = bool(
+        prompt381_surface.get("prompt381_prompt379_execution_performed", False)
+    )
+    prompt379_returncode = prompt381_surface.get("prompt381_prompt379_returncode")
+    prompt379_returncode_classification = _normalize_text(
+        prompt381_surface.get("prompt381_prompt379_returncode_classification"),
+        default="not_run",
+    )
+    prompt379_execution_success = bool(
+        prompt379_returncode_classification == "success" or prompt379_returncode == 0
+    )
+    prompt379_post_execution_tracked_diff_empty = bool(
+        prompt381_surface.get(
+            "prompt381_prompt379_post_execution_tracked_diff_empty",
+            False,
+        )
+    )
+    prompt381_approve_commit_tag_allowed = bool(
+        prompt381_surface.get("prompt381_approve_commit_tag_allowed", False)
+    )
+    prompt381_approve_commit_tag_performed = bool(
+        prompt381_surface.get("prompt381_approve_commit_tag_performed", False)
+    )
+    prompt381_git_mutation_performed = bool(
+        prompt381_surface.get("prompt381_git_mutation_performed", False)
+    )
+    prompt381_remote_mutation_performed = bool(
+        prompt381_surface.get("prompt381_remote_mutation_performed", False)
+    )
+
+    if not prompt382_prompt381_evidence_ready:
+        _append_reason(prompt382_active_blocked_reasons, "prompt381_evidence_missing")
+    if not prompt382_prompt381_approve_candidate_ready:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt381_approve_candidate_not_ready",
+        )
+    if not prompt382_prompt381_approve_candidate_contract_ready:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt381_approve_candidate_contract_not_ready",
+        )
+    if not prompt379_execution_performed:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt379_execution_not_performed",
+        )
+    if not prompt379_execution_success:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt379_returncode_not_success",
+        )
+    if prompt379_post_execution_tracked_diff_empty:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt379_post_execution_tracked_diff_empty",
+        )
+    if not prompt382_prompt381_changed_files:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt379_post_execution_changed_files_empty",
+        )
+    if prompt381_approve_commit_tag_allowed:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt381_approve_commit_tag_allowed_state_inconsistent",
+        )
+    if prompt381_approve_commit_tag_performed:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt381_approve_commit_tag_already_performed",
+        )
+    if prompt381_git_mutation_performed:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt381_git_mutation_performed",
+        )
+    if prompt381_remote_mutation_performed:
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt381_remote_mutation_performed",
+        )
+    if (
+        prompt381_boundary_status == "ready"
+        and (
+            not prompt382_prompt381_approve_candidate_ready
+            or not prompt382_prompt381_approve_candidate_contract_ready
+        )
+    ):
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt381_boundary_state_inconsistent",
+        )
+    if (
+        prompt381_boundary_status == "blocked"
+        and prompt382_prompt381_approve_candidate_ready
+        and prompt382_prompt381_approve_candidate_contract_ready
+    ):
+        _append_reason(
+            prompt382_active_blocked_reasons,
+            "prompt381_boundary_state_inconsistent",
+        )
+
+    if not prompt382_active_blocked_reasons:
+        prompt382_approve_commit_tag_execution_gate_status = (
+            "ready_for_explicit_execution"
+        )
+        prompt382_execution_ready = True
+        prompt382_next_action = (
+            "run_with_explicit_prompt382_approve_commit_tag_execution_flags"
+        )
+        prompt382_authoritative_next_action = prompt382_next_action
+        prompt382_active_blocked_reasons = [
+            "prompt382_approve_commit_tag_execution_not_explicitly_enabled"
+        ]
+
+    prompt382_active_blocked_reason = (
+        prompt382_active_blocked_reasons[0] if prompt382_active_blocked_reasons else ""
+    )
+    prompt382_summary = (
+        "Prompt382 prepared the explicit local-only approve commit/tag execution gate metadata without performing git mutation."
+        if prompt382_execution_ready
+        else "Prompt382 blocked because the Prompt381 approve-candidate boundary is not ready for explicit approve commit/tag execution."
+    )
+
+    prompt382_gate_payload: dict[str, Any] = {
+        "prompt382_schema_version": _PROMPT382_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt382",
+        "prompt382_prompt381_source_path": prompt381_source_path,
+        "prompt382_approve_commit_tag_execution_gate_status": (
+            prompt382_approve_commit_tag_execution_gate_status
+        ),
+        "prompt382_prompt381_evidence_ready": prompt382_prompt381_evidence_ready,
+        "prompt382_prompt381_approve_candidate_ready": (
+            prompt382_prompt381_approve_candidate_ready
+        ),
+        "prompt382_prompt381_approve_candidate_contract_ready": (
+            prompt382_prompt381_approve_candidate_contract_ready
+        ),
+        "prompt382_prompt381_changed_files": list(prompt382_prompt381_changed_files),
+        "prompt382_commit_message": _PROMPT382_COMMIT_MESSAGE,
+        "prompt382_tag_name": _PROMPT382_TAG_NAME,
+        "prompt382_execution_ready": prompt382_execution_ready,
+        "prompt382_execution_allowed": prompt382_execution_allowed,
+        "prompt382_execution_attempted": prompt382_execution_attempted,
+        "prompt382_execution_performed": prompt382_execution_performed,
+        "prompt382_git_add_allowed": prompt382_git_add_allowed,
+        "prompt382_git_add_performed": prompt382_git_add_performed,
+        "prompt382_git_commit_allowed": prompt382_git_commit_allowed,
+        "prompt382_git_commit_performed": prompt382_git_commit_performed,
+        "prompt382_git_tag_allowed": prompt382_git_tag_allowed,
+        "prompt382_git_tag_performed": prompt382_git_tag_performed,
+        "prompt382_remote_mutation_allowed": prompt382_remote_mutation_allowed,
+        "prompt382_remote_mutation_performed": (
+            prompt382_remote_mutation_performed
+        ),
+        "prompt382_next_action": prompt382_next_action,
+        "prompt382_authoritative_next_action": (
+            prompt382_authoritative_next_action
+        ),
+        "prompt382_active_blocked_reason": prompt382_active_blocked_reason,
+        "prompt382_active_blocked_reasons": prompt382_active_blocked_reasons,
+        "prompt382_summary": prompt382_summary,
+    }
+    prompt382_plan_payload: dict[str, Any] = {
+        **prompt382_gate_payload,
+        "prompt382_plan_type": "approve_commit_tag_execution_plan",
+        "prompt382_follow_on_prompt": "prompt383",
+        "prompt382_plan_is_metadata_only": True,
+        "prompt382_explicit_execution_required": True,
+        "prompt382_explicit_execution_flags_not_yet_enabled": True,
+        "prompt382_planned_git_add_paths": list(prompt382_prompt381_changed_files),
+        "prompt382_planned_git_add_argv": (
+            ["git", "add", *prompt382_prompt381_changed_files]
+            if prompt382_prompt381_changed_files
+            else []
+        ),
+        "prompt382_planned_git_commit_argv": [
+            "git",
+            "commit",
+            "-m",
+            _PROMPT382_COMMIT_MESSAGE,
+        ],
+        "prompt382_planned_git_tag_argv": ["git", "tag", _PROMPT382_TAG_NAME],
+        "prompt382_plan_execution_allowed": False,
+        "prompt382_plan_execution_performed": False,
+    }
+
+    prompt382_gate_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt382_gate_path, prompt382_gate_payload)
+    _write_json(prompt382_plan_path, prompt382_plan_payload)
+    return {
+        key: value
+        for key, value in prompt382_gate_payload.items()
+        if key.startswith("prompt382_")
     }
 
 
@@ -223866,6 +224243,12 @@ class PlannedExecutionRunner:
         prompt381_approve_candidate_contract_path = (
             run_root / "prompt381_approve_candidate_contract.json"
         )
+        prompt382_approve_commit_tag_execution_gate_path = (
+            run_root / "prompt382_approve_commit_tag_execution_gate.json"
+        )
+        prompt382_approve_commit_tag_execution_plan_path = (
+            run_root / "prompt382_approve_commit_tag_execution_plan.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -224120,6 +224503,16 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt381_approve_candidate_boundary_payload,
+        }
+        prompt382_approve_commit_tag_execution_gate_payload = (
+            _build_prompt382_approve_commit_tag_execution_gate_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt382_approve_commit_tag_execution_gate_payload,
         }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
@@ -224884,6 +225277,18 @@ class PlannedExecutionRunner:
         manifest["prompt381_approve_candidate_contract_path"] = str(
             prompt381_approve_candidate_contract_path
         )
+        manifest["prompt382_approve_commit_tag_execution_gate_summary"] = dict(
+            prompt382_approve_commit_tag_execution_gate_payload
+        )
+        manifest["prompt382_approve_commit_tag_execution_gate_path"] = str(
+            prompt382_approve_commit_tag_execution_gate_path
+        )
+        manifest["prompt382_approve_commit_tag_execution_plan_summary"] = dict(
+            prompt382_approve_commit_tag_execution_gate_payload
+        )
+        manifest["prompt382_approve_commit_tag_execution_plan_path"] = str(
+            prompt382_approve_commit_tag_execution_plan_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -225106,6 +225511,12 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt381_approve_candidate_contract"] = (
             manifest.get("prompt381_approve_candidate_contract_summary")
         )
+        contract_summaries_by_role["prompt382_approve_commit_tag_execution_gate"] = (
+            manifest.get("prompt382_approve_commit_tag_execution_gate_summary")
+        )
+        contract_summaries_by_role["prompt382_approve_commit_tag_execution_plan"] = (
+            manifest.get("prompt382_approve_commit_tag_execution_plan_summary")
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -225327,6 +225738,12 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["prompt381_approve_candidate_contract"] = (
             manifest.get("prompt381_approve_candidate_contract_path")
+        )
+        contract_paths_by_role["prompt382_approve_commit_tag_execution_gate"] = (
+            manifest.get("prompt382_approve_commit_tag_execution_gate_path")
+        )
+        contract_paths_by_role["prompt382_approve_commit_tag_execution_plan"] = (
+            manifest.get("prompt382_approve_commit_tag_execution_plan_path")
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -228383,6 +228800,144 @@ class PlannedExecutionRunner:
             "prompt381_active_blocked_reasons": _normalize_string_list(
                 prompt381_approve_candidate_boundary_payload.get(
                     "prompt381_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt382_approve_commit_tag_execution_gate_status": _normalize_text(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_approve_commit_tag_execution_gate_status"
+                ),
+                default="blocked",
+            ),
+            "prompt382_prompt381_evidence_ready": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_prompt381_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt382_prompt381_approve_candidate_ready": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_prompt381_approve_candidate_ready",
+                    False,
+                )
+            ),
+            "prompt382_prompt381_approve_candidate_contract_ready": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_prompt381_approve_candidate_contract_ready",
+                    False,
+                )
+            ),
+            "prompt382_prompt381_changed_files": _normalize_string_list(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_prompt381_changed_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt382_commit_message": _normalize_text(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_commit_message"
+                ),
+                default="",
+            ),
+            "prompt382_tag_name": _normalize_text(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_tag_name"
+                ),
+                default="",
+            ),
+            "prompt382_execution_ready": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_execution_ready",
+                    False,
+                )
+            ),
+            "prompt382_execution_allowed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt382_execution_attempted": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt382_execution_performed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_execution_performed",
+                    False,
+                )
+            ),
+            "prompt382_git_add_allowed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_git_add_allowed",
+                    False,
+                )
+            ),
+            "prompt382_git_add_performed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_git_add_performed",
+                    False,
+                )
+            ),
+            "prompt382_git_commit_allowed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_git_commit_allowed",
+                    False,
+                )
+            ),
+            "prompt382_git_commit_performed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_git_commit_performed",
+                    False,
+                )
+            ),
+            "prompt382_git_tag_allowed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_git_tag_allowed",
+                    False,
+                )
+            ),
+            "prompt382_git_tag_performed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_git_tag_performed",
+                    False,
+                )
+            ),
+            "prompt382_remote_mutation_allowed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt382_remote_mutation_performed": bool(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt382_next_action": _normalize_text(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_next_action"
+                ),
+                default="wait_for_prompt381_approve_candidate_ready",
+            ),
+            "prompt382_authoritative_next_action": _normalize_text(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_authoritative_next_action"
+                ),
+                default="wait_for_prompt381_approve_candidate_ready",
+            ),
+            "prompt382_active_blocked_reason": _normalize_text(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt382_active_blocked_reasons": _normalize_string_list(
+                prompt382_approve_commit_tag_execution_gate_payload.get(
+                    "prompt382_active_blocked_reasons"
                 ),
                 sort_items=False,
             ),
