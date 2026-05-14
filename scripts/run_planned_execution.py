@@ -681,6 +681,23 @@ def _build_parser() -> argparse.ArgumentParser:
             "Prompt387 remains dry-run plan-only and does not execute Codex, ChatGPT, or git."
         ),
     )
+    parser.add_argument(
+        "--enable-prompt389-bounded-repeated-success-path-loop",
+        action="store_true",
+        help=(
+            "Explicitly allow Prompt389 to attempt bounded repeated success-path loop execution. "
+            "Without this flag Prompt389 remains blocked-by-default and non-mutating."
+        ),
+    )
+    parser.add_argument(
+        "--prompt389-max-cycles",
+        type=int,
+        default=None,
+        help=(
+            "Optional Prompt389 bounded repeated-loop max cycle count. "
+            "Defaults to 2 and is capped at 5 by Prompt389."
+        ),
+    )
     parser.add_argument("--stop-on-failure", action="store_true", default=True, help="Stop when a unit fails")
     parser.add_argument("--continue-on-failure", action="store_true", help="Continue processing units after failures")
     parser.add_argument("--json", action="store_true", dest="as_json")
@@ -771,6 +788,10 @@ def main(argv: list[str] | None = None) -> int:
             prompt387_success_path_dispatch_enabled=bool(
                 args.enable_prompt387_success_path_dispatch
             ),
+            prompt389_bounded_repeated_success_path_loop_enabled=bool(
+                args.enable_prompt389_bounded_repeated_success_path_loop
+            ),
+            prompt389_max_cycles=args.prompt389_max_cycles,
         )
         manifest = _refresh_result_accounting_surfaces(
             manifest=manifest,
