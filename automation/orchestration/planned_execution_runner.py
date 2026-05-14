@@ -3711,6 +3711,9 @@ _PROMPT388_SCHEMA_VERSION = (
 _PROMPT389_SCHEMA_VERSION = (
     "prompt389_explicit_bounded_repeated_success_path_loop_execution_v1"
 )
+_PROMPT390_SCHEMA_VERSION = (
+    "prompt390_prompt389_next_action_reconciliation_enabled_run_readiness_v1"
+)
 _PROMPT382_COMMIT_MESSAGE = "Add Prompt382 approve commit tag execution gate"
 _PROMPT382_TAG_NAME = "prompt382-approve-commit-tag-execution-gate"
 _PROMPT385_GENERATED_PROMPT_INTAKE_METHOD = "prompt378_generated_prompt_path"
@@ -4578,6 +4581,60 @@ _PROMPT389_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt389_authoritative_next_action",
     "prompt389_active_blocked_reason",
     "prompt389_active_blocked_reasons",
+)
+_PROMPT390_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt390_prompt389_next_action_reconciliation_status",
+    "prompt390_prompt389_evidence_ready",
+    "prompt390_prompt389_gate_status",
+    "prompt390_prompt389_next_action",
+    "prompt390_prompt389_authoritative_next_action",
+    "prompt390_prompt389_next_action_match",
+    "prompt390_prompt389_next_action_canonical",
+    "prompt390_prompt389_next_action_reconciliation_required",
+    "prompt390_prompt389_next_action_reconciled",
+    "prompt390_prompt389_active_blocked_reason",
+    "prompt390_prompt389_completion_gate_ready",
+    "prompt390_prompt389_repeated_cycle_execution_allowed",
+    "prompt390_prompt389_repeated_cycle_execution_attempted",
+    "prompt390_prompt389_repeated_cycle_execution_performed",
+    "prompt390_prompt389_cycles_attempted",
+    "prompt390_prompt389_cycles_completed",
+    "prompt390_success_path_only",
+    "prompt390_local_only",
+    "prompt390_bounded",
+    "prompt390_failure_route_supported",
+    "prompt390_retry_route_supported",
+    "prompt390_rollback_supported",
+    "prompt390_remote_route_supported",
+    "prompt390_enabled_run_readiness_status",
+    "prompt390_enabled_run_ready",
+    "prompt390_enabled_run_blocked_reason",
+    "prompt390_enabled_run_blocked_reasons",
+    "prompt390_explicit_enable_required",
+    "prompt390_explicit_enable_supplied",
+    "prompt390_generated_prompt_path_required",
+    "prompt390_generated_prompt_path_supplied",
+    "prompt390_max_cycles_allowed",
+    "prompt390_safe_upper_bound_max_cycles",
+    "prompt390_codex_execution_allowed",
+    "prompt390_codex_execution_attempted",
+    "prompt390_codex_execution_performed",
+    "prompt390_chatgpt_invocation_allowed",
+    "prompt390_chatgpt_invocation_attempted",
+    "prompt390_chatgpt_invocation_performed",
+    "prompt390_git_mutation_allowed",
+    "prompt390_git_mutation_attempted",
+    "prompt390_git_mutation_performed",
+    "prompt390_remote_mutation_allowed",
+    "prompt390_remote_mutation_attempted",
+    "prompt390_remote_mutation_performed",
+    "prompt390_reconciliation_path",
+    "prompt390_enabled_run_readiness_path",
+    "prompt390_reconciliation_receipt_path",
+    "prompt390_next_action",
+    "prompt390_authoritative_next_action",
+    "prompt390_active_blocked_reason",
+    "prompt390_active_blocked_reasons",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -6554,6 +6611,23 @@ def _merge_prompt389_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT389_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt390_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt390_prompt389_next_action_reconciliation_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt390_prompt389_next_action_reconciliation_state)
+        if isinstance(prompt390_prompt389_next_action_reconciliation_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT390_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -59916,6 +59990,618 @@ def _build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state
     }
 
 
+def _build_prompt390_prompt389_next_action_reconciliation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt390_reconciliation_path = (
+        artifact_root / "prompt390_prompt389_next_action_reconciliation.json"
+    )
+    prompt390_enabled_run_readiness_path = (
+        artifact_root / "prompt390_prompt389_enabled_run_readiness.json"
+    )
+    prompt390_reconciliation_receipt_path = (
+        artifact_root / "prompt390_prompt389_reconciliation_receipt.json"
+    )
+    prompt389_execution_gate_path = (
+        artifact_root
+        / "prompt389_explicit_bounded_repeated_success_path_loop_execution_gate.json"
+    )
+    prompt389_execution_plan_path = (
+        artifact_root / "prompt389_bounded_repeated_success_path_loop_execution_plan.json"
+    )
+    prompt389_execution_receipt_path = (
+        artifact_root
+        / "prompt389_bounded_repeated_success_path_loop_execution_receipt.json"
+    )
+    run_state = dict(run_state_payload or {})
+
+    def _has_prompt389_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        return all(key in raw_payload for key in _PROMPT389_APPROVED_RESTART_SURFACE_KEYS)
+
+    def _normalize_prompt389_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt389_explicit_bounded_repeated_success_path_loop_execution_gate_status": _normalize_text(
+                source.get(
+                    "prompt389_explicit_bounded_repeated_success_path_loop_execution_gate_status"
+                ),
+                default="blocked",
+            ),
+            "prompt389_prompt388_completion_gate_ready": bool(
+                source.get("prompt389_prompt388_completion_gate_ready", False)
+            ),
+            "prompt389_success_path_only": bool(
+                source.get("prompt389_success_path_only", True)
+            ),
+            "prompt389_local_only": bool(source.get("prompt389_local_only", True)),
+            "prompt389_bounded": bool(source.get("prompt389_bounded", True)),
+            "prompt389_failure_route_supported": bool(
+                source.get("prompt389_failure_route_supported", False)
+            ),
+            "prompt389_retry_route_supported": bool(
+                source.get("prompt389_retry_route_supported", False)
+            ),
+            "prompt389_rollback_supported": bool(
+                source.get("prompt389_rollback_supported", False)
+            ),
+            "prompt389_remote_route_supported": bool(
+                source.get("prompt389_remote_route_supported", False)
+            ),
+            "prompt389_explicit_enable_required": bool(
+                source.get("prompt389_explicit_enable_required", True)
+            ),
+            "prompt389_explicit_enable_supplied": bool(
+                source.get("prompt389_explicit_enable_supplied", False)
+            ),
+            "prompt389_generated_prompt_path_required": bool(
+                source.get("prompt389_generated_prompt_path_required", True)
+            ),
+            "prompt389_generated_prompt_path_supplied": bool(
+                source.get("prompt389_generated_prompt_path_supplied", False)
+            ),
+            "prompt389_max_cycles_allowed": bool(
+                source.get("prompt389_max_cycles_allowed", False)
+            ),
+            "prompt389_safe_upper_bound_max_cycles": _as_non_negative_int(
+                source.get("prompt389_safe_upper_bound_max_cycles"),
+                default=_PROMPT389_SAFE_UPPER_BOUND_MAX_CYCLES,
+            ),
+            "prompt389_repeated_cycle_execution_allowed": bool(
+                source.get("prompt389_repeated_cycle_execution_allowed", False)
+            ),
+            "prompt389_repeated_cycle_execution_attempted": bool(
+                source.get("prompt389_repeated_cycle_execution_attempted", False)
+            ),
+            "prompt389_repeated_cycle_execution_performed": bool(
+                source.get("prompt389_repeated_cycle_execution_performed", False)
+            ),
+            "prompt389_cycles_attempted": _as_non_negative_int(
+                source.get("prompt389_cycles_attempted"),
+                default=0,
+            ),
+            "prompt389_cycles_completed": _as_non_negative_int(
+                source.get("prompt389_cycles_completed"),
+                default=0,
+            ),
+            "prompt389_codex_execution_allowed": bool(
+                source.get("prompt389_codex_execution_allowed", False)
+            ),
+            "prompt389_codex_execution_attempted": bool(
+                source.get("prompt389_codex_execution_attempted", False)
+            ),
+            "prompt389_codex_execution_performed": bool(
+                source.get("prompt389_codex_execution_performed", False)
+            ),
+            "prompt389_chatgpt_invocation_allowed": bool(
+                source.get("prompt389_chatgpt_invocation_allowed", False)
+            ),
+            "prompt389_chatgpt_invocation_attempted": bool(
+                source.get("prompt389_chatgpt_invocation_attempted", False)
+            ),
+            "prompt389_chatgpt_invocation_performed": bool(
+                source.get("prompt389_chatgpt_invocation_performed", False)
+            ),
+            "prompt389_git_mutation_allowed": bool(
+                source.get("prompt389_git_mutation_allowed", False)
+            ),
+            "prompt389_git_mutation_attempted": bool(
+                source.get("prompt389_git_mutation_attempted", False)
+            ),
+            "prompt389_git_mutation_performed": bool(
+                source.get("prompt389_git_mutation_performed", False)
+            ),
+            "prompt389_remote_mutation_allowed": bool(
+                source.get("prompt389_remote_mutation_allowed", False)
+            ),
+            "prompt389_remote_mutation_attempted": bool(
+                source.get("prompt389_remote_mutation_attempted", False)
+            ),
+            "prompt389_remote_mutation_performed": bool(
+                source.get("prompt389_remote_mutation_performed", False)
+            ),
+            "prompt389_next_action": _normalize_text(
+                source.get("prompt389_next_action"),
+                default="wait_for_prompt388_evidence",
+            ),
+            "prompt389_authoritative_next_action": _normalize_text(
+                source.get("prompt389_authoritative_next_action"),
+                default="wait_for_prompt388_evidence",
+            ),
+            "prompt389_active_blocked_reason": _normalize_text(
+                source.get("prompt389_active_blocked_reason"),
+                default="",
+            ),
+            "prompt389_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt389_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _resolve_prompt389_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt389_evidence(run_state):
+            return _normalize_prompt389_surface(run_state), ""
+        for candidate_path in (
+            prompt389_execution_gate_path,
+            prompt389_execution_plan_path,
+            prompt389_execution_receipt_path,
+        ):
+            payload = _read_json_object_if_exists(candidate_path)
+            if _has_prompt389_evidence(payload):
+                return _normalize_prompt389_surface(payload), str(candidate_path)
+        return _normalize_prompt389_surface(run_state), ""
+
+    def _map_prompt389_block_reason(reason: str, *, default: str = "") -> str:
+        normalized_reason = _normalize_text(reason, default=default)
+        if not normalized_reason:
+            return ""
+        if normalized_reason.startswith("prompt388_"):
+            return f"prompt389_{normalized_reason[len('prompt388_'):]}"
+        return normalized_reason
+
+    def _map_prompt389_block_reasons(reasons: Sequence[str] | None) -> list[str]:
+        mapped: list[str] = []
+        for reason in reasons or ():
+            normalized_reason = _map_prompt389_block_reason(reason)
+            if normalized_reason and normalized_reason not in mapped:
+                mapped.append(normalized_reason)
+        return mapped
+
+    def _canonical_next_action(
+        prompt389_surface: Mapping[str, Any],
+        *,
+        evidence_ready: bool,
+    ) -> str:
+        if not evidence_ready:
+            return "wait_for_prompt388_evidence"
+        if not bool(prompt389_surface.get("prompt389_prompt388_completion_gate_ready", False)):
+            return "wait_for_prompt388_completion_gate_ready"
+        if _normalize_text(
+            prompt389_surface.get(
+                "prompt389_explicit_bounded_repeated_success_path_loop_execution_gate_status"
+            ),
+            default="blocked",
+        ) == "ready" and bool(
+            prompt389_surface.get("prompt389_repeated_cycle_execution_allowed", False)
+        ):
+            return "run_prompt389_enabled_readiness_probe_or_enabled_loop"
+        next_action = _normalize_text(
+            prompt389_surface.get("prompt389_next_action"),
+            default="",
+        )
+        if next_action:
+            return next_action
+        authoritative_next_action = _normalize_text(
+            prompt389_surface.get("prompt389_authoritative_next_action"),
+            default="",
+        )
+        if authoritative_next_action:
+            return authoritative_next_action
+        return "wait_for_prompt388_completion_gate_ready"
+
+    prompt389_surface, prompt389_source_path = _resolve_prompt389_surface()
+    prompt390_prompt389_evidence_ready = bool(
+        prompt389_source_path or _has_prompt389_evidence(run_state)
+    )
+    prompt390_prompt389_gate_status = _normalize_text(
+        prompt389_surface.get(
+            "prompt389_explicit_bounded_repeated_success_path_loop_execution_gate_status"
+        ),
+        default="blocked",
+    )
+    prompt390_prompt389_completion_gate_ready = bool(
+        prompt389_surface.get("prompt389_prompt388_completion_gate_ready", False)
+    )
+    prompt390_prompt389_repeated_cycle_execution_allowed = bool(
+        prompt389_surface.get("prompt389_repeated_cycle_execution_allowed", False)
+    )
+    prompt390_prompt389_repeated_cycle_execution_attempted = bool(
+        prompt389_surface.get("prompt389_repeated_cycle_execution_attempted", False)
+    )
+    prompt390_prompt389_repeated_cycle_execution_performed = bool(
+        prompt389_surface.get("prompt389_repeated_cycle_execution_performed", False)
+    )
+    prompt390_prompt389_cycles_attempted = _as_non_negative_int(
+        prompt389_surface.get("prompt389_cycles_attempted"),
+        default=0,
+    )
+    prompt390_prompt389_cycles_completed = _as_non_negative_int(
+        prompt389_surface.get("prompt389_cycles_completed"),
+        default=0,
+    )
+    prompt390_success_path_only = bool(
+        prompt389_surface.get("prompt389_success_path_only", True)
+    )
+    prompt390_local_only = bool(prompt389_surface.get("prompt389_local_only", True))
+    prompt390_bounded = bool(prompt389_surface.get("prompt389_bounded", True))
+    prompt390_failure_route_supported = bool(
+        prompt389_surface.get("prompt389_failure_route_supported", False)
+    )
+    prompt390_retry_route_supported = bool(
+        prompt389_surface.get("prompt389_retry_route_supported", False)
+    )
+    prompt390_rollback_supported = bool(
+        prompt389_surface.get("prompt389_rollback_supported", False)
+    )
+    prompt390_remote_route_supported = bool(
+        prompt389_surface.get("prompt389_remote_route_supported", False)
+    )
+    prompt390_explicit_enable_required = bool(
+        prompt389_surface.get("prompt389_explicit_enable_required", True)
+    )
+    prompt390_explicit_enable_supplied = bool(
+        prompt389_surface.get("prompt389_explicit_enable_supplied", False)
+    )
+    prompt390_generated_prompt_path_required = bool(
+        prompt389_surface.get("prompt389_generated_prompt_path_required", True)
+    )
+    prompt390_generated_prompt_path_supplied = bool(
+        prompt389_surface.get("prompt389_generated_prompt_path_supplied", False)
+    )
+    prompt390_max_cycles_allowed = bool(
+        prompt389_surface.get("prompt389_max_cycles_allowed", False)
+    )
+    prompt390_safe_upper_bound_max_cycles = _as_non_negative_int(
+        prompt389_surface.get("prompt389_safe_upper_bound_max_cycles"),
+        default=_PROMPT389_SAFE_UPPER_BOUND_MAX_CYCLES,
+    )
+    prompt390_codex_execution_allowed = bool(
+        prompt389_surface.get("prompt389_codex_execution_allowed", False)
+    )
+    prompt390_codex_execution_attempted = bool(
+        prompt389_surface.get("prompt389_codex_execution_attempted", False)
+    )
+    prompt390_codex_execution_performed = bool(
+        prompt389_surface.get("prompt389_codex_execution_performed", False)
+    )
+    prompt390_chatgpt_invocation_allowed = bool(
+        prompt389_surface.get("prompt389_chatgpt_invocation_allowed", False)
+    )
+    prompt390_chatgpt_invocation_attempted = bool(
+        prompt389_surface.get("prompt389_chatgpt_invocation_attempted", False)
+    )
+    prompt390_chatgpt_invocation_performed = bool(
+        prompt389_surface.get("prompt389_chatgpt_invocation_performed", False)
+    )
+    prompt390_git_mutation_allowed = bool(
+        prompt389_surface.get("prompt389_git_mutation_allowed", False)
+    )
+    prompt390_git_mutation_attempted = bool(
+        prompt389_surface.get("prompt389_git_mutation_attempted", False)
+    )
+    prompt390_git_mutation_performed = bool(
+        prompt389_surface.get("prompt389_git_mutation_performed", False)
+    )
+    prompt390_remote_mutation_allowed = bool(
+        prompt389_surface.get("prompt389_remote_mutation_allowed", False)
+    )
+    prompt390_remote_mutation_attempted = bool(
+        prompt389_surface.get("prompt389_remote_mutation_attempted", False)
+    )
+    prompt390_remote_mutation_performed = bool(
+        prompt389_surface.get("prompt389_remote_mutation_performed", False)
+    )
+    prompt390_prompt389_active_blocked_reason = _normalize_text(
+        prompt389_surface.get("prompt389_active_blocked_reason"),
+        default=(
+            "prompt388_evidence_missing"
+            if not prompt390_prompt389_evidence_ready
+            else (
+                "prompt388_completion_gate_not_ready"
+                if not prompt390_prompt389_completion_gate_ready
+                else ""
+            )
+        ),
+    )
+    prompt390_prompt389_next_action_canonical = _canonical_next_action(
+        prompt389_surface,
+        evidence_ready=prompt390_prompt389_evidence_ready,
+    )
+    prompt390_prompt389_next_action = _normalize_text(
+        prompt389_surface.get("prompt389_next_action"),
+        default=prompt390_prompt389_next_action_canonical,
+    )
+    prompt390_prompt389_authoritative_next_action = _normalize_text(
+        prompt389_surface.get("prompt389_authoritative_next_action"),
+        default="",
+    )
+    if (
+        prompt390_prompt389_evidence_ready
+        and prompt390_prompt389_active_blocked_reason
+        == "prompt388_completion_gate_not_ready"
+    ):
+        prompt390_prompt389_authoritative_next_action = "wait_for_prompt388_evidence"
+    elif not prompt390_prompt389_authoritative_next_action:
+        prompt390_prompt389_authoritative_next_action = (
+            prompt390_prompt389_next_action_canonical
+        )
+    prompt390_prompt389_next_action_match = (
+        prompt390_prompt389_next_action
+        == prompt390_prompt389_authoritative_next_action
+    )
+    prompt390_prompt389_next_action_reconciliation_required = bool(
+        prompt390_prompt389_evidence_ready
+        and (
+            not prompt390_prompt389_next_action_match
+            or (
+                prompt390_prompt389_next_action
+                != prompt390_prompt389_next_action_canonical
+            )
+            or (
+                prompt390_prompt389_authoritative_next_action
+                != prompt390_prompt389_next_action_canonical
+            )
+        )
+    )
+    prompt390_prompt389_next_action_reconciled = bool(
+        prompt390_prompt389_evidence_ready
+    )
+    prompt390_prompt389_next_action_reconciliation_status = (
+        "completed" if prompt390_prompt389_evidence_ready else "blocked"
+    )
+
+    prompt390_enabled_run_ready = bool(
+        prompt390_prompt389_evidence_ready
+        and prompt390_prompt389_gate_status == "ready"
+        and prompt390_prompt389_repeated_cycle_execution_allowed
+    )
+    prompt390_enabled_run_readiness_status = (
+        "ready" if prompt390_enabled_run_ready else "blocked"
+    )
+    prompt390_enabled_run_blocked_reasons = _map_prompt389_block_reasons(
+        prompt389_surface.get("prompt389_active_blocked_reasons")
+        if isinstance(prompt389_surface.get("prompt389_active_blocked_reasons"), list)
+        else []
+    )
+    if not prompt390_enabled_run_ready:
+        default_blocked_reason = _map_prompt389_block_reason(
+            prompt390_prompt389_active_blocked_reason,
+            default="prompt389_enabled_run_not_ready",
+        )
+        if not prompt390_prompt389_evidence_ready:
+            default_blocked_reason = "prompt389_evidence_missing"
+        elif not prompt390_prompt389_completion_gate_ready:
+            default_blocked_reason = "prompt389_completion_gate_not_ready"
+        elif not default_blocked_reason:
+            default_blocked_reason = "prompt389_enabled_run_not_ready"
+        if not prompt390_enabled_run_blocked_reasons:
+            prompt390_enabled_run_blocked_reasons = [default_blocked_reason]
+        prompt390_enabled_run_blocked_reason = (
+            prompt390_enabled_run_blocked_reasons[0]
+            if prompt390_enabled_run_blocked_reasons
+            else default_blocked_reason
+        )
+        prompt390_next_action = prompt390_prompt389_next_action_canonical
+        prompt390_authoritative_next_action = prompt390_prompt389_next_action_canonical
+        prompt390_active_blocked_reason = prompt390_enabled_run_blocked_reason
+        prompt390_active_blocked_reasons = list(prompt390_enabled_run_blocked_reasons)
+    else:
+        prompt390_enabled_run_blocked_reason = ""
+        prompt390_enabled_run_blocked_reasons = []
+        prompt390_next_action = "run_prompt389_enabled_readiness_probe_or_enabled_loop"
+        prompt390_authoritative_next_action = prompt390_next_action
+        prompt390_active_blocked_reason = ""
+        prompt390_active_blocked_reasons = []
+
+    prompt390_state: dict[str, Any] = {
+        "prompt390_prompt389_next_action_reconciliation_status": (
+            prompt390_prompt389_next_action_reconciliation_status
+        ),
+        "prompt390_prompt389_evidence_ready": prompt390_prompt389_evidence_ready,
+        "prompt390_prompt389_gate_status": prompt390_prompt389_gate_status,
+        "prompt390_prompt389_next_action": prompt390_prompt389_next_action,
+        "prompt390_prompt389_authoritative_next_action": (
+            prompt390_prompt389_authoritative_next_action
+        ),
+        "prompt390_prompt389_next_action_match": prompt390_prompt389_next_action_match,
+        "prompt390_prompt389_next_action_canonical": (
+            prompt390_prompt389_next_action_canonical
+        ),
+        "prompt390_prompt389_next_action_reconciliation_required": (
+            prompt390_prompt389_next_action_reconciliation_required
+        ),
+        "prompt390_prompt389_next_action_reconciled": (
+            prompt390_prompt389_next_action_reconciled
+        ),
+        "prompt390_prompt389_active_blocked_reason": (
+            prompt390_prompt389_active_blocked_reason
+        ),
+        "prompt390_prompt389_completion_gate_ready": (
+            prompt390_prompt389_completion_gate_ready
+        ),
+        "prompt390_prompt389_repeated_cycle_execution_allowed": (
+            prompt390_prompt389_repeated_cycle_execution_allowed
+        ),
+        "prompt390_prompt389_repeated_cycle_execution_attempted": (
+            prompt390_prompt389_repeated_cycle_execution_attempted
+        ),
+        "prompt390_prompt389_repeated_cycle_execution_performed": (
+            prompt390_prompt389_repeated_cycle_execution_performed
+        ),
+        "prompt390_prompt389_cycles_attempted": prompt390_prompt389_cycles_attempted,
+        "prompt390_prompt389_cycles_completed": prompt390_prompt389_cycles_completed,
+        "prompt390_success_path_only": prompt390_success_path_only,
+        "prompt390_local_only": prompt390_local_only,
+        "prompt390_bounded": prompt390_bounded,
+        "prompt390_failure_route_supported": prompt390_failure_route_supported,
+        "prompt390_retry_route_supported": prompt390_retry_route_supported,
+        "prompt390_rollback_supported": prompt390_rollback_supported,
+        "prompt390_remote_route_supported": prompt390_remote_route_supported,
+        "prompt390_enabled_run_readiness_status": (
+            prompt390_enabled_run_readiness_status
+        ),
+        "prompt390_enabled_run_ready": prompt390_enabled_run_ready,
+        "prompt390_enabled_run_blocked_reason": prompt390_enabled_run_blocked_reason,
+        "prompt390_enabled_run_blocked_reasons": list(
+            prompt390_enabled_run_blocked_reasons
+        ),
+        "prompt390_explicit_enable_required": prompt390_explicit_enable_required,
+        "prompt390_explicit_enable_supplied": prompt390_explicit_enable_supplied,
+        "prompt390_generated_prompt_path_required": (
+            prompt390_generated_prompt_path_required
+        ),
+        "prompt390_generated_prompt_path_supplied": (
+            prompt390_generated_prompt_path_supplied
+        ),
+        "prompt390_max_cycles_allowed": prompt390_max_cycles_allowed,
+        "prompt390_safe_upper_bound_max_cycles": (
+            prompt390_safe_upper_bound_max_cycles
+        ),
+        "prompt390_codex_execution_allowed": prompt390_codex_execution_allowed,
+        "prompt390_codex_execution_attempted": prompt390_codex_execution_attempted,
+        "prompt390_codex_execution_performed": prompt390_codex_execution_performed,
+        "prompt390_chatgpt_invocation_allowed": (
+            prompt390_chatgpt_invocation_allowed
+        ),
+        "prompt390_chatgpt_invocation_attempted": (
+            prompt390_chatgpt_invocation_attempted
+        ),
+        "prompt390_chatgpt_invocation_performed": (
+            prompt390_chatgpt_invocation_performed
+        ),
+        "prompt390_git_mutation_allowed": prompt390_git_mutation_allowed,
+        "prompt390_git_mutation_attempted": prompt390_git_mutation_attempted,
+        "prompt390_git_mutation_performed": prompt390_git_mutation_performed,
+        "prompt390_remote_mutation_allowed": prompt390_remote_mutation_allowed,
+        "prompt390_remote_mutation_attempted": prompt390_remote_mutation_attempted,
+        "prompt390_remote_mutation_performed": prompt390_remote_mutation_performed,
+        "prompt390_reconciliation_path": str(prompt390_reconciliation_path),
+        "prompt390_enabled_run_readiness_path": str(
+            prompt390_enabled_run_readiness_path
+        ),
+        "prompt390_reconciliation_receipt_path": str(
+            prompt390_reconciliation_receipt_path
+        ),
+        "prompt390_next_action": prompt390_next_action,
+        "prompt390_authoritative_next_action": prompt390_authoritative_next_action,
+        "prompt390_active_blocked_reason": prompt390_active_blocked_reason,
+        "prompt390_active_blocked_reasons": list(prompt390_active_blocked_reasons),
+    }
+    reconciliation_payload = {
+        "prompt390_schema_version": _PROMPT390_SCHEMA_VERSION,
+        "source_prompt": "prompt390",
+        "status": prompt390_prompt389_next_action_reconciliation_status,
+        "reconciliation_status": prompt390_prompt389_next_action_reconciliation_status,
+        "blocked_reason": (
+            "none" if prompt390_prompt389_evidence_ready else "prompt389_evidence_missing"
+        ),
+        "prompt389_source_path": prompt389_source_path,
+        "prompt389_gate_status": prompt390_prompt389_gate_status,
+        "prompt389_next_action": prompt390_prompt389_next_action,
+        "prompt389_authoritative_next_action": (
+            prompt390_prompt389_authoritative_next_action
+        ),
+        "prompt389_next_action_match": prompt390_prompt389_next_action_match,
+        "prompt389_next_action_canonical": prompt390_prompt389_next_action_canonical,
+        "prompt389_next_action_reconciliation_required": (
+            prompt390_prompt389_next_action_reconciliation_required
+        ),
+        "prompt389_next_action_reconciled": (
+            prompt390_prompt389_next_action_reconciled
+        ),
+        "next_action": prompt390_next_action,
+        "authoritative_next_action": prompt390_authoritative_next_action,
+        "summary": (
+            "Prompt390 reconciled Prompt389 next-action metadata."
+            if prompt390_prompt389_evidence_ready
+            else "Prompt390 is blocked because Prompt389 evidence is missing."
+        ),
+        "prompt390_state": dict(prompt390_state),
+        **prompt390_state,
+    }
+    enabled_run_readiness_payload = {
+        "prompt390_schema_version": _PROMPT390_SCHEMA_VERSION,
+        "source_prompt": "prompt390",
+        "status": prompt390_enabled_run_readiness_status,
+        "readiness_status": prompt390_enabled_run_readiness_status,
+        "blocked_reason": _normalize_text(
+            prompt390_enabled_run_blocked_reason,
+            default="none" if prompt390_enabled_run_ready else "prompt389_enabled_run_not_ready",
+        ),
+        "blocked_reasons": list(prompt390_enabled_run_blocked_reasons),
+        "prompt389_source_path": prompt389_source_path,
+        "prompt389_gate_status": prompt390_prompt389_gate_status,
+        "enabled_run_ready": prompt390_enabled_run_ready,
+        "explicit_enable_required": prompt390_explicit_enable_required,
+        "explicit_enable_supplied": prompt390_explicit_enable_supplied,
+        "generated_prompt_path_required": prompt390_generated_prompt_path_required,
+        "generated_prompt_path_supplied": prompt390_generated_prompt_path_supplied,
+        "max_cycles_allowed": prompt390_max_cycles_allowed,
+        "safe_upper_bound_max_cycles": prompt390_safe_upper_bound_max_cycles,
+        "execution_allowed": False,
+        "execution_attempted": False,
+        "execution_performed": False,
+        "next_action": prompt390_next_action,
+        "authoritative_next_action": prompt390_authoritative_next_action,
+        "summary": (
+            "Prompt390 determined Prompt389 is ready for explicit enabled-run preparation."
+            if prompt390_enabled_run_ready
+            else "Prompt390 determined Prompt389 enabled-run preparation remains blocked."
+        ),
+        "prompt390_state": dict(prompt390_state),
+        **prompt390_state,
+    }
+    reconciliation_receipt_payload = {
+        "prompt390_schema_version": _PROMPT390_SCHEMA_VERSION,
+        "source_prompt": "prompt390",
+        "status": (
+            "completed" if prompt390_prompt389_evidence_ready else "blocked"
+        ),
+        "reconciliation_status": prompt390_prompt389_next_action_reconciliation_status,
+        "enabled_run_readiness_status": prompt390_enabled_run_readiness_status,
+        "prompt389_source_path": prompt389_source_path,
+        "prompt389_evidence_ready": prompt390_prompt389_evidence_ready,
+        "next_action": prompt390_next_action,
+        "authoritative_next_action": prompt390_authoritative_next_action,
+        "active_blocked_reason": _normalize_text(
+            prompt390_active_blocked_reason,
+            default="none" if prompt390_enabled_run_ready else "prompt389_enabled_run_not_ready",
+        ),
+        "active_blocked_reasons": list(prompt390_active_blocked_reasons),
+        "reconciliation_path": str(prompt390_reconciliation_path),
+        "enabled_run_readiness_path": str(prompt390_enabled_run_readiness_path),
+        "summary": (
+            "Prompt390 emitted reconciliation and enabled-run readiness artifacts."
+            if prompt390_prompt389_evidence_ready
+            else "Prompt390 could not emit a completed receipt because Prompt389 evidence is missing."
+        ),
+        "prompt390_state": dict(prompt390_state),
+        **prompt390_state,
+    }
+
+    prompt390_reconciliation_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt390_reconciliation_path, reconciliation_payload)
+    _write_json(prompt390_enabled_run_readiness_path, enabled_run_readiness_payload)
+    _write_json(prompt390_reconciliation_receipt_path, reconciliation_receipt_payload)
+    return {
+        key: value for key, value in prompt390_state.items() if key.startswith("prompt390_")
+    }
+
+
 def _merge_prompt376_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -60574,6 +61260,64 @@ def _merge_prompt389_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt389_next_action"
             if _normalize_text(prompt389.get("prompt389_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt390_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt390_prompt389_next_action_reconciliation_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt390 = (
+        dict(prompt390_prompt389_next_action_reconciliation_payload)
+        if isinstance(prompt390_prompt389_next_action_reconciliation_payload, Mapping)
+        else {}
+    )
+    for key in _PROMPT390_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt390 and prompt390.get(key) is not None:
+            payload[key] = prompt390.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt390_prompt389_next_action_reconciliation_status"
+            if _normalize_text(
+                prompt390.get("prompt390_prompt389_next_action_reconciliation_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt390_prompt389_evidence_ready"
+            if bool(prompt390.get("prompt390_prompt389_evidence_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt390_enabled_run_readiness_status"
+            if _normalize_text(
+                prompt390.get("prompt390_enabled_run_readiness_status"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt390_enabled_run_ready"
+            if bool(prompt390.get("prompt390_enabled_run_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt390_prompt389_next_action_canonical"
+            if _normalize_text(
+                prompt390.get("prompt390_prompt389_next_action_canonical"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt390_next_action"
+            if _normalize_text(prompt390.get("prompt390_next_action"), default="")
             else "",
         ]
     )
@@ -230478,6 +231222,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt389_explicit_bounded_repeated_success_path_loop_execution_payload,
         }
+        prompt390_prompt389_next_action_reconciliation_payload = (
+            _build_prompt390_prompt389_next_action_reconciliation_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt390_prompt389_next_action_reconciliation_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -230649,6 +231403,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt389_explicit_bounded_repeated_success_path_loop_execution_state=(
                     prompt389_explicit_bounded_repeated_success_path_loop_execution_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt390_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt390_prompt389_next_action_reconciliation_state=(
+                    prompt390_prompt389_next_action_reconciliation_payload
                 ),
             )
         )
@@ -230867,6 +231629,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt389_explicit_bounded_repeated_success_path_loop_execution_payload=(
                     prompt389_explicit_bounded_repeated_success_path_loop_execution_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt390_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt390_prompt389_next_action_reconciliation_payload=(
+                    prompt390_prompt389_next_action_reconciliation_payload
                 ),
             )
         )
@@ -231499,6 +232271,35 @@ class PlannedExecutionRunner:
         manifest[
             "prompt389_bounded_repeated_success_path_loop_execution_receipt_path"
         ] = str(prompt389_bounded_repeated_success_path_loop_execution_receipt_path)
+        manifest["prompt390_prompt389_next_action_reconciliation_summary"] = dict(
+            prompt390_prompt389_next_action_reconciliation_payload
+        )
+        manifest["prompt390_prompt389_next_action_reconciliation_path"] = (
+            _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_reconciliation_path"
+                ),
+                default="",
+            )
+        )
+        manifest["prompt390_prompt389_enabled_run_readiness_summary"] = dict(
+            prompt390_prompt389_next_action_reconciliation_payload
+        )
+        manifest["prompt390_prompt389_enabled_run_readiness_path"] = _normalize_text(
+            prompt390_prompt389_next_action_reconciliation_payload.get(
+                "prompt390_enabled_run_readiness_path"
+            ),
+            default="",
+        )
+        manifest["prompt390_prompt389_reconciliation_receipt_summary"] = dict(
+            prompt390_prompt389_next_action_reconciliation_payload
+        )
+        manifest["prompt390_prompt389_reconciliation_receipt_path"] = _normalize_text(
+            prompt390_prompt389_next_action_reconciliation_payload.get(
+                "prompt390_reconciliation_receipt_path"
+            ),
+            default="",
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -231794,6 +232595,15 @@ class PlannedExecutionRunner:
         ] = manifest.get(
             "prompt389_bounded_repeated_success_path_loop_execution_receipt_summary"
         )
+        contract_summaries_by_role[
+            "prompt390_prompt389_next_action_reconciliation"
+        ] = manifest.get("prompt390_prompt389_next_action_reconciliation_summary")
+        contract_summaries_by_role[
+            "prompt390_prompt389_enabled_run_readiness"
+        ] = manifest.get("prompt390_prompt389_enabled_run_readiness_summary")
+        contract_summaries_by_role[
+            "prompt390_prompt389_reconciliation_receipt"
+        ] = manifest.get("prompt390_prompt389_reconciliation_receipt_summary")
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -232089,6 +232899,15 @@ class PlannedExecutionRunner:
         ] = manifest.get(
             "prompt389_bounded_repeated_success_path_loop_execution_receipt_path"
         )
+        contract_paths_by_role[
+            "prompt390_prompt389_next_action_reconciliation"
+        ] = manifest.get("prompt390_prompt389_next_action_reconciliation_path")
+        contract_paths_by_role[
+            "prompt390_prompt389_enabled_run_readiness"
+        ] = manifest.get("prompt390_prompt389_enabled_run_readiness_path")
+        contract_paths_by_role[
+            "prompt390_prompt389_reconciliation_receipt"
+        ] = manifest.get("prompt390_prompt389_reconciliation_receipt_path")
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
             summaries_by_role=contract_summaries_by_role,
@@ -237523,6 +238342,318 @@ class PlannedExecutionRunner:
             "prompt389_active_blocked_reasons": _normalize_string_list(
                 prompt389_explicit_bounded_repeated_success_path_loop_execution_payload.get(
                     "prompt389_active_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt390_prompt389_next_action_reconciliation_status": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_next_action_reconciliation_status"
+                ),
+                default="blocked",
+            ),
+            "prompt390_prompt389_evidence_ready": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt390_prompt389_gate_status": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_gate_status"
+                ),
+                default="blocked",
+            ),
+            "prompt390_prompt389_next_action": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_next_action"
+                ),
+                default="wait_for_prompt388_evidence",
+            ),
+            "prompt390_prompt389_authoritative_next_action": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_authoritative_next_action"
+                ),
+                default="wait_for_prompt388_evidence",
+            ),
+            "prompt390_prompt389_next_action_match": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_next_action_match",
+                    False,
+                )
+            ),
+            "prompt390_prompt389_next_action_canonical": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_next_action_canonical"
+                ),
+                default="wait_for_prompt389_evidence",
+            ),
+            "prompt390_prompt389_next_action_reconciliation_required": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_next_action_reconciliation_required",
+                    False,
+                )
+            ),
+            "prompt390_prompt389_next_action_reconciled": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_next_action_reconciled",
+                    False,
+                )
+            ),
+            "prompt390_prompt389_active_blocked_reason": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt390_prompt389_completion_gate_ready": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_completion_gate_ready",
+                    False,
+                )
+            ),
+            "prompt390_prompt389_repeated_cycle_execution_allowed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_repeated_cycle_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt390_prompt389_repeated_cycle_execution_attempted": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_repeated_cycle_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt390_prompt389_repeated_cycle_execution_performed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_repeated_cycle_execution_performed",
+                    False,
+                )
+            ),
+            "prompt390_prompt389_cycles_attempted": _as_non_negative_int(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_cycles_attempted"
+                ),
+                default=0,
+            ),
+            "prompt390_prompt389_cycles_completed": _as_non_negative_int(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_prompt389_cycles_completed"
+                ),
+                default=0,
+            ),
+            "prompt390_success_path_only": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_success_path_only",
+                    True,
+                )
+            ),
+            "prompt390_local_only": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_local_only",
+                    True,
+                )
+            ),
+            "prompt390_bounded": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_bounded",
+                    True,
+                )
+            ),
+            "prompt390_failure_route_supported": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_failure_route_supported",
+                    False,
+                )
+            ),
+            "prompt390_retry_route_supported": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_retry_route_supported",
+                    False,
+                )
+            ),
+            "prompt390_rollback_supported": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_rollback_supported",
+                    False,
+                )
+            ),
+            "prompt390_remote_route_supported": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_remote_route_supported",
+                    False,
+                )
+            ),
+            "prompt390_enabled_run_readiness_status": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_enabled_run_readiness_status"
+                ),
+                default="blocked",
+            ),
+            "prompt390_enabled_run_ready": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_enabled_run_ready",
+                    False,
+                )
+            ),
+            "prompt390_enabled_run_blocked_reason": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_enabled_run_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt390_enabled_run_blocked_reasons": _normalize_string_list(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_enabled_run_blocked_reasons"
+                ),
+                sort_items=False,
+            ),
+            "prompt390_explicit_enable_required": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_explicit_enable_required",
+                    True,
+                )
+            ),
+            "prompt390_explicit_enable_supplied": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_explicit_enable_supplied",
+                    False,
+                )
+            ),
+            "prompt390_generated_prompt_path_required": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_generated_prompt_path_required",
+                    True,
+                )
+            ),
+            "prompt390_generated_prompt_path_supplied": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_generated_prompt_path_supplied",
+                    False,
+                )
+            ),
+            "prompt390_max_cycles_allowed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_max_cycles_allowed",
+                    False,
+                )
+            ),
+            "prompt390_safe_upper_bound_max_cycles": _as_non_negative_int(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_safe_upper_bound_max_cycles"
+                ),
+                default=_PROMPT389_SAFE_UPPER_BOUND_MAX_CYCLES,
+            ),
+            "prompt390_codex_execution_allowed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt390_codex_execution_attempted": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_codex_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt390_codex_execution_performed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt390_chatgpt_invocation_allowed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_chatgpt_invocation_allowed",
+                    False,
+                )
+            ),
+            "prompt390_chatgpt_invocation_attempted": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_chatgpt_invocation_attempted",
+                    False,
+                )
+            ),
+            "prompt390_chatgpt_invocation_performed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_chatgpt_invocation_performed",
+                    False,
+                )
+            ),
+            "prompt390_git_mutation_allowed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_git_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt390_git_mutation_attempted": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_git_mutation_attempted",
+                    False,
+                )
+            ),
+            "prompt390_git_mutation_performed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt390_remote_mutation_allowed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt390_remote_mutation_attempted": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_remote_mutation_attempted",
+                    False,
+                )
+            ),
+            "prompt390_remote_mutation_performed": bool(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt390_reconciliation_path": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_reconciliation_path"
+                ),
+                default="",
+            ),
+            "prompt390_enabled_run_readiness_path": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_enabled_run_readiness_path"
+                ),
+                default="",
+            ),
+            "prompt390_reconciliation_receipt_path": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_reconciliation_receipt_path"
+                ),
+                default="",
+            ),
+            "prompt390_next_action": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_next_action"
+                ),
+                default="wait_for_prompt389_evidence",
+            ),
+            "prompt390_authoritative_next_action": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_authoritative_next_action"
+                ),
+                default="wait_for_prompt389_evidence",
+            ),
+            "prompt390_active_blocked_reason": _normalize_text(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt390_active_blocked_reasons": _normalize_string_list(
+                prompt390_prompt389_next_action_reconciliation_payload.get(
+                    "prompt390_active_blocked_reasons"
                 ),
                 sort_items=False,
             ),
