@@ -3705,6 +3705,9 @@ _PROMPT386_SCHEMA_VERSION = (
 _PROMPT387_SCHEMA_VERSION = (
     "prompt387_success_path_loop_dispatch_execution_wiring_bridge_v1"
 )
+_PROMPT388_SCHEMA_VERSION = (
+    "prompt388_local_only_success_path_autonomous_loop_completion_gate_v1"
+)
 _PROMPT382_COMMIT_MESSAGE = "Add Prompt382 approve commit tag execution gate"
 _PROMPT382_TAG_NAME = "prompt382-approve-commit-tag-execution-gate"
 _PROMPT385_GENERATED_PROMPT_INTAKE_METHOD = "prompt378_generated_prompt_path"
@@ -3731,6 +3734,15 @@ _PROMPT387_REQUIRED_NEXT_PROMPT = (
 _PROMPT387_REQUIRED_NEXT_PROMPT_GOAL = (
     "local_only_success_path_autonomous_loop_completion_gate"
 )
+_PROMPT388_MAX_CYCLES_ALLOWED = _PROMPT387_MAX_CYCLES_ALLOWED
+_PROMPT388_GENERATED_PROMPT_PATH_FIELD = _PROMPT387_GENERATED_PROMPT_PATH_FIELD
+_PROMPT388_REQUIRED_NEXT_PROMPT_ID = "prompt389"
+_PROMPT388_REQUIRED_NEXT_PROMPT = (
+    "prompt389_explicit_bounded_repeated_success_path_loop_execution"
+)
+_PROMPT388_REQUIRED_NEXT_PROMPT_GOAL = (
+    "explicit_bounded_repeated_success_path_loop_execution"
+)
 _PROMPT387_ORDERED_LOOP_STAGES: tuple[str, ...] = (
     "prompt385_next_prompt_generation_request",
     "prompt378_generated_prompt_intake",
@@ -3742,6 +3754,7 @@ _PROMPT387_ORDERED_LOOP_STAGES: tuple[str, ...] = (
     "prompt384_commit_tag_reconciliation",
     "prompt385_success_path_next_cycle_handoff",
 )
+_PROMPT388_ORDERED_LOOP_STAGES = _PROMPT387_ORDERED_LOOP_STAGES
 _PROMPT386_ORDERED_LOOP_STAGES: tuple[str, ...] = (
     "prompt385_next_prompt_generation_request",
     "prompt378_generated_prompt_intake",
@@ -4400,6 +4413,76 @@ _PROMPT387_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt387_dispatch_bridge_path",
     "prompt387_dispatch_plan_path",
     "prompt387_execution_wiring_path",
+)
+_PROMPT388_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt388_local_success_path_autonomous_loop_completion_gate_status",
+    "prompt388_prompt387_evidence_ready",
+    "prompt388_prompt387_dispatch_bridge_ready",
+    "prompt388_prompt387_dispatch_plan_ready",
+    "prompt388_prompt387_execution_wiring_ready",
+    "prompt388_prompt387_success_path_only",
+    "prompt388_prompt387_local_only",
+    "prompt388_prompt387_bounded",
+    "prompt388_prompt387_dispatch_performed",
+    "prompt388_prompt387_codex_execution_performed",
+    "prompt388_prompt387_chatgpt_invocation_performed",
+    "prompt388_prompt387_git_mutation_performed",
+    "prompt388_prompt387_remote_mutation_performed",
+    "prompt388_success_path_only",
+    "prompt388_local_only",
+    "prompt388_bounded",
+    "prompt388_failure_route_supported",
+    "prompt388_retry_route_supported",
+    "prompt388_rollback_supported",
+    "prompt388_remote_route_supported",
+    "prompt388_autonomous_loop_completion_gate_ready",
+    "prompt388_local_only_success_path_autonomy_complete",
+    "prompt388_repeated_cycle_runner_contract_ready",
+    "prompt388_repeated_cycle_runner_execution_ready",
+    "prompt388_repeated_cycle_runner_execution_deferred",
+    "prompt388_repeated_cycle_runner_enabled",
+    "prompt388_repeated_cycle_runner_attempted",
+    "prompt388_repeated_cycle_runner_performed",
+    "prompt388_repeated_cycle_runner_mode",
+    "prompt388_current_cycle_index",
+    "prompt388_next_cycle_index",
+    "prompt388_max_cycles",
+    "prompt388_max_cycles_allowed",
+    "prompt388_cycle_limit_reached",
+    "prompt388_generated_prompt_path_required",
+    "prompt388_generated_prompt_path_supplied",
+    "prompt388_generated_prompt_path_field",
+    "prompt388_ordered_loop_stages",
+    "prompt388_ordered_loop_stage_count",
+    "prompt388_first_stage",
+    "prompt388_generated_prompt_intake_stage",
+    "prompt388_codex_execution_stage",
+    "prompt388_route_decision_stage",
+    "prompt388_approve_candidate_stage",
+    "prompt388_commit_tag_gate_stage",
+    "prompt388_commit_tag_execution_stage",
+    "prompt388_reconciliation_stage",
+    "prompt388_next_cycle_handoff_stage",
+    "prompt388_codex_execution_allowed",
+    "prompt388_codex_execution_attempted",
+    "prompt388_codex_execution_performed",
+    "prompt388_chatgpt_invocation_allowed",
+    "prompt388_chatgpt_invocation_attempted",
+    "prompt388_chatgpt_invocation_performed",
+    "prompt388_git_mutation_allowed",
+    "prompt388_git_mutation_performed",
+    "prompt388_remote_mutation_allowed",
+    "prompt388_remote_mutation_performed",
+    "prompt388_required_next_prompt",
+    "prompt388_required_next_prompt_id",
+    "prompt388_required_next_prompt_goal",
+    "prompt388_completion_gate_path",
+    "prompt388_repeated_cycle_runner_contract_path",
+    "prompt388_completion_receipt_path",
+    "prompt388_next_action",
+    "prompt388_authoritative_next_action",
+    "prompt388_active_blocked_reason",
+    "prompt388_active_blocked_reasons",
 )
 _PROMPT364_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt364_verification_status",
@@ -6332,6 +6415,28 @@ def _merge_prompt387_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT387_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt388_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt388_local_success_path_autonomous_loop_completion_gate_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt388_local_success_path_autonomous_loop_completion_gate_state)
+        if isinstance(
+            prompt388_local_success_path_autonomous_loop_completion_gate_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT388_APPROVED_RESTART_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -57940,6 +58045,768 @@ def _build_prompt387_success_path_loop_dispatch_bridge_state(
     }
 
 
+def _build_prompt388_local_success_path_autonomous_loop_completion_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+) -> dict[str, Any]:
+    artifact_root = run_root if run_root is not None else Path(".")
+    prompt388_completion_gate_path = (
+        artifact_root
+        / "prompt388_local_success_path_autonomous_loop_completion_gate.json"
+    )
+    prompt388_repeated_cycle_runner_contract_path = (
+        artifact_root / "prompt388_bounded_repeated_cycle_runner_contract.json"
+    )
+    prompt388_completion_receipt_path = (
+        artifact_root / "prompt388_success_path_autonomy_completion_receipt.json"
+    )
+    prompt387_dispatch_bridge_path = (
+        artifact_root / "prompt387_success_path_loop_dispatch_bridge.json"
+    )
+    prompt387_dispatch_plan_path = (
+        artifact_root / "prompt387_success_path_loop_dispatch_plan.json"
+    )
+    prompt387_execution_wiring_path = (
+        artifact_root / "prompt387_success_path_loop_execution_wiring.json"
+    )
+    run_state = dict(run_state_payload or {})
+
+    def _append_reason(reasons: list[str], reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in reasons:
+            reasons.append(normalized_reason)
+
+    def _normalize_prompt387_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        ordered_loop_stages = _normalize_string_list(
+            source.get("prompt387_ordered_loop_stages"),
+            sort_items=False,
+        )
+        return {
+            "prompt387_success_path_loop_dispatch_bridge_status": _normalize_text(
+                source.get("prompt387_success_path_loop_dispatch_bridge_status"),
+                default="blocked",
+            ),
+            "prompt387_prompt386_evidence_ready": _prompt357_as_boolish(
+                source.get("prompt387_prompt386_evidence_ready"),
+                default=False,
+            ),
+            "prompt387_dispatch_bridge_ready": _prompt357_as_boolish(
+                source.get("prompt387_dispatch_bridge_ready"),
+                default=False,
+            ),
+            "prompt387_dispatch_plan_ready": _prompt357_as_boolish(
+                source.get("prompt387_dispatch_plan_ready"),
+                default=False,
+            ),
+            "prompt387_execution_wiring_ready": _prompt357_as_boolish(
+                source.get("prompt387_execution_wiring_ready"),
+                default=False,
+            ),
+            "prompt387_success_path_only": _prompt357_as_boolish(
+                source.get("prompt387_success_path_only"),
+                default=False,
+            ),
+            "prompt387_local_only": _prompt357_as_boolish(
+                source.get("prompt387_local_only"),
+                default=False,
+            ),
+            "prompt387_bounded": _prompt357_as_boolish(
+                source.get("prompt387_bounded"),
+                default=False,
+            ),
+            "prompt387_dispatch_performed": _prompt357_as_boolish(
+                source.get("prompt387_dispatch_performed"),
+                default=False,
+            ),
+            "prompt387_codex_execution_performed": _prompt357_as_boolish(
+                source.get("prompt387_codex_execution_performed"),
+                default=False,
+            ),
+            "prompt387_chatgpt_invocation_performed": _prompt357_as_boolish(
+                source.get("prompt387_chatgpt_invocation_performed"),
+                default=False,
+            ),
+            "prompt387_git_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt387_git_mutation_performed"),
+                default=False,
+            ),
+            "prompt387_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt387_remote_mutation_performed"),
+                default=False,
+            ),
+            "prompt387_failure_route_supported": _prompt357_as_boolish(
+                source.get("prompt387_failure_route_supported"),
+                default=False,
+            ),
+            "prompt387_retry_route_supported": _prompt357_as_boolish(
+                source.get("prompt387_retry_route_supported"),
+                default=False,
+            ),
+            "prompt387_rollback_supported": _prompt357_as_boolish(
+                source.get("prompt387_rollback_supported"),
+                default=False,
+            ),
+            "prompt387_remote_route_supported": _prompt357_as_boolish(
+                source.get("prompt387_remote_route_supported"),
+                default=False,
+            ),
+            "prompt387_current_cycle_index": _as_non_negative_int(
+                source.get("prompt387_current_cycle_index"),
+                default=1,
+            ),
+            "prompt387_next_cycle_index": _as_non_negative_int(
+                source.get("prompt387_next_cycle_index"),
+                default=2,
+            ),
+            "prompt387_max_cycles": _as_non_negative_int(
+                source.get("prompt387_max_cycles"),
+                default=_PROMPT388_MAX_CYCLES_ALLOWED,
+            ),
+            "prompt387_max_cycles_allowed": _as_non_negative_int(
+                source.get("prompt387_max_cycles_allowed"),
+                default=_PROMPT388_MAX_CYCLES_ALLOWED,
+            ),
+            "prompt387_generated_prompt_path_required": _prompt357_as_boolish(
+                source.get("prompt387_generated_prompt_path_required"),
+                default=True,
+            ),
+            "prompt387_generated_prompt_path_supplied": _prompt357_as_boolish(
+                source.get("prompt387_generated_prompt_path_supplied"),
+                default=False,
+            ),
+            "prompt387_generated_prompt_path_field": _normalize_text(
+                source.get("prompt387_generated_prompt_path_field"),
+                default=_PROMPT388_GENERATED_PROMPT_PATH_FIELD,
+            ),
+            "prompt387_ordered_loop_stages": ordered_loop_stages,
+            "prompt387_ordered_loop_stage_count": _as_non_negative_int(
+                source.get("prompt387_ordered_loop_stage_count"),
+                default=len(ordered_loop_stages),
+            ),
+            "prompt387_first_stage": _normalize_text(
+                source.get("prompt387_first_stage"),
+                default=ordered_loop_stages[0] if ordered_loop_stages else "",
+            ),
+            "prompt387_generated_prompt_intake_stage": _normalize_text(
+                source.get("prompt387_generated_prompt_intake_stage"),
+                default="",
+            ),
+            "prompt387_codex_execution_stage": _normalize_text(
+                source.get("prompt387_codex_execution_stage"),
+                default="",
+            ),
+            "prompt387_route_decision_stage": _normalize_text(
+                source.get("prompt387_route_decision_stage"),
+                default="",
+            ),
+            "prompt387_approve_candidate_stage": _normalize_text(
+                source.get("prompt387_approve_candidate_stage"),
+                default="",
+            ),
+            "prompt387_commit_tag_gate_stage": _normalize_text(
+                source.get("prompt387_commit_tag_gate_stage"),
+                default="",
+            ),
+            "prompt387_commit_tag_execution_stage": _normalize_text(
+                source.get("prompt387_commit_tag_execution_stage"),
+                default="",
+            ),
+            "prompt387_reconciliation_stage": _normalize_text(
+                source.get("prompt387_reconciliation_stage"),
+                default="",
+            ),
+            "prompt387_next_cycle_handoff_stage": _normalize_text(
+                source.get("prompt387_next_cycle_handoff_stage"),
+                default="",
+            ),
+            "prompt387_next_action": _normalize_text(
+                source.get("prompt387_next_action"),
+                default="wait_for_prompt386_evidence",
+            ),
+            "prompt387_authoritative_next_action": _normalize_text(
+                source.get("prompt387_authoritative_next_action"),
+                default="wait_for_prompt386_evidence",
+            ),
+            "prompt387_active_blocked_reason": _normalize_text(
+                source.get("prompt387_active_blocked_reason"),
+                default="",
+            ),
+            "prompt387_active_blocked_reasons": _normalize_string_list(
+                source.get("prompt387_active_blocked_reasons"),
+                sort_items=False,
+            ),
+        }
+
+    def _has_prompt387_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        return all(key in raw_payload for key in _PROMPT387_APPROVED_RESTART_SURFACE_KEYS)
+
+    def _resolve_prompt387_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt387_evidence(run_state):
+            return _normalize_prompt387_surface(run_state), ""
+
+        prompt387_bridge_payload = _read_json_object_if_exists(prompt387_dispatch_bridge_path)
+        if _has_prompt387_evidence(prompt387_bridge_payload):
+            return _normalize_prompt387_surface(prompt387_bridge_payload), str(
+                prompt387_dispatch_bridge_path
+            )
+
+        prompt387_plan_payload = _read_json_object_if_exists(prompt387_dispatch_plan_path)
+        if _has_prompt387_evidence(prompt387_plan_payload):
+            return _normalize_prompt387_surface(prompt387_plan_payload), str(
+                prompt387_dispatch_plan_path
+            )
+
+        prompt387_wiring_payload = _read_json_object_if_exists(
+            prompt387_execution_wiring_path
+        )
+        if _has_prompt387_evidence(prompt387_wiring_payload):
+            return _normalize_prompt387_surface(prompt387_wiring_payload), str(
+                prompt387_execution_wiring_path
+            )
+
+        return _normalize_prompt387_surface(run_state), ""
+
+    prompt387_surface, prompt387_source_path = _resolve_prompt387_surface()
+    prompt388_prompt387_evidence_ready = bool(
+        prompt387_source_path or _has_prompt387_evidence(run_state)
+    )
+    prompt388_prompt387_dispatch_bridge_ready = bool(
+        prompt387_surface.get("prompt387_dispatch_bridge_ready", False)
+    )
+    prompt388_prompt387_dispatch_plan_ready = bool(
+        prompt387_surface.get("prompt387_dispatch_plan_ready", False)
+    )
+    prompt388_prompt387_execution_wiring_ready = bool(
+        prompt387_surface.get("prompt387_execution_wiring_ready", False)
+    )
+    prompt388_prompt387_success_path_only = bool(
+        prompt387_surface.get("prompt387_success_path_only", False)
+    )
+    prompt388_prompt387_local_only = bool(
+        prompt387_surface.get("prompt387_local_only", False)
+    )
+    prompt388_prompt387_bounded = bool(
+        prompt387_surface.get("prompt387_bounded", False)
+    )
+    prompt388_prompt387_dispatch_performed = bool(
+        prompt387_surface.get("prompt387_dispatch_performed", False)
+    )
+    prompt388_prompt387_codex_execution_performed = bool(
+        prompt387_surface.get("prompt387_codex_execution_performed", False)
+    )
+    prompt388_prompt387_chatgpt_invocation_performed = bool(
+        prompt387_surface.get("prompt387_chatgpt_invocation_performed", False)
+    )
+    prompt388_prompt387_git_mutation_performed = bool(
+        prompt387_surface.get("prompt387_git_mutation_performed", False)
+    )
+    prompt388_prompt387_remote_mutation_performed = bool(
+        prompt387_surface.get("prompt387_remote_mutation_performed", False)
+    )
+
+    prompt388_success_path_only = True
+    prompt388_local_only = True
+    prompt388_bounded = True
+    prompt388_failure_route_supported = False
+    prompt388_retry_route_supported = False
+    prompt388_rollback_supported = False
+    prompt388_remote_route_supported = False
+    prompt388_current_cycle_index = _as_non_negative_int(
+        prompt387_surface.get("prompt387_current_cycle_index"),
+        default=1,
+    )
+    if prompt388_current_cycle_index <= 0:
+        prompt388_current_cycle_index = 1
+    prompt388_next_cycle_index = _as_non_negative_int(
+        prompt387_surface.get("prompt387_next_cycle_index"),
+        default=prompt388_current_cycle_index + 1,
+    )
+    if prompt388_next_cycle_index <= 0:
+        prompt388_next_cycle_index = prompt388_current_cycle_index + 1
+    prompt388_max_cycles_allowed = _as_non_negative_int(
+        prompt387_surface.get("prompt387_max_cycles_allowed"),
+        default=_PROMPT388_MAX_CYCLES_ALLOWED,
+    ) or _PROMPT388_MAX_CYCLES_ALLOWED
+    prompt388_max_cycles = min(
+        _as_non_negative_int(
+            prompt387_surface.get("prompt387_max_cycles"),
+            default=prompt388_max_cycles_allowed,
+        )
+        or prompt388_max_cycles_allowed,
+        prompt388_max_cycles_allowed,
+    )
+    prompt388_cycle_limit_reached = bool(
+        prompt388_max_cycles <= 0
+        or prompt388_current_cycle_index > prompt388_max_cycles
+    )
+    prompt388_generated_prompt_path_required = bool(
+        prompt387_surface.get("prompt387_generated_prompt_path_required", True)
+    )
+    prompt388_generated_prompt_path_supplied = bool(
+        prompt387_surface.get("prompt387_generated_prompt_path_supplied", False)
+    )
+    prompt388_generated_prompt_path_field = _normalize_text(
+        prompt387_surface.get("prompt387_generated_prompt_path_field"),
+        default=_PROMPT388_GENERATED_PROMPT_PATH_FIELD,
+    )
+    prompt388_ordered_loop_stages = _normalize_string_list(
+        prompt387_surface.get("prompt387_ordered_loop_stages"),
+        sort_items=False,
+    )
+    prompt388_ordered_loop_stage_count = _as_non_negative_int(
+        prompt387_surface.get("prompt387_ordered_loop_stage_count"),
+        default=len(prompt388_ordered_loop_stages),
+    )
+    prompt388_first_stage = _normalize_text(
+        prompt387_surface.get("prompt387_first_stage"),
+        default=prompt388_ordered_loop_stages[0] if prompt388_ordered_loop_stages else "",
+    )
+    prompt388_generated_prompt_intake_stage = _normalize_text(
+        prompt387_surface.get("prompt387_generated_prompt_intake_stage"),
+        default="",
+    )
+    prompt388_codex_execution_stage = _normalize_text(
+        prompt387_surface.get("prompt387_codex_execution_stage"),
+        default="",
+    )
+    prompt388_route_decision_stage = _normalize_text(
+        prompt387_surface.get("prompt387_route_decision_stage"),
+        default="",
+    )
+    prompt388_approve_candidate_stage = _normalize_text(
+        prompt387_surface.get("prompt387_approve_candidate_stage"),
+        default="",
+    )
+    prompt388_commit_tag_gate_stage = _normalize_text(
+        prompt387_surface.get("prompt387_commit_tag_gate_stage"),
+        default="",
+    )
+    prompt388_commit_tag_execution_stage = _normalize_text(
+        prompt387_surface.get("prompt387_commit_tag_execution_stage"),
+        default="",
+    )
+    prompt388_reconciliation_stage = _normalize_text(
+        prompt387_surface.get("prompt387_reconciliation_stage"),
+        default="",
+    )
+    prompt388_next_cycle_handoff_stage = _normalize_text(
+        prompt387_surface.get("prompt387_next_cycle_handoff_stage"),
+        default="",
+    )
+    prompt388_codex_execution_allowed = False
+    prompt388_codex_execution_attempted = False
+    prompt388_codex_execution_performed = False
+    prompt388_chatgpt_invocation_allowed = False
+    prompt388_chatgpt_invocation_attempted = False
+    prompt388_chatgpt_invocation_performed = False
+    prompt388_git_mutation_allowed = False
+    prompt388_git_mutation_performed = False
+    prompt388_remote_mutation_allowed = False
+    prompt388_remote_mutation_performed = False
+    prompt388_repeated_cycle_runner_execution_ready = False
+    prompt388_repeated_cycle_runner_execution_deferred = True
+    prompt388_repeated_cycle_runner_enabled = False
+    prompt388_repeated_cycle_runner_attempted = False
+    prompt388_repeated_cycle_runner_performed = False
+    prompt388_required_next_prompt = _PROMPT388_REQUIRED_NEXT_PROMPT
+    prompt388_required_next_prompt_id = _PROMPT388_REQUIRED_NEXT_PROMPT_ID
+    prompt388_required_next_prompt_goal = _PROMPT388_REQUIRED_NEXT_PROMPT_GOAL
+    prompt388_local_success_path_autonomous_loop_completion_gate_status = "blocked"
+    prompt388_autonomous_loop_completion_gate_ready = False
+    prompt388_local_only_success_path_autonomy_complete = False
+    prompt388_repeated_cycle_runner_contract_ready = False
+    prompt388_repeated_cycle_runner_mode = "contract_only_blocked_default"
+    prompt388_next_action = "wait_for_prompt387_evidence"
+    prompt388_authoritative_next_action = prompt388_next_action
+    prompt388_active_blocked_reasons: list[str] = []
+
+    expected_ordered_loop_stages = list(_PROMPT388_ORDERED_LOOP_STAGES)
+    ordered_stages_complete = prompt388_ordered_loop_stages == expected_ordered_loop_stages
+    stage_fields_complete = all(
+        (
+            prompt388_first_stage == expected_ordered_loop_stages[0],
+            prompt388_generated_prompt_intake_stage
+            == "prompt378_generated_prompt_intake",
+            prompt388_codex_execution_stage
+            == "prompt379_generated_prompt_codex_execution_bridge",
+            prompt388_route_decision_stage
+            == "prompt380_prompt379_result_review_route_decision",
+            prompt388_approve_candidate_stage
+            == "prompt381_approve_candidate_boundary",
+            prompt388_commit_tag_gate_stage
+            == "prompt382_approve_commit_tag_execution_gate",
+            prompt388_commit_tag_execution_stage
+            == "prompt383_explicit_approve_commit_tag_execution",
+            prompt388_reconciliation_stage
+            == "prompt384_commit_tag_reconciliation",
+            prompt388_next_cycle_handoff_stage
+            == "prompt385_success_path_next_cycle_handoff",
+        )
+    )
+
+    if not prompt388_prompt387_evidence_ready:
+        _append_reason(prompt388_active_blocked_reasons, "prompt387_evidence_missing")
+        prompt388_next_action = "wait_for_prompt387_evidence"
+    else:
+        if not prompt388_prompt387_dispatch_bridge_ready:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_dispatch_bridge_not_ready",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "wait_for_prompt387_dispatch_bridge_ready"
+        if not prompt388_prompt387_dispatch_plan_ready:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_dispatch_plan_not_ready",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "wait_for_prompt387_dispatch_plan_ready"
+        if not prompt388_prompt387_execution_wiring_ready:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_execution_wiring_not_ready",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "wait_for_prompt387_execution_wiring_ready"
+        if not prompt388_prompt387_success_path_only:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_success_path_only_not_true",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_success_path_scope_violation"
+        if not prompt388_prompt387_local_only:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_local_only_not_true",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_local_only_violation"
+        if not prompt388_prompt387_bounded:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_bounded_not_true",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_bounded_violation"
+        if prompt388_prompt387_dispatch_performed:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_dispatch_performed",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_dispatch_violation"
+        if prompt388_prompt387_codex_execution_performed:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_codex_execution_performed",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_codex_execution_violation"
+        if prompt388_prompt387_chatgpt_invocation_performed:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_chatgpt_invocation_performed",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_chatgpt_invocation_violation"
+        if prompt388_prompt387_git_mutation_performed:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_git_mutation_performed",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_git_mutation_violation"
+        if prompt388_prompt387_remote_mutation_performed:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_remote_mutation_performed",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_remote_mutation_violation"
+        if bool(prompt387_surface.get("prompt387_failure_route_supported", False)):
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_failure_route_supported",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_failure_route_support_violation"
+        if bool(prompt387_surface.get("prompt387_retry_route_supported", False)):
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_retry_route_supported",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_retry_route_support_violation"
+        if bool(prompt387_surface.get("prompt387_rollback_supported", False)):
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_rollback_supported",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_rollback_support_violation"
+        if bool(prompt387_surface.get("prompt387_remote_route_supported", False)):
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_remote_route_supported",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "review_prompt387_remote_route_support_violation"
+        if not ordered_stages_complete:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_ordered_loop_stages_incomplete",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "repair_prompt387_ordered_loop_stages"
+        if not stage_fields_complete:
+            had_prior_reasons = bool(prompt388_active_blocked_reasons)
+            _append_reason(
+                prompt388_active_blocked_reasons,
+                "prompt387_stage_field_contract_incomplete",
+            )
+            if not had_prior_reasons:
+                prompt388_next_action = "repair_prompt387_stage_field_contract"
+
+    if not prompt388_active_blocked_reasons:
+        prompt388_local_success_path_autonomous_loop_completion_gate_status = (
+            "completed"
+        )
+        prompt388_autonomous_loop_completion_gate_ready = True
+        prompt388_local_only_success_path_autonomy_complete = True
+        prompt388_repeated_cycle_runner_contract_ready = True
+        prompt388_repeated_cycle_runner_mode = "contract_only_ready_for_prompt389"
+        prompt388_next_action = (
+            "prepare_prompt389_explicit_bounded_repeated_success_path_loop_execution"
+        )
+
+    prompt388_authoritative_next_action = prompt388_next_action
+    prompt388_active_blocked_reason = (
+        prompt388_active_blocked_reasons[0]
+        if prompt388_active_blocked_reasons
+        else ""
+    )
+    prompt388_state: dict[str, Any] = {
+        "prompt388_schema_version": _PROMPT388_SCHEMA_VERSION,
+        "source_prompt": "prompt388",
+        "prompt388_prompt387_source_path": prompt387_source_path,
+        "prompt388_local_success_path_autonomous_loop_completion_gate_status": (
+            prompt388_local_success_path_autonomous_loop_completion_gate_status
+        ),
+        "prompt388_prompt387_evidence_ready": prompt388_prompt387_evidence_ready,
+        "prompt388_prompt387_dispatch_bridge_ready": (
+            prompt388_prompt387_dispatch_bridge_ready
+        ),
+        "prompt388_prompt387_dispatch_plan_ready": (
+            prompt388_prompt387_dispatch_plan_ready
+        ),
+        "prompt388_prompt387_execution_wiring_ready": (
+            prompt388_prompt387_execution_wiring_ready
+        ),
+        "prompt388_prompt387_success_path_only": (
+            prompt388_prompt387_success_path_only
+        ),
+        "prompt388_prompt387_local_only": prompt388_prompt387_local_only,
+        "prompt388_prompt387_bounded": prompt388_prompt387_bounded,
+        "prompt388_prompt387_dispatch_performed": (
+            prompt388_prompt387_dispatch_performed
+        ),
+        "prompt388_prompt387_codex_execution_performed": (
+            prompt388_prompt387_codex_execution_performed
+        ),
+        "prompt388_prompt387_chatgpt_invocation_performed": (
+            prompt388_prompt387_chatgpt_invocation_performed
+        ),
+        "prompt388_prompt387_git_mutation_performed": (
+            prompt388_prompt387_git_mutation_performed
+        ),
+        "prompt388_prompt387_remote_mutation_performed": (
+            prompt388_prompt387_remote_mutation_performed
+        ),
+        "prompt388_success_path_only": prompt388_success_path_only,
+        "prompt388_local_only": prompt388_local_only,
+        "prompt388_bounded": prompt388_bounded,
+        "prompt388_failure_route_supported": prompt388_failure_route_supported,
+        "prompt388_retry_route_supported": prompt388_retry_route_supported,
+        "prompt388_rollback_supported": prompt388_rollback_supported,
+        "prompt388_remote_route_supported": prompt388_remote_route_supported,
+        "prompt388_autonomous_loop_completion_gate_ready": (
+            prompt388_autonomous_loop_completion_gate_ready
+        ),
+        "prompt388_local_only_success_path_autonomy_complete": (
+            prompt388_local_only_success_path_autonomy_complete
+        ),
+        "prompt388_repeated_cycle_runner_contract_ready": (
+            prompt388_repeated_cycle_runner_contract_ready
+        ),
+        "prompt388_repeated_cycle_runner_execution_ready": (
+            prompt388_repeated_cycle_runner_execution_ready
+        ),
+        "prompt388_repeated_cycle_runner_execution_deferred": (
+            prompt388_repeated_cycle_runner_execution_deferred
+        ),
+        "prompt388_repeated_cycle_runner_enabled": (
+            prompt388_repeated_cycle_runner_enabled
+        ),
+        "prompt388_repeated_cycle_runner_attempted": (
+            prompt388_repeated_cycle_runner_attempted
+        ),
+        "prompt388_repeated_cycle_runner_performed": (
+            prompt388_repeated_cycle_runner_performed
+        ),
+        "prompt388_repeated_cycle_runner_mode": prompt388_repeated_cycle_runner_mode,
+        "prompt388_current_cycle_index": prompt388_current_cycle_index,
+        "prompt388_next_cycle_index": prompt388_next_cycle_index,
+        "prompt388_max_cycles": prompt388_max_cycles,
+        "prompt388_max_cycles_allowed": prompt388_max_cycles_allowed,
+        "prompt388_cycle_limit_reached": prompt388_cycle_limit_reached,
+        "prompt388_generated_prompt_path_required": (
+            prompt388_generated_prompt_path_required
+        ),
+        "prompt388_generated_prompt_path_supplied": (
+            prompt388_generated_prompt_path_supplied
+        ),
+        "prompt388_generated_prompt_path_field": (
+            prompt388_generated_prompt_path_field
+        ),
+        "prompt388_ordered_loop_stages": list(prompt388_ordered_loop_stages),
+        "prompt388_ordered_loop_stage_count": prompt388_ordered_loop_stage_count,
+        "prompt388_first_stage": prompt388_first_stage,
+        "prompt388_generated_prompt_intake_stage": (
+            prompt388_generated_prompt_intake_stage
+        ),
+        "prompt388_codex_execution_stage": prompt388_codex_execution_stage,
+        "prompt388_route_decision_stage": prompt388_route_decision_stage,
+        "prompt388_approve_candidate_stage": prompt388_approve_candidate_stage,
+        "prompt388_commit_tag_gate_stage": prompt388_commit_tag_gate_stage,
+        "prompt388_commit_tag_execution_stage": (
+            prompt388_commit_tag_execution_stage
+        ),
+        "prompt388_reconciliation_stage": prompt388_reconciliation_stage,
+        "prompt388_next_cycle_handoff_stage": prompt388_next_cycle_handoff_stage,
+        "prompt388_codex_execution_allowed": prompt388_codex_execution_allowed,
+        "prompt388_codex_execution_attempted": prompt388_codex_execution_attempted,
+        "prompt388_codex_execution_performed": prompt388_codex_execution_performed,
+        "prompt388_chatgpt_invocation_allowed": (
+            prompt388_chatgpt_invocation_allowed
+        ),
+        "prompt388_chatgpt_invocation_attempted": (
+            prompt388_chatgpt_invocation_attempted
+        ),
+        "prompt388_chatgpt_invocation_performed": (
+            prompt388_chatgpt_invocation_performed
+        ),
+        "prompt388_git_mutation_allowed": prompt388_git_mutation_allowed,
+        "prompt388_git_mutation_performed": prompt388_git_mutation_performed,
+        "prompt388_remote_mutation_allowed": prompt388_remote_mutation_allowed,
+        "prompt388_remote_mutation_performed": prompt388_remote_mutation_performed,
+        "prompt388_required_next_prompt": prompt388_required_next_prompt,
+        "prompt388_required_next_prompt_id": prompt388_required_next_prompt_id,
+        "prompt388_required_next_prompt_goal": prompt388_required_next_prompt_goal,
+        "prompt388_completion_gate_path": str(prompt388_completion_gate_path),
+        "prompt388_repeated_cycle_runner_contract_path": str(
+            prompt388_repeated_cycle_runner_contract_path
+        ),
+        "prompt388_completion_receipt_path": str(prompt388_completion_receipt_path),
+        "prompt388_next_action": prompt388_next_action,
+        "prompt388_authoritative_next_action": prompt388_authoritative_next_action,
+        "prompt388_active_blocked_reason": prompt388_active_blocked_reason,
+        "prompt388_active_blocked_reasons": list(prompt388_active_blocked_reasons),
+    }
+    prompt388_completion_gate_payload: dict[str, Any] = {
+        "local_only": True,
+        "success_path_only": True,
+        "bounded": True,
+        "metadata_only": True,
+        "contract_only": True,
+        "execution_deferred": True,
+        "completion_gate_type": "local_success_path_autonomous_loop_completion_gate",
+        "source_of_truth": "prompt387_success_path_loop_dispatch_execution_wiring_bridge",
+        "stage_contract_complete": ordered_stages_complete and stage_fields_complete,
+        **prompt388_state,
+    }
+    prompt388_repeated_cycle_runner_contract_payload: dict[str, Any] = {
+        "success_path_only": True,
+        "local_only": True,
+        "bounded": True,
+        "contract_only": True,
+        "metadata_only": True,
+        "execution_deferred": True,
+        "actual_execution_prompt": _PROMPT388_REQUIRED_NEXT_PROMPT_ID,
+        "default_max_cycles": _PROMPT388_MAX_CYCLES_ALLOWED,
+        "safe_upper_bound_max_cycles": prompt388_max_cycles_allowed,
+        "generated_prompt_path_required": True,
+        "generated_prompt_path_field": _PROMPT388_GENERATED_PROMPT_PATH_FIELD,
+        "ordered_loop_stages": list(prompt388_ordered_loop_stages),
+        "stage_count": prompt388_ordered_loop_stage_count,
+        "first_stage": _PROMPT388_ORDERED_LOOP_STAGES[0],
+        "generated_prompt_intake_stage": "prompt378_generated_prompt_intake",
+        "codex_execution_stage": "prompt379_generated_prompt_codex_execution_bridge",
+        "route_decision_stage": "prompt380_prompt379_result_review_route_decision",
+        "approve_candidate_stage": "prompt381_approve_candidate_boundary",
+        "commit_tag_gate_stage": "prompt382_approve_commit_tag_execution_gate",
+        "commit_tag_execution_stage": "prompt383_explicit_approve_commit_tag_execution",
+        "reconciliation_stage": "prompt384_commit_tag_reconciliation",
+        "next_cycle_handoff_stage": "prompt385_success_path_next_cycle_handoff",
+        "failure_route_supported": False,
+        "retry_route_supported": False,
+        "rollback_supported": False,
+        "remote_route_supported": False,
+        "dispatch_attempted": False,
+        "dispatch_performed": False,
+        "repeated_cycle_runner_attempted": False,
+        "repeated_cycle_runner_performed": False,
+        "codex_execution_attempted": False,
+        "chatgpt_invocation_attempted": False,
+        "git_mutation_performed": False,
+        "remote_mutation_performed": False,
+        **prompt388_state,
+    }
+    prompt388_completion_receipt_payload: dict[str, Any] = {
+        "local_only": True,
+        "success_path_only": True,
+        "bounded": True,
+        "metadata_only": True,
+        "contract_only": True,
+        "execution_deferred": True,
+        "receipt_type": "success_path_autonomy_completion_receipt",
+        "actual_execution_prompt": _PROMPT388_REQUIRED_NEXT_PROMPT_ID,
+        **prompt388_state,
+    }
+
+    prompt388_completion_gate_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(prompt388_completion_gate_path, prompt388_completion_gate_payload)
+    _write_json(
+        prompt388_repeated_cycle_runner_contract_path,
+        prompt388_repeated_cycle_runner_contract_payload,
+    )
+    _write_json(prompt388_completion_receipt_path, prompt388_completion_receipt_payload)
+    return {
+        key: value for key, value in prompt388_state.items() if key.startswith("prompt388_")
+    }
+
+
 def _merge_prompt376_surface_into_approved_restart_execution_contract(
     *,
     approved_restart_execution_contract_payload: Mapping[str, Any] | None,
@@ -58462,6 +59329,86 @@ def _merge_prompt387_surface_into_approved_restart_execution_contract(
             else "",
             "approved_restart_execution_contract.prompt387_next_action"
             if _normalize_text(prompt387.get("prompt387_next_action"), default="")
+            else "",
+        ]
+    )
+    payload["supporting_compact_truth_refs"] = supporting_refs
+    return payload
+
+
+def _merge_prompt388_surface_into_approved_restart_execution_contract(
+    *,
+    approved_restart_execution_contract_payload: Mapping[str, Any] | None,
+    prompt388_local_success_path_autonomous_loop_completion_gate_payload: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    payload = (
+        dict(approved_restart_execution_contract_payload)
+        if isinstance(approved_restart_execution_contract_payload, Mapping)
+        else {}
+    )
+    prompt388 = (
+        dict(prompt388_local_success_path_autonomous_loop_completion_gate_payload)
+        if isinstance(
+            prompt388_local_success_path_autonomous_loop_completion_gate_payload,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT388_APPROVED_RESTART_SURFACE_KEYS:
+        if key in prompt388 and prompt388.get(key) is not None:
+            payload[key] = prompt388.get(key)
+    supporting_refs = _serialize_required_signals(
+        [
+            *(
+                payload.get("supporting_compact_truth_refs")
+                if isinstance(payload.get("supporting_compact_truth_refs"), list)
+                else []
+            ),
+            "approved_restart_execution_contract.prompt388_local_success_path_autonomous_loop_completion_gate_status"
+            if _normalize_text(
+                prompt388.get(
+                    "prompt388_local_success_path_autonomous_loop_completion_gate_status"
+                ),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt388_prompt387_evidence_ready"
+            if bool(prompt388.get("prompt388_prompt387_evidence_ready", False))
+            else "",
+            "approved_restart_execution_contract.prompt388_autonomous_loop_completion_gate_ready"
+            if bool(
+                prompt388.get(
+                    "prompt388_autonomous_loop_completion_gate_ready",
+                    False,
+                )
+            )
+            else "",
+            "approved_restart_execution_contract.prompt388_local_only_success_path_autonomy_complete"
+            if bool(
+                prompt388.get(
+                    "prompt388_local_only_success_path_autonomy_complete",
+                    False,
+                )
+            )
+            else "",
+            "approved_restart_execution_contract.prompt388_repeated_cycle_runner_contract_ready"
+            if bool(
+                prompt388.get(
+                    "prompt388_repeated_cycle_runner_contract_ready",
+                    False,
+                )
+            )
+            else "",
+            "approved_restart_execution_contract.prompt388_required_next_prompt_id"
+            if _normalize_text(
+                prompt388.get("prompt388_required_next_prompt_id"),
+                default="",
+            )
+            else "",
+            "approved_restart_execution_contract.prompt388_next_action"
+            if _normalize_text(prompt388.get("prompt388_next_action"), default="")
             else "",
         ]
     )
@@ -227970,6 +228917,15 @@ class PlannedExecutionRunner:
         prompt387_success_path_loop_execution_wiring_path = (
             run_root / "prompt387_success_path_loop_execution_wiring.json"
         )
+        prompt388_local_success_path_autonomous_loop_completion_gate_path = (
+            run_root / "prompt388_local_success_path_autonomous_loop_completion_gate.json"
+        )
+        prompt388_bounded_repeated_cycle_runner_contract_path = (
+            run_root / "prompt388_bounded_repeated_cycle_runner_contract.json"
+        )
+        prompt388_success_path_autonomy_completion_receipt_path = (
+            run_root / "prompt388_success_path_autonomy_completion_receipt.json"
+        )
         prompt363_approve_commit_tag_boundary_payload = (
             _build_prompt363_approve_commit_tag_boundary(
                 run_state_payload=run_state_payload,
@@ -228296,6 +229252,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt387_success_path_loop_dispatch_bridge_payload,
         }
+        prompt388_local_success_path_autonomous_loop_completion_gate_payload = (
+            _build_prompt388_local_success_path_autonomous_loop_completion_gate_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt388_local_success_path_autonomous_loop_completion_gate_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -228451,6 +229417,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt387_success_path_loop_dispatch_bridge_state=(
                     prompt387_success_path_loop_dispatch_bridge_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt388_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt388_local_success_path_autonomous_loop_completion_gate_state=(
+                    prompt388_local_success_path_autonomous_loop_completion_gate_payload
                 ),
             )
         )
@@ -228649,6 +229623,16 @@ class PlannedExecutionRunner:
                 ),
                 prompt387_success_path_loop_dispatch_bridge_payload=(
                     prompt387_success_path_loop_dispatch_bridge_payload
+                ),
+            )
+        )
+        approved_restart_execution_contract_payload = (
+            _merge_prompt388_surface_into_approved_restart_execution_contract(
+                approved_restart_execution_contract_payload=(
+                    approved_restart_execution_contract_payload
+                ),
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload=(
+                    prompt388_local_success_path_autonomous_loop_completion_gate_payload
                 ),
             )
         )
@@ -229245,6 +230229,24 @@ class PlannedExecutionRunner:
         manifest["prompt387_success_path_loop_execution_wiring_path"] = str(
             prompt387_success_path_loop_execution_wiring_path
         )
+        manifest[
+            "prompt388_local_success_path_autonomous_loop_completion_gate_summary"
+        ] = dict(prompt388_local_success_path_autonomous_loop_completion_gate_payload)
+        manifest[
+            "prompt388_local_success_path_autonomous_loop_completion_gate_path"
+        ] = str(prompt388_local_success_path_autonomous_loop_completion_gate_path)
+        manifest["prompt388_bounded_repeated_cycle_runner_contract_summary"] = dict(
+            prompt388_local_success_path_autonomous_loop_completion_gate_payload
+        )
+        manifest["prompt388_bounded_repeated_cycle_runner_contract_path"] = str(
+            prompt388_bounded_repeated_cycle_runner_contract_path
+        )
+        manifest["prompt388_success_path_autonomy_completion_receipt_summary"] = (
+            dict(prompt388_local_success_path_autonomous_loop_completion_gate_payload)
+        )
+        manifest["prompt388_success_path_autonomy_completion_receipt_path"] = str(
+            prompt388_success_path_autonomy_completion_receipt_path
+        )
         contract_summaries_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_summary"
         )
@@ -229512,6 +230514,19 @@ class PlannedExecutionRunner:
         contract_summaries_by_role["prompt387_success_path_loop_execution_wiring"] = (
             manifest.get("prompt387_success_path_loop_execution_wiring_summary")
         )
+        contract_summaries_by_role[
+            "prompt388_local_success_path_autonomous_loop_completion_gate"
+        ] = manifest.get(
+            "prompt388_local_success_path_autonomous_loop_completion_gate_summary"
+        )
+        contract_summaries_by_role[
+            "prompt388_bounded_repeated_cycle_runner_contract"
+        ] = manifest.get("prompt388_bounded_repeated_cycle_runner_contract_summary")
+        contract_summaries_by_role[
+            "prompt388_success_path_autonomy_completion_receipt"
+        ] = manifest.get(
+            "prompt388_success_path_autonomy_completion_receipt_summary"
+        )
         contract_paths_by_role["retention_manifest"] = manifest.get(
             "retention_manifest_path"
         )
@@ -229778,6 +230793,19 @@ class PlannedExecutionRunner:
         )
         contract_paths_by_role["prompt387_success_path_loop_execution_wiring"] = (
             manifest.get("prompt387_success_path_loop_execution_wiring_path")
+        )
+        contract_paths_by_role[
+            "prompt388_local_success_path_autonomous_loop_completion_gate"
+        ] = manifest.get(
+            "prompt388_local_success_path_autonomous_loop_completion_gate_path"
+        )
+        contract_paths_by_role[
+            "prompt388_bounded_repeated_cycle_runner_contract"
+        ] = manifest.get("prompt388_bounded_repeated_cycle_runner_contract_path")
+        contract_paths_by_role[
+            "prompt388_success_path_autonomy_completion_receipt"
+        ] = manifest.get(
+            "prompt388_success_path_autonomy_completion_receipt_path"
         )
         manifest["contract_artifact_index"] = build_contract_artifact_index(
             paths_by_role=contract_paths_by_role,
@@ -234363,6 +235391,414 @@ class PlannedExecutionRunner:
                     "prompt387_execution_wiring_path"
                 ),
                 default="",
+            ),
+            "prompt388_local_success_path_autonomous_loop_completion_gate_status": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_local_success_path_autonomous_loop_completion_gate_status"
+                ),
+                default="blocked",
+            ),
+            "prompt388_prompt387_evidence_ready": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_dispatch_bridge_ready": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_dispatch_bridge_ready",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_dispatch_plan_ready": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_dispatch_plan_ready",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_execution_wiring_ready": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_execution_wiring_ready",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_success_path_only": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_success_path_only",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_local_only": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_local_only",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_bounded": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_bounded",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_dispatch_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_dispatch_performed",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_codex_execution_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_chatgpt_invocation_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_chatgpt_invocation_performed",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_git_mutation_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt388_prompt387_remote_mutation_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_prompt387_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt388_success_path_only": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_success_path_only",
+                    True,
+                )
+            ),
+            "prompt388_local_only": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_local_only",
+                    True,
+                )
+            ),
+            "prompt388_bounded": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_bounded",
+                    True,
+                )
+            ),
+            "prompt388_failure_route_supported": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_failure_route_supported",
+                    False,
+                )
+            ),
+            "prompt388_retry_route_supported": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_retry_route_supported",
+                    False,
+                )
+            ),
+            "prompt388_rollback_supported": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_rollback_supported",
+                    False,
+                )
+            ),
+            "prompt388_remote_route_supported": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_remote_route_supported",
+                    False,
+                )
+            ),
+            "prompt388_autonomous_loop_completion_gate_ready": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_autonomous_loop_completion_gate_ready",
+                    False,
+                )
+            ),
+            "prompt388_local_only_success_path_autonomy_complete": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_local_only_success_path_autonomy_complete",
+                    False,
+                )
+            ),
+            "prompt388_repeated_cycle_runner_contract_ready": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_repeated_cycle_runner_contract_ready",
+                    False,
+                )
+            ),
+            "prompt388_repeated_cycle_runner_execution_ready": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_repeated_cycle_runner_execution_ready",
+                    False,
+                )
+            ),
+            "prompt388_repeated_cycle_runner_execution_deferred": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_repeated_cycle_runner_execution_deferred",
+                    True,
+                )
+            ),
+            "prompt388_repeated_cycle_runner_enabled": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_repeated_cycle_runner_enabled",
+                    False,
+                )
+            ),
+            "prompt388_repeated_cycle_runner_attempted": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_repeated_cycle_runner_attempted",
+                    False,
+                )
+            ),
+            "prompt388_repeated_cycle_runner_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_repeated_cycle_runner_performed",
+                    False,
+                )
+            ),
+            "prompt388_repeated_cycle_runner_mode": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_repeated_cycle_runner_mode"
+                ),
+                default="contract_only_blocked_default",
+            ),
+            "prompt388_current_cycle_index": _as_non_negative_int(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_current_cycle_index"
+                ),
+                default=1,
+            ),
+            "prompt388_next_cycle_index": _as_non_negative_int(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_next_cycle_index"
+                ),
+                default=2,
+            ),
+            "prompt388_max_cycles": _as_non_negative_int(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_max_cycles"
+                ),
+                default=_PROMPT388_MAX_CYCLES_ALLOWED,
+            ),
+            "prompt388_max_cycles_allowed": _as_non_negative_int(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_max_cycles_allowed"
+                ),
+                default=_PROMPT388_MAX_CYCLES_ALLOWED,
+            ),
+            "prompt388_cycle_limit_reached": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_cycle_limit_reached",
+                    False,
+                )
+            ),
+            "prompt388_generated_prompt_path_required": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_generated_prompt_path_required",
+                    True,
+                )
+            ),
+            "prompt388_generated_prompt_path_supplied": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_generated_prompt_path_supplied",
+                    False,
+                )
+            ),
+            "prompt388_generated_prompt_path_field": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_generated_prompt_path_field"
+                ),
+                default=_PROMPT388_GENERATED_PROMPT_PATH_FIELD,
+            ),
+            "prompt388_ordered_loop_stages": _normalize_string_list(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_ordered_loop_stages"
+                ),
+                sort_items=False,
+            ),
+            "prompt388_ordered_loop_stage_count": _as_non_negative_int(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_ordered_loop_stage_count"
+                ),
+                default=0,
+            ),
+            "prompt388_first_stage": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_first_stage"
+                ),
+                default="",
+            ),
+            "prompt388_generated_prompt_intake_stage": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_generated_prompt_intake_stage"
+                ),
+                default="",
+            ),
+            "prompt388_codex_execution_stage": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_codex_execution_stage"
+                ),
+                default="",
+            ),
+            "prompt388_route_decision_stage": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_route_decision_stage"
+                ),
+                default="",
+            ),
+            "prompt388_approve_candidate_stage": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_approve_candidate_stage"
+                ),
+                default="",
+            ),
+            "prompt388_commit_tag_gate_stage": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_commit_tag_gate_stage"
+                ),
+                default="",
+            ),
+            "prompt388_commit_tag_execution_stage": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_commit_tag_execution_stage"
+                ),
+                default="",
+            ),
+            "prompt388_reconciliation_stage": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_reconciliation_stage"
+                ),
+                default="",
+            ),
+            "prompt388_next_cycle_handoff_stage": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_next_cycle_handoff_stage"
+                ),
+                default="",
+            ),
+            "prompt388_codex_execution_allowed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_codex_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt388_codex_execution_attempted": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_codex_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt388_codex_execution_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_codex_execution_performed",
+                    False,
+                )
+            ),
+            "prompt388_chatgpt_invocation_allowed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_chatgpt_invocation_allowed",
+                    False,
+                )
+            ),
+            "prompt388_chatgpt_invocation_attempted": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_chatgpt_invocation_attempted",
+                    False,
+                )
+            ),
+            "prompt388_chatgpt_invocation_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_chatgpt_invocation_performed",
+                    False,
+                )
+            ),
+            "prompt388_git_mutation_allowed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_git_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt388_git_mutation_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_git_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt388_remote_mutation_allowed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_remote_mutation_allowed",
+                    False,
+                )
+            ),
+            "prompt388_remote_mutation_performed": bool(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_remote_mutation_performed",
+                    False,
+                )
+            ),
+            "prompt388_required_next_prompt": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_required_next_prompt"
+                ),
+                default="",
+            ),
+            "prompt388_required_next_prompt_id": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_required_next_prompt_id"
+                ),
+                default="",
+            ),
+            "prompt388_required_next_prompt_goal": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_required_next_prompt_goal"
+                ),
+                default="",
+            ),
+            "prompt388_completion_gate_path": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_completion_gate_path"
+                ),
+                default="",
+            ),
+            "prompt388_repeated_cycle_runner_contract_path": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_repeated_cycle_runner_contract_path"
+                ),
+                default="",
+            ),
+            "prompt388_completion_receipt_path": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_completion_receipt_path"
+                ),
+                default="",
+            ),
+            "prompt388_next_action": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_next_action"
+                ),
+                default="wait_for_prompt387_evidence",
+            ),
+            "prompt388_authoritative_next_action": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_authoritative_next_action"
+                ),
+                default="wait_for_prompt387_evidence",
+            ),
+            "prompt388_active_blocked_reason": _normalize_text(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_active_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt388_active_blocked_reasons": _normalize_string_list(
+                prompt388_local_success_path_autonomous_loop_completion_gate_payload.get(
+                    "prompt388_active_blocked_reasons"
+                ),
+                sort_items=False,
             ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(
