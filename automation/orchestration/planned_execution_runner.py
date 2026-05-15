@@ -40860,6 +40860,7 @@ def _build_prompt360_bounded_codex_live_execution_gate(
     run_root: Path | None = None,
     job_id: str = "",
     execution_repo_path: str = "",
+    suppress_for_prompt379_explicit_execution: bool = False,
     now: Callable[[], datetime] = datetime.now,
 ) -> dict[str, Any]:
     run_state = dict(run_state_payload or {})
@@ -41570,8 +41571,31 @@ def _build_prompt360_bounded_codex_live_execution_gate(
     )
     prompt360_execution_receipt_written = False
     prompt360_execution_returncode = 0
+    prompt360_suppressed_for_prompt379_explicit_execution = bool(
+        suppress_for_prompt379_explicit_execution
+    )
 
-    if active_blocked_reasons:
+    if prompt360_suppressed_for_prompt379_explicit_execution:
+        gate_status = "suppressed_for_prompt379_explicit_execution"
+        execution_status = "not_run"
+        live_execution_attempted = False
+        live_execution_allowed = False
+        codex_execution_allowed = False
+        execution_receipt_path = ""
+        prompt360_execution_receipt_written = False
+        prompt360_execution_returncode = 0
+        authoritative_next_action = "continue_to_prompt379_explicit_execution"
+        next_action = "continue_to_prompt379_explicit_execution"
+        manual_required = False
+        replan_required = False
+        active_blocked_reason = ""
+        normalized_active_blocked_reasons = []
+        summary = (
+            "Prompt360 live execution was suppressed because Prompt379 explicit "
+            "execution is active; Prompt360 remained metadata-only to avoid "
+            "pre-Prompt379 tracked source mutation."
+        )
+    elif active_blocked_reasons:
         gate_status = "blocked"
         execution_status = "not_run"
         live_execution_attempted = False
@@ -41738,6 +41762,9 @@ def _build_prompt360_bounded_codex_live_execution_gate(
         "prompt360_live_execution_attempted": bool(live_execution_attempted),
         "prompt360_live_execution_allowed": bool(live_execution_allowed),
         "prompt360_codex_execution_allowed": bool(codex_execution_allowed),
+        "prompt360_suppressed_for_prompt379_explicit_execution": (
+            prompt360_suppressed_for_prompt379_explicit_execution
+        ),
         "prompt360_execution_status": execution_status,
         "prompt360_execution_receipt_path": execution_receipt_path,
         "prompt360_safe_live_helper_found": bool(safe_live_helper_found),
@@ -227434,6 +227461,22 @@ class PlannedExecutionRunner:
         unit_progression_registry: dict[str, dict[str, Any]] = {}
         unit_signal_registry: dict[str, dict[str, bool]] = {}
         total_units_planned = len(units)
+        prompt379_explicit_execution_active = bool(
+            prompt379_codex_execution_requested
+            and prompt379_codex_execution_confirmed
+        )
+        initial_unit_live_execution_suppressed_for_prompt379_explicit_execution = bool(
+            prompt379_explicit_execution_active and not dry_run
+        )
+        initial_unit_execution_adapter = (
+            CodexExecutorAdapter(transport=DryRunCodexExecutionTransport())
+            if initial_unit_live_execution_suppressed_for_prompt379_explicit_execution
+            else self.adapter
+        )
+        initial_unit_execution_dry_run = bool(
+            dry_run
+            or initial_unit_live_execution_suppressed_for_prompt379_explicit_execution
+        )
 
         for unit in units:
             pr_id = _normalize_text(unit.get("pr_id"))
@@ -227499,13 +227542,19 @@ class PlannedExecutionRunner:
             _write_json(unit_progression_path, unit_progression)
 
             launch_response = dict(
-                self.adapter.launch_job(
+                initial_unit_execution_adapter.launch_job(
                     job_id=resolved_job_id,
                     pr_id=pr_id,
                     prompt_path=str(compiled_prompt_path),
                     work_dir=str(unit_dir),
                     metadata={
-                        "dry_run": dry_run,
+                        "dry_run": initial_unit_execution_dry_run,
+                        "prompt379_explicit_execution_active": (
+                            prompt379_explicit_execution_active
+                        ),
+                        "initial_unit_live_execution_suppressed_for_prompt379_explicit_execution": (
+                            initial_unit_live_execution_suppressed_for_prompt379_explicit_execution
+                        ),
                         "planned_step_id": _normalize_text(step_handoff.get("planned_step_id"), default=pr_id),
                         "source_step_id": _normalize_text(prompt_handoff.get("source_step_id"), default=pr_id),
                         "tier_category": _normalize_text(
@@ -227544,12 +227593,12 @@ class PlannedExecutionRunner:
             _write_json(unit_progression_path, unit_progression)
 
             status_response = (
-                dict(self.adapter.poll_status(run_id=run_id))
+                dict(initial_unit_execution_adapter.poll_status(run_id=run_id))
                 if run_id
                 else {"status": "failed", "error": "missing_run_id"}
             )
             artifact_response = (
-                dict(self.adapter.collect_artifacts(run_id=run_id))
+                dict(initial_unit_execution_adapter.collect_artifacts(run_id=run_id))
                 if run_id
                 else {"stdout_path": "", "stderr_path": "", "artifacts": []}
             )
@@ -227559,9 +227608,9 @@ class PlannedExecutionRunner:
                 launch_response=launch_response,
                 status_response=status_response,
                 artifact_response=artifact_response,
-                dry_run=dry_run,
+                dry_run=initial_unit_execution_dry_run,
             )
-            normalized_result = self.adapter.normalize_result(
+            normalized_result = initial_unit_execution_adapter.normalize_result(
                 job_id=resolved_job_id,
                 pr_unit=unit,
                 raw_result=raw_result,
@@ -227575,7 +227624,10 @@ class PlannedExecutionRunner:
                 normalized_result.get("execution", {}).get("status"),
                 default="failed",
             ).lower()
-            unit_failed = _unit_is_failure(execution_status=execution_status, dry_run=dry_run)
+            unit_failed = _unit_is_failure(
+                execution_status=execution_status,
+                dry_run=initial_unit_execution_dry_run,
+            )
             receipt_status = "failed" if unit_failed else "recorded"
             _append_progression_checkpoint(
                 unit_progression,
@@ -227615,7 +227667,13 @@ class PlannedExecutionRunner:
                 "job_id": resolved_job_id,
                 "pr_id": pr_id,
                 "status": receipt_status,
-                "dry_run": dry_run,
+                "dry_run": initial_unit_execution_dry_run,
+                "prompt379_explicit_execution_active": (
+                    prompt379_explicit_execution_active
+                ),
+                "initial_unit_live_execution_suppressed_for_prompt379_explicit_execution": (
+                    initial_unit_live_execution_suppressed_for_prompt379_explicit_execution
+                ),
                 "run_id": run_id,
                 "execution_status": execution_status,
                 "compiled_prompt_path": str(compiled_prompt_path),
@@ -228050,6 +228108,13 @@ class PlannedExecutionRunner:
             "prompt373_live_execution_confirmed": bool(prompt373_live_execution_confirmed),
             "prompt379_codex_execution_requested": bool(prompt379_codex_execution_requested),
             "prompt379_codex_execution_confirmed": bool(prompt379_codex_execution_confirmed),
+            "prompt379_explicit_execution_active": prompt379_explicit_execution_active,
+            "pre_prompt379_legacy_live_execution_suppressed": bool(
+                prompt379_explicit_execution_active
+            ),
+            "initial_unit_live_execution_suppressed_for_prompt379_explicit_execution": (
+                initial_unit_live_execution_suppressed_for_prompt379_explicit_execution
+            ),
             "prompt383_approve_commit_tag_requested": bool(
                 prompt383_approve_commit_tag_requested
             ),
@@ -230722,6 +230787,9 @@ class PlannedExecutionRunner:
                 run_root=run_root,
                 job_id=resolved_job_id,
                 execution_repo_path=resolved_execution_repo_path,
+                suppress_for_prompt379_explicit_execution=bool(
+                    prompt379_explicit_execution_active
+                ),
                 now=self.now,
             )
         )
