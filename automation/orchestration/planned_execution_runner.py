@@ -4280,12 +4280,14 @@ _PROMPT384_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
 )
 _PROMPT385_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt385_success_path_next_cycle_handoff_status",
+    "prompt385_prompt380_source_path",
     "prompt385_prompt384_evidence_ready",
     "prompt385_prompt384_reconciliation_status",
     "prompt385_prompt384_success_cycle_closure_ready",
     "prompt385_prompt384_success_cycle_closed",
     "prompt385_prompt384_remote_mutation_absent",
     "prompt385_previous_cycle_closed",
+    "prompt385_previous_cycle_closure_source",
     "prompt385_previous_cycle_commit",
     "prompt385_previous_cycle_tag",
     "prompt385_previous_cycle_committed_files",
@@ -32490,19 +32492,32 @@ def _planning_artifact_bundle_is_prompt167_smoke_placeholder(
 
     placeholder_markers = {
         _normalize_text(project_brief.get("objective"), default=""),
+        _normalize_text(project_brief.get("summary"), default=""),
+        _normalize_text(project_brief.get("success_definition"), default=""),
         _normalize_text(first_pr.get("pr_id"), default=""),
         _normalize_text(first_pr.get("title"), default=""),
+        _normalize_text(first_pr.get("summary"), default=""),
+        _normalize_text(first_pr.get("exact_scope"), default=""),
         _normalize_text(roadmap.get("roadmap_id"), default=""),
         _normalize_text(first_item.get("id"), default=""),
         _normalize_text(first_item.get("title"), default=""),
     }
-    return bool(
-        {
-            "Prompt167 smoke run",
-            "prompt167-smoke",
-            "prompt167-smoke-roadmap",
-        }
-        & placeholder_markers
+    exact_placeholder_markers = {
+        "Prompt167 smoke run",
+        "prompt167-smoke",
+        "prompt167-smoke-roadmap",
+    }
+    if exact_placeholder_markers & placeholder_markers:
+        return True
+
+    normalized_markers = {
+        marker.strip().lower().replace("_", "-")
+        for marker in placeholder_markers
+        if marker.strip()
+    }
+    return any(
+        "prompt167" in marker and "smoke" in marker
+        for marker in normalized_markers
     )
 
 
@@ -56701,6 +56716,9 @@ def _build_prompt385_success_path_next_cycle_handoff_state(
     prompt384_success_cycle_closure_path = (
         artifact_root / "prompt384_success_cycle_closure.json"
     )
+    prompt380_route_path = (
+        artifact_root / "prompt380_prompt379_result_review_route_decision.json"
+    )
     run_state = dict(run_state_payload or {})
 
     def _append_reason(reasons: list[str], reason: str) -> None:
@@ -56817,6 +56835,86 @@ def _build_prompt385_success_path_next_cycle_handoff_state(
 
         return _normalize_prompt384_surface(run_state), ""
 
+    def _normalize_prompt380_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
+        source = dict(value) if isinstance(value, Mapping) else {}
+        return {
+            "prompt380_prompt379_result_review_status": _normalize_text(
+                source.get("prompt380_prompt379_result_review_status"),
+                default="blocked",
+            ),
+            "prompt380_prompt379_execution_performed": _prompt357_as_boolish(
+                source.get("prompt380_prompt379_execution_performed"),
+                default=False,
+            ),
+            "prompt380_prompt379_returncode_classification": _normalize_text(
+                source.get("prompt380_prompt379_returncode_classification"),
+                default="not_run",
+            ),
+            "prompt380_prompt379_post_execution_tracked_diff_empty": (
+                _prompt357_as_boolish(
+                    source.get(
+                        "prompt380_prompt379_post_execution_tracked_diff_empty"
+                    ),
+                    default=False,
+                )
+            ),
+            "prompt380_prompt379_post_execution_changed_files": (
+                _normalize_string_list(
+                    source.get("prompt380_prompt379_post_execution_changed_files"),
+                    sort_items=False,
+                )
+            ),
+            "prompt380_route_decision": _normalize_text(
+                source.get("prompt380_route_decision"),
+                default="blocked_retry_or_review",
+            ),
+            "prompt380_approve_candidate": _prompt357_as_boolish(
+                source.get("prompt380_approve_candidate"),
+                default=False,
+            ),
+            "prompt380_no_diff_continuation_allowed": _prompt357_as_boolish(
+                source.get("prompt380_no_diff_continuation_allowed"),
+                default=False,
+            ),
+            "prompt380_git_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt380_git_mutation_performed"),
+                default=False,
+            ),
+            "prompt380_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt380_remote_mutation_performed"),
+                default=False,
+            ),
+        }
+
+    def _has_prompt380_no_diff_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
+        if not isinstance(raw_payload, Mapping):
+            return False
+        required_keys = (
+            "prompt380_prompt379_result_review_status",
+            "prompt380_prompt379_execution_performed",
+            "prompt380_prompt379_returncode_classification",
+            "prompt380_prompt379_post_execution_tracked_diff_empty",
+            "prompt380_prompt379_post_execution_changed_files",
+            "prompt380_route_decision",
+            "prompt380_approve_candidate",
+            "prompt380_no_diff_continuation_allowed",
+            "prompt380_git_mutation_performed",
+            "prompt380_remote_mutation_performed",
+        )
+        return all(key in raw_payload for key in required_keys)
+
+    def _resolve_prompt380_surface() -> tuple[dict[str, Any], str]:
+        if _has_prompt380_no_diff_evidence(run_state):
+            return _normalize_prompt380_surface(run_state), ""
+
+        prompt380_route_payload = _read_json_object_if_exists(prompt380_route_path)
+        if _has_prompt380_no_diff_evidence(prompt380_route_payload):
+            return _normalize_prompt380_surface(prompt380_route_payload), str(
+                prompt380_route_path
+            )
+
+        return _normalize_prompt380_surface(run_state), ""
+
     def _resolve_cycle_state() -> tuple[int, int, int]:
         current_cycle_index = _as_non_negative_int(
             run_state.get("prompt378_next_cycle_index"),
@@ -56927,6 +57025,56 @@ def _build_prompt385_success_path_next_cycle_handoff_state(
         prompt384_surface.get("prompt384_committed_files"),
         sort_items=False,
     )
+    prompt380_surface, prompt380_source_path = _resolve_prompt380_surface()
+    prompt385_prompt380_no_diff_continuation_valid = bool(
+        prompt380_source_path or _has_prompt380_no_diff_evidence(run_state)
+    ) and all(
+        (
+            _normalize_text(
+                prompt380_surface.get("prompt380_prompt379_result_review_status"),
+                default="",
+            )
+            == "completed",
+            _normalize_text(
+                prompt380_surface.get("prompt380_route_decision"),
+                default="",
+            )
+            == "no_diff_continuation",
+            bool(prompt380_surface.get("prompt380_no_diff_continuation_allowed", False)),
+            not bool(prompt380_surface.get("prompt380_approve_candidate", False)),
+            bool(prompt380_surface.get("prompt380_prompt379_execution_performed", False)),
+            _normalize_text(
+                prompt380_surface.get(
+                    "prompt380_prompt379_returncode_classification"
+                ),
+                default="",
+            )
+            == "success",
+            bool(
+                prompt380_surface.get(
+                    "prompt380_prompt379_post_execution_tracked_diff_empty",
+                    False,
+                )
+            ),
+            not _normalize_string_list(
+                prompt380_surface.get(
+                    "prompt380_prompt379_post_execution_changed_files"
+                ),
+                sort_items=False,
+            ),
+            not bool(prompt380_surface.get("prompt380_git_mutation_performed", False)),
+            not bool(
+                prompt380_surface.get("prompt380_remote_mutation_performed", False)
+            ),
+        )
+    )
+    prompt385_prompt384_success_cycle_valid = bool(
+        prompt385_prompt384_evidence_ready
+        and prompt385_prompt384_success_cycle_closed
+        and prompt385_prompt384_success_cycle_closure_ready
+        and prompt385_prompt384_remote_mutation_absent
+        and not prompt385_prompt384_remote_mutation_performed
+    )
     prompt385_current_cycle_index, prompt385_next_cycle_index, prompt385_max_cycles = (
         _resolve_cycle_state()
     )
@@ -56949,8 +57097,13 @@ def _build_prompt385_success_path_next_cycle_handoff_state(
     prompt385_next_action = "wait_for_prompt384_success_cycle_closure"
     prompt385_authoritative_next_action = prompt385_next_action
     prompt385_active_blocked_reasons: list[str] = []
+    prompt385_previous_cycle_closure_source = ""
 
-    if not prompt385_prompt384_evidence_ready:
+    if prompt385_prompt384_success_cycle_valid:
+        prompt385_previous_cycle_closure_source = "prompt384_success_cycle_closure"
+    elif prompt385_prompt380_no_diff_continuation_valid:
+        prompt385_previous_cycle_closure_source = "prompt380_no_diff_continuation"
+    elif not prompt385_prompt384_evidence_ready:
         _append_reason(prompt385_active_blocked_reasons, "prompt384_evidence_missing")
     else:
         if not prompt385_prompt384_success_cycle_closed:
@@ -56991,17 +57144,24 @@ def _build_prompt385_success_path_next_cycle_handoff_state(
         else ""
     )
     previous_cycle_summary = (
-        f"Previous success cycle closed locally at commit "
-        f"{prompt385_previous_cycle_commit or '<missing>'} with tag "
-        f"{prompt385_previous_cycle_tag or '<missing>'}; "
-        f"{len(prompt385_previous_cycle_committed_files)} committed file(s) were "
-        f"reconciled through Prompt384."
+        "Previous success cycle closed locally through Prompt380 no-diff "
+        "continuation; Prompt379 completed successfully with no tracked source "
+        "diff, no changed tracked files, no git mutation, and no remote mutation."
+        if prompt385_previous_cycle_closure_source == "prompt380_no_diff_continuation"
+        else (
+            f"Previous success cycle closed locally at commit "
+            f"{prompt385_previous_cycle_commit or '<missing>'} with tag "
+            f"{prompt385_previous_cycle_tag or '<missing>'}; "
+            f"{len(prompt385_previous_cycle_committed_files)} committed file(s) were "
+            f"reconciled through Prompt384."
+        )
     )
 
     prompt385_state: dict[str, Any] = {
         "prompt385_schema_version": _PROMPT385_SCHEMA_VERSION,
         "local_only": True,
         "source_prompt": "prompt385",
+        "prompt385_prompt380_source_path": prompt380_source_path,
         "prompt385_prompt384_source_path": prompt384_source_path,
         "prompt385_success_path_next_cycle_handoff_status": (
             prompt385_success_path_next_cycle_handoff_status
@@ -57020,6 +57180,9 @@ def _build_prompt385_success_path_next_cycle_handoff_state(
             prompt385_prompt384_remote_mutation_absent
         ),
         "prompt385_previous_cycle_closed": prompt385_previous_cycle_closed,
+        "prompt385_previous_cycle_closure_source": (
+            prompt385_previous_cycle_closure_source
+        ),
         "prompt385_previous_cycle_commit": prompt385_previous_cycle_commit,
         "prompt385_previous_cycle_tag": prompt385_previous_cycle_tag,
         "prompt385_previous_cycle_committed_files": list(
