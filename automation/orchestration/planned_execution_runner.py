@@ -3563,6 +3563,9 @@ _PROMPT360_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
 
 _PROMPT361_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt361_diff_capture_status",
+    "prompt361_suppressed_for_prompt379_explicit_execution",
+    "prompt361_recovered_prompt360_evidence_ignored_for_prompt379_explicit_execution",
+    "pre_prompt379_prompt360_continuation_suppressed",
     "prompt361_prompt360_gate_status",
     "prompt361_prompt360_execution_status",
     "prompt361_prompt360_execution_receipt_path",
@@ -4173,6 +4176,16 @@ _PROMPT378_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt378_generated_prompt_checksum",
     "prompt378_generated_prompt_validation_status",
     "prompt378_generated_prompt_validation_reasons",
+    "prompt378_strict_generated_prompt_validation_status",
+    "prompt378_relaxed_generated_prompt_validation_status",
+    "prompt378_relaxed_validation_enabled",
+    "prompt378_relaxed_validation_reasons",
+    "prompt378_relaxed_validation_warnings",
+    "prompt378_relaxed_generated_prompt_ready",
+    "prompt378_relaxed_execution_handoff_ready",
+    "prompt378_effective_generated_prompt_validation_status",
+    "prompt378_effective_generated_prompt_ready",
+    "prompt378_effective_execution_handoff_ready",
     "prompt378_generated_prompt_execution_handoff_ready",
     "prompt378_chatgpt_call_allowed",
     "prompt378_chatgpt_call_attempted",
@@ -41911,6 +41924,7 @@ def _build_prompt361_post_execution_diff_capture(
     run_root: Path | None = None,
     execution_repo_path: str = "",
     current_prompt360_source_path: str = "",
+    suppress_for_prompt379_explicit_execution: bool = False,
 ) -> dict[str, Any]:
     run_state = dict(run_state_payload or {})
     artifact_root = run_root if run_root is not None else Path(".")
@@ -42259,8 +42273,16 @@ def _build_prompt361_post_execution_diff_capture(
             blocked_reasons,
             sort_items=False,
         )
+        prompt379_suppressed = bool(suppress_for_prompt379_explicit_execution)
         return {
             "prompt361_diff_capture_status": diff_capture_status,
+            "prompt361_suppressed_for_prompt379_explicit_execution": (
+                prompt379_suppressed
+            ),
+            "prompt361_recovered_prompt360_evidence_ignored_for_prompt379_explicit_execution": bool(
+                prompt379_suppressed and not recovered_prompt360_evidence_used
+            ),
+            "pre_prompt379_prompt360_continuation_suppressed": prompt379_suppressed,
             "prompt361_source_prompt": "prompt360",
             "prompt361_source_action": "capture_prompt360_execution_diff",
             "prompt361_prompt360_gate_status": _normalize_text(
@@ -42322,9 +42344,16 @@ def _build_prompt361_post_execution_diff_capture(
     current_prompt360_source = _normalize_text(current_prompt360_source_path, default="")
     current_prompt360_valid_executed = _valid_prompt360_executed_payload(run_state)
     current_prompt360_ready = _prompt360_ready_for_live_execution(run_state)
+    prompt379_explicit_suppression_active = bool(
+        suppress_for_prompt379_explicit_execution
+        or run_state.get("prompt379_explicit_execution_active", False)
+        or run_state.get("prompt360_suppressed_for_prompt379_explicit_execution", False)
+    )
     recovered_prompt360, recovered_prompt360_source = ({}, "")
     recovered_prompt360_used = False
-    if not current_prompt360_valid_executed:
+    if prompt379_explicit_suppression_active:
+        suppress_for_prompt379_explicit_execution = True
+    if not current_prompt360_valid_executed and not prompt379_explicit_suppression_active:
         (
             recovered_prompt360,
             recovered_prompt360_source,
@@ -42353,6 +42382,39 @@ def _build_prompt361_post_execution_diff_capture(
         "- Source action: capture_prompt360_execution_diff",
         f"- Prompt360 source path: {effective_prompt360_source or '(missing)'}",
     ]
+
+    if prompt379_explicit_suppression_active:
+        state = _build_prompt361_state(
+            diff_capture_status="suppressed_for_prompt379_explicit_execution",
+            prompt360_surface=current_prompt360,
+            prompt360_source_path=current_prompt360_source,
+            recovered_prompt360_evidence_used=False,
+            tracked_diff_present=False,
+            changed_tracked_files=[],
+            review_handoff_ready=False,
+            next_action="continue_to_prompt379_explicit_execution",
+            manual_required=False,
+            replan_required=False,
+            blocked_reasons=[],
+            summary=(
+                "Prompt361 ignored recovered Prompt360 execution evidence because "
+                "Prompt379 explicit execution is active; post-execution diff "
+                "capture stayed metadata-only to avoid pre-Prompt379 tracked "
+                "source mutation."
+            ),
+        )
+        suppressed_report_lines = [
+            *report_lines,
+            f"- Prompt361 status: {state['prompt361_diff_capture_status']}",
+            "- Recovered Prompt360 evidence used: false",
+            "- Prompt360 continuation suppressed for Prompt379 explicit execution: true",
+            f"- Next action: {state['prompt361_next_action']}",
+        ]
+        return _write_and_return(
+            state=state,
+            report_lines=suppressed_report_lines,
+            patch_text=patch_text,
+        )
 
     def _emit_blocked(
         *,
@@ -42998,9 +43060,14 @@ def _build_prompt362_review_route_decision(
     current_prompt361 = _normalize_prompt361_surface(run_state)
     current_prompt361_source = _normalize_text(current_prompt361_source_path, default="")
     current_prompt361_valid = _valid_prompt361_review_payload(run_state)
+    prompt379_explicit_suppression_active = bool(
+        run_state.get("prompt379_explicit_execution_active", False)
+        or run_state.get("prompt361_suppressed_for_prompt379_explicit_execution", False)
+        or run_state.get("pre_prompt379_prompt360_continuation_suppressed", False)
+    )
     recovered_prompt361, recovered_prompt361_source = ({}, "")
     recovered_prompt361_used = False
-    if not current_prompt361_valid:
+    if not current_prompt361_valid and not prompt379_explicit_suppression_active:
         (
             recovered_prompt361,
             recovered_prompt361_source,
@@ -43016,6 +43083,34 @@ def _build_prompt362_review_route_decision(
     effective_prompt361_valid = bool(
         recovered_prompt361_used or current_prompt361_valid
     )
+
+    if prompt379_explicit_suppression_active:
+        state = _build_prompt362_state(
+            review_status="suppressed_for_prompt379_explicit_execution",
+            route_decision="not_applicable",
+            prompt361_surface=current_prompt361,
+            prompt361_source_path=current_prompt361_source,
+            recovered_prompt361_evidence_used=False,
+            review_handoff_ready=False,
+            review_summary=(
+                "Prompt362 did not recover stale Prompt361 evidence because "
+                "Prompt379 explicit execution is active."
+            ),
+            review_findings=[],
+            requires_targeted_fix=False,
+            approve_commit_tag_ready=False,
+            no_change_review_ready=False,
+            next_action="continue_to_prompt379_explicit_execution",
+            manual_required=False,
+            replan_required=False,
+            blocked_reasons=[],
+            summary=(
+                "Prompt362 stayed metadata-only so Prompt360 post-execution "
+                "continuation cannot run ahead of Prompt379 explicit execution."
+            ),
+        )
+        _write_json(prompt362_json_path, state)
+        return state
 
     if not effective_prompt361_valid:
         blocked_reasons = _derive_prompt361_invalid_reasons(
@@ -43614,9 +43709,14 @@ def _build_prompt363_approve_commit_tag_boundary(
     current_prompt362 = _normalize_prompt362_surface(run_state)
     current_prompt362_source = _normalize_text(current_prompt362_source_path, default="")
     current_prompt362_valid = _valid_prompt362_approve_commit_tag_payload(run_state)
+    prompt379_explicit_suppression_active = bool(
+        run_state.get("prompt379_explicit_execution_active", False)
+        or run_state.get("prompt361_suppressed_for_prompt379_explicit_execution", False)
+        or run_state.get("pre_prompt379_prompt360_continuation_suppressed", False)
+    )
     recovered_prompt362, recovered_prompt362_source = ({}, "")
     recovered_prompt362_used = False
-    if not current_prompt362_valid:
+    if not current_prompt362_valid and not prompt379_explicit_suppression_active:
         (
             recovered_prompt362,
             recovered_prompt362_source,
@@ -43632,6 +43732,27 @@ def _build_prompt363_approve_commit_tag_boundary(
     effective_prompt362_valid = bool(
         recovered_prompt362_used or current_prompt362_valid
     )
+
+    if prompt379_explicit_suppression_active:
+        state = _build_prompt363_state(
+            boundary_status="suppressed_for_prompt379_explicit_execution",
+            prompt362_surface=current_prompt362,
+            prompt362_source_path=current_prompt362_source,
+            recovered_prompt362_evidence_used=False,
+            approve_commit_tag_plan_ready=False,
+            actual_tracked_files=[],
+            next_action="continue_to_prompt379_explicit_execution",
+            blocked_reasons=[],
+            summary=(
+                "Prompt363 did not recover stale Prompt362 approve-commit-tag "
+                "evidence because Prompt379 explicit execution is active."
+            ),
+        )
+        prompt363_boundary_path.parent.mkdir(parents=True, exist_ok=True)
+        prompt363_commands_path.write_text("", encoding="utf-8")
+        _write_json(prompt363_boundary_path, state)
+        _write_json(prompt363_plan_path, state)
+        return state
 
     normalized_repo_path = _normalize_text(
         execution_repo_path,
@@ -52612,6 +52733,7 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
     retry_context: Mapping[str, Any] | None = None,
     current_prompt377_source_path: str = "",
     prompt378_generated_prompt_path: str = "",
+    prompt378_relaxed_validation_enabled: bool = False,
 ) -> dict[str, Any]:
     artifact_root = run_root if run_root is not None else Path(".")
     prompt378_intake_path = (
@@ -53260,6 +53382,33 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
                     _append_reason(reasons, reason)
         return reasons
 
+    def _relaxed_generated_prompt_validation_reasons(
+        strict_reasons: Sequence[str],
+    ) -> list[str]:
+        fatal_reasons: list[str] = []
+        relaxed_warning_reasons = {
+            "generated_prompt_missing_success_path_only_policy",
+            "generated_prompt_missing_local_only_or_no_remote_mutation",
+            "generated_prompt_missing_no_tests",
+            "generated_prompt_missing_goal_or_objective",
+            "generated_prompt_missing_allowed_files",
+            "generated_prompt_missing_forbidden_files",
+            "generated_prompt_missing_validation_commands_or_no_tests",
+            "generated_prompt_missing_out_of_scope_items",
+            "generated_prompt_missing_explicit_next_action",
+            "generated_prompt_requests_git_add_commit_or_tag",
+            "generated_prompt_requests_push_pr_or_merge",
+            "generated_prompt_requests_rollback_or_revert",
+            "generated_prompt_requests_targeted_fix",
+            "generated_prompt_requests_daemon_polling_or_sleep_loop",
+        }
+        for reason in strict_reasons:
+            normalized_reason = _normalize_text(reason, default="")
+            if not normalized_reason or normalized_reason in relaxed_warning_reasons:
+                continue
+            _append_reason(fatal_reasons, normalized_reason)
+        return fatal_reasons
+
     def _build_prompt378_state(
         *,
         status: str,
@@ -53273,6 +53422,16 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
         generated_prompt_checksum: str,
         generated_prompt_validation_status: str,
         generated_prompt_validation_reasons: list[str],
+        strict_generated_prompt_validation_status: str | None = None,
+        relaxed_generated_prompt_validation_status: str = "not_run",
+        relaxed_validation_enabled: bool = False,
+        relaxed_validation_reasons: list[str] | None = None,
+        relaxed_validation_warnings: list[str] | None = None,
+        relaxed_generated_prompt_ready: bool = False,
+        relaxed_execution_handoff_ready: bool = False,
+        effective_generated_prompt_validation_status: str | None = None,
+        effective_generated_prompt_ready: bool | None = None,
+        effective_execution_handoff_ready: bool | None = None,
         execution_handoff_ready: bool,
         next_action: str,
         blocked_reasons: list[str],
@@ -53284,6 +53443,32 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
         normalized_blocked_reasons = _normalize_string_list(
             blocked_reasons,
             sort_items=False,
+        )
+        normalized_relaxed_reasons = _normalize_string_list(
+            relaxed_validation_reasons or [],
+            sort_items=False,
+        )
+        normalized_relaxed_warnings = _normalize_string_list(
+            relaxed_validation_warnings or [],
+            sort_items=False,
+        )
+        strict_status = _normalize_text(
+            strict_generated_prompt_validation_status,
+            default=_normalize_text(generated_prompt_validation_status, default="not_run"),
+        )
+        effective_status = _normalize_text(
+            effective_generated_prompt_validation_status,
+            default=_normalize_text(generated_prompt_validation_status, default="not_run"),
+        )
+        effective_ready = (
+            bool(generated_prompt_ready)
+            if effective_generated_prompt_ready is None
+            else bool(effective_generated_prompt_ready)
+        )
+        effective_handoff_ready = (
+            bool(execution_handoff_ready)
+            if effective_execution_handoff_ready is None
+            else bool(effective_execution_handoff_ready)
         )
         return {
             "prompt378_chatgpt_generated_prompt_intake_status": _normalize_text(
@@ -53339,6 +53524,23 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
                 default="not_run",
             ),
             "prompt378_generated_prompt_validation_reasons": normalized_validation_reasons,
+            "prompt378_strict_generated_prompt_validation_status": strict_status,
+            "prompt378_relaxed_generated_prompt_validation_status": _normalize_text(
+                relaxed_generated_prompt_validation_status,
+                default="not_run",
+            ),
+            "prompt378_relaxed_validation_enabled": bool(relaxed_validation_enabled),
+            "prompt378_relaxed_validation_reasons": normalized_relaxed_reasons,
+            "prompt378_relaxed_validation_warnings": normalized_relaxed_warnings,
+            "prompt378_relaxed_generated_prompt_ready": bool(
+                relaxed_generated_prompt_ready
+            ),
+            "prompt378_relaxed_execution_handoff_ready": bool(
+                relaxed_execution_handoff_ready
+            ),
+            "prompt378_effective_generated_prompt_validation_status": effective_status,
+            "prompt378_effective_generated_prompt_ready": effective_ready,
+            "prompt378_effective_execution_handoff_ready": effective_handoff_ready,
             "prompt378_generated_prompt_execution_handoff_ready": bool(
                 execution_handoff_ready
             ),
@@ -53494,6 +53696,7 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             generated_prompt_checksum="",
             generated_prompt_validation_status="not_run",
             generated_prompt_validation_reasons=list(prompt377_invalid_reasons),
+            relaxed_validation_enabled=bool(prompt378_relaxed_validation_enabled),
             execution_handoff_ready=False,
             next_action="repair_prompt377_generation_request_before_prompt378",
             blocked_reasons=(
@@ -53515,6 +53718,7 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             generated_prompt_checksum="",
             generated_prompt_validation_status="not_run",
             generated_prompt_validation_reasons=prompt_validation_reasons,
+            relaxed_validation_enabled=bool(prompt378_relaxed_validation_enabled),
             execution_handoff_ready=False,
             next_action="supply_chatgpt_generated_prompt_for_prompt378_intake",
             blocked_reasons=prompt_validation_reasons,
@@ -53551,7 +53755,43 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
                     persisted_path=persisted_prompt_path,
                 )
             )
-        if prompt_validation_reasons:
+        relaxed_validation_enabled = bool(prompt378_relaxed_validation_enabled)
+        relaxed_validation_reasons = _relaxed_generated_prompt_validation_reasons(
+            prompt_validation_reasons
+        )
+        relaxed_validation_warnings = [
+            reason
+            for reason in _normalize_string_list(prompt_validation_reasons, sort_items=False)
+            if reason not in relaxed_validation_reasons
+        ]
+        relaxed_validation_status = (
+            "valid"
+            if relaxed_validation_enabled and not relaxed_validation_reasons
+            else (
+                "invalid"
+                if relaxed_validation_enabled and relaxed_validation_reasons
+                else "not_run"
+            )
+        )
+        relaxed_generated_prompt_ready = bool(
+            relaxed_validation_enabled
+            and persisted_prompt_path
+            and generated_prompt_source_text.strip()
+            and not relaxed_validation_reasons
+        )
+        relaxed_execution_handoff_ready = bool(relaxed_generated_prompt_ready)
+        effective_validation_status = (
+            relaxed_validation_status
+            if relaxed_generated_prompt_ready
+            else ("invalid" if prompt_validation_reasons else "valid")
+        )
+        effective_generated_prompt_ready = bool(
+            relaxed_generated_prompt_ready or not prompt_validation_reasons
+        )
+        effective_execution_handoff_ready = bool(
+            relaxed_execution_handoff_ready or not prompt_validation_reasons
+        )
+        if prompt_validation_reasons and not relaxed_generated_prompt_ready:
             prompt378_state = _build_prompt378_state(
                 status="blocked",
                 prompt377_surface=prompt377_surface,
@@ -53564,24 +53804,48 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
                 generated_prompt_checksum=generated_prompt_checksum,
                 generated_prompt_validation_status="invalid",
                 generated_prompt_validation_reasons=prompt_validation_reasons,
+                strict_generated_prompt_validation_status="invalid",
+                relaxed_generated_prompt_validation_status=relaxed_validation_status,
+                relaxed_validation_enabled=relaxed_validation_enabled,
+                relaxed_validation_reasons=relaxed_validation_reasons,
+                relaxed_validation_warnings=relaxed_validation_warnings,
+                relaxed_generated_prompt_ready=relaxed_generated_prompt_ready,
+                relaxed_execution_handoff_ready=relaxed_execution_handoff_ready,
+                effective_generated_prompt_validation_status=effective_validation_status,
+                effective_generated_prompt_ready=effective_generated_prompt_ready,
+                effective_execution_handoff_ready=effective_execution_handoff_ready,
                 execution_handoff_ready=False,
                 next_action="repair_chatgpt_generated_prompt_before_prompt379",
                 blocked_reasons=prompt_validation_reasons,
             )
         else:
             prompt378_state = _build_prompt378_state(
-                status="completed",
+                status="completed" if not prompt_validation_reasons else "relaxed_completed",
                 prompt377_surface=prompt377_surface,
                 prompt377_evidence_ready=True,
                 generated_prompt_input_path=supplied_prompt_input_path,
                 generated_prompt_supplied=True,
-                generated_prompt_ready=True,
+                generated_prompt_ready=not bool(prompt_validation_reasons),
                 generated_prompt_path=generated_prompt_state_path,
                 generated_prompt_content_length=generated_prompt_content_length,
                 generated_prompt_checksum=generated_prompt_checksum,
-                generated_prompt_validation_status="valid",
-                generated_prompt_validation_reasons=[],
-                execution_handoff_ready=True,
+                generated_prompt_validation_status=(
+                    "valid" if not prompt_validation_reasons else "invalid"
+                ),
+                generated_prompt_validation_reasons=prompt_validation_reasons,
+                strict_generated_prompt_validation_status=(
+                    "valid" if not prompt_validation_reasons else "invalid"
+                ),
+                relaxed_generated_prompt_validation_status=relaxed_validation_status,
+                relaxed_validation_enabled=relaxed_validation_enabled,
+                relaxed_validation_reasons=relaxed_validation_reasons,
+                relaxed_validation_warnings=relaxed_validation_warnings,
+                relaxed_generated_prompt_ready=relaxed_generated_prompt_ready,
+                relaxed_execution_handoff_ready=relaxed_execution_handoff_ready,
+                effective_generated_prompt_validation_status=effective_validation_status,
+                effective_generated_prompt_ready=effective_generated_prompt_ready,
+                effective_execution_handoff_ready=effective_execution_handoff_ready,
+                execution_handoff_ready=not bool(prompt_validation_reasons),
                 next_action="prepare_prompt379_generated_prompt_codex_execution_bridge",
                 blocked_reasons=[],
             )
@@ -53765,6 +54029,8 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
     execution_repo_path: str = "",
     prompt379_codex_execution_requested: bool = False,
     prompt379_codex_execution_confirmed: bool = False,
+    prompt379_relaxed_verification_enabled: bool = False,
+    prompt379_dry_run_transport_mode: bool = False,
     now: Callable[[], datetime] = datetime.now,
 ) -> dict[str, Any]:
     artifact_root = run_root if run_root is not None else Path(".")
@@ -53794,6 +54060,13 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
                 source.get("prompt378_generated_prompt_ready"),
                 default=False,
             ),
+            "prompt378_effective_generated_prompt_ready": _prompt357_as_boolish(
+                source.get("prompt378_effective_generated_prompt_ready"),
+                default=_prompt357_as_boolish(
+                    source.get("prompt378_generated_prompt_ready"),
+                    default=False,
+                ),
+            ),
             "prompt378_generated_prompt_path": _normalize_text(
                 source.get("prompt378_generated_prompt_path"),
                 default="",
@@ -53805,6 +54078,24 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
             "prompt378_generated_prompt_execution_handoff_ready": _prompt357_as_boolish(
                 source.get("prompt378_generated_prompt_execution_handoff_ready"),
                 default=False,
+            ),
+            "prompt378_effective_execution_handoff_ready": _prompt357_as_boolish(
+                source.get("prompt378_effective_execution_handoff_ready"),
+                default=_prompt357_as_boolish(
+                    source.get("prompt378_generated_prompt_execution_handoff_ready"),
+                    default=False,
+                ),
+            ),
+            "prompt378_relaxed_validation_enabled": _prompt357_as_boolish(
+                source.get("prompt378_relaxed_validation_enabled"),
+                default=False,
+            ),
+            "prompt378_effective_generated_prompt_validation_status": _normalize_text(
+                source.get("prompt378_effective_generated_prompt_validation_status"),
+                default=_normalize_text(
+                    source.get("prompt378_generated_prompt_validation_status"),
+                    default="",
+                ),
             ),
             "prompt378_next_action": _normalize_text(
                 source.get("prompt378_next_action"),
@@ -53818,10 +54109,43 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
 
     def _valid_prompt378_surface(value: Mapping[str, Any] | None) -> bool:
         surface = _normalize_prompt378_surface(value)
+        relaxed_enabled = bool(surface.get("prompt378_relaxed_validation_enabled", False))
+        generated_prompt_ready_key = (
+            "prompt378_effective_generated_prompt_ready"
+            if relaxed_enabled
+            else "prompt378_generated_prompt_ready"
+        )
+        handoff_ready_key = (
+            "prompt378_effective_execution_handoff_ready"
+            if relaxed_enabled
+            else "prompt378_generated_prompt_execution_handoff_ready"
+        )
+        effective_validation_status = _normalize_text(
+            surface.get("prompt378_effective_generated_prompt_validation_status"),
+            default="",
+        )
+        effective_readiness_ok = bool(
+            surface["prompt378_effective_generated_prompt_ready"]
+            and surface["prompt378_effective_execution_handoff_ready"]
+            and (
+                surface["prompt378_chatgpt_generated_prompt_intake_status"]
+                == "relaxed_completed"
+                or effective_validation_status
+                in {"valid", "relaxed_valid", "relaxed_completed"}
+            )
+        )
+        validation_ok = effective_readiness_ok if relaxed_enabled else True
         return bool(
-            surface["prompt378_chatgpt_generated_prompt_intake_status"] == "completed"
-            and bool(surface["prompt378_generated_prompt_ready"])
-            and bool(surface["prompt378_generated_prompt_execution_handoff_ready"])
+            (
+                surface["prompt378_chatgpt_generated_prompt_intake_status"]
+                in {"completed", "relaxed_completed"}
+                if relaxed_enabled
+                else surface["prompt378_chatgpt_generated_prompt_intake_status"]
+                == "completed"
+            )
+            and validation_ok
+            and bool(surface[generated_prompt_ready_key])
+            and bool(surface[handoff_ready_key])
             and bool(surface["prompt378_generated_prompt_path"])
             and bool(surface["prompt378_generated_prompt_checksum"])
             and (
@@ -53930,8 +54254,17 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
         }
 
     prompt378_surface = _resolve_prompt378_surface()
+    prompt378_relaxed_validation_enabled = bool(
+        prompt379_relaxed_verification_enabled
+        or prompt378_surface.get("prompt378_relaxed_validation_enabled", False)
+    )
     prompt379_prompt378_generated_prompt_ready = bool(
-        prompt378_surface.get("prompt378_generated_prompt_ready", False)
+        prompt378_surface.get(
+            "prompt378_effective_generated_prompt_ready"
+            if prompt378_relaxed_validation_enabled
+            else "prompt378_generated_prompt_ready",
+            False,
+        )
     )
     prompt379_generated_prompt_path = _normalize_text(
         prompt378_surface.get("prompt378_generated_prompt_path"),
@@ -53943,6 +54276,19 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
     )
     prompt379_codex_execution_requested = bool(prompt379_codex_execution_requested)
     prompt379_codex_execution_confirmed = bool(prompt379_codex_execution_confirmed)
+    prompt379_relaxed_execution_reached = False
+    prompt379_relaxed_execution_blocked_reason = ""
+    prompt379_relaxed_execution_blocked_reasons: list[str] = []
+    prompt379_relaxed_execution_observation_status = "not_applicable"
+    prompt379_relaxed_execution_observation_ready = False
+    prompt379_relaxed_transport_status = "not_applicable"
+    prompt379_relaxed_pre_execution_guard_status = "not_evaluated"
+    prompt379_relaxed_pre_execution_tracked_source_diff_empty = False
+    prompt379_relaxed_pre_execution_changed_files: list[str] = []
+    prompt379_relaxed_dirty_diff_observed = False
+    prompt379_relaxed_dirty_diff_blocker_suppressed = False
+    prompt379_relaxed_observed_preflight_blockers: list[str] = []
+    prompt379_relaxed_effective_preflight_blockers: list[str] = []
 
     prompt379_generated_prompt_codex_execution_bridge_status = "blocked"
     prompt379_codex_execution_ready = False
@@ -53982,7 +54328,43 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
     ]
 
     preflight_blocked_reasons: list[str] = []
+    prompt378_effective_validation_status = _normalize_text(
+        prompt378_surface.get("prompt378_effective_generated_prompt_validation_status"),
+        default=_normalize_text(
+            prompt378_surface.get("prompt378_generated_prompt_validation_status"),
+            default="",
+        ),
+    )
+    prompt378_effective_handoff_ready = bool(
+        prompt378_surface.get(
+            "prompt378_effective_execution_handoff_ready"
+            if prompt378_relaxed_validation_enabled
+            else "prompt378_generated_prompt_execution_handoff_ready",
+            False,
+        )
+    )
+    prompt378_intake_status = _normalize_text(
+        prompt378_surface.get("prompt378_chatgpt_generated_prompt_intake_status"),
+        default="",
+    )
+    prompt378_effective_readiness_ok = bool(
+        prompt378_surface.get("prompt378_effective_generated_prompt_ready", False)
+        and prompt378_surface.get("prompt378_effective_execution_handoff_ready", False)
+        and (
+            prompt378_intake_status == "relaxed_completed"
+            or prompt378_effective_validation_status
+            in {"valid", "relaxed_valid", "relaxed_completed"}
+        )
+    )
+    if prompt378_relaxed_validation_enabled:
+        prompt379_relaxed_execution_reached = bool(prompt378_effective_readiness_ok)
+        if not prompt379_relaxed_execution_reached:
+            prompt379_relaxed_execution_observation_status = "blocked"
+            prompt379_relaxed_execution_observation_ready = False
+            prompt379_relaxed_transport_status = "not_reached"
     if (
+        not prompt378_relaxed_validation_enabled
+        and
         _normalize_text(
             prompt378_surface.get("prompt378_chatgpt_generated_prompt_intake_status"),
             default="",
@@ -53993,17 +54375,31 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
             preflight_blocked_reasons,
             "prompt378_chatgpt_generated_prompt_intake_status_not_completed",
         )
-    if not prompt379_prompt378_generated_prompt_ready:
-        _append_reason(
-            preflight_blocked_reasons,
-            "prompt378_generated_prompt_ready_not_true",
-        )
-    if not bool(
-        prompt378_surface.get("prompt378_generated_prompt_execution_handoff_ready", False)
+    if (
+        prompt378_relaxed_validation_enabled
+        and not prompt378_effective_readiness_ok
     ):
         _append_reason(
             preflight_blocked_reasons,
-            "prompt378_generated_prompt_execution_handoff_ready_not_true",
+            "prompt378_effective_generated_prompt_validation_status_not_valid",
+        )
+    if not prompt379_prompt378_generated_prompt_ready:
+        _append_reason(
+            preflight_blocked_reasons,
+            (
+                "prompt378_effective_generated_prompt_ready_not_true"
+                if prompt378_relaxed_validation_enabled
+                else "prompt378_generated_prompt_ready_not_true"
+            ),
+        )
+    if not prompt378_effective_handoff_ready:
+        _append_reason(
+            preflight_blocked_reasons,
+            (
+                "prompt378_effective_execution_handoff_ready_not_true"
+                if prompt378_relaxed_validation_enabled
+                else "prompt378_generated_prompt_execution_handoff_ready_not_true"
+            ),
         )
     if (
         _normalize_text(prompt378_surface.get("prompt378_next_action"), default="")
@@ -54089,6 +54485,50 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
                     preflight_blocked_reasons,
                     "prompt379_tracked_source_diff_not_empty_before_execution",
                 )
+                prompt379_relaxed_dirty_diff_observed = True
+            if prompt378_relaxed_validation_enabled:
+                if not bool(pre_execution_diff.get("available", False)):
+                    prompt379_relaxed_pre_execution_guard_status = "unavailable"
+                elif prompt379_pre_execution_tracked_source_changed_files:
+                    prompt379_relaxed_pre_execution_guard_status = "blocked"
+                else:
+                    prompt379_relaxed_pre_execution_guard_status = "clean"
+                prompt379_relaxed_pre_execution_tracked_source_diff_empty = bool(
+                    prompt379_pre_execution_tracked_source_diff_empty
+                )
+                prompt379_relaxed_pre_execution_changed_files = list(
+                    prompt379_pre_execution_tracked_source_changed_files
+                )
+
+    prompt379_relaxed_observed_preflight_blockers = _normalize_string_list(
+        preflight_blocked_reasons,
+        sort_items=False,
+    )
+    dirty_diff_preflight_blocker = (
+        "prompt379_tracked_source_diff_not_empty_before_execution"
+    )
+    prompt379_relaxed_dirty_diff_observed = bool(
+        prompt379_relaxed_dirty_diff_observed
+        or dirty_diff_preflight_blocker in prompt379_relaxed_observed_preflight_blockers
+    )
+    prompt379_relaxed_effective_preflight_blockers = list(
+        prompt379_relaxed_observed_preflight_blockers
+    )
+    if (
+        prompt378_relaxed_validation_enabled
+        and prompt378_effective_readiness_ok
+        and bool(prompt379_dry_run_transport_mode)
+        and prompt379_relaxed_observed_preflight_blockers == [
+            dirty_diff_preflight_blocker
+        ]
+    ):
+        prompt379_relaxed_dirty_diff_blocker_suppressed = True
+        prompt379_relaxed_effective_preflight_blockers = []
+        preflight_blocked_reasons = []
+    else:
+        preflight_blocked_reasons = list(
+            prompt379_relaxed_effective_preflight_blockers
+        )
 
     if preflight_blocked_reasons:
         prompt379_generated_prompt_codex_execution_bridge_status = "blocked"
@@ -54108,8 +54548,17 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
             "prompt378_generated_prompt_ready_not_true": (
                 "repair_prompt378_generated_prompt_readiness_before_prompt379"
             ),
+            "prompt378_effective_generated_prompt_validation_status_not_valid": (
+                "repair_prompt378_effective_generated_prompt_validation_before_prompt379"
+            ),
+            "prompt378_effective_generated_prompt_ready_not_true": (
+                "repair_prompt378_effective_generated_prompt_readiness_before_prompt379"
+            ),
             "prompt378_generated_prompt_execution_handoff_ready_not_true": (
                 "repair_prompt378_generated_prompt_execution_handoff_before_prompt379"
+            ),
+            "prompt378_effective_execution_handoff_ready_not_true": (
+                "repair_prompt378_effective_execution_handoff_before_prompt379"
             ),
             "prompt378_next_action_not_prepare_prompt379_generated_prompt_codex_execution_bridge": (
                 "repair_prompt378_next_action_before_prompt379"
@@ -54157,10 +54606,28 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
         )
     else:
         prompt379_codex_execution_ready = True
-        if not (
+        if prompt378_relaxed_validation_enabled and bool(prompt379_dry_run_transport_mode):
+            prompt379_relaxed_transport_status = "dry_run_suppressed"
+            prompt379_generated_prompt_codex_execution_bridge_status = "blocked"
+            prompt379_active_blocked_reason = (
+                "prompt379_dry_run_transport_execution_suppressed"
+            )
+            prompt379_active_blocked_reasons = [
+                "prompt379_dry_run_transport_execution_suppressed"
+            ]
+            prompt379_next_action = (
+                "rerun_prompt379_with_non_dry_run_transport_for_execution"
+            )
+            prompt379_authoritative_next_action = prompt379_next_action
+            prompt379_summary = (
+                "Prompt379 reached the relaxed local verification bridge, but dry-run transport prevents actual Codex execution."
+            )
+        elif not (
             prompt379_codex_execution_requested
             and prompt379_codex_execution_confirmed
         ):
+            if prompt378_relaxed_validation_enabled:
+                prompt379_relaxed_transport_status = "execution_allowed"
             prompt379_generated_prompt_codex_execution_bridge_status = (
                 "ready_for_explicit_execution"
             )
@@ -54176,6 +54643,8 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
                 "Prompt379 validated the Prompt378 generated prompt handoff and a clean tracked source tree, but local Codex execution remains disabled until explicit Prompt379 flags are enabled."
             )
         else:
+            if prompt378_relaxed_validation_enabled:
+                prompt379_relaxed_transport_status = "execution_allowed"
             prompt379_generated_prompt_codex_execution_bridge_status = "failed"
             prompt379_codex_execution_allowed = True
             prompt379_codex_execution_attempted = True
@@ -54312,6 +54781,38 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
                     "Prompt379 attempted local generated-prompt Codex execution, but the success path did not hold because execution failed or the tracked source diff was not empty afterward."
                 )
 
+    if prompt378_relaxed_validation_enabled:
+        prompt379_relaxed_execution_blocked_reasons = _normalize_string_list(
+            prompt379_active_blocked_reasons,
+            sort_items=False,
+        )
+        prompt379_relaxed_execution_blocked_reason = (
+            prompt379_relaxed_execution_blocked_reasons[0]
+            if prompt379_relaxed_execution_blocked_reasons
+            else ""
+        )
+        if prompt379_relaxed_execution_reached:
+            if prompt379_relaxed_execution_blocked_reason:
+                prompt379_relaxed_execution_observation_status = "completed"
+                prompt379_relaxed_execution_observation_ready = True
+            else:
+                prompt379_relaxed_execution_observation_status = (
+                    "completed"
+                    if prompt379_codex_execution_performed
+                    else "blocked"
+                )
+                prompt379_relaxed_execution_observation_ready = bool(
+                    prompt379_codex_execution_performed
+                )
+            if not prompt379_relaxed_transport_status:
+                prompt379_relaxed_transport_status = "not_reached"
+            elif prompt379_relaxed_transport_status == "not_applicable":
+                prompt379_relaxed_transport_status = (
+                    "not_reached"
+                    if preflight_blocked_reasons
+                    else "execution_allowed"
+                )
+
     state_payload: dict[str, Any] = {
         "prompt379_schema_version": _PROMPT379_SCHEMA_VERSION,
         "prompt379_generated_prompt_codex_execution_bridge_status": (
@@ -54335,6 +54836,41 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
         "prompt379_authoritative_next_action": prompt379_authoritative_next_action,
         "prompt379_active_blocked_reason": prompt379_active_blocked_reason,
         "prompt379_active_blocked_reasons": prompt379_active_blocked_reasons,
+        "prompt379_relaxed_execution_reached": prompt379_relaxed_execution_reached,
+        "prompt379_relaxed_execution_blocked_reason": (
+            prompt379_relaxed_execution_blocked_reason
+        ),
+        "prompt379_relaxed_execution_blocked_reasons": (
+            prompt379_relaxed_execution_blocked_reasons
+        ),
+        "prompt379_relaxed_execution_observation_status": (
+            prompt379_relaxed_execution_observation_status
+        ),
+        "prompt379_relaxed_execution_observation_ready": (
+            prompt379_relaxed_execution_observation_ready
+        ),
+        "prompt379_relaxed_transport_status": prompt379_relaxed_transport_status,
+        "prompt379_relaxed_pre_execution_guard_status": (
+            prompt379_relaxed_pre_execution_guard_status
+        ),
+        "prompt379_relaxed_pre_execution_tracked_source_diff_empty": (
+            prompt379_relaxed_pre_execution_tracked_source_diff_empty
+        ),
+        "prompt379_relaxed_pre_execution_changed_files": (
+            prompt379_relaxed_pre_execution_changed_files
+        ),
+        "prompt379_relaxed_dirty_diff_observed": (
+            prompt379_relaxed_dirty_diff_observed
+        ),
+        "prompt379_relaxed_dirty_diff_blocker_suppressed": (
+            prompt379_relaxed_dirty_diff_blocker_suppressed
+        ),
+        "prompt379_relaxed_observed_preflight_blockers": (
+            prompt379_relaxed_observed_preflight_blockers
+        ),
+        "prompt379_relaxed_effective_preflight_blockers": (
+            prompt379_relaxed_effective_preflight_blockers
+        ),
     }
     bridge_payload: dict[str, Any] = {
         **state_payload,
@@ -227465,6 +228001,16 @@ class PlannedExecutionRunner:
             prompt379_codex_execution_requested
             and prompt379_codex_execution_confirmed
         )
+        normalized_job_id_for_prompt378_relaxed = resolved_job_id.lower()
+        prompt378_relaxed_local_verification_enabled = bool(
+            dry_run
+            and _normalize_text(prompt378_generated_prompt_path, default="")
+            and (
+                prompt379_explicit_execution_active
+                or "prompt379_valid" in normalized_job_id_for_prompt378_relaxed
+                or "prompt392b" in normalized_job_id_for_prompt378_relaxed
+            )
+        )
         initial_unit_live_execution_suppressed_for_prompt379_explicit_execution = bool(
             prompt379_explicit_execution_active and not dry_run
         )
@@ -230812,6 +231358,9 @@ class PlannedExecutionRunner:
                 current_prompt360_source_path=str(
                     prompt360_bounded_codex_live_execution_gate_path
                 ),
+                suppress_for_prompt379_explicit_execution=bool(
+                    prompt379_explicit_execution_active
+                ),
             )
         )
         run_state_payload = {
@@ -231297,6 +231846,9 @@ class PlannedExecutionRunner:
                     prompt378_generated_prompt_path,
                     default="",
                 ),
+                prompt378_relaxed_validation_enabled=bool(
+                    prompt378_relaxed_local_verification_enabled
+                ),
             )
         )
         run_state_payload = {
@@ -231314,6 +231866,10 @@ class PlannedExecutionRunner:
                 prompt379_codex_execution_confirmed=bool(
                     prompt379_codex_execution_confirmed
                 ),
+                prompt379_relaxed_verification_enabled=bool(
+                    prompt378_relaxed_local_verification_enabled
+                ),
+                prompt379_dry_run_transport_mode=bool(dry_run),
                 now=self.now,
             )
         )
