@@ -3528,6 +3528,141 @@ _LOCAL_CODEX_EXECUTION_READINESS_SURFACE_KEYS: tuple[str, ...] = (
     "project_browser_autonomous_local_codex_execution_readiness_runtime_posture",
 )
 
+_PROMPT397C_PRE_PROMPT379_MUTATION_SUPPRESSION_REASON = (
+    "explicit_prompt379_live_execution_pre_prompt379_mutation_paths_suppressed"
+)
+_PROMPT397C_SUPPRESSION_SCOPE = (
+    "pre_prompt379_local_codex_one_shot_one_cycle_selected_step_and_prompt389_paths"
+)
+
+
+def _prompt397c_generated_prompt_can_be_strict_valid(path_text: str) -> bool:
+    normalized_path = _normalize_text(path_text, default="")
+    if not normalized_path:
+        return False
+    try:
+        prompt_text = Path(normalized_path).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    normalized_prompt = _normalize_text(prompt_text, default="")
+    lowered_prompt = normalized_prompt.lower()
+    if not normalized_prompt.strip():
+        return False
+    required_markers = (
+        ("success-path-only", "success path only"),
+        ("local-only", "local only", "no remote mutation"),
+        ("no tests", "do not add tests", "do not run tests", "do not include tests"),
+        ("allowed files",),
+        ("forbidden files",),
+        ("validation commands", "do not run runtime checks or tests", "no tests"),
+        ("out-of-scope", "out of scope"),
+    )
+    return all(any(marker in lowered_prompt for marker in group) for group in required_markers)
+
+
+def _build_prompt397c_pre_prompt379_mutation_suppression_state(
+    *,
+    dry_run: bool,
+    prompt379_codex_execution_requested: bool,
+    prompt379_codex_execution_confirmed: bool,
+    prompt378_generated_prompt_path: str,
+    prompt379_live_transport_enabled: bool,
+) -> dict[str, Any]:
+    prompt_path_supplied = bool(_normalize_text(prompt378_generated_prompt_path, default=""))
+    strict_validation_can_be_valid = _prompt397c_generated_prompt_can_be_strict_valid(
+        prompt378_generated_prompt_path
+    )
+    active = bool(
+        (not dry_run)
+        and prompt379_live_transport_enabled
+        and prompt379_codex_execution_requested
+        and prompt379_codex_execution_confirmed
+        and prompt_path_supplied
+        and strict_validation_can_be_valid
+    )
+    reason = (
+        _PROMPT397C_PRE_PROMPT379_MUTATION_SUPPRESSION_REASON
+        if active
+        else ""
+    )
+    return {
+        "prompt397c_pre_prompt379_mutation_paths_suppressed": active,
+        "prompt397c_pre_prompt379_mutation_suppression_reason": reason,
+        "prompt397c_suppressed_local_codex_one_shot": active,
+        "prompt397c_suppressed_one_cycle_controller_local_execution": active,
+        "prompt397c_suppressed_prompt389_nested_cycle_execution": active,
+        "prompt397c_suppressed_selected_step_execution_adapter": active,
+        "prompt397c_explicit_prompt379_live_execution_active": active,
+        "prompt397c_suppression_scope": (
+            _PROMPT397C_SUPPRESSION_SCOPE if active else "not_applicable"
+        ),
+        "prompt397c_prompt378_generated_prompt_path_supplied": prompt_path_supplied,
+        "prompt397c_prompt378_strict_validation_can_be_valid": (
+            strict_validation_can_be_valid
+        ),
+    }
+
+
+def _build_prompt397c_suppressed_one_cycle_controller_state() -> dict[str, Any]:
+    reason = _PROMPT397C_PRE_PROMPT379_MUTATION_SUPPRESSION_REASON
+    return {
+        "project_browser_autonomous_one_cycle_controller_status": "suppressed",
+        "project_browser_autonomous_one_cycle_controller_next_action": (
+            "continue_to_prompt379_explicit_live_execution"
+        ),
+        "project_browser_autonomous_one_cycle_controller_codex_execution_status": (
+            "suppressed"
+        ),
+        "project_browser_autonomous_one_cycle_controller_enabled": False,
+        "project_browser_autonomous_one_cycle_controller_execute_enabled": False,
+        "project_browser_autonomous_one_cycle_controller_execution_attempted": False,
+        "project_browser_autonomous_one_cycle_controller_execution_blocked_reason": reason,
+        "project_browser_autonomous_one_cycle_controller_execution_gate_status": (
+            "suppressed"
+        ),
+        "project_browser_autonomous_local_codex_one_shot_handoff_status": (
+            "suppressed"
+        ),
+        "project_browser_autonomous_local_codex_one_shot_handoff_handoff_status": (
+            "suppressed"
+        ),
+        "project_browser_autonomous_local_codex_one_shot_handoff_next_action": (
+            "continue_to_prompt379_explicit_live_execution"
+        ),
+        "project_browser_autonomous_local_codex_one_shot_handoff_blocked_reason": reason,
+        "project_browser_autonomous_local_codex_one_shot_handoff_readiness_reason": reason,
+        "project_browser_autonomous_local_codex_one_shot_handoff_prompt_ready": False,
+        "project_browser_autonomous_local_codex_one_shot_handoff_command_ready": False,
+        "project_browser_autonomous_local_codex_one_shot_handoff_codex_invocation_allowed": False,
+        "project_browser_autonomous_local_codex_one_shot_handoff_execution_allowed": False,
+        "project_browser_autonomous_local_codex_one_shot_execution_status": (
+            "suppressed"
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_execution_status": (
+            "not_run"
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_next_action": (
+            "continue_to_prompt379_explicit_live_execution"
+        ),
+        "project_browser_autonomous_local_codex_one_shot_execution_blocked_reason": reason,
+        "project_browser_autonomous_local_codex_one_shot_execution_readiness_reason": reason,
+        "project_browser_autonomous_local_codex_one_shot_execution_codex_invoked": False,
+        "project_browser_autonomous_local_codex_one_shot_execution_codex_invocation_allowed": False,
+        "project_browser_autonomous_local_codex_one_shot_execution_execution_allowed": False,
+        "project_browser_autonomous_local_codex_one_shot_execution_execution_attempted": False,
+        "project_browser_autonomous_local_codex_one_shot_execution_execution_completed": False,
+        "project_browser_autonomous_selected_step_execution_adapter_status": (
+            "suppressed"
+        ),
+        "project_browser_autonomous_selected_step_execution_blocked_reason": reason,
+        "project_browser_autonomous_selected_step_execution_ready": False,
+        "project_browser_autonomous_selected_step_execution_allowed": False,
+        "project_browser_autonomous_selected_step_execution_performed": False,
+        "project_browser_autonomous_selected_step_execution_next_action": (
+            "continue_to_prompt379_explicit_live_execution"
+        ),
+    }
+
 _PROMPT360_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt360_gate_status",
     "prompt360_transport_mode",
@@ -48925,6 +49060,22 @@ def _build_prompt373_selected_step_live_codex_execution_state(
             prompt373_active_blocked_reason
         )
         prompt373_authoritative_next_action = prompt373_next_action
+    elif bool(run_state.get("prompt397c_suppressed_selected_step_execution_adapter", False)):
+        prompt373_selected_step_live_codex_execution_status = (
+            "suppressed_for_prompt379_explicit_execution"
+        )
+        prompt373_execution_status = "not_run"
+        prompt373_live_execution_gate_ready = False
+        prompt373_active_blocked_reason = (
+            _PROMPT397C_PRE_PROMPT379_MUTATION_SUPPRESSION_REASON
+        )
+        prompt373_active_blocked_reasons = [prompt373_active_blocked_reason]
+        prompt373_next_action = "continue_to_prompt379_explicit_live_execution"
+        prompt373_authoritative_next_action = prompt373_next_action
+        prompt373_summary = (
+            "Prompt373 selected-step live Codex execution was suppressed because "
+            "explicit Prompt379 live execution is active."
+        )
     elif not (prompt373_live_execution_requested and prompt373_live_execution_confirmed):
         prompt373_selected_step_live_codex_execution_status = (
             "ready_for_explicit_execution"
@@ -60360,8 +60511,17 @@ def _build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state
     prompt389_authoritative_next_action = prompt389_next_action
     prompt389_active_blocked_reasons: list[str] = []
     prompt389_cycle_receipt_paths: list[str] = []
+    prompt397c_prompt389_suppressed = bool(
+        run_state.get("prompt397c_suppressed_prompt389_nested_cycle_execution", False)
+    )
 
-    if not prompt389_prompt388_evidence_ready:
+    if prompt397c_prompt389_suppressed:
+        _append_reason(
+            prompt389_active_blocked_reasons,
+            _PROMPT397C_PRE_PROMPT379_MUTATION_SUPPRESSION_REASON,
+        )
+        prompt389_next_action = "continue_to_prompt379_explicit_live_execution"
+    elif not prompt389_prompt388_evidence_ready:
         _append_reason(prompt389_active_blocked_reasons, "prompt388_evidence_missing")
         prompt389_next_action = "wait_for_prompt388_evidence"
     else:
@@ -60745,6 +60905,8 @@ def _build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state
         if prompt389_active_blocked_reasons
         else ""
     )
+    if prompt397c_prompt389_suppressed:
+        prompt389_authoritative_next_action = prompt389_next_action
     if not prompt389_stop_reason:
         prompt389_stop_reason = prompt389_active_blocked_reason
     prompt389_gate_status = (
@@ -228246,6 +228408,22 @@ class PlannedExecutionRunner:
             prompt379_codex_execution_requested
             and prompt379_codex_execution_confirmed
         )
+        prompt397c_pre_prompt379_mutation_suppression_payload = (
+            _build_prompt397c_pre_prompt379_mutation_suppression_state(
+                dry_run=bool(dry_run),
+                prompt379_codex_execution_requested=bool(
+                    prompt379_codex_execution_requested
+                ),
+                prompt379_codex_execution_confirmed=bool(
+                    prompt379_codex_execution_confirmed
+                ),
+                prompt378_generated_prompt_path=_normalize_text(
+                    prompt378_generated_prompt_path,
+                    default="",
+                ),
+                prompt379_live_transport_enabled=bool(not dry_run),
+            )
+        )
         normalized_job_id_for_prompt378_relaxed = resolved_job_id.lower()
         prompt378_relaxed_local_verification_enabled = bool(
             dry_run
@@ -228903,6 +229081,7 @@ class PlannedExecutionRunner:
             "pre_prompt379_legacy_live_execution_suppressed": bool(
                 prompt379_explicit_execution_active
             ),
+            **prompt397c_pre_prompt379_mutation_suppression_payload,
             "initial_unit_live_execution_suppressed_for_prompt379_explicit_execution": (
                 initial_unit_live_execution_suppressed_for_prompt379_explicit_execution
             ),
@@ -231164,16 +231343,28 @@ class PlannedExecutionRunner:
                 ),
             )
         )
-        project_browser_autonomous_one_cycle_controller_state = (
-            _build_project_browser_autonomous_one_cycle_controller_state(
-                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
-                prior_approved_restart_execution_payload=(
-                    prior_approved_restart_execution_payload_for_one_cycle_controller
-                ),
-                execution_repo_path=resolved_execution_repo_path,
-                dry_run=bool(dry_run),
+        if bool(
+            run_state_payload.get(
+                "prompt397c_pre_prompt379_mutation_paths_suppressed",
+                False,
             )
-        )
+        ):
+            project_browser_autonomous_one_cycle_controller_state = (
+                _build_prompt397c_suppressed_one_cycle_controller_state()
+            )
+        else:
+            project_browser_autonomous_one_cycle_controller_state = (
+                _build_project_browser_autonomous_one_cycle_controller_state(
+                    approved_restart_payload=(
+                        approved_restart_payload_for_bounded_local_loop
+                    ),
+                    prior_approved_restart_execution_payload=(
+                        prior_approved_restart_execution_payload_for_one_cycle_controller
+                    ),
+                    execution_repo_path=resolved_execution_repo_path,
+                    dry_run=bool(dry_run),
+                )
+            )
         def _read_prompt365_projection_flag(
             value: Any,
             *,
@@ -236872,6 +237063,54 @@ class PlannedExecutionRunner:
                 ),
                 default="",
             ),
+            "prompt397c_pre_prompt379_mutation_paths_suppressed": bool(
+                prompt397c_pre_prompt379_mutation_suppression_payload.get(
+                    "prompt397c_pre_prompt379_mutation_paths_suppressed",
+                    False,
+                )
+            ),
+            "prompt397c_pre_prompt379_mutation_suppression_reason": _normalize_text(
+                prompt397c_pre_prompt379_mutation_suppression_payload.get(
+                    "prompt397c_pre_prompt379_mutation_suppression_reason"
+                ),
+                default="",
+            ),
+            "prompt397c_suppressed_local_codex_one_shot": bool(
+                prompt397c_pre_prompt379_mutation_suppression_payload.get(
+                    "prompt397c_suppressed_local_codex_one_shot",
+                    False,
+                )
+            ),
+            "prompt397c_suppressed_one_cycle_controller_local_execution": bool(
+                prompt397c_pre_prompt379_mutation_suppression_payload.get(
+                    "prompt397c_suppressed_one_cycle_controller_local_execution",
+                    False,
+                )
+            ),
+            "prompt397c_suppressed_prompt389_nested_cycle_execution": bool(
+                prompt397c_pre_prompt379_mutation_suppression_payload.get(
+                    "prompt397c_suppressed_prompt389_nested_cycle_execution",
+                    False,
+                )
+            ),
+            "prompt397c_suppressed_selected_step_execution_adapter": bool(
+                prompt397c_pre_prompt379_mutation_suppression_payload.get(
+                    "prompt397c_suppressed_selected_step_execution_adapter",
+                    False,
+                )
+            ),
+            "prompt397c_explicit_prompt379_live_execution_active": bool(
+                prompt397c_pre_prompt379_mutation_suppression_payload.get(
+                    "prompt397c_explicit_prompt379_live_execution_active",
+                    False,
+                )
+            ),
+            "prompt397c_suppression_scope": _normalize_text(
+                prompt397c_pre_prompt379_mutation_suppression_payload.get(
+                    "prompt397c_suppression_scope"
+                ),
+                default="not_applicable",
+            ),
             "prompt380_prompt379_result_review_status": _normalize_text(
                 prompt380_prompt379_result_review_route_decision_payload.get(
                     "prompt380_prompt379_result_review_status"
@@ -239941,6 +240180,52 @@ class PlannedExecutionRunner:
                 "prompt379_authoritative_next_action": _normalize_text(
                     run_state_payload.get("prompt379_authoritative_next_action"),
                     default="run_with_explicit_prompt379_codex_execution_flags",
+                ),
+                "prompt397c_pre_prompt379_mutation_paths_suppressed": bool(
+                    run_state_payload.get(
+                        "prompt397c_pre_prompt379_mutation_paths_suppressed",
+                        False,
+                    )
+                ),
+                "prompt397c_pre_prompt379_mutation_suppression_reason": _normalize_text(
+                    run_state_payload.get(
+                        "prompt397c_pre_prompt379_mutation_suppression_reason"
+                    ),
+                    default="",
+                ),
+                "prompt397c_suppressed_local_codex_one_shot": bool(
+                    run_state_payload.get(
+                        "prompt397c_suppressed_local_codex_one_shot",
+                        False,
+                    )
+                ),
+                "prompt397c_suppressed_one_cycle_controller_local_execution": bool(
+                    run_state_payload.get(
+                        "prompt397c_suppressed_one_cycle_controller_local_execution",
+                        False,
+                    )
+                ),
+                "prompt397c_suppressed_prompt389_nested_cycle_execution": bool(
+                    run_state_payload.get(
+                        "prompt397c_suppressed_prompt389_nested_cycle_execution",
+                        False,
+                    )
+                ),
+                "prompt397c_suppressed_selected_step_execution_adapter": bool(
+                    run_state_payload.get(
+                        "prompt397c_suppressed_selected_step_execution_adapter",
+                        False,
+                    )
+                ),
+                "prompt397c_explicit_prompt379_live_execution_active": bool(
+                    run_state_payload.get(
+                        "prompt397c_explicit_prompt379_live_execution_active",
+                        False,
+                    )
+                ),
+                "prompt397c_suppression_scope": _normalize_text(
+                    run_state_payload.get("prompt397c_suppression_scope"),
+                    default="not_applicable",
                 ),
             }
         )
