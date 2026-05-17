@@ -3833,6 +3833,13 @@ _PROMPT373_SCHEMA_VERSION = "prompt373_selected_step_live_codex_execution_v1"
 _PROMPT379_SCHEMA_VERSION = "prompt379_generated_prompt_codex_execution_bridge_v1"
 _PROMPT380_SCHEMA_VERSION = "prompt380_prompt379_result_review_route_decision_v1"
 _PROMPT381_SCHEMA_VERSION = "prompt381_approve_candidate_boundary_v1"
+_PROMPT398_SCHEMA_VERSION = "prompt398_committed_prompt379_result_bridge_v1"
+_PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
+    "prompt379-live-oneshot-fast-rerun-approve-candidate"
+)
+_PROMPT398_COMMITTED_PROMPT379_EXPECTED_HEAD_SUBJECT_FRAGMENT = (
+    "Prompt379 apply live one-shot approve candidate result"
+)
 _PROMPT382_SCHEMA_VERSION = "prompt382_approve_commit_tag_execution_gate_v1"
 _PROMPT383_SCHEMA_VERSION = "prompt383_explicit_approve_commit_tag_execution_v1"
 _PROMPT384_SCHEMA_VERSION = "prompt384_commit_tag_reconciliation_success_cycle_closure_v1"
@@ -4467,6 +4474,20 @@ _PROMPT385_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt385_authoritative_next_action",
     "prompt385_active_blocked_reason",
     "prompt385_active_blocked_reasons",
+)
+_PROMPT398_COMMITTED_PROMPT379_RESULT_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt398_committed_prompt379_result_detected",
+    "prompt398_committed_prompt379_result_status",
+    "prompt398_committed_prompt379_result_blocked_reason",
+    "prompt398_committed_prompt379_result_blocked_reasons",
+    "prompt398_committed_prompt379_head_commit",
+    "prompt398_committed_prompt379_head_subject",
+    "prompt398_committed_prompt379_head_tags",
+    "prompt398_committed_prompt379_expected_tag",
+    "prompt398_committed_prompt379_worktree_clean",
+    "prompt398_committed_prompt379_accepted",
+    "prompt398_committed_prompt379_next_cycle_handoff_ready",
+    "prompt398_committed_prompt379_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -6683,6 +6704,23 @@ def _merge_prompt385_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT385_APPROVED_RESTART_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt398_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt398_committed_prompt379_result_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt398_committed_prompt379_result_state)
+        if isinstance(prompt398_committed_prompt379_result_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT398_COMMITTED_PROMPT379_RESULT_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -55902,6 +55940,144 @@ def _build_prompt381_approve_candidate_boundary_state(
         key: value
         for key, value in prompt381_boundary_payload.items()
         if key.startswith("prompt381_")
+    }
+
+
+def _build_prompt398_committed_prompt379_result_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execution_repo_path: str = "",
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    repo_path = _normalize_text(execution_repo_path, default=str(Path.cwd()))
+    blocked_reasons: list[str] = []
+
+    def _append_reason(reason: str) -> None:
+        normalized_reason = _normalize_text(reason, default="")
+        if normalized_reason and normalized_reason not in blocked_reasons:
+            blocked_reasons.append(normalized_reason)
+
+    def _run_git_read(args: list[str]) -> tuple[bool, str]:
+        try:
+            completed = _run_git(repo_path, args, timeout_seconds=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return False, ""
+        if completed.returncode != 0:
+            return False, _normalize_text(completed.stderr, default="")
+        return True, _normalize_text(completed.stdout, default="")
+
+    head_commit_available, head_commit_stdout = _run_git_read(["rev-parse", "HEAD"])
+    head_subject_available, head_subject_stdout = _run_git_read(
+        ["log", "-1", "--pretty=%s"]
+    )
+    head_tags_available, head_tags_stdout = _run_git_read(["tag", "--points-at", "HEAD"])
+    worktree_status_available, worktree_status_stdout = _run_git_read(
+        ["status", "--short", "--untracked-files=no"]
+    )
+
+    prompt398_committed_prompt379_head_commit = (
+        head_commit_stdout.splitlines()[0].strip()
+        if head_commit_available and head_commit_stdout.splitlines()
+        else ""
+    )
+    prompt398_committed_prompt379_head_subject = (
+        head_subject_stdout.splitlines()[0].strip()
+        if head_subject_available and head_subject_stdout.splitlines()
+        else ""
+    )
+    prompt398_committed_prompt379_head_tags = sorted(
+        {
+            _normalize_text(line, default="")
+            for line in head_tags_stdout.splitlines()
+            if _normalize_text(line, default="")
+        }
+    )
+    prompt398_committed_prompt379_worktree_clean = bool(
+        worktree_status_available and not worktree_status_stdout.strip()
+    )
+    prompt398_current_run_prompt379_live_execution_required = bool(
+        run_state.get("prompt379_live_execution_ready", False)
+        or run_state.get("prompt379_execution_performed", False)
+        or run_state.get("prompt379_codex_execution_performed", False)
+    )
+
+    if not head_commit_available:
+        _append_reason("prompt398_head_commit_unavailable")
+    if not head_subject_available:
+        _append_reason("prompt398_head_subject_unavailable")
+    if not head_tags_available:
+        _append_reason("prompt398_head_tags_unavailable")
+    if not worktree_status_available:
+        _append_reason("prompt398_worktree_status_unavailable")
+    if (
+        _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG
+        not in prompt398_committed_prompt379_head_tags
+    ):
+        _append_reason("prompt398_expected_prompt379_tag_missing_at_head")
+    if (
+        _PROMPT398_COMMITTED_PROMPT379_EXPECTED_HEAD_SUBJECT_FRAGMENT
+        not in prompt398_committed_prompt379_head_subject
+    ):
+        _append_reason("prompt398_expected_prompt379_head_subject_missing")
+    if not prompt398_committed_prompt379_worktree_clean:
+        _append_reason("prompt398_tracked_worktree_not_clean")
+    if prompt398_current_run_prompt379_live_execution_required:
+        _append_reason("prompt398_current_run_prompt379_live_execution_required")
+
+    prompt398_committed_prompt379_accepted = not blocked_reasons
+    prompt398_committed_prompt379_result_status = (
+        "accepted" if prompt398_committed_prompt379_accepted else "blocked"
+    )
+    prompt398_committed_prompt379_next_cycle_handoff_ready = (
+        prompt398_committed_prompt379_accepted
+    )
+    prompt398_committed_prompt379_next_action = (
+        "prepare_next_cycle_handoff_from_committed_prompt379_result"
+        if prompt398_committed_prompt379_accepted
+        else "wait_for_exact_committed_prompt379_approve_result"
+    )
+    prompt398_committed_prompt379_result_blocked_reason = (
+        blocked_reasons[0] if blocked_reasons else ""
+    )
+
+    return {
+        "prompt398_schema_version": _PROMPT398_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt398",
+        "prompt398_committed_prompt379_result_detected": (
+            prompt398_committed_prompt379_accepted
+        ),
+        "prompt398_committed_prompt379_result_status": (
+            prompt398_committed_prompt379_result_status
+        ),
+        "prompt398_committed_prompt379_result_blocked_reason": (
+            prompt398_committed_prompt379_result_blocked_reason
+        ),
+        "prompt398_committed_prompt379_result_blocked_reasons": blocked_reasons,
+        "prompt398_committed_prompt379_head_commit": (
+            prompt398_committed_prompt379_head_commit
+        ),
+        "prompt398_committed_prompt379_head_subject": (
+            prompt398_committed_prompt379_head_subject
+        ),
+        "prompt398_committed_prompt379_head_tags": (
+            prompt398_committed_prompt379_head_tags
+        ),
+        "prompt398_committed_prompt379_expected_tag": (
+            _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG
+        ),
+        "prompt398_committed_prompt379_worktree_clean": (
+            prompt398_committed_prompt379_worktree_clean
+        ),
+        "prompt398_committed_prompt379_accepted": (
+            prompt398_committed_prompt379_accepted
+        ),
+        "prompt398_committed_prompt379_next_cycle_handoff_ready": (
+            prompt398_committed_prompt379_next_cycle_handoff_ready
+        ),
+        "prompt398_committed_prompt379_next_action": (
+            prompt398_committed_prompt379_next_action
+        ),
     }
 
 
@@ -232334,6 +232510,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt381_approve_candidate_boundary_payload,
         }
+        prompt398_committed_prompt379_result_bridge_payload = (
+            _build_prompt398_committed_prompt379_result_bridge_state(
+                run_state_payload=run_state_payload,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt398_committed_prompt379_result_bridge_payload,
+        }
         prompt382_approve_commit_tag_execution_gate_payload = (
             _build_prompt382_approve_commit_tag_execution_gate_state(
                 run_state_payload=run_state_payload,
@@ -232595,6 +232781,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt385_success_path_next_cycle_handoff_state=(
                     prompt385_success_path_next_cycle_handoff_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt398_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt398_committed_prompt379_result_state=(
+                    prompt398_committed_prompt379_result_bridge_payload
                 ),
             )
         )
@@ -237349,6 +237543,80 @@ class PlannedExecutionRunner:
                 ),
                 sort_items=False,
             ),
+            "prompt398_committed_prompt379_result_detected": bool(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_result_detected",
+                    False,
+                )
+            ),
+            "prompt398_committed_prompt379_result_status": _normalize_text(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_result_status"
+                ),
+                default="blocked",
+            ),
+            "prompt398_committed_prompt379_result_blocked_reason": _normalize_text(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_result_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt398_committed_prompt379_result_blocked_reasons": (
+                _normalize_string_list(
+                    prompt398_committed_prompt379_result_bridge_payload.get(
+                        "prompt398_committed_prompt379_result_blocked_reasons"
+                    ),
+                    sort_items=False,
+                )
+            ),
+            "prompt398_committed_prompt379_head_commit": _normalize_text(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_head_commit"
+                ),
+                default="",
+            ),
+            "prompt398_committed_prompt379_head_subject": _normalize_text(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_head_subject"
+                ),
+                default="",
+            ),
+            "prompt398_committed_prompt379_head_tags": _normalize_string_list(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_head_tags"
+                ),
+                sort_items=True,
+            ),
+            "prompt398_committed_prompt379_expected_tag": _normalize_text(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_expected_tag"
+                ),
+                default=_PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG,
+            ),
+            "prompt398_committed_prompt379_worktree_clean": bool(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_worktree_clean",
+                    False,
+                )
+            ),
+            "prompt398_committed_prompt379_accepted": bool(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_accepted",
+                    False,
+                )
+            ),
+            "prompt398_committed_prompt379_next_cycle_handoff_ready": bool(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_next_cycle_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt398_committed_prompt379_next_action": _normalize_text(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_next_action"
+                ),
+                default="wait_for_exact_committed_prompt379_approve_result",
+            ),
             "prompt382_approve_commit_tag_execution_gate_status": _normalize_text(
                 prompt382_approve_commit_tag_execution_gate_payload.get(
                     "prompt382_approve_commit_tag_execution_gate_status"
@@ -240226,6 +240494,72 @@ class PlannedExecutionRunner:
                 "prompt397c_suppression_scope": _normalize_text(
                     run_state_payload.get("prompt397c_suppression_scope"),
                     default="not_applicable",
+                ),
+                "prompt398_committed_prompt379_result_detected": bool(
+                    run_state_payload.get(
+                        "prompt398_committed_prompt379_result_detected",
+                        False,
+                    )
+                ),
+                "prompt398_committed_prompt379_result_status": _normalize_text(
+                    run_state_payload.get(
+                        "prompt398_committed_prompt379_result_status"
+                    ),
+                    default="blocked",
+                ),
+                "prompt398_committed_prompt379_result_blocked_reason": (
+                    _normalize_text(
+                        run_state_payload.get(
+                            "prompt398_committed_prompt379_result_blocked_reason"
+                        ),
+                        default="",
+                    )
+                ),
+                "prompt398_committed_prompt379_result_blocked_reasons": (
+                    _normalize_string_list(
+                        run_state_payload.get(
+                            "prompt398_committed_prompt379_result_blocked_reasons"
+                        ),
+                        sort_items=False,
+                    )
+                ),
+                "prompt398_committed_prompt379_head_commit": _normalize_text(
+                    run_state_payload.get("prompt398_committed_prompt379_head_commit"),
+                    default="",
+                ),
+                "prompt398_committed_prompt379_head_subject": _normalize_text(
+                    run_state_payload.get("prompt398_committed_prompt379_head_subject"),
+                    default="",
+                ),
+                "prompt398_committed_prompt379_head_tags": _normalize_string_list(
+                    run_state_payload.get("prompt398_committed_prompt379_head_tags"),
+                    sort_items=True,
+                ),
+                "prompt398_committed_prompt379_expected_tag": _normalize_text(
+                    run_state_payload.get("prompt398_committed_prompt379_expected_tag"),
+                    default=_PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG,
+                ),
+                "prompt398_committed_prompt379_worktree_clean": bool(
+                    run_state_payload.get(
+                        "prompt398_committed_prompt379_worktree_clean",
+                        False,
+                    )
+                ),
+                "prompt398_committed_prompt379_accepted": bool(
+                    run_state_payload.get(
+                        "prompt398_committed_prompt379_accepted",
+                        False,
+                    )
+                ),
+                "prompt398_committed_prompt379_next_cycle_handoff_ready": bool(
+                    run_state_payload.get(
+                        "prompt398_committed_prompt379_next_cycle_handoff_ready",
+                        False,
+                    )
+                ),
+                "prompt398_committed_prompt379_next_action": _normalize_text(
+                    run_state_payload.get("prompt398_committed_prompt379_next_action"),
+                    default="wait_for_exact_committed_prompt379_approve_result",
                 ),
             }
         )
