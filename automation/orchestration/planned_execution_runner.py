@@ -3836,6 +3836,7 @@ _PROMPT381_SCHEMA_VERSION = "prompt381_approve_candidate_boundary_v1"
 _PROMPT398_SCHEMA_VERSION = "prompt398_committed_prompt379_result_bridge_v1"
 _PROMPT399_SCHEMA_VERSION = "prompt399_relaxed_committed_result_observation_v1"
 _PROMPT400_SCHEMA_VERSION = "prompt400_relaxed_next_cycle_handoff_bridge_v1"
+_PROMPT401_SCHEMA_VERSION = "prompt401_next_prompt_selection_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4541,6 +4542,24 @@ _PROMPT400_RELAXED_HANDOFF_SURFACE_KEYS: tuple[str, ...] = (
     "prompt400_remaining_strict_false_gate_fields",
     "prompt400_relaxed_bypassed_strict_gates",
     "prompt400_strict_reenable_next_gate",
+)
+_PROMPT401_NEXT_PROMPT_SELECTION_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt401_next_prompt_selection_enabled",
+    "prompt401_next_prompt_selection_status",
+    "prompt401_next_prompt_selection_blocked_reason",
+    "prompt401_next_prompt_selection_blocked_reasons",
+    "prompt401_input_prompt400_relaxed_handoff_bridge_status",
+    "prompt401_input_prompt400_relaxed_next_cycle_ready",
+    "prompt401_input_prompt400_relaxed_next_cycle_observation_ready",
+    "prompt401_input_prompt400_relaxed_next_action",
+    "prompt401_selected_next_prompt_id",
+    "prompt401_selected_next_prompt_title",
+    "prompt401_selected_next_prompt_objective",
+    "prompt401_selected_next_prompt_action",
+    "prompt401_selected_next_prompt_reason",
+    "prompt401_selection_source",
+    "prompt401_selection_confidence",
+    "prompt401_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -6808,6 +6827,23 @@ def _merge_prompt400_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT400_RELAXED_HANDOFF_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt401_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt401_next_prompt_selection_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt401_next_prompt_selection_state)
+        if isinstance(prompt401_next_prompt_selection_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT401_NEXT_PROMPT_SELECTION_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -56517,6 +56553,96 @@ def _build_prompt400_relaxed_next_cycle_handoff_bridge_state(
         ),
         "prompt400_relaxed_bypassed_strict_gates": relaxed_bypassed_strict_gates,
         "prompt400_strict_reenable_next_gate": strict_reenable_next_gate,
+    }
+
+
+def _build_prompt401_next_prompt_selection_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    input_bridge_status = _normalize_text(
+        run_state.get("prompt400_relaxed_handoff_bridge_status"),
+        default="",
+    )
+    input_next_cycle_ready = bool(
+        run_state.get("prompt400_relaxed_next_cycle_ready", False)
+    )
+    input_observation_ready = bool(
+        run_state.get("prompt400_relaxed_next_cycle_observation_ready", False)
+    )
+    input_next_action = _normalize_text(
+        run_state.get("prompt400_relaxed_next_action"),
+        default="",
+    )
+
+    required_inputs: tuple[tuple[str, bool], ...] = (
+        (
+            "prompt400_relaxed_handoff_bridge_status_not_accepted",
+            input_bridge_status == "accepted",
+        ),
+        ("prompt400_relaxed_next_cycle_not_ready", input_next_cycle_ready),
+        (
+            "prompt400_relaxed_next_cycle_observation_not_ready",
+            input_observation_ready,
+        ),
+        (
+            "prompt400_relaxed_next_action_not_prepare_prompt401_next_prompt_selection_from_relaxed_handoff",
+            input_next_action
+            == "prepare_prompt401_next_prompt_selection_from_relaxed_handoff",
+        ),
+    )
+    blocked_reasons = [
+        reason for reason, input_ready in required_inputs if not input_ready
+    ]
+    selection_enabled = not blocked_reasons
+
+    return {
+        "prompt401_schema_version": _PROMPT401_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt401",
+        "prompt401_next_prompt_selection_enabled": selection_enabled,
+        "prompt401_next_prompt_selection_status": (
+            "selected" if selection_enabled else "blocked"
+        ),
+        "prompt401_next_prompt_selection_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt401_next_prompt_selection_blocked_reasons": blocked_reasons,
+        "prompt401_input_prompt400_relaxed_handoff_bridge_status": input_bridge_status,
+        "prompt401_input_prompt400_relaxed_next_cycle_ready": input_next_cycle_ready,
+        "prompt401_input_prompt400_relaxed_next_cycle_observation_ready": (
+            input_observation_ready
+        ),
+        "prompt401_input_prompt400_relaxed_next_action": input_next_action,
+        "prompt401_selected_next_prompt_id": "prompt402" if selection_enabled else "",
+        "prompt401_selected_next_prompt_title": (
+            "generate_selected_next_prompt_from_relaxed_handoff"
+            if selection_enabled
+            else ""
+        ),
+        "prompt401_selected_next_prompt_objective": (
+            "create a metadata-only generated-prompt surface for the selected next prompt using Prompt400 relaxed handoff evidence"
+            if selection_enabled
+            else ""
+        ),
+        "prompt401_selected_next_prompt_action": (
+            "prepare_prompt402_generated_prompt_surface" if selection_enabled else ""
+        ),
+        "prompt401_selected_next_prompt_reason": (
+            "prompt400_relaxed_handoff_ready_requires_next_prompt_generation_surface"
+            if selection_enabled
+            else ""
+        ),
+        "prompt401_selection_source": (
+            "prompt400_relaxed_handoff" if selection_enabled else ""
+        ),
+        "prompt401_selection_confidence": "high" if selection_enabled else "none",
+        "prompt401_next_action": (
+            "prepare_prompt402_generated_prompt_surface"
+            if selection_enabled
+            else "wait_for_prompt400_relaxed_handoff"
+        ),
     }
 
 
@@ -233099,6 +233225,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt400_relaxed_next_cycle_handoff_bridge_payload,
         }
+        prompt401_next_prompt_selection_payload = (
+            _build_prompt401_next_prompt_selection_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt401_next_prompt_selection_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -233262,6 +233397,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt400_relaxed_handoff_state=(
                     prompt400_relaxed_next_cycle_handoff_bridge_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt401_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt401_next_prompt_selection_state=(
+                    prompt401_next_prompt_selection_payload
                 ),
             )
         )
@@ -241065,6 +241208,102 @@ class PlannedExecutionRunner:
                 ),
                 default="worktree clean",
             ),
+            "prompt401_next_prompt_selection_enabled": bool(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_next_prompt_selection_enabled",
+                    False,
+                )
+            ),
+            "prompt401_next_prompt_selection_status": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_next_prompt_selection_status"
+                ),
+                default="blocked",
+            ),
+            "prompt401_next_prompt_selection_blocked_reason": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_next_prompt_selection_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt401_next_prompt_selection_blocked_reasons": (
+                _normalize_string_list(
+                    prompt401_next_prompt_selection_payload.get(
+                        "prompt401_next_prompt_selection_blocked_reasons"
+                    ),
+                    sort_items=False,
+                )
+            ),
+            "prompt401_input_prompt400_relaxed_handoff_bridge_status": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_input_prompt400_relaxed_handoff_bridge_status"
+                ),
+                default="",
+            ),
+            "prompt401_input_prompt400_relaxed_next_cycle_ready": bool(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_input_prompt400_relaxed_next_cycle_ready",
+                    False,
+                )
+            ),
+            "prompt401_input_prompt400_relaxed_next_cycle_observation_ready": bool(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_input_prompt400_relaxed_next_cycle_observation_ready",
+                    False,
+                )
+            ),
+            "prompt401_input_prompt400_relaxed_next_action": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_input_prompt400_relaxed_next_action"
+                ),
+                default="",
+            ),
+            "prompt401_selected_next_prompt_id": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_selected_next_prompt_id"
+                ),
+                default="",
+            ),
+            "prompt401_selected_next_prompt_title": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_selected_next_prompt_title"
+                ),
+                default="",
+            ),
+            "prompt401_selected_next_prompt_objective": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_selected_next_prompt_objective"
+                ),
+                default="",
+            ),
+            "prompt401_selected_next_prompt_action": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_selected_next_prompt_action"
+                ),
+                default="",
+            ),
+            "prompt401_selected_next_prompt_reason": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_selected_next_prompt_reason"
+                ),
+                default="",
+            ),
+            "prompt401_selection_source": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_selection_source"
+                ),
+                default="",
+            ),
+            "prompt401_selection_confidence": _normalize_text(
+                prompt401_next_prompt_selection_payload.get(
+                    "prompt401_selection_confidence"
+                ),
+                default="none",
+            ),
+            "prompt401_next_action": _normalize_text(
+                prompt401_next_prompt_selection_payload.get("prompt401_next_action"),
+                default="wait_for_prompt400_relaxed_handoff",
+            ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(
             run_state_payload,
@@ -241544,6 +241783,88 @@ class PlannedExecutionRunner:
                 "prompt400_strict_reenable_next_gate": _normalize_text(
                     run_state_payload.get("prompt400_strict_reenable_next_gate"),
                     default="worktree clean",
+                ),
+                "prompt401_next_prompt_selection_enabled": bool(
+                    run_state_payload.get(
+                        "prompt401_next_prompt_selection_enabled",
+                        False,
+                    )
+                ),
+                "prompt401_next_prompt_selection_status": _normalize_text(
+                    run_state_payload.get("prompt401_next_prompt_selection_status"),
+                    default="blocked",
+                ),
+                "prompt401_next_prompt_selection_blocked_reason": _normalize_text(
+                    run_state_payload.get(
+                        "prompt401_next_prompt_selection_blocked_reason"
+                    ),
+                    default="",
+                ),
+                "prompt401_next_prompt_selection_blocked_reasons": (
+                    _normalize_string_list(
+                        run_state_payload.get(
+                            "prompt401_next_prompt_selection_blocked_reasons"
+                        ),
+                        sort_items=False,
+                    )
+                ),
+                "prompt401_input_prompt400_relaxed_handoff_bridge_status": (
+                    _normalize_text(
+                        run_state_payload.get(
+                            "prompt401_input_prompt400_relaxed_handoff_bridge_status"
+                        ),
+                        default="",
+                    )
+                ),
+                "prompt401_input_prompt400_relaxed_next_cycle_ready": bool(
+                    run_state_payload.get(
+                        "prompt401_input_prompt400_relaxed_next_cycle_ready",
+                        False,
+                    )
+                ),
+                "prompt401_input_prompt400_relaxed_next_cycle_observation_ready": bool(
+                    run_state_payload.get(
+                        "prompt401_input_prompt400_relaxed_next_cycle_observation_ready",
+                        False,
+                    )
+                ),
+                "prompt401_input_prompt400_relaxed_next_action": _normalize_text(
+                    run_state_payload.get(
+                        "prompt401_input_prompt400_relaxed_next_action"
+                    ),
+                    default="",
+                ),
+                "prompt401_selected_next_prompt_id": _normalize_text(
+                    run_state_payload.get("prompt401_selected_next_prompt_id"),
+                    default="",
+                ),
+                "prompt401_selected_next_prompt_title": _normalize_text(
+                    run_state_payload.get("prompt401_selected_next_prompt_title"),
+                    default="",
+                ),
+                "prompt401_selected_next_prompt_objective": _normalize_text(
+                    run_state_payload.get("prompt401_selected_next_prompt_objective"),
+                    default="",
+                ),
+                "prompt401_selected_next_prompt_action": _normalize_text(
+                    run_state_payload.get("prompt401_selected_next_prompt_action"),
+                    default="",
+                ),
+                "prompt401_selected_next_prompt_reason": _normalize_text(
+                    run_state_payload.get("prompt401_selected_next_prompt_reason"),
+                    default="",
+                ),
+                "prompt401_selection_source": _normalize_text(
+                    run_state_payload.get("prompt401_selection_source"),
+                    default="",
+                ),
+                "prompt401_selection_confidence": _normalize_text(
+                    run_state_payload.get("prompt401_selection_confidence"),
+                    default="none",
+                ),
+                "prompt401_next_action": _normalize_text(
+                    run_state_payload.get("prompt401_next_action"),
+                    default="wait_for_prompt400_relaxed_handoff",
                 ),
             }
         )
