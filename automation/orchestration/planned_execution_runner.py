@@ -3835,6 +3835,7 @@ _PROMPT380_SCHEMA_VERSION = "prompt380_prompt379_result_review_route_decision_v1
 _PROMPT381_SCHEMA_VERSION = "prompt381_approve_candidate_boundary_v1"
 _PROMPT398_SCHEMA_VERSION = "prompt398_committed_prompt379_result_bridge_v1"
 _PROMPT399_SCHEMA_VERSION = "prompt399_relaxed_committed_result_observation_v1"
+_PROMPT400_SCHEMA_VERSION = "prompt400_relaxed_next_cycle_handoff_bridge_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4519,6 +4520,27 @@ _PROMPT399_RELAXED_OBSERVATION_SURFACE_KEYS: tuple[str, ...] = (
     "prompt399_strict_reenable_plan",
     "prompt399_strict_reenable_next_gate",
     "prompt399_strict_reenable_blocked_until",
+)
+_PROMPT400_RELAXED_HANDOFF_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt400_relaxed_handoff_bridge_enabled",
+    "prompt400_relaxed_handoff_bridge_status",
+    "prompt400_relaxed_handoff_bridge_blocked_reason",
+    "prompt400_relaxed_handoff_bridge_blocked_reasons",
+    "prompt400_relaxed_handoff_input_prompt398_accepted",
+    "prompt400_relaxed_handoff_input_prompt399_accepted",
+    "prompt400_relaxed_handoff_prompt381_strict_block_allowed",
+    "prompt400_relaxed_handoff_prompt385_bridge_ready",
+    "prompt400_relaxed_handoff_prompt389_bridge_ready",
+    "prompt400_relaxed_handoff_prompt390_bridge_ready",
+    "prompt400_relaxed_handoff_gates_applied",
+    "prompt400_relaxed_handoff_gates_not_applied",
+    "prompt400_relaxed_next_cycle_ready",
+    "prompt400_relaxed_next_cycle_observation_ready",
+    "prompt400_relaxed_next_action",
+    "prompt400_remaining_strict_blocked_gates",
+    "prompt400_remaining_strict_false_gate_fields",
+    "prompt400_relaxed_bypassed_strict_gates",
+    "prompt400_strict_reenable_next_gate",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -6769,6 +6791,23 @@ def _merge_prompt399_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT399_RELAXED_OBSERVATION_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt400_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt400_relaxed_handoff_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt400_relaxed_handoff_state)
+        if isinstance(prompt400_relaxed_handoff_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT400_RELAXED_HANDOFF_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -56363,6 +56402,121 @@ def _build_prompt399_relaxed_committed_result_observation_state(
         "prompt399_strict_reenable_plan": prompt399_strict_reenable_plan,
         "prompt399_strict_reenable_next_gate": prompt399_strict_reenable_plan[0],
         "prompt399_strict_reenable_blocked_until": "prompt400_strict_gate_reenable",
+    }
+
+
+def _build_prompt400_relaxed_next_cycle_handoff_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+
+    prompt398_status_accepted = (
+        _normalize_text(
+            run_state.get("prompt398_committed_prompt379_result_status"),
+            default="",
+        )
+        == "accepted"
+    )
+    prompt398_accepted = bool(
+        run_state.get("prompt398_committed_prompt379_accepted", False)
+    )
+    prompt399_alternate_evidence_ready = bool(
+        run_state.get("prompt399_committed_result_alternate_evidence_ready", False)
+    )
+    prompt399_observation_accepted = (
+        _normalize_text(
+            run_state.get("prompt399_relaxed_observation_status"),
+            default="",
+        )
+        == "accepted"
+    )
+    prompt399_handoff_ready = bool(
+        run_state.get("prompt399_relaxed_next_cycle_handoff_ready", False)
+    )
+    prompt399_observation_ready = bool(
+        run_state.get("prompt399_relaxed_end_to_end_observation_ready", False)
+    )
+
+    required_inputs: tuple[tuple[str, bool], ...] = (
+        (
+            "prompt398_committed_prompt379_result_status_not_accepted",
+            prompt398_status_accepted,
+        ),
+        ("prompt398_committed_prompt379_accepted_false", prompt398_accepted),
+        (
+            "prompt399_committed_result_alternate_evidence_not_ready",
+            prompt399_alternate_evidence_ready,
+        ),
+        (
+            "prompt399_relaxed_observation_status_not_accepted",
+            prompt399_observation_accepted,
+        ),
+        (
+            "prompt399_relaxed_next_cycle_handoff_not_ready",
+            prompt399_handoff_ready,
+        ),
+        (
+            "prompt399_relaxed_end_to_end_observation_not_ready",
+            prompt399_observation_ready,
+        ),
+    )
+    blocked_reasons = [
+        reason for reason, input_ready in required_inputs if not input_ready
+    ]
+    bridge_ready = not blocked_reasons
+    relaxed_bypassed_strict_gates = ["prompt381", "prompt385", "prompt389", "prompt390"]
+    gates_applied = list(relaxed_bypassed_strict_gates) if bridge_ready else []
+    gates_not_applied = [] if bridge_ready else list(relaxed_bypassed_strict_gates)
+    strict_reenable_next_gate = _normalize_text(
+        run_state.get("prompt399_strict_reenable_next_gate"),
+        default="worktree clean",
+    )
+
+    return {
+        "prompt400_schema_version": _PROMPT400_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt400",
+        "prompt400_relaxed_handoff_bridge_enabled": bridge_ready,
+        "prompt400_relaxed_handoff_bridge_status": (
+            "accepted" if bridge_ready else "blocked"
+        ),
+        "prompt400_relaxed_handoff_bridge_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt400_relaxed_handoff_bridge_blocked_reasons": blocked_reasons,
+        "prompt400_relaxed_handoff_input_prompt398_accepted": bool(
+            prompt398_status_accepted and prompt398_accepted
+        ),
+        "prompt400_relaxed_handoff_input_prompt399_accepted": bool(
+            prompt399_alternate_evidence_ready
+            and prompt399_observation_accepted
+            and prompt399_handoff_ready
+            and prompt399_observation_ready
+        ),
+        "prompt400_relaxed_handoff_prompt381_strict_block_allowed": bridge_ready,
+        "prompt400_relaxed_handoff_prompt385_bridge_ready": bridge_ready,
+        "prompt400_relaxed_handoff_prompt389_bridge_ready": bridge_ready,
+        "prompt400_relaxed_handoff_prompt390_bridge_ready": bridge_ready,
+        "prompt400_relaxed_handoff_gates_applied": gates_applied,
+        "prompt400_relaxed_handoff_gates_not_applied": gates_not_applied,
+        "prompt400_relaxed_next_cycle_ready": bridge_ready,
+        "prompt400_relaxed_next_cycle_observation_ready": bridge_ready,
+        "prompt400_relaxed_next_action": (
+            "prepare_prompt401_next_prompt_selection_from_relaxed_handoff"
+            if bridge_ready
+            else "wait_for_prompt399_accepted_relaxed_observation_evidence"
+        ),
+        "prompt400_remaining_strict_blocked_gates": _normalize_string_list(
+            run_state.get("prompt399_all_blocked_gates"),
+            sort_items=False,
+        ),
+        "prompt400_remaining_strict_false_gate_fields": _normalize_string_list(
+            run_state.get("prompt399_all_false_gate_fields"),
+            sort_items=False,
+        ),
+        "prompt400_relaxed_bypassed_strict_gates": relaxed_bypassed_strict_gates,
+        "prompt400_strict_reenable_next_gate": strict_reenable_next_gate,
     }
 
 
@@ -232936,6 +233090,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt399_relaxed_committed_result_observation_payload,
         }
+        prompt400_relaxed_next_cycle_handoff_bridge_payload = (
+            _build_prompt400_relaxed_next_cycle_handoff_bridge_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt400_relaxed_next_cycle_handoff_bridge_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -233091,6 +233254,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt399_relaxed_observation_state=(
                     prompt399_relaxed_committed_result_observation_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt400_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt400_relaxed_handoff_state=(
+                    prompt400_relaxed_next_cycle_handoff_bridge_payload
                 ),
             )
         )
@@ -240778,6 +240949,122 @@ class PlannedExecutionRunner:
                 ),
                 default="prompt400_strict_gate_reenable",
             ),
+            "prompt400_relaxed_handoff_bridge_enabled": bool(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_bridge_enabled",
+                    False,
+                )
+            ),
+            "prompt400_relaxed_handoff_bridge_status": _normalize_text(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_bridge_status"
+                ),
+                default="blocked",
+            ),
+            "prompt400_relaxed_handoff_bridge_blocked_reason": _normalize_text(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_bridge_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt400_relaxed_handoff_bridge_blocked_reasons": (
+                _normalize_string_list(
+                    prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                        "prompt400_relaxed_handoff_bridge_blocked_reasons"
+                    ),
+                    sort_items=False,
+                )
+            ),
+            "prompt400_relaxed_handoff_input_prompt398_accepted": bool(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_input_prompt398_accepted",
+                    False,
+                )
+            ),
+            "prompt400_relaxed_handoff_input_prompt399_accepted": bool(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_input_prompt399_accepted",
+                    False,
+                )
+            ),
+            "prompt400_relaxed_handoff_prompt381_strict_block_allowed": bool(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_prompt381_strict_block_allowed",
+                    False,
+                )
+            ),
+            "prompt400_relaxed_handoff_prompt385_bridge_ready": bool(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_prompt385_bridge_ready",
+                    False,
+                )
+            ),
+            "prompt400_relaxed_handoff_prompt389_bridge_ready": bool(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_prompt389_bridge_ready",
+                    False,
+                )
+            ),
+            "prompt400_relaxed_handoff_prompt390_bridge_ready": bool(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_prompt390_bridge_ready",
+                    False,
+                )
+            ),
+            "prompt400_relaxed_handoff_gates_applied": _normalize_string_list(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_gates_applied"
+                ),
+                sort_items=False,
+            ),
+            "prompt400_relaxed_handoff_gates_not_applied": _normalize_string_list(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_handoff_gates_not_applied"
+                ),
+                sort_items=False,
+            ),
+            "prompt400_relaxed_next_cycle_ready": bool(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_next_cycle_ready",
+                    False,
+                )
+            ),
+            "prompt400_relaxed_next_cycle_observation_ready": bool(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_next_cycle_observation_ready",
+                    False,
+                )
+            ),
+            "prompt400_relaxed_next_action": _normalize_text(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_next_action"
+                ),
+                default="wait_for_prompt399_accepted_relaxed_observation_evidence",
+            ),
+            "prompt400_remaining_strict_blocked_gates": _normalize_string_list(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_remaining_strict_blocked_gates"
+                ),
+                sort_items=False,
+            ),
+            "prompt400_remaining_strict_false_gate_fields": _normalize_string_list(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_remaining_strict_false_gate_fields"
+                ),
+                sort_items=False,
+            ),
+            "prompt400_relaxed_bypassed_strict_gates": _normalize_string_list(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_relaxed_bypassed_strict_gates"
+                ),
+                sort_items=False,
+            ),
+            "prompt400_strict_reenable_next_gate": _normalize_text(
+                prompt400_relaxed_next_cycle_handoff_bridge_payload.get(
+                    "prompt400_strict_reenable_next_gate"
+                ),
+                default="worktree clean",
+            ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(
             run_state_payload,
@@ -241156,6 +241443,107 @@ class PlannedExecutionRunner:
                 "prompt399_strict_reenable_blocked_until": _normalize_text(
                     run_state_payload.get("prompt399_strict_reenable_blocked_until"),
                     default="prompt400_strict_gate_reenable",
+                ),
+                "prompt400_relaxed_handoff_bridge_enabled": bool(
+                    run_state_payload.get(
+                        "prompt400_relaxed_handoff_bridge_enabled",
+                        False,
+                    )
+                ),
+                "prompt400_relaxed_handoff_bridge_status": _normalize_text(
+                    run_state_payload.get("prompt400_relaxed_handoff_bridge_status"),
+                    default="blocked",
+                ),
+                "prompt400_relaxed_handoff_bridge_blocked_reason": _normalize_text(
+                    run_state_payload.get(
+                        "prompt400_relaxed_handoff_bridge_blocked_reason"
+                    ),
+                    default="",
+                ),
+                "prompt400_relaxed_handoff_bridge_blocked_reasons": (
+                    _normalize_string_list(
+                        run_state_payload.get(
+                            "prompt400_relaxed_handoff_bridge_blocked_reasons"
+                        ),
+                        sort_items=False,
+                    )
+                ),
+                "prompt400_relaxed_handoff_input_prompt398_accepted": bool(
+                    run_state_payload.get(
+                        "prompt400_relaxed_handoff_input_prompt398_accepted",
+                        False,
+                    )
+                ),
+                "prompt400_relaxed_handoff_input_prompt399_accepted": bool(
+                    run_state_payload.get(
+                        "prompt400_relaxed_handoff_input_prompt399_accepted",
+                        False,
+                    )
+                ),
+                "prompt400_relaxed_handoff_prompt381_strict_block_allowed": bool(
+                    run_state_payload.get(
+                        "prompt400_relaxed_handoff_prompt381_strict_block_allowed",
+                        False,
+                    )
+                ),
+                "prompt400_relaxed_handoff_prompt385_bridge_ready": bool(
+                    run_state_payload.get(
+                        "prompt400_relaxed_handoff_prompt385_bridge_ready",
+                        False,
+                    )
+                ),
+                "prompt400_relaxed_handoff_prompt389_bridge_ready": bool(
+                    run_state_payload.get(
+                        "prompt400_relaxed_handoff_prompt389_bridge_ready",
+                        False,
+                    )
+                ),
+                "prompt400_relaxed_handoff_prompt390_bridge_ready": bool(
+                    run_state_payload.get(
+                        "prompt400_relaxed_handoff_prompt390_bridge_ready",
+                        False,
+                    )
+                ),
+                "prompt400_relaxed_handoff_gates_applied": _normalize_string_list(
+                    run_state_payload.get("prompt400_relaxed_handoff_gates_applied"),
+                    sort_items=False,
+                ),
+                "prompt400_relaxed_handoff_gates_not_applied": _normalize_string_list(
+                    run_state_payload.get(
+                        "prompt400_relaxed_handoff_gates_not_applied"
+                    ),
+                    sort_items=False,
+                ),
+                "prompt400_relaxed_next_cycle_ready": bool(
+                    run_state_payload.get("prompt400_relaxed_next_cycle_ready", False)
+                ),
+                "prompt400_relaxed_next_cycle_observation_ready": bool(
+                    run_state_payload.get(
+                        "prompt400_relaxed_next_cycle_observation_ready",
+                        False,
+                    )
+                ),
+                "prompt400_relaxed_next_action": _normalize_text(
+                    run_state_payload.get("prompt400_relaxed_next_action"),
+                    default="wait_for_prompt399_accepted_relaxed_observation_evidence",
+                ),
+                "prompt400_remaining_strict_blocked_gates": _normalize_string_list(
+                    run_state_payload.get("prompt400_remaining_strict_blocked_gates"),
+                    sort_items=False,
+                ),
+                "prompt400_remaining_strict_false_gate_fields": _normalize_string_list(
+                    run_state_payload.get(
+                        "prompt400_remaining_strict_false_gate_fields"
+                    ),
+                    sort_items=False,
+                ),
+                "prompt400_relaxed_bypassed_strict_gates": _normalize_string_list(
+                    run_state_payload.get("prompt400_relaxed_bypassed_strict_gates"),
+                    sort_items=False,
+                ),
+                "prompt400_strict_reenable_next_gate": _normalize_text(
+                    run_state_payload.get("prompt400_strict_reenable_next_gate"),
+                    default="worktree clean",
                 ),
             }
         )
