@@ -3840,6 +3840,7 @@ _PROMPT401_SCHEMA_VERSION = "prompt401_next_prompt_selection_v1"
 _PROMPT402_SCHEMA_VERSION = "prompt402_generated_prompt_surface_v1"
 _PROMPT403_SCHEMA_VERSION = "prompt403_selected_prompt_dry_run_handoff_v1"
 _PROMPT404_SCHEMA_VERSION = "prompt404_selected_prompt_handoff_review_v1"
+_PROMPT405_SCHEMA_VERSION = "prompt405_selected_prompt_execution_plan_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4632,6 +4633,34 @@ _PROMPT404_SELECTED_PROMPT_HANDOFF_REVIEW_KEYS: tuple[str, ...] = (
     "prompt404_selected_prompt_retry_required",
     "prompt404_selected_prompt_commit_tag_allowed",
     "prompt404_next_action",
+)
+_PROMPT405_SELECTED_PROMPT_EXECUTION_PLAN_KEYS: tuple[str, ...] = (
+    "prompt405_selected_prompt_execution_plan_enabled",
+    "prompt405_selected_prompt_execution_plan_status",
+    "prompt405_selected_prompt_execution_plan_blocked_reason",
+    "prompt405_selected_prompt_execution_plan_blocked_reasons",
+    "prompt405_input_prompt404_handoff_review_status",
+    "prompt405_input_prompt404_result_review_status",
+    "prompt405_input_prompt404_execution_classification",
+    "prompt405_input_prompt404_review_route",
+    "prompt405_input_prompt404_review_ready",
+    "prompt405_input_prompt404_execution_plan_ready",
+    "prompt405_input_prompt404_approval_candidate",
+    "prompt405_input_prompt404_commit_tag_allowed",
+    "prompt405_input_prompt404_next_action",
+    "prompt405_selected_prompt_id",
+    "prompt405_selected_prompt_source",
+    "prompt405_selected_prompt_execution_mode",
+    "prompt405_selected_prompt_execution_plan_ready",
+    "prompt405_selected_prompt_execution_allowed",
+    "prompt405_selected_prompt_execution_requires_explicit_enable",
+    "prompt405_selected_prompt_execution_attempted",
+    "prompt405_selected_prompt_execution_performed",
+    "prompt405_selected_prompt_live_execution_allowed",
+    "prompt405_selected_prompt_commit_tag_allowed",
+    "prompt405_selected_prompt_plan_classification",
+    "prompt405_selected_prompt_plan_route",
+    "prompt405_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -6343,7 +6372,11 @@ def _merge_codex_live_network_stop_surface_into_approved_restart_payload(
     policy_snapshot: Mapping[str, Any] | None,
     retry_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
     policy_payload = dict(policy_snapshot) if isinstance(policy_snapshot, Mapping) else {}
     retry_payload = dict(retry_context) if isinstance(retry_context, Mapping) else {}
 
@@ -6971,6 +7004,23 @@ def _merge_prompt404_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT404_SELECTED_PROMPT_HANDOFF_REVIEW_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt405_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt405_selected_prompt_execution_plan_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt405_selected_prompt_execution_plan_state)
+        if isinstance(prompt405_selected_prompt_execution_plan_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT405_SELECTED_PROMPT_EXECUTION_PLAN_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -57130,6 +57180,138 @@ def _build_prompt404_selected_prompt_handoff_review_state(
             "prepare_prompt405_selected_prompt_execution_plan"
             if review_ready
             else "wait_for_prompt403_selected_prompt_dry_run_handoff"
+        ),
+    }
+
+
+def _build_prompt405_selected_prompt_execution_plan_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    input_handoff_review_status = _normalize_text(
+        run_state.get("prompt404_selected_prompt_handoff_review_status"),
+        default="",
+    )
+    input_result_review_status = _normalize_text(
+        run_state.get("prompt404_selected_prompt_result_review_status"),
+        default="",
+    )
+    input_execution_classification = _normalize_text(
+        run_state.get("prompt404_selected_prompt_execution_classification"),
+        default="",
+    )
+    input_review_route = _normalize_text(
+        run_state.get("prompt404_selected_prompt_review_route"),
+        default="",
+    )
+    input_review_ready = bool(
+        run_state.get("prompt404_selected_prompt_review_ready", False)
+    )
+    input_execution_plan_ready = bool(
+        run_state.get("prompt404_selected_prompt_execution_plan_ready", False)
+    )
+    input_approval_candidate = bool(
+        run_state.get("prompt404_selected_prompt_approval_candidate", False)
+    )
+    input_commit_tag_allowed = bool(
+        run_state.get("prompt404_selected_prompt_commit_tag_allowed", False)
+    )
+    input_next_action = _normalize_text(
+        run_state.get("prompt404_next_action"),
+        default="",
+    )
+
+    required_inputs: tuple[tuple[str, bool], ...] = (
+        (
+            "prompt404_selected_prompt_handoff_review_status_not_reviewed",
+            input_handoff_review_status == "reviewed",
+        ),
+        (
+            "prompt404_selected_prompt_result_review_status_not_reviewed",
+            input_result_review_status == "reviewed",
+        ),
+        (
+            "prompt404_selected_prompt_execution_classification_not_not_executed_handoff_ready",
+            input_execution_classification == "not_executed_handoff_ready",
+        ),
+        (
+            "prompt404_selected_prompt_review_route_not_ready_for_selected_prompt_execution_planning",
+            input_review_route == "ready_for_selected_prompt_execution_planning",
+        ),
+        (
+            "prompt404_selected_prompt_review_ready_false",
+            input_review_ready,
+        ),
+        (
+            "prompt404_selected_prompt_execution_plan_ready_false",
+            input_execution_plan_ready,
+        ),
+        (
+            "prompt404_selected_prompt_approval_candidate_true",
+            not input_approval_candidate,
+        ),
+        (
+            "prompt404_selected_prompt_commit_tag_allowed_true",
+            not input_commit_tag_allowed,
+        ),
+        (
+            "prompt404_next_action_not_prepare_prompt405_selected_prompt_execution_plan",
+            input_next_action == "prepare_prompt405_selected_prompt_execution_plan",
+        ),
+    )
+    blocked_reasons = [
+        reason for reason, input_ready in required_inputs if not input_ready
+    ]
+    plan_ready = not blocked_reasons
+
+    return {
+        "prompt405_schema_version": _PROMPT405_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt405",
+        "prompt405_selected_prompt_execution_plan_enabled": plan_ready,
+        "prompt405_selected_prompt_execution_plan_status": (
+            "ready" if plan_ready else "blocked"
+        ),
+        "prompt405_selected_prompt_execution_plan_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt405_selected_prompt_execution_plan_blocked_reasons": blocked_reasons,
+        "prompt405_input_prompt404_handoff_review_status": (
+            input_handoff_review_status
+        ),
+        "prompt405_input_prompt404_result_review_status": input_result_review_status,
+        "prompt405_input_prompt404_execution_classification": (
+            input_execution_classification
+        ),
+        "prompt405_input_prompt404_review_route": input_review_route,
+        "prompt405_input_prompt404_review_ready": input_review_ready,
+        "prompt405_input_prompt404_execution_plan_ready": input_execution_plan_ready,
+        "prompt405_input_prompt404_approval_candidate": input_approval_candidate,
+        "prompt405_input_prompt404_commit_tag_allowed": input_commit_tag_allowed,
+        "prompt405_input_prompt404_next_action": input_next_action,
+        "prompt405_selected_prompt_id": "prompt402" if plan_ready else "",
+        "prompt405_selected_prompt_source": (
+            "prompt404_handoff_review" if plan_ready else ""
+        ),
+        "prompt405_selected_prompt_execution_mode": "dry_run" if plan_ready else "",
+        "prompt405_selected_prompt_execution_plan_ready": plan_ready,
+        "prompt405_selected_prompt_execution_allowed": False,
+        "prompt405_selected_prompt_execution_requires_explicit_enable": True,
+        "prompt405_selected_prompt_execution_attempted": False,
+        "prompt405_selected_prompt_execution_performed": False,
+        "prompt405_selected_prompt_live_execution_allowed": False,
+        "prompt405_selected_prompt_commit_tag_allowed": False,
+        "prompt405_selected_prompt_plan_classification": (
+            "dry_run_plan_ready_not_executed" if plan_ready else ""
+        ),
+        "prompt405_selected_prompt_plan_route": (
+            "ready_for_bounded_loop_observation" if plan_ready else ""
+        ),
+        "prompt405_next_action": (
+            "prepare_prompt406_bounded_loop_observation"
+            if plan_ready
+            else "wait_for_prompt404_selected_prompt_handoff_review"
         ),
     }
 
@@ -233749,6 +233931,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt404_selected_prompt_handoff_review_payload,
         }
+        prompt405_selected_prompt_execution_plan_payload = (
+            _build_prompt405_selected_prompt_execution_plan_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt405_selected_prompt_execution_plan_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -233944,6 +234135,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt404_selected_prompt_handoff_review_state=(
                     prompt404_selected_prompt_handoff_review_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt405_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt405_selected_prompt_execution_plan_state=(
+                    prompt405_selected_prompt_execution_plan_payload
                 ),
             )
         )
@@ -242798,6 +242997,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT404_SELECTED_PROMPT_HANDOFF_REVIEW_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT405_SELECTED_PROMPT_EXECUTION_PLAN_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
