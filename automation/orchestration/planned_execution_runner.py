@@ -3844,6 +3844,7 @@ _PROMPT405_SCHEMA_VERSION = "prompt405_selected_prompt_execution_plan_v1"
 _PROMPT406_SCHEMA_VERSION = "prompt406_bounded_loop_observation_v1"
 _PROMPT407_SCHEMA_VERSION = "prompt407_relaxed_loop_completion_receipt_v1"
 _PROMPT408_SCHEMA_VERSION = "prompt408_strict_reenable_plan_v1"
+_PROMPT409_SCHEMA_VERSION = "prompt409_strict_reenable_gate_restoration_packet_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4783,6 +4784,31 @@ _PROMPT408_STRICT_REENABLE_PLAN_KEYS: tuple[str, ...] = (
     "prompt408_git_mutation_allowed",
     "prompt408_commit_tag_allowed",
     "prompt408_next_action",
+)
+_PROMPT409_STRICT_REENABLE_GATE_RESTORATION_PACKET_KEYS: tuple[str, ...] = (
+    "prompt409_strict_reenable_gate_enabled",
+    "prompt409_strict_reenable_gate_status",
+    "prompt409_strict_reenable_gate_ready",
+    "prompt409_strict_reenable_gate_blocked_reason",
+    "prompt409_strict_reenable_gate_blocked_reasons",
+    "prompt409_strict_reenable_source",
+    "prompt409_strict_reenable_first_gate",
+    "prompt409_strict_reenable_final_gate",
+    "prompt409_strict_reenable_gate_order",
+    "prompt409_restoration_packet_ready",
+    "prompt409_restoration_packet_scope",
+    "prompt409_restoration_packet_mode",
+    "prompt409_restoration_packet_target_prompt",
+    "prompt409_restoration_packet_targets",
+    "prompt409_strict_reenable_execution_allowed",
+    "prompt409_strict_reenable_attempted",
+    "prompt409_strict_reenable_performed",
+    "prompt409_strict_gates_reenabled",
+    "prompt409_selected_prompt_execution_allowed",
+    "prompt409_codex_invocation_allowed",
+    "prompt409_git_mutation_allowed",
+    "prompt409_commit_tag_allowed",
+    "prompt409_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7202,6 +7228,27 @@ def _merge_prompt408_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT408_STRICT_REENABLE_PLAN_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt409_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt409_strict_reenable_gate_restoration_packet_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt409_strict_reenable_gate_restoration_packet_state)
+        if isinstance(prompt409_strict_reenable_gate_restoration_packet_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT409_STRICT_REENABLE_GATE_RESTORATION_PACKET_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -58152,6 +58199,91 @@ def _build_prompt408_strict_reenable_plan_state(
             "prepare_prompt409_strict_reenable_gate"
             if plan_ready
             else "wait_for_prompt407_relaxed_loop_completion_receipt"
+        ),
+    }
+
+
+def _build_prompt409_strict_reenable_gate_restoration_packet_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    expected_order = [
+        "prompt381_approve_candidate_boundary",
+        "prompt385_next_cycle_handoff",
+        "prompt389_bounded_repeated_success_path_loop",
+        "prompt390_enabled_run",
+    ]
+    expected_targets = ["prompt381", "prompt385", "prompt389", "prompt390"]
+    prompt408_plan_status = _normalize_text(
+        run_state.get("prompt408_strict_reenable_plan_status"),
+        default="",
+    )
+    prompt408_plan_ready = bool(
+        run_state.get("prompt408_strict_reenable_plan_ready", False)
+    )
+    prompt408_required = bool(
+        run_state.get("prompt408_strict_reenable_required", False)
+    )
+    prompt408_first_gate = _normalize_text(
+        run_state.get("prompt408_strict_reenable_first_gate"),
+        default="",
+    )
+    prompt408_final_gate = _normalize_text(
+        run_state.get("prompt408_strict_reenable_final_gate"),
+        default="",
+    )
+    prompt408_order = _normalize_string_list(
+        run_state.get("prompt408_strict_reenable_order"),
+        sort_items=False,
+    )
+
+    plan_ready = (
+        prompt408_plan_status == "ready"
+        and prompt408_plan_ready
+        and prompt408_required
+        and prompt408_first_gate == expected_order[0]
+        and prompt408_final_gate == expected_order[-1]
+        and prompt408_order == expected_order
+    )
+    blocked_reasons = (
+        [] if plan_ready else ["prompt408_strict_reenable_plan_not_ready"]
+    )
+
+    return {
+        "prompt409_schema_version": _PROMPT409_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt409",
+        "prompt409_strict_reenable_gate_enabled": True,
+        "prompt409_strict_reenable_gate_status": (
+            "ready" if plan_ready else "blocked"
+        ),
+        "prompt409_strict_reenable_gate_ready": plan_ready,
+        "prompt409_strict_reenable_gate_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt409_strict_reenable_gate_blocked_reasons": blocked_reasons,
+        "prompt409_strict_reenable_source": "prompt408_strict_reenable_plan",
+        "prompt409_strict_reenable_first_gate": expected_order[0],
+        "prompt409_strict_reenable_final_gate": expected_order[-1],
+        "prompt409_strict_reenable_gate_order": expected_order,
+        "prompt409_restoration_packet_ready": plan_ready,
+        "prompt409_restoration_packet_scope": "strict_route_restore",
+        "prompt409_restoration_packet_mode": "metadata_only",
+        "prompt409_restoration_packet_target_prompt": "prompt410",
+        "prompt409_restoration_packet_targets": expected_targets,
+        "prompt409_strict_reenable_execution_allowed": False,
+        "prompt409_strict_reenable_attempted": False,
+        "prompt409_strict_reenable_performed": False,
+        "prompt409_strict_gates_reenabled": False,
+        "prompt409_selected_prompt_execution_allowed": False,
+        "prompt409_codex_invocation_allowed": False,
+        "prompt409_git_mutation_allowed": False,
+        "prompt409_commit_tag_allowed": False,
+        "prompt409_next_action": (
+            "restore_strict_route_in_prompt410"
+            if plan_ready
+            else "review_prompt408_strict_reenable_plan"
         ),
     }
 
@@ -234807,6 +234939,33 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt408_strict_reenable_plan_payload,
         }
+        prompt409_strict_reenable_gate_restoration_packet_payload = (
+            _build_prompt409_strict_reenable_gate_restoration_packet_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt409_strict_reenable_gate_restoration_packet_payload,
+        }
+        run_state_payload["supporting_compact_truth_refs"] = (
+            _serialize_required_signals(
+                _normalize_string_list(
+                    run_state_payload.get("supporting_compact_truth_refs"),
+                    sort_items=False,
+                )
+                + [
+                    "run_state.prompt408_strict_reenable_plan_status",
+                    "run_state.prompt408_strict_reenable_plan_ready",
+                    "run_state.prompt408_strict_reenable_required",
+                    "run_state.prompt408_strict_reenable_first_gate",
+                    "run_state.prompt408_strict_reenable_final_gate",
+                    "run_state.prompt408_strict_reenable_order",
+                    "run_state.prompt409_strict_reenable_gate_status",
+                    "run_state.prompt409_restoration_packet_ready",
+                ]
+            )
+        )
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -235034,6 +235193,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt408_strict_reenable_plan_state=(
                     prompt408_strict_reenable_plan_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt409_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt409_strict_reenable_gate_restoration_packet_state=(
+                    prompt409_strict_reenable_gate_restoration_packet_payload
                 ),
             )
         )
@@ -243900,6 +244067,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT408_STRICT_REENABLE_PLAN_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT409_STRICT_REENABLE_GATE_RESTORATION_PACKET_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
