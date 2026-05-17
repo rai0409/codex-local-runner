@@ -54673,7 +54673,7 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
                 )
 
     pre_execution_diff = {"available": False, "reason": "", "changed_files": []}
-    if not preflight_blocked_reasons:
+    if not preflight_blocked_reasons and not bool(prompt379_dry_run_transport_mode):
         if not prompt379_execution_repo_ready:
             _append_reason(
                 preflight_blocked_reasons,
