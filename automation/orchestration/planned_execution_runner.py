@@ -3846,6 +3846,7 @@ _PROMPT407_SCHEMA_VERSION = "prompt407_relaxed_loop_completion_receipt_v1"
 _PROMPT408_SCHEMA_VERSION = "prompt408_strict_reenable_plan_v1"
 _PROMPT409_SCHEMA_VERSION = "prompt409_strict_reenable_gate_restoration_packet_v1"
 _PROMPT410_SCHEMA_VERSION = "prompt410_strict_route_restore_v1"
+_PROMPT411_SCHEMA_VERSION = "prompt411_physical_prompt_materialization_plan_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4842,6 +4843,28 @@ _PROMPT410_STRICT_ROUTE_RESTORE_KEYS: tuple[str, ...] = (
     "prompt410_strict_route_restore_attempted",
     "prompt410_strict_route_restore_performed",
     "prompt410_next_action",
+)
+_PROMPT411_PHYSICAL_PROMPT_MATERIALIZATION_PLAN_KEYS: tuple[str, ...] = (
+    "prompt411_physical_prompt_materialization_enabled",
+    "prompt411_physical_prompt_materialization_status",
+    "prompt411_physical_prompt_materialization_ready",
+    "prompt411_physical_prompt_materialization_blocked_reason",
+    "prompt411_physical_prompt_materialization_blocked_reasons",
+    "prompt411_physical_prompt_materialization_source",
+    "prompt411_selected_prompt_id",
+    "prompt411_selected_prompt_source",
+    "prompt411_selected_prompt_materialization_ready",
+    "prompt411_materialization_mode",
+    "prompt411_materialization_target_prompt",
+    "prompt411_physical_prompt_path_planned",
+    "prompt411_physical_prompt_path",
+    "prompt411_physical_prompt_write_allowed",
+    "prompt411_physical_prompt_written",
+    "prompt411_selected_prompt_execution_allowed",
+    "prompt411_codex_invocation_allowed",
+    "prompt411_git_mutation_allowed",
+    "prompt411_commit_tag_allowed",
+    "prompt411_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7303,6 +7326,27 @@ def _merge_prompt410_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT410_STRICT_ROUTE_RESTORE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt411_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt411_physical_prompt_materialization_plan_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt411_physical_prompt_materialization_plan_state)
+        if isinstance(prompt411_physical_prompt_materialization_plan_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT411_PHYSICAL_PROMPT_MATERIALIZATION_PLAN_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -58441,6 +58485,70 @@ def _build_prompt410_strict_route_restore_state(
             "prepare_prompt411_physical_prompt_materialization"
             if restoration_ready
             else "review_prompt409_restoration_packet"
+        ),
+    }
+
+
+def _build_prompt411_physical_prompt_materialization_plan_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    prompt410_ready = (
+        _normalize_text(
+            run_state.get("prompt410_strict_route_restore_status"),
+            default="",
+        )
+        == "restored"
+        and run_state.get("prompt410_strict_route_restore_ready") is True
+        and _normalize_text(
+            run_state.get("prompt410_next_action"),
+            default="",
+        )
+        == "prepare_prompt411_physical_prompt_materialization"
+    )
+    blocked_reason = (
+        "" if prompt410_ready else "prompt410_strict_route_restore_not_ready"
+    )
+    blocked_reasons = [] if prompt410_ready else [blocked_reason]
+
+    return {
+        "prompt411_schema_version": _PROMPT411_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt411",
+        "prompt411_physical_prompt_materialization_enabled": True,
+        "prompt411_physical_prompt_materialization_status": (
+            "ready" if prompt410_ready else "blocked"
+        ),
+        "prompt411_physical_prompt_materialization_ready": prompt410_ready,
+        "prompt411_physical_prompt_materialization_blocked_reason": (
+            blocked_reason
+        ),
+        "prompt411_physical_prompt_materialization_blocked_reasons": (
+            blocked_reasons
+        ),
+        "prompt411_physical_prompt_materialization_source": (
+            "prompt410_strict_route_restore" if prompt410_ready else ""
+        ),
+        "prompt411_selected_prompt_id": "prompt402" if prompt410_ready else "",
+        "prompt411_selected_prompt_source": (
+            "prompt402_generated_prompt_surface" if prompt410_ready else ""
+        ),
+        "prompt411_selected_prompt_materialization_ready": prompt410_ready,
+        "prompt411_materialization_mode": "metadata_only",
+        "prompt411_materialization_target_prompt": "prompt412",
+        "prompt411_physical_prompt_path_planned": prompt410_ready,
+        "prompt411_physical_prompt_path": "",
+        "prompt411_physical_prompt_write_allowed": False,
+        "prompt411_physical_prompt_written": False,
+        "prompt411_selected_prompt_execution_allowed": False,
+        "prompt411_codex_invocation_allowed": False,
+        "prompt411_git_mutation_allowed": False,
+        "prompt411_commit_tag_allowed": False,
+        "prompt411_next_action": (
+            "prepare_prompt412_selected_prompt_execution_adapter"
+            if prompt410_ready
+            else "review_prompt410_strict_route_restore"
         ),
     }
 
@@ -235114,6 +235222,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt410_strict_route_restore_payload,
         }
+        prompt411_physical_prompt_materialization_plan_payload = (
+            _build_prompt411_physical_prompt_materialization_plan_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt411_physical_prompt_materialization_plan_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -235134,6 +235251,12 @@ class PlannedExecutionRunner:
                     "run_state.prompt410_strict_route_restore_status",
                     "run_state.prompt410_strict_route_restore_ready",
                     "run_state.prompt410_restored_gate_order",
+                    "run_state.prompt410_next_action",
+                    "run_state.prompt411_physical_prompt_materialization_status",
+                    "run_state.prompt411_physical_prompt_materialization_ready",
+                    "run_state.prompt411_selected_prompt_id",
+                    "run_state.prompt411_materialization_mode",
+                    "run_state.prompt411_next_action",
                 ]
             )
         )
@@ -235380,6 +235503,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt410_strict_route_restore_state=(
                     prompt410_strict_route_restore_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt411_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt411_physical_prompt_materialization_plan_state=(
+                    prompt411_physical_prompt_materialization_plan_payload
                 ),
             )
         )
@@ -244252,6 +244383,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT410_STRICT_ROUTE_RESTORE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT411_PHYSICAL_PROMPT_MATERIALIZATION_PLAN_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
