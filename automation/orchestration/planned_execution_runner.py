@@ -3838,6 +3838,7 @@ _PROMPT399_SCHEMA_VERSION = "prompt399_relaxed_committed_result_observation_v1"
 _PROMPT400_SCHEMA_VERSION = "prompt400_relaxed_next_cycle_handoff_bridge_v1"
 _PROMPT401_SCHEMA_VERSION = "prompt401_next_prompt_selection_v1"
 _PROMPT402_SCHEMA_VERSION = "prompt402_generated_prompt_surface_v1"
+_PROMPT403_SCHEMA_VERSION = "prompt403_selected_prompt_dry_run_handoff_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4584,6 +4585,28 @@ _PROMPT402_GENERATED_PROMPT_SURFACE_KEYS: tuple[str, ...] = (
     "prompt402_generated_prompt_ready",
     "prompt402_selected_prompt_execution_handoff_ready",
     "prompt402_next_action",
+)
+_PROMPT403_SELECTED_PROMPT_DRY_RUN_HANDOFF_KEYS: tuple[str, ...] = (
+    "prompt403_selected_prompt_dry_run_handoff_enabled",
+    "prompt403_selected_prompt_dry_run_handoff_status",
+    "prompt403_selected_prompt_dry_run_handoff_blocked_reason",
+    "prompt403_selected_prompt_dry_run_handoff_blocked_reasons",
+    "prompt403_input_prompt402_generated_prompt_surface_status",
+    "prompt403_input_prompt402_generated_prompt_ready",
+    "prompt403_input_prompt402_selected_prompt_execution_handoff_ready",
+    "prompt403_input_prompt402_generated_prompt_id",
+    "prompt403_input_prompt402_generated_prompt_mode",
+    "prompt403_input_prompt402_next_action",
+    "prompt403_selected_prompt_id",
+    "prompt403_selected_prompt_source",
+    "prompt403_selected_prompt_execution_mode",
+    "prompt403_selected_prompt_execution_ready",
+    "prompt403_selected_prompt_execution_attempted",
+    "prompt403_selected_prompt_execution_performed",
+    "prompt403_selected_prompt_live_execution_allowed",
+    "prompt403_selected_prompt_physical_prompt_required",
+    "prompt403_selected_prompt_result_review_ready",
+    "prompt403_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -6889,6 +6912,23 @@ def _merge_prompt402_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT402_GENERATED_PROMPT_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt403_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt403_selected_prompt_dry_run_handoff_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt403_selected_prompt_dry_run_handoff_state)
+        if isinstance(prompt403_selected_prompt_dry_run_handoff_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT403_SELECTED_PROMPT_DRY_RUN_HANDOFF_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -56828,6 +56868,108 @@ def _build_prompt402_generated_prompt_surface_state(
             "prepare_prompt403_selected_prompt_dry_run_handoff"
             if surface_ready
             else "wait_for_prompt401_next_prompt_selection"
+        ),
+    }
+
+
+def _build_prompt403_selected_prompt_dry_run_handoff_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    input_surface_status = _normalize_text(
+        run_state.get("prompt402_generated_prompt_surface_status"),
+        default="",
+    )
+    input_generated_prompt_ready = bool(
+        run_state.get("prompt402_generated_prompt_ready", False)
+    )
+    input_execution_handoff_ready = bool(
+        run_state.get("prompt402_selected_prompt_execution_handoff_ready", False)
+    )
+    input_generated_prompt_id = _normalize_text(
+        run_state.get("prompt402_generated_prompt_id"),
+        default="",
+    )
+    input_generated_prompt_mode = _normalize_text(
+        run_state.get("prompt402_generated_prompt_mode"),
+        default="",
+    )
+    input_next_action = _normalize_text(
+        run_state.get("prompt402_next_action"),
+        default="",
+    )
+
+    required_inputs: tuple[tuple[str, bool], ...] = (
+        (
+            "prompt402_generated_prompt_surface_status_not_ready",
+            input_surface_status == "ready",
+        ),
+        (
+            "prompt402_generated_prompt_ready_false",
+            input_generated_prompt_ready,
+        ),
+        (
+            "prompt402_selected_prompt_execution_handoff_ready_false",
+            input_execution_handoff_ready,
+        ),
+        (
+            "prompt402_generated_prompt_id_not_prompt402",
+            input_generated_prompt_id == "prompt402",
+        ),
+        (
+            "prompt402_generated_prompt_mode_not_metadata_only",
+            input_generated_prompt_mode == "metadata_only",
+        ),
+        (
+            "prompt402_next_action_not_prepare_prompt403_selected_prompt_dry_run_handoff",
+            input_next_action == "prepare_prompt403_selected_prompt_dry_run_handoff",
+        ),
+    )
+    blocked_reasons = [
+        reason for reason, input_ready in required_inputs if not input_ready
+    ]
+    handoff_ready = not blocked_reasons
+
+    return {
+        "prompt403_schema_version": _PROMPT403_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt403",
+        "prompt403_selected_prompt_dry_run_handoff_enabled": handoff_ready,
+        "prompt403_selected_prompt_dry_run_handoff_status": (
+            "ready" if handoff_ready else "blocked"
+        ),
+        "prompt403_selected_prompt_dry_run_handoff_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt403_selected_prompt_dry_run_handoff_blocked_reasons": blocked_reasons,
+        "prompt403_input_prompt402_generated_prompt_surface_status": (
+            input_surface_status
+        ),
+        "prompt403_input_prompt402_generated_prompt_ready": input_generated_prompt_ready,
+        "prompt403_input_prompt402_selected_prompt_execution_handoff_ready": (
+            input_execution_handoff_ready
+        ),
+        "prompt403_input_prompt402_generated_prompt_id": input_generated_prompt_id,
+        "prompt403_input_prompt402_generated_prompt_mode": input_generated_prompt_mode,
+        "prompt403_input_prompt402_next_action": input_next_action,
+        "prompt403_selected_prompt_id": "prompt402" if handoff_ready else "",
+        "prompt403_selected_prompt_source": (
+            "prompt402_generated_prompt_surface" if handoff_ready else ""
+        ),
+        "prompt403_selected_prompt_execution_mode": (
+            "dry_run" if handoff_ready else ""
+        ),
+        "prompt403_selected_prompt_execution_ready": handoff_ready,
+        "prompt403_selected_prompt_execution_attempted": False,
+        "prompt403_selected_prompt_execution_performed": False,
+        "prompt403_selected_prompt_live_execution_allowed": False,
+        "prompt403_selected_prompt_physical_prompt_required": False,
+        "prompt403_selected_prompt_result_review_ready": False,
+        "prompt403_next_action": (
+            "prepare_prompt404_selected_prompt_result_review"
+            if handoff_ready
+            else "wait_for_prompt402_generated_prompt_surface"
         ),
     }
 
@@ -233429,6 +233571,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt402_generated_prompt_surface_payload,
         }
+        prompt403_selected_prompt_dry_run_handoff_payload = (
+            _build_prompt403_selected_prompt_dry_run_handoff_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt403_selected_prompt_dry_run_handoff_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -233608,6 +233759,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt402_generated_prompt_surface_state=(
                     prompt402_generated_prompt_surface_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt403_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt403_selected_prompt_dry_run_handoff_state=(
+                    prompt403_selected_prompt_dry_run_handoff_payload
                 ),
             )
         )
@@ -241635,6 +241794,128 @@ class PlannedExecutionRunner:
                 ),
                 default="wait_for_prompt401_next_prompt_selection",
             ),
+            "prompt403_selected_prompt_dry_run_handoff_enabled": bool(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_dry_run_handoff_enabled",
+                    False,
+                )
+            ),
+            "prompt403_selected_prompt_dry_run_handoff_status": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_dry_run_handoff_status"
+                ),
+                default="blocked",
+            ),
+            "prompt403_selected_prompt_dry_run_handoff_blocked_reason": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_dry_run_handoff_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt403_selected_prompt_dry_run_handoff_blocked_reasons": (
+                _normalize_string_list(
+                    prompt403_selected_prompt_dry_run_handoff_payload.get(
+                        "prompt403_selected_prompt_dry_run_handoff_blocked_reasons"
+                    ),
+                    sort_items=False,
+                )
+            ),
+            "prompt403_input_prompt402_generated_prompt_surface_status": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_input_prompt402_generated_prompt_surface_status"
+                ),
+                default="",
+            ),
+            "prompt403_input_prompt402_generated_prompt_ready": bool(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_input_prompt402_generated_prompt_ready",
+                    False,
+                )
+            ),
+            "prompt403_input_prompt402_selected_prompt_execution_handoff_ready": bool(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_input_prompt402_selected_prompt_execution_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt403_input_prompt402_generated_prompt_id": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_input_prompt402_generated_prompt_id"
+                ),
+                default="",
+            ),
+            "prompt403_input_prompt402_generated_prompt_mode": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_input_prompt402_generated_prompt_mode"
+                ),
+                default="",
+            ),
+            "prompt403_input_prompt402_next_action": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_input_prompt402_next_action"
+                ),
+                default="",
+            ),
+            "prompt403_selected_prompt_id": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_id"
+                ),
+                default="",
+            ),
+            "prompt403_selected_prompt_source": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_source"
+                ),
+                default="",
+            ),
+            "prompt403_selected_prompt_execution_mode": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_execution_mode"
+                ),
+                default="",
+            ),
+            "prompt403_selected_prompt_execution_ready": bool(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_execution_ready",
+                    False,
+                )
+            ),
+            "prompt403_selected_prompt_execution_attempted": bool(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_execution_attempted",
+                    False,
+                )
+            ),
+            "prompt403_selected_prompt_execution_performed": bool(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_execution_performed",
+                    False,
+                )
+            ),
+            "prompt403_selected_prompt_live_execution_allowed": bool(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_live_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt403_selected_prompt_physical_prompt_required": bool(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_physical_prompt_required",
+                    False,
+                )
+            ),
+            "prompt403_selected_prompt_result_review_ready": bool(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_selected_prompt_result_review_ready",
+                    False,
+                )
+            ),
+            "prompt403_next_action": _normalize_text(
+                prompt403_selected_prompt_dry_run_handoff_payload.get(
+                    "prompt403_next_action"
+                ),
+                default="wait_for_prompt402_generated_prompt_surface",
+            ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(
             run_state_payload,
@@ -242200,6 +242481,9 @@ class PlannedExecutionRunner:
             }
         )
         for key in _PROMPT402_GENERATED_PROMPT_SURFACE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT403_SELECTED_PROMPT_DRY_RUN_HANDOFF_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
