@@ -3842,6 +3842,7 @@ _PROMPT403_SCHEMA_VERSION = "prompt403_selected_prompt_dry_run_handoff_v1"
 _PROMPT404_SCHEMA_VERSION = "prompt404_selected_prompt_handoff_review_v1"
 _PROMPT405_SCHEMA_VERSION = "prompt405_selected_prompt_execution_plan_v1"
 _PROMPT406_SCHEMA_VERSION = "prompt406_bounded_loop_observation_v1"
+_PROMPT407_SCHEMA_VERSION = "prompt407_relaxed_loop_completion_receipt_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4697,6 +4698,45 @@ _PROMPT406_BOUNDED_LOOP_OBSERVATION_KEYS: tuple[str, ...] = (
     "prompt406_strict_reenable_required",
     "prompt406_strict_reenable_next_gate",
     "prompt406_next_action",
+)
+_PROMPT407_RELAXED_LOOP_COMPLETION_RECEIPT_KEYS: tuple[str, ...] = (
+    "prompt407_relaxed_loop_completion_receipt_enabled",
+    "prompt407_relaxed_loop_completion_receipt_status",
+    "prompt407_relaxed_loop_completion_receipt_blocked_reason",
+    "prompt407_relaxed_loop_completion_receipt_blocked_reasons",
+    "prompt407_input_prompt406_observation_status",
+    "prompt407_input_prompt406_loop_observed",
+    "prompt407_input_prompt406_observation_mode",
+    "prompt407_input_prompt406_execution_scope",
+    "prompt407_input_prompt406_execution_type",
+    "prompt407_input_prompt406_actual_execution_performed",
+    "prompt407_input_prompt406_codex_invoked",
+    "prompt407_input_prompt406_git_mutation_allowed",
+    "prompt407_input_prompt406_commit_tag_allowed",
+    "prompt407_input_prompt406_strict_gates_reenabled",
+    "prompt407_input_prompt406_completion_candidate",
+    "prompt407_input_prompt406_strict_reenable_required",
+    "prompt407_input_prompt406_strict_reenable_next_gate",
+    "prompt407_input_prompt406_next_action",
+    "prompt407_completed_chain_expected",
+    "prompt407_completed_chain_observed",
+    "prompt407_completed_chain_verified",
+    "prompt407_relaxed_local_loop_observation_completed",
+    "prompt407_relaxed_local_loop_completion_scope",
+    "prompt407_relaxed_local_loop_completion_mode",
+    "prompt407_relaxed_local_loop_completion_type",
+    "prompt407_selected_prompt_actual_execution_performed",
+    "prompt407_codex_invoked",
+    "prompt407_git_mutation_allowed",
+    "prompt407_commit_tag_allowed",
+    "prompt407_strict_gates_reenabled",
+    "prompt407_remaining_strict_blocked_gates",
+    "prompt407_remaining_strict_false_gate_fields",
+    "prompt407_relaxed_bypassed_strict_gates",
+    "prompt407_strict_reenable_entry_ready",
+    "prompt407_strict_reenable_plan_required",
+    "prompt407_strict_reenable_plan_target",
+    "prompt407_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -6431,7 +6471,11 @@ def _merge_codex_gate_connector_enablement_into_approved_restart_payload(
     policy_snapshot: Mapping[str, Any] | None,
     retry_context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
     policy_payload = dict(policy_snapshot) if isinstance(policy_snapshot, Mapping) else {}
     retry_payload = dict(retry_context) if isinstance(retry_context, Mapping) else {}
 
@@ -7074,6 +7118,23 @@ def _merge_prompt406_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT406_BOUNDED_LOOP_OBSERVATION_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt407_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt407_relaxed_loop_completion_receipt_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt407_relaxed_loop_completion_receipt_state)
+        if isinstance(prompt407_relaxed_loop_completion_receipt_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT407_RELAXED_LOOP_COMPLETION_RECEIPT_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -57560,6 +57621,229 @@ def _build_prompt406_bounded_loop_observation_state(
             "prepare_prompt407_relaxed_loop_completion_receipt"
             if observation_allowed
             else "wait_for_prompt405_selected_prompt_execution_plan"
+        ),
+    }
+
+
+def _build_prompt407_relaxed_loop_completion_receipt_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    input_observation_status = _normalize_text(
+        run_state.get("prompt406_bounded_loop_observation_status"),
+        default="",
+    )
+    input_loop_observed = bool(
+        run_state.get("prompt406_relaxed_local_loop_observed", False)
+    )
+    input_observation_mode = _normalize_text(
+        run_state.get("prompt406_relaxed_local_loop_observation_mode"),
+        default="",
+    )
+    input_execution_scope = _normalize_text(
+        run_state.get("prompt406_relaxed_local_loop_execution_scope"),
+        default="",
+    )
+    input_execution_type = _normalize_text(
+        run_state.get("prompt406_relaxed_local_loop_execution_type"),
+        default="",
+    )
+    input_actual_execution_performed = bool(
+        run_state.get("prompt406_relaxed_local_loop_actual_execution_performed", False)
+    )
+    input_codex_invoked = bool(
+        run_state.get("prompt406_relaxed_local_loop_codex_invoked", False)
+    )
+    input_git_mutation_allowed = bool(
+        run_state.get("prompt406_relaxed_local_loop_git_mutation_allowed", False)
+    )
+    input_commit_tag_allowed = bool(
+        run_state.get("prompt406_relaxed_local_loop_commit_tag_allowed", False)
+    )
+    input_strict_gates_reenabled = bool(
+        run_state.get("prompt406_relaxed_local_loop_strict_gates_reenabled", False)
+    )
+    input_completion_candidate = bool(
+        run_state.get("prompt406_relaxed_local_loop_completion_candidate", False)
+    )
+    input_strict_reenable_required = bool(
+        run_state.get("prompt406_strict_reenable_required", False)
+    )
+    input_strict_reenable_next_gate = _normalize_text(
+        run_state.get("prompt406_strict_reenable_next_gate"),
+        default="",
+    )
+    input_next_action = _normalize_text(
+        run_state.get("prompt406_next_action"),
+        default="",
+    )
+
+    completed_chain_expected = [
+        "prompt398_committed_result_evidence",
+        "prompt399_relaxed_observation",
+        "prompt400_relaxed_handoff",
+        "prompt401_next_prompt_selection",
+        "prompt402_generated_prompt_surface",
+        "prompt403_selected_prompt_dry_run_handoff",
+        "prompt404_selected_prompt_handoff_review",
+        "prompt405_selected_prompt_execution_plan",
+    ]
+    completed_chain_observed = _normalize_string_list(
+        run_state.get("prompt406_relaxed_local_loop_completed_chain"),
+        sort_items=False,
+    )
+    completed_chain_verified = completed_chain_observed == completed_chain_expected
+
+    required_inputs: tuple[tuple[str, bool], ...] = (
+        (
+            "prompt406_bounded_loop_observation_status_not_observed",
+            input_observation_status == "observed",
+        ),
+        (
+            "prompt406_relaxed_local_loop_observed_false",
+            input_loop_observed,
+        ),
+        (
+            "prompt406_relaxed_local_loop_observation_mode_not_metadata_only",
+            input_observation_mode == "metadata_only",
+        ),
+        (
+            "prompt406_relaxed_local_loop_execution_scope_not_local_only",
+            input_execution_scope == "local_only",
+        ),
+        (
+            "prompt406_relaxed_local_loop_execution_type_not_dry_run_plan_observation",
+            input_execution_type == "dry_run_plan_observation",
+        ),
+        (
+            "prompt406_relaxed_local_loop_actual_execution_performed_true",
+            not input_actual_execution_performed,
+        ),
+        (
+            "prompt406_relaxed_local_loop_codex_invoked_true",
+            not input_codex_invoked,
+        ),
+        (
+            "prompt406_relaxed_local_loop_git_mutation_allowed_true",
+            not input_git_mutation_allowed,
+        ),
+        (
+            "prompt406_relaxed_local_loop_commit_tag_allowed_true",
+            not input_commit_tag_allowed,
+        ),
+        (
+            "prompt406_relaxed_local_loop_strict_gates_reenabled_true",
+            not input_strict_gates_reenabled,
+        ),
+        (
+            "prompt406_relaxed_local_loop_completion_candidate_false",
+            input_completion_candidate,
+        ),
+        (
+            "prompt406_strict_reenable_required_false",
+            input_strict_reenable_required,
+        ),
+        (
+            "prompt406_strict_reenable_next_gate_not_prompt407_relaxed_loop_completion_receipt",
+            input_strict_reenable_next_gate
+            == "prompt407_relaxed_loop_completion_receipt",
+        ),
+        (
+            "prompt406_next_action_not_prepare_prompt407_relaxed_loop_completion_receipt",
+            input_next_action == "prepare_prompt407_relaxed_loop_completion_receipt",
+        ),
+        (
+            "prompt406_relaxed_local_loop_completed_chain_not_verified",
+            completed_chain_verified,
+        ),
+    )
+    blocked_reasons = [
+        reason for reason, input_ready in required_inputs if not input_ready
+    ]
+    receipt_ready = not blocked_reasons
+
+    remaining_strict_blocked_gates = _normalize_string_list(
+        run_state.get("prompt406_remaining_strict_blocked_gates"),
+        sort_items=False,
+    )
+    remaining_strict_false_gate_fields = _normalize_string_list(
+        run_state.get("prompt406_remaining_strict_false_gate_fields"),
+        sort_items=False,
+    )
+    relaxed_bypassed_strict_gates = _normalize_string_list(
+        run_state.get("prompt406_relaxed_bypassed_strict_gates"),
+        sort_items=False,
+    )
+
+    return {
+        "prompt407_schema_version": _PROMPT407_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt407",
+        "prompt407_relaxed_loop_completion_receipt_enabled": receipt_ready,
+        "prompt407_relaxed_loop_completion_receipt_status": (
+            "completed" if receipt_ready else "blocked"
+        ),
+        "prompt407_relaxed_loop_completion_receipt_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt407_relaxed_loop_completion_receipt_blocked_reasons": blocked_reasons,
+        "prompt407_input_prompt406_observation_status": input_observation_status,
+        "prompt407_input_prompt406_loop_observed": input_loop_observed,
+        "prompt407_input_prompt406_observation_mode": input_observation_mode,
+        "prompt407_input_prompt406_execution_scope": input_execution_scope,
+        "prompt407_input_prompt406_execution_type": input_execution_type,
+        "prompt407_input_prompt406_actual_execution_performed": (
+            input_actual_execution_performed
+        ),
+        "prompt407_input_prompt406_codex_invoked": input_codex_invoked,
+        "prompt407_input_prompt406_git_mutation_allowed": (
+            input_git_mutation_allowed
+        ),
+        "prompt407_input_prompt406_commit_tag_allowed": input_commit_tag_allowed,
+        "prompt407_input_prompt406_strict_gates_reenabled": (
+            input_strict_gates_reenabled
+        ),
+        "prompt407_input_prompt406_completion_candidate": input_completion_candidate,
+        "prompt407_input_prompt406_strict_reenable_required": (
+            input_strict_reenable_required
+        ),
+        "prompt407_input_prompt406_strict_reenable_next_gate": (
+            input_strict_reenable_next_gate
+        ),
+        "prompt407_input_prompt406_next_action": input_next_action,
+        "prompt407_completed_chain_expected": completed_chain_expected,
+        "prompt407_completed_chain_observed": completed_chain_observed,
+        "prompt407_completed_chain_verified": completed_chain_verified,
+        "prompt407_relaxed_local_loop_observation_completed": receipt_ready,
+        "prompt407_relaxed_local_loop_completion_scope": (
+            "local_only" if receipt_ready else ""
+        ),
+        "prompt407_relaxed_local_loop_completion_mode": (
+            "metadata_only" if receipt_ready else ""
+        ),
+        "prompt407_relaxed_local_loop_completion_type": (
+            "dry_run_plan_observation_receipt" if receipt_ready else ""
+        ),
+        "prompt407_selected_prompt_actual_execution_performed": False,
+        "prompt407_codex_invoked": False,
+        "prompt407_git_mutation_allowed": False,
+        "prompt407_commit_tag_allowed": False,
+        "prompt407_strict_gates_reenabled": False,
+        "prompt407_remaining_strict_blocked_gates": remaining_strict_blocked_gates,
+        "prompt407_remaining_strict_false_gate_fields": (
+            remaining_strict_false_gate_fields
+        ),
+        "prompt407_relaxed_bypassed_strict_gates": relaxed_bypassed_strict_gates,
+        "prompt407_strict_reenable_entry_ready": receipt_ready,
+        "prompt407_strict_reenable_plan_required": True,
+        "prompt407_strict_reenable_plan_target": (
+            "prompt408_strict_reenable_plan" if receipt_ready else ""
+        ),
+        "prompt407_next_action": (
+            "prepare_prompt408_strict_reenable_plan"
+            if receipt_ready
+            else "wait_for_prompt406_bounded_loop_observation"
         ),
     }
 
@@ -234197,6 +234481,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt406_bounded_loop_observation_payload,
         }
+        prompt407_relaxed_loop_completion_receipt_payload = (
+            _build_prompt407_relaxed_loop_completion_receipt_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt407_relaxed_loop_completion_receipt_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -234408,6 +234701,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt406_bounded_loop_observation_state=(
                     prompt406_bounded_loop_observation_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt407_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt407_relaxed_loop_completion_receipt_state=(
+                    prompt407_relaxed_loop_completion_receipt_payload
                 ),
             )
         )
@@ -243268,6 +243569,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT406_BOUNDED_LOOP_OBSERVATION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT407_RELAXED_LOOP_COMPLETION_RECEIPT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
