@@ -6,4 +6,5 @@ tasks/latest_prompt.txt
 tasks/runs/
 tasks/control_plane_dispatches/
 state/jobs.db
+current_prompt_verify_results/
 .codex
