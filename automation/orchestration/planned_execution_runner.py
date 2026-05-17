@@ -3834,6 +3834,7 @@ _PROMPT379_SCHEMA_VERSION = "prompt379_generated_prompt_codex_execution_bridge_v
 _PROMPT380_SCHEMA_VERSION = "prompt380_prompt379_result_review_route_decision_v1"
 _PROMPT381_SCHEMA_VERSION = "prompt381_approve_candidate_boundary_v1"
 _PROMPT398_SCHEMA_VERSION = "prompt398_committed_prompt379_result_bridge_v1"
+_PROMPT399_SCHEMA_VERSION = "prompt399_relaxed_committed_result_observation_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4484,10 +4485,40 @@ _PROMPT398_COMMITTED_PROMPT379_RESULT_SURFACE_KEYS: tuple[str, ...] = (
     "prompt398_committed_prompt379_head_subject",
     "prompt398_committed_prompt379_head_tags",
     "prompt398_committed_prompt379_expected_tag",
+    "prompt398_committed_prompt379_tag_commit",
+    "prompt398_committed_prompt379_tag_subject",
+    "prompt398_committed_prompt379_tag_is_ancestor_of_head",
+    "prompt398_committed_prompt379_detection_mode",
     "prompt398_committed_prompt379_worktree_clean",
     "prompt398_committed_prompt379_accepted",
     "prompt398_committed_prompt379_next_cycle_handoff_ready",
     "prompt398_committed_prompt379_next_action",
+)
+_PROMPT399_RELAXED_OBSERVATION_SURFACE_KEYS: tuple[str, ...] = (
+    "prompt399_relaxed_observation_mode_enabled",
+    "prompt399_relaxed_observation_status",
+    "prompt399_all_blocked_gates",
+    "prompt399_all_false_gate_fields",
+    "prompt399_all_missing_evidence_fields",
+    "prompt399_first_blocking_gate",
+    "prompt399_authoritative_blocking_gates",
+    "prompt399_relaxable_blocking_gates",
+    "prompt399_non_relaxable_blocking_gates",
+    "prompt399_committed_result_alternate_evidence_ready",
+    "prompt399_prompt381_blocked_but_alternate_evidence_available",
+    "prompt399_relaxed_gates_applied",
+    "prompt399_relaxed_gates_not_applied",
+    "prompt399_relaxed_next_cycle_handoff_ready",
+    "prompt399_relaxed_end_to_end_observation_ready",
+    "prompt399_relaxed_next_action",
+    "prompt399_prompt381_blocked_reason",
+    "prompt399_prompt385_blocked_reason",
+    "prompt399_prompt389_blocked_reason",
+    "prompt399_prompt390_blocked_reason",
+    "prompt399_next_cycle_blocked_reason",
+    "prompt399_strict_reenable_plan",
+    "prompt399_strict_reenable_next_gate",
+    "prompt399_strict_reenable_blocked_until",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -6721,6 +6752,23 @@ def _merge_prompt398_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT398_COMMITTED_PROMPT379_RESULT_SURFACE_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt399_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt399_relaxed_observation_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(approved_restart_payload) if isinstance(approved_restart_payload, Mapping) else {}
+    surface = (
+        dict(prompt399_relaxed_observation_state)
+        if isinstance(prompt399_relaxed_observation_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT399_RELAXED_OBSERVATION_SURFACE_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -55948,7 +55996,6 @@ def _build_prompt398_committed_prompt379_result_bridge_state(
     run_state_payload: Mapping[str, Any] | None,
     execution_repo_path: str = "",
 ) -> dict[str, Any]:
-    run_state = dict(run_state_payload or {})
     repo_path = _normalize_text(execution_repo_path, default=str(Path.cwd()))
     blocked_reasons: list[str] = []
 
@@ -55971,6 +56018,13 @@ def _build_prompt398_committed_prompt379_result_bridge_state(
         ["log", "-1", "--pretty=%s"]
     )
     head_tags_available, head_tags_stdout = _run_git_read(["tag", "--points-at", "HEAD"])
+    tag_commit_available, tag_commit_stdout = _run_git_read(
+        [
+            "rev-parse",
+            "--verify",
+            f"refs/tags/{_PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG}^{{commit}}",
+        ]
+    )
     worktree_status_available, worktree_status_stdout = _run_git_read(
         ["status", "--short", "--untracked-files=no"]
     )
@@ -55992,13 +56046,50 @@ def _build_prompt398_committed_prompt379_result_bridge_state(
             if _normalize_text(line, default="")
         }
     )
+    prompt398_committed_prompt379_tag_commit = (
+        tag_commit_stdout.splitlines()[0].strip()
+        if tag_commit_available and tag_commit_stdout.splitlines()
+        else ""
+    )
+    tag_subject_available = False
+    tag_subject_stdout = ""
+    if prompt398_committed_prompt379_tag_commit:
+        tag_subject_available, tag_subject_stdout = _run_git_read(
+            [
+                "log",
+                "-1",
+                "--pretty=%s",
+                prompt398_committed_prompt379_tag_commit,
+            ]
+        )
+    prompt398_committed_prompt379_tag_subject = (
+        tag_subject_stdout.splitlines()[0].strip()
+        if tag_subject_available and tag_subject_stdout.splitlines()
+        else ""
+    )
+    tag_is_ancestor_available = False
+    prompt398_committed_prompt379_tag_is_ancestor_of_head = False
+    if prompt398_committed_prompt379_tag_commit:
+        try:
+            completed = _run_git(
+                repo_path,
+                [
+                    "merge-base",
+                    "--is-ancestor",
+                    prompt398_committed_prompt379_tag_commit,
+                    "HEAD",
+                ],
+                timeout_seconds=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            completed = None
+        if completed is not None:
+            tag_is_ancestor_available = True
+            prompt398_committed_prompt379_tag_is_ancestor_of_head = (
+                completed.returncode == 0
+            )
     prompt398_committed_prompt379_worktree_clean = bool(
         worktree_status_available and not worktree_status_stdout.strip()
-    )
-    prompt398_current_run_prompt379_live_execution_required = bool(
-        run_state.get("prompt379_live_execution_ready", False)
-        or run_state.get("prompt379_execution_performed", False)
-        or run_state.get("prompt379_codex_execution_performed", False)
     )
 
     if not head_commit_available:
@@ -56007,22 +56098,23 @@ def _build_prompt398_committed_prompt379_result_bridge_state(
         _append_reason("prompt398_head_subject_unavailable")
     if not head_tags_available:
         _append_reason("prompt398_head_tags_unavailable")
+    if not tag_commit_available:
+        _append_reason("prompt398_expected_prompt379_tag_missing")
+    if prompt398_committed_prompt379_tag_commit and not tag_subject_available:
+        _append_reason("prompt398_expected_prompt379_tag_subject_unavailable")
+    if prompt398_committed_prompt379_tag_commit and not tag_is_ancestor_available:
+        _append_reason("prompt398_expected_prompt379_tag_ancestor_check_unavailable")
     if not worktree_status_available:
         _append_reason("prompt398_worktree_status_unavailable")
     if (
-        _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG
-        not in prompt398_committed_prompt379_head_tags
-    ):
-        _append_reason("prompt398_expected_prompt379_tag_missing_at_head")
-    if (
         _PROMPT398_COMMITTED_PROMPT379_EXPECTED_HEAD_SUBJECT_FRAGMENT
-        not in prompt398_committed_prompt379_head_subject
+        not in prompt398_committed_prompt379_tag_subject
     ):
-        _append_reason("prompt398_expected_prompt379_head_subject_missing")
+        _append_reason("prompt398_expected_prompt379_tag_subject_missing")
+    if not prompt398_committed_prompt379_tag_is_ancestor_of_head:
+        _append_reason("prompt398_expected_prompt379_tag_not_ancestor_of_head")
     if not prompt398_committed_prompt379_worktree_clean:
         _append_reason("prompt398_tracked_worktree_not_clean")
-    if prompt398_current_run_prompt379_live_execution_required:
-        _append_reason("prompt398_current_run_prompt379_live_execution_required")
 
     prompt398_committed_prompt379_accepted = not blocked_reasons
     prompt398_committed_prompt379_result_status = (
@@ -56038,6 +56130,11 @@ def _build_prompt398_committed_prompt379_result_bridge_state(
     )
     prompt398_committed_prompt379_result_blocked_reason = (
         blocked_reasons[0] if blocked_reasons else ""
+    )
+    prompt398_committed_prompt379_detection_mode = (
+        "ancestor_tag_commit"
+        if prompt398_committed_prompt379_accepted
+        else "ancestor_tag_commit_blocked"
     )
 
     return {
@@ -56066,6 +56163,18 @@ def _build_prompt398_committed_prompt379_result_bridge_state(
         "prompt398_committed_prompt379_expected_tag": (
             _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG
         ),
+        "prompt398_committed_prompt379_tag_commit": (
+            prompt398_committed_prompt379_tag_commit
+        ),
+        "prompt398_committed_prompt379_tag_subject": (
+            prompt398_committed_prompt379_tag_subject
+        ),
+        "prompt398_committed_prompt379_tag_is_ancestor_of_head": (
+            prompt398_committed_prompt379_tag_is_ancestor_of_head
+        ),
+        "prompt398_committed_prompt379_detection_mode": (
+            prompt398_committed_prompt379_detection_mode
+        ),
         "prompt398_committed_prompt379_worktree_clean": (
             prompt398_committed_prompt379_worktree_clean
         ),
@@ -56078,6 +56187,182 @@ def _build_prompt398_committed_prompt379_result_bridge_state(
         "prompt398_committed_prompt379_next_action": (
             prompt398_committed_prompt379_next_action
         ),
+    }
+
+
+def _build_prompt399_relaxed_committed_result_observation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+
+    def _field_missing(field_name: str) -> bool:
+        value = run_state.get(field_name)
+        return (
+            field_name not in run_state
+            or value is None
+            or _normalize_text(value, default="") == ""
+        )
+
+    def _blocked_reason(field_name: str) -> str:
+        value = _normalize_text(run_state.get(field_name), default="")
+        return value if value else "not_observed"
+
+    prompt399_prompt381_blocked_reason = _blocked_reason(
+        "prompt381_active_blocked_reason"
+    )
+    prompt399_prompt385_blocked_reason = _blocked_reason(
+        "prompt385_active_blocked_reason"
+    )
+    prompt399_prompt389_blocked_reason = _blocked_reason(
+        "prompt389_active_blocked_reason"
+    )
+    prompt399_prompt390_blocked_reason = _blocked_reason(
+        "prompt390_active_blocked_reason"
+    )
+    prompt399_next_cycle_blocked_reason = _blocked_reason(
+        "project_browser_autonomous_multi_cycle_controller_next_cycle_blocked_reason"
+    )
+
+    gate_status_fields: tuple[tuple[str, str], ...] = (
+        ("prompt381", "prompt381_approve_candidate_boundary_status"),
+        ("prompt385", "prompt385_success_path_next_cycle_handoff_status"),
+        (
+            "prompt389",
+            "prompt389_explicit_bounded_repeated_success_path_loop_execution_gate_status",
+        ),
+        ("prompt390", "prompt390_enabled_run_readiness_status"),
+    )
+    prompt399_all_blocked_gates: list[str] = []
+    prompt399_all_missing_evidence_fields: list[str] = []
+    for gate_name, status_field in gate_status_fields:
+        if _field_missing(status_field):
+            prompt399_all_missing_evidence_fields.append(status_field)
+            continue
+        status = _normalize_text(run_state.get(status_field), default="")
+        if status in {"blocked", "failed"}:
+            prompt399_all_blocked_gates.append(gate_name)
+
+    false_gate_fields: tuple[str, ...] = (
+        "prompt381_prompt380_evidence_ready",
+        "prompt381_prompt380_approve_candidate",
+        "prompt381_approve_candidate_ready",
+        "prompt385_prompt384_evidence_ready",
+        "prompt385_next_cycle_handoff_ready",
+        "prompt389_repeated_cycle_execution_gate_ready",
+        "prompt389_repeated_cycle_execution_allowed",
+        "prompt390_enabled_run_ready",
+        "prompt390_prompt389_next_action_reconciled",
+    )
+    prompt399_all_false_gate_fields = [
+        field_name
+        for field_name in false_gate_fields
+        if field_name in run_state and not bool(run_state.get(field_name, False))
+    ]
+    for field_name in false_gate_fields:
+        if (
+            field_name not in run_state
+            and field_name not in prompt399_all_missing_evidence_fields
+        ):
+            prompt399_all_missing_evidence_fields.append(field_name)
+
+    prompt398_committed_result_accepted = bool(
+        run_state.get("prompt398_committed_prompt379_accepted", False)
+    )
+    prompt399_committed_result_alternate_evidence_ready = (
+        prompt398_committed_result_accepted
+    )
+    prompt381_blocked = (
+        _normalize_text(
+            run_state.get("prompt381_approve_candidate_boundary_status"),
+            default="",
+        )
+        == "blocked"
+    )
+    prompt399_prompt381_blocked_but_alternate_evidence_available = bool(
+        prompt381_blocked and prompt399_committed_result_alternate_evidence_ready
+    )
+
+    prompt399_relaxable_blocking_gates = []
+    if prompt399_prompt381_blocked_but_alternate_evidence_available:
+        prompt399_relaxable_blocking_gates.append("prompt381")
+    prompt399_non_relaxable_blocking_gates = [
+        gate_name
+        for gate_name in prompt399_all_blocked_gates
+        if gate_name not in prompt399_relaxable_blocking_gates
+    ]
+    prompt399_authoritative_blocking_gates = list(prompt399_all_blocked_gates)
+    prompt399_first_blocking_gate = (
+        prompt399_all_blocked_gates[0] if prompt399_all_blocked_gates else ""
+    )
+
+    prompt399_relaxed_gates_applied = list(prompt399_relaxable_blocking_gates)
+    prompt399_relaxed_gates_not_applied = [
+        gate_name
+        for gate_name in prompt399_all_blocked_gates
+        if gate_name not in prompt399_relaxed_gates_applied
+    ]
+    prompt399_relaxed_next_cycle_handoff_ready = bool(
+        prompt399_committed_result_alternate_evidence_ready
+    )
+    prompt399_relaxed_end_to_end_observation_ready = bool(
+        prompt399_relaxed_next_cycle_handoff_ready
+    )
+    prompt399_relaxed_observation_status = (
+        "accepted" if prompt399_relaxed_end_to_end_observation_ready else "blocked"
+    )
+    prompt399_relaxed_next_action = (
+        "prepare_prompt400_connect_relaxed_observation_to_next_cycle_handoff"
+        if prompt399_relaxed_end_to_end_observation_ready
+        else "wait_for_prompt398_committed_prompt379_result_acceptance"
+    )
+    prompt399_strict_reenable_plan = [
+        "worktree clean",
+        "ancestor tag detection",
+        "tag commit subject",
+        "generated prompt validation",
+        "Prompt379 execution receipt",
+        "Prompt380 approve route",
+        "next-cycle handoff",
+        "commit/tag boundary",
+    ]
+
+    return {
+        "prompt399_schema_version": _PROMPT399_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt399",
+        "prompt399_relaxed_observation_mode_enabled": True,
+        "prompt399_relaxed_observation_status": prompt399_relaxed_observation_status,
+        "prompt399_all_blocked_gates": prompt399_all_blocked_gates,
+        "prompt399_all_false_gate_fields": prompt399_all_false_gate_fields,
+        "prompt399_all_missing_evidence_fields": prompt399_all_missing_evidence_fields,
+        "prompt399_first_blocking_gate": prompt399_first_blocking_gate,
+        "prompt399_authoritative_blocking_gates": prompt399_authoritative_blocking_gates,
+        "prompt399_relaxable_blocking_gates": prompt399_relaxable_blocking_gates,
+        "prompt399_non_relaxable_blocking_gates": prompt399_non_relaxable_blocking_gates,
+        "prompt399_committed_result_alternate_evidence_ready": (
+            prompt399_committed_result_alternate_evidence_ready
+        ),
+        "prompt399_prompt381_blocked_but_alternate_evidence_available": (
+            prompt399_prompt381_blocked_but_alternate_evidence_available
+        ),
+        "prompt399_relaxed_gates_applied": prompt399_relaxed_gates_applied,
+        "prompt399_relaxed_gates_not_applied": prompt399_relaxed_gates_not_applied,
+        "prompt399_relaxed_next_cycle_handoff_ready": (
+            prompt399_relaxed_next_cycle_handoff_ready
+        ),
+        "prompt399_relaxed_end_to_end_observation_ready": (
+            prompt399_relaxed_end_to_end_observation_ready
+        ),
+        "prompt399_relaxed_next_action": prompt399_relaxed_next_action,
+        "prompt399_prompt381_blocked_reason": prompt399_prompt381_blocked_reason,
+        "prompt399_prompt385_blocked_reason": prompt399_prompt385_blocked_reason,
+        "prompt399_prompt389_blocked_reason": prompt399_prompt389_blocked_reason,
+        "prompt399_prompt390_blocked_reason": prompt399_prompt390_blocked_reason,
+        "prompt399_next_cycle_blocked_reason": prompt399_next_cycle_blocked_reason,
+        "prompt399_strict_reenable_plan": prompt399_strict_reenable_plan,
+        "prompt399_strict_reenable_next_gate": prompt399_strict_reenable_plan[0],
+        "prompt399_strict_reenable_blocked_until": "prompt400_strict_gate_reenable",
     }
 
 
@@ -232642,6 +232927,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt390_prompt389_next_action_reconciliation_payload,
         }
+        prompt399_relaxed_committed_result_observation_payload = (
+            _build_prompt399_relaxed_committed_result_observation_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt399_relaxed_committed_result_observation_payload,
+        }
         approved_restart_payload_for_bounded_local_loop = (
             _merge_prompt360_surface_into_approved_restart_payload(
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
@@ -232789,6 +233083,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt398_committed_prompt379_result_state=(
                     prompt398_committed_prompt379_result_bridge_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt399_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt399_relaxed_observation_state=(
+                    prompt399_relaxed_committed_result_observation_payload
                 ),
             )
         )
@@ -237593,6 +237895,30 @@ class PlannedExecutionRunner:
                 ),
                 default=_PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG,
             ),
+            "prompt398_committed_prompt379_tag_commit": _normalize_text(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_tag_commit"
+                ),
+                default="",
+            ),
+            "prompt398_committed_prompt379_tag_subject": _normalize_text(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_tag_subject"
+                ),
+                default="",
+            ),
+            "prompt398_committed_prompt379_tag_is_ancestor_of_head": bool(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_tag_is_ancestor_of_head",
+                    False,
+                )
+            ),
+            "prompt398_committed_prompt379_detection_mode": _normalize_text(
+                prompt398_committed_prompt379_result_bridge_payload.get(
+                    "prompt398_committed_prompt379_detection_mode"
+                ),
+                default="ancestor_tag_commit_blocked",
+            ),
             "prompt398_committed_prompt379_worktree_clean": bool(
                 prompt398_committed_prompt379_result_bridge_payload.get(
                     "prompt398_committed_prompt379_worktree_clean",
@@ -240308,6 +240634,150 @@ class PlannedExecutionRunner:
                 ),
                 sort_items=False,
             ),
+            "prompt399_relaxed_observation_mode_enabled": bool(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_relaxed_observation_mode_enabled",
+                    False,
+                )
+            ),
+            "prompt399_relaxed_observation_status": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_relaxed_observation_status"
+                ),
+                default="blocked",
+            ),
+            "prompt399_all_blocked_gates": _normalize_string_list(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_all_blocked_gates"
+                ),
+                sort_items=False,
+            ),
+            "prompt399_all_false_gate_fields": _normalize_string_list(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_all_false_gate_fields"
+                ),
+                sort_items=False,
+            ),
+            "prompt399_all_missing_evidence_fields": _normalize_string_list(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_all_missing_evidence_fields"
+                ),
+                sort_items=False,
+            ),
+            "prompt399_first_blocking_gate": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_first_blocking_gate"
+                ),
+                default="",
+            ),
+            "prompt399_authoritative_blocking_gates": _normalize_string_list(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_authoritative_blocking_gates"
+                ),
+                sort_items=False,
+            ),
+            "prompt399_relaxable_blocking_gates": _normalize_string_list(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_relaxable_blocking_gates"
+                ),
+                sort_items=False,
+            ),
+            "prompt399_non_relaxable_blocking_gates": _normalize_string_list(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_non_relaxable_blocking_gates"
+                ),
+                sort_items=False,
+            ),
+            "prompt399_committed_result_alternate_evidence_ready": bool(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_committed_result_alternate_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt399_prompt381_blocked_but_alternate_evidence_available": bool(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_prompt381_blocked_but_alternate_evidence_available",
+                    False,
+                )
+            ),
+            "prompt399_relaxed_gates_applied": _normalize_string_list(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_relaxed_gates_applied"
+                ),
+                sort_items=False,
+            ),
+            "prompt399_relaxed_gates_not_applied": _normalize_string_list(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_relaxed_gates_not_applied"
+                ),
+                sort_items=False,
+            ),
+            "prompt399_relaxed_next_cycle_handoff_ready": bool(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_relaxed_next_cycle_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt399_relaxed_end_to_end_observation_ready": bool(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_relaxed_end_to_end_observation_ready",
+                    False,
+                )
+            ),
+            "prompt399_relaxed_next_action": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_relaxed_next_action"
+                ),
+                default="wait_for_prompt398_committed_prompt379_result_acceptance",
+            ),
+            "prompt399_prompt381_blocked_reason": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_prompt381_blocked_reason"
+                ),
+                default="not_observed",
+            ),
+            "prompt399_prompt385_blocked_reason": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_prompt385_blocked_reason"
+                ),
+                default="not_observed",
+            ),
+            "prompt399_prompt389_blocked_reason": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_prompt389_blocked_reason"
+                ),
+                default="not_observed",
+            ),
+            "prompt399_prompt390_blocked_reason": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_prompt390_blocked_reason"
+                ),
+                default="not_observed",
+            ),
+            "prompt399_next_cycle_blocked_reason": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_next_cycle_blocked_reason"
+                ),
+                default="not_observed",
+            ),
+            "prompt399_strict_reenable_plan": _normalize_string_list(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_strict_reenable_plan"
+                ),
+                sort_items=False,
+            ),
+            "prompt399_strict_reenable_next_gate": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_strict_reenable_next_gate"
+                ),
+                default="worktree clean",
+            ),
+            "prompt399_strict_reenable_blocked_until": _normalize_text(
+                prompt399_relaxed_committed_result_observation_payload.get(
+                    "prompt399_strict_reenable_blocked_until"
+                ),
+                default="prompt400_strict_gate_reenable",
+            ),
         }
         run_state_summary_compact = select_manifest_run_state_summary_compact(
             run_state_payload,
@@ -240539,6 +241009,26 @@ class PlannedExecutionRunner:
                     run_state_payload.get("prompt398_committed_prompt379_expected_tag"),
                     default=_PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG,
                 ),
+                "prompt398_committed_prompt379_tag_commit": _normalize_text(
+                    run_state_payload.get("prompt398_committed_prompt379_tag_commit"),
+                    default="",
+                ),
+                "prompt398_committed_prompt379_tag_subject": _normalize_text(
+                    run_state_payload.get("prompt398_committed_prompt379_tag_subject"),
+                    default="",
+                ),
+                "prompt398_committed_prompt379_tag_is_ancestor_of_head": bool(
+                    run_state_payload.get(
+                        "prompt398_committed_prompt379_tag_is_ancestor_of_head",
+                        False,
+                    )
+                ),
+                "prompt398_committed_prompt379_detection_mode": _normalize_text(
+                    run_state_payload.get(
+                        "prompt398_committed_prompt379_detection_mode"
+                    ),
+                    default="ancestor_tag_commit_blocked",
+                ),
                 "prompt398_committed_prompt379_worktree_clean": bool(
                     run_state_payload.get(
                         "prompt398_committed_prompt379_worktree_clean",
@@ -240560,6 +241050,112 @@ class PlannedExecutionRunner:
                 "prompt398_committed_prompt379_next_action": _normalize_text(
                     run_state_payload.get("prompt398_committed_prompt379_next_action"),
                     default="wait_for_exact_committed_prompt379_approve_result",
+                ),
+                "prompt399_relaxed_observation_mode_enabled": bool(
+                    run_state_payload.get(
+                        "prompt399_relaxed_observation_mode_enabled",
+                        False,
+                    )
+                ),
+                "prompt399_relaxed_observation_status": _normalize_text(
+                    run_state_payload.get("prompt399_relaxed_observation_status"),
+                    default="blocked",
+                ),
+                "prompt399_all_blocked_gates": _normalize_string_list(
+                    run_state_payload.get("prompt399_all_blocked_gates"),
+                    sort_items=False,
+                ),
+                "prompt399_all_false_gate_fields": _normalize_string_list(
+                    run_state_payload.get("prompt399_all_false_gate_fields"),
+                    sort_items=False,
+                ),
+                "prompt399_all_missing_evidence_fields": _normalize_string_list(
+                    run_state_payload.get("prompt399_all_missing_evidence_fields"),
+                    sort_items=False,
+                ),
+                "prompt399_first_blocking_gate": _normalize_text(
+                    run_state_payload.get("prompt399_first_blocking_gate"),
+                    default="",
+                ),
+                "prompt399_authoritative_blocking_gates": _normalize_string_list(
+                    run_state_payload.get("prompt399_authoritative_blocking_gates"),
+                    sort_items=False,
+                ),
+                "prompt399_relaxable_blocking_gates": _normalize_string_list(
+                    run_state_payload.get("prompt399_relaxable_blocking_gates"),
+                    sort_items=False,
+                ),
+                "prompt399_non_relaxable_blocking_gates": _normalize_string_list(
+                    run_state_payload.get("prompt399_non_relaxable_blocking_gates"),
+                    sort_items=False,
+                ),
+                "prompt399_committed_result_alternate_evidence_ready": bool(
+                    run_state_payload.get(
+                        "prompt399_committed_result_alternate_evidence_ready",
+                        False,
+                    )
+                ),
+                "prompt399_prompt381_blocked_but_alternate_evidence_available": bool(
+                    run_state_payload.get(
+                        "prompt399_prompt381_blocked_but_alternate_evidence_available",
+                        False,
+                    )
+                ),
+                "prompt399_relaxed_gates_applied": _normalize_string_list(
+                    run_state_payload.get("prompt399_relaxed_gates_applied"),
+                    sort_items=False,
+                ),
+                "prompt399_relaxed_gates_not_applied": _normalize_string_list(
+                    run_state_payload.get("prompt399_relaxed_gates_not_applied"),
+                    sort_items=False,
+                ),
+                "prompt399_relaxed_next_cycle_handoff_ready": bool(
+                    run_state_payload.get(
+                        "prompt399_relaxed_next_cycle_handoff_ready",
+                        False,
+                    )
+                ),
+                "prompt399_relaxed_end_to_end_observation_ready": bool(
+                    run_state_payload.get(
+                        "prompt399_relaxed_end_to_end_observation_ready",
+                        False,
+                    )
+                ),
+                "prompt399_relaxed_next_action": _normalize_text(
+                    run_state_payload.get("prompt399_relaxed_next_action"),
+                    default="wait_for_prompt398_committed_prompt379_result_acceptance",
+                ),
+                "prompt399_prompt381_blocked_reason": _normalize_text(
+                    run_state_payload.get("prompt399_prompt381_blocked_reason"),
+                    default="not_observed",
+                ),
+                "prompt399_prompt385_blocked_reason": _normalize_text(
+                    run_state_payload.get("prompt399_prompt385_blocked_reason"),
+                    default="not_observed",
+                ),
+                "prompt399_prompt389_blocked_reason": _normalize_text(
+                    run_state_payload.get("prompt399_prompt389_blocked_reason"),
+                    default="not_observed",
+                ),
+                "prompt399_prompt390_blocked_reason": _normalize_text(
+                    run_state_payload.get("prompt399_prompt390_blocked_reason"),
+                    default="not_observed",
+                ),
+                "prompt399_next_cycle_blocked_reason": _normalize_text(
+                    run_state_payload.get("prompt399_next_cycle_blocked_reason"),
+                    default="not_observed",
+                ),
+                "prompt399_strict_reenable_plan": _normalize_string_list(
+                    run_state_payload.get("prompt399_strict_reenable_plan"),
+                    sort_items=False,
+                ),
+                "prompt399_strict_reenable_next_gate": _normalize_text(
+                    run_state_payload.get("prompt399_strict_reenable_next_gate"),
+                    default="worktree clean",
+                ),
+                "prompt399_strict_reenable_blocked_until": _normalize_text(
+                    run_state_payload.get("prompt399_strict_reenable_blocked_until"),
+                    default="prompt400_strict_gate_reenable",
                 ),
             }
         )
