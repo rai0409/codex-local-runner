@@ -3862,6 +3862,9 @@ _PROMPT415_SCHEMA_VERSION = (
 _PROMPT416_SCHEMA_VERSION = (
     "prompt416_physical_prompt_materialization_write_boundary_v1"
 )
+_PROMPT417_SCHEMA_VERSION = (
+    "prompt417_selected_prompt_codex_execution_adapter_boundary_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5069,6 +5072,52 @@ _PROMPT416_PHYSICAL_PROMPT_MATERIALIZATION_WRITE_KEYS: tuple[str, ...] = (
     "prompt416_git_mutation_allowed",
     "prompt416_commit_tag_allowed",
     "prompt416_next_action",
+)
+_PROMPT417_SELECTED_PROMPT_CODEX_EXECUTION_ADAPTER_KEYS: tuple[str, ...] = (
+    "prompt417_schema_version",
+    "prompt417_selected_prompt_codex_execution_adapter_enabled",
+    "prompt417_selected_prompt_codex_execution_adapter_status",
+    "prompt417_selected_prompt_codex_execution_adapter_ready",
+    "prompt417_selected_prompt_codex_execution_adapter_blocked_reason",
+    "prompt417_selected_prompt_codex_execution_adapter_blocked_reasons",
+    "prompt417_selected_prompt_codex_execution_adapter_source",
+    "prompt417_selected_prompt_id",
+    "prompt417_prompt_path",
+    "prompt417_prompt_path_valid",
+    "prompt417_prompt_file_required",
+    "prompt417_prompt_file_checked",
+    "prompt417_prompt_file_exists",
+    "prompt417_prompt_file_read",
+    "prompt417_prompt_text_size_bytes",
+    "prompt417_prompt_text_sha256",
+    "prompt417_execution_requested",
+    "prompt417_execution_allowed",
+    "prompt417_execution_attempted",
+    "prompt417_execution_performed",
+    "prompt417_execution_returncode",
+    "prompt417_execution_returncode_classification",
+    "prompt417_execution_status",
+    "prompt417_execution_blocked_reason",
+    "prompt417_stdout_path",
+    "prompt417_stderr_path",
+    "prompt417_result_json_path",
+    "prompt417_stdout_written",
+    "prompt417_stderr_written",
+    "prompt417_result_json_written",
+    "prompt417_capture_written",
+    "prompt417_review_packet_ready",
+    "prompt417_review_packet_target_prompt",
+    "prompt417_review_packet_mode",
+    "prompt417_review_packet_prompt_id",
+    "prompt417_review_packet_result_json_path",
+    "prompt417_approve_candidate",
+    "prompt417_targeted_fix_required",
+    "prompt417_retry_required",
+    "prompt417_selected_prompt_execution_allowed",
+    "prompt417_codex_invocation_allowed",
+    "prompt417_git_mutation_allowed",
+    "prompt417_commit_tag_allowed",
+    "prompt417_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7668,6 +7717,31 @@ def _merge_prompt416_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT416_PHYSICAL_PROMPT_MATERIALIZATION_WRITE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt417_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt417_selected_prompt_codex_execution_adapter_state: Mapping[str, Any]
+    | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt417_selected_prompt_codex_execution_adapter_state)
+        if isinstance(
+            prompt417_selected_prompt_codex_execution_adapter_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT417_SELECTED_PROMPT_CODEX_EXECUTION_ADAPTER_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -59801,6 +59875,685 @@ def _build_prompt416_physical_prompt_materialization_write_state(
         "prompt416_git_mutation_allowed": False,
         "prompt416_commit_tag_allowed": False,
         "prompt416_next_action": next_action,
+    }
+
+
+def _prompt417_validate_prompt_path(path_value: Any) -> str:
+    path_text = _normalize_text(path_value, default="")
+    if not path_text:
+        return ""
+    path = PurePosixPath(path_text)
+    if path.is_absolute() or ".." in path.parts:
+        return ""
+    normalized_path = PurePosixPath(*path.parts)
+    allowed_parent = PurePosixPath("current_prompt_verify_results/prompt416")
+    if normalized_path == allowed_parent:
+        return ""
+    try:
+        normalized_path.relative_to(allowed_parent)
+    except ValueError:
+        return ""
+    return normalized_path.as_posix()
+
+
+def _prompt417_capture_paths() -> tuple[str, str, str]:
+    return (
+        "current_prompt_verify_results/prompt417/prompt402_stdout.txt",
+        "current_prompt_verify_results/prompt417/prompt402_stderr.txt",
+        "current_prompt_verify_results/prompt417/prompt402_execution_result.json",
+    )
+
+
+def _prompt417_normalize_timeout(timeout_seconds: int) -> int:
+    try:
+        normalized = int(timeout_seconds)
+    except (TypeError, ValueError):
+        normalized = 600
+    return max(1, min(3600, normalized))
+
+
+def _prompt417_normalize_command(
+    codex_command: Sequence[str] | None,
+) -> tuple[list[str], str]:
+    if codex_command is None:
+        command = ["codex", "exec", "-"]
+    elif isinstance(codex_command, str):
+        command = [codex_command]
+    else:
+        command = list(codex_command)
+    if not command:
+        return [], "empty_codex_command"
+    normalized: list[str] = []
+    for item in command:
+        if not isinstance(item, str):
+            return [], "invalid_codex_command_item"
+        normalized.append(item)
+    return normalized, ""
+
+
+def _prompt417_normalize_transport_result(
+    result: Any,
+) -> tuple[int | None, str, str]:
+    if isinstance(result, Mapping):
+        returncode = result.get("returncode")
+        stdout = result.get("stdout", "")
+        stderr = result.get("stderr", "")
+    else:
+        returncode = getattr(result, "returncode", None)
+        stdout = getattr(result, "stdout", "")
+        stderr = getattr(result, "stderr", "")
+    if not isinstance(returncode, int):
+        returncode = None
+    if isinstance(stdout, bytes):
+        stdout_text = stdout.decode("utf-8", errors="replace")
+    else:
+        stdout_text = "" if stdout is None else str(stdout)
+    if isinstance(stderr, bytes):
+        stderr_text = stderr.decode("utf-8", errors="replace")
+    else:
+        stderr_text = "" if stderr is None else str(stderr)
+    return returncode, stdout_text, stderr_text
+
+
+def _prompt417_returncode_classification(returncode: int | None) -> str:
+    if returncode == 0:
+        return "success"
+    if isinstance(returncode, int):
+        return "failed"
+    return "not_run"
+
+
+def _prompt417_write_capture_text(
+    *,
+    repo_root: Path,
+    relative_path: str,
+    text: str,
+) -> None:
+    path = PurePosixPath(relative_path)
+    allowed_parent = PurePosixPath("current_prompt_verify_results/prompt417")
+    if path.is_absolute() or ".." in path.parts:
+        raise OSError("prompt417_invalid_capture_path")
+    try:
+        path.relative_to(allowed_parent)
+    except ValueError as exc:
+        raise OSError("prompt417_capture_path_outside_allowed_root") from exc
+    target = repo_root / Path(path.as_posix())
+    for existing_path in (
+        repo_root / "current_prompt_verify_results",
+        repo_root / "current_prompt_verify_results" / "prompt417",
+        target,
+    ):
+        if existing_path.is_symlink():
+            raise OSError("prompt417_symlink_capture_path_rejected")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.parent.is_symlink():
+        raise OSError("prompt417_symlink_capture_parent_rejected")
+    target.write_text(text, encoding="utf-8")
+
+
+def _prompt417_write_result_json(
+    *,
+    repo_root: Path,
+    relative_path: str,
+    payload: Mapping[str, Any],
+) -> None:
+    _prompt417_write_capture_text(
+        repo_root=repo_root,
+        relative_path=relative_path,
+        text=json.dumps(dict(payload), indent=2, sort_keys=True) + "\n",
+    )
+
+
+def _prompt417_base_state(
+    *,
+    status: str,
+    ready: bool,
+    blocked_reason: str,
+    blocked_reasons: list[str],
+    selected_prompt_id: str,
+    prompt_path: str,
+    prompt_path_valid: bool,
+    execute_requested: bool,
+    stdout_path: str,
+    stderr_path: str,
+    result_json_path: str,
+) -> dict[str, Any]:
+    return {
+        "prompt417_schema_version": _PROMPT417_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt417",
+        "prompt417_selected_prompt_codex_execution_adapter_enabled": True,
+        "prompt417_selected_prompt_codex_execution_adapter_status": status,
+        "prompt417_selected_prompt_codex_execution_adapter_ready": ready,
+        "prompt417_selected_prompt_codex_execution_adapter_blocked_reason": (
+            blocked_reason
+        ),
+        "prompt417_selected_prompt_codex_execution_adapter_blocked_reasons": (
+            blocked_reasons
+        ),
+        "prompt417_selected_prompt_codex_execution_adapter_source": (
+            "prompt416_execution_adapter_packet"
+        ),
+        "prompt417_selected_prompt_id": selected_prompt_id,
+        "prompt417_prompt_path": prompt_path,
+        "prompt417_prompt_path_valid": prompt_path_valid,
+        "prompt417_prompt_file_required": True,
+        "prompt417_prompt_file_checked": False,
+        "prompt417_prompt_file_exists": False,
+        "prompt417_prompt_file_read": False,
+        "prompt417_prompt_text_size_bytes": 0,
+        "prompt417_prompt_text_sha256": "",
+        "prompt417_execution_requested": bool(execute_requested),
+        "prompt417_execution_allowed": False,
+        "prompt417_execution_attempted": False,
+        "prompt417_execution_performed": False,
+        "prompt417_execution_returncode": None,
+        "prompt417_execution_returncode_classification": "not_run",
+        "prompt417_execution_status": "not_run",
+        "prompt417_execution_blocked_reason": "",
+        "prompt417_stdout_path": stdout_path,
+        "prompt417_stderr_path": stderr_path,
+        "prompt417_result_json_path": result_json_path,
+        "prompt417_stdout_written": False,
+        "prompt417_stderr_written": False,
+        "prompt417_result_json_written": False,
+        "prompt417_capture_written": False,
+        "prompt417_review_packet_ready": False,
+        "prompt417_review_packet_target_prompt": "prompt418",
+        "prompt417_review_packet_mode": "execution_not_run",
+        "prompt417_review_packet_prompt_id": selected_prompt_id,
+        "prompt417_review_packet_result_json_path": result_json_path,
+        "prompt417_approve_candidate": False,
+        "prompt417_targeted_fix_required": False,
+        "prompt417_retry_required": False,
+        "prompt417_selected_prompt_execution_allowed": False,
+        "prompt417_codex_invocation_allowed": False,
+        "prompt417_git_mutation_allowed": False,
+        "prompt417_commit_tag_allowed": False,
+        "prompt417_next_action": (
+            "request_prompt417_selected_prompt_codex_execution"
+        ),
+    }
+
+
+def _build_prompt417_selected_prompt_codex_execution_adapter_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execute_requested: bool = False,
+    allow_execute: bool = False,
+    repo_path: str | Path | None = None,
+    codex_command: Sequence[str] | None = None,
+    timeout_seconds: int = 600,
+    transport_runner: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    requested = bool(execute_requested)
+    stdout_path, stderr_path, result_json_path = _prompt417_capture_paths()
+    prompt_path_source = "prompt416_execution_adapter_packet"
+    packet_prompt_path = _normalize_text(
+        run_state.get("prompt416_execution_adapter_packet_prompt_path"),
+        default="",
+    )
+    fallback_prompt_path = _normalize_text(
+        run_state.get("prompt416_physical_prompt_path"),
+        default="",
+    )
+    raw_prompt_path = packet_prompt_path or fallback_prompt_path
+    if not packet_prompt_path and fallback_prompt_path:
+        prompt_path_source = "prompt416_physical_prompt_path"
+    prompt_path = _prompt417_validate_prompt_path(raw_prompt_path)
+
+    prompt416_required_inputs = (
+        _normalize_text(
+            run_state.get("prompt416_physical_prompt_materialization_write_status"),
+            default="",
+        )
+        == "written",
+        run_state.get("prompt416_physical_prompt_materialization_write_ready")
+        is True,
+        _normalize_text(run_state.get("prompt416_selected_prompt_id"), default="")
+        == "prompt402",
+        run_state.get("prompt416_physical_prompt_written") is True,
+        run_state.get("prompt416_physical_prompt_exists") is True,
+        run_state.get("prompt416_receipt_written") is True,
+        run_state.get("prompt416_execution_adapter_packet_ready") is True,
+        _normalize_text(
+            run_state.get("prompt416_execution_adapter_packet_target_prompt"),
+            default="",
+        )
+        == "prompt417",
+        _normalize_text(
+            run_state.get("prompt416_execution_adapter_packet_mode"),
+            default="",
+        )
+        == "physical_prompt_written_no_execute",
+        _normalize_text(
+            run_state.get("prompt416_execution_adapter_packet_prompt_id"),
+            default="",
+        )
+        == "prompt402",
+        run_state.get("prompt416_execution_requested") is False,
+        run_state.get("prompt416_execution_allowed") is False,
+        run_state.get("prompt416_execution_attempted") is False,
+        run_state.get("prompt416_execution_performed") is False,
+        run_state.get("prompt416_execution_returncode") is None,
+        _normalize_text(
+            run_state.get("prompt416_execution_returncode_classification"),
+            default="",
+        )
+        == "not_run",
+        run_state.get("prompt416_capture_plan_ready") is True,
+        run_state.get("prompt416_capture_written") is False,
+        run_state.get("prompt416_approve_candidate") is False,
+        run_state.get("prompt416_targeted_fix_required") is False,
+        run_state.get("prompt416_retry_required") is False,
+        run_state.get("prompt416_selected_prompt_execution_allowed") is False,
+        run_state.get("prompt416_codex_invocation_allowed") is False,
+        run_state.get("prompt416_git_mutation_allowed") is False,
+        run_state.get("prompt416_commit_tag_allowed") is False,
+        _normalize_text(run_state.get("prompt416_next_action"), default="")
+        == "prepare_prompt417_selected_prompt_codex_execution_adapter",
+    )
+    prompt416_ready_except_path = all(prompt416_required_inputs)
+
+    if not prompt416_ready_except_path:
+        state = _prompt417_base_state(
+            status="blocked",
+            ready=False,
+            blocked_reason="prompt416_execution_adapter_packet_not_ready",
+            blocked_reasons=["prompt416_execution_adapter_packet_not_ready"],
+            selected_prompt_id="",
+            prompt_path="",
+            prompt_path_valid=False,
+            execute_requested=requested,
+            stdout_path="",
+            stderr_path="",
+            result_json_path="",
+        )
+        state.update(
+            {
+                "prompt417_execution_status": "blocked",
+                "prompt417_execution_blocked_reason": (
+                    "prompt416_execution_adapter_packet_not_ready"
+                ),
+                "prompt417_review_packet_mode": "blocked",
+                "prompt417_review_packet_prompt_id": "",
+                "prompt417_review_packet_result_json_path": "",
+                "prompt417_next_action": (
+                    "review_prompt416_physical_prompt_materialization_write"
+                ),
+            }
+        )
+        return state
+
+    if not prompt_path:
+        state = _prompt417_base_state(
+            status="blocked",
+            ready=False,
+            blocked_reason="invalid_prompt_path",
+            blocked_reasons=["invalid_prompt_path"],
+            selected_prompt_id="prompt402",
+            prompt_path="",
+            prompt_path_valid=False,
+            execute_requested=requested,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            result_json_path=result_json_path,
+        )
+        state.update(
+            {
+                "prompt417_execution_status": "blocked",
+                "prompt417_execution_blocked_reason": "invalid_prompt_path",
+                "prompt417_review_packet_mode": "blocked",
+                "prompt417_next_action": "review_prompt417_prompt_path",
+            }
+        )
+        return state
+
+    if not requested or not bool(allow_execute):
+        state = _prompt417_base_state(
+            status="ready",
+            ready=True,
+            blocked_reason="",
+            blocked_reasons=[],
+            selected_prompt_id="prompt402",
+            prompt_path=prompt_path,
+            prompt_path_valid=True,
+            execute_requested=requested,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            result_json_path=result_json_path,
+        )
+        state.update(
+            {
+                "prompt417_selected_prompt_codex_execution_adapter_source": (
+                    prompt_path_source
+                ),
+                "prompt417_execution_blocked_reason": (
+                    "execution_not_requested_or_not_allowed"
+                ),
+            }
+        )
+        return state
+
+    if repo_path is None:
+        state = _prompt417_base_state(
+            status="blocked",
+            ready=False,
+            blocked_reason="repo_path_missing",
+            blocked_reasons=["repo_path_missing"],
+            selected_prompt_id="prompt402",
+            prompt_path=prompt_path,
+            prompt_path_valid=True,
+            execute_requested=requested,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            result_json_path=result_json_path,
+        )
+        state.update(
+            {
+                "prompt417_execution_status": "blocked",
+                "prompt417_execution_blocked_reason": "repo_path_missing",
+                "prompt417_review_packet_mode": "blocked",
+                "prompt417_next_action": "review_prompt417_execution_request",
+            }
+        )
+        return state
+
+    command, command_error = _prompt417_normalize_command(codex_command)
+    if command_error:
+        state = _prompt417_base_state(
+            status="blocked",
+            ready=False,
+            blocked_reason=command_error,
+            blocked_reasons=[command_error],
+            selected_prompt_id="prompt402",
+            prompt_path=prompt_path,
+            prompt_path_valid=True,
+            execute_requested=requested,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            result_json_path=result_json_path,
+        )
+        state.update(
+            {
+                "prompt417_execution_status": "blocked",
+                "prompt417_execution_blocked_reason": command_error,
+                "prompt417_review_packet_mode": "blocked",
+                "prompt417_next_action": "review_prompt417_execution_request",
+            }
+        )
+        return state
+
+    timeout = _prompt417_normalize_timeout(timeout_seconds)
+    repo_root = Path(repo_path)
+    prompt_file_path = repo_root / Path(prompt_path)
+    try:
+        prompt_stat = prompt_file_path.lstat()
+    except FileNotFoundError:
+        state = _prompt417_base_state(
+            status="blocked",
+            ready=False,
+            blocked_reason="prompt_file_missing",
+            blocked_reasons=["prompt_file_missing"],
+            selected_prompt_id="prompt402",
+            prompt_path=prompt_path,
+            prompt_path_valid=True,
+            execute_requested=requested,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            result_json_path=result_json_path,
+        )
+        state.update(
+            {
+                "prompt417_prompt_file_checked": True,
+                "prompt417_execution_status": "blocked",
+                "prompt417_execution_blocked_reason": "prompt_file_missing",
+                "prompt417_review_packet_mode": "blocked",
+                "prompt417_next_action": (
+                    "review_prompt416_physical_prompt_materialization_write"
+                ),
+            }
+        )
+        return state
+    if prompt_file_path.is_symlink():
+        state = _prompt417_base_state(
+            status="blocked",
+            ready=False,
+            blocked_reason="prompt_file_is_symlink",
+            blocked_reasons=["prompt_file_is_symlink"],
+            selected_prompt_id="prompt402",
+            prompt_path=prompt_path,
+            prompt_path_valid=True,
+            execute_requested=requested,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            result_json_path=result_json_path,
+        )
+        state.update(
+            {
+                "prompt417_prompt_file_checked": True,
+                "prompt417_execution_status": "blocked",
+                "prompt417_execution_blocked_reason": "prompt_file_is_symlink",
+                "prompt417_review_packet_mode": "blocked",
+                "prompt417_next_action": "review_prompt417_prompt_path",
+            }
+        )
+        return state
+    if not prompt_file_path.is_file():
+        state = _prompt417_base_state(
+            status="blocked",
+            ready=False,
+            blocked_reason="prompt_file_missing",
+            blocked_reasons=["prompt_file_missing"],
+            selected_prompt_id="prompt402",
+            prompt_path=prompt_path,
+            prompt_path_valid=True,
+            execute_requested=requested,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            result_json_path=result_json_path,
+        )
+        state.update(
+            {
+                "prompt417_prompt_file_checked": True,
+                "prompt417_execution_status": "blocked",
+                "prompt417_execution_blocked_reason": "prompt_file_missing",
+                "prompt417_review_packet_mode": "blocked",
+                "prompt417_next_action": (
+                    "review_prompt416_physical_prompt_materialization_write"
+                ),
+            }
+        )
+        return state
+
+    prompt_text = prompt_file_path.read_text(encoding="utf-8")
+    prompt_text_size_bytes = len(prompt_text.encode("utf-8"))
+    prompt_text_sha256 = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
+    stdout_text = ""
+    stderr_text = ""
+    returncode: int | None = None
+    execution_error_type = ""
+    execution_error_message = ""
+    execution_attempted = True
+    execution_performed = False
+    execution_status = "completed"
+    returncode_classification = "not_run"
+
+    try:
+        if transport_runner is not None:
+            result = transport_runner(
+                command=command,
+                input=prompt_text,
+                timeout=timeout,
+                cwd=str(repo_root),
+            )
+        else:
+            result = subprocess.run(
+                command,
+                input=prompt_text,
+                timeout=timeout,
+                cwd=str(repo_root),
+                shell=False,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        returncode, stdout_text, stderr_text = (
+            _prompt417_normalize_transport_result(result)
+        )
+        execution_performed = True
+        returncode_classification = _prompt417_returncode_classification(
+            returncode
+        )
+    except (TimeoutError, subprocess.TimeoutExpired) as exc:
+        execution_status = "timeout"
+        returncode_classification = "timeout"
+        execution_error_type = type(exc).__name__
+        execution_error_message = str(exc)
+        if isinstance(exc, subprocess.TimeoutExpired):
+            if isinstance(exc.stdout, bytes):
+                stdout_text = exc.stdout.decode("utf-8", errors="replace")
+            elif exc.stdout is not None:
+                stdout_text = str(exc.stdout)
+            if isinstance(exc.stderr, bytes):
+                stderr_text = exc.stderr.decode("utf-8", errors="replace")
+            elif exc.stderr is not None:
+                stderr_text = str(exc.stderr)
+    except Exception as exc:
+        execution_status = "execution_error"
+        returncode_classification = "execution_error"
+        execution_error_type = type(exc).__name__
+        execution_error_message = str(exc)
+
+    result_payload = {
+        "schema_version": _PROMPT417_SCHEMA_VERSION,
+        "prompt_id": "prompt417",
+        "status": execution_status,
+        "selected_prompt_id": "prompt402",
+        "prompt_path": prompt_path,
+        "prompt_text_size_bytes": prompt_text_size_bytes,
+        "prompt_text_sha256": prompt_text_sha256,
+        "command": list(command),
+        "shell": False,
+        "timeout_seconds": timeout,
+        "execution_requested": True,
+        "execution_allowed": True,
+        "execution_attempted": execution_attempted,
+        "execution_performed": execution_performed,
+        "returncode": returncode,
+        "returncode_classification": returncode_classification,
+        "execution_status": execution_status,
+        "execution_error_type": execution_error_type,
+        "execution_error_message": execution_error_message,
+        "stdout_path": stdout_path,
+        "stderr_path": stderr_path,
+        "result_json_path": result_json_path,
+        "stdout_size_bytes": len(stdout_text.encode("utf-8")),
+        "stderr_size_bytes": len(stderr_text.encode("utf-8")),
+        "approve_candidate": False,
+        "targeted_fix_required": False,
+        "retry_required": False,
+        "codex_invocation_allowed": False,
+        "commit_tag_allowed": False,
+    }
+
+    stdout_written = False
+    stderr_written = False
+    result_json_written = False
+    try:
+        _prompt417_write_capture_text(
+            repo_root=repo_root,
+            relative_path=stdout_path,
+            text=stdout_text,
+        )
+        stdout_written = True
+        _prompt417_write_capture_text(
+            repo_root=repo_root,
+            relative_path=stderr_path,
+            text=stderr_text,
+        )
+        stderr_written = True
+        _prompt417_write_result_json(
+            repo_root=repo_root,
+            relative_path=result_json_path,
+            payload=result_payload,
+        )
+        result_json_written = True
+    except OSError as exc:
+        if not execution_error_type:
+            execution_error_type = type(exc).__name__
+            execution_error_message = str(exc)
+        if returncode_classification not in {"timeout", "execution_error"}:
+            returncode_classification = "execution_error"
+            execution_status = "execution_error"
+
+    review_packet_ready = result_json_written
+    return {
+        "prompt417_schema_version": _PROMPT417_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt417",
+        "prompt417_selected_prompt_codex_execution_adapter_enabled": True,
+        "prompt417_selected_prompt_codex_execution_adapter_status": "executed",
+        "prompt417_selected_prompt_codex_execution_adapter_ready": True,
+        "prompt417_selected_prompt_codex_execution_adapter_blocked_reason": "",
+        "prompt417_selected_prompt_codex_execution_adapter_blocked_reasons": [],
+        "prompt417_selected_prompt_codex_execution_adapter_source": (
+            prompt_path_source
+        ),
+        "prompt417_selected_prompt_id": "prompt402",
+        "prompt417_prompt_path": prompt_path,
+        "prompt417_prompt_path_valid": True,
+        "prompt417_prompt_file_required": True,
+        "prompt417_prompt_file_checked": True,
+        "prompt417_prompt_file_exists": bool(prompt_stat),
+        "prompt417_prompt_file_read": True,
+        "prompt417_prompt_text_size_bytes": prompt_text_size_bytes,
+        "prompt417_prompt_text_sha256": prompt_text_sha256,
+        "prompt417_execution_requested": True,
+        "prompt417_execution_allowed": True,
+        "prompt417_execution_attempted": execution_attempted,
+        "prompt417_execution_performed": execution_performed,
+        "prompt417_execution_returncode": returncode,
+        "prompt417_execution_returncode_classification": (
+            returncode_classification
+        ),
+        "prompt417_execution_status": execution_status,
+        "prompt417_execution_blocked_reason": "",
+        "prompt417_stdout_path": stdout_path,
+        "prompt417_stderr_path": stderr_path,
+        "prompt417_result_json_path": result_json_path,
+        "prompt417_stdout_written": stdout_written,
+        "prompt417_stderr_written": stderr_written,
+        "prompt417_result_json_written": result_json_written,
+        "prompt417_capture_written": (
+            stdout_written and stderr_written and result_json_written
+        ),
+        "prompt417_review_packet_ready": review_packet_ready,
+        "prompt417_review_packet_target_prompt": "prompt418",
+        "prompt417_review_packet_mode": (
+            "execution_result_captured" if review_packet_ready else "blocked"
+        ),
+        "prompt417_review_packet_prompt_id": "prompt402",
+        "prompt417_review_packet_result_json_path": (
+            result_json_path if review_packet_ready else ""
+        ),
+        "prompt417_approve_candidate": False,
+        "prompt417_targeted_fix_required": False,
+        "prompt417_retry_required": False,
+        "prompt417_selected_prompt_execution_allowed": False,
+        "prompt417_codex_invocation_allowed": False,
+        "prompt417_git_mutation_allowed": False,
+        "prompt417_commit_tag_allowed": False,
+        "prompt417_next_action": (
+            "prepare_prompt418_execution_result_review"
+            if review_packet_ready
+            else "review_prompt417_execution_error"
+        ),
     }
 
 
@@ -236527,6 +237280,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt416_physical_prompt_materialization_write_payload,
         }
+        prompt417_selected_prompt_codex_execution_adapter_payload = (
+            _build_prompt417_selected_prompt_codex_execution_adapter_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt417_selected_prompt_codex_execution_adapter_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -236587,6 +237349,17 @@ class PlannedExecutionRunner:
                     "run_state.prompt416_execution_adapter_packet_ready",
                     "run_state.prompt416_execution_adapter_packet_mode",
                     "run_state.prompt416_next_action",
+                    "run_state.prompt417_selected_prompt_codex_execution_adapter_status",
+                    "run_state.prompt417_selected_prompt_codex_execution_adapter_ready",
+                    "run_state.prompt417_prompt_path",
+                    "run_state.prompt417_prompt_path_valid",
+                    "run_state.prompt417_execution_requested",
+                    "run_state.prompt417_execution_allowed",
+                    "run_state.prompt417_execution_returncode_classification",
+                    "run_state.prompt417_execution_status",
+                    "run_state.prompt417_review_packet_ready",
+                    "run_state.prompt417_review_packet_target_prompt",
+                    "run_state.prompt417_next_action",
                 ]
             )
         )
@@ -236881,6 +237654,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt416_physical_prompt_materialization_write_state=(
                     prompt416_physical_prompt_materialization_write_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt417_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt417_selected_prompt_codex_execution_adapter_state=(
+                    prompt417_selected_prompt_codex_execution_adapter_payload
                 ),
             )
         )
@@ -245771,6 +246552,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT416_PHYSICAL_PROMPT_MATERIALIZATION_WRITE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT417_SELECTED_PROMPT_CODEX_EXECUTION_ADAPTER_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
