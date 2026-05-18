@@ -3859,6 +3859,9 @@ _PROMPT414_SCHEMA_VERSION = (
 _PROMPT415_SCHEMA_VERSION = (
     "prompt415_guarded_execution_enable_plan_boundary_v1"
 )
+_PROMPT416_SCHEMA_VERSION = (
+    "prompt416_physical_prompt_materialization_write_boundary_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5018,6 +5021,54 @@ _PROMPT415_GUARDED_EXECUTION_ENABLE_PLAN_KEYS: tuple[str, ...] = (
     "prompt415_git_mutation_allowed",
     "prompt415_commit_tag_allowed",
     "prompt415_next_action",
+)
+_PROMPT416_PHYSICAL_PROMPT_MATERIALIZATION_WRITE_KEYS: tuple[str, ...] = (
+    "prompt416_schema_version",
+    "prompt416_physical_prompt_materialization_write_enabled",
+    "prompt416_physical_prompt_materialization_write_status",
+    "prompt416_physical_prompt_materialization_write_ready",
+    "prompt416_physical_prompt_materialization_write_blocked_reason",
+    "prompt416_physical_prompt_materialization_write_blocked_reasons",
+    "prompt416_physical_prompt_materialization_write_source",
+    "prompt416_selected_prompt_id",
+    "prompt416_selected_prompt_source",
+    "prompt416_selected_prompt_text_source",
+    "prompt416_selected_prompt_text_present",
+    "prompt416_selected_prompt_text_size_bytes",
+    "prompt416_selected_prompt_text_sha256",
+    "prompt416_physical_prompt_path",
+    "prompt416_physical_prompt_write_requested",
+    "prompt416_physical_prompt_write_allowed",
+    "prompt416_physical_prompt_written",
+    "prompt416_physical_prompt_exists",
+    "prompt416_physical_prompt_write_blocked_reason",
+    "prompt416_receipt_path",
+    "prompt416_receipt_written",
+    "prompt416_execution_adapter_packet_ready",
+    "prompt416_execution_adapter_packet_target_prompt",
+    "prompt416_execution_adapter_packet_mode",
+    "prompt416_execution_adapter_packet_prompt_id",
+    "prompt416_execution_adapter_packet_prompt_path",
+    "prompt416_execution_adapter_packet_result_json_path",
+    "prompt416_execution_requested",
+    "prompt416_execution_allowed",
+    "prompt416_execution_attempted",
+    "prompt416_execution_performed",
+    "prompt416_execution_returncode",
+    "prompt416_execution_returncode_classification",
+    "prompt416_capture_plan_ready",
+    "prompt416_stdout_path",
+    "prompt416_stderr_path",
+    "prompt416_result_json_path",
+    "prompt416_capture_written",
+    "prompt416_approve_candidate",
+    "prompt416_targeted_fix_required",
+    "prompt416_retry_required",
+    "prompt416_selected_prompt_execution_allowed",
+    "prompt416_codex_invocation_allowed",
+    "prompt416_git_mutation_allowed",
+    "prompt416_commit_tag_allowed",
+    "prompt416_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7592,6 +7643,31 @@ def _merge_prompt415_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT415_GUARDED_EXECUTION_ENABLE_PLAN_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt416_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt416_physical_prompt_materialization_write_state: Mapping[str, Any]
+    | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt416_physical_prompt_materialization_write_state)
+        if isinstance(
+            prompt416_physical_prompt_materialization_write_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT416_PHYSICAL_PROMPT_MATERIALIZATION_WRITE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -59259,6 +59335,472 @@ def _build_prompt415_guarded_execution_enable_plan_state(
             if prompt414_ready
             else "review_prompt414_execution_result_review_boundary"
         ),
+    }
+
+
+def _prompt416_selected_prompt_text(
+    run_state: Mapping[str, Any],
+) -> tuple[str, str]:
+    for source_key in (
+        "prompt402_generated_prompt",
+        "prompt402_generated_prompt_text",
+        "prompt402_generated_prompt_surface",
+        "prompt402_prompt",
+        "selected_prompt_text",
+    ):
+        value = run_state.get(source_key)
+        if isinstance(value, str) and value:
+            return value, source_key
+        if value is not None and value != "":
+            try:
+                return (
+                    json.dumps(value, indent=2, sort_keys=True),
+                    source_key,
+                )
+            except TypeError:
+                return str(value), source_key
+    return (
+        "Prompt402 selected prompt text was not present in the provided "
+        "run_state_payload. This file is a bounded materialization placeholder "
+        "for Prompt416 and must not be treated as a successful generated prompt.",
+        "placeholder",
+    )
+
+
+def _prompt416_text_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _prompt416_validate_relative_path(path_value: Any) -> str:
+    path_text = _normalize_text(path_value, default="")
+    if not path_text:
+        return ""
+    path = PurePosixPath(path_text)
+    if path.is_absolute() or ".." in path.parts:
+        return ""
+    normalized_path = PurePosixPath(*path.parts)
+    allowed_parent = PurePosixPath("current_prompt_verify_results/prompt416")
+    if normalized_path == allowed_parent:
+        return ""
+    try:
+        normalized_path.relative_to(allowed_parent)
+    except ValueError:
+        return ""
+    return normalized_path.as_posix()
+
+
+def _prompt416_write_materialization_files(
+    *,
+    repo_path: str | Path,
+    prompt_path: str,
+    selected_prompt_text: str,
+    receipt: Mapping[str, Any],
+) -> None:
+    repo_root = Path(repo_path)
+    prompt_file_path = repo_root / Path(prompt_path)
+    receipt_file_path = (
+        repo_root
+        / "current_prompt_verify_results"
+        / "prompt416"
+        / "physical_prompt_materialization_receipt.json"
+    )
+    for existing_path in (
+        repo_root / "current_prompt_verify_results",
+        repo_root / "current_prompt_verify_results" / "prompt416",
+        prompt_file_path,
+        receipt_file_path,
+    ):
+        if existing_path.is_symlink():
+            raise OSError("prompt416_symlink_path_rejected")
+    prompt_file_path.parent.mkdir(parents=True, exist_ok=True)
+    if prompt_file_path.parent.is_symlink():
+        raise OSError("prompt416_symlink_parent_rejected")
+    prompt_file_path.write_text(selected_prompt_text, encoding="utf-8")
+    receipt_file_path.write_text(
+        json.dumps(dict(receipt), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _build_prompt416_physical_prompt_materialization_write_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    write_requested: bool = False,
+    allow_write: bool = False,
+    repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    required_inputs = (
+        (
+            _normalize_text(
+                run_state.get("prompt415_guarded_execution_enable_plan_status"),
+                default="",
+            )
+            == "ready"
+        ),
+        run_state.get("prompt415_guarded_execution_enable_plan_ready") is True,
+        (
+            _normalize_text(
+                run_state.get("prompt415_enable_plan_classification"),
+                default="",
+            )
+            == "guarded_execution_enable_plan"
+        ),
+        (
+            _normalize_text(run_state.get("prompt415_enable_plan_route"), default="")
+            == "ready_for_prompt416_physical_prompt_materialization_write_plan"
+        ),
+        run_state.get("prompt415_physical_prompt_write_plan_ready") is True,
+        (
+            _normalize_text(
+                run_state.get("prompt415_physical_prompt_write_plan_target_prompt"),
+                default="",
+            )
+            == "prompt416"
+        ),
+        run_state.get("prompt415_physical_prompt_write_requested") is False,
+        run_state.get("prompt415_physical_prompt_write_allowed") is False,
+        run_state.get("prompt415_physical_prompt_written") is False,
+        run_state.get("prompt415_physical_prompt_path_planned") is True,
+        run_state.get("prompt415_execution_plan_ready") is True,
+        (
+            _normalize_text(
+                run_state.get("prompt415_execution_plan_target_prompt"),
+                default="",
+            )
+            == "prompt416"
+        ),
+        (
+            _normalize_text(
+                run_state.get("prompt415_execution_plan_mode"),
+                default="",
+            )
+            == "guarded_no_execute"
+        ),
+        run_state.get("prompt415_execution_requested") is False,
+        run_state.get("prompt415_execution_allowed") is False,
+        run_state.get("prompt415_execution_attempted") is False,
+        run_state.get("prompt415_execution_performed") is False,
+        run_state.get("prompt415_execution_returncode") is None,
+        (
+            _normalize_text(
+                run_state.get("prompt415_execution_returncode_classification"),
+                default="",
+            )
+            == "not_run"
+        ),
+        run_state.get("prompt415_capture_plan_ready") is True,
+        (
+            _normalize_text(run_state.get("prompt415_capture_target_prompt"), default="")
+            == "prompt416"
+        ),
+        run_state.get("prompt415_capture_written") is False,
+        run_state.get("prompt415_review_packet_ready") is True,
+        (
+            _normalize_text(
+                run_state.get("prompt415_review_packet_target_prompt"),
+                default="",
+            )
+            == "prompt416"
+        ),
+        (
+            _normalize_text(
+                run_state.get("prompt415_review_packet_mode"),
+                default="",
+            )
+            == "guarded_execution_enable_plan_no_execute"
+        ),
+        (
+            _normalize_text(
+                run_state.get("prompt415_review_packet_prompt_id"),
+                default="",
+            )
+            == "prompt402"
+        ),
+        run_state.get("prompt415_approve_candidate") is False,
+        run_state.get("prompt415_targeted_fix_required") is False,
+        run_state.get("prompt415_retry_required") is False,
+        run_state.get("prompt415_selected_prompt_execution_allowed") is False,
+        run_state.get("prompt415_codex_invocation_allowed") is False,
+        run_state.get("prompt415_git_mutation_allowed") is False,
+        run_state.get("prompt415_commit_tag_allowed") is False,
+        (
+            _normalize_text(run_state.get("prompt415_next_action"), default="")
+            == "prepare_prompt416_physical_prompt_write_plan"
+        ),
+    )
+    prompt415_ready = all(required_inputs)
+    requested = bool(write_requested)
+    requested_and_allowed = requested and bool(allow_write)
+    default_prompt_path = (
+        "current_prompt_verify_results/prompt416/"
+        "selected_prompt_prompt402.md"
+    )
+    receipt_path = (
+        "current_prompt_verify_results/prompt416/"
+        "physical_prompt_materialization_receipt.json"
+    )
+    stdout_path = "current_prompt_verify_results/prompt417/prompt402_stdout.txt"
+    stderr_path = "current_prompt_verify_results/prompt417/prompt402_stderr.txt"
+    result_json_path = (
+        "current_prompt_verify_results/prompt417/"
+        "prompt402_execution_result.json"
+    )
+
+    if not prompt415_ready:
+        return {
+            "prompt416_schema_version": _PROMPT416_SCHEMA_VERSION,
+            "local_only": True,
+            "source_prompt": "prompt416",
+            "prompt416_physical_prompt_materialization_write_enabled": True,
+            "prompt416_physical_prompt_materialization_write_status": "blocked",
+            "prompt416_physical_prompt_materialization_write_ready": False,
+            "prompt416_physical_prompt_materialization_write_blocked_reason": (
+                "prompt415_guarded_execution_enable_plan_not_ready"
+            ),
+            "prompt416_physical_prompt_materialization_write_blocked_reasons": [
+                "prompt415_guarded_execution_enable_plan_not_ready"
+            ],
+            "prompt416_physical_prompt_materialization_write_source": (
+                "prompt415_guarded_execution_enable_plan"
+            ),
+            "prompt416_selected_prompt_id": "",
+            "prompt416_selected_prompt_source": "",
+            "prompt416_selected_prompt_text_source": "",
+            "prompt416_selected_prompt_text_present": False,
+            "prompt416_selected_prompt_text_size_bytes": 0,
+            "prompt416_selected_prompt_text_sha256": "",
+            "prompt416_physical_prompt_path": "",
+            "prompt416_physical_prompt_write_requested": requested,
+            "prompt416_physical_prompt_write_allowed": False,
+            "prompt416_physical_prompt_written": False,
+            "prompt416_physical_prompt_exists": False,
+            "prompt416_physical_prompt_write_blocked_reason": (
+                "prompt415_guarded_execution_enable_plan_not_ready"
+            ),
+            "prompt416_receipt_path": "",
+            "prompt416_receipt_written": False,
+            "prompt416_execution_adapter_packet_ready": False,
+            "prompt416_execution_adapter_packet_target_prompt": "prompt417",
+            "prompt416_execution_adapter_packet_mode": "blocked",
+            "prompt416_execution_adapter_packet_prompt_id": "",
+            "prompt416_execution_adapter_packet_prompt_path": "",
+            "prompt416_execution_adapter_packet_result_json_path": "",
+            "prompt416_execution_requested": False,
+            "prompt416_execution_allowed": False,
+            "prompt416_execution_attempted": False,
+            "prompt416_execution_performed": False,
+            "prompt416_execution_returncode": None,
+            "prompt416_execution_returncode_classification": "not_run",
+            "prompt416_capture_plan_ready": False,
+            "prompt416_stdout_path": "",
+            "prompt416_stderr_path": "",
+            "prompt416_result_json_path": "",
+            "prompt416_capture_written": False,
+            "prompt416_approve_candidate": False,
+            "prompt416_targeted_fix_required": False,
+            "prompt416_retry_required": False,
+            "prompt416_selected_prompt_execution_allowed": False,
+            "prompt416_codex_invocation_allowed": False,
+            "prompt416_git_mutation_allowed": False,
+            "prompt416_commit_tag_allowed": False,
+            "prompt416_next_action": (
+                "review_prompt415_guarded_execution_enable_plan"
+            ),
+        }
+
+    physical_prompt_path = _prompt416_validate_relative_path(
+        run_state.get("prompt415_physical_prompt_path") or default_prompt_path
+    )
+    selected_prompt_text, selected_prompt_text_source = (
+        _prompt416_selected_prompt_text(run_state)
+    )
+    selected_prompt_text_bytes = selected_prompt_text.encode("utf-8")
+    selected_prompt_source = _normalize_text(
+        run_state.get("prompt415_selected_prompt_source"),
+        default="prompt402_generated_prompt_surface",
+    )
+    selected_prompt_sha256 = _prompt416_text_sha256(selected_prompt_text)
+    if not physical_prompt_path:
+        return {
+            "prompt416_schema_version": _PROMPT416_SCHEMA_VERSION,
+            "local_only": True,
+            "source_prompt": "prompt416",
+            "prompt416_physical_prompt_materialization_write_enabled": True,
+            "prompt416_physical_prompt_materialization_write_status": "blocked",
+            "prompt416_physical_prompt_materialization_write_ready": False,
+            "prompt416_physical_prompt_materialization_write_blocked_reason": (
+                "invalid_physical_prompt_path"
+            ),
+            "prompt416_physical_prompt_materialization_write_blocked_reasons": [
+                "invalid_physical_prompt_path"
+            ],
+            "prompt416_physical_prompt_materialization_write_source": (
+                "prompt415_guarded_execution_enable_plan"
+            ),
+            "prompt416_selected_prompt_id": "prompt402",
+            "prompt416_selected_prompt_source": selected_prompt_source,
+            "prompt416_selected_prompt_text_source": selected_prompt_text_source,
+            "prompt416_selected_prompt_text_present": True,
+            "prompt416_selected_prompt_text_size_bytes": len(
+                selected_prompt_text_bytes
+            ),
+            "prompt416_selected_prompt_text_sha256": selected_prompt_sha256,
+            "prompt416_physical_prompt_path": "",
+            "prompt416_physical_prompt_write_requested": requested,
+            "prompt416_physical_prompt_write_allowed": False,
+            "prompt416_physical_prompt_written": False,
+            "prompt416_physical_prompt_exists": False,
+            "prompt416_physical_prompt_write_blocked_reason": (
+                "invalid_physical_prompt_path"
+            ),
+            "prompt416_receipt_path": "",
+            "prompt416_receipt_written": False,
+            "prompt416_execution_adapter_packet_ready": False,
+            "prompt416_execution_adapter_packet_target_prompt": "prompt417",
+            "prompt416_execution_adapter_packet_mode": "blocked",
+            "prompt416_execution_adapter_packet_prompt_id": "prompt402",
+            "prompt416_execution_adapter_packet_prompt_path": "",
+            "prompt416_execution_adapter_packet_result_json_path": (
+                result_json_path
+            ),
+            "prompt416_execution_requested": False,
+            "prompt416_execution_allowed": False,
+            "prompt416_execution_attempted": False,
+            "prompt416_execution_performed": False,
+            "prompt416_execution_returncode": None,
+            "prompt416_execution_returncode_classification": "not_run",
+            "prompt416_capture_plan_ready": False,
+            "prompt416_stdout_path": "",
+            "prompt416_stderr_path": "",
+            "prompt416_result_json_path": "",
+            "prompt416_capture_written": False,
+            "prompt416_approve_candidate": False,
+            "prompt416_targeted_fix_required": False,
+            "prompt416_retry_required": False,
+            "prompt416_selected_prompt_execution_allowed": False,
+            "prompt416_codex_invocation_allowed": False,
+            "prompt416_git_mutation_allowed": False,
+            "prompt416_commit_tag_allowed": False,
+            "prompt416_next_action": "review_prompt416_physical_prompt_path",
+        }
+
+    written = False
+    receipt_written = False
+    write_blocked_reason = "write_not_requested_or_not_allowed"
+    status = "ready"
+    next_action = "request_prompt416_physical_prompt_write"
+    adapter_ready = False
+    adapter_mode = "physical_prompt_not_written"
+    if requested_and_allowed and repo_path is None:
+        write_blocked_reason = "repo_path_missing"
+    elif requested_and_allowed:
+        receipt = {
+            "schema_version": _PROMPT416_SCHEMA_VERSION,
+            "prompt_id": "prompt416",
+            "status": "written",
+            "selected_prompt_id": "prompt402",
+            "selected_prompt_source": selected_prompt_source,
+            "prompt_path": physical_prompt_path,
+            "prompt_text_source": selected_prompt_text_source,
+            "prompt_text_present": True,
+            "prompt_text_size_bytes": len(selected_prompt_text_bytes),
+            "prompt_text_sha256": selected_prompt_sha256,
+            "write_requested": True,
+            "write_allowed": True,
+            "written": True,
+            "execution_requested": False,
+            "execution_allowed": False,
+            "execution_attempted": False,
+            "execution_performed": False,
+            "codex_invocation_allowed": False,
+            "commit_tag_allowed": False,
+        }
+        try:
+            _prompt416_write_materialization_files(
+                repo_path=repo_path,
+                prompt_path=physical_prompt_path,
+                selected_prompt_text=selected_prompt_text,
+                receipt=receipt,
+            )
+        except OSError:
+            status = "blocked"
+            write_blocked_reason = "physical_prompt_write_failed"
+            next_action = "review_prompt416_physical_prompt_write"
+        else:
+            written = True
+            receipt_written = True
+            write_blocked_reason = ""
+            status = "written"
+            next_action = (
+                "prepare_prompt417_selected_prompt_codex_execution_adapter"
+            )
+            adapter_ready = True
+            adapter_mode = "physical_prompt_written_no_execute"
+
+    return {
+        "prompt416_schema_version": _PROMPT416_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt416",
+        "prompt416_physical_prompt_materialization_write_enabled": True,
+        "prompt416_physical_prompt_materialization_write_status": status,
+        "prompt416_physical_prompt_materialization_write_ready": (
+            status in {"ready", "written"}
+        ),
+        "prompt416_physical_prompt_materialization_write_blocked_reason": (
+            "" if status in {"ready", "written"} else write_blocked_reason
+        ),
+        "prompt416_physical_prompt_materialization_write_blocked_reasons": (
+            [] if status in {"ready", "written"} else [write_blocked_reason]
+        ),
+        "prompt416_physical_prompt_materialization_write_source": (
+            "prompt415_guarded_execution_enable_plan"
+        ),
+        "prompt416_selected_prompt_id": "prompt402",
+        "prompt416_selected_prompt_source": selected_prompt_source,
+        "prompt416_selected_prompt_text_source": selected_prompt_text_source,
+        "prompt416_selected_prompt_text_present": True,
+        "prompt416_selected_prompt_text_size_bytes": len(
+            selected_prompt_text_bytes
+        ),
+        "prompt416_selected_prompt_text_sha256": selected_prompt_sha256,
+        "prompt416_physical_prompt_path": physical_prompt_path,
+        "prompt416_physical_prompt_write_requested": requested,
+        "prompt416_physical_prompt_write_allowed": written,
+        "prompt416_physical_prompt_written": written,
+        "prompt416_physical_prompt_exists": written,
+        "prompt416_physical_prompt_write_blocked_reason": write_blocked_reason,
+        "prompt416_receipt_path": receipt_path,
+        "prompt416_receipt_written": receipt_written,
+        "prompt416_execution_adapter_packet_ready": adapter_ready,
+        "prompt416_execution_adapter_packet_target_prompt": "prompt417",
+        "prompt416_execution_adapter_packet_mode": adapter_mode,
+        "prompt416_execution_adapter_packet_prompt_id": "prompt402",
+        "prompt416_execution_adapter_packet_prompt_path": physical_prompt_path,
+        "prompt416_execution_adapter_packet_result_json_path": result_json_path,
+        "prompt416_execution_requested": False,
+        "prompt416_execution_allowed": False,
+        "prompt416_execution_attempted": False,
+        "prompt416_execution_performed": False,
+        "prompt416_execution_returncode": None,
+        "prompt416_execution_returncode_classification": "not_run",
+        "prompt416_capture_plan_ready": True,
+        "prompt416_stdout_path": stdout_path,
+        "prompt416_stderr_path": stderr_path,
+        "prompt416_result_json_path": result_json_path,
+        "prompt416_capture_written": False,
+        "prompt416_approve_candidate": False,
+        "prompt416_targeted_fix_required": False,
+        "prompt416_retry_required": False,
+        "prompt416_selected_prompt_execution_allowed": False,
+        "prompt416_codex_invocation_allowed": False,
+        "prompt416_git_mutation_allowed": False,
+        "prompt416_commit_tag_allowed": False,
+        "prompt416_next_action": next_action,
     }
 
 
@@ -235976,6 +236518,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt415_guarded_execution_enable_plan_payload,
         }
+        prompt416_physical_prompt_materialization_write_payload = (
+            _build_prompt416_physical_prompt_materialization_write_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt416_physical_prompt_materialization_write_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -236027,6 +236578,15 @@ class PlannedExecutionRunner:
                     "run_state.prompt415_execution_plan_mode",
                     "run_state.prompt415_review_packet_target_prompt",
                     "run_state.prompt415_next_action",
+                    "run_state.prompt416_physical_prompt_materialization_write_status",
+                    "run_state.prompt416_physical_prompt_materialization_write_ready",
+                    "run_state.prompt416_selected_prompt_text_source",
+                    "run_state.prompt416_physical_prompt_path",
+                    "run_state.prompt416_physical_prompt_written",
+                    "run_state.prompt416_receipt_written",
+                    "run_state.prompt416_execution_adapter_packet_ready",
+                    "run_state.prompt416_execution_adapter_packet_mode",
+                    "run_state.prompt416_next_action",
                 ]
             )
         )
@@ -236313,6 +236873,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt415_guarded_execution_enable_plan_state=(
                     prompt415_guarded_execution_enable_plan_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt416_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt416_physical_prompt_materialization_write_state=(
+                    prompt416_physical_prompt_materialization_write_payload
                 ),
             )
         )
@@ -245188,6 +245756,21 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT411_PHYSICAL_PROMPT_MATERIALIZATION_PLAN_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT412_PHYSICAL_PROMPT_MATERIALIZATION_BOUNDARY_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT413_SELECTED_PROMPT_EXECUTION_ADAPTER_BOUNDARY_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT414_EXECUTION_RESULT_REVIEW_BOUNDARY_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT415_GUARDED_EXECUTION_ENABLE_PLAN_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT416_PHYSICAL_PROMPT_MATERIALIZATION_WRITE_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
