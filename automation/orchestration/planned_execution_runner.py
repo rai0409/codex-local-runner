@@ -3847,6 +3847,9 @@ _PROMPT408_SCHEMA_VERSION = "prompt408_strict_reenable_plan_v1"
 _PROMPT409_SCHEMA_VERSION = "prompt409_strict_reenable_gate_restoration_packet_v1"
 _PROMPT410_SCHEMA_VERSION = "prompt410_strict_route_restore_v1"
 _PROMPT411_SCHEMA_VERSION = "prompt411_physical_prompt_materialization_plan_v1"
+_PROMPT412_SCHEMA_VERSION = (
+    "prompt412_physical_prompt_materialization_boundary_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4865,6 +4868,33 @@ _PROMPT411_PHYSICAL_PROMPT_MATERIALIZATION_PLAN_KEYS: tuple[str, ...] = (
     "prompt411_git_mutation_allowed",
     "prompt411_commit_tag_allowed",
     "prompt411_next_action",
+)
+_PROMPT412_PHYSICAL_PROMPT_MATERIALIZATION_BOUNDARY_KEYS: tuple[str, ...] = (
+    "prompt412_physical_prompt_materialization_boundary_enabled",
+    "prompt412_physical_prompt_materialization_boundary_status",
+    "prompt412_physical_prompt_materialization_boundary_ready",
+    "prompt412_physical_prompt_materialization_boundary_blocked_reason",
+    "prompt412_physical_prompt_materialization_boundary_blocked_reasons",
+    "prompt412_physical_prompt_materialization_source",
+    "prompt412_selected_prompt_id",
+    "prompt412_selected_prompt_source",
+    "prompt412_physical_prompt_mode",
+    "prompt412_physical_prompt_path_planned",
+    "prompt412_physical_prompt_path",
+    "prompt412_physical_prompt_write_requested",
+    "prompt412_physical_prompt_write_allowed",
+    "prompt412_physical_prompt_written",
+    "prompt412_physical_prompt_exists",
+    "prompt412_execution_adapter_packet_ready",
+    "prompt412_execution_adapter_packet_target_prompt",
+    "prompt412_execution_adapter_packet_mode",
+    "prompt412_execution_adapter_packet_prompt_id",
+    "prompt412_execution_adapter_packet_prompt_path",
+    "prompt412_selected_prompt_execution_allowed",
+    "prompt412_codex_invocation_allowed",
+    "prompt412_git_mutation_allowed",
+    "prompt412_commit_tag_allowed",
+    "prompt412_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7347,6 +7377,27 @@ def _merge_prompt411_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT411_PHYSICAL_PROMPT_MATERIALIZATION_PLAN_KEYS:
+        if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt412_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt412_physical_prompt_materialization_boundary_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt412_physical_prompt_materialization_boundary_state)
+        if isinstance(prompt412_physical_prompt_materialization_boundary_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT412_PHYSICAL_PROMPT_MATERIALIZATION_BOUNDARY_KEYS:
         if key in surface and surface.get(key) is not None:
             merged[key] = surface.get(key)
     return merged
@@ -58549,6 +58600,101 @@ def _build_prompt411_physical_prompt_materialization_plan_state(
             "prepare_prompt412_selected_prompt_execution_adapter"
             if prompt410_ready
             else "review_prompt410_strict_route_restore"
+        ),
+    }
+
+
+def _build_prompt412_physical_prompt_materialization_boundary_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    physical_prompt_path = (
+        "current_prompt_verify_results/prompt412/selected_prompt_prompt402.md"
+    )
+    prompt411_ready = (
+        _normalize_text(
+            run_state.get("prompt411_physical_prompt_materialization_status"),
+            default="",
+        )
+        == "ready"
+        and run_state.get("prompt411_physical_prompt_materialization_ready") is True
+        and _normalize_text(run_state.get("prompt411_selected_prompt_id"), default="")
+        == "prompt402"
+        and run_state.get("prompt411_selected_prompt_materialization_ready") is True
+        and _normalize_text(
+            run_state.get("prompt411_materialization_target_prompt"),
+            default="",
+        )
+        == "prompt412"
+        and _normalize_text(run_state.get("prompt411_next_action"), default="")
+        == "prepare_prompt412_selected_prompt_execution_adapter"
+    )
+    blocked_reason = (
+        ""
+        if prompt411_ready
+        else "prompt411_physical_prompt_materialization_not_ready"
+    )
+    blocked_reasons = [] if prompt411_ready else [blocked_reason]
+
+    return {
+        "prompt412_schema_version": _PROMPT412_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt412",
+        "prompt412_physical_prompt_materialization_boundary_enabled": True,
+        "prompt412_physical_prompt_materialization_boundary_status": (
+            "ready" if prompt411_ready else "blocked"
+        ),
+        "prompt412_physical_prompt_materialization_boundary_ready": (
+            prompt411_ready
+        ),
+        "prompt412_physical_prompt_materialization_boundary_blocked_reason": (
+            blocked_reason
+        ),
+        "prompt412_physical_prompt_materialization_boundary_blocked_reasons": (
+            blocked_reasons
+        ),
+        "prompt412_physical_prompt_materialization_source": (
+            "prompt411_physical_prompt_materialization_plan"
+            if prompt411_ready
+            else ""
+        ),
+        "prompt412_selected_prompt_id": "prompt402" if prompt411_ready else "",
+        "prompt412_selected_prompt_source": (
+            "prompt402_generated_prompt_surface" if prompt411_ready else ""
+        ),
+        "prompt412_physical_prompt_mode": (
+            "planned_no_write" if prompt411_ready else "blocked_no_write"
+        ),
+        "prompt412_physical_prompt_path_planned": prompt411_ready,
+        "prompt412_physical_prompt_path": (
+            physical_prompt_path if prompt411_ready else ""
+        ),
+        "prompt412_physical_prompt_write_requested": False,
+        "prompt412_physical_prompt_write_allowed": False,
+        "prompt412_physical_prompt_written": False,
+        "prompt412_physical_prompt_exists": False,
+        "prompt412_execution_adapter_packet_ready": prompt411_ready,
+        "prompt412_execution_adapter_packet_target_prompt": "prompt413",
+        "prompt412_execution_adapter_packet_mode": (
+            "selected_prompt_physical_prompt_boundary"
+            if prompt411_ready
+            else "blocked"
+        ),
+        "prompt412_execution_adapter_packet_prompt_id": (
+            "prompt402" if prompt411_ready else ""
+        ),
+        "prompt412_execution_adapter_packet_prompt_path": (
+            physical_prompt_path if prompt411_ready else ""
+        ),
+        "prompt412_selected_prompt_execution_allowed": False,
+        "prompt412_codex_invocation_allowed": False,
+        "prompt412_git_mutation_allowed": False,
+        "prompt412_commit_tag_allowed": False,
+        "prompt412_next_action": (
+            "prepare_prompt413_selected_prompt_execution_adapter"
+            if prompt411_ready
+            else "review_prompt411_physical_prompt_materialization_plan"
         ),
     }
 
@@ -235231,6 +235377,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt411_physical_prompt_materialization_plan_payload,
         }
+        prompt412_physical_prompt_materialization_boundary_payload = (
+            _build_prompt412_physical_prompt_materialization_boundary_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt412_physical_prompt_materialization_boundary_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -235257,6 +235412,11 @@ class PlannedExecutionRunner:
                     "run_state.prompt411_selected_prompt_id",
                     "run_state.prompt411_materialization_mode",
                     "run_state.prompt411_next_action",
+                    "run_state.prompt412_physical_prompt_materialization_boundary_status",
+                    "run_state.prompt412_physical_prompt_materialization_boundary_ready",
+                    "run_state.prompt412_execution_adapter_packet_ready",
+                    "run_state.prompt412_execution_adapter_packet_target_prompt",
+                    "run_state.prompt412_next_action",
                 ]
             )
         )
@@ -235511,6 +235671,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt411_physical_prompt_materialization_plan_state=(
                     prompt411_physical_prompt_materialization_plan_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt412_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt412_physical_prompt_materialization_boundary_state=(
+                    prompt412_physical_prompt_materialization_boundary_payload
                 ),
             )
         )
