@@ -3865,6 +3865,12 @@ _PROMPT416_SCHEMA_VERSION = (
 _PROMPT417_SCHEMA_VERSION = (
     "prompt417_selected_prompt_codex_execution_adapter_boundary_v1"
 )
+_PROMPT418_SCHEMA_VERSION = (
+    "prompt418_execution_result_review_and_success_route_v1"
+)
+_PROMPT419_SCHEMA_VERSION = (
+    "prompt419_approve_commit_tag_and_success_loop_boundary_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5118,6 +5124,113 @@ _PROMPT417_SELECTED_PROMPT_CODEX_EXECUTION_ADAPTER_KEYS: tuple[str, ...] = (
     "prompt417_git_mutation_allowed",
     "prompt417_commit_tag_allowed",
     "prompt417_next_action",
+)
+_PROMPT418_EXECUTION_RESULT_REVIEW_AND_SUCCESS_ROUTE_KEYS: tuple[str, ...] = (
+    "prompt418_schema_version",
+    "prompt418_execution_result_review_enabled",
+    "prompt418_execution_result_review_status",
+    "prompt418_execution_result_review_ready",
+    "prompt418_execution_result_review_blocked_reason",
+    "prompt418_execution_result_review_blocked_reasons",
+    "prompt418_execution_result_review_source",
+    "prompt418_selected_prompt_id",
+    "prompt418_result_json_path",
+    "prompt418_stdout_path",
+    "prompt418_stderr_path",
+    "prompt418_execution_review_classification",
+    "prompt418_execution_review_route",
+    "prompt418_execution_result_available",
+    "prompt418_execution_success",
+    "prompt418_execution_failed",
+    "prompt418_execution_timeout",
+    "prompt418_execution_error",
+    "prompt418_execution_not_run",
+    "prompt418_execution_returncode",
+    "prompt418_execution_returncode_classification",
+    "prompt418_execution_status",
+    "prompt418_approve_candidate",
+    "prompt418_approve_reason",
+    "prompt418_targeted_fix_required",
+    "prompt418_retry_required",
+    "prompt418_stop_required",
+    "prompt418_failure_route_ready",
+    "prompt418_failure_route_reason",
+    "prompt418_failure_route_target_prompt",
+    "prompt418_commit_tag_plan_ready",
+    "prompt418_commit_tag_plan_target_prompt",
+    "prompt418_commit_tag_plan_mode",
+    "prompt418_commit_tag_plan_selected_prompt_id",
+    "prompt418_commit_tag_plan_source_result_json_path",
+    "prompt418_commit_tag_plan_commit_message",
+    "prompt418_commit_tag_plan_tag_name",
+    "prompt418_commit_tag_plan_allowed",
+    "prompt418_commit_tag_plan_performed",
+    "prompt418_success_handoff_ready",
+    "prompt418_success_handoff_target_prompt",
+    "prompt418_success_handoff_mode",
+    "prompt418_success_handoff_selected_prompt_id",
+    "prompt418_success_handoff_next_cycle_target_prompt",
+    "prompt418_next_cycle_plan_ready",
+    "prompt418_next_cycle_plan_target_prompt",
+    "prompt418_next_cycle_plan_mode",
+    "prompt418_next_cycle_plan_allowed",
+    "prompt418_next_cycle_started",
+    "prompt418_selected_prompt_execution_allowed",
+    "prompt418_codex_invocation_allowed",
+    "prompt418_git_mutation_allowed",
+    "prompt418_commit_tag_allowed",
+    "prompt418_commit_tag_performed",
+    "prompt418_push_allowed",
+    "prompt418_pr_allowed",
+    "prompt418_merge_allowed",
+    "prompt418_rollback_allowed",
+    "prompt418_next_action",
+)
+_PROMPT419_APPROVE_COMMIT_TAG_AND_SUCCESS_LOOP_KEYS: tuple[str, ...] = (
+    "prompt419_schema_version",
+    "prompt419_approve_commit_tag_boundary_enabled",
+    "prompt419_approve_commit_tag_boundary_status",
+    "prompt419_approve_commit_tag_boundary_ready",
+    "prompt419_approve_commit_tag_boundary_blocked_reason",
+    "prompt419_approve_commit_tag_boundary_blocked_reasons",
+    "prompt419_approve_commit_tag_boundary_source",
+    "prompt419_selected_prompt_id",
+    "prompt419_approve_candidate",
+    "prompt419_approve_reason",
+    "prompt419_commit_tag_requested",
+    "prompt419_git_mutation_allowed",
+    "prompt419_commit_tag_allowed",
+    "prompt419_commit_tag_attempted",
+    "prompt419_commit_tag_performed",
+    "prompt419_commit_performed",
+    "prompt419_tag_performed",
+    "prompt419_commit_returncode",
+    "prompt419_tag_returncode",
+    "prompt419_commit_tag_status",
+    "prompt419_commit_tag_blocked_reason",
+    "prompt419_commit_message",
+    "prompt419_tag_name",
+    "prompt419_commit_tag_receipt_ready",
+    "prompt419_commit_tag_receipt_written",
+    "prompt419_commit_tag_receipt_path",
+    "prompt419_success_loop_packet_ready",
+    "prompt419_success_loop_packet_target_prompt",
+    "prompt419_success_loop_packet_mode",
+    "prompt419_success_loop_packet_selected_prompt_id",
+    "prompt419_success_loop_packet_commit_tag_status",
+    "prompt419_next_cycle_plan_ready",
+    "prompt419_next_cycle_plan_target_prompt",
+    "prompt419_next_cycle_plan_mode",
+    "prompt419_next_cycle_allowed",
+    "prompt419_next_cycle_started",
+    "prompt419_targeted_fix_required",
+    "prompt419_retry_required",
+    "prompt419_stop_required",
+    "prompt419_push_allowed",
+    "prompt419_pr_allowed",
+    "prompt419_merge_allowed",
+    "prompt419_rollback_allowed",
+    "prompt419_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7742,6 +7855,58 @@ def _merge_prompt417_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT417_SELECTED_PROMPT_CODEX_EXECUTION_ADAPTER_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt418_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt418_execution_result_review_and_success_route_state: Mapping[str, Any]
+    | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt418_execution_result_review_and_success_route_state)
+        if isinstance(
+            prompt418_execution_result_review_and_success_route_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT418_EXECUTION_RESULT_REVIEW_AND_SUCCESS_ROUTE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt419_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt419_approve_commit_tag_and_success_loop_boundary_state: Mapping[
+        str, Any
+    ]
+    | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt419_approve_commit_tag_and_success_loop_boundary_state)
+        if isinstance(
+            prompt419_approve_commit_tag_and_success_loop_boundary_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT419_APPROVE_COMMIT_TAG_AND_SUCCESS_LOOP_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -60555,6 +60720,794 @@ def _build_prompt417_selected_prompt_codex_execution_adapter_state(
             else "review_prompt417_execution_error"
         ),
     }
+
+
+def _build_prompt418_execution_result_review_and_success_route_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    result_json_path = _normalize_text(
+        run_state.get("prompt417_review_packet_result_json_path"),
+        default="",
+    )
+    stdout_path = _normalize_text(run_state.get("prompt417_stdout_path"), default="")
+    stderr_path = _normalize_text(run_state.get("prompt417_stderr_path"), default="")
+    returncode = run_state.get("prompt417_execution_returncode")
+    returncode_classification = _normalize_text(
+        run_state.get("prompt417_execution_returncode_classification"),
+        default="",
+    )
+    execution_status = _normalize_text(
+        run_state.get("prompt417_execution_status"),
+        default="",
+    )
+    prompt417_ready = (
+        _normalize_text(
+            run_state.get("prompt417_selected_prompt_codex_execution_adapter_status"),
+            default="",
+        )
+        == "executed"
+        and run_state.get("prompt417_selected_prompt_codex_execution_adapter_ready")
+        is True
+        and _normalize_text(run_state.get("prompt417_selected_prompt_id"), default="")
+        == "prompt402"
+        and run_state.get("prompt417_prompt_path_valid") is True
+        and run_state.get("prompt417_prompt_file_required") is True
+        and run_state.get("prompt417_prompt_file_checked") is True
+        and run_state.get("prompt417_prompt_file_exists") is True
+        and run_state.get("prompt417_prompt_file_read") is True
+        and run_state.get("prompt417_execution_requested") is True
+        and run_state.get("prompt417_execution_allowed") is True
+        and run_state.get("prompt417_execution_attempted") is True
+        and run_state.get("prompt417_execution_performed") is True
+        and execution_status in {"completed", "timeout", "execution_error"}
+        and returncode_classification
+        in {"success", "failed", "timeout", "execution_error"}
+        and run_state.get("prompt417_stdout_written") is True
+        and run_state.get("prompt417_stderr_written") is True
+        and run_state.get("prompt417_result_json_written") is True
+        and run_state.get("prompt417_capture_written") is True
+        and run_state.get("prompt417_review_packet_ready") is True
+        and _normalize_text(
+            run_state.get("prompt417_review_packet_target_prompt"),
+            default="",
+        )
+        == "prompt418"
+        and _normalize_text(
+            run_state.get("prompt417_review_packet_mode"),
+            default="",
+        )
+        == "execution_result_captured"
+        and _normalize_text(
+            run_state.get("prompt417_review_packet_prompt_id"),
+            default="",
+        )
+        == "prompt402"
+        and bool(result_json_path)
+        and run_state.get("prompt417_approve_candidate") is False
+        and run_state.get("prompt417_selected_prompt_execution_allowed") is False
+        and run_state.get("prompt417_commit_tag_allowed") is False
+        and run_state.get("prompt417_git_mutation_allowed") is False
+        and run_state.get("prompt417_codex_invocation_allowed") is False
+        and _normalize_text(run_state.get("prompt417_next_action"), default="")
+        == "prepare_prompt418_execution_result_review"
+    )
+    success = (
+        prompt417_ready
+        and returncode == 0
+        and returncode_classification == "success"
+        and execution_status == "completed"
+        and _normalize_text(
+            run_state.get("prompt417_execution_blocked_reason"),
+            default="",
+        )
+        == ""
+        and run_state.get("prompt417_result_json_written") is True
+        and run_state.get("prompt417_capture_written") is True
+    )
+    failed = (
+        prompt417_ready
+        and isinstance(returncode, int)
+        and not isinstance(returncode, bool)
+        and returncode != 0
+        and returncode_classification == "failed"
+        and execution_status == "completed"
+    )
+    timeout = (
+        prompt417_ready
+        and returncode is None
+        and returncode_classification == "timeout"
+        and execution_status == "timeout"
+    )
+    execution_error = (
+        prompt417_ready
+        and returncode is None
+        and returncode_classification == "execution_error"
+        and execution_status == "execution_error"
+    )
+
+    state: dict[str, Any] = {
+        "prompt418_schema_version": _PROMPT418_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt418",
+        "prompt418_execution_result_review_enabled": True,
+        "prompt418_execution_result_review_status": "blocked",
+        "prompt418_execution_result_review_ready": False,
+        "prompt418_execution_result_review_blocked_reason": (
+            "prompt417_execution_result_capture_not_ready"
+        ),
+        "prompt418_execution_result_review_blocked_reasons": [
+            "prompt417_execution_result_capture_not_ready"
+        ],
+        "prompt418_execution_result_review_source": "prompt417_review_packet",
+        "prompt418_selected_prompt_id": "",
+        "prompt418_result_json_path": "",
+        "prompt418_stdout_path": "",
+        "prompt418_stderr_path": "",
+        "prompt418_execution_review_classification": "blocked",
+        "prompt418_execution_review_route": (
+            "review_prompt417_selected_prompt_codex_execution_adapter"
+        ),
+        "prompt418_execution_result_available": False,
+        "prompt418_execution_success": False,
+        "prompt418_execution_failed": False,
+        "prompt418_execution_timeout": False,
+        "prompt418_execution_error": False,
+        "prompt418_execution_not_run": True,
+        "prompt418_execution_returncode": None,
+        "prompt418_execution_returncode_classification": "not_run",
+        "prompt418_execution_status": "blocked",
+        "prompt418_approve_candidate": False,
+        "prompt418_approve_reason": "",
+        "prompt418_targeted_fix_required": False,
+        "prompt418_retry_required": False,
+        "prompt418_stop_required": False,
+        "prompt418_failure_route_ready": False,
+        "prompt418_failure_route_reason": "",
+        "prompt418_failure_route_target_prompt": "",
+        "prompt418_commit_tag_plan_ready": False,
+        "prompt418_commit_tag_plan_target_prompt": "prompt419",
+        "prompt418_commit_tag_plan_mode": "blocked",
+        "prompt418_commit_tag_plan_selected_prompt_id": "",
+        "prompt418_commit_tag_plan_source_result_json_path": "",
+        "prompt418_commit_tag_plan_commit_message": "",
+        "prompt418_commit_tag_plan_tag_name": "",
+        "prompt418_commit_tag_plan_allowed": False,
+        "prompt418_commit_tag_plan_performed": False,
+        "prompt418_success_handoff_ready": False,
+        "prompt418_success_handoff_target_prompt": "prompt419",
+        "prompt418_success_handoff_mode": "blocked",
+        "prompt418_success_handoff_selected_prompt_id": "",
+        "prompt418_success_handoff_next_cycle_target_prompt": "",
+        "prompt418_next_cycle_plan_ready": False,
+        "prompt418_next_cycle_plan_target_prompt": "prompt420",
+        "prompt418_next_cycle_plan_mode": "blocked",
+        "prompt418_next_cycle_plan_allowed": False,
+        "prompt418_next_cycle_started": False,
+        "prompt418_selected_prompt_execution_allowed": False,
+        "prompt418_codex_invocation_allowed": False,
+        "prompt418_git_mutation_allowed": False,
+        "prompt418_commit_tag_allowed": False,
+        "prompt418_commit_tag_performed": False,
+        "prompt418_push_allowed": False,
+        "prompt418_pr_allowed": False,
+        "prompt418_merge_allowed": False,
+        "prompt418_rollback_allowed": False,
+        "prompt418_next_action": (
+            "review_prompt417_selected_prompt_codex_execution_adapter"
+        ),
+    }
+
+    if not prompt417_ready:
+        return state
+
+    state.update(
+        {
+            "prompt418_execution_result_review_ready": True,
+            "prompt418_execution_result_review_blocked_reason": "",
+            "prompt418_execution_result_review_blocked_reasons": [],
+            "prompt418_selected_prompt_id": "prompt402",
+            "prompt418_result_json_path": result_json_path,
+            "prompt418_stdout_path": stdout_path,
+            "prompt418_stderr_path": stderr_path,
+            "prompt418_execution_result_available": True,
+            "prompt418_execution_not_run": False,
+            "prompt418_execution_returncode": returncode,
+            "prompt418_execution_returncode_classification": (
+                returncode_classification
+            ),
+            "prompt418_execution_status": execution_status,
+        }
+    )
+
+    if success:
+        state.update(
+            {
+                "prompt418_execution_result_review_status": "approved",
+                "prompt418_execution_review_classification": "success",
+                "prompt418_execution_review_route": "approve_commit_tag_plan",
+                "prompt418_execution_success": True,
+                "prompt418_execution_returncode": 0,
+                "prompt418_execution_returncode_classification": "success",
+                "prompt418_execution_status": "completed",
+                "prompt418_approve_candidate": True,
+                "prompt418_approve_reason": (
+                    "selected_prompt_execution_returncode_success"
+                ),
+                "prompt418_commit_tag_plan_ready": True,
+                "prompt418_commit_tag_plan_mode": (
+                    "success_only_guarded_commit_tag_plan"
+                ),
+                "prompt418_commit_tag_plan_selected_prompt_id": "prompt402",
+                "prompt418_commit_tag_plan_source_result_json_path": (
+                    result_json_path
+                ),
+                "prompt418_commit_tag_plan_commit_message": (
+                    "Prompt402 apply selected prompt execution result"
+                ),
+                "prompt418_commit_tag_plan_tag_name": (
+                    "prompt402-selected-prompt-execution-result"
+                ),
+                "prompt418_success_handoff_ready": True,
+                "prompt418_success_handoff_mode": (
+                    "approve_candidate_to_commit_tag_boundary"
+                ),
+                "prompt418_success_handoff_selected_prompt_id": "prompt402",
+                "prompt418_success_handoff_next_cycle_target_prompt": (
+                    "prompt420"
+                ),
+                "prompt418_next_cycle_plan_ready": True,
+                "prompt418_next_cycle_plan_mode": (
+                    "success_only_bounded_next_cycle_plan"
+                ),
+                "prompt418_next_action": (
+                    "prepare_prompt419_approve_commit_tag_and_success_loop_boundary"
+                ),
+            }
+        )
+    elif failed:
+        state.update(
+            {
+                "prompt418_execution_result_review_status": "failed",
+                "prompt418_execution_review_classification": "failed",
+                "prompt418_execution_review_route": "targeted_fix_required",
+                "prompt418_execution_failed": True,
+                "prompt418_targeted_fix_required": True,
+                "prompt418_retry_required": True,
+                "prompt418_failure_route_ready": True,
+                "prompt418_failure_route_reason": (
+                    "selected_prompt_execution_failed"
+                ),
+                "prompt418_failure_route_target_prompt": "prompt421",
+                "prompt418_commit_tag_plan_mode": "blocked_failure",
+                "prompt418_success_handoff_mode": "blocked_failure",
+                "prompt418_next_cycle_plan_mode": "blocked_failure",
+                "prompt418_next_action": "prepare_prompt421_targeted_fix_route",
+            }
+        )
+    elif timeout:
+        state.update(
+            {
+                "prompt418_execution_result_review_status": "timeout",
+                "prompt418_execution_review_classification": "timeout",
+                "prompt418_execution_review_route": "targeted_fix_required",
+                "prompt418_execution_timeout": True,
+                "prompt418_execution_returncode": None,
+                "prompt418_targeted_fix_required": True,
+                "prompt418_retry_required": True,
+                "prompt418_failure_route_ready": True,
+                "prompt418_failure_route_reason": (
+                    "selected_prompt_execution_timeout"
+                ),
+                "prompt418_failure_route_target_prompt": "prompt421",
+                "prompt418_commit_tag_plan_mode": "blocked_failure",
+                "prompt418_success_handoff_mode": "blocked_failure",
+                "prompt418_next_cycle_plan_mode": "blocked_failure",
+                "prompt418_next_action": "prepare_prompt421_targeted_fix_route",
+            }
+        )
+    elif execution_error:
+        state.update(
+            {
+                "prompt418_execution_result_review_status": "execution_error",
+                "prompt418_execution_review_classification": "execution_error",
+                "prompt418_execution_review_route": "targeted_fix_required",
+                "prompt418_execution_error": True,
+                "prompt418_execution_returncode": None,
+                "prompt418_targeted_fix_required": True,
+                "prompt418_retry_required": True,
+                "prompt418_failure_route_ready": True,
+                "prompt418_failure_route_reason": (
+                    "selected_prompt_execution_error"
+                ),
+                "prompt418_failure_route_target_prompt": "prompt421",
+                "prompt418_commit_tag_plan_mode": "blocked_failure",
+                "prompt418_success_handoff_mode": "blocked_failure",
+                "prompt418_next_cycle_plan_mode": "blocked_failure",
+                "prompt418_next_action": "prepare_prompt421_targeted_fix_route",
+            }
+        )
+
+    return state
+
+
+def _prompt419_commit_message_valid(commit_message: Any) -> bool:
+    if not isinstance(commit_message, str):
+        return False
+    normalized = commit_message.strip()
+    return bool(normalized) and len(normalized) <= 200
+
+
+def _prompt419_tag_name_valid(tag_name: Any) -> bool:
+    if not isinstance(tag_name, str):
+        return False
+    normalized = tag_name.strip()
+    if not normalized or len(normalized) > 120:
+        return False
+    if normalized.startswith("-") or ".." in normalized:
+        return False
+    if any(char.isspace() for char in normalized):
+        return False
+    if "/" in normalized or "\\" in normalized:
+        return False
+    return True
+
+
+def _prompt419_success_approval_ready(run_state: Mapping[str, Any]) -> bool:
+    required_values: dict[str, Any] = {
+        "prompt418_execution_result_review_status": "approved",
+        "prompt418_execution_result_review_ready": True,
+        "prompt418_execution_review_classification": "success",
+        "prompt418_execution_review_route": "approve_commit_tag_plan",
+        "prompt418_execution_result_available": True,
+        "prompt418_execution_success": True,
+        "prompt418_execution_failed": False,
+        "prompt418_execution_timeout": False,
+        "prompt418_execution_error": False,
+        "prompt418_execution_not_run": False,
+        "prompt418_execution_returncode": 0,
+        "prompt418_execution_returncode_classification": "success",
+        "prompt418_execution_status": "completed",
+        "prompt418_approve_candidate": True,
+        "prompt418_targeted_fix_required": False,
+        "prompt418_retry_required": False,
+        "prompt418_stop_required": False,
+        "prompt418_commit_tag_plan_ready": True,
+        "prompt418_commit_tag_plan_target_prompt": "prompt419",
+        "prompt418_commit_tag_plan_mode": "success_only_guarded_commit_tag_plan",
+        "prompt418_commit_tag_plan_selected_prompt_id": "prompt402",
+        "prompt418_commit_tag_plan_allowed": False,
+        "prompt418_commit_tag_plan_performed": False,
+        "prompt418_success_handoff_ready": True,
+        "prompt418_success_handoff_target_prompt": "prompt419",
+        "prompt418_success_handoff_mode": (
+            "approve_candidate_to_commit_tag_boundary"
+        ),
+        "prompt418_success_handoff_selected_prompt_id": "prompt402",
+        "prompt418_success_handoff_next_cycle_target_prompt": "prompt420",
+        "prompt418_next_cycle_plan_ready": True,
+        "prompt418_next_cycle_plan_target_prompt": "prompt420",
+        "prompt418_next_cycle_plan_mode": "success_only_bounded_next_cycle_plan",
+        "prompt418_next_cycle_plan_allowed": False,
+        "prompt418_next_cycle_started": False,
+        "prompt418_git_mutation_allowed": False,
+        "prompt418_commit_tag_allowed": False,
+        "prompt418_commit_tag_performed": False,
+        "prompt418_push_allowed": False,
+        "prompt418_pr_allowed": False,
+        "prompt418_merge_allowed": False,
+        "prompt418_rollback_allowed": False,
+        "prompt418_next_action": (
+            "prepare_prompt419_approve_commit_tag_and_success_loop_boundary"
+        ),
+    }
+    for key, expected in required_values.items():
+        if run_state.get(key) != expected:
+            return False
+    commit_message = run_state.get("prompt418_commit_tag_plan_commit_message")
+    tag_name = run_state.get("prompt418_commit_tag_plan_tag_name")
+    return (
+        isinstance(commit_message, str)
+        and bool(commit_message.strip())
+        and isinstance(tag_name, str)
+        and bool(tag_name.strip())
+    )
+
+
+def _prompt419_commit_tag_plan_valid(
+    *,
+    run_state: Mapping[str, Any],
+    commit_message: str,
+    tag_name: str,
+) -> bool:
+    return (
+        _prompt419_commit_message_valid(commit_message)
+        and _prompt419_tag_name_valid(tag_name)
+        and run_state.get("prompt418_commit_tag_plan_mode")
+        == "success_only_guarded_commit_tag_plan"
+        and run_state.get("prompt418_push_allowed") is False
+        and run_state.get("prompt418_pr_allowed") is False
+        and run_state.get("prompt418_merge_allowed") is False
+        and run_state.get("prompt418_rollback_allowed") is False
+    )
+
+
+def _prompt419_normalize_git_runner_result(result: Any) -> dict[str, Any]:
+    if isinstance(result, Mapping):
+        returncode = result.get("returncode")
+        stdout = result.get("stdout", "")
+        stderr = result.get("stderr", "")
+    else:
+        returncode = getattr(result, "returncode", None)
+        stdout = getattr(result, "stdout", "")
+        stderr = getattr(result, "stderr", "")
+    if isinstance(stdout, bytes):
+        stdout = stdout.decode("utf-8", errors="replace")
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", errors="replace")
+    return {
+        "returncode": returncode if isinstance(returncode, int) else None,
+        "stdout": stdout if isinstance(stdout, str) else str(stdout),
+        "stderr": stderr if isinstance(stderr, str) else str(stderr),
+    }
+
+
+def _prompt419_command_allowed(
+    *,
+    command: Sequence[str],
+    commit_message: str,
+    tag_name: str,
+) -> bool:
+    allowed_commands = (
+        ["git", "status", "--short"],
+        ["git", "add", "automation/orchestration/planned_execution_runner.py"],
+        ["git", "commit", "-m", commit_message],
+        ["git", "tag", tag_name],
+        ["git", "tag", "--points-at", "HEAD"],
+    )
+    return list(command) in allowed_commands
+
+
+def _prompt419_run_git_command(
+    *,
+    command: list[str],
+    cwd: str,
+    timeout: int,
+    git_runner: Callable[..., Any] | None,
+    commit_message: str,
+    tag_name: str,
+) -> dict[str, Any]:
+    if not _prompt419_command_allowed(
+        command=command,
+        commit_message=commit_message,
+        tag_name=tag_name,
+    ):
+        raise ValueError("prompt419_disallowed_git_command")
+    if git_runner is not None:
+        raw_result = git_runner(command=command, cwd=cwd, timeout=timeout)
+    else:
+        raw_result = subprocess.run(
+            command,
+            cwd=cwd,
+            timeout=timeout,
+            check=False,
+            capture_output=True,
+            text=True,
+            shell=False,
+        )
+    normalized = _prompt419_normalize_git_runner_result(raw_result)
+    return {
+        "command": list(command),
+        "returncode": normalized.get("returncode"),
+        "stdout": normalized.get("stdout", ""),
+        "stderr": normalized.get("stderr", ""),
+    }
+
+
+def _prompt419_write_commit_tag_receipt(
+    *,
+    repo_root: Path,
+    receipt: Mapping[str, Any],
+) -> bool:
+    receipt_path = (
+        repo_root
+        / "current_prompt_verify_results"
+        / "prompt419"
+        / "commit_tag_receipt.json"
+    )
+    try:
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(receipt_path, receipt)
+    except OSError:
+        return False
+    return True
+
+
+def _build_prompt419_approve_commit_tag_and_success_loop_boundary_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    commit_tag_requested: bool = False,
+    allow_git_mutation: bool = False,
+    repo_path: str | Path | None = None,
+    git_runner: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    receipt_relative_path = (
+        "current_prompt_verify_results/prompt419/commit_tag_receipt.json"
+    )
+    state: dict[str, Any] = {
+        "prompt419_schema_version": _PROMPT419_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt419",
+        "prompt419_approve_commit_tag_boundary_enabled": True,
+        "prompt419_approve_commit_tag_boundary_status": "blocked",
+        "prompt419_approve_commit_tag_boundary_ready": False,
+        "prompt419_approve_commit_tag_boundary_blocked_reason": (
+            "prompt418_success_approval_not_ready"
+        ),
+        "prompt419_approve_commit_tag_boundary_blocked_reasons": [
+            "prompt418_success_approval_not_ready"
+        ],
+        "prompt419_approve_commit_tag_boundary_source": (
+            "prompt418_commit_tag_plan"
+        ),
+        "prompt419_selected_prompt_id": "",
+        "prompt419_approve_candidate": False,
+        "prompt419_approve_reason": "",
+        "prompt419_commit_tag_requested": bool(commit_tag_requested),
+        "prompt419_git_mutation_allowed": False,
+        "prompt419_commit_tag_allowed": False,
+        "prompt419_commit_tag_attempted": False,
+        "prompt419_commit_tag_performed": False,
+        "prompt419_commit_performed": False,
+        "prompt419_tag_performed": False,
+        "prompt419_commit_returncode": None,
+        "prompt419_tag_returncode": None,
+        "prompt419_commit_tag_status": "blocked",
+        "prompt419_commit_tag_blocked_reason": (
+            "prompt418_success_approval_not_ready"
+        ),
+        "prompt419_commit_message": "",
+        "prompt419_tag_name": "",
+        "prompt419_commit_tag_receipt_ready": False,
+        "prompt419_commit_tag_receipt_written": False,
+        "prompt419_commit_tag_receipt_path": "",
+        "prompt419_success_loop_packet_ready": False,
+        "prompt419_success_loop_packet_target_prompt": "prompt420",
+        "prompt419_success_loop_packet_mode": "blocked",
+        "prompt419_success_loop_packet_selected_prompt_id": "",
+        "prompt419_success_loop_packet_commit_tag_status": "blocked",
+        "prompt419_next_cycle_plan_ready": False,
+        "prompt419_next_cycle_plan_target_prompt": "prompt420",
+        "prompt419_next_cycle_plan_mode": "blocked",
+        "prompt419_next_cycle_allowed": False,
+        "prompt419_next_cycle_started": False,
+        "prompt419_targeted_fix_required": False,
+        "prompt419_retry_required": False,
+        "prompt419_stop_required": False,
+        "prompt419_push_allowed": False,
+        "prompt419_pr_allowed": False,
+        "prompt419_merge_allowed": False,
+        "prompt419_rollback_allowed": False,
+        "prompt419_next_action": "review_prompt418_execution_result_review",
+    }
+
+    if not _prompt419_success_approval_ready(run_state):
+        return state
+
+    commit_message = _normalize_text(
+        run_state.get("prompt418_commit_tag_plan_commit_message"),
+        default="",
+    ).strip()
+    tag_name = _normalize_text(
+        run_state.get("prompt418_commit_tag_plan_tag_name"),
+        default="",
+    ).strip()
+    plan_valid = _prompt419_commit_tag_plan_valid(
+        run_state=run_state,
+        commit_message=commit_message,
+        tag_name=tag_name,
+    )
+    state.update(
+        {
+            "prompt419_approve_commit_tag_boundary_status": "ready",
+            "prompt419_approve_commit_tag_boundary_ready": True,
+            "prompt419_approve_commit_tag_boundary_blocked_reason": "",
+            "prompt419_approve_commit_tag_boundary_blocked_reasons": [],
+            "prompt419_selected_prompt_id": "prompt402",
+            "prompt419_approve_candidate": True,
+            "prompt419_approve_reason": (
+                "selected_prompt_execution_returncode_success"
+            ),
+            "prompt419_commit_tag_status": "not_run",
+            "prompt419_commit_tag_blocked_reason": (
+                "commit_tag_not_requested_or_not_allowed"
+            ),
+            "prompt419_commit_message": commit_message,
+            "prompt419_tag_name": tag_name,
+            "prompt419_commit_tag_receipt_path": receipt_relative_path,
+            "prompt419_success_loop_packet_mode": "commit_tag_not_performed",
+            "prompt419_success_loop_packet_selected_prompt_id": "prompt402",
+            "prompt419_success_loop_packet_commit_tag_status": "not_run",
+            "prompt419_next_cycle_plan_ready": True,
+            "prompt419_next_cycle_plan_mode": (
+                "success_only_bounded_next_cycle_plan"
+            ),
+            "prompt419_next_action": (
+                "request_prompt419_approve_commit_tag_execution"
+            ),
+        }
+    )
+
+    if not plan_valid:
+        state.update(
+            {
+                "prompt419_approve_commit_tag_boundary_status": "blocked",
+                "prompt419_approve_commit_tag_boundary_ready": False,
+                "prompt419_approve_commit_tag_boundary_blocked_reason": (
+                    "invalid_commit_tag_plan"
+                ),
+                "prompt419_approve_commit_tag_boundary_blocked_reasons": [
+                    "invalid_commit_tag_plan"
+                ],
+                "prompt419_commit_tag_status": "blocked",
+                "prompt419_commit_tag_blocked_reason": "invalid_commit_tag_plan",
+                "prompt419_commit_tag_performed": False,
+                "prompt419_success_loop_packet_ready": False,
+                "prompt419_success_loop_packet_mode": "blocked",
+                "prompt419_success_loop_packet_commit_tag_status": "blocked",
+                "prompt419_next_action": "review_prompt418_commit_tag_plan",
+            }
+        )
+        return state
+
+    if not (commit_tag_requested and allow_git_mutation and repo_path is not None):
+        return state
+
+    repo_root = Path(repo_path)
+    commands: list[list[str]] = [
+        ["git", "status", "--short"],
+        ["git", "add", "automation/orchestration/planned_execution_runner.py"],
+        ["git", "commit", "-m", commit_message],
+        ["git", "tag", tag_name],
+        ["git", "tag", "--points-at", "HEAD"],
+    ]
+    command_results: list[dict[str, Any]] = []
+    execution_exception = ""
+    state.update(
+        {
+            "prompt419_git_mutation_allowed": True,
+            "prompt419_commit_tag_allowed": True,
+            "prompt419_commit_tag_attempted": True,
+            "prompt419_commit_tag_blocked_reason": "",
+        }
+    )
+    try:
+        for command in commands:
+            if command == ["git", "tag", tag_name]:
+                commit_returncode = state.get("prompt419_commit_returncode")
+                if commit_returncode != 0:
+                    break
+            result = _prompt419_run_git_command(
+                command=command,
+                cwd=str(repo_root),
+                timeout=30,
+                git_runner=git_runner,
+                commit_message=commit_message,
+                tag_name=tag_name,
+            )
+            command_results.append(result)
+            if command[:3] == ["git", "commit", "-m"]:
+                state["prompt419_commit_returncode"] = result.get("returncode")
+                state["prompt419_commit_performed"] = (
+                    result.get("returncode") == 0
+                )
+            elif command == ["git", "tag", tag_name]:
+                state["prompt419_tag_returncode"] = result.get("returncode")
+                state["prompt419_tag_performed"] = result.get("returncode") == 0
+            if command[:3] == ["git", "commit", "-m"] and result.get(
+                "returncode"
+            ) != 0:
+                break
+            if command == ["git", "tag", tag_name] and result.get(
+                "returncode"
+            ) != 0:
+                break
+            if command in (
+                ["git", "status", "--short"],
+                ["git", "add", "automation/orchestration/planned_execution_runner.py"],
+            ) and result.get("returncode") != 0:
+                break
+    except Exception as exc:  # noqa: BLE001 - serialized into guarded receipt.
+        execution_exception = str(exc)
+        state.update(
+            {
+                "prompt419_commit_tag_status": "execution_error",
+                "prompt419_commit_tag_performed": False,
+                "prompt419_success_loop_packet_ready": False,
+                "prompt419_success_loop_packet_mode": "blocked",
+                "prompt419_success_loop_packet_commit_tag_status": (
+                    "execution_error"
+                ),
+                "prompt419_next_action": "review_prompt419_commit_tag_failure",
+            }
+        )
+    else:
+        commit_performed = state.get("prompt419_commit_performed") is True
+        tag_performed = state.get("prompt419_tag_performed") is True
+        commit_tag_performed = commit_performed and tag_performed
+        state.update(
+            {
+                "prompt419_commit_tag_performed": commit_tag_performed,
+                "prompt419_commit_tag_status": (
+                    "performed" if commit_tag_performed else "failed"
+                ),
+                "prompt419_approve_commit_tag_boundary_status": (
+                    "performed" if commit_tag_performed else "ready"
+                ),
+                "prompt419_success_loop_packet_ready": commit_tag_performed,
+                "prompt419_success_loop_packet_mode": (
+                    "commit_tag_performed_success_loop_ready"
+                    if commit_tag_performed
+                    else "commit_tag_not_performed"
+                ),
+                "prompt419_success_loop_packet_commit_tag_status": (
+                    "performed" if commit_tag_performed else "failed"
+                ),
+                "prompt419_next_action": (
+                    "prepare_prompt420_success_only_next_cycle_loop"
+                    if commit_tag_performed
+                    else "review_prompt419_commit_tag_failure"
+                ),
+            }
+        )
+
+    receipt_status = _normalize_text(
+        state.get("prompt419_commit_tag_status"),
+        default="execution_error",
+    )
+    receipt_payload: dict[str, Any] = {
+        "schema_version": _PROMPT419_SCHEMA_VERSION,
+        "prompt_id": "prompt419",
+        "status": receipt_status,
+        "selected_prompt_id": "prompt402",
+        "commit_message": commit_message,
+        "tag_name": tag_name,
+        "commit_tag_requested": True,
+        "git_mutation_allowed": True,
+        "commit_tag_allowed": True,
+        "commit_tag_attempted": True,
+        "commit_tag_performed": state.get("prompt419_commit_tag_performed")
+        is True,
+        "commit_performed": state.get("prompt419_commit_performed") is True,
+        "tag_performed": state.get("prompt419_tag_performed") is True,
+        "commands": commands,
+        "command_results": command_results,
+        "push_allowed": False,
+        "pr_allowed": False,
+        "merge_allowed": False,
+        "rollback_allowed": False,
+        "next_cycle_started": False,
+    }
+    if execution_exception:
+        receipt_payload["execution_exception"] = execution_exception
+    state["prompt419_commit_tag_receipt_ready"] = True
+    state["prompt419_commit_tag_receipt_written"] = (
+        _prompt419_write_commit_tag_receipt(
+            repo_root=repo_root,
+            receipt=receipt_payload,
+        )
+    )
+    return state
 
 
 def _build_prompt382_approve_commit_tag_execution_gate_state(
@@ -237289,6 +238242,24 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt417_selected_prompt_codex_execution_adapter_payload,
         }
+        prompt418_execution_result_review_and_success_route_payload = (
+            _build_prompt418_execution_result_review_and_success_route_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt418_execution_result_review_and_success_route_payload,
+        }
+        prompt419_approve_commit_tag_and_success_loop_boundary_payload = (
+            _build_prompt419_approve_commit_tag_and_success_loop_boundary_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt419_approve_commit_tag_and_success_loop_boundary_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -237360,6 +238331,25 @@ class PlannedExecutionRunner:
                     "run_state.prompt417_review_packet_ready",
                     "run_state.prompt417_review_packet_target_prompt",
                     "run_state.prompt417_next_action",
+                    "run_state.prompt418_execution_result_review_status",
+                    "run_state.prompt418_execution_result_review_ready",
+                    "run_state.prompt418_execution_review_classification",
+                    "run_state.prompt418_execution_review_route",
+                    "run_state.prompt418_approve_candidate",
+                    "run_state.prompt418_targeted_fix_required",
+                    "run_state.prompt418_commit_tag_plan_ready",
+                    "run_state.prompt418_success_handoff_ready",
+                    "run_state.prompt418_next_cycle_plan_ready",
+                    "run_state.prompt418_next_action",
+                    "run_state.prompt419_approve_commit_tag_boundary_status",
+                    "run_state.prompt419_approve_commit_tag_boundary_ready",
+                    "run_state.prompt419_commit_tag_requested",
+                    "run_state.prompt419_commit_tag_status",
+                    "run_state.prompt419_commit_tag_performed",
+                    "run_state.prompt419_success_loop_packet_ready",
+                    "run_state.prompt419_success_loop_packet_target_prompt",
+                    "run_state.prompt419_next_cycle_plan_ready",
+                    "run_state.prompt419_next_action",
                 ]
             )
         )
@@ -237662,6 +238652,22 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt417_selected_prompt_codex_execution_adapter_state=(
                     prompt417_selected_prompt_codex_execution_adapter_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt418_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt418_execution_result_review_and_success_route_state=(
+                    prompt418_execution_result_review_and_success_route_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt419_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt419_approve_commit_tag_and_success_loop_boundary_state=(
+                    prompt419_approve_commit_tag_and_success_loop_boundary_payload
                 ),
             )
         )
@@ -246555,6 +247561,12 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT417_SELECTED_PROMPT_CODEX_EXECUTION_ADAPTER_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT418_EXECUTION_RESULT_REVIEW_AND_SUCCESS_ROUTE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT419_APPROVE_COMMIT_TAG_AND_SUCCESS_LOOP_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
