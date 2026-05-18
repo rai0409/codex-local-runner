@@ -3887,6 +3887,9 @@ _PROMPT424_SCHEMA_VERSION = (
 _PROMPT425_SCHEMA_VERSION = (
     "prompt425_local_autonomous_loop_invocation_boundary_v1"
 )
+_PROMPT426_SCHEMA_VERSION = (
+    "prompt426_bounded_runner_step_executor_boundary_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5536,6 +5539,49 @@ _PROMPT425_LOCAL_AUTONOMOUS_LOOP_INVOCATION_KEYS: tuple[str, ...] = (
     "prompt425_requires_next_cycle",
     "prompt425_stop_required",
     "prompt425_next_action",
+)
+_PROMPT426_BOUNDED_RUNNER_STEP_EXECUTOR_KEYS: tuple[str, ...] = (
+    "prompt426_bounded_runner_step_executor_enabled",
+    "prompt426_schema_version",
+    "prompt426_current_cycle",
+    "prompt426_max_cycles",
+    "prompt426_next_cycle_index",
+    "prompt426_execute_requested",
+    "prompt426_step_execution_allowed",
+    "prompt426_invocation_step",
+    "prompt426_invocation_target_prompt",
+    "prompt426_invocation_order",
+    "prompt426_expected_next_surface",
+    "prompt426_requires_codex_execution",
+    "prompt426_requires_prompt_materialization",
+    "prompt426_requires_targeted_fix_execution",
+    "prompt426_requires_commit_tag",
+    "prompt426_requires_next_cycle",
+    "prompt426_codex_invocation_allowed",
+    "prompt426_git_mutation_allowed",
+    "prompt426_commit_tag_allowed",
+    "prompt426_push_allowed",
+    "prompt426_pr_allowed",
+    "prompt426_merge_allowed",
+    "prompt426_rollback_allowed",
+    "prompt426_next_cycle_started",
+    "prompt426_unbounded_loop_allowed",
+    "prompt426_daemon_mode_allowed",
+    "prompt426_bounded_runner_step_executor_status",
+    "prompt426_bounded_runner_step_executor_ready",
+    "prompt426_bounded_runner_step_executor_blocked_reason",
+    "prompt426_bounded_runner_step_executor_blocked_reasons",
+    "prompt426_step_execution_mode",
+    "prompt426_step_execution_ready",
+    "prompt426_step_execution_attempted",
+    "prompt426_step_execution_performed",
+    "prompt426_step_execution_status",
+    "prompt426_step_execution_result_available",
+    "prompt426_step_execution_result_payload",
+    "prompt426_step_execution_error",
+    "prompt426_step_execution_error_message",
+    "prompt426_stop_required",
+    "prompt426_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8346,6 +8392,27 @@ def _merge_prompt425_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT425_LOCAL_AUTONOMOUS_LOOP_INVOCATION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt426_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt426_bounded_runner_step_executor_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt426_bounded_runner_step_executor_state)
+        if isinstance(prompt426_bounded_runner_step_executor_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT426_BOUNDED_RUNNER_STEP_EXECUTOR_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -63943,6 +64010,280 @@ def _build_prompt425_local_autonomous_loop_invocation_state(
         return state
 
     return state
+
+
+def _build_prompt426_bounded_runner_step_executor_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execute_requested: bool = False,
+    allow_step_execution: bool = False,
+    current_cycle: int | None = None,
+    max_cycles: int = 2,
+    step_runner: Callable[..., Mapping[str, Any] | None] | None = None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    current_cycle_source = (
+        run_state.get("prompt425_current_cycle", 0)
+        if current_cycle is None
+        else current_cycle
+    )
+    normalized_current_cycle = _prompt424_normalize_cycle_value(
+        current_cycle_source,
+        minimum=0,
+        default=0,
+    )
+    normalized_max_cycles = _prompt424_normalize_cycle_value(
+        max_cycles,
+        minimum=1,
+        default=2,
+    )
+    invocation_step = _normalize_text(
+        run_state.get("prompt425_invocation_step"),
+        default="",
+    )
+    invocation_target_prompt = _normalize_text(
+        run_state.get("prompt425_invocation_target_prompt"),
+        default="",
+    )
+    invocation_order = _normalize_string_list(
+        run_state.get("prompt425_invocation_order"),
+        sort_items=False,
+    )
+    expected_next_surface = _normalize_text(
+        run_state.get("prompt425_expected_next_surface"),
+        default="",
+    )
+    prompt425_status = _normalize_text(
+        run_state.get("prompt425_local_autonomous_loop_invocation_status"),
+        default="",
+    )
+    prompt425_stop_required = bool(run_state.get("prompt425_stop_required"))
+
+    state: dict[str, Any] = {
+        "prompt426_bounded_runner_step_executor_enabled": True,
+        "prompt426_schema_version": _PROMPT426_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt426",
+        "prompt426_current_cycle": normalized_current_cycle,
+        "prompt426_max_cycles": normalized_max_cycles,
+        "prompt426_next_cycle_index": normalized_current_cycle + 1,
+        "prompt426_execute_requested": bool(execute_requested),
+        "prompt426_step_execution_allowed": bool(allow_step_execution),
+        "prompt426_invocation_step": invocation_step,
+        "prompt426_invocation_target_prompt": invocation_target_prompt,
+        "prompt426_invocation_order": invocation_order,
+        "prompt426_expected_next_surface": expected_next_surface,
+        "prompt426_requires_codex_execution": bool(
+            run_state.get("prompt425_requires_codex_execution", False)
+        ),
+        "prompt426_requires_prompt_materialization": bool(
+            run_state.get("prompt425_requires_prompt_materialization", False)
+        ),
+        "prompt426_requires_targeted_fix_execution": bool(
+            run_state.get("prompt425_requires_targeted_fix_execution", False)
+        ),
+        "prompt426_requires_commit_tag": bool(
+            run_state.get("prompt425_requires_commit_tag", False)
+        ),
+        "prompt426_requires_next_cycle": bool(
+            run_state.get("prompt425_requires_next_cycle", False)
+        ),
+        "prompt426_codex_invocation_allowed": False,
+        "prompt426_git_mutation_allowed": False,
+        "prompt426_commit_tag_allowed": False,
+        "prompt426_push_allowed": False,
+        "prompt426_pr_allowed": False,
+        "prompt426_merge_allowed": False,
+        "prompt426_rollback_allowed": False,
+        "prompt426_next_cycle_started": False,
+        "prompt426_unbounded_loop_allowed": False,
+        "prompt426_daemon_mode_allowed": False,
+        "prompt426_bounded_runner_step_executor_status": "blocked",
+        "prompt426_bounded_runner_step_executor_ready": False,
+        "prompt426_bounded_runner_step_executor_blocked_reason": (
+            "prompt425_invocation_plan_not_ready"
+        ),
+        "prompt426_bounded_runner_step_executor_blocked_reasons": [
+            "prompt425_invocation_plan_not_ready"
+        ],
+        "prompt426_step_execution_mode": "blocked",
+        "prompt426_step_execution_ready": False,
+        "prompt426_step_execution_attempted": False,
+        "prompt426_step_execution_performed": False,
+        "prompt426_step_execution_status": "blocked",
+        "prompt426_step_execution_result_available": False,
+        "prompt426_step_execution_result_payload": {},
+        "prompt426_step_execution_error": False,
+        "prompt426_step_execution_error_message": "",
+        "prompt426_stop_required": False,
+        "prompt426_next_action": (
+            "review_prompt425_local_autonomous_loop_invocation"
+        ),
+    }
+
+    if prompt425_status == "stopped" or prompt425_stop_required:
+        state.update(
+            {
+                "prompt426_bounded_runner_step_executor_status": "stopped",
+                "prompt426_bounded_runner_step_executor_ready": True,
+                "prompt426_bounded_runner_step_executor_blocked_reason": "",
+                "prompt426_bounded_runner_step_executor_blocked_reasons": [],
+                "prompt426_step_execution_mode": "stop",
+                "prompt426_step_execution_ready": False,
+                "prompt426_step_execution_attempted": False,
+                "prompt426_step_execution_performed": False,
+                "prompt426_step_execution_status": "not_run",
+                "prompt426_step_execution_result_available": False,
+                "prompt426_step_execution_result_payload": {},
+                "prompt426_step_execution_error": False,
+                "prompt426_step_execution_error_message": "",
+                "prompt426_stop_required": True,
+                "prompt426_next_action": "stop_local_autonomous_loop",
+            }
+        )
+        return state
+
+    prompt425_executable_plan_ready = (
+        run_state.get("prompt425_local_autonomous_loop_invocation_enabled") is True
+        and run_state.get("prompt425_local_autonomous_loop_invocation_ready") is True
+        and run_state.get("prompt425_invocation_plan_ready") is True
+        and run_state.get("prompt425_invocation_mode") == "one_step_plan"
+        and invocation_step
+        in {
+            "start_next_success_cycle",
+            "approve_commit_tag_then_next_cycle",
+            "retry_targeted_fix",
+        }
+        and invocation_target_prompt in {"prompt420", "prompt419", "prompt421"}
+        and run_state.get("prompt425_codex_invocation_allowed") is False
+        and run_state.get("prompt425_git_mutation_allowed") is False
+        and run_state.get("prompt425_commit_tag_allowed") is False
+        and run_state.get("prompt425_push_allowed") is False
+        and run_state.get("prompt425_pr_allowed") is False
+        and run_state.get("prompt425_merge_allowed") is False
+        and run_state.get("prompt425_rollback_allowed") is False
+        and run_state.get("prompt425_next_cycle_started") is False
+        and run_state.get("prompt425_unbounded_loop_allowed") is False
+        and run_state.get("prompt425_daemon_mode_allowed") is False
+    )
+    if not prompt425_executable_plan_ready:
+        return state
+
+    if not execute_requested or not allow_step_execution:
+        state.update(
+            {
+                "prompt426_bounded_runner_step_executor_status": "ready",
+                "prompt426_bounded_runner_step_executor_ready": True,
+                "prompt426_bounded_runner_step_executor_blocked_reason": "",
+                "prompt426_bounded_runner_step_executor_blocked_reasons": [],
+                "prompt426_step_execution_mode": "planned_no_execute",
+                "prompt426_step_execution_ready": True,
+                "prompt426_step_execution_attempted": False,
+                "prompt426_step_execution_performed": False,
+                "prompt426_step_execution_status": "not_run",
+                "prompt426_step_execution_result_available": False,
+                "prompt426_step_execution_result_payload": {},
+                "prompt426_step_execution_error": False,
+                "prompt426_step_execution_error_message": "",
+                "prompt426_stop_required": False,
+                "prompt426_next_action": (
+                    "request_prompt426_bounded_runner_step_execution"
+                ),
+            }
+        )
+        return state
+
+    if step_runner is None:
+        state.update(
+            {
+                "prompt426_bounded_runner_step_executor_status": "blocked",
+                "prompt426_bounded_runner_step_executor_ready": False,
+                "prompt426_bounded_runner_step_executor_blocked_reason": (
+                    "step_runner_missing"
+                ),
+                "prompt426_bounded_runner_step_executor_blocked_reasons": [
+                    "step_runner_missing"
+                ],
+                "prompt426_step_execution_mode": "blocked",
+                "prompt426_step_execution_ready": False,
+                "prompt426_step_execution_attempted": False,
+                "prompt426_step_execution_performed": False,
+                "prompt426_step_execution_status": "blocked",
+                "prompt426_step_execution_result_available": False,
+                "prompt426_step_execution_result_payload": {},
+                "prompt426_step_execution_error": False,
+                "prompt426_step_execution_error_message": "",
+                "prompt426_stop_required": False,
+                "prompt426_next_action": "provide_prompt426_step_runner",
+            }
+        )
+        return state
+
+    try:
+        step_result = step_runner(
+            invocation_step=invocation_step,
+            invocation_target_prompt=invocation_target_prompt,
+            invocation_order=invocation_order,
+            current_cycle=normalized_current_cycle,
+            max_cycles=normalized_max_cycles,
+            run_state_payload=run_state_payload,
+        )
+        result_payload = dict(step_result) if isinstance(step_result, Mapping) else {}
+        execution_status = _normalize_text(
+            result_payload.get("status"),
+            default="completed",
+        )
+        state.update(
+            {
+                "prompt426_bounded_runner_step_executor_status": "executed",
+                "prompt426_bounded_runner_step_executor_ready": True,
+                "prompt426_bounded_runner_step_executor_blocked_reason": "",
+                "prompt426_bounded_runner_step_executor_blocked_reasons": [],
+                "prompt426_step_execution_mode": "bounded_step_runner",
+                "prompt426_step_execution_ready": True,
+                "prompt426_step_execution_attempted": True,
+                "prompt426_step_execution_performed": True,
+                "prompt426_step_execution_status": execution_status,
+                "prompt426_step_execution_result_available": True,
+                "prompt426_step_execution_result_payload": result_payload,
+                "prompt426_step_execution_error": False,
+                "prompt426_step_execution_error_message": "",
+                "prompt426_stop_required": False,
+                "prompt426_next_action": (
+                    "review_prompt426_step_execution_result"
+                ),
+            }
+        )
+        return state
+    except Exception as exc:
+        state.update(
+            {
+                "prompt426_bounded_runner_step_executor_status": (
+                    "execution_error"
+                ),
+                "prompt426_bounded_runner_step_executor_ready": True,
+                "prompt426_bounded_runner_step_executor_blocked_reason": "",
+                "prompt426_bounded_runner_step_executor_blocked_reasons": [],
+                "prompt426_step_execution_mode": "bounded_step_runner",
+                "prompt426_step_execution_ready": True,
+                "prompt426_step_execution_attempted": True,
+                "prompt426_step_execution_performed": True,
+                "prompt426_step_execution_status": "execution_error",
+                "prompt426_step_execution_result_available": False,
+                "prompt426_step_execution_result_payload": {},
+                "prompt426_step_execution_error": True,
+                "prompt426_step_execution_error_message": str(exc),
+                "prompt426_stop_required": False,
+                "prompt426_next_action": (
+                    "review_prompt426_step_execution_error"
+                ),
+            }
+        )
+        return state
 
 
 def _build_prompt382_approve_commit_tag_execution_gate_state(
@@ -240751,6 +241092,17 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt425_local_autonomous_loop_invocation_payload,
         }
+        prompt426_bounded_runner_step_executor_payload = (
+            _build_prompt426_bounded_runner_step_executor_state(
+                run_state_payload=run_state_payload,
+                current_cycle=run_state_payload.get("prompt425_current_cycle"),
+                max_cycles=run_state_payload.get("prompt425_max_cycles", 2),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt426_bounded_runner_step_executor_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -240925,6 +241277,26 @@ class PlannedExecutionRunner:
                     "run_state.prompt425_requires_commit_tag",
                     "run_state.prompt425_requires_next_cycle",
                     "run_state.prompt425_stop_required",
+                    (
+                        "run_state."
+                        "prompt426_bounded_runner_step_executor_status"
+                    ),
+                    "run_state.prompt426_step_execution_mode",
+                    "run_state.prompt426_step_execution_status",
+                    "run_state.prompt426_invocation_step",
+                    "run_state.prompt426_invocation_target_prompt",
+                    "run_state.prompt426_next_action",
+                    "run_state.prompt426_current_cycle",
+                    "run_state.prompt426_max_cycles",
+                    "run_state.prompt426_step_execution_attempted",
+                    "run_state.prompt426_step_execution_performed",
+                    "run_state.prompt426_step_execution_result_available",
+                    "run_state.prompt426_requires_codex_execution",
+                    "run_state.prompt426_requires_prompt_materialization",
+                    "run_state.prompt426_requires_targeted_fix_execution",
+                    "run_state.prompt426_requires_commit_tag",
+                    "run_state.prompt426_requires_next_cycle",
+                    "run_state.prompt426_stop_required",
                 ]
             )
         )
@@ -241291,6 +241663,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt425_local_autonomous_loop_invocation_state=(
                     prompt425_local_autonomous_loop_invocation_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt426_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt426_bounded_runner_step_executor_state=(
+                    prompt426_bounded_runner_step_executor_payload
                 ),
             )
         )
@@ -250208,6 +250588,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT425_LOCAL_AUTONOMOUS_LOOP_INVOCATION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT426_BOUNDED_RUNNER_STEP_EXECUTOR_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
