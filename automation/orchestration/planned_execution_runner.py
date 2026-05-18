@@ -3850,6 +3850,9 @@ _PROMPT411_SCHEMA_VERSION = "prompt411_physical_prompt_materialization_plan_v1"
 _PROMPT412_SCHEMA_VERSION = (
     "prompt412_physical_prompt_materialization_boundary_v1"
 )
+_PROMPT413_SCHEMA_VERSION = (
+    "prompt413_selected_prompt_execution_adapter_boundary_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4895,6 +4898,40 @@ _PROMPT412_PHYSICAL_PROMPT_MATERIALIZATION_BOUNDARY_KEYS: tuple[str, ...] = (
     "prompt412_git_mutation_allowed",
     "prompt412_commit_tag_allowed",
     "prompt412_next_action",
+)
+_PROMPT413_SELECTED_PROMPT_EXECUTION_ADAPTER_BOUNDARY_KEYS: tuple[str, ...] = (
+    "prompt413_selected_prompt_execution_adapter_enabled",
+    "prompt413_selected_prompt_execution_adapter_status",
+    "prompt413_selected_prompt_execution_adapter_ready",
+    "prompt413_selected_prompt_execution_adapter_blocked_reason",
+    "prompt413_selected_prompt_execution_adapter_blocked_reasons",
+    "prompt413_selected_prompt_execution_adapter_source",
+    "prompt413_selected_prompt_id",
+    "prompt413_selected_prompt_source",
+    "prompt413_selected_prompt_prompt_path",
+    "prompt413_execution_mode",
+    "prompt413_execution_requested",
+    "prompt413_execution_allowed",
+    "prompt413_execution_attempted",
+    "prompt413_execution_performed",
+    "prompt413_execution_returncode",
+    "prompt413_execution_returncode_classification",
+    "prompt413_capture_plan_ready",
+    "prompt413_capture_target_prompt",
+    "prompt413_stdout_path",
+    "prompt413_stderr_path",
+    "prompt413_result_json_path",
+    "prompt413_capture_written",
+    "prompt413_review_packet_ready",
+    "prompt413_review_packet_target_prompt",
+    "prompt413_review_packet_mode",
+    "prompt413_review_packet_prompt_id",
+    "prompt413_review_packet_result_json_path",
+    "prompt413_selected_prompt_execution_allowed",
+    "prompt413_codex_invocation_allowed",
+    "prompt413_git_mutation_allowed",
+    "prompt413_commit_tag_allowed",
+    "prompt413_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7399,6 +7436,31 @@ def _merge_prompt412_surface_into_approved_restart_payload(
     )
     for key in _PROMPT412_PHYSICAL_PROMPT_MATERIALIZATION_BOUNDARY_KEYS:
         if key in surface and surface.get(key) is not None:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt413_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt413_selected_prompt_execution_adapter_boundary_state: Mapping[str, Any]
+    | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt413_selected_prompt_execution_adapter_boundary_state)
+        if isinstance(
+            prompt413_selected_prompt_execution_adapter_boundary_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT413_SELECTED_PROMPT_EXECUTION_ADAPTER_BOUNDARY_KEYS:
+        if key in surface:
             merged[key] = surface.get(key)
     return merged
 
@@ -58695,6 +58757,125 @@ def _build_prompt412_physical_prompt_materialization_boundary_state(
             "prepare_prompt413_selected_prompt_execution_adapter"
             if prompt411_ready
             else "review_prompt411_physical_prompt_materialization_plan"
+        ),
+    }
+
+
+def _build_prompt413_selected_prompt_execution_adapter_boundary_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = dict(run_state_payload or {})
+    prompt_path = (
+        "current_prompt_verify_results/prompt412/selected_prompt_prompt402.md"
+    )
+    stdout_path = "current_prompt_verify_results/prompt413/prompt402_stdout.txt"
+    stderr_path = "current_prompt_verify_results/prompt413/prompt402_stderr.txt"
+    result_json_path = (
+        "current_prompt_verify_results/prompt413/"
+        "prompt402_execution_result.json"
+    )
+    prompt412_ready = (
+        _normalize_text(
+            run_state.get(
+                "prompt412_physical_prompt_materialization_boundary_status"
+            ),
+            default="",
+        )
+        == "ready"
+        and run_state.get(
+            "prompt412_physical_prompt_materialization_boundary_ready"
+        )
+        is True
+        and run_state.get("prompt412_execution_adapter_packet_ready") is True
+        and _normalize_text(
+            run_state.get("prompt412_execution_adapter_packet_target_prompt"),
+            default="",
+        )
+        == "prompt413"
+        and _normalize_text(
+            run_state.get("prompt412_execution_adapter_packet_mode"),
+            default="",
+        )
+        == "selected_prompt_physical_prompt_boundary"
+        and _normalize_text(
+            run_state.get("prompt412_execution_adapter_packet_prompt_id"),
+            default="",
+        )
+        == "prompt402"
+        and _normalize_text(run_state.get("prompt412_next_action"), default="")
+        == "prepare_prompt413_selected_prompt_execution_adapter"
+    )
+    blocked_reason = (
+        ""
+        if prompt412_ready
+        else "prompt412_execution_adapter_packet_not_ready"
+    )
+    blocked_reasons = [] if prompt412_ready else [blocked_reason]
+
+    return {
+        "prompt413_schema_version": _PROMPT413_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt413",
+        "prompt413_selected_prompt_execution_adapter_enabled": True,
+        "prompt413_selected_prompt_execution_adapter_status": (
+            "ready" if prompt412_ready else "blocked"
+        ),
+        "prompt413_selected_prompt_execution_adapter_ready": prompt412_ready,
+        "prompt413_selected_prompt_execution_adapter_blocked_reason": (
+            blocked_reason
+        ),
+        "prompt413_selected_prompt_execution_adapter_blocked_reasons": (
+            blocked_reasons
+        ),
+        "prompt413_selected_prompt_execution_adapter_source": (
+            "prompt412_execution_adapter_packet" if prompt412_ready else ""
+        ),
+        "prompt413_selected_prompt_id": "prompt402" if prompt412_ready else "",
+        "prompt413_selected_prompt_source": (
+            "prompt402_generated_prompt_surface" if prompt412_ready else ""
+        ),
+        "prompt413_selected_prompt_prompt_path": (
+            prompt_path if prompt412_ready else ""
+        ),
+        "prompt413_execution_mode": (
+            "planned_no_execute" if prompt412_ready else "blocked_no_execute"
+        ),
+        "prompt413_execution_requested": False,
+        "prompt413_execution_allowed": False,
+        "prompt413_execution_attempted": False,
+        "prompt413_execution_performed": False,
+        "prompt413_execution_returncode": None,
+        "prompt413_execution_returncode_classification": "not_run",
+        "prompt413_capture_plan_ready": prompt412_ready,
+        "prompt413_capture_target_prompt": "prompt414",
+        "prompt413_stdout_path": stdout_path if prompt412_ready else "",
+        "prompt413_stderr_path": stderr_path if prompt412_ready else "",
+        "prompt413_result_json_path": (
+            result_json_path if prompt412_ready else ""
+        ),
+        "prompt413_capture_written": False,
+        "prompt413_review_packet_ready": prompt412_ready,
+        "prompt413_review_packet_target_prompt": "prompt414",
+        "prompt413_review_packet_mode": (
+            "execution_adapter_boundary_no_execute"
+            if prompt412_ready
+            else "blocked"
+        ),
+        "prompt413_review_packet_prompt_id": (
+            "prompt402" if prompt412_ready else ""
+        ),
+        "prompt413_review_packet_result_json_path": (
+            result_json_path if prompt412_ready else ""
+        ),
+        "prompt413_selected_prompt_execution_allowed": False,
+        "prompt413_codex_invocation_allowed": False,
+        "prompt413_git_mutation_allowed": False,
+        "prompt413_commit_tag_allowed": False,
+        "prompt413_next_action": (
+            "prepare_prompt414_execution_result_review"
+            if prompt412_ready
+            else "review_prompt412_execution_adapter_packet"
         ),
     }
 
@@ -235386,6 +235567,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt412_physical_prompt_materialization_boundary_payload,
         }
+        prompt413_selected_prompt_execution_adapter_boundary_payload = (
+            _build_prompt413_selected_prompt_execution_adapter_boundary_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt413_selected_prompt_execution_adapter_boundary_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -235417,6 +235607,13 @@ class PlannedExecutionRunner:
                     "run_state.prompt412_execution_adapter_packet_ready",
                     "run_state.prompt412_execution_adapter_packet_target_prompt",
                     "run_state.prompt412_next_action",
+                    "run_state.prompt413_selected_prompt_execution_adapter_status",
+                    "run_state.prompt413_selected_prompt_execution_adapter_ready",
+                    "run_state.prompt413_execution_mode",
+                    "run_state.prompt413_capture_plan_ready",
+                    "run_state.prompt413_review_packet_ready",
+                    "run_state.prompt413_review_packet_target_prompt",
+                    "run_state.prompt413_next_action",
                 ]
             )
         )
@@ -235679,6 +235876,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt412_physical_prompt_materialization_boundary_state=(
                     prompt412_physical_prompt_materialization_boundary_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt413_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt413_selected_prompt_execution_adapter_boundary_state=(
+                    prompt413_selected_prompt_execution_adapter_boundary_payload
                 ),
             )
         )
