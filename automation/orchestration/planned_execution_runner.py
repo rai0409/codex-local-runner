@@ -3884,6 +3884,9 @@ _PROMPT423_SCHEMA_VERSION = (
 _PROMPT424_SCHEMA_VERSION = (
     "prompt424_bounded_full_autonomous_loop_integration_surface_v1"
 )
+_PROMPT425_SCHEMA_VERSION = (
+    "prompt425_local_autonomous_loop_invocation_boundary_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5494,6 +5497,45 @@ _PROMPT424_BOUNDED_FULL_AUTONOMOUS_LOOP_KEYS: tuple[str, ...] = (
     "prompt424_next_cycle_started",
     "prompt424_unbounded_loop_allowed",
     "prompt424_next_action",
+)
+_PROMPT425_LOCAL_AUTONOMOUS_LOOP_INVOCATION_KEYS: tuple[str, ...] = (
+    "prompt425_local_autonomous_loop_invocation_enabled",
+    "prompt425_schema_version",
+    "prompt425_invocation_requested",
+    "prompt425_invocation_plan_allowed",
+    "prompt425_invocation_performed",
+    "prompt425_current_cycle",
+    "prompt425_max_cycles",
+    "prompt425_next_cycle_index",
+    "prompt425_selected_prompt_id",
+    "prompt425_codex_invocation_allowed",
+    "prompt425_git_mutation_allowed",
+    "prompt425_commit_tag_allowed",
+    "prompt425_push_allowed",
+    "prompt425_pr_allowed",
+    "prompt425_merge_allowed",
+    "prompt425_rollback_allowed",
+    "prompt425_next_cycle_started",
+    "prompt425_unbounded_loop_allowed",
+    "prompt425_daemon_mode_allowed",
+    "prompt425_local_autonomous_loop_invocation_status",
+    "prompt425_local_autonomous_loop_invocation_ready",
+    "prompt425_local_autonomous_loop_invocation_blocked_reason",
+    "prompt425_local_autonomous_loop_invocation_blocked_reasons",
+    "prompt425_invocation_mode",
+    "prompt425_invocation_plan_ready",
+    "prompt425_invocation_step",
+    "prompt425_invocation_target_prompt",
+    "prompt425_invocation_reason",
+    "prompt425_invocation_order",
+    "prompt425_expected_next_surface",
+    "prompt425_requires_codex_execution",
+    "prompt425_requires_prompt_materialization",
+    "prompt425_requires_targeted_fix_execution",
+    "prompt425_requires_commit_tag",
+    "prompt425_requires_next_cycle",
+    "prompt425_stop_required",
+    "prompt425_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8283,6 +8325,27 @@ def _merge_prompt424_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT424_BOUNDED_FULL_AUTONOMOUS_LOOP_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt425_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt425_local_autonomous_loop_invocation_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt425_local_autonomous_loop_invocation_state)
+        if isinstance(prompt425_local_autonomous_loop_invocation_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT425_LOCAL_AUTONOMOUS_LOOP_INVOCATION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -63587,6 +63650,294 @@ def _build_prompt424_bounded_full_autonomous_loop_state(
                 "prompt424_commit_tag_handoff_ready": False,
                 "prompt424_next_cycle_handoff_ready": False,
                 "prompt424_next_action": "stop_targeted_fix_retry_limit_reached",
+            }
+        )
+        return state
+
+    return state
+
+
+def _build_prompt425_local_autonomous_loop_invocation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    invocation_requested: bool = False,
+    allow_invocation_plan: bool = False,
+    current_cycle: int | None = None,
+    max_cycles: int = 2,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    current_cycle_source = (
+        run_state.get("prompt424_current_cycle", 0)
+        if current_cycle is None
+        else current_cycle
+    )
+    normalized_current_cycle = _prompt424_normalize_cycle_value(
+        current_cycle_source,
+        minimum=0,
+        default=0,
+    )
+    normalized_max_cycles = _prompt424_normalize_cycle_value(
+        max_cycles,
+        minimum=1,
+        default=2,
+    )
+    prompt424_route = _normalize_text(
+        run_state.get("prompt424_route"),
+        default="",
+    )
+    prompt424_selected_prompt_id = _normalize_text(
+        run_state.get("prompt424_selected_prompt_id"),
+        default="",
+    )
+    selected_prompt_id = prompt424_selected_prompt_id
+    if not selected_prompt_id and prompt424_route.startswith("targeted_fix"):
+        selected_prompt_id = "prompt402"
+
+    state: dict[str, Any] = {
+        "prompt425_local_autonomous_loop_invocation_enabled": True,
+        "prompt425_schema_version": _PROMPT425_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt425",
+        "prompt425_invocation_requested": bool(invocation_requested),
+        "prompt425_invocation_plan_allowed": bool(allow_invocation_plan),
+        "prompt425_invocation_performed": False,
+        "prompt425_current_cycle": normalized_current_cycle,
+        "prompt425_max_cycles": normalized_max_cycles,
+        "prompt425_next_cycle_index": normalized_current_cycle + 1,
+        "prompt425_selected_prompt_id": selected_prompt_id,
+        "prompt425_codex_invocation_allowed": False,
+        "prompt425_git_mutation_allowed": False,
+        "prompt425_commit_tag_allowed": False,
+        "prompt425_push_allowed": False,
+        "prompt425_pr_allowed": False,
+        "prompt425_merge_allowed": False,
+        "prompt425_rollback_allowed": False,
+        "prompt425_next_cycle_started": False,
+        "prompt425_unbounded_loop_allowed": False,
+        "prompt425_daemon_mode_allowed": False,
+        "prompt425_local_autonomous_loop_invocation_status": "blocked",
+        "prompt425_local_autonomous_loop_invocation_ready": False,
+        "prompt425_local_autonomous_loop_invocation_blocked_reason": (
+            "prompt424_bounded_full_autonomous_loop_not_ready"
+        ),
+        "prompt425_local_autonomous_loop_invocation_blocked_reasons": [
+            "prompt424_bounded_full_autonomous_loop_not_ready"
+        ],
+        "prompt425_invocation_mode": "blocked",
+        "prompt425_invocation_plan_ready": False,
+        "prompt425_invocation_step": "",
+        "prompt425_invocation_target_prompt": "",
+        "prompt425_invocation_reason": "prompt424_not_ready",
+        "prompt425_invocation_order": [],
+        "prompt425_expected_next_surface": "",
+        "prompt425_requires_codex_execution": False,
+        "prompt425_requires_prompt_materialization": False,
+        "prompt425_requires_targeted_fix_execution": False,
+        "prompt425_requires_commit_tag": False,
+        "prompt425_requires_next_cycle": False,
+        "prompt425_stop_required": False,
+        "prompt425_next_action": (
+            "review_prompt424_bounded_full_autonomous_loop_integration"
+        ),
+    }
+
+    prompt424_ready = (
+        run_state.get("prompt424_bounded_full_autonomous_loop_enabled") is True
+        and run_state.get("prompt424_bounded_full_autonomous_loop_ready") is True
+        and prompt424_route
+        in {
+            "success_next_cycle",
+            "targeted_fix_success_commit_tag",
+            "targeted_fix_retry",
+            "targeted_fix_stop",
+            "cycle_limit_stop",
+        }
+        and run_state.get("prompt424_codex_invocation_allowed") is False
+        and run_state.get("prompt424_git_mutation_allowed") is False
+        and run_state.get("prompt424_commit_tag_allowed") is False
+        and run_state.get("prompt424_push_allowed") is False
+        and run_state.get("prompt424_pr_allowed") is False
+        and run_state.get("prompt424_merge_allowed") is False
+        and run_state.get("prompt424_rollback_allowed") is False
+        and run_state.get("prompt424_next_cycle_started") is False
+        and run_state.get("prompt424_unbounded_loop_allowed") is False
+    )
+    if not prompt424_ready:
+        return state
+
+    if not invocation_requested or not allow_invocation_plan:
+        state.update(
+            {
+                "prompt425_local_autonomous_loop_invocation_status": "ready",
+                "prompt425_local_autonomous_loop_invocation_ready": True,
+                "prompt425_local_autonomous_loop_invocation_blocked_reason": "",
+                "prompt425_local_autonomous_loop_invocation_blocked_reasons": [],
+                "prompt425_invocation_mode": "planned_no_invocation",
+                "prompt425_invocation_plan_ready": False,
+                "prompt425_invocation_step": "",
+                "prompt425_invocation_target_prompt": "",
+                "prompt425_invocation_reason": (
+                    "invocation_not_requested_or_not_allowed"
+                ),
+                "prompt425_next_action": (
+                    "request_prompt425_local_autonomous_loop_invocation_plan"
+                ),
+            }
+        )
+        return state
+
+    if prompt424_route == "success_next_cycle":
+        state.update(
+            {
+                "prompt425_local_autonomous_loop_invocation_status": "planned",
+                "prompt425_local_autonomous_loop_invocation_ready": True,
+                "prompt425_local_autonomous_loop_invocation_blocked_reason": "",
+                "prompt425_local_autonomous_loop_invocation_blocked_reasons": [],
+                "prompt425_invocation_mode": "one_step_plan",
+                "prompt425_invocation_plan_ready": True,
+                "prompt425_invocation_step": "start_next_success_cycle",
+                "prompt425_invocation_target_prompt": "prompt420",
+                "prompt425_invocation_reason": (
+                    "prompt424_success_next_cycle_route_ready"
+                ),
+                "prompt425_invocation_order": ["prompt420"],
+                "prompt425_expected_next_surface": (
+                    "prompt420_success_only_next_cycle_loop"
+                ),
+                "prompt425_requires_next_cycle": True,
+                "prompt425_stop_required": False,
+                "prompt425_next_action": (
+                    "invoke_prompt420_success_next_cycle_boundary"
+                ),
+            }
+        )
+        return state
+
+    if prompt424_route == "targeted_fix_success_commit_tag":
+        state.update(
+            {
+                "prompt425_local_autonomous_loop_invocation_status": "planned",
+                "prompt425_local_autonomous_loop_invocation_ready": True,
+                "prompt425_local_autonomous_loop_invocation_blocked_reason": "",
+                "prompt425_local_autonomous_loop_invocation_blocked_reasons": [],
+                "prompt425_invocation_mode": "one_step_plan",
+                "prompt425_invocation_plan_ready": True,
+                "prompt425_invocation_step": "approve_commit_tag_then_next_cycle",
+                "prompt425_invocation_target_prompt": "prompt419",
+                "prompt425_invocation_reason": (
+                    "prompt424_targeted_fix_success_commit_tag_route_ready"
+                ),
+                "prompt425_invocation_order": ["prompt419", "prompt420"],
+                "prompt425_expected_next_surface": (
+                    "prompt419_approve_commit_tag_boundary_then_"
+                    "prompt420_next_cycle"
+                ),
+                "prompt425_requires_commit_tag": True,
+                "prompt425_requires_next_cycle": True,
+                "prompt425_stop_required": False,
+                "prompt425_next_action": (
+                    "invoke_prompt419_commit_tag_boundary_then_"
+                    "prompt420_next_cycle"
+                ),
+            }
+        )
+        return state
+
+    if prompt424_route == "targeted_fix_retry":
+        state.update(
+            {
+                "prompt425_local_autonomous_loop_invocation_status": "planned",
+                "prompt425_local_autonomous_loop_invocation_ready": True,
+                "prompt425_local_autonomous_loop_invocation_blocked_reason": "",
+                "prompt425_local_autonomous_loop_invocation_blocked_reasons": [],
+                "prompt425_invocation_mode": "one_step_plan",
+                "prompt425_invocation_plan_ready": True,
+                "prompt425_invocation_step": "retry_targeted_fix",
+                "prompt425_invocation_target_prompt": "prompt421",
+                "prompt425_invocation_reason": (
+                    "prompt424_targeted_fix_retry_route_ready"
+                ),
+                "prompt425_invocation_order": [
+                    "prompt421",
+                    "prompt422",
+                    "prompt423",
+                    "prompt424",
+                ],
+                "prompt425_expected_next_surface": (
+                    "prompt421_targeted_fix_materialization_then_"
+                    "prompt424_review"
+                ),
+                "prompt425_requires_codex_execution": True,
+                "prompt425_requires_prompt_materialization": True,
+                "prompt425_requires_targeted_fix_execution": True,
+                "prompt425_requires_commit_tag": False,
+                "prompt425_requires_next_cycle": False,
+                "prompt425_stop_required": False,
+                "prompt425_next_action": (
+                    "invoke_prompt421_targeted_fix_retry_boundary"
+                ),
+            }
+        )
+        return state
+
+    if prompt424_route == "targeted_fix_stop":
+        state.update(
+            {
+                "prompt425_local_autonomous_loop_invocation_status": "stopped",
+                "prompt425_local_autonomous_loop_invocation_ready": True,
+                "prompt425_local_autonomous_loop_invocation_blocked_reason": "",
+                "prompt425_local_autonomous_loop_invocation_blocked_reasons": [],
+                "prompt425_invocation_mode": "stop",
+                "prompt425_invocation_plan_ready": False,
+                "prompt425_invocation_step": "stop",
+                "prompt425_invocation_target_prompt": "",
+                "prompt425_invocation_reason": (
+                    "prompt424_targeted_fix_stop_route_ready"
+                ),
+                "prompt425_invocation_order": [],
+                "prompt425_expected_next_surface": "",
+                "prompt425_requires_codex_execution": False,
+                "prompt425_requires_prompt_materialization": False,
+                "prompt425_requires_targeted_fix_execution": False,
+                "prompt425_requires_commit_tag": False,
+                "prompt425_requires_next_cycle": False,
+                "prompt425_stop_required": True,
+                "prompt425_next_action": (
+                    "stop_targeted_fix_retry_limit_reached"
+                ),
+            }
+        )
+        return state
+
+    if prompt424_route == "cycle_limit_stop":
+        state.update(
+            {
+                "prompt425_local_autonomous_loop_invocation_status": "stopped",
+                "prompt425_local_autonomous_loop_invocation_ready": True,
+                "prompt425_local_autonomous_loop_invocation_blocked_reason": "",
+                "prompt425_local_autonomous_loop_invocation_blocked_reasons": [],
+                "prompt425_invocation_mode": "stop",
+                "prompt425_invocation_plan_ready": False,
+                "prompt425_invocation_step": "stop",
+                "prompt425_invocation_target_prompt": "",
+                "prompt425_invocation_reason": (
+                    "prompt424_cycle_limit_stop_route_ready"
+                ),
+                "prompt425_invocation_order": [],
+                "prompt425_expected_next_surface": "",
+                "prompt425_requires_codex_execution": False,
+                "prompt425_requires_prompt_materialization": False,
+                "prompt425_requires_targeted_fix_execution": False,
+                "prompt425_requires_commit_tag": False,
+                "prompt425_requires_next_cycle": False,
+                "prompt425_stop_required": True,
+                "prompt425_next_action": (
+                    "stop_bounded_full_autonomous_loop_cycle_limit_reached"
+                ),
             }
         )
         return state
@@ -240389,6 +240740,17 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt424_bounded_full_autonomous_loop_payload,
         }
+        prompt425_local_autonomous_loop_invocation_payload = (
+            _build_prompt425_local_autonomous_loop_invocation_state(
+                run_state_payload=run_state_payload,
+                current_cycle=run_state_payload.get("prompt424_current_cycle"),
+                max_cycles=run_state_payload.get("prompt424_max_cycles", 2),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt425_local_autonomous_loop_invocation_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -240546,6 +240908,23 @@ class PlannedExecutionRunner:
                     "run_state.prompt424_commit_tag_handoff_ready",
                     "run_state.prompt424_next_cycle_handoff_ready",
                     "run_state.prompt424_next_action",
+                    (
+                        "run_state."
+                        "prompt425_local_autonomous_loop_invocation_status"
+                    ),
+                    "run_state.prompt425_invocation_mode",
+                    "run_state.prompt425_invocation_step",
+                    "run_state.prompt425_invocation_target_prompt",
+                    "run_state.prompt425_next_action",
+                    "run_state.prompt425_current_cycle",
+                    "run_state.prompt425_max_cycles",
+                    "run_state.prompt425_invocation_plan_ready",
+                    "run_state.prompt425_requires_codex_execution",
+                    "run_state.prompt425_requires_prompt_materialization",
+                    "run_state.prompt425_requires_targeted_fix_execution",
+                    "run_state.prompt425_requires_commit_tag",
+                    "run_state.prompt425_requires_next_cycle",
+                    "run_state.prompt425_stop_required",
                 ]
             )
         )
@@ -240904,6 +241283,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt424_bounded_full_autonomous_loop_state=(
                     prompt424_bounded_full_autonomous_loop_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt425_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt425_local_autonomous_loop_invocation_state=(
+                    prompt425_local_autonomous_loop_invocation_payload
                 ),
             )
         )
@@ -249818,6 +250205,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT424_BOUNDED_FULL_AUTONOMOUS_LOOP_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT425_LOCAL_AUTONOMOUS_LOOP_INVOCATION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
