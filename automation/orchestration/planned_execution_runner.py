@@ -3878,6 +3878,9 @@ _PROMPT421_SCHEMA_VERSION = (
 _PROMPT422_SCHEMA_VERSION = (
     "prompt422_targeted_fix_codex_execution_adapter_v1"
 )
+_PROMPT423_SCHEMA_VERSION = (
+    "prompt423_targeted_fix_result_review_boundary_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5382,6 +5385,64 @@ _PROMPT422_TARGETED_FIX_CODEX_EXECUTION_ADAPTER_KEYS: tuple[str, ...] = (
     "prompt422_rollback_allowed",
     "prompt422_next_cycle_started",
     "prompt422_next_action",
+)
+_PROMPT423_TARGETED_FIX_RESULT_REVIEW_KEYS: tuple[str, ...] = (
+    "prompt423_schema_version",
+    "prompt423_targeted_fix_result_review_enabled",
+    "prompt423_targeted_fix_result_review_status",
+    "prompt423_targeted_fix_result_review_ready",
+    "prompt423_targeted_fix_result_review_blocked_reason",
+    "prompt423_targeted_fix_result_review_blocked_reasons",
+    "prompt423_targeted_fix_result_review_source",
+    "prompt423_selected_prompt_id",
+    "prompt423_targeted_fix_execution_result_available",
+    "prompt423_targeted_fix_execution_success",
+    "prompt423_targeted_fix_execution_failed",
+    "prompt423_targeted_fix_execution_timeout",
+    "prompt423_targeted_fix_execution_error",
+    "prompt423_targeted_fix_execution_status",
+    "prompt423_targeted_fix_execution_returncode",
+    "prompt423_targeted_fix_execution_returncode_classification",
+    "prompt423_targeted_fix_prompt_path",
+    "prompt423_targeted_fix_result_json_path",
+    "prompt423_targeted_fix_stdout_path",
+    "prompt423_targeted_fix_stderr_path",
+    "prompt423_targeted_fix_attempt_current",
+    "prompt423_targeted_fix_attempt_max",
+    "prompt423_targeted_fix_attempt_next",
+    "prompt423_targeted_fix_retry_allowed",
+    "prompt423_retry_required",
+    "prompt423_stop_required",
+    "prompt423_approve_candidate",
+    "prompt423_targeted_fix_required",
+    "prompt423_commit_tag_plan_ready",
+    "prompt423_commit_tag_plan_target_prompt",
+    "prompt423_commit_tag_plan_mode",
+    "prompt423_commit_tag_plan_selected_prompt_id",
+    "prompt423_commit_tag_plan_commit_message",
+    "prompt423_commit_tag_plan_tag_name",
+    "prompt423_commit_tag_plan_allowed",
+    "prompt423_success_handoff_ready",
+    "prompt423_success_handoff_target_prompt",
+    "prompt423_success_handoff_mode",
+    "prompt423_success_handoff_next_cycle_target_prompt",
+    "prompt423_failure_route_ready",
+    "prompt423_failure_route_reason",
+    "prompt423_failure_route_target_prompt",
+    "prompt423_retry_route_ready",
+    "prompt423_retry_route_target_prompt",
+    "prompt423_retry_route_mode",
+    "prompt423_retry_route_attempt_next",
+    "prompt423_selected_prompt_execution_allowed",
+    "prompt423_codex_invocation_allowed",
+    "prompt423_git_mutation_allowed",
+    "prompt423_commit_tag_allowed",
+    "prompt423_push_allowed",
+    "prompt423_pr_allowed",
+    "prompt423_merge_allowed",
+    "prompt423_rollback_allowed",
+    "prompt423_next_cycle_started",
+    "prompt423_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8129,6 +8190,27 @@ def _merge_prompt422_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT422_TARGETED_FIX_CODEX_EXECUTION_ADAPTER_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt423_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt423_targeted_fix_result_review_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt423_targeted_fix_result_review_state)
+        if isinstance(prompt423_targeted_fix_result_review_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT423_TARGETED_FIX_RESULT_REVIEW_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -62823,6 +62905,293 @@ def _build_prompt422_targeted_fix_codex_execution_adapter_state(
             "prompt422_next_action": (
                 "prepare_prompt423_targeted_fix_result_review"
             ),
+        }
+    )
+    return state
+
+
+def _prompt423_normalize_attempt(value: Any, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(normalized, 1)
+
+
+def _prompt423_prompt422_review_packet_ready(
+    run_state: Mapping[str, Any],
+) -> bool:
+    required_values: dict[str, Any] = {
+        "prompt422_targeted_fix_codex_execution_adapter_status": "executed",
+        "prompt422_targeted_fix_codex_execution_adapter_ready": True,
+        "prompt422_selected_prompt_id": "prompt402",
+        "prompt422_targeted_fix_prompt_path": (
+            "current_prompt_verify_results/prompt421/targeted_fix_prompt.md"
+        ),
+        "prompt422_targeted_fix_prompt_path_valid": True,
+        "prompt422_targeted_fix_prompt_file_checked": True,
+        "prompt422_targeted_fix_prompt_file_read": True,
+        "prompt422_execution_mode": "targeted_fix_execution_captured",
+        "prompt422_execute_requested": True,
+        "prompt422_execution_allowed": True,
+        "prompt422_execution_attempted": True,
+        "prompt422_execution_performed": True,
+        "prompt422_stdout_written": True,
+        "prompt422_stderr_written": True,
+        "prompt422_result_json_written": True,
+        "prompt422_capture_written": True,
+        "prompt422_review_packet_ready": True,
+        "prompt422_review_packet_target_prompt": "prompt423",
+        "prompt422_review_packet_mode": (
+            "targeted_fix_execution_result_captured"
+        ),
+        "prompt422_review_packet_prompt_id": "prompt402",
+        "prompt422_codex_invocation_allowed": True,
+        "prompt422_git_mutation_allowed": False,
+        "prompt422_commit_tag_allowed": False,
+        "prompt422_next_cycle_started": False,
+        "prompt422_next_action": (
+            "prepare_prompt423_targeted_fix_result_review"
+        ),
+    }
+    if not all(run_state.get(key) == expected for key, expected in required_values.items()):
+        return False
+    return (
+        _normalize_text(
+            run_state.get("prompt422_execution_returncode_classification"),
+            default="",
+        )
+        in {"success", "failed", "timeout", "execution_error"}
+    )
+
+
+def _build_prompt423_targeted_fix_result_review_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    targeted_fix_attempt_current: int | None = None,
+    targeted_fix_attempt_max: int = 2,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    attempt_current_source = (
+        run_state.get("prompt423_targeted_fix_attempt_current")
+        if targeted_fix_attempt_current is None
+        else targeted_fix_attempt_current
+    )
+    attempt_current = _prompt423_normalize_attempt(attempt_current_source, 1)
+    attempt_max = _prompt423_normalize_attempt(targeted_fix_attempt_max, 2)
+    attempt_next = attempt_current + 1
+    prompt_path = "current_prompt_verify_results/prompt421/targeted_fix_prompt.md"
+    result_json_path = (
+        "current_prompt_verify_results/prompt422/"
+        "targeted_fix_execution_result.json"
+    )
+    stdout_path = "current_prompt_verify_results/prompt422/targeted_fix_stdout.txt"
+    stderr_path = "current_prompt_verify_results/prompt422/targeted_fix_stderr.txt"
+    safety_invariants: dict[str, Any] = {
+        "prompt423_selected_prompt_execution_allowed": False,
+        "prompt423_codex_invocation_allowed": False,
+        "prompt423_git_mutation_allowed": False,
+        "prompt423_commit_tag_allowed": False,
+        "prompt423_push_allowed": False,
+        "prompt423_pr_allowed": False,
+        "prompt423_merge_allowed": False,
+        "prompt423_rollback_allowed": False,
+        "prompt423_next_cycle_started": False,
+    }
+    state: dict[str, Any] = {
+        "prompt423_schema_version": _PROMPT423_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt423",
+        "prompt423_targeted_fix_result_review_enabled": True,
+        "prompt423_targeted_fix_result_review_status": "blocked",
+        "prompt423_targeted_fix_result_review_ready": False,
+        "prompt423_targeted_fix_result_review_blocked_reason": (
+            "prompt422_targeted_fix_execution_result_not_ready"
+        ),
+        "prompt423_targeted_fix_result_review_blocked_reasons": [
+            "prompt422_targeted_fix_execution_result_not_ready"
+        ],
+        "prompt423_targeted_fix_result_review_source": (
+            "prompt422_targeted_fix_execution_result"
+        ),
+        "prompt423_selected_prompt_id": "",
+        "prompt423_targeted_fix_execution_result_available": False,
+        "prompt423_targeted_fix_execution_success": False,
+        "prompt423_targeted_fix_execution_failed": False,
+        "prompt423_targeted_fix_execution_timeout": False,
+        "prompt423_targeted_fix_execution_error": False,
+        "prompt423_targeted_fix_execution_status": "blocked",
+        "prompt423_targeted_fix_execution_returncode": None,
+        "prompt423_targeted_fix_execution_returncode_classification": "not_run",
+        "prompt423_targeted_fix_prompt_path": "",
+        "prompt423_targeted_fix_result_json_path": "",
+        "prompt423_targeted_fix_stdout_path": "",
+        "prompt423_targeted_fix_stderr_path": "",
+        "prompt423_targeted_fix_attempt_current": attempt_current,
+        "prompt423_targeted_fix_attempt_max": attempt_max,
+        "prompt423_targeted_fix_attempt_next": attempt_next,
+        "prompt423_targeted_fix_retry_allowed": False,
+        "prompt423_retry_required": False,
+        "prompt423_stop_required": False,
+        "prompt423_approve_candidate": False,
+        "prompt423_targeted_fix_required": False,
+        "prompt423_commit_tag_plan_ready": False,
+        "prompt423_commit_tag_plan_target_prompt": "",
+        "prompt423_commit_tag_plan_mode": "",
+        "prompt423_commit_tag_plan_selected_prompt_id": "",
+        "prompt423_commit_tag_plan_commit_message": "",
+        "prompt423_commit_tag_plan_tag_name": "",
+        "prompt423_commit_tag_plan_allowed": False,
+        "prompt423_success_handoff_ready": False,
+        "prompt423_success_handoff_target_prompt": "",
+        "prompt423_success_handoff_mode": "",
+        "prompt423_success_handoff_next_cycle_target_prompt": "",
+        "prompt423_failure_route_ready": False,
+        "prompt423_failure_route_reason": "",
+        "prompt423_failure_route_target_prompt": "",
+        "prompt423_retry_route_ready": False,
+        "prompt423_retry_route_target_prompt": "",
+        "prompt423_retry_route_mode": "",
+        "prompt423_retry_route_attempt_next": attempt_next,
+        **safety_invariants,
+        "prompt423_next_action": (
+            "review_prompt422_targeted_fix_codex_execution_adapter"
+        ),
+    }
+
+    if not _prompt423_prompt422_review_packet_ready(run_state):
+        return state
+
+    classification = _normalize_text(
+        run_state.get("prompt422_execution_returncode_classification"),
+        default="",
+    )
+    execution_status = _normalize_text(
+        run_state.get("prompt422_execution_status"),
+        default="",
+    )
+    returncode = run_state.get("prompt422_execution_returncode")
+    execution_failed = classification == "failed"
+    execution_timeout = classification == "timeout"
+    execution_error = classification == "execution_error"
+    shared_ready_state: dict[str, Any] = {
+        "prompt423_targeted_fix_result_review_ready": True,
+        "prompt423_targeted_fix_result_review_blocked_reason": "",
+        "prompt423_targeted_fix_result_review_blocked_reasons": [],
+        "prompt423_selected_prompt_id": "prompt402",
+        "prompt423_targeted_fix_execution_result_available": True,
+        "prompt423_targeted_fix_execution_success": classification == "success",
+        "prompt423_targeted_fix_execution_failed": execution_failed,
+        "prompt423_targeted_fix_execution_timeout": execution_timeout,
+        "prompt423_targeted_fix_execution_error": execution_error,
+        "prompt423_targeted_fix_execution_status": execution_status,
+        "prompt423_targeted_fix_execution_returncode": returncode,
+        "prompt423_targeted_fix_execution_returncode_classification": classification,
+        "prompt423_targeted_fix_prompt_path": prompt_path,
+        "prompt423_targeted_fix_result_json_path": result_json_path,
+        "prompt423_targeted_fix_stdout_path": stdout_path,
+        "prompt423_targeted_fix_stderr_path": stderr_path,
+        **safety_invariants,
+    }
+
+    if classification == "success":
+        state.update(
+            {
+                **shared_ready_state,
+                "prompt423_targeted_fix_result_review_status": "approved",
+                "prompt423_targeted_fix_retry_allowed": False,
+                "prompt423_retry_required": False,
+                "prompt423_stop_required": False,
+                "prompt423_approve_candidate": True,
+                "prompt423_targeted_fix_required": False,
+                "prompt423_commit_tag_plan_ready": True,
+                "prompt423_commit_tag_plan_target_prompt": "prompt419",
+                "prompt423_commit_tag_plan_mode": (
+                    "targeted_fix_success_guarded_commit_tag_plan"
+                ),
+                "prompt423_commit_tag_plan_selected_prompt_id": "prompt402",
+                "prompt423_commit_tag_plan_commit_message": (
+                    "Prompt402 apply targeted fix execution result"
+                ),
+                "prompt423_commit_tag_plan_tag_name": (
+                    "prompt402-targeted-fix-execution-result"
+                ),
+                "prompt423_commit_tag_plan_allowed": False,
+                "prompt423_success_handoff_ready": True,
+                "prompt423_success_handoff_target_prompt": "prompt419",
+                "prompt423_success_handoff_mode": (
+                    "targeted_fix_success_commit_tag_boundary"
+                ),
+                "prompt423_success_handoff_next_cycle_target_prompt": "prompt420",
+                "prompt423_failure_route_ready": False,
+                "prompt423_failure_route_reason": "",
+                "prompt423_failure_route_target_prompt": "",
+                "prompt423_retry_route_ready": False,
+                "prompt423_retry_route_target_prompt": "",
+                "prompt423_retry_route_mode": "",
+                "prompt423_next_action": (
+                    "prepare_prompt419_approve_commit_tag_for_targeted_fix_success"
+                ),
+            }
+        )
+        return state
+
+    retry_allowed = attempt_current < attempt_max
+    failure_route_reason = {
+        "failed": "targeted_fix_execution_failed",
+        "timeout": "targeted_fix_execution_timeout",
+        "execution_error": "targeted_fix_execution_error",
+    }.get(classification, "")
+
+    if retry_allowed:
+        state.update(
+            {
+                **shared_ready_state,
+                "prompt423_targeted_fix_result_review_status": "retry",
+                "prompt423_targeted_fix_retry_allowed": True,
+                "prompt423_retry_required": True,
+                "prompt423_stop_required": False,
+                "prompt423_approve_candidate": False,
+                "prompt423_targeted_fix_required": True,
+                "prompt423_commit_tag_plan_ready": False,
+                "prompt423_success_handoff_ready": False,
+                "prompt423_failure_route_ready": True,
+                "prompt423_failure_route_reason": failure_route_reason,
+                "prompt423_failure_route_target_prompt": "prompt421",
+                "prompt423_retry_route_ready": True,
+                "prompt423_retry_route_target_prompt": "prompt421",
+                "prompt423_retry_route_mode": "bounded_targeted_fix_retry",
+                "prompt423_retry_route_attempt_next": attempt_next,
+                "prompt423_next_action": "prepare_prompt421_targeted_fix_retry",
+            }
+        )
+        return state
+
+    state.update(
+        {
+            **shared_ready_state,
+            "prompt423_targeted_fix_result_review_status": "stopped",
+            "prompt423_targeted_fix_retry_allowed": False,
+            "prompt423_retry_required": False,
+            "prompt423_stop_required": True,
+            "prompt423_approve_candidate": False,
+            "prompt423_targeted_fix_required": False,
+            "prompt423_commit_tag_plan_ready": False,
+            "prompt423_success_handoff_ready": False,
+            "prompt423_failure_route_ready": True,
+            "prompt423_failure_route_reason": "targeted_fix_retry_limit_reached",
+            "prompt423_failure_route_target_prompt": "",
+            "prompt423_retry_route_ready": False,
+            "prompt423_retry_route_target_prompt": "",
+            "prompt423_retry_route_mode": "",
+            "prompt423_retry_route_attempt_next": attempt_next,
+            "prompt423_next_action": "stop_targeted_fix_retry_limit_reached",
         }
     )
     return state
@@ -239605,6 +239974,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt422_targeted_fix_codex_execution_adapter_payload,
         }
+        prompt423_targeted_fix_result_review_payload = (
+            _build_prompt423_targeted_fix_result_review_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt423_targeted_fix_result_review_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -239736,6 +240114,16 @@ class PlannedExecutionRunner:
                     "run_state.prompt422_review_packet_ready",
                     "run_state.prompt422_review_packet_target_prompt",
                     "run_state.prompt422_next_action",
+                    "run_state.prompt423_targeted_fix_result_review_status",
+                    "run_state.prompt423_targeted_fix_result_review_ready",
+                    "run_state.prompt423_targeted_fix_execution_returncode_classification",
+                    "run_state.prompt423_targeted_fix_retry_allowed",
+                    "run_state.prompt423_approve_candidate",
+                    "run_state.prompt423_commit_tag_plan_ready",
+                    "run_state.prompt423_success_handoff_ready",
+                    "run_state.prompt423_retry_route_ready",
+                    "run_state.prompt423_stop_required",
+                    "run_state.prompt423_next_action",
                 ]
             )
         )
@@ -240078,6 +240466,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt422_targeted_fix_codex_execution_adapter_state=(
                     prompt422_targeted_fix_codex_execution_adapter_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt423_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt423_targeted_fix_result_review_state=(
+                    prompt423_targeted_fix_result_review_payload
                 ),
             )
         )
@@ -248986,6 +249382,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT422_TARGETED_FIX_CODEX_EXECUTION_ADAPTER_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT423_TARGETED_FIX_RESULT_REVIEW_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
