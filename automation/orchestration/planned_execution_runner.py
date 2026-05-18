@@ -3893,6 +3893,9 @@ _PROMPT426_SCHEMA_VERSION = (
 _PROMPT427_SCHEMA_VERSION = (
     "prompt427_bounded_multi_cycle_loop_runner_surface_v1"
 )
+_PROMPT428_SCHEMA_VERSION = (
+    "prompt428_bounded_runtime_command_artifact_contract_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5616,6 +5619,47 @@ _PROMPT427_BOUNDED_MULTI_CYCLE_LOOP_RUNNER_KEYS: tuple[str, ...] = (
     "prompt427_unbounded_loop_allowed",
     "prompt427_daemon_mode_allowed",
     "prompt427_next_action",
+)
+_PROMPT428_BOUNDED_RUNTIME_COMMAND_ARTIFACT_CONTRACT_KEYS: tuple[str, ...] = (
+    "prompt428_bounded_runtime_command_artifact_contract_enabled",
+    "prompt428_schema_version",
+    "prompt428_bounded_runtime_command_artifact_contract_ready",
+    "prompt428_bounded_runtime_command_artifact_contract_status",
+    "prompt428_bounded_runtime_command_artifact_contract_blocked_reason",
+    "prompt428_runtime_contract_requested",
+    "prompt428_allow_runtime_contract",
+    "prompt428_transport_mode",
+    "prompt428_max_cycles",
+    "prompt428_required_runtime_inputs",
+    "prompt428_command_plan_ready",
+    "prompt428_runtime_command_argv",
+    "prompt428_artifact_contract_ready",
+    "prompt428_expected_artifacts_dir",
+    "prompt428_expected_out_dir",
+    "prompt428_expected_job_id",
+    "prompt428_expected_runtime_summary_artifact",
+    "prompt428_expected_runtime_receipt_artifact",
+    "prompt428_expected_cycle_results_artifact",
+    "prompt428_expected_failure_stop_artifact",
+    "prompt428_expected_final_state_artifact",
+    "prompt428_expected_artifacts",
+    "prompt428_failure_stop_contract_ready",
+    "prompt428_failure_stop_conditions",
+    "prompt428_review_required_before_commit_tag",
+    "prompt428_commit_tag_review_requirements",
+    "prompt428_commit_tag_handoff_ready",
+    "prompt428_commit_tag_allowed",
+    "prompt428_commit_tag_performed",
+    "prompt428_codex_invocation_allowed",
+    "prompt428_git_mutation_allowed",
+    "prompt428_push_allowed",
+    "prompt428_pr_allowed",
+    "prompt428_merge_allowed",
+    "prompt428_rollback_allowed",
+    "prompt428_unbounded_loop_allowed",
+    "prompt428_daemon_mode_allowed",
+    "prompt428_runtime_command_executed",
+    "prompt428_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8468,6 +8512,32 @@ def _merge_prompt427_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT427_BOUNDED_MULTI_CYCLE_LOOP_RUNNER_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt428_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt428_bounded_runtime_command_artifact_contract_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt428_bounded_runtime_command_artifact_contract_state)
+        if isinstance(
+            prompt428_bounded_runtime_command_artifact_contract_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT428_BOUNDED_RUNTIME_COMMAND_ARTIFACT_CONTRACT_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -64611,6 +64681,223 @@ def _build_prompt427_bounded_multi_cycle_loop_runner_state(
         final_cycle_status="cycle_limit_stop",
         next_action="review_prompt427_bounded_loop_results",
     )
+
+
+def _build_prompt428_bounded_runtime_command_artifact_contract_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    runtime_contract_requested: bool = False,
+    allow_runtime_contract: bool = False,
+    artifacts_dir: str | None = None,
+    out_dir: str | None = None,
+    job_id: str | None = None,
+    max_cycles: int = 2,
+    transport_mode: str = "dry-run",
+) -> dict[str, Any]:
+    _ = run_state_payload
+    normalized_artifacts_dir = _normalize_text(
+        artifacts_dir,
+        default="/tmp/codex-local-runner-decision/one_cycle_controller",
+    )
+    normalized_out_dir = _normalize_text(
+        out_dir,
+        default="/tmp/codex-local-runner-checks/"
+        "prompt428_bounded_runtime_contract_out",
+    )
+    normalized_job_id = _normalize_text(
+        job_id,
+        default="prompt428-bounded-runtime-contract",
+    )
+    normalized_max_cycles = _prompt427_int_like(max_cycles)
+    if normalized_max_cycles is None or normalized_max_cycles < 1:
+        normalized_max_cycles = 2
+    normalized_transport_mode = _normalize_text(
+        transport_mode,
+        default="dry-run",
+    )
+    expected_artifacts_by_role = {
+        "runtime_summary": "prompt428_bounded_runtime_summary.json",
+        "runtime_receipt": "prompt428_bounded_runtime_receipt.json",
+        "cycle_results": "prompt428_bounded_cycle_results.json",
+        "failure_stop": "prompt428_failure_stop_contract.json",
+        "final_state": "prompt428_final_state.json",
+    }
+    expected_artifacts = [
+        expected_artifacts_by_role["runtime_summary"],
+        expected_artifacts_by_role["runtime_receipt"],
+        expected_artifacts_by_role["cycle_results"],
+        expected_artifacts_by_role["failure_stop"],
+        expected_artifacts_by_role["final_state"],
+    ]
+    failure_stop_conditions = [
+        "py_compile_failed",
+        "changed_file_guard_failed",
+        "prompt425_invocation_plan_blocked",
+        "prompt426_step_execution_error",
+        "prompt426_step_execution_blocked",
+        "prompt427_loop_blocked",
+        "prompt427_loop_execution_error",
+        "prompt427_cycle_limit_reached",
+        "prompt427_stop_required",
+        "runtime_command_returncode_nonzero",
+        "unexpected_tracked_changes",
+        "unexpected_untracked_files",
+    ]
+    commit_tag_review_requirements = [
+        "runtime_command_completed",
+        "expected_artifacts_produced",
+        "failure_stop_artifact_reviewed",
+        "no_unexpected_tracked_or_untracked_files",
+        "py_compile_passes",
+        "changed_file_guard_satisfied",
+    ]
+
+    state: dict[str, Any] = {
+        "prompt428_bounded_runtime_command_artifact_contract_enabled": True,
+        "prompt428_schema_version": _PROMPT428_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt428",
+        "prompt428_bounded_runtime_command_artifact_contract_ready": False,
+        "prompt428_bounded_runtime_command_artifact_contract_status": "blocked",
+        "prompt428_bounded_runtime_command_artifact_contract_blocked_reason": "",
+        "prompt428_runtime_contract_requested": bool(runtime_contract_requested),
+        "prompt428_allow_runtime_contract": bool(allow_runtime_contract),
+        "prompt428_transport_mode": normalized_transport_mode,
+        "prompt428_max_cycles": normalized_max_cycles,
+        "prompt428_required_runtime_inputs": [
+            "artifacts_dir",
+            "out_dir",
+            "job_id",
+            "transport_mode",
+        ],
+        "prompt428_command_plan_ready": False,
+        "prompt428_runtime_command_argv": [],
+        "prompt428_artifact_contract_ready": False,
+        "prompt428_expected_artifacts_dir": normalized_artifacts_dir,
+        "prompt428_expected_out_dir": normalized_out_dir,
+        "prompt428_expected_job_id": normalized_job_id,
+        "prompt428_expected_runtime_summary_artifact": (
+            expected_artifacts_by_role["runtime_summary"]
+        ),
+        "prompt428_expected_runtime_receipt_artifact": (
+            expected_artifacts_by_role["runtime_receipt"]
+        ),
+        "prompt428_expected_cycle_results_artifact": (
+            expected_artifacts_by_role["cycle_results"]
+        ),
+        "prompt428_expected_failure_stop_artifact": (
+            expected_artifacts_by_role["failure_stop"]
+        ),
+        "prompt428_expected_final_state_artifact": (
+            expected_artifacts_by_role["final_state"]
+        ),
+        "prompt428_expected_artifacts": expected_artifacts,
+        "prompt428_failure_stop_contract_ready": False,
+        "prompt428_failure_stop_conditions": failure_stop_conditions,
+        "prompt428_review_required_before_commit_tag": True,
+        "prompt428_commit_tag_review_requirements": (
+            commit_tag_review_requirements
+        ),
+        "prompt428_commit_tag_handoff_ready": False,
+        "prompt428_commit_tag_allowed": False,
+        "prompt428_commit_tag_performed": False,
+        "prompt428_codex_invocation_allowed": False,
+        "prompt428_git_mutation_allowed": False,
+        "prompt428_push_allowed": False,
+        "prompt428_pr_allowed": False,
+        "prompt428_merge_allowed": False,
+        "prompt428_rollback_allowed": False,
+        "prompt428_unbounded_loop_allowed": False,
+        "prompt428_daemon_mode_allowed": False,
+        "prompt428_runtime_command_executed": False,
+        "prompt428_next_action": "",
+    }
+
+    if not runtime_contract_requested:
+        state.update(
+            {
+                "prompt428_bounded_runtime_command_artifact_contract_ready": True,
+                "prompt428_bounded_runtime_command_artifact_contract_status": (
+                    "ready"
+                ),
+                "prompt428_next_action": (
+                    "request_prompt428_runtime_contract"
+                ),
+            }
+        )
+        return state
+
+    if not allow_runtime_contract:
+        state.update(
+            {
+                "prompt428_bounded_runtime_command_artifact_contract_ready": False,
+                "prompt428_bounded_runtime_command_artifact_contract_status": (
+                    "blocked"
+                ),
+                "prompt428_bounded_runtime_command_artifact_contract_blocked_reason": (
+                    "runtime_contract_not_allowed"
+                ),
+                "prompt428_next_action": "allow_prompt428_runtime_contract",
+            }
+        )
+        return state
+
+    if normalized_transport_mode not in {"dry-run", "live"}:
+        state.update(
+            {
+                "prompt428_bounded_runtime_command_artifact_contract_ready": False,
+                "prompt428_bounded_runtime_command_artifact_contract_status": (
+                    "blocked"
+                ),
+                "prompt428_bounded_runtime_command_artifact_contract_blocked_reason": (
+                    "invalid_transport_mode"
+                ),
+                "prompt428_next_action": (
+                    "select_supported_prompt428_transport_mode"
+                ),
+            }
+        )
+        return state
+
+    command_argv = [
+        "python",
+        "scripts/run_planned_execution.py",
+        "--artifacts-dir",
+        normalized_artifacts_dir,
+        "--out-dir",
+        normalized_out_dir,
+        "--job-id",
+        normalized_job_id,
+        "--transport-mode",
+        normalized_transport_mode,
+        "--json",
+    ]
+    if normalized_transport_mode == "live":
+        command_argv.extend(
+            [
+                "--enable-live-transport",
+                "--live-timeout-seconds",
+                "120",
+            ]
+        )
+
+    state.update(
+        {
+            "prompt428_bounded_runtime_command_artifact_contract_ready": True,
+            "prompt428_bounded_runtime_command_artifact_contract_status": (
+                "contract_ready"
+            ),
+            "prompt428_command_plan_ready": True,
+            "prompt428_runtime_command_argv": command_argv,
+            "prompt428_artifact_contract_ready": True,
+            "prompt428_failure_stop_contract_ready": True,
+            "prompt428_commit_tag_handoff_ready": True,
+            "prompt428_next_action": (
+                "run_prompt428_runtime_command_and_review_artifacts"
+            ),
+        }
+    )
+    return state
 
 
 def _build_prompt382_approve_commit_tag_execution_gate_state(
@@ -241441,6 +241728,63 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt427_bounded_multi_cycle_loop_runner_payload,
         }
+        prompt428_bounded_runtime_command_artifact_contract_payload = (
+            _build_prompt428_bounded_runtime_command_artifact_contract_state(
+                run_state_payload=run_state_payload,
+                runtime_contract_requested=bool(
+                    run_state_payload.get("prompt428_runtime_contract_requested")
+                ),
+                allow_runtime_contract=bool(
+                    run_state_payload.get("prompt428_allow_runtime_contract")
+                ),
+                artifacts_dir=run_state_payload.get(
+                    "prompt428_expected_artifacts_dir"
+                ),
+                out_dir=run_state_payload.get("prompt428_expected_out_dir"),
+                job_id=run_state_payload.get("prompt428_expected_job_id"),
+                max_cycles=run_state_payload.get("prompt427_max_cycles", 2),
+                transport_mode=run_state_payload.get(
+                    "prompt428_transport_mode",
+                    "dry-run",
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt428_bounded_runtime_command_artifact_contract_payload,
+        }
+        compact_planning_summary = run_state_payload.get(
+            "project_planning_summary_compact"
+        )
+        if isinstance(compact_planning_summary, Mapping):
+            run_state_payload["project_planning_summary_compact"] = {
+                **dict(compact_planning_summary),
+                "prompt428_bounded_runtime_command_artifact_contract_status": (
+                    prompt428_bounded_runtime_command_artifact_contract_payload.get(
+                        "prompt428_bounded_runtime_command_artifact_contract_status"
+                    )
+                ),
+                "prompt428_command_plan_ready": (
+                    prompt428_bounded_runtime_command_artifact_contract_payload.get(
+                        "prompt428_command_plan_ready"
+                    )
+                ),
+                "prompt428_artifact_contract_ready": (
+                    prompt428_bounded_runtime_command_artifact_contract_payload.get(
+                        "prompt428_artifact_contract_ready"
+                    )
+                ),
+                "prompt428_failure_stop_contract_ready": (
+                    prompt428_bounded_runtime_command_artifact_contract_payload.get(
+                        "prompt428_failure_stop_contract_ready"
+                    )
+                ),
+                "prompt428_next_action": (
+                    prompt428_bounded_runtime_command_artifact_contract_payload.get(
+                        "prompt428_next_action"
+                    )
+                ),
+            }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -241653,6 +241997,23 @@ class PlannedExecutionRunner:
                     "run_state.prompt427_final_cycle_status",
                     "run_state.prompt427_stop_required",
                     "run_state.prompt427_stop_reason",
+                    (
+                        "run_state."
+                        "prompt428_bounded_runtime_command_artifact_contract_status"
+                    ),
+                    (
+                        "run_state."
+                        "prompt428_bounded_runtime_command_artifact_contract_ready"
+                    ),
+                    "run_state.prompt428_runtime_contract_requested",
+                    "run_state.prompt428_allow_runtime_contract",
+                    "run_state.prompt428_transport_mode",
+                    "run_state.prompt428_command_plan_ready",
+                    "run_state.prompt428_artifact_contract_ready",
+                    "run_state.prompt428_failure_stop_contract_ready",
+                    "run_state.prompt428_commit_tag_handoff_ready",
+                    "run_state.prompt428_runtime_command_executed",
+                    "run_state.prompt428_next_action",
                 ]
             )
         )
@@ -242035,6 +242396,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt427_bounded_multi_cycle_loop_runner_state=(
                     prompt427_bounded_multi_cycle_loop_runner_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt428_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt428_bounded_runtime_command_artifact_contract_state=(
+                    prompt428_bounded_runtime_command_artifact_contract_payload
                 ),
             )
         )
