@@ -3872,6 +3872,9 @@ _PROMPT419_SCHEMA_VERSION = (
     "prompt419_approve_commit_tag_and_success_loop_boundary_v1"
 )
 _PROMPT420_SCHEMA_VERSION = "prompt420_success_only_next_cycle_loop_v1"
+_PROMPT421_SCHEMA_VERSION = (
+    "prompt421_targeted_fix_route_and_materialization_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5277,6 +5280,50 @@ _PROMPT420_SUCCESS_ONLY_NEXT_CYCLE_LOOP_KEYS: tuple[str, ...] = (
     "prompt420_merge_allowed",
     "prompt420_rollback_allowed",
     "prompt420_next_action",
+)
+_PROMPT421_TARGETED_FIX_ROUTE_AND_MATERIALIZATION_KEYS: tuple[str, ...] = (
+    "prompt421_schema_version",
+    "prompt421_targeted_fix_route_enabled",
+    "prompt421_targeted_fix_route_status",
+    "prompt421_targeted_fix_route_ready",
+    "prompt421_targeted_fix_route_blocked_reason",
+    "prompt421_targeted_fix_route_blocked_reasons",
+    "prompt421_targeted_fix_route_source",
+    "prompt421_selected_prompt_id",
+    "prompt421_failure_classification",
+    "prompt421_failure_route_reason",
+    "prompt421_execution_returncode",
+    "prompt421_execution_returncode_classification",
+    "prompt421_execution_status",
+    "prompt421_result_json_path",
+    "prompt421_stdout_path",
+    "prompt421_stderr_path",
+    "prompt421_targeted_fix_required",
+    "prompt421_retry_required",
+    "prompt421_stop_required",
+    "prompt421_targeted_fix_prompt_ready",
+    "prompt421_targeted_fix_prompt_text",
+    "prompt421_targeted_fix_prompt_path",
+    "prompt421_targeted_fix_materialize_requested",
+    "prompt421_targeted_fix_materialize_allowed",
+    "prompt421_targeted_fix_prompt_written",
+    "prompt421_targeted_fix_prompt_exists",
+    "prompt421_targeted_fix_receipt_path",
+    "prompt421_targeted_fix_receipt_written",
+    "prompt421_targeted_fix_execution_packet_ready",
+    "prompt421_targeted_fix_execution_packet_target_prompt",
+    "prompt421_targeted_fix_execution_packet_mode",
+    "prompt421_targeted_fix_execution_packet_prompt_path",
+    "prompt421_selected_prompt_execution_allowed",
+    "prompt421_codex_invocation_allowed",
+    "prompt421_git_mutation_allowed",
+    "prompt421_commit_tag_allowed",
+    "prompt421_push_allowed",
+    "prompt421_pr_allowed",
+    "prompt421_merge_allowed",
+    "prompt421_rollback_allowed",
+    "prompt421_next_cycle_started",
+    "prompt421_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7974,6 +8021,31 @@ def _merge_prompt420_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT420_SUCCESS_ONLY_NEXT_CYCLE_LOOP_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt421_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt421_targeted_fix_route_and_materialization_state: Mapping[str, Any]
+    | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt421_targeted_fix_route_and_materialization_state)
+        if isinstance(
+            prompt421_targeted_fix_route_and_materialization_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT421_TARGETED_FIX_ROUTE_AND_MATERIALIZATION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -61796,6 +61868,409 @@ def _build_prompt420_success_only_next_cycle_loop_state(
             }
         )
 
+    return state
+
+
+def _prompt421_relative_path_valid(path: str) -> bool:
+    if not path:
+        return False
+    pure_path = PurePosixPath(path)
+    return (
+        not pure_path.is_absolute()
+        and ".." not in pure_path.parts
+        and "\\" not in path
+    )
+
+
+def _prompt421_prompt418_targeted_fix_route_ready(
+    run_state: Mapping[str, Any],
+) -> bool:
+    classification = _normalize_text(
+        run_state.get("prompt418_execution_review_classification"),
+        default="",
+    )
+    if classification not in {"failed", "timeout", "execution_error"}:
+        return False
+    shared_required_values: dict[str, Any] = {
+        "prompt418_execution_result_review_ready": True,
+        "prompt418_execution_review_route": "targeted_fix_required",
+        "prompt418_execution_result_available": True,
+        "prompt418_execution_success": False,
+        "prompt418_execution_not_run": False,
+        "prompt418_approve_candidate": False,
+        "prompt418_targeted_fix_required": True,
+        "prompt418_retry_required": True,
+        "prompt418_stop_required": False,
+        "prompt418_failure_route_ready": True,
+        "prompt418_failure_route_target_prompt": "prompt421",
+        "prompt418_commit_tag_plan_ready": False,
+        "prompt418_success_handoff_ready": False,
+        "prompt418_next_cycle_plan_ready": False,
+        "prompt418_commit_tag_allowed": False,
+        "prompt418_next_action": "prepare_prompt421_targeted_fix_route",
+    }
+    if any(
+        run_state.get(key) != expected
+        for key, expected in shared_required_values.items()
+    ):
+        return False
+    if classification == "failed":
+        return (
+            run_state.get("prompt418_execution_result_review_status") == "failed"
+            and run_state.get("prompt418_execution_failed") is True
+            and run_state.get("prompt418_execution_timeout") is False
+            and run_state.get("prompt418_execution_error") is False
+            and isinstance(
+                run_state.get("prompt418_execution_returncode"),
+                int,
+            )
+            and not isinstance(
+                run_state.get("prompt418_execution_returncode"),
+                bool,
+            )
+            and run_state.get("prompt418_execution_returncode") != 0
+            and run_state.get("prompt418_execution_returncode_classification")
+            == "failed"
+            and run_state.get("prompt418_execution_status") == "completed"
+            and run_state.get("prompt418_failure_route_reason")
+            == "selected_prompt_execution_failed"
+        )
+    if classification == "timeout":
+        return (
+            run_state.get("prompt418_execution_result_review_status") == "timeout"
+            and run_state.get("prompt418_execution_failed") is False
+            and run_state.get("prompt418_execution_timeout") is True
+            and run_state.get("prompt418_execution_error") is False
+            and run_state.get("prompt418_execution_returncode") is None
+            and run_state.get("prompt418_execution_returncode_classification")
+            == "timeout"
+            and run_state.get("prompt418_execution_status") == "timeout"
+            and run_state.get("prompt418_failure_route_reason")
+            == "selected_prompt_execution_timeout"
+        )
+    return (
+        run_state.get("prompt418_execution_result_review_status")
+        == "execution_error"
+        and run_state.get("prompt418_execution_failed") is False
+        and run_state.get("prompt418_execution_timeout") is False
+        and run_state.get("prompt418_execution_error") is True
+        and run_state.get("prompt418_execution_returncode") is None
+        and run_state.get("prompt418_execution_returncode_classification")
+        == "execution_error"
+        and run_state.get("prompt418_execution_status") == "execution_error"
+        and run_state.get("prompt418_failure_route_reason")
+        == "selected_prompt_execution_error"
+    )
+
+
+def _prompt421_build_targeted_fix_prompt_text(
+    *,
+    selected_prompt_id: str,
+    failure_classification: str,
+    failure_route_reason: str,
+    execution_returncode: Any,
+    execution_returncode_classification: str,
+    execution_status: str,
+    result_json_path: str,
+    stdout_path: str,
+    stderr_path: str,
+) -> str:
+    return "\n".join(
+        [
+            "# Prompt421 Targeted Fix Handoff",
+            "",
+            "Goal: inspect the existing code and apply a minimal targeted fix.",
+            "",
+            f"- selected_prompt_id: {selected_prompt_id}",
+            f"- failure_classification: {failure_classification}",
+            (
+                "- returncode_classification: "
+                f"{execution_returncode_classification}"
+            ),
+            f"- execution_status: {execution_status}",
+            f"- execution_returncode: {execution_returncode!r}",
+            f"- failure_route_reason: {failure_route_reason}",
+            f"- result_json_path: {result_json_path}",
+            f"- stdout_path: {stdout_path}",
+            f"- stderr_path: {stderr_path}",
+            "",
+            "Instructions:",
+            (
+                "- Inspect the existing code and apply the smallest targeted "
+                "fix that addresses the failure route."
+            ),
+            (
+                "- Modify only automation/orchestration/"
+                "planned_execution_runner.py unless evidence requires otherwise."
+            ),
+            "- Do not execute Codex or targeted_fix from this handoff.",
+            "- Do not run git, commit, tag, push, open a PR, merge, or rollback.",
+            (
+                "- After implementation, run only: python -m py_compile "
+                "automation/orchestration/planned_execution_runner.py "
+                "scripts/run_planned_execution.py"
+            ),
+            "",
+        ]
+    )
+
+
+def _build_prompt421_targeted_fix_route_and_materialization_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    materialize_requested: bool = False,
+    allow_materialize: bool = False,
+    repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    prompt_relative_path = (
+        "current_prompt_verify_results/prompt421/targeted_fix_prompt.md"
+    )
+    receipt_relative_path = (
+        "current_prompt_verify_results/prompt421/"
+        "targeted_fix_materialization_receipt.json"
+    )
+    materialize_allowed = (
+        bool(materialize_requested) and bool(allow_materialize) and repo_path is not None
+    )
+    safety_invariants: dict[str, Any] = {
+        "prompt421_selected_prompt_execution_allowed": False,
+        "prompt421_codex_invocation_allowed": False,
+        "prompt421_git_mutation_allowed": False,
+        "prompt421_commit_tag_allowed": False,
+        "prompt421_push_allowed": False,
+        "prompt421_pr_allowed": False,
+        "prompt421_merge_allowed": False,
+        "prompt421_rollback_allowed": False,
+        "prompt421_next_cycle_started": False,
+    }
+    state: dict[str, Any] = {
+        "prompt421_schema_version": _PROMPT421_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt421",
+        "prompt421_targeted_fix_route_enabled": True,
+        "prompt421_targeted_fix_route_status": "blocked",
+        "prompt421_targeted_fix_route_ready": False,
+        "prompt421_targeted_fix_route_blocked_reason": (
+            "prompt418_targeted_fix_route_not_ready"
+        ),
+        "prompt421_targeted_fix_route_blocked_reasons": [
+            "prompt418_targeted_fix_route_not_ready"
+        ],
+        "prompt421_targeted_fix_route_source": "prompt418_failure_route",
+        "prompt421_selected_prompt_id": "",
+        "prompt421_failure_classification": "blocked",
+        "prompt421_failure_route_reason": "",
+        "prompt421_execution_returncode": None,
+        "prompt421_execution_returncode_classification": "not_run",
+        "prompt421_execution_status": "blocked",
+        "prompt421_result_json_path": "",
+        "prompt421_stdout_path": "",
+        "prompt421_stderr_path": "",
+        "prompt421_targeted_fix_required": False,
+        "prompt421_retry_required": False,
+        "prompt421_stop_required": False,
+        "prompt421_targeted_fix_prompt_ready": False,
+        "prompt421_targeted_fix_prompt_text": "",
+        "prompt421_targeted_fix_prompt_path": "",
+        "prompt421_targeted_fix_materialize_requested": bool(
+            materialize_requested
+        ),
+        "prompt421_targeted_fix_materialize_allowed": False,
+        "prompt421_targeted_fix_prompt_written": False,
+        "prompt421_targeted_fix_prompt_exists": False,
+        "prompt421_targeted_fix_receipt_path": "",
+        "prompt421_targeted_fix_receipt_written": False,
+        "prompt421_targeted_fix_execution_packet_ready": False,
+        "prompt421_targeted_fix_execution_packet_target_prompt": "prompt422",
+        "prompt421_targeted_fix_execution_packet_mode": "blocked",
+        "prompt421_targeted_fix_execution_packet_prompt_path": "",
+        **safety_invariants,
+        "prompt421_next_action": "review_prompt418_execution_result_review",
+    }
+
+    if not _prompt421_prompt418_targeted_fix_route_ready(run_state):
+        return state
+
+    selected_prompt_id = _normalize_text(
+        run_state.get("prompt418_selected_prompt_id"),
+        default="",
+    ) or "prompt402"
+    failure_classification = _normalize_text(
+        run_state.get("prompt418_execution_review_classification"),
+        default="",
+    )
+    failure_route_reason = _normalize_text(
+        run_state.get("prompt418_failure_route_reason"),
+        default="",
+    )
+    execution_returncode = run_state.get("prompt418_execution_returncode")
+    execution_returncode_classification = _normalize_text(
+        run_state.get("prompt418_execution_returncode_classification"),
+        default="",
+    )
+    execution_status = _normalize_text(
+        run_state.get("prompt418_execution_status"),
+        default="",
+    )
+    result_json_path = _normalize_text(
+        run_state.get("prompt418_result_json_path"),
+        default="",
+    )
+    stdout_path = _normalize_text(
+        run_state.get("prompt418_stdout_path"),
+        default="",
+    )
+    stderr_path = _normalize_text(
+        run_state.get("prompt418_stderr_path"),
+        default="",
+    )
+    prompt_text = _prompt421_build_targeted_fix_prompt_text(
+        selected_prompt_id=selected_prompt_id,
+        failure_classification=failure_classification,
+        failure_route_reason=failure_route_reason,
+        execution_returncode=execution_returncode,
+        execution_returncode_classification=execution_returncode_classification,
+        execution_status=execution_status,
+        result_json_path=result_json_path,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+    )
+    state.update(
+        {
+            "prompt421_targeted_fix_route_status": "ready",
+            "prompt421_targeted_fix_route_ready": True,
+            "prompt421_targeted_fix_route_blocked_reason": "",
+            "prompt421_targeted_fix_route_blocked_reasons": [],
+            "prompt421_selected_prompt_id": selected_prompt_id,
+            "prompt421_failure_classification": failure_classification,
+            "prompt421_failure_route_reason": failure_route_reason,
+            "prompt421_execution_returncode": execution_returncode,
+            "prompt421_execution_returncode_classification": (
+                execution_returncode_classification
+            ),
+            "prompt421_execution_status": execution_status,
+            "prompt421_result_json_path": result_json_path,
+            "prompt421_stdout_path": stdout_path,
+            "prompt421_stderr_path": stderr_path,
+            "prompt421_targeted_fix_required": True,
+            "prompt421_retry_required": True,
+            "prompt421_targeted_fix_prompt_ready": True,
+            "prompt421_targeted_fix_prompt_text": prompt_text,
+            "prompt421_targeted_fix_prompt_path": prompt_relative_path,
+            "prompt421_targeted_fix_receipt_path": receipt_relative_path,
+            "prompt421_targeted_fix_execution_packet_mode": (
+                "targeted_fix_prompt_not_materialized"
+            ),
+            "prompt421_targeted_fix_execution_packet_prompt_path": (
+                prompt_relative_path
+            ),
+            "prompt421_next_action": (
+                "request_prompt421_targeted_fix_prompt_materialization"
+            ),
+        }
+    )
+
+    if not materialize_allowed:
+        return state
+
+    if not (
+        _prompt421_relative_path_valid(prompt_relative_path)
+        and _prompt421_relative_path_valid(receipt_relative_path)
+        and prompt_relative_path.startswith(
+            "current_prompt_verify_results/prompt421/"
+        )
+        and receipt_relative_path.startswith(
+            "current_prompt_verify_results/prompt421/"
+        )
+    ):
+        state.update(
+            {
+                "prompt421_targeted_fix_route_status": "blocked",
+                "prompt421_targeted_fix_route_ready": False,
+                "prompt421_targeted_fix_route_blocked_reason": (
+                    "invalid_targeted_fix_prompt_path"
+                ),
+                "prompt421_targeted_fix_route_blocked_reasons": [
+                    "invalid_targeted_fix_prompt_path"
+                ],
+                "prompt421_targeted_fix_execution_packet_ready": False,
+                "prompt421_targeted_fix_execution_packet_mode": "blocked",
+                "prompt421_next_action": (
+                    "request_prompt421_targeted_fix_prompt_materialization"
+                ),
+            }
+        )
+        return state
+
+    repo_root = Path(repo_path)
+    prompt_path = repo_root / prompt_relative_path
+    receipt_path = repo_root / receipt_relative_path
+    receipt_payload: dict[str, Any] = {
+        "schema_version": _PROMPT421_SCHEMA_VERSION,
+        "prompt_id": "prompt421",
+        "status": "materialized",
+        "selected_prompt_id": selected_prompt_id,
+        "failure_classification": failure_classification,
+        "materialize_requested": True,
+        "materialize_allowed": True,
+        "prompt_path": prompt_relative_path,
+        "prompt_written": True,
+        "receipt_written": True,
+        "target_prompt": "prompt422",
+        "codex_invocation_allowed": False,
+        "git_mutation_allowed": False,
+        "commit_tag_allowed": False,
+    }
+    try:
+        prompt_path.parent.mkdir(parents=True, exist_ok=True)
+        prompt_path.write_text(prompt_text, encoding="utf-8")
+        _write_json(receipt_path, receipt_payload)
+    except Exception:  # noqa: BLE001 - surfaced as deterministic route status.
+        state.update(
+            {
+                "prompt421_targeted_fix_route_status": "materialization_error",
+                "prompt421_targeted_fix_route_ready": False,
+                "prompt421_targeted_fix_route_blocked_reason": (
+                    "targeted_fix_prompt_materialization_error"
+                ),
+                "prompt421_targeted_fix_route_blocked_reasons": [
+                    "targeted_fix_prompt_materialization_error"
+                ],
+                "prompt421_targeted_fix_materialize_allowed": True,
+                "prompt421_targeted_fix_prompt_written": False,
+                "prompt421_targeted_fix_prompt_exists": False,
+                "prompt421_targeted_fix_receipt_written": False,
+                "prompt421_targeted_fix_execution_packet_ready": False,
+                "prompt421_targeted_fix_execution_packet_mode": "blocked",
+                "prompt421_next_action": (
+                    "request_prompt421_targeted_fix_prompt_materialization"
+                ),
+            }
+        )
+        return state
+
+    state.update(
+        {
+            "prompt421_targeted_fix_route_status": "materialized",
+            "prompt421_targeted_fix_route_ready": True,
+            "prompt421_targeted_fix_materialize_allowed": True,
+            "prompt421_targeted_fix_prompt_written": True,
+            "prompt421_targeted_fix_prompt_exists": True,
+            "prompt421_targeted_fix_receipt_written": True,
+            "prompt421_targeted_fix_execution_packet_ready": True,
+            "prompt421_targeted_fix_execution_packet_mode": (
+                "targeted_fix_prompt_materialized_no_execute"
+            ),
+            "prompt421_next_action": (
+                "prepare_prompt422_targeted_fix_codex_execution"
+            ),
+        }
+    )
     return state
 
 
@@ -238558,6 +239033,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt420_success_only_next_cycle_loop_payload,
         }
+        prompt421_targeted_fix_route_and_materialization_payload = (
+            _build_prompt421_targeted_fix_route_and_materialization_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt421_targeted_fix_route_and_materialization_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -238661,6 +239145,17 @@ class PlannedExecutionRunner:
                     "run_state.prompt420_success_only_autonomous_loop_ready",
                     "run_state.prompt420_full_autonomous_loop_ready",
                     "run_state.prompt420_next_action",
+                    "run_state.prompt421_targeted_fix_route_status",
+                    "run_state.prompt421_targeted_fix_route_ready",
+                    "run_state.prompt421_failure_classification",
+                    "run_state.prompt421_targeted_fix_prompt_ready",
+                    "run_state.prompt421_targeted_fix_prompt_path",
+                    "run_state.prompt421_targeted_fix_execution_packet_ready",
+                    (
+                        "run_state."
+                        "prompt421_targeted_fix_execution_packet_target_prompt"
+                    ),
+                    "run_state.prompt421_next_action",
                 ]
             )
         )
@@ -238987,6 +239482,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt420_success_only_next_cycle_loop_state=(
                     prompt420_success_only_next_cycle_loop_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt421_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt421_targeted_fix_route_and_materialization_state=(
+                    prompt421_targeted_fix_route_and_materialization_payload
                 ),
             )
         )
@@ -247889,6 +248392,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT420_SUCCESS_ONLY_NEXT_CYCLE_LOOP_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT421_TARGETED_FIX_ROUTE_AND_MATERIALIZATION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
