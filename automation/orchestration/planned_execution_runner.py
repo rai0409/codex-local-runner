@@ -3890,6 +3890,9 @@ _PROMPT425_SCHEMA_VERSION = (
 _PROMPT426_SCHEMA_VERSION = (
     "prompt426_bounded_runner_step_executor_boundary_v1"
 )
+_PROMPT427_SCHEMA_VERSION = (
+    "prompt427_bounded_multi_cycle_loop_runner_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5582,6 +5585,37 @@ _PROMPT426_BOUNDED_RUNNER_STEP_EXECUTOR_KEYS: tuple[str, ...] = (
     "prompt426_step_execution_error_message",
     "prompt426_stop_required",
     "prompt426_next_action",
+)
+_PROMPT427_BOUNDED_MULTI_CYCLE_LOOP_RUNNER_KEYS: tuple[str, ...] = (
+    "prompt427_bounded_multi_cycle_loop_runner_enabled",
+    "prompt427_schema_version",
+    "prompt427_bounded_multi_cycle_loop_runner_ready",
+    "prompt427_bounded_multi_cycle_loop_runner_status",
+    "prompt427_bounded_multi_cycle_loop_runner_blocked_reason",
+    "prompt427_loop_requested",
+    "prompt427_allow_bounded_loop",
+    "prompt427_current_cycle",
+    "prompt427_max_cycles",
+    "prompt427_cycle_limit_reached",
+    "prompt427_cycle_execution_attempted",
+    "prompt427_cycle_execution_performed",
+    "prompt427_cycle_execution_count",
+    "prompt427_cycle_results",
+    "prompt427_final_cycle_status",
+    "prompt427_stop_required",
+    "prompt427_stop_reason",
+    "prompt427_execution_error",
+    "prompt427_execution_error_message",
+    "prompt427_codex_invocation_allowed",
+    "prompt427_git_mutation_allowed",
+    "prompt427_commit_tag_allowed",
+    "prompt427_push_allowed",
+    "prompt427_pr_allowed",
+    "prompt427_merge_allowed",
+    "prompt427_rollback_allowed",
+    "prompt427_unbounded_loop_allowed",
+    "prompt427_daemon_mode_allowed",
+    "prompt427_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8413,6 +8447,27 @@ def _merge_prompt426_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT426_BOUNDED_RUNNER_STEP_EXECUTOR_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt427_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt427_bounded_multi_cycle_loop_runner_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt427_bounded_multi_cycle_loop_runner_state)
+        if isinstance(prompt427_bounded_multi_cycle_loop_runner_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT427_BOUNDED_MULTI_CYCLE_LOOP_RUNNER_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -64284,6 +64339,278 @@ def _build_prompt426_bounded_runner_step_executor_state(
             }
         )
         return state
+
+
+def _prompt427_int_like(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_prompt427_bounded_multi_cycle_loop_runner_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    loop_requested: bool = False,
+    allow_bounded_loop: bool = False,
+    current_cycle: int | None = None,
+    max_cycles: int = 2,
+    step_executor: Callable[..., Mapping[str, Any] | None] | None = None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    normalized_current_cycle = _prompt427_int_like(current_cycle)
+    if normalized_current_cycle is None:
+        normalized_current_cycle = _prompt427_int_like(
+            run_state.get("prompt426_current_cycle")
+            or run_state.get("prompt425_current_cycle")
+            or 0
+        )
+    if normalized_current_cycle is None:
+        normalized_current_cycle = 0
+    normalized_current_cycle = max(normalized_current_cycle, 0)
+
+    normalized_max_cycles = _prompt427_int_like(max_cycles)
+    if normalized_max_cycles is None or normalized_max_cycles < 1:
+        normalized_max_cycles = 2
+
+    def _base_state() -> dict[str, Any]:
+        return {
+            "prompt427_bounded_multi_cycle_loop_runner_enabled": True,
+            "prompt427_schema_version": _PROMPT427_SCHEMA_VERSION,
+            "local_only": True,
+            "source_prompt": "prompt427",
+            "prompt427_bounded_multi_cycle_loop_runner_ready": False,
+            "prompt427_bounded_multi_cycle_loop_runner_status": "blocked",
+            "prompt427_bounded_multi_cycle_loop_runner_blocked_reason": "",
+            "prompt427_loop_requested": bool(loop_requested),
+            "prompt427_allow_bounded_loop": bool(allow_bounded_loop),
+            "prompt427_current_cycle": normalized_current_cycle,
+            "prompt427_max_cycles": normalized_max_cycles,
+            "prompt427_cycle_limit_reached": (
+                normalized_current_cycle >= normalized_max_cycles
+            ),
+            "prompt427_cycle_execution_attempted": False,
+            "prompt427_cycle_execution_performed": False,
+            "prompt427_cycle_execution_count": 0,
+            "prompt427_cycle_results": [],
+            "prompt427_final_cycle_status": "",
+            "prompt427_stop_required": False,
+            "prompt427_stop_reason": "",
+            "prompt427_execution_error": False,
+            "prompt427_execution_error_message": "",
+            "prompt427_codex_invocation_allowed": False,
+            "prompt427_git_mutation_allowed": False,
+            "prompt427_commit_tag_allowed": False,
+            "prompt427_push_allowed": False,
+            "prompt427_pr_allowed": False,
+            "prompt427_merge_allowed": False,
+            "prompt427_rollback_allowed": False,
+            "prompt427_unbounded_loop_allowed": False,
+            "prompt427_daemon_mode_allowed": False,
+            "prompt427_next_action": "",
+        }
+
+    state = _base_state()
+
+    if not loop_requested:
+        state.update(
+            {
+                "prompt427_bounded_multi_cycle_loop_runner_ready": True,
+                "prompt427_bounded_multi_cycle_loop_runner_status": "ready",
+                "prompt427_next_action": (
+                    "request_prompt427_bounded_loop_execution"
+                ),
+            }
+        )
+        return state
+
+    if not allow_bounded_loop:
+        state.update(
+            {
+                "prompt427_bounded_multi_cycle_loop_runner_ready": False,
+                "prompt427_bounded_multi_cycle_loop_runner_status": "blocked",
+                "prompt427_bounded_multi_cycle_loop_runner_blocked_reason": (
+                    "bounded_loop_execution_not_allowed"
+                ),
+                "prompt427_cycle_limit_reached": False,
+                "prompt427_next_action": (
+                    "allow_prompt427_bounded_loop_execution"
+                ),
+            }
+        )
+        return state
+
+    if normalized_current_cycle >= normalized_max_cycles:
+        state.update(
+            {
+                "prompt427_bounded_multi_cycle_loop_runner_ready": True,
+                "prompt427_bounded_multi_cycle_loop_runner_status": "stopped",
+                "prompt427_cycle_limit_reached": True,
+                "prompt427_final_cycle_status": "cycle_limit_stop",
+                "prompt427_stop_required": True,
+                "prompt427_stop_reason": (
+                    "bounded_multi_cycle_loop_cycle_limit_reached"
+                ),
+                "prompt427_next_action": "stop_bounded_multi_cycle_loop",
+            }
+        )
+        return state
+
+    if not callable(step_executor):
+        state.update(
+            {
+                "prompt427_bounded_multi_cycle_loop_runner_ready": False,
+                "prompt427_bounded_multi_cycle_loop_runner_status": "blocked",
+                "prompt427_bounded_multi_cycle_loop_runner_blocked_reason": (
+                    "step_executor_missing"
+                ),
+                "prompt427_cycle_limit_reached": False,
+                "prompt427_next_action": "provide_prompt427_step_executor",
+            }
+        )
+        return state
+
+    cycle_results: list[dict[str, Any]] = []
+    previous_cycle_result: dict[str, Any] | None = None
+    current = normalized_current_cycle
+
+    def _finalize_cycle_state(
+        *,
+        status: str,
+        ready: bool,
+        stop_required: bool,
+        stop_reason: str,
+        final_cycle_status: str,
+        next_action: str,
+        execution_error: bool = False,
+        execution_error_message: str = "",
+    ) -> dict[str, Any]:
+        state.update(
+            {
+                "prompt427_bounded_multi_cycle_loop_runner_ready": ready,
+                "prompt427_bounded_multi_cycle_loop_runner_status": status,
+                "prompt427_bounded_multi_cycle_loop_runner_blocked_reason": "",
+                "prompt427_current_cycle": current,
+                "prompt427_cycle_limit_reached": current >= normalized_max_cycles,
+                "prompt427_cycle_execution_attempted": True,
+                "prompt427_cycle_execution_performed": len(cycle_results) > 0,
+                "prompt427_cycle_execution_count": len(cycle_results),
+                "prompt427_cycle_results": cycle_results,
+                "prompt427_final_cycle_status": final_cycle_status,
+                "prompt427_stop_required": stop_required,
+                "prompt427_stop_reason": stop_reason,
+                "prompt427_execution_error": execution_error,
+                "prompt427_execution_error_message": execution_error_message,
+                "prompt427_next_action": next_action,
+            }
+        )
+        return state
+
+    for cycle_index in range(normalized_max_cycles - normalized_current_cycle):
+        try:
+            raw_result = step_executor(
+                cycle_index=cycle_index,
+                current_cycle=current,
+                max_cycles=normalized_max_cycles,
+                run_state_payload=run_state_payload,
+                previous_cycle_result=previous_cycle_result,
+            )
+        except Exception as exc:
+            current += 1
+            return _finalize_cycle_state(
+                status="execution_error",
+                ready=False,
+                stop_required=True,
+                stop_reason="step_executor_exception",
+                final_cycle_status="execution_error",
+                next_action="review_prompt427_step_executor_error",
+                execution_error=True,
+                execution_error_message=str(exc),
+            )
+
+        result = dict(raw_result) if isinstance(raw_result, Mapping) else {}
+        cycle_results.append(result)
+        previous_cycle_result = result
+        current += 1
+
+        result_blocked = (
+            result.get("prompt426_bounded_runner_step_executor_status")
+            == "blocked"
+            or result.get("prompt427_bounded_multi_cycle_loop_runner_status")
+            == "blocked"
+            or result.get("status") == "blocked"
+        )
+        if result_blocked:
+            return _finalize_cycle_state(
+                status="blocked",
+                ready=False,
+                stop_required=True,
+                stop_reason="cycle_result_blocked",
+                final_cycle_status="blocked",
+                next_action="review_prompt427_blocked_cycle_result",
+            )
+
+        result_execution_error = (
+            result.get("prompt426_bounded_runner_step_executor_status")
+            == "execution_error"
+            or result.get("prompt426_step_execution_status")
+            == "execution_error"
+            or result.get("prompt426_step_execution_error") is True
+            or result.get("status") == "execution_error"
+        )
+        if result_execution_error:
+            return _finalize_cycle_state(
+                status="execution_error",
+                ready=False,
+                stop_required=True,
+                stop_reason="cycle_result_execution_error",
+                final_cycle_status="execution_error",
+                next_action="review_prompt427_execution_error_cycle_result",
+                execution_error=True,
+            )
+
+        result_stop = (
+            result.get("prompt426_stop_required") is True
+            or result.get("prompt427_stop_required") is True
+            or result.get("stop_required") is True
+            or result.get("prompt426_bounded_runner_step_executor_status")
+            == "stopped"
+            or result.get("status") == "stopped"
+        )
+        if result_stop:
+            return _finalize_cycle_state(
+                status="stopped",
+                ready=True,
+                stop_required=True,
+                stop_reason="cycle_result_stop_required",
+                final_cycle_status="stopped",
+                next_action="stop_bounded_multi_cycle_loop",
+            )
+
+        if current >= normalized_max_cycles:
+            return _finalize_cycle_state(
+                status="cycle_limit_stop",
+                ready=True,
+                stop_required=True,
+                stop_reason="bounded_multi_cycle_loop_cycle_limit_reached",
+                final_cycle_status="cycle_limit_stop",
+                next_action="review_prompt427_bounded_loop_results",
+            )
+
+    return _finalize_cycle_state(
+        status="cycle_limit_stop",
+        ready=True,
+        stop_required=True,
+        stop_reason="bounded_multi_cycle_loop_cycle_limit_reached",
+        final_cycle_status="cycle_limit_stop",
+        next_action="review_prompt427_bounded_loop_results",
+    )
 
 
 def _build_prompt382_approve_commit_tag_execution_gate_state(
@@ -241103,6 +241430,17 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt426_bounded_runner_step_executor_payload,
         }
+        prompt427_bounded_multi_cycle_loop_runner_payload = (
+            _build_prompt427_bounded_multi_cycle_loop_runner_state(
+                run_state_payload=run_state_payload,
+                current_cycle=run_state_payload.get("prompt426_current_cycle"),
+                max_cycles=run_state_payload.get("prompt426_max_cycles", 2),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt427_bounded_multi_cycle_loop_runner_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -241297,6 +241635,24 @@ class PlannedExecutionRunner:
                     "run_state.prompt426_requires_commit_tag",
                     "run_state.prompt426_requires_next_cycle",
                     "run_state.prompt426_stop_required",
+                    (
+                        "run_state."
+                        "prompt427_bounded_multi_cycle_loop_runner_status"
+                    ),
+                    (
+                        "run_state."
+                        "prompt427_bounded_multi_cycle_loop_runner_ready"
+                    ),
+                    "run_state.prompt427_next_action",
+                    "run_state.prompt427_current_cycle",
+                    "run_state.prompt427_max_cycles",
+                    "run_state.prompt427_cycle_limit_reached",
+                    "run_state.prompt427_cycle_execution_attempted",
+                    "run_state.prompt427_cycle_execution_performed",
+                    "run_state.prompt427_cycle_execution_count",
+                    "run_state.prompt427_final_cycle_status",
+                    "run_state.prompt427_stop_required",
+                    "run_state.prompt427_stop_reason",
                 ]
             )
         )
@@ -241671,6 +242027,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt426_bounded_runner_step_executor_state=(
                     prompt426_bounded_runner_step_executor_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt427_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt427_bounded_multi_cycle_loop_runner_state=(
+                    prompt427_bounded_multi_cycle_loop_runner_payload
                 ),
             )
         )
@@ -250591,6 +250955,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT426_BOUNDED_RUNNER_STEP_EXECUTOR_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT427_BOUNDED_MULTI_CYCLE_LOOP_RUNNER_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
