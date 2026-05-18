@@ -3871,6 +3871,7 @@ _PROMPT418_SCHEMA_VERSION = (
 _PROMPT419_SCHEMA_VERSION = (
     "prompt419_approve_commit_tag_and_success_loop_boundary_v1"
 )
+_PROMPT420_SCHEMA_VERSION = "prompt420_success_only_next_cycle_loop_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5231,6 +5232,51 @@ _PROMPT419_APPROVE_COMMIT_TAG_AND_SUCCESS_LOOP_KEYS: tuple[str, ...] = (
     "prompt419_merge_allowed",
     "prompt419_rollback_allowed",
     "prompt419_next_action",
+)
+_PROMPT420_SUCCESS_ONLY_NEXT_CYCLE_LOOP_KEYS: tuple[str, ...] = (
+    "prompt420_schema_version",
+    "prompt420_success_only_next_cycle_loop_enabled",
+    "prompt420_success_only_next_cycle_loop_status",
+    "prompt420_success_only_next_cycle_loop_ready",
+    "prompt420_success_only_next_cycle_loop_blocked_reason",
+    "prompt420_success_only_next_cycle_loop_blocked_reasons",
+    "prompt420_success_only_next_cycle_loop_source",
+    "prompt420_selected_prompt_id",
+    "prompt420_previous_cycle_completed",
+    "prompt420_previous_cycle_commit_tag_performed",
+    "prompt420_success_cycle_current",
+    "prompt420_success_cycle_next",
+    "prompt420_success_cycle_max",
+    "prompt420_success_cycle_remaining",
+    "prompt420_bounded_loop_ready",
+    "prompt420_bounded_loop_continue_allowed",
+    "prompt420_bounded_loop_started",
+    "prompt420_bounded_loop_stop_required",
+    "prompt420_next_prompt_selection_ready",
+    "prompt420_next_prompt_selection_requested",
+    "prompt420_next_prompt_selection_allowed",
+    "prompt420_next_prompt_selection_started",
+    "prompt420_next_prompt_selection_target_prompt",
+    "prompt420_next_prompt_selection_mode",
+    "prompt420_next_prompt_selection_reason",
+    "prompt420_success_only_autonomous_loop_ready",
+    "prompt420_success_only_autonomous_loop_completed",
+    "prompt420_success_only_autonomous_loop_scope",
+    "prompt420_full_autonomous_loop_ready",
+    "prompt420_full_autonomous_loop_blocked_reason",
+    "prompt420_targeted_fix_required",
+    "prompt420_targeted_fix_integrated",
+    "prompt420_retry_required",
+    "prompt420_stop_required",
+    "prompt420_selected_prompt_execution_allowed",
+    "prompt420_codex_invocation_allowed",
+    "prompt420_git_mutation_allowed",
+    "prompt420_commit_tag_allowed",
+    "prompt420_push_allowed",
+    "prompt420_pr_allowed",
+    "prompt420_merge_allowed",
+    "prompt420_rollback_allowed",
+    "prompt420_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7907,6 +7953,27 @@ def _merge_prompt419_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT419_APPROVE_COMMIT_TAG_AND_SUCCESS_LOOP_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt420_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt420_success_only_next_cycle_loop_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt420_success_only_next_cycle_loop_state)
+        if isinstance(prompt420_success_only_next_cycle_loop_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT420_SUCCESS_ONLY_NEXT_CYCLE_LOOP_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -61507,6 +61574,228 @@ def _build_prompt419_approve_commit_tag_and_success_loop_boundary_state(
             receipt=receipt_payload,
         )
     )
+    return state
+
+
+def _prompt420_prompt419_success_loop_packet_ready(
+    run_state: Mapping[str, Any],
+) -> bool:
+    required_values: dict[str, Any] = {
+        "prompt419_approve_commit_tag_boundary_status": "performed",
+        "prompt419_approve_commit_tag_boundary_ready": True,
+        "prompt419_selected_prompt_id": "prompt402",
+        "prompt419_approve_candidate": True,
+        "prompt419_commit_tag_requested": True,
+        "prompt419_git_mutation_allowed": True,
+        "prompt419_commit_tag_allowed": True,
+        "prompt419_commit_tag_attempted": True,
+        "prompt419_commit_tag_performed": True,
+        "prompt419_commit_performed": True,
+        "prompt419_tag_performed": True,
+        "prompt419_commit_tag_status": "performed",
+        "prompt419_success_loop_packet_ready": True,
+        "prompt419_success_loop_packet_target_prompt": "prompt420",
+        "prompt419_success_loop_packet_mode": (
+            "commit_tag_performed_success_loop_ready"
+        ),
+        "prompt419_success_loop_packet_selected_prompt_id": "prompt402",
+        "prompt419_success_loop_packet_commit_tag_status": "performed",
+        "prompt419_next_cycle_plan_ready": True,
+        "prompt419_next_cycle_plan_target_prompt": "prompt420",
+        "prompt419_next_cycle_plan_mode": "success_only_bounded_next_cycle_plan",
+        "prompt419_next_cycle_allowed": False,
+        "prompt419_next_cycle_started": False,
+        "prompt419_targeted_fix_required": False,
+        "prompt419_retry_required": False,
+        "prompt419_stop_required": False,
+        "prompt419_push_allowed": False,
+        "prompt419_pr_allowed": False,
+        "prompt419_merge_allowed": False,
+        "prompt419_rollback_allowed": False,
+        "prompt419_next_action": "prepare_prompt420_success_only_next_cycle_loop",
+    }
+    return all(run_state.get(key) == expected for key, expected in required_values.items())
+
+
+def _prompt420_normalize_cycle_value(
+    value: Any,
+    *,
+    field_name: str,
+    minimum: int,
+) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+        raise ValueError(f"{field_name}_must_be_int_gte_{minimum}")
+    return value
+
+
+def _build_prompt420_success_only_next_cycle_loop_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    start_next_cycle_requested: bool = False,
+    allow_next_cycle: bool = False,
+    max_success_cycles: int = 2,
+    current_success_cycle: int | None = None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    normalized_max_success_cycles = _prompt420_normalize_cycle_value(
+        max_success_cycles,
+        field_name="max_success_cycles",
+        minimum=1,
+    )
+    if current_success_cycle is None:
+        derived_current_success_cycle = run_state.get(
+            "prompt420_success_cycle_current",
+            0,
+        )
+    else:
+        derived_current_success_cycle = current_success_cycle
+    normalized_current_success_cycle = _prompt420_normalize_cycle_value(
+        derived_current_success_cycle,
+        field_name="current_success_cycle",
+        minimum=0,
+    )
+    next_success_cycle = normalized_current_success_cycle + 1
+    remaining_success_cycles = max(
+        normalized_max_success_cycles - normalized_current_success_cycle,
+        0,
+    )
+    prompt419_ready = _prompt420_prompt419_success_loop_packet_ready(run_state)
+
+    state: dict[str, Any] = {
+        "prompt420_schema_version": _PROMPT420_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt420",
+        "prompt420_success_only_next_cycle_loop_enabled": True,
+        "prompt420_success_only_next_cycle_loop_status": "blocked",
+        "prompt420_success_only_next_cycle_loop_ready": False,
+        "prompt420_success_only_next_cycle_loop_blocked_reason": (
+            "prompt419_success_loop_packet_not_ready"
+        ),
+        "prompt420_success_only_next_cycle_loop_blocked_reasons": [
+            "prompt419_success_loop_packet_not_ready"
+        ],
+        "prompt420_success_only_next_cycle_loop_source": (
+            "prompt419_success_loop_packet"
+        ),
+        "prompt420_selected_prompt_id": "",
+        "prompt420_previous_cycle_completed": False,
+        "prompt420_previous_cycle_commit_tag_performed": False,
+        "prompt420_success_cycle_current": 0,
+        "prompt420_success_cycle_next": 0,
+        "prompt420_success_cycle_max": normalized_max_success_cycles,
+        "prompt420_success_cycle_remaining": normalized_max_success_cycles,
+        "prompt420_bounded_loop_ready": False,
+        "prompt420_bounded_loop_continue_allowed": False,
+        "prompt420_bounded_loop_started": False,
+        "prompt420_bounded_loop_stop_required": False,
+        "prompt420_next_prompt_selection_ready": False,
+        "prompt420_next_prompt_selection_requested": bool(
+            start_next_cycle_requested
+        ),
+        "prompt420_next_prompt_selection_allowed": False,
+        "prompt420_next_prompt_selection_started": False,
+        "prompt420_next_prompt_selection_target_prompt": "prompt402",
+        "prompt420_next_prompt_selection_mode": "blocked",
+        "prompt420_next_prompt_selection_reason": (
+            "prompt419_success_loop_packet_not_ready"
+        ),
+        "prompt420_success_only_autonomous_loop_ready": False,
+        "prompt420_success_only_autonomous_loop_completed": False,
+        "prompt420_success_only_autonomous_loop_scope": "success_only",
+        "prompt420_full_autonomous_loop_ready": False,
+        "prompt420_full_autonomous_loop_blocked_reason": (
+            "prompt419_success_loop_packet_not_ready"
+        ),
+        "prompt420_targeted_fix_required": False,
+        "prompt420_targeted_fix_integrated": False,
+        "prompt420_retry_required": False,
+        "prompt420_stop_required": False,
+        "prompt420_selected_prompt_execution_allowed": False,
+        "prompt420_codex_invocation_allowed": False,
+        "prompt420_git_mutation_allowed": False,
+        "prompt420_commit_tag_allowed": False,
+        "prompt420_push_allowed": False,
+        "prompt420_pr_allowed": False,
+        "prompt420_merge_allowed": False,
+        "prompt420_rollback_allowed": False,
+        "prompt420_next_action": (
+            "review_prompt419_approve_commit_tag_and_success_loop_boundary"
+        ),
+    }
+
+    if not prompt419_ready:
+        return state
+
+    state.update(
+        {
+            "prompt420_success_only_next_cycle_loop_status": "ready",
+            "prompt420_success_only_next_cycle_loop_ready": True,
+            "prompt420_success_only_next_cycle_loop_blocked_reason": "",
+            "prompt420_success_only_next_cycle_loop_blocked_reasons": [],
+            "prompt420_selected_prompt_id": "prompt402",
+            "prompt420_previous_cycle_completed": True,
+            "prompt420_previous_cycle_commit_tag_performed": True,
+            "prompt420_success_cycle_current": normalized_current_success_cycle,
+            "prompt420_success_cycle_next": next_success_cycle,
+            "prompt420_success_cycle_max": normalized_max_success_cycles,
+            "prompt420_success_cycle_remaining": remaining_success_cycles,
+            "prompt420_bounded_loop_ready": True,
+            "prompt420_next_prompt_selection_ready": True,
+            "prompt420_next_prompt_selection_mode": (
+                "success_only_return_to_prompt_selection"
+            ),
+            "prompt420_next_prompt_selection_reason": (
+                "previous_cycle_success_commit_tag_performed"
+            ),
+            "prompt420_success_only_autonomous_loop_ready": True,
+            "prompt420_success_only_autonomous_loop_completed": True,
+            "prompt420_full_autonomous_loop_blocked_reason": (
+                "targeted_fix_route_not_integrated"
+            ),
+            "prompt420_next_action": (
+                "request_prompt420_success_only_next_cycle_start"
+            ),
+        }
+    )
+
+    if next_success_cycle > normalized_max_success_cycles:
+        state.update(
+            {
+                "prompt420_success_only_next_cycle_loop_status": "stopped",
+                "prompt420_bounded_loop_continue_allowed": False,
+                "prompt420_bounded_loop_started": False,
+                "prompt420_bounded_loop_stop_required": True,
+                "prompt420_next_prompt_selection_ready": False,
+                "prompt420_next_prompt_selection_allowed": False,
+                "prompt420_next_prompt_selection_started": False,
+                "prompt420_stop_required": True,
+                "prompt420_next_action": (
+                    "stop_success_only_loop_max_cycles_reached"
+                ),
+            }
+        )
+        return state
+
+    if start_next_cycle_requested and allow_next_cycle:
+        state.update(
+            {
+                "prompt420_success_only_next_cycle_loop_status": "started",
+                "prompt420_bounded_loop_continue_allowed": True,
+                "prompt420_bounded_loop_started": True,
+                "prompt420_bounded_loop_stop_required": False,
+                "prompt420_next_prompt_selection_requested": True,
+                "prompt420_next_prompt_selection_allowed": True,
+                "prompt420_next_prompt_selection_started": True,
+                "prompt420_next_action": (
+                    "return_to_prompt402_next_prompt_selection"
+                ),
+            }
+        )
+
     return state
 
 
@@ -238260,6 +238549,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt419_approve_commit_tag_and_success_loop_boundary_payload,
         }
+        prompt420_success_only_next_cycle_loop_payload = (
+            _build_prompt420_success_only_next_cycle_loop_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt420_success_only_next_cycle_loop_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -238350,6 +238648,19 @@ class PlannedExecutionRunner:
                     "run_state.prompt419_success_loop_packet_target_prompt",
                     "run_state.prompt419_next_cycle_plan_ready",
                     "run_state.prompt419_next_action",
+                    "run_state.prompt420_success_only_next_cycle_loop_status",
+                    "run_state.prompt420_success_only_next_cycle_loop_ready",
+                    "run_state.prompt420_selected_prompt_id",
+                    "run_state.prompt420_success_cycle_current",
+                    "run_state.prompt420_success_cycle_next",
+                    "run_state.prompt420_success_cycle_max",
+                    "run_state.prompt420_bounded_loop_continue_allowed",
+                    "run_state.prompt420_bounded_loop_started",
+                    "run_state.prompt420_next_prompt_selection_ready",
+                    "run_state.prompt420_next_prompt_selection_allowed",
+                    "run_state.prompt420_success_only_autonomous_loop_ready",
+                    "run_state.prompt420_full_autonomous_loop_ready",
+                    "run_state.prompt420_next_action",
                 ]
             )
         )
@@ -238668,6 +238979,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt419_approve_commit_tag_and_success_loop_boundary_state=(
                     prompt419_approve_commit_tag_and_success_loop_boundary_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt420_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt420_success_only_next_cycle_loop_state=(
+                    prompt420_success_only_next_cycle_loop_payload
                 ),
             )
         )
@@ -247567,6 +247886,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT419_APPROVE_COMMIT_TAG_AND_SUCCESS_LOOP_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT420_SUCCESS_ONLY_NEXT_CYCLE_LOOP_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
