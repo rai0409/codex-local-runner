@@ -3875,6 +3875,9 @@ _PROMPT420_SCHEMA_VERSION = "prompt420_success_only_next_cycle_loop_v1"
 _PROMPT421_SCHEMA_VERSION = (
     "prompt421_targeted_fix_route_and_materialization_v1"
 )
+_PROMPT422_SCHEMA_VERSION = (
+    "prompt422_targeted_fix_codex_execution_adapter_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5324,6 +5327,61 @@ _PROMPT421_TARGETED_FIX_ROUTE_AND_MATERIALIZATION_KEYS: tuple[str, ...] = (
     "prompt421_rollback_allowed",
     "prompt421_next_cycle_started",
     "prompt421_next_action",
+)
+_PROMPT422_TARGETED_FIX_CODEX_EXECUTION_ADAPTER_KEYS: tuple[str, ...] = (
+    "prompt422_schema_version",
+    "prompt422_targeted_fix_codex_execution_adapter_enabled",
+    "prompt422_targeted_fix_codex_execution_adapter_status",
+    "prompt422_targeted_fix_codex_execution_adapter_ready",
+    "prompt422_targeted_fix_codex_execution_adapter_blocked_reason",
+    "prompt422_targeted_fix_codex_execution_adapter_blocked_reasons",
+    "prompt422_targeted_fix_codex_execution_adapter_source",
+    "prompt422_selected_prompt_id",
+    "prompt422_targeted_fix_prompt_path",
+    "prompt422_targeted_fix_prompt_path_valid",
+    "prompt422_targeted_fix_prompt_file_checked",
+    "prompt422_targeted_fix_prompt_file_read",
+    "prompt422_targeted_fix_prompt_sha256",
+    "prompt422_targeted_fix_prompt_size_bytes",
+    "prompt422_execution_mode",
+    "prompt422_execute_requested",
+    "prompt422_execution_allowed",
+    "prompt422_execution_attempted",
+    "prompt422_execution_performed",
+    "prompt422_execution_status",
+    "prompt422_execution_returncode",
+    "prompt422_execution_returncode_classification",
+    "prompt422_execution_timeout",
+    "prompt422_execution_error",
+    "prompt422_execution_error_message",
+    "prompt422_command",
+    "prompt422_command_shell",
+    "prompt422_timeout_seconds",
+    "prompt422_stdout_path",
+    "prompt422_stderr_path",
+    "prompt422_result_json_path",
+    "prompt422_stdout_written",
+    "prompt422_stderr_written",
+    "prompt422_result_json_written",
+    "prompt422_capture_written",
+    "prompt422_review_packet_ready",
+    "prompt422_review_packet_target_prompt",
+    "prompt422_review_packet_mode",
+    "prompt422_review_packet_prompt_id",
+    "prompt422_approve_candidate",
+    "prompt422_targeted_fix_required",
+    "prompt422_retry_required",
+    "prompt422_stop_required",
+    "prompt422_selected_prompt_execution_allowed",
+    "prompt422_codex_invocation_allowed",
+    "prompt422_git_mutation_allowed",
+    "prompt422_commit_tag_allowed",
+    "prompt422_push_allowed",
+    "prompt422_pr_allowed",
+    "prompt422_merge_allowed",
+    "prompt422_rollback_allowed",
+    "prompt422_next_cycle_started",
+    "prompt422_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8046,6 +8104,31 @@ def _merge_prompt421_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT421_TARGETED_FIX_ROUTE_AND_MATERIALIZATION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt422_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt422_targeted_fix_codex_execution_adapter_state: Mapping[str, Any]
+    | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt422_targeted_fix_codex_execution_adapter_state)
+        if isinstance(
+            prompt422_targeted_fix_codex_execution_adapter_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT422_TARGETED_FIX_CODEX_EXECUTION_ADAPTER_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -62268,6 +62351,477 @@ def _build_prompt421_targeted_fix_route_and_materialization_state(
             ),
             "prompt421_next_action": (
                 "prepare_prompt422_targeted_fix_codex_execution"
+            ),
+        }
+    )
+    return state
+
+
+def _prompt422_normalize_timeout_seconds(value: Any) -> int:
+    if isinstance(value, bool):
+        return 600
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError):
+        return 600
+    return max(normalized, 1)
+
+
+def _prompt422_normalize_command(
+    command: Sequence[str] | None,
+) -> list[str]:
+    if command is None:
+        return ["codex", "exec", "-"]
+    normalized = [str(part) for part in command]
+    if not normalized or not normalized[0]:
+        raise ValueError("invalid_codex_command")
+    return normalized
+
+
+def _prompt422_targeted_fix_prompt_path_valid(path: str) -> bool:
+    if not path:
+        return False
+    pure_path = PurePosixPath(path)
+    return (
+        not pure_path.is_absolute()
+        and ".." not in pure_path.parts
+        and "\\" not in path
+        and path.startswith("current_prompt_verify_results/prompt421/")
+    )
+
+
+def _prompt422_prompt421_execution_packet_ready(
+    run_state: Mapping[str, Any],
+) -> bool:
+    required_values: dict[str, Any] = {
+        "prompt421_targeted_fix_route_status": "materialized",
+        "prompt421_targeted_fix_route_ready": True,
+        "prompt421_selected_prompt_id": "prompt402",
+        "prompt421_targeted_fix_required": True,
+        "prompt421_retry_required": True,
+        "prompt421_stop_required": False,
+        "prompt421_targeted_fix_prompt_ready": True,
+        "prompt421_targeted_fix_materialize_requested": True,
+        "prompt421_targeted_fix_materialize_allowed": True,
+        "prompt421_targeted_fix_prompt_written": True,
+        "prompt421_targeted_fix_prompt_exists": True,
+        "prompt421_targeted_fix_receipt_written": True,
+        "prompt421_targeted_fix_execution_packet_ready": True,
+        "prompt421_targeted_fix_execution_packet_target_prompt": "prompt422",
+        "prompt421_targeted_fix_execution_packet_mode": (
+            "targeted_fix_prompt_materialized_no_execute"
+        ),
+        "prompt421_codex_invocation_allowed": False,
+        "prompt421_git_mutation_allowed": False,
+        "prompt421_commit_tag_allowed": False,
+        "prompt421_next_cycle_started": False,
+        "prompt421_next_action": (
+            "prepare_prompt422_targeted_fix_codex_execution"
+        ),
+    }
+    return all(run_state.get(key) == expected for key, expected in required_values.items())
+
+
+def _prompt422_result_json_payload(
+    *,
+    targeted_fix_prompt_path: str,
+    targeted_fix_prompt_sha256: str,
+    targeted_fix_prompt_size_bytes: int,
+    command: list[str],
+    timeout_seconds: int,
+    execution_requested: bool,
+    execution_allowed: bool,
+    execution_attempted: bool,
+    execution_performed: bool,
+    execution_status: str,
+    returncode: Any,
+    returncode_classification: str,
+    execution_timeout: bool,
+    execution_error: bool,
+    execution_error_message: str,
+    stdout_path: str,
+    stderr_path: str,
+    result_json_path: str,
+    stdout_size_bytes: int,
+    stderr_size_bytes: int,
+    codex_invocation_allowed: bool,
+) -> dict[str, Any]:
+    return {
+        "schema_version": _PROMPT422_SCHEMA_VERSION,
+        "prompt_id": "prompt422",
+        "selected_prompt_id": "prompt402",
+        "targeted_fix_prompt_path": targeted_fix_prompt_path,
+        "targeted_fix_prompt_sha256": targeted_fix_prompt_sha256,
+        "targeted_fix_prompt_size_bytes": targeted_fix_prompt_size_bytes,
+        "command": command,
+        "shell": False,
+        "timeout_seconds": timeout_seconds,
+        "execution_requested": execution_requested,
+        "execution_allowed": execution_allowed,
+        "execution_attempted": execution_attempted,
+        "execution_performed": execution_performed,
+        "execution_status": execution_status,
+        "returncode": returncode,
+        "returncode_classification": returncode_classification,
+        "execution_timeout": execution_timeout,
+        "execution_error": execution_error,
+        "execution_error_message": execution_error_message,
+        "stdout_path": stdout_path,
+        "stderr_path": stderr_path,
+        "result_json_path": result_json_path,
+        "stdout_size_bytes": stdout_size_bytes,
+        "stderr_size_bytes": stderr_size_bytes,
+        "approve_candidate": False,
+        "targeted_fix_required": True,
+        "retry_required": True,
+        "stop_required": False,
+        "codex_invocation_allowed": codex_invocation_allowed,
+        "git_mutation_allowed": False,
+        "commit_tag_allowed": False,
+        "review_packet_target_prompt": "prompt423",
+    }
+
+
+def _build_prompt422_targeted_fix_codex_execution_adapter_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execute_requested: bool = False,
+    allow_execute: bool = False,
+    repo_path: str | Path | None = None,
+    codex_command: Sequence[str] | None = None,
+    timeout_seconds: int = 600,
+    transport_runner: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    normalized_timeout_seconds = _prompt422_normalize_timeout_seconds(
+        timeout_seconds
+    )
+    try:
+        normalized_command = _prompt422_normalize_command(codex_command)
+    except ValueError:
+        normalized_command = []
+    stdout_relative_path = (
+        "current_prompt_verify_results/prompt422/targeted_fix_stdout.txt"
+    )
+    stderr_relative_path = (
+        "current_prompt_verify_results/prompt422/targeted_fix_stderr.txt"
+    )
+    result_json_relative_path = (
+        "current_prompt_verify_results/prompt422/"
+        "targeted_fix_execution_result.json"
+    )
+    safety_invariants: dict[str, Any] = {
+        "prompt422_git_mutation_allowed": False,
+        "prompt422_commit_tag_allowed": False,
+        "prompt422_push_allowed": False,
+        "prompt422_pr_allowed": False,
+        "prompt422_merge_allowed": False,
+        "prompt422_rollback_allowed": False,
+        "prompt422_next_cycle_started": False,
+    }
+    state: dict[str, Any] = {
+        "prompt422_schema_version": _PROMPT422_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt422",
+        "prompt422_targeted_fix_codex_execution_adapter_enabled": True,
+        "prompt422_targeted_fix_codex_execution_adapter_status": "blocked",
+        "prompt422_targeted_fix_codex_execution_adapter_ready": False,
+        "prompt422_targeted_fix_codex_execution_adapter_blocked_reason": (
+            "prompt421_targeted_fix_execution_packet_not_ready"
+        ),
+        "prompt422_targeted_fix_codex_execution_adapter_blocked_reasons": [
+            "prompt421_targeted_fix_execution_packet_not_ready"
+        ],
+        "prompt422_targeted_fix_codex_execution_adapter_source": (
+            "prompt421_targeted_fix_execution_packet"
+        ),
+        "prompt422_selected_prompt_id": "",
+        "prompt422_targeted_fix_prompt_path": "",
+        "prompt422_targeted_fix_prompt_path_valid": False,
+        "prompt422_targeted_fix_prompt_file_checked": False,
+        "prompt422_targeted_fix_prompt_file_read": False,
+        "prompt422_targeted_fix_prompt_sha256": "",
+        "prompt422_targeted_fix_prompt_size_bytes": 0,
+        "prompt422_execution_mode": "blocked",
+        "prompt422_execute_requested": bool(execute_requested),
+        "prompt422_execution_allowed": False,
+        "prompt422_execution_attempted": False,
+        "prompt422_execution_performed": False,
+        "prompt422_execution_status": "blocked",
+        "prompt422_execution_returncode": None,
+        "prompt422_execution_returncode_classification": "not_run",
+        "prompt422_execution_timeout": False,
+        "prompt422_execution_error": False,
+        "prompt422_execution_error_message": "",
+        "prompt422_command": normalized_command,
+        "prompt422_command_shell": False,
+        "prompt422_timeout_seconds": normalized_timeout_seconds,
+        "prompt422_stdout_path": stdout_relative_path,
+        "prompt422_stderr_path": stderr_relative_path,
+        "prompt422_result_json_path": result_json_relative_path,
+        "prompt422_stdout_written": False,
+        "prompt422_stderr_written": False,
+        "prompt422_result_json_written": False,
+        "prompt422_capture_written": False,
+        "prompt422_review_packet_ready": False,
+        "prompt422_review_packet_target_prompt": "prompt423",
+        "prompt422_review_packet_mode": "blocked",
+        "prompt422_review_packet_prompt_id": "",
+        "prompt422_approve_candidate": False,
+        "prompt422_targeted_fix_required": False,
+        "prompt422_retry_required": False,
+        "prompt422_stop_required": False,
+        "prompt422_selected_prompt_execution_allowed": False,
+        "prompt422_codex_invocation_allowed": False,
+        **safety_invariants,
+        "prompt422_next_action": (
+            "review_prompt421_targeted_fix_route_and_materialization"
+        ),
+    }
+
+    if not _prompt422_prompt421_execution_packet_ready(run_state):
+        return state
+
+    prompt_relative_path = _normalize_text(
+        run_state.get("prompt421_targeted_fix_execution_packet_prompt_path"),
+        default="",
+    )
+    path_valid = _prompt422_targeted_fix_prompt_path_valid(prompt_relative_path)
+    state.update(
+        {
+            "prompt422_targeted_fix_codex_execution_adapter_status": "ready",
+            "prompt422_targeted_fix_codex_execution_adapter_ready": True,
+            "prompt422_targeted_fix_codex_execution_adapter_blocked_reason": "",
+            "prompt422_targeted_fix_codex_execution_adapter_blocked_reasons": [],
+            "prompt422_selected_prompt_id": "prompt402",
+            "prompt422_targeted_fix_prompt_path": prompt_relative_path,
+            "prompt422_targeted_fix_prompt_path_valid": path_valid,
+            "prompt422_execution_mode": "planned_no_execute",
+            "prompt422_execution_status": "not_run",
+            "prompt422_review_packet_mode": "targeted_fix_execution_not_run",
+            "prompt422_review_packet_prompt_id": "prompt402",
+            "prompt422_targeted_fix_required": True,
+            "prompt422_retry_required": True,
+            "prompt422_stop_required": False,
+            "prompt422_next_action": (
+                "request_prompt422_targeted_fix_codex_execution"
+            ),
+        }
+    )
+
+    def _block_ready_state(reason: str) -> dict[str, Any]:
+        state.update(
+            {
+                "prompt422_targeted_fix_codex_execution_adapter_status": (
+                    "blocked"
+                ),
+                "prompt422_targeted_fix_codex_execution_adapter_ready": False,
+                "prompt422_targeted_fix_codex_execution_adapter_blocked_reason": (
+                    reason
+                ),
+                "prompt422_targeted_fix_codex_execution_adapter_blocked_reasons": [
+                    reason
+                ],
+                "prompt422_execution_mode": "blocked",
+                "prompt422_execution_allowed": False,
+                "prompt422_execution_attempted": False,
+                "prompt422_execution_performed": False,
+                "prompt422_execution_status": "blocked",
+                "prompt422_execution_returncode": None,
+                "prompt422_execution_returncode_classification": "not_run",
+                "prompt422_execution_timeout": False,
+                "prompt422_execution_error": False,
+                "prompt422_execution_error_message": "",
+                "prompt422_review_packet_ready": False,
+                "prompt422_review_packet_mode": "blocked",
+                "prompt422_codex_invocation_allowed": False,
+                **safety_invariants,
+                "prompt422_next_action": (
+                    "review_prompt421_targeted_fix_route_and_materialization"
+                ),
+            }
+        )
+        return state
+
+    if not path_valid:
+        return _block_ready_state("invalid_targeted_fix_prompt_path")
+
+    if not normalized_command:
+        return _block_ready_state("invalid_codex_command")
+
+    if not (bool(execute_requested) and bool(allow_execute)):
+        return state
+
+    if repo_path is None:
+        return _block_ready_state("targeted_fix_prompt_file_missing")
+
+    repo_root = Path(repo_path)
+    prompt_path = repo_root / prompt_relative_path
+    stdout_path = repo_root / stdout_relative_path
+    stderr_path = repo_root / stderr_relative_path
+    result_json_path = repo_root / result_json_relative_path
+    state.update(
+        {
+            "prompt422_targeted_fix_prompt_file_checked": True,
+            "prompt422_execution_allowed": True,
+            "prompt422_codex_invocation_allowed": True,
+        }
+    )
+    if prompt_path.is_symlink():
+        return _block_ready_state("targeted_fix_prompt_file_symlink")
+    if not prompt_path.exists():
+        return _block_ready_state("targeted_fix_prompt_file_missing")
+
+    execution_attempted = True
+    execution_performed = True
+    stdout_text = ""
+    stderr_text = ""
+    execution_status = "execution_error"
+    returncode: int | None = None
+    returncode_classification = "execution_error"
+    execution_timeout = False
+    execution_error = True
+    execution_error_message = ""
+    prompt_text = ""
+    prompt_sha256 = ""
+    prompt_size_bytes = 0
+
+    try:
+        prompt_text = prompt_path.read_text(encoding="utf-8")
+        encoded_prompt_text = prompt_text.encode("utf-8")
+        prompt_sha256 = hashlib.sha256(encoded_prompt_text).hexdigest()
+        prompt_size_bytes = len(encoded_prompt_text)
+        state.update(
+            {
+                "prompt422_targeted_fix_prompt_file_read": True,
+                "prompt422_targeted_fix_prompt_sha256": prompt_sha256,
+                "prompt422_targeted_fix_prompt_size_bytes": prompt_size_bytes,
+            }
+        )
+        if transport_runner is not None:
+            completed = transport_runner(
+                command=normalized_command,
+                input=prompt_text,
+                timeout=normalized_timeout_seconds,
+                cwd=repo_root,
+            )
+        else:
+            completed = subprocess.run(
+                normalized_command,
+                shell=False,
+                capture_output=True,
+                text=True,
+                check=False,
+                input=prompt_text,
+                cwd=repo_root,
+                timeout=normalized_timeout_seconds,
+            )
+        if isinstance(completed, Mapping):
+            stdout_text = str(completed.get("stdout", ""))
+            stderr_text = str(completed.get("stderr", ""))
+            raw_returncode = completed.get("returncode")
+        else:
+            stdout_text = str(getattr(completed, "stdout", ""))
+            stderr_text = str(getattr(completed, "stderr", ""))
+            raw_returncode = getattr(completed, "returncode", None)
+        returncode = (
+            raw_returncode
+            if isinstance(raw_returncode, int) and not isinstance(raw_returncode, bool)
+            else None
+        )
+        execution_status = "completed"
+        returncode_classification = "success" if returncode == 0 else "failed"
+        execution_timeout = False
+        execution_error = False
+        execution_error_message = ""
+    except (subprocess.TimeoutExpired, TimeoutError) as exc:
+        stdout_text = str(getattr(exc, "stdout", "") or "")
+        stderr_text = str(getattr(exc, "stderr", "") or "")
+        execution_status = "timeout"
+        returncode = None
+        returncode_classification = "timeout"
+        execution_timeout = True
+        execution_error = False
+        execution_error_message = ""
+    except Exception as exc:  # noqa: BLE001 - captured for Prompt423 review.
+        execution_status = "execution_error"
+        returncode = None
+        returncode_classification = "execution_error"
+        execution_timeout = False
+        execution_error = True
+        execution_error_message = str(exc)
+
+    stdout_size_bytes = len(stdout_text.encode("utf-8"))
+    stderr_size_bytes = len(stderr_text.encode("utf-8"))
+    result_payload = _prompt422_result_json_payload(
+        targeted_fix_prompt_path=prompt_relative_path,
+        targeted_fix_prompt_sha256=prompt_sha256,
+        targeted_fix_prompt_size_bytes=prompt_size_bytes,
+        command=normalized_command,
+        timeout_seconds=normalized_timeout_seconds,
+        execution_requested=True,
+        execution_allowed=True,
+        execution_attempted=execution_attempted,
+        execution_performed=execution_performed,
+        execution_status=execution_status,
+        returncode=returncode,
+        returncode_classification=returncode_classification,
+        execution_timeout=execution_timeout,
+        execution_error=execution_error,
+        execution_error_message=execution_error_message,
+        stdout_path=stdout_relative_path,
+        stderr_path=stderr_relative_path,
+        result_json_path=result_json_relative_path,
+        stdout_size_bytes=stdout_size_bytes,
+        stderr_size_bytes=stderr_size_bytes,
+        codex_invocation_allowed=True,
+    )
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_path.write_text(stdout_text, encoding="utf-8")
+    stderr_path.write_text(stderr_text, encoding="utf-8")
+    _write_json(result_json_path, result_payload)
+    state.update(
+        {
+            "prompt422_targeted_fix_codex_execution_adapter_status": "executed",
+            "prompt422_targeted_fix_codex_execution_adapter_ready": True,
+            "prompt422_targeted_fix_codex_execution_adapter_blocked_reason": (
+                "targeted_fix_codex_execution_error"
+                if execution_error
+                else ""
+            ),
+            "prompt422_targeted_fix_codex_execution_adapter_blocked_reasons": (
+                ["targeted_fix_codex_execution_error"] if execution_error else []
+            ),
+            "prompt422_execution_mode": "targeted_fix_execution_captured",
+            "prompt422_execution_allowed": True,
+            "prompt422_execution_attempted": execution_attempted,
+            "prompt422_execution_performed": execution_performed,
+            "prompt422_execution_status": execution_status,
+            "prompt422_execution_returncode": returncode,
+            "prompt422_execution_returncode_classification": (
+                returncode_classification
+            ),
+            "prompt422_execution_timeout": execution_timeout,
+            "prompt422_execution_error": execution_error,
+            "prompt422_execution_error_message": execution_error_message,
+            "prompt422_stdout_written": True,
+            "prompt422_stderr_written": True,
+            "prompt422_result_json_written": True,
+            "prompt422_capture_written": True,
+            "prompt422_review_packet_ready": True,
+            "prompt422_review_packet_mode": (
+                "targeted_fix_execution_result_captured"
+            ),
+            "prompt422_review_packet_prompt_id": "prompt402",
+            "prompt422_selected_prompt_execution_allowed": False,
+            "prompt422_codex_invocation_allowed": True,
+            **safety_invariants,
+            "prompt422_next_action": (
+                "prepare_prompt423_targeted_fix_result_review"
             ),
         }
     )
@@ -239042,6 +239596,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt421_targeted_fix_route_and_materialization_payload,
         }
+        prompt422_targeted_fix_codex_execution_adapter_payload = (
+            _build_prompt422_targeted_fix_codex_execution_adapter_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt422_targeted_fix_codex_execution_adapter_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -239156,6 +239719,23 @@ class PlannedExecutionRunner:
                         "prompt421_targeted_fix_execution_packet_target_prompt"
                     ),
                     "run_state.prompt421_next_action",
+                    (
+                        "run_state."
+                        "prompt422_targeted_fix_codex_execution_adapter_status"
+                    ),
+                    (
+                        "run_state."
+                        "prompt422_targeted_fix_codex_execution_adapter_ready"
+                    ),
+                    "run_state.prompt422_execution_mode",
+                    "run_state.prompt422_execution_status",
+                    (
+                        "run_state."
+                        "prompt422_execution_returncode_classification"
+                    ),
+                    "run_state.prompt422_review_packet_ready",
+                    "run_state.prompt422_review_packet_target_prompt",
+                    "run_state.prompt422_next_action",
                 ]
             )
         )
@@ -239490,6 +240070,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt421_targeted_fix_route_and_materialization_state=(
                     prompt421_targeted_fix_route_and_materialization_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt422_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt422_targeted_fix_codex_execution_adapter_state=(
+                    prompt422_targeted_fix_codex_execution_adapter_payload
                 ),
             )
         )
@@ -248395,6 +248983,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT421_TARGETED_FIX_ROUTE_AND_MATERIALIZATION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT422_TARGETED_FIX_CODEX_EXECUTION_ADAPTER_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact
