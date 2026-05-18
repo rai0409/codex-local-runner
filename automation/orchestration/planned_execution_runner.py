@@ -3856,6 +3856,9 @@ _PROMPT413_SCHEMA_VERSION = (
 _PROMPT414_SCHEMA_VERSION = (
     "prompt414_execution_result_review_boundary_v1"
 )
+_PROMPT415_SCHEMA_VERSION = (
+    "prompt415_guarded_execution_enable_plan_boundary_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -4964,6 +4967,57 @@ _PROMPT414_EXECUTION_RESULT_REVIEW_BOUNDARY_KEYS: tuple[str, ...] = (
     "prompt414_execution_attempted",
     "prompt414_execution_performed",
     "prompt414_next_action",
+)
+_PROMPT415_GUARDED_EXECUTION_ENABLE_PLAN_KEYS: tuple[str, ...] = (
+    "prompt415_schema_version",
+    "prompt415_guarded_execution_enable_plan_enabled",
+    "prompt415_guarded_execution_enable_plan_status",
+    "prompt415_guarded_execution_enable_plan_ready",
+    "prompt415_guarded_execution_enable_plan_blocked_reason",
+    "prompt415_guarded_execution_enable_plan_blocked_reasons",
+    "prompt415_guarded_execution_enable_plan_source",
+    "prompt415_selected_prompt_id",
+    "prompt415_selected_prompt_source",
+    "prompt415_enable_plan_classification",
+    "prompt415_enable_plan_route",
+    "prompt415_execution_enable_requested",
+    "prompt415_execution_enable_allowed",
+    "prompt415_execution_enable_performed",
+    "prompt415_physical_prompt_write_plan_ready",
+    "prompt415_physical_prompt_write_plan_target_prompt",
+    "prompt415_physical_prompt_write_requested",
+    "prompt415_physical_prompt_write_allowed",
+    "prompt415_physical_prompt_written",
+    "prompt415_physical_prompt_path_planned",
+    "prompt415_physical_prompt_path",
+    "prompt415_execution_plan_ready",
+    "prompt415_execution_plan_target_prompt",
+    "prompt415_execution_plan_mode",
+    "prompt415_execution_requested",
+    "prompt415_execution_allowed",
+    "prompt415_execution_attempted",
+    "prompt415_execution_performed",
+    "prompt415_execution_returncode",
+    "prompt415_execution_returncode_classification",
+    "prompt415_capture_plan_ready",
+    "prompt415_capture_target_prompt",
+    "prompt415_stdout_path",
+    "prompt415_stderr_path",
+    "prompt415_result_json_path",
+    "prompt415_capture_written",
+    "prompt415_review_packet_ready",
+    "prompt415_review_packet_target_prompt",
+    "prompt415_review_packet_mode",
+    "prompt415_review_packet_prompt_id",
+    "prompt415_review_packet_result_json_path",
+    "prompt415_approve_candidate",
+    "prompt415_targeted_fix_required",
+    "prompt415_retry_required",
+    "prompt415_selected_prompt_execution_allowed",
+    "prompt415_codex_invocation_allowed",
+    "prompt415_git_mutation_allowed",
+    "prompt415_commit_tag_allowed",
+    "prompt415_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -7517,6 +7571,27 @@ def _merge_prompt414_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT414_EXECUTION_RESULT_REVIEW_BOUNDARY_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt415_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt415_guarded_execution_enable_plan_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt415_guarded_execution_enable_plan_state)
+        if isinstance(prompt415_guarded_execution_enable_plan_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT415_GUARDED_EXECUTION_ENABLE_PLAN_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -59025,6 +59100,164 @@ def _build_prompt414_execution_result_review_boundary_state(
             "prepare_prompt415_guarded_execution_enable_plan"
             if prompt413_ready
             else "review_prompt413_selected_prompt_execution_adapter"
+        ),
+    }
+
+
+def _build_prompt415_guarded_execution_enable_plan_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    run_state = (
+        dict(run_state_payload)
+        if isinstance(run_state_payload, Mapping)
+        else {}
+    )
+    prompt414_ready = (
+        _normalize_text(
+            run_state.get("prompt414_execution_result_review_status"),
+            default="",
+        )
+        == "reviewed"
+        and run_state.get("prompt414_execution_result_review_ready") is True
+        and _normalize_text(
+            run_state.get("prompt414_review_classification"),
+            default="",
+        )
+        == "not_run_boundary"
+        and _normalize_text(run_state.get("prompt414_review_route"), default="")
+        == "ready_for_prompt415_guarded_execution_enable_plan"
+        and run_state.get("prompt414_execution_result_available") is False
+        and run_state.get("prompt414_execution_success") is False
+        and run_state.get("prompt414_execution_failed") is False
+        and run_state.get("prompt414_execution_not_run") is True
+        and run_state.get("prompt414_execution_returncode") is None
+        and _normalize_text(
+            run_state.get("prompt414_execution_returncode_classification"),
+            default="",
+        )
+        == "not_run"
+        and run_state.get("prompt414_approve_candidate") is False
+        and run_state.get("prompt414_targeted_fix_required") is False
+        and run_state.get("prompt414_retry_required") is False
+        and run_state.get("prompt414_commit_tag_allowed") is False
+        and _normalize_text(run_state.get("prompt414_next_action"), default="")
+        == "prepare_prompt415_guarded_execution_enable_plan"
+    )
+    selected_prompt_id = ""
+    selected_prompt_source = ""
+    if prompt414_ready:
+        selected_prompt_id = _normalize_text(
+            run_state.get("prompt414_selected_prompt_id"),
+            default="",
+        )
+        selected_prompt_source = _normalize_text(
+            run_state.get("prompt414_selected_prompt_source"),
+            default="",
+        )
+        if not selected_prompt_id:
+            selected_prompt_id = "prompt402"
+        if not selected_prompt_source:
+            selected_prompt_source = "prompt402_generated_prompt_surface"
+
+    physical_prompt_path = (
+        "current_prompt_verify_results/prompt416/"
+        "selected_prompt_prompt402.md"
+    )
+    stdout_path = "current_prompt_verify_results/prompt416/prompt402_stdout.txt"
+    stderr_path = "current_prompt_verify_results/prompt416/prompt402_stderr.txt"
+    result_json_path = (
+        "current_prompt_verify_results/prompt416/"
+        "prompt402_execution_result.json"
+    )
+    blocked_reason = (
+        ""
+        if prompt414_ready
+        else "prompt414_not_run_boundary_review_not_ready"
+    )
+    blocked_reasons = [] if prompt414_ready else [blocked_reason]
+
+    return {
+        "prompt415_schema_version": _PROMPT415_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt415",
+        "prompt415_guarded_execution_enable_plan_enabled": True,
+        "prompt415_guarded_execution_enable_plan_status": (
+            "ready" if prompt414_ready else "blocked"
+        ),
+        "prompt415_guarded_execution_enable_plan_ready": prompt414_ready,
+        "prompt415_guarded_execution_enable_plan_blocked_reason": (
+            blocked_reason
+        ),
+        "prompt415_guarded_execution_enable_plan_blocked_reasons": (
+            blocked_reasons
+        ),
+        "prompt415_guarded_execution_enable_plan_source": (
+            "prompt414_execution_result_review_boundary"
+        ),
+        "prompt415_selected_prompt_id": selected_prompt_id,
+        "prompt415_selected_prompt_source": selected_prompt_source,
+        "prompt415_enable_plan_classification": (
+            "guarded_execution_enable_plan" if prompt414_ready else "blocked"
+        ),
+        "prompt415_enable_plan_route": (
+            "ready_for_prompt416_physical_prompt_materialization_write_plan"
+            if prompt414_ready
+            else "review_prompt414_execution_result_review_boundary"
+        ),
+        "prompt415_execution_enable_requested": False,
+        "prompt415_execution_enable_allowed": False,
+        "prompt415_execution_enable_performed": False,
+        "prompt415_physical_prompt_write_plan_ready": prompt414_ready,
+        "prompt415_physical_prompt_write_plan_target_prompt": "prompt416",
+        "prompt415_physical_prompt_write_requested": False,
+        "prompt415_physical_prompt_write_allowed": False,
+        "prompt415_physical_prompt_written": False,
+        "prompt415_physical_prompt_path_planned": prompt414_ready,
+        "prompt415_physical_prompt_path": (
+            physical_prompt_path if prompt414_ready else ""
+        ),
+        "prompt415_execution_plan_ready": prompt414_ready,
+        "prompt415_execution_plan_target_prompt": "prompt416",
+        "prompt415_execution_plan_mode": (
+            "guarded_no_execute" if prompt414_ready else "blocked_no_execute"
+        ),
+        "prompt415_execution_requested": False,
+        "prompt415_execution_allowed": False,
+        "prompt415_execution_attempted": False,
+        "prompt415_execution_performed": False,
+        "prompt415_execution_returncode": None,
+        "prompt415_execution_returncode_classification": "not_run",
+        "prompt415_capture_plan_ready": prompt414_ready,
+        "prompt415_capture_target_prompt": "prompt416",
+        "prompt415_stdout_path": stdout_path if prompt414_ready else "",
+        "prompt415_stderr_path": stderr_path if prompt414_ready else "",
+        "prompt415_result_json_path": (
+            result_json_path if prompt414_ready else ""
+        ),
+        "prompt415_capture_written": False,
+        "prompt415_review_packet_ready": prompt414_ready,
+        "prompt415_review_packet_target_prompt": "prompt416",
+        "prompt415_review_packet_mode": (
+            "guarded_execution_enable_plan_no_execute"
+            if prompt414_ready
+            else "blocked"
+        ),
+        "prompt415_review_packet_prompt_id": selected_prompt_id,
+        "prompt415_review_packet_result_json_path": (
+            result_json_path if prompt414_ready else ""
+        ),
+        "prompt415_approve_candidate": False,
+        "prompt415_targeted_fix_required": False,
+        "prompt415_retry_required": False,
+        "prompt415_selected_prompt_execution_allowed": False,
+        "prompt415_codex_invocation_allowed": False,
+        "prompt415_git_mutation_allowed": False,
+        "prompt415_commit_tag_allowed": False,
+        "prompt415_next_action": (
+            "prepare_prompt416_physical_prompt_write_plan"
+            if prompt414_ready
+            else "review_prompt414_execution_result_review_boundary"
         ),
     }
 
@@ -235734,6 +235967,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt414_execution_result_review_boundary_payload,
         }
+        prompt415_guarded_execution_enable_plan_payload = (
+            _build_prompt415_guarded_execution_enable_plan_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt415_guarded_execution_enable_plan_payload,
+        }
         run_state_payload["supporting_compact_truth_refs"] = (
             _serialize_required_signals(
                 _normalize_string_list(
@@ -235778,6 +236020,13 @@ class PlannedExecutionRunner:
                     "run_state.prompt414_review_route",
                     "run_state.prompt414_execution_not_run",
                     "run_state.prompt414_next_action",
+                    "run_state.prompt415_guarded_execution_enable_plan_status",
+                    "run_state.prompt415_guarded_execution_enable_plan_ready",
+                    "run_state.prompt415_enable_plan_classification",
+                    "run_state.prompt415_enable_plan_route",
+                    "run_state.prompt415_execution_plan_mode",
+                    "run_state.prompt415_review_packet_target_prompt",
+                    "run_state.prompt415_next_action",
                 ]
             )
         )
@@ -236056,6 +236305,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt414_execution_result_review_boundary_state=(
                     prompt414_execution_result_review_boundary_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt415_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt415_guarded_execution_enable_plan_state=(
+                    prompt415_guarded_execution_enable_plan_payload
                 ),
             )
         )
