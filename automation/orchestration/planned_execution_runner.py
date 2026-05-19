@@ -3927,6 +3927,9 @@ _PROMPT438_SCHEMA_VERSION = (
 _PROMPT439_SCHEMA_VERSION = (
     "prompt439_handoff_execution_result_materialization_surface_v1"
 )
+_PROMPT440_SCHEMA_VERSION = (
+    "prompt440_live_safe_bounded_command_runner_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6100,6 +6103,34 @@ _PROMPT439_HANDOFF_EXECUTION_RESULT_MATERIALIZATION_KEYS: tuple[str, ...] = (
     "prompt439_rollback_allowed",
     "prompt439_unbounded_loop_allowed",
     "prompt439_daemon_mode_allowed",
+)
+_PROMPT440_LIVE_SAFE_BOUNDED_COMMAND_RUNNER_KEYS: tuple[str, ...] = (
+    "prompt440_live_safe_runtime_execution_enabled",
+    "prompt440_schema_version",
+    "prompt440_transport_mode",
+    "prompt440_live_transport_enabled",
+    "prompt440_prompt437_request_valid",
+    "prompt440_prompt436_runtime_execution_requested",
+    "prompt440_prompt436_runtime_execution_allowed",
+    "prompt440_runtime_command_argv",
+    "prompt440_live_command_allowlisted",
+    "prompt440_live_command_execution_attempted",
+    "prompt440_live_command_execution_performed",
+    "prompt440_live_command_returncode",
+    "prompt440_live_command_returncode_classification",
+    "prompt440_live_command_stdout_path",
+    "prompt440_live_command_stderr_path",
+    "prompt440_live_command_result_materialized",
+    "prompt440_blocked_reason",
+    "prompt440_next_action",
+    "prompt440_git_direct_mutation_allowed",
+    "prompt440_commit_tag_direct_execution_allowed",
+    "prompt440_push_allowed",
+    "prompt440_pr_allowed",
+    "prompt440_merge_allowed",
+    "prompt440_rollback_allowed",
+    "prompt440_unbounded_loop_allowed",
+    "prompt440_daemon_mode_allowed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -66011,6 +66042,277 @@ def _build_prompt430_dry_run_runtime_command_runner() -> Callable[..., dict[str,
     return _command_runner
 
 
+def _prompt440_live_command_allowlisted(command_argv: Any) -> bool:
+    if (
+        not isinstance(command_argv, list)
+        or len(command_argv) not in {2, 3}
+        or not all(isinstance(item, str) for item in command_argv)
+    ):
+        return False
+    executable = command_argv[0]
+    allowed_python_executables = {"python", "python3"}
+    if sys.executable:
+        allowed_python_executables.add(sys.executable)
+    if executable not in allowed_python_executables:
+        return False
+    if command_argv == [executable, "--version"]:
+        return True
+    if len(command_argv) != 3 or command_argv[1] != "-c":
+        return False
+    allowed_exit_snippets = {
+        f"import sys; sys.exit({exit_code})" for exit_code in range(10)
+    }
+    return command_argv[2] in allowed_exit_snippets
+
+
+def _prompt440_normalize_timeout_seconds(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return 10
+    return min(value, 30)
+
+
+def _build_prompt440_live_safe_runtime_command_runner_state(
+    *,
+    transport_mode: str,
+    live_transport_enabled: bool,
+    prompt437_state: Mapping[str, Any],
+    request_runtime_execution: bool,
+    allow_runtime_execution: bool,
+) -> tuple[dict[str, Any], Callable[..., dict[str, Any]] | None]:
+    normalized_transport_mode = _normalize_text(transport_mode, default="dry-run")
+    command_argv = prompt437_state.get("prompt437_runtime_command_argv")
+    copied_command_argv = list(command_argv) if isinstance(command_argv, list) else []
+    prompt437_request_valid = (
+        prompt437_state.get("prompt437_runtime_command_request_valid") is True
+    )
+    live_enabled = normalized_transport_mode == "live" and bool(live_transport_enabled)
+    allowlisted = _prompt440_live_command_allowlisted(copied_command_argv)
+
+    state: dict[str, Any] = {
+        "prompt440_live_safe_runtime_execution_enabled": live_enabled,
+        "prompt440_schema_version": _PROMPT440_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt440",
+        "prompt440_transport_mode": normalized_transport_mode,
+        "prompt440_live_transport_enabled": bool(live_transport_enabled),
+        "prompt440_prompt437_request_valid": prompt437_request_valid,
+        "prompt440_prompt436_runtime_execution_requested": bool(
+            request_runtime_execution
+        ),
+        "prompt440_prompt436_runtime_execution_allowed": bool(
+            allow_runtime_execution
+        ),
+        "prompt440_runtime_command_argv": copied_command_argv,
+        "prompt440_live_command_allowlisted": False,
+        "prompt440_live_command_execution_attempted": False,
+        "prompt440_live_command_execution_performed": False,
+        "prompt440_live_command_returncode": None,
+        "prompt440_live_command_returncode_classification": "unknown",
+        "prompt440_live_command_stdout_path": "",
+        "prompt440_live_command_stderr_path": "",
+        "prompt440_live_command_result_materialized": False,
+        "prompt440_blocked_reason": "",
+        "prompt440_next_action": "",
+        "prompt440_git_direct_mutation_allowed": False,
+        "prompt440_commit_tag_direct_execution_allowed": False,
+        "prompt440_push_allowed": False,
+        "prompt440_pr_allowed": False,
+        "prompt440_merge_allowed": False,
+        "prompt440_rollback_allowed": False,
+        "prompt440_unbounded_loop_allowed": False,
+        "prompt440_daemon_mode_allowed": False,
+    }
+
+    if not live_enabled:
+        state["prompt440_next_action"] = (
+            "prompt440_live_safe_runtime_result_ready"
+            if normalized_transport_mode != "live"
+            else "enable_live_transport"
+        )
+        return state, None
+    if not prompt437_request_valid:
+        state.update(
+            {
+                "prompt440_blocked_reason": "prompt437_runtime_command_request_not_valid",
+                "prompt440_next_action": (
+                    "provide_prompt437_runtime_command_request"
+                ),
+            }
+        )
+        return state, None
+    if not request_runtime_execution:
+        state.update(
+            {
+                "prompt440_blocked_reason": "prompt436_runtime_execution_not_requested",
+                "prompt440_next_action": "request_prompt436_runtime_execution",
+            }
+        )
+        return state, None
+    if not allow_runtime_execution:
+        state.update(
+            {
+                "prompt440_blocked_reason": "prompt436_runtime_execution_not_allowed",
+                "prompt440_next_action": "allow_prompt436_runtime_execution",
+            }
+        )
+        return state, None
+    state["prompt440_live_command_allowlisted"] = allowlisted
+    if not allowlisted:
+        state.update(
+            {
+                "prompt440_blocked_reason": "prompt440_live_command_not_allowlisted",
+                "prompt440_next_action": "allow_prompt440_live_safe_command",
+            }
+        )
+        return state, None
+
+    def _command_runner(
+        *,
+        command_argv: Sequence[str],
+        launch_packet: Mapping[str, Any],
+        run_state_payload: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        runtime_request = (
+            launch_packet.get("runtime_command_request")
+            if isinstance(launch_packet, Mapping)
+            else {}
+        )
+        if not isinstance(runtime_request, Mapping):
+            runtime_request = {}
+        timeout_seconds = _prompt440_normalize_timeout_seconds(
+            runtime_request.get("timeout_seconds")
+        )
+        cwd = runtime_request.get("cwd")
+        subprocess_cwd = cwd if isinstance(cwd, str) and cwd else None
+        env_payload = runtime_request.get("env")
+        subprocess_env = None
+        if isinstance(env_payload, Mapping):
+            subprocess_env = {
+                **os.environ,
+                **{
+                    key: value
+                    for key, value in env_payload.items()
+                    if isinstance(key, str) and isinstance(value, str)
+                },
+            }
+        result_payload: dict[str, Any] = {
+            "stdout_path": "",
+            "stderr_path": "",
+            "receipt_path": "",
+            "dry_run": False,
+            "execution_performed": False,
+            "command_argv": list(command_argv),
+            "request_id": _normalize_text(
+                runtime_request.get("request_id"),
+                default="",
+            ),
+            "adapter": "prompt440_live_safe_bounded_command_runner",
+            "runtime_command_request": dict(runtime_request),
+            "timeout_seconds": timeout_seconds,
+            "run_state_id": _normalize_text(
+                (run_state_payload or {}).get("run_id")
+                if isinstance(run_state_payload, Mapping)
+                else "",
+                default="",
+            ),
+            "prompt440_live_command_allowlisted": True,
+            "prompt440_live_command_execution_attempted": True,
+        }
+        try:
+            completed = subprocess.run(
+                list(command_argv),
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                cwd=subprocess_cwd,
+                env=subprocess_env,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+            stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+            result_payload.update(
+                {
+                    "returncode": None,
+                    "returncode_classification": "timeout",
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "execution_performed": True,
+                    "timeout": True,
+                    "prompt440_live_command_execution_performed": True,
+                    "prompt440_live_command_returncode": None,
+                    "prompt440_live_command_returncode_classification": "timeout",
+                    "prompt440_live_command_result_materialized": True,
+                    "prompt440_blocked_reason": "prompt440_live_command_timeout",
+                    "prompt440_next_action": (
+                        "prompt440_live_safe_runtime_result_ready"
+                    ),
+                }
+            )
+            return result_payload
+
+        classification = "success" if completed.returncode == 0 else "failed"
+        result_payload.update(
+            {
+                "returncode": completed.returncode,
+                "returncode_classification": classification,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
+                "execution_performed": True,
+                "prompt440_live_command_execution_performed": True,
+                "prompt440_live_command_returncode": completed.returncode,
+                "prompt440_live_command_returncode_classification": classification,
+                "prompt440_live_command_result_materialized": True,
+                "prompt440_next_action": (
+                    "prompt440_live_safe_runtime_result_ready"
+                ),
+            }
+        )
+        return result_payload
+
+    state.update(
+        {
+            "prompt440_live_command_allowlisted": True,
+            "prompt440_next_action": "review_prompt440_live_command_result",
+        }
+    )
+    return state, _command_runner
+
+
+def _finalize_prompt440_live_safe_runtime_command_runner_state(
+    *,
+    prompt440_state: Mapping[str, Any],
+    prompt430_state: Mapping[str, Any],
+) -> dict[str, Any]:
+    finalized = dict(prompt440_state)
+    result_payload = prompt430_state.get("prompt430_runtime_execution_result_payload")
+    if not isinstance(result_payload, Mapping):
+        return finalized
+
+    for key in (
+        "prompt440_live_command_execution_attempted",
+        "prompt440_live_command_execution_performed",
+        "prompt440_live_command_returncode",
+        "prompt440_live_command_returncode_classification",
+        "prompt440_live_command_result_materialized",
+        "prompt440_blocked_reason",
+        "prompt440_next_action",
+    ):
+        if key in result_payload:
+            finalized[key] = result_payload.get(key)
+    if (
+        finalized.get("prompt440_live_command_execution_attempted") is True
+        and finalized.get("prompt440_live_command_result_materialized") is not True
+    ):
+        finalized["prompt440_next_action"] = "review_prompt440_live_command_result"
+    elif finalized.get("prompt440_live_command_result_materialized") is True:
+        finalized["prompt440_next_action"] = (
+            "prompt440_live_safe_runtime_result_ready"
+        )
+    return finalized
+
+
 def _build_prompt430_bounded_runtime_execution_adapter_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -66248,12 +66550,20 @@ def _build_prompt430_bounded_runtime_execution_adapter_state(
     if returncode == 0:
         returncode_classification = "success"
     elif returncode is None:
-        returncode_classification = "unknown"
+        returncode_classification = _normalize_text(
+            result_payload.get("returncode_classification"),
+            default="unknown",
+        )
+        if returncode_classification == "timeout":
+            returncode_classification = "failed"
     else:
         returncode_classification = "failed"
     execution_success = returncode == 0
-    execution_failed = returncode is not None and returncode != 0
-    execution_unknown = returncode is None
+    execution_failed = (
+        (returncode is not None and returncode != 0)
+        or returncode_classification == "failed"
+    )
+    execution_unknown = returncode is None and not execution_failed
 
     state.update(
         {
@@ -245702,7 +246012,7 @@ class PlannedExecutionRunner:
                 max_cycles=run_state_payload.get("prompt427_max_cycles", 2),
                 transport_mode=run_state_payload.get(
                     "prompt428_transport_mode",
-                    "dry-run",
+                    "dry-run" if dry_run else "live",
                 ),
             )
         )
@@ -245740,15 +246050,38 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt437_runtime_command_artifact_wiring_payload,
         }
-        prompt430_command_runner = (
-            _build_prompt430_dry_run_runtime_command_runner()
-            if dry_run
+        (
+            prompt440_live_safe_runtime_command_runner_payload,
+            prompt440_command_runner,
+        ) = _build_prompt440_live_safe_runtime_command_runner_state(
+            transport_mode=run_state_payload.get(
+                "prompt428_transport_mode",
+                "dry-run",
+            ),
+            live_transport_enabled=bool(live_transport_enabled),
+            prompt437_state=prompt437_runtime_command_artifact_wiring_payload,
+            request_runtime_execution=bool(
+                run_state_payload.get("prompt430_execution_requested")
+            ),
+            allow_runtime_execution=bool(
+                run_state_payload.get("prompt430_allow_runtime_execution")
+            ),
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt440_live_safe_runtime_command_runner_payload,
+        }
+        prompt430_command_runner = None
+        if (
+            dry_run
             and prompt437_runtime_command_artifact_wiring_payload.get(
                 "prompt437_runtime_command_request_valid"
             )
             is True
-            else None
-        )
+        ):
+            prompt430_command_runner = _build_prompt430_dry_run_runtime_command_runner()
+        elif not dry_run:
+            prompt430_command_runner = prompt440_command_runner
         prompt430_bounded_runtime_execution_adapter_payload = (
             _build_prompt430_bounded_runtime_execution_adapter_state(
                 run_state_payload=run_state_payload,
@@ -245766,6 +246099,12 @@ class PlannedExecutionRunner:
                 ),
             )
         )
+        prompt440_live_safe_runtime_command_runner_payload = (
+            _finalize_prompt440_live_safe_runtime_command_runner_state(
+                prompt440_state=prompt440_live_safe_runtime_command_runner_payload,
+                prompt430_state=prompt430_bounded_runtime_execution_adapter_payload,
+            )
+        )
         prompt437_runtime_command_artifact_wiring_payload = (
             _finalize_prompt437_runtime_command_artifact_wiring_state(
                 prompt437_state=prompt437_runtime_command_artifact_wiring_payload,
@@ -245774,6 +246113,7 @@ class PlannedExecutionRunner:
         )
         run_state_payload = {
             **run_state_payload,
+            **prompt440_live_safe_runtime_command_runner_payload,
             **prompt437_runtime_command_artifact_wiring_payload,
             **prompt430_bounded_runtime_execution_adapter_payload,
         }
@@ -245843,7 +246183,15 @@ class PlannedExecutionRunner:
         prompt439_handoff_execution_result_materialization_payload = (
             _build_prompt439_handoff_execution_result_materialization_state(
                 run_state_payload=run_state_payload,
-                dry_run=dry_run,
+                dry_run=(
+                    dry_run
+                    or (
+                        prompt440_live_safe_runtime_command_runner_payload.get(
+                            "prompt440_live_command_result_materialized"
+                        )
+                        is True
+                    )
+                ),
             )
         )
         run_state_payload = {
@@ -246494,6 +246842,39 @@ class PlannedExecutionRunner:
                     "run_state.prompt437_runtime_command_validation_status",
                     "run_state.prompt437_blocked_reason",
                     "run_state.prompt437_next_action",
+                    "run_state.prompt440_live_safe_runtime_execution_enabled",
+                    "run_state.prompt440_transport_mode",
+                    "run_state.prompt440_live_transport_enabled",
+                    "run_state.prompt440_prompt437_request_valid",
+                    (
+                        "run_state."
+                        "prompt440_prompt436_runtime_execution_requested"
+                    ),
+                    (
+                        "run_state."
+                        "prompt440_prompt436_runtime_execution_allowed"
+                    ),
+                    "run_state.prompt440_runtime_command_argv",
+                    "run_state.prompt440_live_command_allowlisted",
+                    (
+                        "run_state."
+                        "prompt440_live_command_execution_attempted"
+                    ),
+                    (
+                        "run_state."
+                        "prompt440_live_command_execution_performed"
+                    ),
+                    "run_state.prompt440_live_command_returncode",
+                    (
+                        "run_state."
+                        "prompt440_live_command_returncode_classification"
+                    ),
+                    (
+                        "run_state."
+                        "prompt440_live_command_result_materialized"
+                    ),
+                    "run_state.prompt440_blocked_reason",
+                    "run_state.prompt440_next_action",
                     (
                         "run_state."
                         "prompt430_bounded_runtime_execution_adapter_status"
@@ -256081,6 +256462,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT437_RUNTIME_COMMAND_ARTIFACT_WIRING_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT440_LIVE_SAFE_BOUNDED_COMMAND_RUNNER_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT430_BOUNDED_RUNTIME_EXECUTION_ADAPTER_KEYS:
