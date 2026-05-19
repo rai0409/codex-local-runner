@@ -3896,6 +3896,9 @@ _PROMPT427_SCHEMA_VERSION = (
 _PROMPT428_SCHEMA_VERSION = (
     "prompt428_bounded_runtime_command_artifact_contract_surface_v1"
 )
+_PROMPT429_SCHEMA_VERSION = (
+    "prompt429_bounded_runtime_launch_readiness_gate_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5660,6 +5663,35 @@ _PROMPT428_BOUNDED_RUNTIME_COMMAND_ARTIFACT_CONTRACT_KEYS: tuple[str, ...] = (
     "prompt428_daemon_mode_allowed",
     "prompt428_runtime_command_executed",
     "prompt428_next_action",
+)
+_PROMPT429_BOUNDED_RUNTIME_LAUNCH_READINESS_GATE_KEYS: tuple[str, ...] = (
+    "prompt429_bounded_runtime_launch_readiness_gate_enabled",
+    "prompt429_schema_version",
+    "prompt429_bounded_runtime_launch_readiness_gate_ready",
+    "prompt429_bounded_runtime_launch_readiness_gate_status",
+    "prompt429_bounded_runtime_launch_readiness_gate_blocked_reason",
+    "prompt429_launch_requested",
+    "prompt429_allow_runtime_launch",
+    "prompt429_prompt428_contract_ready",
+    "prompt429_command_argv_ready",
+    "prompt429_expected_artifacts_ready",
+    "prompt429_failure_stop_contract_ready",
+    "prompt429_runtime_command_already_executed",
+    "prompt429_launch_packet_ready",
+    "prompt429_launch_allowed",
+    "prompt429_launch_performed",
+    "prompt429_runtime_launch_packet",
+    "prompt429_codex_invocation_allowed",
+    "prompt429_git_mutation_allowed",
+    "prompt429_commit_tag_allowed",
+    "prompt429_push_allowed",
+    "prompt429_pr_allowed",
+    "prompt429_merge_allowed",
+    "prompt429_rollback_allowed",
+    "prompt429_unbounded_loop_allowed",
+    "prompt429_daemon_mode_allowed",
+    "prompt429_runtime_command_executed",
+    "prompt429_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8538,6 +8570,32 @@ def _merge_prompt428_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT428_BOUNDED_RUNTIME_COMMAND_ARTIFACT_CONTRACT_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt429_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt429_bounded_runtime_launch_readiness_gate_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt429_bounded_runtime_launch_readiness_gate_state)
+        if isinstance(
+            prompt429_bounded_runtime_launch_readiness_gate_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT429_BOUNDED_RUNTIME_LAUNCH_READINESS_GATE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -64898,6 +64956,149 @@ def _build_prompt428_bounded_runtime_command_artifact_contract_state(
         }
     )
     return state
+
+
+def _build_prompt429_bounded_runtime_launch_readiness_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    launch_requested: bool = False,
+    allow_runtime_launch: bool = False,
+) -> dict[str, Any]:
+    payload = (
+        run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    )
+    command_argv = payload.get("prompt428_runtime_command_argv")
+    expected_artifacts = payload.get("prompt428_expected_artifacts")
+    failure_stop_conditions = payload.get(
+        "prompt428_failure_stop_conditions"
+    )
+    command_argv_ready = (
+        isinstance(command_argv, list) and len(command_argv) > 0
+    )
+    expected_artifacts_ready = (
+        isinstance(expected_artifacts, list) and len(expected_artifacts) > 0
+    )
+    failure_stop_contract_ready = (
+        payload.get("prompt428_failure_stop_contract_ready") is True
+        and isinstance(failure_stop_conditions, list)
+        and len(failure_stop_conditions) > 0
+    )
+    prompt428_contract_ready = (
+        payload.get(
+            "prompt428_bounded_runtime_command_artifact_contract_ready"
+        )
+        is True
+        and payload.get(
+            "prompt428_bounded_runtime_command_artifact_contract_status"
+        )
+        == "contract_ready"
+        and payload.get("prompt428_command_plan_ready") is True
+        and payload.get("prompt428_artifact_contract_ready") is True
+        and payload.get("prompt428_failure_stop_contract_ready") is True
+    )
+    runtime_command_already_executed = (
+        payload.get("prompt428_runtime_command_executed") is True
+    )
+    launch_packet = {
+        "command_argv": (
+            list(command_argv)
+            if isinstance(command_argv, list)
+            else command_argv
+        ),
+        "expected_artifacts": (
+            list(expected_artifacts)
+            if isinstance(expected_artifacts, list)
+            else expected_artifacts
+        ),
+        "failure_stop_conditions": (
+            list(failure_stop_conditions)
+            if isinstance(failure_stop_conditions, list)
+            else failure_stop_conditions
+        ),
+        "review_required_before_commit_tag": payload.get(
+            "prompt428_review_required_before_commit_tag"
+        ),
+        "expected_artifacts_dir": payload.get(
+            "prompt428_expected_artifacts_dir"
+        ),
+        "expected_out_dir": payload.get("prompt428_expected_out_dir"),
+        "expected_job_id": payload.get("prompt428_expected_job_id"),
+        "transport_mode": payload.get("prompt428_transport_mode"),
+        "launch_execution_policy": "external_only",
+        "launch_execution_performed": False,
+    }
+
+    status = "blocked"
+    ready = False
+    blocked_reason = ""
+    launch_packet_ready = False
+    launch_allowed = False
+    next_action = "review_prompt428_runtime_contract"
+
+    if not launch_requested:
+        status = "ready"
+        ready = True
+        next_action = "request_prompt429_runtime_launch"
+    elif not allow_runtime_launch:
+        blocked_reason = "runtime_launch_not_allowed"
+        next_action = "allow_prompt429_runtime_launch"
+    elif runtime_command_already_executed:
+        blocked_reason = "runtime_command_already_executed"
+        next_action = "review_existing_runtime_execution_result"
+    elif not prompt428_contract_ready:
+        blocked_reason = "prompt428_runtime_contract_not_ready"
+        next_action = "review_prompt428_runtime_contract"
+    elif not command_argv_ready:
+        blocked_reason = "runtime_command_argv_not_ready"
+        next_action = "fix_prompt428_runtime_command_argv"
+    elif not expected_artifacts_ready:
+        blocked_reason = "expected_artifacts_not_ready"
+        next_action = "fix_prompt428_expected_artifacts"
+    elif not failure_stop_contract_ready:
+        blocked_reason = "failure_stop_contract_not_ready"
+        next_action = "fix_prompt428_failure_stop_contract"
+    else:
+        status = "launch_packet_ready"
+        ready = True
+        launch_packet_ready = True
+        launch_allowed = True
+        next_action = "execute_prompt429_runtime_launch_packet_externally"
+
+    return {
+        "prompt429_bounded_runtime_launch_readiness_gate_enabled": True,
+        "prompt429_schema_version": _PROMPT429_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt429",
+        "prompt429_bounded_runtime_launch_readiness_gate_ready": ready,
+        "prompt429_bounded_runtime_launch_readiness_gate_status": status,
+        "prompt429_bounded_runtime_launch_readiness_gate_blocked_reason": (
+            blocked_reason
+        ),
+        "prompt429_launch_requested": bool(launch_requested),
+        "prompt429_allow_runtime_launch": bool(allow_runtime_launch),
+        "prompt429_prompt428_contract_ready": prompt428_contract_ready,
+        "prompt429_command_argv_ready": command_argv_ready,
+        "prompt429_expected_artifacts_ready": expected_artifacts_ready,
+        "prompt429_failure_stop_contract_ready": failure_stop_contract_ready,
+        "prompt429_runtime_command_already_executed": (
+            runtime_command_already_executed
+        ),
+        "prompt429_launch_packet_ready": launch_packet_ready,
+        "prompt429_launch_allowed": launch_allowed,
+        "prompt429_launch_performed": False,
+        "prompt429_runtime_launch_packet": launch_packet,
+        "prompt429_codex_invocation_allowed": False,
+        "prompt429_git_mutation_allowed": False,
+        "prompt429_commit_tag_allowed": False,
+        "prompt429_push_allowed": False,
+        "prompt429_pr_allowed": False,
+        "prompt429_merge_allowed": False,
+        "prompt429_rollback_allowed": False,
+        "prompt429_unbounded_loop_allowed": False,
+        "prompt429_daemon_mode_allowed": False,
+        "prompt429_runtime_command_executed": False,
+        "prompt429_next_action": next_action,
+    }
 
 
 def _build_prompt382_approve_commit_tag_execution_gate_state(
@@ -241753,6 +241954,21 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt428_bounded_runtime_command_artifact_contract_payload,
         }
+        prompt429_bounded_runtime_launch_readiness_gate_payload = (
+            _build_prompt429_bounded_runtime_launch_readiness_gate_state(
+                run_state_payload=run_state_payload,
+                launch_requested=bool(
+                    run_state_payload.get("prompt429_launch_requested")
+                ),
+                allow_runtime_launch=bool(
+                    run_state_payload.get("prompt429_allow_runtime_launch")
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt429_bounded_runtime_launch_readiness_gate_payload,
+        }
         compact_planning_summary = run_state_payload.get(
             "project_planning_summary_compact"
         )
@@ -241782,6 +241998,26 @@ class PlannedExecutionRunner:
                 "prompt428_next_action": (
                     prompt428_bounded_runtime_command_artifact_contract_payload.get(
                         "prompt428_next_action"
+                    )
+                ),
+                "prompt429_bounded_runtime_launch_readiness_gate_status": (
+                    prompt429_bounded_runtime_launch_readiness_gate_payload.get(
+                        "prompt429_bounded_runtime_launch_readiness_gate_status"
+                    )
+                ),
+                "prompt429_launch_packet_ready": (
+                    prompt429_bounded_runtime_launch_readiness_gate_payload.get(
+                        "prompt429_launch_packet_ready"
+                    )
+                ),
+                "prompt429_launch_allowed": (
+                    prompt429_bounded_runtime_launch_readiness_gate_payload.get(
+                        "prompt429_launch_allowed"
+                    )
+                ),
+                "prompt429_next_action": (
+                    prompt429_bounded_runtime_launch_readiness_gate_payload.get(
+                        "prompt429_next_action"
                     )
                 ),
             }
@@ -242014,6 +242250,26 @@ class PlannedExecutionRunner:
                     "run_state.prompt428_commit_tag_handoff_ready",
                     "run_state.prompt428_runtime_command_executed",
                     "run_state.prompt428_next_action",
+                    (
+                        "run_state."
+                        "prompt429_bounded_runtime_launch_readiness_gate_status"
+                    ),
+                    (
+                        "run_state."
+                        "prompt429_bounded_runtime_launch_readiness_gate_ready"
+                    ),
+                    "run_state.prompt429_launch_requested",
+                    "run_state.prompt429_allow_runtime_launch",
+                    "run_state.prompt429_prompt428_contract_ready",
+                    "run_state.prompt429_command_argv_ready",
+                    "run_state.prompt429_expected_artifacts_ready",
+                    "run_state.prompt429_failure_stop_contract_ready",
+                    "run_state.prompt429_runtime_command_already_executed",
+                    "run_state.prompt429_launch_packet_ready",
+                    "run_state.prompt429_launch_allowed",
+                    "run_state.prompt429_launch_performed",
+                    "run_state.prompt429_runtime_command_executed",
+                    "run_state.prompt429_next_action",
                 ]
             )
         )
@@ -242404,6 +242660,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt428_bounded_runtime_command_artifact_contract_state=(
                     prompt428_bounded_runtime_command_artifact_contract_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt429_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt429_bounded_runtime_launch_readiness_gate_state=(
+                    prompt429_bounded_runtime_launch_readiness_gate_payload
                 ),
             )
         )
