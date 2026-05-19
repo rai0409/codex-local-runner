@@ -3914,6 +3914,7 @@ _PROMPT433_SCHEMA_VERSION = (
 _PROMPT434_SCHEMA_VERSION = (
     "prompt434_bounded_complete_autonomous_self_run_closure_surface_v1"
 )
+_PROMPT435_SCHEMA_VERSION = "prompt435_runtime_activation_wiring_surface_v1"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5963,6 +5964,29 @@ _PROMPT434_BOUNDED_COMPLETE_AUTONOMOUS_SELF_RUN_CLOSURE_KEYS: tuple[str, ...] = 
     "prompt434_rollback_allowed",
     "prompt434_unbounded_loop_allowed",
     "prompt434_daemon_mode_allowed",
+)
+_PROMPT435_RUNTIME_ACTIVATION_WIRING_KEYS: tuple[str, ...] = (
+    "prompt435_runtime_activation_wiring_enabled",
+    "prompt435_schema_version",
+    "prompt435_request_autonomous_closure",
+    "prompt435_allow_autonomous_closure",
+    "prompt435_allow_next_cycle",
+    "prompt435_enable_bounded_cycle_runner",
+    "prompt435_autonomous_current_cycle",
+    "prompt435_autonomous_max_cycles",
+    "prompt435_cycle_runner_connected",
+    "prompt435_cycle_runner_mode",
+    "prompt435_next_action",
+    "prompt435_codex_direct_invocation_allowed",
+    "prompt435_subprocess_direct_execution_allowed",
+    "prompt435_git_direct_mutation_allowed",
+    "prompt435_commit_tag_direct_execution_allowed",
+    "prompt435_push_allowed",
+    "prompt435_pr_allowed",
+    "prompt435_merge_allowed",
+    "prompt435_rollback_allowed",
+    "prompt435_unbounded_loop_allowed",
+    "prompt435_daemon_mode_allowed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8992,6 +9016,27 @@ def _merge_prompt434_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT434_BOUNDED_COMPLETE_AUTONOMOUS_SELF_RUN_CLOSURE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt435_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt435_runtime_activation_wiring_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt435_runtime_activation_wiring_state)
+        if isinstance(prompt435_runtime_activation_wiring_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT435_RUNTIME_ACTIVATION_WIRING_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -66677,6 +66722,137 @@ def _build_prompt433_bounded_handoff_execution_adapter_state(
         }
     )
     return state
+
+
+def _build_prompt435_bounded_cycle_runner_adapter(
+    *,
+    transport_mode: str,
+    repo_path: str | Path | None,
+    artifacts_dir: str | Path,
+    out_dir: str | Path,
+    job_id: str,
+    live_transport_enabled: bool = False,
+) -> Callable[..., dict[str, Any]]:
+    normalized_transport_mode = _normalize_text(transport_mode, default="dry-run")
+    normalized_repo_path = _normalize_text(repo_path, default="")
+    normalized_artifacts_dir = _normalize_text(artifacts_dir, default="")
+    normalized_out_dir = _normalize_text(out_dir, default="")
+    normalized_job_id = _normalize_text(job_id, default="planned-execution")
+
+    def _cycle_runner(
+        *,
+        next_cycle_number: Any,
+        current_cycle: Any,
+        max_cycles: Any,
+        previous_commit_sha: Any,
+        previous_tag_name: Any,
+        previous_commit_tag_receipt_path: Any,
+        run_state_payload: Any,
+    ) -> dict[str, Any]:
+        next_job_id = f"{normalized_job_id}-cycle-{next_cycle_number}"
+        next_command_argv = [
+            sys.executable or "python",
+            "scripts/run_planned_execution.py",
+            "--artifacts-dir",
+            normalized_artifacts_dir,
+            "--out-dir",
+            normalized_out_dir,
+            "--job-id",
+            next_job_id,
+            "--transport-mode",
+            normalized_transport_mode,
+        ]
+        if normalized_repo_path:
+            next_command_argv.extend(["--repo-path", normalized_repo_path])
+        if normalized_transport_mode == "live" and bool(live_transport_enabled):
+            next_command_argv.append("--enable-live-transport")
+        next_command_argv.append("--json")
+
+        live_transport_flag_omitted = (
+            normalized_transport_mode == "live" and not bool(live_transport_enabled)
+        )
+        return {
+            "status": "completed",
+            "next_prompt_id": "prompt_unknown",
+            "next_prompt_path": "",
+            "next_prompt_text": "",
+            "next_command_argv": next_command_argv,
+            "next_run_state_path": "",
+            "next_manifest_path": "",
+            "next_artifacts_dir": normalized_artifacts_dir,
+            "next_out_dir": normalized_out_dir,
+            "next_job_id": next_job_id,
+            "returncode": 0,
+            "receipt_path": "",
+            "result_payload": {
+                "prompt435_cycle_runner_adapter": "metadata_only",
+                "next_cycle_number": next_cycle_number,
+                "current_cycle": current_cycle,
+                "max_cycles": max_cycles,
+                "previous_commit_sha": previous_commit_sha,
+                "previous_tag_name": previous_tag_name,
+                "previous_commit_tag_receipt_path": (
+                    previous_commit_tag_receipt_path
+                ),
+                "transport_mode": normalized_transport_mode,
+                "repo_path": normalized_repo_path,
+                "live_transport_enabled": bool(live_transport_enabled),
+                "enable_live_transport_flag_omitted": live_transport_flag_omitted,
+                "run_state_payload_received": isinstance(
+                    run_state_payload,
+                    Mapping,
+                ),
+            },
+        }
+
+    return _cycle_runner
+
+
+def _build_prompt435_runtime_activation_wiring_state(
+    *,
+    request_autonomous_closure: bool = False,
+    allow_autonomous_closure: bool = False,
+    allow_next_cycle: bool = False,
+    enable_bounded_cycle_runner: bool = False,
+    autonomous_current_cycle: Any = None,
+    autonomous_max_cycles: Any = 2,
+) -> dict[str, Any]:
+    request_closure = bool(request_autonomous_closure)
+    allow_closure = bool(allow_autonomous_closure)
+    allow_cycle = bool(allow_next_cycle)
+    runner_connected = bool(enable_bounded_cycle_runner)
+    if not request_closure:
+        next_action = "request_prompt434_autonomous_self_run_closure"
+    elif not allow_closure:
+        next_action = "allow_prompt434_autonomous_closure"
+    elif allow_cycle and not runner_connected:
+        next_action = "enable_prompt435_bounded_cycle_runner"
+    else:
+        next_action = "activate_prompt434_autonomous_closure"
+
+    return {
+        "prompt435_runtime_activation_wiring_enabled": True,
+        "prompt435_schema_version": _PROMPT435_SCHEMA_VERSION,
+        "prompt435_request_autonomous_closure": request_closure,
+        "prompt435_allow_autonomous_closure": allow_closure,
+        "prompt435_allow_next_cycle": allow_cycle,
+        "prompt435_enable_bounded_cycle_runner": runner_connected,
+        "prompt435_autonomous_current_cycle": autonomous_current_cycle,
+        "prompt435_autonomous_max_cycles": autonomous_max_cycles,
+        "prompt435_cycle_runner_connected": runner_connected,
+        "prompt435_cycle_runner_mode": "metadata_only" if runner_connected else "",
+        "prompt435_next_action": next_action,
+        "prompt435_codex_direct_invocation_allowed": False,
+        "prompt435_subprocess_direct_execution_allowed": False,
+        "prompt435_git_direct_mutation_allowed": False,
+        "prompt435_commit_tag_direct_execution_allowed": False,
+        "prompt435_push_allowed": False,
+        "prompt435_pr_allowed": False,
+        "prompt435_merge_allowed": False,
+        "prompt435_rollback_allowed": False,
+        "prompt435_unbounded_loop_allowed": False,
+        "prompt435_daemon_mode_allowed": False,
+    }
 
 
 def _build_prompt434_bounded_complete_autonomous_self_run_closure_state(
@@ -239762,6 +239938,13 @@ class PlannedExecutionRunner:
         prompt387_success_path_dispatch_enabled: bool = False,
         prompt389_bounded_repeated_success_path_loop_enabled: bool = False,
         prompt389_max_cycles: int | None = None,
+        prompt435_request_autonomous_closure: bool = False,
+        prompt435_allow_autonomous_closure: bool = False,
+        prompt435_allow_next_cycle: bool = False,
+        prompt435_autonomous_current_cycle: int | None = None,
+        prompt435_autonomous_max_cycles: int = 2,
+        prompt435_enable_bounded_cycle_runner: bool = False,
+        live_transport_enabled: bool = False,
     ) -> dict[str, Any]:
         artifacts_root = Path(artifacts_input_dir)
         output_root = Path(output_dir)
@@ -240543,6 +240726,20 @@ class PlannedExecutionRunner:
                 if prompt389_max_cycles is not None
                 else _PROMPT389_DEFAULT_MAX_CYCLES
             ),
+            "prompt435_request_autonomous_closure": bool(
+                prompt435_request_autonomous_closure
+            ),
+            "prompt435_allow_autonomous_closure": bool(
+                prompt435_allow_autonomous_closure
+            ),
+            "prompt435_allow_next_cycle": bool(prompt435_allow_next_cycle),
+            "prompt435_enable_bounded_cycle_runner": bool(
+                prompt435_enable_bounded_cycle_runner
+            ),
+            "prompt435_autonomous_current_cycle": (
+                prompt435_autonomous_current_cycle
+            ),
+            "prompt435_autonomous_max_cycles": prompt435_autonomous_max_cycles,
         }
         run_state_payload = _augment_run_state_with_objective_contract_summary(
             run_state_payload=run_state_payload,
@@ -244279,20 +244476,67 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt433_bounded_handoff_execution_adapter_payload,
         }
+        prompt435_runtime_activation_wiring_payload = (
+            _build_prompt435_runtime_activation_wiring_state(
+                request_autonomous_closure=bool(
+                    run_state_payload.get("prompt435_request_autonomous_closure")
+                ),
+                allow_autonomous_closure=bool(
+                    run_state_payload.get("prompt435_allow_autonomous_closure")
+                ),
+                allow_next_cycle=bool(
+                    run_state_payload.get("prompt435_allow_next_cycle")
+                ),
+                enable_bounded_cycle_runner=bool(
+                    run_state_payload.get("prompt435_enable_bounded_cycle_runner")
+                ),
+                autonomous_current_cycle=run_state_payload.get(
+                    "prompt435_autonomous_current_cycle"
+                ),
+                autonomous_max_cycles=run_state_payload.get(
+                    "prompt435_autonomous_max_cycles",
+                    2,
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt435_runtime_activation_wiring_payload,
+        }
+        prompt435_cycle_runner = None
+        if bool(
+            prompt435_runtime_activation_wiring_payload.get(
+                "prompt435_cycle_runner_connected"
+            )
+        ):
+            prompt435_cycle_runner = _build_prompt435_bounded_cycle_runner_adapter(
+                transport_mode="dry-run" if dry_run else "live",
+                repo_path=resolved_execution_repo_path,
+                artifacts_dir=artifacts_root,
+                out_dir=output_root,
+                job_id=resolved_job_id,
+                live_transport_enabled=bool(live_transport_enabled),
+            )
         prompt434_bounded_complete_autonomous_self_run_closure_payload = (
             _build_prompt434_bounded_complete_autonomous_self_run_closure_state(
                 run_state_payload=run_state_payload,
                 closure_requested=bool(
-                    run_state_payload.get("prompt434_closure_requested")
+                    run_state_payload.get("prompt435_request_autonomous_closure")
                 ),
                 allow_autonomous_closure=bool(
-                    run_state_payload.get("prompt434_allow_autonomous_closure")
+                    run_state_payload.get("prompt435_allow_autonomous_closure")
                 ),
                 allow_next_cycle=bool(
-                    run_state_payload.get("prompt434_allow_next_cycle")
+                    run_state_payload.get("prompt435_allow_next_cycle")
                 ),
-                current_cycle=run_state_payload.get("prompt434_current_cycle"),
-                max_cycles=run_state_payload.get("prompt434_max_cycles"),
+                current_cycle=run_state_payload.get(
+                    "prompt435_autonomous_current_cycle"
+                ),
+                max_cycles=run_state_payload.get(
+                    "prompt435_autonomous_max_cycles",
+                    2,
+                ),
+                cycle_runner=prompt435_cycle_runner,
             )
         )
         run_state_payload = {
@@ -244453,6 +244697,36 @@ class PlannedExecutionRunner:
                 "prompt434_next_action": (
                     prompt434_bounded_complete_autonomous_self_run_closure_payload.get(
                         "prompt434_next_action"
+                    )
+                ),
+                "prompt435_runtime_activation_wiring_enabled": (
+                    prompt435_runtime_activation_wiring_payload.get(
+                        "prompt435_runtime_activation_wiring_enabled"
+                    )
+                ),
+                "prompt435_request_autonomous_closure": (
+                    prompt435_runtime_activation_wiring_payload.get(
+                        "prompt435_request_autonomous_closure"
+                    )
+                ),
+                "prompt435_allow_autonomous_closure": (
+                    prompt435_runtime_activation_wiring_payload.get(
+                        "prompt435_allow_autonomous_closure"
+                    )
+                ),
+                "prompt435_allow_next_cycle": (
+                    prompt435_runtime_activation_wiring_payload.get(
+                        "prompt435_allow_next_cycle"
+                    )
+                ),
+                "prompt435_cycle_runner_connected": (
+                    prompt435_runtime_activation_wiring_payload.get(
+                        "prompt435_cycle_runner_connected"
+                    )
+                ),
+                "prompt435_next_action": (
+                    prompt435_runtime_activation_wiring_payload.get(
+                        "prompt435_next_action"
                     )
                 ),
             }
@@ -245273,6 +245547,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt434_bounded_complete_autonomous_self_run_closure_state=(
                     prompt434_bounded_complete_autonomous_self_run_closure_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt435_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt435_runtime_activation_wiring_state=(
+                    prompt435_runtime_activation_wiring_payload
                 ),
             )
         )
@@ -254196,6 +254478,30 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT427_BOUNDED_MULTI_CYCLE_LOOP_RUNNER_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT428_BOUNDED_RUNTIME_COMMAND_ARTIFACT_CONTRACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT429_BOUNDED_RUNTIME_LAUNCH_READINESS_GATE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT430_BOUNDED_RUNTIME_EXECUTION_ADAPTER_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT432_ROUTE_DECISION_HANDOFF_PACKET_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT433_BOUNDED_HANDOFF_EXECUTION_ADAPTER_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT434_BOUNDED_COMPLETE_AUTONOMOUS_SELF_RUN_CLOSURE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT435_RUNTIME_ACTIVATION_WIRING_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact

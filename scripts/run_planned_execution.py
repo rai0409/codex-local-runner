@@ -698,6 +698,42 @@ def _build_parser() -> argparse.ArgumentParser:
             "Defaults to 2 and is capped at 5 by Prompt389."
         ),
     )
+    parser.add_argument(
+        "--request-autonomous-closure",
+        action="store_true",
+        default=False,
+        help="Request Prompt434 bounded autonomous self-run closure activation",
+    )
+    parser.add_argument(
+        "--allow-autonomous-closure",
+        action="store_true",
+        default=False,
+        help="Allow Prompt434 autonomous closure after explicit request",
+    )
+    parser.add_argument(
+        "--allow-next-cycle",
+        action="store_true",
+        default=False,
+        help="Allow Prompt434 to consider a bounded next-cycle candidate",
+    )
+    parser.add_argument(
+        "--autonomous-current-cycle",
+        type=int,
+        default=None,
+        help="Current bounded autonomous cycle number for Prompt434",
+    )
+    parser.add_argument(
+        "--autonomous-max-cycles",
+        type=int,
+        default=2,
+        help="Maximum bounded autonomous cycle count for Prompt434",
+    )
+    parser.add_argument(
+        "--enable-bounded-cycle-runner",
+        action="store_true",
+        default=False,
+        help="Connect Prompt435 metadata-only bounded cycle runner to Prompt434",
+    )
     parser.add_argument("--stop-on-failure", action="store_true", default=True, help="Stop when a unit fails")
     parser.add_argument("--continue-on-failure", action="store_true", help="Continue processing units after failures")
     parser.add_argument("--json", action="store_true", dest="as_json")
@@ -792,6 +828,19 @@ def main(argv: list[str] | None = None) -> int:
                 args.enable_prompt389_bounded_repeated_success_path_loop
             ),
             prompt389_max_cycles=args.prompt389_max_cycles,
+            prompt435_request_autonomous_closure=bool(
+                args.request_autonomous_closure
+            ),
+            prompt435_allow_autonomous_closure=bool(
+                args.allow_autonomous_closure
+            ),
+            prompt435_allow_next_cycle=bool(args.allow_next_cycle),
+            prompt435_autonomous_current_cycle=args.autonomous_current_cycle,
+            prompt435_autonomous_max_cycles=args.autonomous_max_cycles,
+            prompt435_enable_bounded_cycle_runner=bool(
+                args.enable_bounded_cycle_runner
+            ),
+            live_transport_enabled=bool(args.enable_live_transport),
         )
         manifest = _refresh_result_accounting_surfaces(
             manifest=manifest,
