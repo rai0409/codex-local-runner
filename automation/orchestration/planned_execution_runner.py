@@ -3905,6 +3905,9 @@ _PROMPT430_SCHEMA_VERSION = (
 _PROMPT431_SCHEMA_VERSION = (
     "prompt431_runtime_execution_result_review_route_decision_surface_v1"
 )
+_PROMPT432_SCHEMA_VERSION = (
+    "prompt432_route_decision_handoff_packet_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5790,6 +5793,49 @@ _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS: tuple[str, ...] 
     "prompt431_next_cycle_started",
     "prompt431_targeted_fix_generated",
     "prompt431_targeted_fix_executed",
+)
+_PROMPT432_ROUTE_DECISION_HANDOFF_PACKET_KEYS: tuple[str, ...] = (
+    "prompt432_route_decision_handoff_packet_enabled",
+    "prompt432_schema_version",
+    "prompt432_route_decision_handoff_packet_ready",
+    "prompt432_route_decision_handoff_packet_status",
+    "prompt432_route_decision_handoff_packet_blocked_reason",
+    "prompt432_handoff_requested",
+    "prompt432_allow_handoff_packet",
+    "prompt432_prompt431_route_decision_ready",
+    "prompt432_handoff_packet_ready",
+    "prompt432_selected_handoff",
+    "prompt432_approve_commit_tag_handoff_ready",
+    "prompt432_targeted_fix_handoff_ready",
+    "prompt432_stop_handoff_ready",
+    "prompt432_approve_commit_tag_handoff_packet",
+    "prompt432_targeted_fix_handoff_packet",
+    "prompt432_stop_handoff_packet",
+    "prompt432_current_cycle",
+    "prompt432_max_cycles",
+    "prompt432_cycle_capacity_available",
+    "prompt432_runtime_returncode",
+    "prompt432_runtime_returncode_classification",
+    "prompt432_next_cycle_continuation_candidate",
+    "prompt432_cycle_closure_after_commit_tag",
+    "prompt432_failure_review_required",
+    "prompt432_stop_required",
+    "prompt432_stop_reason",
+    "prompt432_next_action",
+    "prompt432_codex_invocation_allowed",
+    "prompt432_subprocess_execution_allowed",
+    "prompt432_git_mutation_allowed",
+    "prompt432_commit_tag_allowed",
+    "prompt432_commit_tag_performed",
+    "prompt432_push_allowed",
+    "prompt432_pr_allowed",
+    "prompt432_merge_allowed",
+    "prompt432_rollback_allowed",
+    "prompt432_unbounded_loop_allowed",
+    "prompt432_daemon_mode_allowed",
+    "prompt432_next_cycle_started",
+    "prompt432_targeted_fix_generated",
+    "prompt432_targeted_fix_executed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8746,6 +8792,27 @@ def _merge_prompt431_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt432_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt432_route_decision_handoff_packet_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt432_route_decision_handoff_packet_state)
+        if isinstance(prompt432_route_decision_handoff_packet_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT432_ROUTE_DECISION_HANDOFF_PACKET_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -65704,6 +65771,276 @@ def _build_prompt431_runtime_execution_result_review_route_decision_state(
         "prompt431_next_cycle_started": False,
         "prompt431_targeted_fix_generated": False,
         "prompt431_targeted_fix_executed": False,
+    }
+
+
+def _build_prompt432_route_decision_handoff_packet_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    handoff_requested: bool = False,
+    allow_handoff_packet: bool = False,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+
+    prompt431_route_decision_ready = (
+        payload.get("prompt431_route_decision_ready") is True
+    )
+    selected_route = _normalize_text(
+        payload.get("prompt431_selected_route"),
+        default="",
+    )
+    prompt431_status = _normalize_text(
+        payload.get(
+            "prompt431_runtime_execution_result_review_route_decision_status"
+        ),
+        default="",
+    )
+    prompt431_blocked_reason = _normalize_text(
+        payload.get(
+            "prompt431_runtime_execution_result_review_route_decision_blocked_reason"
+        ),
+        default="",
+    )
+    current_cycle = payload.get("prompt431_current_cycle")
+    max_cycles = payload.get("prompt431_max_cycles")
+    cycle_capacity_available = payload.get("prompt431_cycle_capacity_available")
+    runtime_returncode = payload.get("prompt431_runtime_returncode")
+    runtime_returncode_classification = _normalize_text(
+        payload.get("prompt431_runtime_returncode_classification"),
+        default="",
+    )
+    next_cycle_continuation_candidate = (
+        payload.get("prompt431_next_cycle_continuation_candidate") is True
+    )
+    failure_review_required = (
+        payload.get("prompt431_failure_review_required") is True
+    )
+    stop_required = payload.get("prompt431_stop_required") is True
+    stop_reason = _normalize_text(
+        payload.get("prompt431_stop_reason"),
+        default="",
+    )
+    runtime_execution_receipt_path = payload.get(
+        "prompt431_runtime_execution_receipt_path"
+    )
+    runtime_execution_stdout_path = payload.get(
+        "prompt431_runtime_execution_stdout_path"
+    )
+    runtime_execution_stderr_path = payload.get(
+        "prompt431_runtime_execution_stderr_path"
+    )
+    runtime_execution_result_payload = payload.get(
+        "prompt431_runtime_execution_result_payload"
+    )
+
+    status = "blocked"
+    ready = False
+    blocked_reason = ""
+    handoff_packet_ready = False
+    selected_handoff = "blocked"
+    approve_commit_tag_handoff_ready = False
+    targeted_fix_handoff_ready = False
+    stop_handoff_ready = False
+    approve_commit_tag_handoff_packet: dict[str, Any] = {}
+    targeted_fix_handoff_packet: dict[str, Any] = {}
+    stop_handoff_packet: dict[str, Any] = {}
+    cycle_closure_after_commit_tag = False
+    next_action = "review_prompt431_route_decision"
+
+    success_handoff_route = (
+        prompt431_route_decision_ready
+        and selected_route == "success_approve_commit_tag_then_next_cycle"
+        and payload.get("prompt431_approve_candidate") is True
+        and payload.get("prompt431_commit_tag_handoff_candidate") is True
+        and runtime_returncode == 0
+        and runtime_returncode_classification == "success"
+    )
+    targeted_fix_handoff_route = (
+        prompt431_route_decision_ready
+        and selected_route == "prepare_targeted_fix"
+        and payload.get("prompt431_targeted_fix_candidate") is True
+        and payload.get("prompt431_targeted_fix_handoff_candidate") is True
+        and (
+            (runtime_returncode is not None and runtime_returncode != 0)
+            or runtime_returncode_classification == "failed"
+        )
+    )
+    stop_handoff_route = (
+        stop_required
+        or failure_review_required
+        or selected_route.startswith("blocked")
+        or prompt431_status in {"blocked", "execution_error"}
+    )
+
+    if not handoff_requested:
+        status = "ready"
+        ready = True
+        selected_handoff = "not_requested"
+        next_action = "request_prompt432_route_decision_handoff"
+    elif not allow_handoff_packet:
+        blocked_reason = "handoff_packet_not_allowed"
+        next_action = "allow_prompt432_handoff_packet"
+    elif success_handoff_route:
+        status = "success_handoff_ready"
+        ready = True
+        handoff_packet_ready = True
+        selected_handoff = "approve_commit_tag_handoff"
+        approve_commit_tag_handoff_ready = True
+        cycle_closure_after_commit_tag = (
+            stop_required
+            and stop_reason == "bounded_runtime_cycle_limit_reached"
+        )
+        if cycle_closure_after_commit_tag:
+            next_cycle_continuation_candidate = False
+            next_action = "prepare_prompt433_approve_commit_tag_execution_then_stop"
+        else:
+            next_action = "prepare_prompt433_approve_commit_tag_execution"
+        approve_commit_tag_handoff_packet = {
+            "handoff_type": "approve_commit_tag",
+            "source_prompt": "prompt431",
+            "selected_route": selected_route,
+            "current_cycle": current_cycle,
+            "max_cycles": max_cycles,
+            "cycle_capacity_available": cycle_capacity_available,
+            "next_cycle_continuation_candidate": (
+                next_cycle_continuation_candidate
+            ),
+            "cycle_closure_after_commit_tag": cycle_closure_after_commit_tag,
+            "runtime_returncode": runtime_returncode,
+            "runtime_returncode_classification": (
+                runtime_returncode_classification
+            ),
+            "runtime_execution_receipt_path": runtime_execution_receipt_path,
+            "runtime_execution_stdout_path": runtime_execution_stdout_path,
+            "runtime_execution_stderr_path": runtime_execution_stderr_path,
+            "runtime_execution_result_payload": runtime_execution_result_payload,
+            "commit_tag_execution_policy": "prompt433_only",
+            "commit_tag_execution_performed": False,
+            "next_cycle_started": False,
+        }
+    elif targeted_fix_handoff_route:
+        status = "targeted_fix_handoff_ready"
+        ready = True
+        handoff_packet_ready = True
+        selected_handoff = "targeted_fix_handoff"
+        targeted_fix_handoff_ready = True
+        next_action = "prepare_prompt433_targeted_fix_generation_execution"
+        targeted_fix_handoff_packet = {
+            "handoff_type": "targeted_fix",
+            "source_prompt": "prompt431",
+            "selected_route": selected_route,
+            "current_cycle": current_cycle,
+            "max_cycles": max_cycles,
+            "runtime_returncode": runtime_returncode,
+            "runtime_returncode_classification": (
+                runtime_returncode_classification
+            ),
+            "runtime_execution_receipt_path": runtime_execution_receipt_path,
+            "runtime_execution_stdout_path": runtime_execution_stdout_path,
+            "runtime_execution_stderr_path": runtime_execution_stderr_path,
+            "runtime_execution_result_payload": runtime_execution_result_payload,
+            "targeted_fix_generation_policy": "prompt433_only",
+            "targeted_fix_execution_policy": "prompt433_only",
+            "targeted_fix_generated": False,
+            "targeted_fix_executed": False,
+            "commit_tag_execution_performed": False,
+            "next_cycle_started": False,
+        }
+    elif stop_handoff_route:
+        status = "stop_handoff_ready"
+        ready = True
+        handoff_packet_ready = True
+        selected_handoff = "stop_handoff"
+        stop_handoff_ready = True
+        next_action = "review_prompt432_stop_handoff"
+        stop_handoff_packet = {
+            "handoff_type": "stop",
+            "source_prompt": "prompt431",
+            "selected_route": selected_route,
+            "status": prompt431_status,
+            "blocked_reason": prompt431_blocked_reason,
+            "current_cycle": current_cycle,
+            "max_cycles": max_cycles,
+            "runtime_returncode": runtime_returncode,
+            "runtime_returncode_classification": (
+                runtime_returncode_classification
+            ),
+            "failure_review_required": failure_review_required,
+            "stop_required": stop_required,
+            "stop_reason": stop_reason,
+            "runtime_execution_receipt_path": runtime_execution_receipt_path,
+            "runtime_execution_stdout_path": runtime_execution_stdout_path,
+            "runtime_execution_stderr_path": runtime_execution_stderr_path,
+            "runtime_execution_result_payload": runtime_execution_result_payload,
+            "next_cycle_started": False,
+            "commit_tag_execution_performed": False,
+            "targeted_fix_generated": False,
+            "targeted_fix_executed": False,
+        }
+    elif not prompt431_route_decision_ready:
+        blocked_reason = "prompt431_route_decision_not_ready"
+        next_action = "review_prompt431_route_decision"
+    else:
+        blocked_reason = "unclassified_prompt431_route_decision"
+        selected_handoff = "blocked_unclassified_route"
+        next_action = "review_prompt431_unclassified_route_decision"
+
+    return {
+        "prompt432_route_decision_handoff_packet_enabled": True,
+        "prompt432_schema_version": _PROMPT432_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt432",
+        "prompt432_route_decision_handoff_packet_ready": ready,
+        "prompt432_route_decision_handoff_packet_status": status,
+        "prompt432_route_decision_handoff_packet_blocked_reason": blocked_reason,
+        "prompt432_handoff_requested": bool(handoff_requested),
+        "prompt432_allow_handoff_packet": bool(allow_handoff_packet),
+        "prompt432_prompt431_route_decision_ready": (
+            prompt431_route_decision_ready
+        ),
+        "prompt432_handoff_packet_ready": handoff_packet_ready,
+        "prompt432_selected_handoff": selected_handoff,
+        "prompt432_approve_commit_tag_handoff_ready": (
+            approve_commit_tag_handoff_ready
+        ),
+        "prompt432_targeted_fix_handoff_ready": targeted_fix_handoff_ready,
+        "prompt432_stop_handoff_ready": stop_handoff_ready,
+        "prompt432_approve_commit_tag_handoff_packet": (
+            approve_commit_tag_handoff_packet
+        ),
+        "prompt432_targeted_fix_handoff_packet": targeted_fix_handoff_packet,
+        "prompt432_stop_handoff_packet": stop_handoff_packet,
+        "prompt432_current_cycle": current_cycle,
+        "prompt432_max_cycles": max_cycles,
+        "prompt432_cycle_capacity_available": cycle_capacity_available,
+        "prompt432_runtime_returncode": runtime_returncode,
+        "prompt432_runtime_returncode_classification": (
+            runtime_returncode_classification
+        ),
+        "prompt432_next_cycle_continuation_candidate": (
+            next_cycle_continuation_candidate
+        ),
+        "prompt432_cycle_closure_after_commit_tag": (
+            cycle_closure_after_commit_tag
+        ),
+        "prompt432_failure_review_required": failure_review_required,
+        "prompt432_stop_required": stop_required,
+        "prompt432_stop_reason": stop_reason,
+        "prompt432_next_action": next_action,
+        "prompt432_codex_invocation_allowed": False,
+        "prompt432_subprocess_execution_allowed": False,
+        "prompt432_git_mutation_allowed": False,
+        "prompt432_commit_tag_allowed": False,
+        "prompt432_commit_tag_performed": False,
+        "prompt432_push_allowed": False,
+        "prompt432_pr_allowed": False,
+        "prompt432_merge_allowed": False,
+        "prompt432_rollback_allowed": False,
+        "prompt432_unbounded_loop_allowed": False,
+        "prompt432_daemon_mode_allowed": False,
+        "prompt432_next_cycle_started": False,
+        "prompt432_targeted_fix_generated": False,
+        "prompt432_targeted_fix_executed": False,
     }
 
 
@@ -242607,6 +242944,21 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt431_runtime_execution_result_review_route_decision_payload,
         }
+        prompt432_route_decision_handoff_packet_payload = (
+            _build_prompt432_route_decision_handoff_packet_state(
+                run_state_payload=run_state_payload,
+                handoff_requested=bool(
+                    run_state_payload.get("prompt432_handoff_requested")
+                ),
+                allow_handoff_packet=bool(
+                    run_state_payload.get("prompt432_allow_handoff_packet")
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt432_route_decision_handoff_packet_payload,
+        }
         compact_planning_summary = run_state_payload.get(
             "project_planning_summary_compact"
         )
@@ -242701,6 +243053,26 @@ class PlannedExecutionRunner:
                 "prompt431_next_action": (
                     prompt431_runtime_execution_result_review_route_decision_payload.get(
                         "prompt431_next_action"
+                    )
+                ),
+                "prompt432_route_decision_handoff_packet_status": (
+                    prompt432_route_decision_handoff_packet_payload.get(
+                        "prompt432_route_decision_handoff_packet_status"
+                    )
+                ),
+                "prompt432_handoff_packet_ready": (
+                    prompt432_route_decision_handoff_packet_payload.get(
+                        "prompt432_handoff_packet_ready"
+                    )
+                ),
+                "prompt432_selected_handoff": (
+                    prompt432_route_decision_handoff_packet_payload.get(
+                        "prompt432_selected_handoff"
+                    )
+                ),
+                "prompt432_next_action": (
+                    prompt432_route_decision_handoff_packet_payload.get(
+                        "prompt432_next_action"
                     )
                 ),
             }
@@ -243008,6 +243380,27 @@ class PlannedExecutionRunner:
                     "run_state.prompt431_failure_review_required",
                     "run_state.prompt431_stop_required",
                     "run_state.prompt431_next_action",
+                    (
+                        "run_state."
+                        "prompt432_route_decision_handoff_packet_status"
+                    ),
+                    (
+                        "run_state."
+                        "prompt432_route_decision_handoff_packet_ready"
+                    ),
+                    "run_state.prompt432_handoff_requested",
+                    "run_state.prompt432_allow_handoff_packet",
+                    "run_state.prompt432_prompt431_route_decision_ready",
+                    "run_state.prompt432_handoff_packet_ready",
+                    "run_state.prompt432_selected_handoff",
+                    "run_state.prompt432_approve_commit_tag_handoff_ready",
+                    "run_state.prompt432_targeted_fix_handoff_ready",
+                    "run_state.prompt432_stop_handoff_ready",
+                    "run_state.prompt432_next_cycle_continuation_candidate",
+                    "run_state.prompt432_cycle_closure_after_commit_tag",
+                    "run_state.prompt432_failure_review_required",
+                    "run_state.prompt432_stop_required",
+                    "run_state.prompt432_next_action",
                 ]
             )
         )
@@ -243422,6 +243815,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt431_runtime_execution_result_review_route_decision_state=(
                     prompt431_runtime_execution_result_review_route_decision_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt432_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt432_route_decision_handoff_packet_state=(
+                    prompt432_route_decision_handoff_packet_payload
                 ),
             )
         )
