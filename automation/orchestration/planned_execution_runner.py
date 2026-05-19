@@ -3902,6 +3902,9 @@ _PROMPT429_SCHEMA_VERSION = (
 _PROMPT430_SCHEMA_VERSION = (
     "prompt430_bounded_runtime_execution_adapter_surface_v1"
 )
+_PROMPT431_SCHEMA_VERSION = (
+    "prompt431_runtime_execution_result_review_route_decision_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5743,6 +5746,50 @@ _PROMPT430_BOUNDED_RUNTIME_EXECUTION_ADAPTER_KEYS: tuple[str, ...] = (
     "prompt430_unbounded_loop_allowed",
     "prompt430_daemon_mode_allowed",
     "prompt430_next_action",
+)
+_PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS: tuple[str, ...] = (
+    "prompt431_runtime_execution_result_review_route_decision_enabled",
+    "prompt431_schema_version",
+    "prompt431_runtime_execution_result_review_route_decision_ready",
+    "prompt431_runtime_execution_result_review_route_decision_status",
+    "prompt431_runtime_execution_result_review_route_decision_blocked_reason",
+    "prompt431_review_requested",
+    "prompt431_allow_route_decision",
+    "prompt431_current_cycle",
+    "prompt431_max_cycles",
+    "prompt431_cycle_capacity_available",
+    "prompt431_prompt430_result_ready",
+    "prompt431_route_decision_ready",
+    "prompt431_selected_route",
+    "prompt431_route_source",
+    "prompt431_runtime_returncode",
+    "prompt431_runtime_returncode_classification",
+    "prompt431_approve_candidate",
+    "prompt431_commit_tag_handoff_candidate",
+    "prompt431_targeted_fix_candidate",
+    "prompt431_targeted_fix_handoff_candidate",
+    "prompt431_next_cycle_continuation_candidate",
+    "prompt431_failure_review_required",
+    "prompt431_stop_required",
+    "prompt431_stop_reason",
+    "prompt431_runtime_execution_receipt_path",
+    "prompt431_runtime_execution_stdout_path",
+    "prompt431_runtime_execution_stderr_path",
+    "prompt431_runtime_execution_result_payload",
+    "prompt431_next_action",
+    "prompt431_codex_invocation_allowed",
+    "prompt431_git_mutation_allowed",
+    "prompt431_commit_tag_allowed",
+    "prompt431_commit_tag_performed",
+    "prompt431_push_allowed",
+    "prompt431_pr_allowed",
+    "prompt431_merge_allowed",
+    "prompt431_rollback_allowed",
+    "prompt431_unbounded_loop_allowed",
+    "prompt431_daemon_mode_allowed",
+    "prompt431_next_cycle_started",
+    "prompt431_targeted_fix_generated",
+    "prompt431_targeted_fix_executed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8673,6 +8720,32 @@ def _merge_prompt430_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT430_BOUNDED_RUNTIME_EXECUTION_ADAPTER_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt431_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt431_runtime_execution_result_review_route_decision_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt431_runtime_execution_result_review_route_decision_state)
+        if isinstance(
+            prompt431_runtime_execution_result_review_route_decision_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -65429,6 +65502,209 @@ def _build_prompt430_bounded_runtime_execution_adapter_state(
         }
     )
     return state
+
+
+def _build_prompt431_runtime_execution_result_review_route_decision_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    review_requested: bool = False,
+    allow_route_decision: bool = False,
+    current_cycle: Any = None,
+    max_cycles: Any = 2,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+
+    parsed_current_cycle = _as_optional_int(current_cycle)
+    if parsed_current_cycle is None:
+        for key in (
+            "prompt431_current_cycle",
+            "prompt430_current_cycle",
+            "prompt427_current_cycle",
+        ):
+            parsed_current_cycle = _as_optional_int(payload.get(key))
+            if parsed_current_cycle is not None:
+                break
+    effective_current_cycle = parsed_current_cycle if parsed_current_cycle is not None else 0
+
+    parsed_max_cycles = _as_optional_int(max_cycles)
+    effective_max_cycles = (
+        parsed_max_cycles if parsed_max_cycles is not None and parsed_max_cycles > 0 else 2
+    )
+    cycle_capacity_available = effective_current_cycle < effective_max_cycles
+
+    prompt430_status = _normalize_text(
+        payload.get("prompt430_bounded_runtime_execution_adapter_status"),
+        default="",
+    )
+    returncode = payload.get("prompt430_runtime_execution_returncode")
+    returncode_classification = _normalize_text(
+        payload.get("prompt430_runtime_execution_returncode_classification"),
+        default="",
+    )
+    prompt430_execution_error = payload.get("prompt430_execution_error") is True
+    prompt430_executed_result_ready = (
+        prompt430_status == "executed"
+        and (
+            payload.get("prompt430_execution_result_available") is True
+            or payload.get("prompt430_execution_performed") is True
+        )
+    )
+    prompt430_error_result_ready = (
+        prompt430_status == "execution_error"
+        or prompt430_execution_error
+        or returncode_classification == "execution_error"
+    )
+    prompt430_result_ready = prompt430_executed_result_ready or prompt430_error_result_ready
+
+    status = "blocked"
+    ready = False
+    blocked_reason = ""
+    route_decision_ready = False
+    selected_route = "blocked"
+    route_source = ""
+    approve_candidate = False
+    commit_tag_handoff_candidate = False
+    targeted_fix_candidate = False
+    targeted_fix_handoff_candidate = False
+    next_cycle_continuation_candidate = False
+    failure_review_required = False
+    stop_required = False
+    stop_reason = ""
+    next_action = "review_prompt430_runtime_execution_adapter"
+
+    if not review_requested:
+        status = "ready"
+        ready = True
+        selected_route = "not_requested"
+        next_action = "request_prompt431_runtime_result_review"
+    elif not allow_route_decision:
+        blocked_reason = "route_decision_not_allowed"
+        next_action = "allow_prompt431_route_decision"
+    elif not prompt430_result_ready:
+        blocked_reason = "prompt430_runtime_execution_result_not_ready"
+        next_action = "review_prompt430_runtime_execution_adapter"
+    elif prompt430_error_result_ready:
+        status = "execution_error"
+        blocked_reason = "runtime_execution_error"
+        selected_route = "runtime_execution_error_stop"
+        failure_review_required = True
+        stop_required = True
+        stop_reason = "runtime_execution_error"
+        next_action = "review_prompt430_runtime_execution_error"
+    elif (
+        prompt430_status == "executed"
+        and payload.get("prompt430_execution_result_available") is True
+        and returncode == 0
+        and returncode_classification == "success"
+        and payload.get("prompt430_runtime_execution_success") is True
+        and payload.get("prompt430_success_path_ready") is True
+    ):
+        status = "success_route_ready"
+        ready = True
+        route_decision_ready = True
+        selected_route = "success_approve_commit_tag_then_next_cycle"
+        route_source = "prompt430"
+        approve_candidate = True
+        commit_tag_handoff_candidate = True
+        next_cycle_continuation_candidate = cycle_capacity_available
+        stop_required = not cycle_capacity_available
+        stop_reason = (
+            "bounded_runtime_cycle_limit_reached"
+            if not cycle_capacity_available
+            else ""
+        )
+        next_action = "prepare_prompt432_success_approve_commit_tag_handoff"
+    elif (
+        (returncode is not None and returncode != 0)
+        or returncode_classification == "failed"
+        or payload.get("prompt430_runtime_execution_failed") is True
+        or payload.get("prompt430_targeted_fix_candidate") is True
+    ):
+        status = "targeted_fix_route_ready"
+        ready = True
+        route_decision_ready = True
+        selected_route = "prepare_targeted_fix"
+        route_source = "prompt430"
+        targeted_fix_candidate = True
+        targeted_fix_handoff_candidate = True
+        next_action = "prepare_prompt432_targeted_fix_handoff"
+    elif (
+        returncode is None
+        or returncode_classification == "unknown"
+        or payload.get("prompt430_runtime_execution_unknown") is True
+    ):
+        blocked_reason = "runtime_execution_returncode_unknown"
+        selected_route = "blocked_unknown_runtime_result"
+        failure_review_required = True
+        stop_required = True
+        stop_reason = "runtime_execution_returncode_unknown"
+        next_action = "review_prompt430_unknown_runtime_result"
+    else:
+        blocked_reason = "unclassified_runtime_execution_result"
+        selected_route = "blocked_unclassified_runtime_result"
+        failure_review_required = True
+        stop_required = True
+        stop_reason = "unclassified_runtime_execution_result"
+        next_action = "review_prompt430_unclassified_runtime_result"
+
+    return {
+        "prompt431_runtime_execution_result_review_route_decision_enabled": True,
+        "prompt431_schema_version": _PROMPT431_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt431",
+        "prompt431_runtime_execution_result_review_route_decision_ready": ready,
+        "prompt431_runtime_execution_result_review_route_decision_status": status,
+        "prompt431_runtime_execution_result_review_route_decision_blocked_reason": (
+            blocked_reason
+        ),
+        "prompt431_review_requested": bool(review_requested),
+        "prompt431_allow_route_decision": bool(allow_route_decision),
+        "prompt431_current_cycle": effective_current_cycle,
+        "prompt431_max_cycles": effective_max_cycles,
+        "prompt431_cycle_capacity_available": cycle_capacity_available,
+        "prompt431_prompt430_result_ready": prompt430_result_ready,
+        "prompt431_route_decision_ready": route_decision_ready,
+        "prompt431_selected_route": selected_route,
+        "prompt431_route_source": route_source,
+        "prompt431_runtime_returncode": returncode,
+        "prompt431_runtime_returncode_classification": returncode_classification,
+        "prompt431_approve_candidate": approve_candidate,
+        "prompt431_commit_tag_handoff_candidate": commit_tag_handoff_candidate,
+        "prompt431_targeted_fix_candidate": targeted_fix_candidate,
+        "prompt431_targeted_fix_handoff_candidate": targeted_fix_handoff_candidate,
+        "prompt431_next_cycle_continuation_candidate": (
+            next_cycle_continuation_candidate
+        ),
+        "prompt431_failure_review_required": failure_review_required,
+        "prompt431_stop_required": stop_required,
+        "prompt431_stop_reason": stop_reason,
+        "prompt431_runtime_execution_receipt_path": payload.get(
+            "prompt430_runtime_execution_receipt_path"
+        ),
+        "prompt431_runtime_execution_stdout_path": payload.get(
+            "prompt430_runtime_execution_stdout_path"
+        ),
+        "prompt431_runtime_execution_stderr_path": payload.get(
+            "prompt430_runtime_execution_stderr_path"
+        ),
+        "prompt431_runtime_execution_result_payload": payload.get(
+            "prompt430_runtime_execution_result_payload"
+        ),
+        "prompt431_next_action": next_action,
+        "prompt431_codex_invocation_allowed": False,
+        "prompt431_git_mutation_allowed": False,
+        "prompt431_commit_tag_allowed": False,
+        "prompt431_commit_tag_performed": False,
+        "prompt431_push_allowed": False,
+        "prompt431_pr_allowed": False,
+        "prompt431_merge_allowed": False,
+        "prompt431_rollback_allowed": False,
+        "prompt431_unbounded_loop_allowed": False,
+        "prompt431_daemon_mode_allowed": False,
+        "prompt431_next_cycle_started": False,
+        "prompt431_targeted_fix_generated": False,
+        "prompt431_targeted_fix_executed": False,
+    }
 
 
 def _build_prompt382_approve_commit_tag_execution_gate_state(
@@ -242314,6 +242590,23 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt430_bounded_runtime_execution_adapter_payload,
         }
+        prompt431_runtime_execution_result_review_route_decision_payload = (
+            _build_prompt431_runtime_execution_result_review_route_decision_state(
+                run_state_payload=run_state_payload,
+                review_requested=bool(
+                    run_state_payload.get("prompt431_review_requested")
+                ),
+                allow_route_decision=bool(
+                    run_state_payload.get("prompt431_allow_route_decision")
+                ),
+                current_cycle=run_state_payload.get("prompt427_current_cycle"),
+                max_cycles=run_state_payload.get("prompt427_max_cycles", 2),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt431_runtime_execution_result_review_route_decision_payload,
+        }
         compact_planning_summary = run_state_payload.get(
             "project_planning_summary_compact"
         )
@@ -242388,6 +242681,26 @@ class PlannedExecutionRunner:
                 "prompt430_next_action": (
                     prompt430_bounded_runtime_execution_adapter_payload.get(
                         "prompt430_next_action"
+                    )
+                ),
+                "prompt431_runtime_execution_result_review_route_decision_status": (
+                    prompt431_runtime_execution_result_review_route_decision_payload.get(
+                        "prompt431_runtime_execution_result_review_route_decision_status"
+                    )
+                ),
+                "prompt431_route_decision_ready": (
+                    prompt431_runtime_execution_result_review_route_decision_payload.get(
+                        "prompt431_route_decision_ready"
+                    )
+                ),
+                "prompt431_selected_route": (
+                    prompt431_runtime_execution_result_review_route_decision_payload.get(
+                        "prompt431_selected_route"
+                    )
+                ),
+                "prompt431_next_action": (
+                    prompt431_runtime_execution_result_review_route_decision_payload.get(
+                        "prompt431_next_action"
                     )
                 ),
             }
@@ -242670,6 +242983,31 @@ class PlannedExecutionRunner:
                     "run_state.prompt430_next_cycle_continuation_candidate",
                     "run_state.prompt430_targeted_fix_candidate",
                     "run_state.prompt430_next_action",
+                    (
+                        "run_state."
+                        "prompt431_runtime_execution_result_review_route_decision_status"
+                    ),
+                    (
+                        "run_state."
+                        "prompt431_runtime_execution_result_review_route_decision_ready"
+                    ),
+                    "run_state.prompt431_review_requested",
+                    "run_state.prompt431_allow_route_decision",
+                    "run_state.prompt431_current_cycle",
+                    "run_state.prompt431_max_cycles",
+                    "run_state.prompt431_cycle_capacity_available",
+                    "run_state.prompt431_prompt430_result_ready",
+                    "run_state.prompt431_route_decision_ready",
+                    "run_state.prompt431_selected_route",
+                    "run_state.prompt431_runtime_returncode_classification",
+                    "run_state.prompt431_approve_candidate",
+                    "run_state.prompt431_commit_tag_handoff_candidate",
+                    "run_state.prompt431_targeted_fix_candidate",
+                    "run_state.prompt431_targeted_fix_handoff_candidate",
+                    "run_state.prompt431_next_cycle_continuation_candidate",
+                    "run_state.prompt431_failure_review_required",
+                    "run_state.prompt431_stop_required",
+                    "run_state.prompt431_next_action",
                 ]
             )
         )
@@ -243076,6 +243414,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt430_bounded_runtime_execution_adapter_state=(
                     prompt430_bounded_runtime_execution_adapter_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt431_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt431_runtime_execution_result_review_route_decision_state=(
+                    prompt431_runtime_execution_result_review_route_decision_payload
                 ),
             )
         )
