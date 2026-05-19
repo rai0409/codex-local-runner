@@ -3921,6 +3921,9 @@ _PROMPT436_SCHEMA_VERSION = (
 _PROMPT437_SCHEMA_VERSION = (
     "prompt437_runtime_command_artifact_input_wiring_surface_v1"
 )
+_PROMPT438_SCHEMA_VERSION = (
+    "prompt438_runtime_result_classification_wiring_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6047,6 +6050,29 @@ _PROMPT437_RUNTIME_COMMAND_ARTIFACT_WIRING_KEYS: tuple[str, ...] = (
     "prompt437_rollback_allowed",
     "prompt437_unbounded_loop_allowed",
     "prompt437_daemon_mode_allowed",
+)
+_PROMPT438_RUNTIME_RESULT_CLASSIFICATION_WIRING_KEYS: tuple[str, ...] = (
+    "prompt438_runtime_result_classification_wiring_enabled",
+    "prompt438_schema_version",
+    "prompt438_prompt430_result_available",
+    "prompt438_prompt430_adapter_status",
+    "prompt438_prompt430_returncode",
+    "prompt438_prompt430_returncode_classification",
+    "prompt438_runtime_result_classification_status",
+    "prompt438_normalized_runtime_outcome",
+    "prompt438_selected_prompt431_route",
+    "prompt438_blocked_reason",
+    "prompt438_next_action",
+    "prompt438_codex_direct_invocation_allowed",
+    "prompt438_subprocess_direct_execution_allowed",
+    "prompt438_git_direct_mutation_allowed",
+    "prompt438_commit_tag_direct_execution_allowed",
+    "prompt438_push_allowed",
+    "prompt438_pr_allowed",
+    "prompt438_merge_allowed",
+    "prompt438_rollback_allowed",
+    "prompt438_unbounded_loop_allowed",
+    "prompt438_daemon_mode_allowed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -9139,6 +9165,29 @@ def _merge_prompt437_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT437_RUNTIME_COMMAND_ARTIFACT_WIRING_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt438_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt438_runtime_result_classification_wiring_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt438_runtime_result_classification_wiring_state)
+        if isinstance(prompt438_runtime_result_classification_wiring_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT438_RUNTIME_RESULT_CLASSIFICATION_WIRING_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -66192,6 +66241,138 @@ def _build_prompt430_bounded_runtime_execution_adapter_state(
     return state
 
 
+def _build_prompt438_runtime_result_classification_wiring_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    adapter_status = _normalize_text(
+        payload.get("prompt430_bounded_runtime_execution_adapter_status"),
+        default="",
+    )
+    result_payload_candidate = payload.get(
+        "prompt430_runtime_execution_result_payload"
+    )
+    if not isinstance(result_payload_candidate, Mapping):
+        result_payload_candidate = payload.get("prompt430_result_payload")
+    result_payload = (
+        dict(result_payload_candidate)
+        if isinstance(result_payload_candidate, Mapping)
+        else {}
+    )
+    result_available = (
+        payload.get("prompt430_execution_result_available") is True
+        or result_payload != {}
+    )
+
+    returncode = payload.get("prompt430_runtime_execution_returncode")
+    if returncode is None:
+        returncode = payload.get("prompt430_returncode")
+    if returncode is None:
+        returncode = result_payload.get("returncode")
+    parsed_returncode = _as_optional_int(returncode)
+    runtime_command_request = result_payload.get("runtime_command_request")
+    if (
+        parsed_returncode is None
+        and result_available
+        and adapter_status == "executed"
+        and result_payload.get("dry_run") is True
+        and isinstance(runtime_command_request, Mapping)
+        and "dry_run_expected_returncode" not in runtime_command_request
+    ):
+        parsed_returncode = 0
+
+    returncode_classification = _normalize_text(
+        payload.get("prompt430_runtime_execution_returncode_classification"),
+        default="",
+    )
+    if not returncode_classification:
+        returncode_classification = _normalize_text(
+            payload.get("prompt430_returncode_classification"),
+            default="",
+        )
+    if not returncode_classification:
+        returncode_classification = _normalize_text(
+            result_payload.get("returncode_classification"),
+            default="",
+        )
+    if returncode_classification == "unknown" and parsed_returncode is not None:
+        returncode_classification = ""
+
+    status = "not_requested"
+    normalized_outcome = "none"
+    selected_route = "not_requested"
+    blocked_reason = ""
+    next_action = "classify_prompt430_runtime_result"
+
+    success_classifications = {"success", "zero", "completed_success"}
+    failure_classifications = {"failed", "nonzero", "execution_failed"}
+
+    if not result_available:
+        status = "blocked"
+        selected_route = "blocked"
+        blocked_reason = "prompt430_execution_result_not_ready"
+        next_action = "review_prompt430_execution_result"
+    elif (
+        parsed_returncode == 0
+        or returncode_classification in success_classifications
+    ):
+        status = "classified"
+        normalized_outcome = "success"
+        selected_route = "success_approve_commit_tag_then_next_cycle"
+        next_action = "route_prompt431_runtime_success"
+        if returncode_classification not in success_classifications:
+            returncode_classification = "success"
+        if parsed_returncode is None:
+            parsed_returncode = 0
+    elif (
+        (parsed_returncode is not None and parsed_returncode != 0)
+        or returncode_classification in failure_classifications
+    ):
+        status = "classified"
+        normalized_outcome = "failed"
+        selected_route = "prepare_targeted_fix"
+        next_action = "route_prompt431_runtime_failure"
+        if returncode_classification not in failure_classifications:
+            returncode_classification = "failed"
+    else:
+        status = "unknown"
+        normalized_outcome = "unknown"
+        selected_route = "blocked"
+        blocked_reason = "runtime_result_classification_unknown"
+        next_action = "fix_prompt438_runtime_result_classification"
+        if not returncode_classification:
+            returncode_classification = "unknown"
+
+    return {
+        "prompt438_runtime_result_classification_wiring_enabled": True,
+        "prompt438_schema_version": _PROMPT438_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt438",
+        "prompt438_prompt430_result_available": result_available,
+        "prompt438_prompt430_adapter_status": adapter_status,
+        "prompt438_prompt430_returncode": parsed_returncode,
+        "prompt438_prompt430_returncode_classification": (
+            returncode_classification
+        ),
+        "prompt438_runtime_result_classification_status": status,
+        "prompt438_normalized_runtime_outcome": normalized_outcome,
+        "prompt438_selected_prompt431_route": selected_route,
+        "prompt438_blocked_reason": blocked_reason,
+        "prompt438_next_action": next_action,
+        "prompt438_codex_direct_invocation_allowed": False,
+        "prompt438_subprocess_direct_execution_allowed": False,
+        "prompt438_git_direct_mutation_allowed": False,
+        "prompt438_commit_tag_direct_execution_allowed": False,
+        "prompt438_push_allowed": False,
+        "prompt438_pr_allowed": False,
+        "prompt438_merge_allowed": False,
+        "prompt438_rollback_allowed": False,
+        "prompt438_unbounded_loop_allowed": False,
+        "prompt438_daemon_mode_allowed": False,
+    }
+
+
 def _build_prompt431_runtime_execution_result_review_route_decision_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -66229,6 +66410,27 @@ def _build_prompt431_runtime_execution_result_review_route_decision_state(
         payload.get("prompt430_runtime_execution_returncode_classification"),
         default="",
     )
+    prompt438_status = _normalize_text(
+        payload.get("prompt438_runtime_result_classification_status"),
+        default="",
+    )
+    prompt438_outcome = _normalize_text(
+        payload.get("prompt438_normalized_runtime_outcome"),
+        default="",
+    )
+    prompt438_route = _normalize_text(
+        payload.get("prompt438_selected_prompt431_route"),
+        default="",
+    )
+    prompt438_returncode = payload.get("prompt438_prompt430_returncode")
+    prompt438_returncode_classification = _normalize_text(
+        payload.get("prompt438_prompt430_returncode_classification"),
+        default="",
+    )
+    prompt438_classified = prompt438_status == "classified"
+    if prompt438_classified:
+        returncode = prompt438_returncode
+        returncode_classification = prompt438_returncode_classification
     prompt430_execution_error = payload.get("prompt430_execution_error") is True
     prompt430_executed_result_ready = (
         prompt430_status == "executed"
@@ -66242,7 +66444,14 @@ def _build_prompt431_runtime_execution_result_review_route_decision_state(
         or prompt430_execution_error
         or returncode_classification == "execution_error"
     )
-    prompt430_result_ready = prompt430_executed_result_ready or prompt430_error_result_ready
+    prompt438_result_ready = (
+        payload.get("prompt438_prompt430_result_available") is True
+    )
+    prompt430_result_ready = (
+        prompt430_executed_result_ready
+        or prompt430_error_result_ready
+        or prompt438_result_ready
+    )
 
     status = "blocked"
     ready = False
@@ -66279,6 +66488,48 @@ def _build_prompt431_runtime_execution_result_review_route_decision_state(
         stop_required = True
         stop_reason = "runtime_execution_error"
         next_action = "review_prompt430_runtime_execution_error"
+    elif prompt438_classified and prompt438_outcome == "success":
+        status = "success_route_ready"
+        ready = True
+        route_decision_ready = True
+        selected_route = (
+            prompt438_route
+            if prompt438_route
+            and not prompt438_route.startswith("blocked")
+            else "success_approve_commit_tag_then_next_cycle"
+        )
+        route_source = "prompt438"
+        approve_candidate = True
+        commit_tag_handoff_candidate = True
+        next_cycle_continuation_candidate = cycle_capacity_available
+        stop_required = not cycle_capacity_available
+        stop_reason = (
+            "bounded_runtime_cycle_limit_reached"
+            if not cycle_capacity_available
+            else ""
+        )
+        next_action = "prepare_prompt432_success_approve_commit_tag_handoff"
+    elif prompt438_classified and prompt438_outcome == "failed":
+        status = "targeted_fix_route_ready"
+        ready = True
+        route_decision_ready = True
+        selected_route = (
+            prompt438_route
+            if prompt438_route
+            and not prompt438_route.startswith("blocked")
+            else "prepare_targeted_fix"
+        )
+        route_source = "prompt438"
+        targeted_fix_candidate = True
+        targeted_fix_handoff_candidate = True
+        next_action = "prepare_prompt432_targeted_fix_handoff"
+    elif prompt438_status == "unknown":
+        blocked_reason = "runtime_result_classification_unknown"
+        selected_route = "blocked"
+        failure_review_required = True
+        stop_required = True
+        stop_reason = "runtime_result_classification_unknown"
+        next_action = "fix_prompt438_runtime_result_classification"
     elif (
         prompt430_status == "executed"
         and payload.get("prompt430_execution_result_available") is True
@@ -245187,6 +245438,15 @@ class PlannedExecutionRunner:
             **prompt437_runtime_command_artifact_wiring_payload,
             **prompt430_bounded_runtime_execution_adapter_payload,
         }
+        prompt438_runtime_result_classification_wiring_payload = (
+            _build_prompt438_runtime_result_classification_wiring_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt438_runtime_result_classification_wiring_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -245421,6 +245681,56 @@ class PlannedExecutionRunner:
                 "prompt430_next_action": (
                     prompt430_bounded_runtime_execution_adapter_payload.get(
                         "prompt430_next_action"
+                    )
+                ),
+                "prompt438_runtime_result_classification_wiring_enabled": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_runtime_result_classification_wiring_enabled"
+                    )
+                ),
+                "prompt438_prompt430_result_available": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_prompt430_result_available"
+                    )
+                ),
+                "prompt438_prompt430_adapter_status": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_prompt430_adapter_status"
+                    )
+                ),
+                "prompt438_prompt430_returncode": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_prompt430_returncode"
+                    )
+                ),
+                "prompt438_prompt430_returncode_classification": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_prompt430_returncode_classification"
+                    )
+                ),
+                "prompt438_runtime_result_classification_status": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_runtime_result_classification_status"
+                    )
+                ),
+                "prompt438_normalized_runtime_outcome": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_normalized_runtime_outcome"
+                    )
+                ),
+                "prompt438_selected_prompt431_route": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_selected_prompt431_route"
+                    )
+                ),
+                "prompt438_blocked_reason": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_blocked_reason"
+                    )
+                ),
+                "prompt438_next_action": (
+                    prompt438_runtime_result_classification_wiring_payload.get(
+                        "prompt438_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -245845,6 +246155,22 @@ class PlannedExecutionRunner:
                     "run_state.prompt430_next_cycle_continuation_candidate",
                     "run_state.prompt430_targeted_fix_candidate",
                     "run_state.prompt430_next_action",
+                    (
+                        "run_state."
+                        "prompt438_runtime_result_classification_wiring_enabled"
+                    ),
+                    "run_state.prompt438_prompt430_result_available",
+                    "run_state.prompt438_prompt430_adapter_status",
+                    "run_state.prompt438_prompt430_returncode",
+                    "run_state.prompt438_prompt430_returncode_classification",
+                    (
+                        "run_state."
+                        "prompt438_runtime_result_classification_status"
+                    ),
+                    "run_state.prompt438_normalized_runtime_outcome",
+                    "run_state.prompt438_selected_prompt431_route",
+                    "run_state.prompt438_blocked_reason",
+                    "run_state.prompt438_next_action",
                     (
                         "run_state."
                         "prompt431_runtime_execution_result_review_route_decision_status"
@@ -246374,6 +246700,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt430_bounded_runtime_execution_adapter_state=(
                     prompt430_bounded_runtime_execution_adapter_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt438_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt438_runtime_result_classification_wiring_state=(
+                    prompt438_runtime_result_classification_wiring_payload
                 ),
             )
         )
@@ -255357,6 +255691,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT430_BOUNDED_RUNTIME_EXECUTION_ADAPTER_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT438_RUNTIME_RESULT_CLASSIFICATION_WIRING_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
