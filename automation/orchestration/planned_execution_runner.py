@@ -3918,6 +3918,9 @@ _PROMPT435_SCHEMA_VERSION = "prompt435_runtime_activation_wiring_surface_v1"
 _PROMPT436_SCHEMA_VERSION = (
     "prompt436_bounded_runtime_chain_activation_wiring_surface_v1"
 )
+_PROMPT437_SCHEMA_VERSION = (
+    "prompt437_runtime_command_artifact_input_wiring_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6018,6 +6021,32 @@ _PROMPT436_RUNTIME_CHAIN_ACTIVATION_KEYS: tuple[str, ...] = (
     "prompt436_rollback_allowed",
     "prompt436_unbounded_loop_allowed",
     "prompt436_daemon_mode_allowed",
+)
+_PROMPT437_RUNTIME_COMMAND_ARTIFACT_WIRING_KEYS: tuple[str, ...] = (
+    "prompt437_runtime_command_artifact_wiring_enabled",
+    "prompt437_schema_version",
+    "prompt437_allow_runtime_command_artifact",
+    "prompt437_runtime_command_artifact_path",
+    "prompt437_runtime_command_json_provided",
+    "prompt437_runtime_command_request_loaded",
+    "prompt437_runtime_command_request_valid",
+    "prompt437_runtime_command_request_source",
+    "prompt437_runtime_command_argv",
+    "prompt437_runtime_command_request_id",
+    "prompt437_runtime_command_validation_status",
+    "prompt437_blocked_reason",
+    "prompt437_next_action",
+    "prompt437_runtime_command_request",
+    "prompt437_codex_direct_invocation_allowed",
+    "prompt437_subprocess_direct_execution_allowed",
+    "prompt437_git_direct_mutation_allowed",
+    "prompt437_commit_tag_direct_execution_allowed",
+    "prompt437_push_allowed",
+    "prompt437_pr_allowed",
+    "prompt437_merge_allowed",
+    "prompt437_rollback_allowed",
+    "prompt437_unbounded_loop_allowed",
+    "prompt437_daemon_mode_allowed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -9089,6 +9118,27 @@ def _merge_prompt436_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT436_RUNTIME_CHAIN_ACTIVATION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt437_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt437_runtime_command_artifact_wiring_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt437_runtime_command_artifact_wiring_state)
+        if isinstance(prompt437_runtime_command_artifact_wiring_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT437_RUNTIME_COMMAND_ARTIFACT_WIRING_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -65594,32 +65644,327 @@ def _build_prompt429_bounded_runtime_launch_readiness_gate_state(
     }
 
 
+def _normalize_prompt437_runtime_command_request(
+    payload: Mapping[str, Any],
+) -> tuple[dict[str, Any], str]:
+    errors: list[str] = []
+    forbidden_shell_string_keys = {
+        "command",
+        "cmd",
+        "shell",
+        "shell_command",
+        "command_string",
+    }
+    for key in forbidden_shell_string_keys:
+        if isinstance(payload.get(key), str):
+            errors.append("shell_string_command_field_rejected")
+            break
+
+    command_argv = payload.get("command_argv")
+    if not isinstance(command_argv, list) or len(command_argv) == 0:
+        errors.append("command_argv_must_be_non_empty_list")
+        normalized_command_argv: list[str] = []
+    elif not all(isinstance(item, str) for item in command_argv):
+        errors.append("command_argv_values_must_be_strings")
+        normalized_command_argv = [
+            item for item in command_argv if isinstance(item, str)
+        ]
+    else:
+        normalized_command_argv = list(command_argv)
+
+    normalized: dict[str, Any] = {
+        "command_argv": normalized_command_argv,
+    }
+    if "cwd" in payload:
+        cwd = payload.get("cwd")
+        if not isinstance(cwd, str):
+            errors.append("cwd_must_be_string")
+        else:
+            normalized["cwd"] = cwd
+    if "env" in payload:
+        env = payload.get("env")
+        if not isinstance(env, Mapping):
+            errors.append("env_must_be_string_map")
+        else:
+            normalized_env: dict[str, str] = {}
+            for key, value in env.items():
+                if not isinstance(key, str) or not isinstance(value, str):
+                    errors.append("env_must_be_string_map")
+                    normalized_env = {}
+                    break
+                normalized_env[key] = value
+            if normalized_env:
+                normalized["env"] = normalized_env
+            elif env == {}:
+                normalized["env"] = {}
+    if "timeout_seconds" in payload:
+        timeout_seconds = payload.get("timeout_seconds")
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, int)
+            or timeout_seconds <= 0
+        ):
+            errors.append("timeout_seconds_must_be_positive_int")
+        else:
+            normalized["timeout_seconds"] = timeout_seconds
+    if "dry_run_expected_returncode" in payload:
+        dry_run_expected_returncode = payload.get("dry_run_expected_returncode")
+        if isinstance(dry_run_expected_returncode, bool) or not isinstance(
+            dry_run_expected_returncode,
+            int,
+        ):
+            errors.append("dry_run_expected_returncode_must_be_int")
+        else:
+            normalized["dry_run_expected_returncode"] = (
+                dry_run_expected_returncode
+            )
+    for optional_string_key in ("request_id", "description"):
+        if optional_string_key in payload:
+            optional_value = payload.get(optional_string_key)
+            if not isinstance(optional_value, str):
+                errors.append(f"{optional_string_key}_must_be_string")
+            else:
+                normalized[optional_string_key] = optional_value
+
+    return normalized, ";".join(errors)
+
+
+def _build_prompt437_runtime_command_artifact_wiring_state(
+    *,
+    allow_runtime_command_artifact: bool = False,
+    runtime_command_artifact_path: str | Path | None = None,
+    runtime_command_json: str | None = None,
+) -> dict[str, Any]:
+    artifact_path_text = _normalize_text(runtime_command_artifact_path, default="")
+    inline_json_text = _normalize_text(runtime_command_json, default="")
+    inline_json_provided = bool(inline_json_text)
+    artifact_provided = bool(artifact_path_text)
+    request_provided = artifact_provided or inline_json_provided
+    source = "none"
+    loaded = False
+    valid = False
+    blocked_reason = ""
+    validation_status = "not_requested"
+    next_action = "provide_prompt437_runtime_command_request"
+    normalized_request: dict[str, Any] = {}
+
+    if request_provided and not allow_runtime_command_artifact:
+        validation_status = "blocked"
+        blocked_reason = "runtime_command_artifact_not_allowed"
+        next_action = "allow_prompt437_runtime_command_artifact"
+    elif request_provided:
+        source = "inline_json" if inline_json_provided else "artifact"
+        try:
+            raw_payload = (
+                json.loads(inline_json_text)
+                if inline_json_provided
+                else json.loads(Path(artifact_path_text).read_text(encoding="utf-8"))
+            )
+            if not isinstance(raw_payload, Mapping):
+                validation_status = "invalid"
+                blocked_reason = "invalid_runtime_command_request"
+                next_action = "fix_prompt437_runtime_command_request"
+            else:
+                loaded = True
+                normalized_request, validation_error = (
+                    _normalize_prompt437_runtime_command_request(raw_payload)
+                )
+                if validation_error:
+                    validation_status = "invalid"
+                    blocked_reason = "invalid_runtime_command_request"
+                    next_action = "fix_prompt437_runtime_command_request"
+                else:
+                    valid = True
+                    validation_status = "valid"
+                    next_action = "prompt437_runtime_command_request_ready"
+        except json.JSONDecodeError:
+            validation_status = "error"
+            blocked_reason = "runtime_command_json_parse_error"
+            next_action = "fix_prompt437_runtime_command_request"
+        except OSError:
+            validation_status = "error"
+            blocked_reason = "runtime_command_artifact_read_error"
+            next_action = "fix_prompt437_runtime_command_request"
+
+    return {
+        "prompt437_runtime_command_artifact_wiring_enabled": True,
+        "prompt437_schema_version": _PROMPT437_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt437",
+        "prompt437_allow_runtime_command_artifact": bool(
+            allow_runtime_command_artifact
+        ),
+        "prompt437_runtime_command_artifact_path": artifact_path_text,
+        "prompt437_runtime_command_json_provided": inline_json_provided,
+        "prompt437_runtime_command_request_loaded": loaded,
+        "prompt437_runtime_command_request_valid": valid,
+        "prompt437_runtime_command_request_source": source,
+        "prompt437_runtime_command_argv": list(
+            normalized_request.get("command_argv", [])
+        )
+        if isinstance(normalized_request.get("command_argv"), list)
+        else [],
+        "prompt437_runtime_command_request_id": _normalize_text(
+            normalized_request.get("request_id"),
+            default="",
+        ),
+        "prompt437_runtime_command_validation_status": validation_status,
+        "prompt437_blocked_reason": blocked_reason,
+        "prompt437_next_action": next_action,
+        "prompt437_runtime_command_request": normalized_request if valid else {},
+        "prompt437_codex_direct_invocation_allowed": False,
+        "prompt437_subprocess_direct_execution_allowed": False,
+        "prompt437_git_direct_mutation_allowed": False,
+        "prompt437_commit_tag_direct_execution_allowed": False,
+        "prompt437_push_allowed": False,
+        "prompt437_pr_allowed": False,
+        "prompt437_merge_allowed": False,
+        "prompt437_rollback_allowed": False,
+        "prompt437_unbounded_loop_allowed": False,
+        "prompt437_daemon_mode_allowed": False,
+    }
+
+
+def _finalize_prompt437_runtime_command_artifact_wiring_state(
+    *,
+    prompt437_state: Mapping[str, Any],
+    prompt430_state: Mapping[str, Any],
+) -> dict[str, Any]:
+    finalized = dict(prompt437_state)
+    if finalized.get("prompt437_runtime_command_request_valid") is not True:
+        return finalized
+    if (
+        prompt430_state.get("prompt430_execution_attempted") is True
+        and prompt430_state.get("prompt430_execution_result_available") is not True
+    ):
+        finalized["prompt437_next_action"] = "review_prompt430_execution_result"
+    elif prompt430_state.get("prompt430_execution_result_available") is True:
+        finalized["prompt437_next_action"] = (
+            "prompt437_runtime_command_request_ready"
+        )
+    elif prompt430_state.get("prompt430_execution_requested") is True:
+        finalized["prompt437_next_action"] = (
+            "prompt437_runtime_command_request_ready"
+        )
+    else:
+        finalized["prompt437_next_action"] = (
+            "activate_prompt430_runtime_execution"
+        )
+    return finalized
+
+
+def _build_prompt430_dry_run_runtime_command_runner() -> Callable[..., dict[str, Any]]:
+    def _command_runner(
+        *,
+        command_argv: Sequence[str],
+        launch_packet: Mapping[str, Any],
+        run_state_payload: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        runtime_request = (
+            launch_packet.get("runtime_command_request")
+            if isinstance(launch_packet, Mapping)
+            else {}
+        )
+        expected_returncode = (
+            runtime_request.get("dry_run_expected_returncode")
+            if isinstance(runtime_request, Mapping)
+            else None
+        )
+        returncode = (
+            expected_returncode
+            if isinstance(expected_returncode, int)
+            and not isinstance(expected_returncode, bool)
+            else None
+        )
+        request_id = (
+            _normalize_text(runtime_request.get("request_id"), default="")
+            if isinstance(runtime_request, Mapping)
+            else ""
+        )
+        return {
+            "returncode": returncode,
+            "stdout": "",
+            "stderr": "dry_run_runtime_command_not_executed",
+            "stdout_path": "",
+            "stderr_path": "",
+            "receipt_path": "",
+            "dry_run": True,
+            "execution_performed": False,
+            "command_argv": list(command_argv),
+            "request_id": request_id,
+            "adapter": "prompt430_dry_run_runtime_command_runner",
+            "runtime_command_request": (
+                dict(runtime_request)
+                if isinstance(runtime_request, Mapping)
+                else {}
+            ),
+            "run_state_id": _normalize_text(
+                (run_state_payload or {}).get("run_id")
+                if isinstance(run_state_payload, Mapping)
+                else "",
+                default="",
+            ),
+        }
+
+    return _command_runner
+
+
 def _build_prompt430_bounded_runtime_execution_adapter_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
     execution_requested: bool = False,
     allow_runtime_execution: bool = False,
     command_runner: Callable[..., Any] | None = None,
+    runtime_command_request: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = (
         run_state_payload if isinstance(run_state_payload, Mapping) else {}
     )
+    injected_runtime_command_request = (
+        dict(runtime_command_request)
+        if isinstance(runtime_command_request, Mapping)
+        else {}
+    )
     launch_packet = payload.get("prompt429_runtime_launch_packet")
     launch_packet_copy = dict(launch_packet) if isinstance(launch_packet, Mapping) else {}
+    if injected_runtime_command_request:
+        launch_packet_copy = {
+            **launch_packet_copy,
+            "command_argv": list(
+                injected_runtime_command_request.get("command_argv", [])
+            ),
+            "cwd": injected_runtime_command_request.get("cwd"),
+            "env": dict(injected_runtime_command_request.get("env", {}))
+            if isinstance(injected_runtime_command_request.get("env"), Mapping)
+            else {},
+            "timeout_seconds": injected_runtime_command_request.get(
+                "timeout_seconds"
+            ),
+            "runtime_command_request": dict(injected_runtime_command_request),
+            "runtime_command_request_source": "prompt437",
+            "launch_execution_policy": "external_only",
+            "launch_execution_performed": False,
+        }
     command_argv = launch_packet_copy.get("command_argv")
     command_argv_ready = isinstance(command_argv, list) and len(command_argv) > 0
     copied_command_argv = list(command_argv) if isinstance(command_argv, list) else []
+    injected_launch_packet_ready = bool(
+        injected_runtime_command_request and command_argv_ready
+    )
     prompt429_launch_packet_ready = (
-        payload.get("prompt429_bounded_runtime_launch_readiness_gate_ready")
-        is True
-        and payload.get("prompt429_bounded_runtime_launch_readiness_gate_status")
-        == "launch_packet_ready"
-        and payload.get("prompt429_launch_packet_ready") is True
-        and payload.get("prompt429_launch_allowed") is True
-        and payload.get("prompt429_launch_performed") is False
-        and isinstance(launch_packet, Mapping)
-        and launch_packet.get("launch_execution_policy") == "external_only"
-        and launch_packet.get("launch_execution_performed") is False
+        injected_launch_packet_ready
+        or (
+            payload.get("prompt429_bounded_runtime_launch_readiness_gate_ready")
+            is True
+            and payload.get("prompt429_bounded_runtime_launch_readiness_gate_status")
+            == "launch_packet_ready"
+            and payload.get("prompt429_launch_packet_ready") is True
+            and payload.get("prompt429_launch_allowed") is True
+            and payload.get("prompt429_launch_performed") is False
+            and isinstance(launch_packet, Mapping)
+            and launch_packet.get("launch_execution_policy") == "external_only"
+            and launch_packet.get("launch_execution_performed") is False
+        )
     )
     command_runner_ready = callable(command_runner)
 
@@ -240265,6 +240610,9 @@ class PlannedExecutionRunner:
         prompt435_autonomous_current_cycle: int | None = None,
         prompt435_autonomous_max_cycles: int = 2,
         prompt435_enable_bounded_cycle_runner: bool = False,
+        prompt437_runtime_command_artifact_path: str | Path | None = None,
+        prompt437_runtime_command_json: str | None = None,
+        prompt437_allow_runtime_command_artifact: bool = False,
         live_transport_enabled: bool = False,
     ) -> dict[str, Any]:
         artifacts_root = Path(artifacts_input_dir)
@@ -241103,6 +241451,16 @@ class PlannedExecutionRunner:
                 prompt435_autonomous_current_cycle
             ),
             "prompt435_autonomous_max_cycles": prompt435_autonomous_max_cycles,
+            "prompt437_allow_runtime_command_artifact": bool(
+                prompt437_allow_runtime_command_artifact
+            ),
+            "prompt437_runtime_command_artifact_path": _normalize_text(
+                prompt437_runtime_command_artifact_path,
+                default="",
+            ),
+            "prompt437_runtime_command_json_provided": bool(
+                _normalize_text(prompt437_runtime_command_json, default="")
+            ),
         }
         run_state_payload = _augment_run_state_with_objective_contract_summary(
             run_state_payload=run_state_payload,
@@ -244777,6 +245135,30 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt429_bounded_runtime_launch_readiness_gate_payload,
         }
+        prompt437_runtime_command_artifact_wiring_payload = (
+            _build_prompt437_runtime_command_artifact_wiring_state(
+                allow_runtime_command_artifact=bool(
+                    prompt437_allow_runtime_command_artifact
+                ),
+                runtime_command_artifact_path=(
+                    prompt437_runtime_command_artifact_path
+                ),
+                runtime_command_json=prompt437_runtime_command_json,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt437_runtime_command_artifact_wiring_payload,
+        }
+        prompt430_command_runner = (
+            _build_prompt430_dry_run_runtime_command_runner()
+            if dry_run
+            and prompt437_runtime_command_artifact_wiring_payload.get(
+                "prompt437_runtime_command_request_valid"
+            )
+            is True
+            else None
+        )
         prompt430_bounded_runtime_execution_adapter_payload = (
             _build_prompt430_bounded_runtime_execution_adapter_state(
                 run_state_payload=run_state_payload,
@@ -244786,10 +245168,23 @@ class PlannedExecutionRunner:
                 allow_runtime_execution=bool(
                     run_state_payload.get("prompt430_allow_runtime_execution")
                 ),
+                command_runner=prompt430_command_runner,
+                runtime_command_request=(
+                    prompt437_runtime_command_artifact_wiring_payload.get(
+                        "prompt437_runtime_command_request"
+                    )
+                ),
+            )
+        )
+        prompt437_runtime_command_artifact_wiring_payload = (
+            _finalize_prompt437_runtime_command_artifact_wiring_state(
+                prompt437_state=prompt437_runtime_command_artifact_wiring_payload,
+                prompt430_state=prompt430_bounded_runtime_execution_adapter_payload,
             )
         )
         run_state_payload = {
             **run_state_payload,
+            **prompt437_runtime_command_artifact_wiring_payload,
             **prompt430_bounded_runtime_execution_adapter_payload,
         }
         prompt431_runtime_execution_result_review_route_decision_payload = (
@@ -244986,6 +245381,21 @@ class PlannedExecutionRunner:
                 "prompt429_next_action": (
                     prompt429_bounded_runtime_launch_readiness_gate_payload.get(
                         "prompt429_next_action"
+                    )
+                ),
+                "prompt437_runtime_command_validation_status": (
+                    prompt437_runtime_command_artifact_wiring_payload.get(
+                        "prompt437_runtime_command_validation_status"
+                    )
+                ),
+                "prompt437_runtime_command_request_valid": (
+                    prompt437_runtime_command_artifact_wiring_payload.get(
+                        "prompt437_runtime_command_request_valid"
+                    )
+                ),
+                "prompt437_next_action": (
+                    prompt437_runtime_command_artifact_wiring_payload.get(
+                        "prompt437_next_action"
                     )
                 ),
                 "prompt430_bounded_runtime_execution_adapter_status": (
@@ -245393,6 +245803,18 @@ class PlannedExecutionRunner:
                     "run_state.prompt429_launch_performed",
                     "run_state.prompt429_runtime_command_executed",
                     "run_state.prompt429_next_action",
+                    "run_state.prompt437_runtime_command_artifact_wiring_enabled",
+                    "run_state.prompt437_allow_runtime_command_artifact",
+                    "run_state.prompt437_runtime_command_artifact_path",
+                    "run_state.prompt437_runtime_command_json_provided",
+                    "run_state.prompt437_runtime_command_request_loaded",
+                    "run_state.prompt437_runtime_command_request_valid",
+                    "run_state.prompt437_runtime_command_request_source",
+                    "run_state.prompt437_runtime_command_argv",
+                    "run_state.prompt437_runtime_command_request_id",
+                    "run_state.prompt437_runtime_command_validation_status",
+                    "run_state.prompt437_blocked_reason",
+                    "run_state.prompt437_next_action",
                     (
                         "run_state."
                         "prompt430_bounded_runtime_execution_adapter_status"
@@ -245936,6 +246358,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt429_bounded_runtime_launch_readiness_gate_state=(
                     prompt429_bounded_runtime_launch_readiness_gate_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt437_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt437_runtime_command_artifact_wiring_state=(
+                    prompt437_runtime_command_artifact_wiring_payload
                 ),
             )
         )
@@ -254921,6 +255351,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT429_BOUNDED_RUNTIME_LAUNCH_READINESS_GATE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT437_RUNTIME_COMMAND_ARTIFACT_WIRING_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT430_BOUNDED_RUNTIME_EXECUTION_ADAPTER_KEYS:

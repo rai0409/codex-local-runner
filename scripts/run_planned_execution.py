@@ -711,6 +711,24 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Allow Prompt430 bounded runtime execution after explicit request",
     )
     parser.add_argument(
+        "--runtime-command-artifact",
+        type=str,
+        default="",
+        help="path to JSON artifact containing bounded runtime command request",
+    )
+    parser.add_argument(
+        "--runtime-command-json",
+        type=str,
+        default="",
+        help="inline JSON object for bounded runtime command request",
+    )
+    parser.add_argument(
+        "--allow-runtime-command-artifact",
+        action="store_true",
+        default=False,
+        help="explicit permission to read/use runtime command artifact or inline JSON",
+    )
+    parser.add_argument(
         "--request-runtime-result-review",
         action="store_true",
         default=False,
@@ -869,6 +887,13 @@ def main(argv: list[str] | None = None) -> int:
             ),
             prompt436_allow_runtime_execution=bool(
                 args.allow_runtime_execution
+            ),
+            prompt437_runtime_command_artifact_path=(
+                args.runtime_command_artifact
+            ),
+            prompt437_runtime_command_json=args.runtime_command_json,
+            prompt437_allow_runtime_command_artifact=bool(
+                args.allow_runtime_command_artifact
             ),
             prompt436_request_runtime_result_review=bool(
                 args.request_runtime_result_review
