@@ -3915,6 +3915,9 @@ _PROMPT434_SCHEMA_VERSION = (
     "prompt434_bounded_complete_autonomous_self_run_closure_surface_v1"
 )
 _PROMPT435_SCHEMA_VERSION = "prompt435_runtime_activation_wiring_surface_v1"
+_PROMPT436_SCHEMA_VERSION = (
+    "prompt436_bounded_runtime_chain_activation_wiring_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5987,6 +5990,34 @@ _PROMPT435_RUNTIME_ACTIVATION_WIRING_KEYS: tuple[str, ...] = (
     "prompt435_rollback_allowed",
     "prompt435_unbounded_loop_allowed",
     "prompt435_daemon_mode_allowed",
+)
+_PROMPT436_RUNTIME_CHAIN_ACTIVATION_KEYS: tuple[str, ...] = (
+    "prompt436_runtime_chain_activation_enabled",
+    "prompt436_schema_version",
+    "prompt436_request_runtime_execution",
+    "prompt436_allow_runtime_execution",
+    "prompt436_request_runtime_result_review",
+    "prompt436_request_route_handoff",
+    "prompt436_request_handoff_execution",
+    "prompt436_allow_handoff_execution",
+    "prompt436_prompt430_activation_status",
+    "prompt436_prompt431_activation_status",
+    "prompt436_prompt432_activation_status",
+    "prompt436_prompt433_activation_status",
+    "prompt436_prompt434_activation_status",
+    "prompt436_chain_activation_status",
+    "prompt436_blocked_reason",
+    "prompt436_next_action",
+    "prompt436_codex_direct_invocation_allowed",
+    "prompt436_subprocess_direct_execution_allowed",
+    "prompt436_git_direct_mutation_allowed",
+    "prompt436_commit_tag_direct_execution_allowed",
+    "prompt436_push_allowed",
+    "prompt436_pr_allowed",
+    "prompt436_merge_allowed",
+    "prompt436_rollback_allowed",
+    "prompt436_unbounded_loop_allowed",
+    "prompt436_daemon_mode_allowed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -9037,6 +9068,27 @@ def _merge_prompt435_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT435_RUNTIME_ACTIVATION_WIRING_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt436_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt436_runtime_chain_activation_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt436_runtime_chain_activation_state)
+        if isinstance(prompt436_runtime_chain_activation_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT436_RUNTIME_CHAIN_ACTIVATION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -66852,6 +66904,269 @@ def _build_prompt435_runtime_activation_wiring_state(
         "prompt435_rollback_allowed": False,
         "prompt435_unbounded_loop_allowed": False,
         "prompt435_daemon_mode_allowed": False,
+    }
+
+
+def _build_prompt436_runtime_chain_activation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+
+    request_runtime_execution = bool(
+        payload.get("prompt436_request_runtime_execution")
+    )
+    allow_runtime_execution = bool(
+        payload.get("prompt436_allow_runtime_execution")
+    )
+    request_runtime_result_review = bool(
+        payload.get("prompt436_request_runtime_result_review")
+    )
+    request_route_handoff = bool(
+        payload.get("prompt436_request_route_handoff")
+    )
+    request_handoff_execution = bool(
+        payload.get("prompt436_request_handoff_execution")
+    )
+    allow_handoff_execution = bool(
+        payload.get("prompt436_allow_handoff_execution")
+    )
+    request_autonomous_closure = bool(
+        payload.get("prompt435_request_autonomous_closure")
+    )
+
+    prompt436_requested = any(
+        (
+            request_runtime_execution,
+            request_runtime_result_review,
+            request_route_handoff,
+            request_handoff_execution,
+        )
+    )
+
+    def _adapter_activation_status(
+        *,
+        requested: bool,
+        status: str,
+        ready: bool = False,
+        completed_statuses: set[str] | None = None,
+        failed_statuses: set[str] | None = None,
+    ) -> str:
+        if not requested:
+            return "not_requested"
+        normalized_status = _normalize_text(status, default="")
+        if normalized_status in (failed_statuses or set()):
+            return "failed"
+        if normalized_status in (completed_statuses or set()):
+            return "completed"
+        if normalized_status == "blocked":
+            return "blocked"
+        if ready:
+            return "ready"
+        return "blocked"
+
+    prompt430_status = _adapter_activation_status(
+        requested=request_runtime_execution,
+        status=_normalize_text(
+            payload.get("prompt430_bounded_runtime_execution_adapter_status"),
+            default="",
+        ),
+        ready=payload.get("prompt430_execution_ready") is True,
+        completed_statuses={"executed"},
+        failed_statuses={"execution_error"},
+    )
+    if (
+        request_runtime_execution
+        and allow_runtime_execution
+        and prompt430_status == "blocked"
+    ):
+        prompt430_blocker = _normalize_text(
+            payload.get(
+                "prompt430_bounded_runtime_execution_adapter_blocked_reason"
+            ),
+            default="",
+        )
+        if prompt430_blocker in {
+            "prompt429_launch_packet_not_ready",
+            "runtime_command_argv_not_ready",
+            "command_runner_missing",
+        }:
+            prompt430_status = "ready"
+
+    prompt431_status = _adapter_activation_status(
+        requested=request_runtime_result_review,
+        status=_normalize_text(
+            payload.get(
+                "prompt431_runtime_execution_result_review_route_decision_status"
+            ),
+            default="",
+        ),
+        ready=payload.get("prompt431_route_decision_ready") is True,
+        completed_statuses={
+            "success_route_ready",
+            "targeted_fix_route_ready",
+        },
+        failed_statuses={"execution_error"},
+    )
+    prompt432_status = _adapter_activation_status(
+        requested=request_route_handoff,
+        status=_normalize_text(
+            payload.get("prompt432_route_decision_handoff_packet_status"),
+            default="",
+        ),
+        ready=payload.get("prompt432_handoff_packet_ready") is True,
+        completed_statuses={
+            "success_handoff_ready",
+            "targeted_fix_handoff_ready",
+            "stop_handoff_ready",
+        },
+    )
+    prompt433_status = _adapter_activation_status(
+        requested=request_handoff_execution,
+        status=_normalize_text(
+            payload.get("prompt433_bounded_handoff_execution_adapter_status"),
+            default="",
+        ),
+        ready=payload.get("prompt433_execution_ready") is True,
+        completed_statuses={
+            "approve_commit_tag_executed",
+            "targeted_fix_executed",
+            "stop_handoff_recorded",
+        },
+        failed_statuses={"execution_error"},
+    )
+    prompt434_status = _adapter_activation_status(
+        requested=request_autonomous_closure,
+        status=_normalize_text(
+            payload.get(
+                "prompt434_bounded_complete_autonomous_self_run_closure_status"
+            ),
+            default="",
+        ),
+        ready=payload.get("prompt434_closure_ready") is True,
+        completed_statuses={
+            "cycle_closure_ready",
+            "next_cycle_started",
+            "targeted_fix_success_rejoin_ready",
+            "targeted_fix_failure_stop",
+            "targeted_fix_unknown_stop",
+            "stop_closure_ready",
+        },
+        failed_statuses={"execution_error", "next_cycle_start_failed"},
+    )
+
+    chain_status = "not_requested"
+    blocked_reason = ""
+    next_action = "request_prompt436_runtime_chain_activation"
+
+    if prompt436_requested:
+        stage_results = (
+            prompt430_status,
+            prompt431_status,
+            prompt432_status,
+            prompt433_status,
+            prompt434_status,
+        )
+        if "failed" in stage_results:
+            chain_status = "failed"
+            if prompt430_status == "failed":
+                blocked_reason = "prompt430_runtime_execution_failed"
+                next_action = "review_prompt430_execution_result"
+            elif prompt431_status == "failed":
+                blocked_reason = "prompt431_route_decision_failed"
+                next_action = "review_prompt431_route_decision"
+            elif prompt432_status == "failed":
+                blocked_reason = "prompt432_handoff_packet_failed"
+                next_action = "review_prompt432_handoff_packet"
+            elif prompt433_status == "failed":
+                blocked_reason = "prompt433_handoff_execution_failed"
+                next_action = "review_prompt434_closure_result"
+            else:
+                blocked_reason = "prompt434_closure_failed"
+                next_action = "review_prompt434_closure_result"
+        elif request_runtime_execution and not allow_runtime_execution:
+            chain_status = "blocked"
+            blocked_reason = "runtime_execution_not_allowed"
+            next_action = "allow_prompt430_runtime_execution"
+        elif (
+            request_runtime_result_review
+            and payload.get("prompt431_prompt430_result_ready") is not True
+        ):
+            chain_status = "blocked"
+            prompt431_status = "blocked"
+            blocked_reason = "prompt430_execution_result_not_ready"
+            next_action = "review_prompt430_execution_result"
+        elif (
+            request_route_handoff
+            and payload.get("prompt432_prompt431_route_decision_ready")
+            is not True
+        ):
+            chain_status = "blocked"
+            prompt432_status = "blocked"
+            blocked_reason = "prompt431_route_decision_not_ready"
+            next_action = "review_prompt431_route_decision"
+        elif request_handoff_execution and not allow_handoff_execution:
+            chain_status = "blocked"
+            prompt433_status = "blocked"
+            blocked_reason = "handoff_execution_not_allowed"
+            next_action = "allow_prompt433_handoff_execution"
+        elif (
+            request_handoff_execution
+            and payload.get("prompt433_prompt432_handoff_packet_ready")
+            is not True
+        ):
+            chain_status = "blocked"
+            prompt433_status = "blocked"
+            blocked_reason = "prompt432_handoff_packet_not_ready"
+            next_action = "review_prompt432_handoff_packet"
+        elif request_autonomous_closure and prompt434_status == "blocked":
+            chain_status = "blocked"
+            blocked_reason = _normalize_text(
+                payload.get(
+                    "prompt434_bounded_complete_autonomous_self_run_closure_blocked_reason"
+                ),
+                default="prompt434_closure_blocked",
+            )
+            next_action = "review_prompt434_closure_result"
+        elif request_autonomous_closure and prompt434_status != "completed":
+            chain_status = "ready"
+            next_action = "activate_prompt434_autonomous_self_run_closure"
+        elif request_autonomous_closure:
+            chain_status = "completed"
+            next_action = "prompt436_runtime_chain_activation_completed"
+        else:
+            chain_status = "ready"
+            next_action = "prompt436_runtime_chain_activation_completed"
+
+    return {
+        "prompt436_runtime_chain_activation_enabled": True,
+        "prompt436_schema_version": _PROMPT436_SCHEMA_VERSION,
+        "prompt436_request_runtime_execution": request_runtime_execution,
+        "prompt436_allow_runtime_execution": allow_runtime_execution,
+        "prompt436_request_runtime_result_review": (
+            request_runtime_result_review
+        ),
+        "prompt436_request_route_handoff": request_route_handoff,
+        "prompt436_request_handoff_execution": request_handoff_execution,
+        "prompt436_allow_handoff_execution": allow_handoff_execution,
+        "prompt436_prompt430_activation_status": prompt430_status,
+        "prompt436_prompt431_activation_status": prompt431_status,
+        "prompt436_prompt432_activation_status": prompt432_status,
+        "prompt436_prompt433_activation_status": prompt433_status,
+        "prompt436_prompt434_activation_status": prompt434_status,
+        "prompt436_chain_activation_status": chain_status,
+        "prompt436_blocked_reason": blocked_reason,
+        "prompt436_next_action": next_action,
+        "prompt436_codex_direct_invocation_allowed": False,
+        "prompt436_subprocess_direct_execution_allowed": False,
+        "prompt436_git_direct_mutation_allowed": False,
+        "prompt436_commit_tag_direct_execution_allowed": False,
+        "prompt436_push_allowed": False,
+        "prompt436_pr_allowed": False,
+        "prompt436_merge_allowed": False,
+        "prompt436_rollback_allowed": False,
+        "prompt436_unbounded_loop_allowed": False,
+        "prompt436_daemon_mode_allowed": False,
     }
 
 
@@ -239938,6 +240253,12 @@ class PlannedExecutionRunner:
         prompt387_success_path_dispatch_enabled: bool = False,
         prompt389_bounded_repeated_success_path_loop_enabled: bool = False,
         prompt389_max_cycles: int | None = None,
+        prompt436_request_runtime_execution: bool = False,
+        prompt436_allow_runtime_execution: bool = False,
+        prompt436_request_runtime_result_review: bool = False,
+        prompt436_request_route_handoff: bool = False,
+        prompt436_request_handoff_execution: bool = False,
+        prompt436_allow_handoff_execution: bool = False,
         prompt435_request_autonomous_closure: bool = False,
         prompt435_allow_autonomous_closure: bool = False,
         prompt435_allow_next_cycle: bool = False,
@@ -240725,6 +241046,48 @@ class PlannedExecutionRunner:
                 _as_non_negative_int(prompt389_max_cycles, default=0)
                 if prompt389_max_cycles is not None
                 else _PROMPT389_DEFAULT_MAX_CYCLES
+            ),
+            "prompt436_request_runtime_execution": bool(
+                prompt436_request_runtime_execution
+            ),
+            "prompt436_allow_runtime_execution": bool(
+                prompt436_allow_runtime_execution
+            ),
+            "prompt436_request_runtime_result_review": bool(
+                prompt436_request_runtime_result_review
+            ),
+            "prompt436_request_route_handoff": bool(
+                prompt436_request_route_handoff
+            ),
+            "prompt436_request_handoff_execution": bool(
+                prompt436_request_handoff_execution
+            ),
+            "prompt436_allow_handoff_execution": bool(
+                prompt436_allow_handoff_execution
+            ),
+            "prompt430_execution_requested": bool(
+                prompt436_request_runtime_execution
+            ),
+            "prompt430_allow_runtime_execution": bool(
+                prompt436_allow_runtime_execution
+            ),
+            "prompt431_review_requested": bool(
+                prompt436_request_runtime_result_review
+            ),
+            "prompt431_allow_route_decision": bool(
+                prompt436_request_runtime_result_review
+            ),
+            "prompt432_handoff_requested": bool(
+                prompt436_request_route_handoff
+            ),
+            "prompt432_allow_handoff_packet": bool(
+                prompt436_request_route_handoff
+            ),
+            "prompt433_execution_requested": bool(
+                prompt436_request_handoff_execution
+            ),
+            "prompt433_allow_handoff_execution": bool(
+                prompt436_allow_handoff_execution
             ),
             "prompt435_request_autonomous_closure": bool(
                 prompt435_request_autonomous_closure
@@ -244457,6 +244820,28 @@ class PlannedExecutionRunner:
                 ),
             )
         )
+        if (
+            bool(run_state_payload.get("prompt436_request_route_handoff"))
+            and run_state_payload.get("prompt431_route_decision_ready")
+            is not True
+        ):
+            prompt432_route_decision_handoff_packet_payload = {
+                **prompt432_route_decision_handoff_packet_payload,
+                "prompt432_route_decision_handoff_packet_ready": False,
+                "prompt432_route_decision_handoff_packet_status": "blocked",
+                "prompt432_route_decision_handoff_packet_blocked_reason": (
+                    "prompt431_route_decision_not_ready"
+                ),
+                "prompt432_handoff_packet_ready": False,
+                "prompt432_selected_handoff": "blocked",
+                "prompt432_approve_commit_tag_handoff_ready": False,
+                "prompt432_targeted_fix_handoff_ready": False,
+                "prompt432_stop_handoff_ready": False,
+                "prompt432_approve_commit_tag_handoff_packet": {},
+                "prompt432_targeted_fix_handoff_packet": {},
+                "prompt432_stop_handoff_packet": {},
+                "prompt432_next_action": "review_prompt431_route_decision",
+            }
         run_state_payload = {
             **run_state_payload,
             **prompt432_route_decision_handoff_packet_payload,
@@ -244542,6 +244927,15 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt434_bounded_complete_autonomous_self_run_closure_payload,
+        }
+        prompt436_runtime_chain_activation_payload = (
+            _build_prompt436_runtime_chain_activation_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt436_runtime_chain_activation_payload,
         }
         compact_planning_summary = run_state_payload.get(
             "project_planning_summary_compact"
@@ -244727,6 +245121,26 @@ class PlannedExecutionRunner:
                 "prompt435_next_action": (
                     prompt435_runtime_activation_wiring_payload.get(
                         "prompt435_next_action"
+                    )
+                ),
+                "prompt436_runtime_chain_activation_enabled": (
+                    prompt436_runtime_chain_activation_payload.get(
+                        "prompt436_runtime_chain_activation_enabled"
+                    )
+                ),
+                "prompt436_chain_activation_status": (
+                    prompt436_runtime_chain_activation_payload.get(
+                        "prompt436_chain_activation_status"
+                    )
+                ),
+                "prompt436_blocked_reason": (
+                    prompt436_runtime_chain_activation_payload.get(
+                        "prompt436_blocked_reason"
+                    )
+                ),
+                "prompt436_next_action": (
+                    prompt436_runtime_chain_activation_payload.get(
+                        "prompt436_next_action"
                     )
                 ),
             }
@@ -245109,6 +245523,21 @@ class PlannedExecutionRunner:
                     "run_state.prompt434_stop_required",
                     "run_state.prompt434_execution_error",
                     "run_state.prompt434_next_action",
+                    "run_state.prompt436_runtime_chain_activation_enabled",
+                    "run_state.prompt436_request_runtime_execution",
+                    "run_state.prompt436_allow_runtime_execution",
+                    "run_state.prompt436_request_runtime_result_review",
+                    "run_state.prompt436_request_route_handoff",
+                    "run_state.prompt436_request_handoff_execution",
+                    "run_state.prompt436_allow_handoff_execution",
+                    "run_state.prompt436_prompt430_activation_status",
+                    "run_state.prompt436_prompt431_activation_status",
+                    "run_state.prompt436_prompt432_activation_status",
+                    "run_state.prompt436_prompt433_activation_status",
+                    "run_state.prompt436_prompt434_activation_status",
+                    "run_state.prompt436_chain_activation_status",
+                    "run_state.prompt436_blocked_reason",
+                    "run_state.prompt436_next_action",
                 ]
             )
         )
@@ -245555,6 +245984,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt435_runtime_activation_wiring_state=(
                     prompt435_runtime_activation_wiring_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt436_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt436_runtime_chain_activation_state=(
+                    prompt436_runtime_chain_activation_payload
                 ),
             )
         )
@@ -254502,6 +254939,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT435_RUNTIME_ACTIVATION_WIRING_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT436_RUNTIME_CHAIN_ACTIVATION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         manifest["run_state_summary_compact"] = run_state_summary_compact

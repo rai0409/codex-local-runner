@@ -699,6 +699,42 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--request-runtime-execution",
+        action="store_true",
+        default=False,
+        help="Request Prompt430 bounded runtime execution activation",
+    )
+    parser.add_argument(
+        "--allow-runtime-execution",
+        action="store_true",
+        default=False,
+        help="Allow Prompt430 bounded runtime execution after explicit request",
+    )
+    parser.add_argument(
+        "--request-runtime-result-review",
+        action="store_true",
+        default=False,
+        help="Request Prompt431 runtime execution result review activation",
+    )
+    parser.add_argument(
+        "--request-route-handoff",
+        action="store_true",
+        default=False,
+        help="Request Prompt432 route decision handoff activation",
+    )
+    parser.add_argument(
+        "--request-handoff-execution",
+        action="store_true",
+        default=False,
+        help="Request Prompt433 bounded handoff execution activation",
+    )
+    parser.add_argument(
+        "--allow-handoff-execution",
+        action="store_true",
+        default=False,
+        help="Allow Prompt433 bounded handoff execution after explicit request",
+    )
+    parser.add_argument(
         "--request-autonomous-closure",
         action="store_true",
         default=False,
@@ -828,6 +864,24 @@ def main(argv: list[str] | None = None) -> int:
                 args.enable_prompt389_bounded_repeated_success_path_loop
             ),
             prompt389_max_cycles=args.prompt389_max_cycles,
+            prompt436_request_runtime_execution=bool(
+                args.request_runtime_execution
+            ),
+            prompt436_allow_runtime_execution=bool(
+                args.allow_runtime_execution
+            ),
+            prompt436_request_runtime_result_review=bool(
+                args.request_runtime_result_review
+            ),
+            prompt436_request_route_handoff=bool(
+                args.request_route_handoff
+            ),
+            prompt436_request_handoff_execution=bool(
+                args.request_handoff_execution
+            ),
+            prompt436_allow_handoff_execution=bool(
+                args.allow_handoff_execution
+            ),
             prompt435_request_autonomous_closure=bool(
                 args.request_autonomous_closure
             ),
