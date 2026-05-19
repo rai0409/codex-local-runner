@@ -3911,6 +3911,9 @@ _PROMPT432_SCHEMA_VERSION = (
 _PROMPT433_SCHEMA_VERSION = (
     "prompt433_bounded_handoff_execution_adapter_surface_v1"
 )
+_PROMPT434_SCHEMA_VERSION = (
+    "prompt434_bounded_complete_autonomous_self_run_closure_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5897,6 +5900,69 @@ _PROMPT433_BOUNDED_HANDOFF_EXECUTION_ADAPTER_KEYS: tuple[str, ...] = (
     "prompt433_next_cycle_started",
     "prompt433_commit_tag_runner_used",
     "prompt433_targeted_fix_runner_used",
+)
+_PROMPT434_BOUNDED_COMPLETE_AUTONOMOUS_SELF_RUN_CLOSURE_KEYS: tuple[str, ...] = (
+    "prompt434_bounded_complete_autonomous_self_run_closure_enabled",
+    "prompt434_schema_version",
+    "prompt434_bounded_complete_autonomous_self_run_closure_ready",
+    "prompt434_bounded_complete_autonomous_self_run_closure_status",
+    "prompt434_bounded_complete_autonomous_self_run_closure_blocked_reason",
+    "prompt434_closure_requested",
+    "prompt434_allow_autonomous_closure",
+    "prompt434_allow_next_cycle",
+    "prompt434_prompt433_result_ready",
+    "prompt434_closure_ready",
+    "prompt434_selected_closure",
+    "prompt434_current_cycle",
+    "prompt434_next_cycle_number",
+    "prompt434_max_cycles",
+    "prompt434_cycle_capacity_available",
+    "prompt434_cycle_limit_reached",
+    "prompt434_complete_autonomous_self_run_candidate",
+    "prompt434_autonomous_cycle_complete",
+    "prompt434_next_cycle_start_attempted",
+    "prompt434_next_cycle_started",
+    "prompt434_cycle_runner_used",
+    "prompt434_next_prompt_selected",
+    "prompt434_next_prompt_generated",
+    "prompt434_next_command_ready",
+    "prompt434_next_prompt_id",
+    "prompt434_next_prompt_path",
+    "prompt434_next_prompt_text",
+    "prompt434_next_command_argv",
+    "prompt434_next_run_state_path",
+    "prompt434_next_manifest_path",
+    "prompt434_next_artifacts_dir",
+    "prompt434_next_out_dir",
+    "prompt434_next_job_id",
+    "prompt434_next_cycle_returncode",
+    "prompt434_next_cycle_receipt_path",
+    "prompt434_next_cycle_result_payload",
+    "prompt434_commit_sha",
+    "prompt434_tag_name",
+    "prompt434_commit_tag_receipt_path",
+    "prompt434_commit_tag_success",
+    "prompt434_targeted_fix_success_rejoin_candidate",
+    "prompt434_targeted_fix_rejoin_packet",
+    "prompt434_targeted_fix_returncode",
+    "prompt434_targeted_fix_prompt_path",
+    "prompt434_targeted_fix_receipt_path",
+    "prompt434_targeted_fix_result_payload",
+    "prompt434_stop_required",
+    "prompt434_stop_reason",
+    "prompt434_execution_error",
+    "prompt434_execution_error_message",
+    "prompt434_next_action",
+    "prompt434_codex_direct_invocation_allowed",
+    "prompt434_subprocess_direct_execution_allowed",
+    "prompt434_git_direct_mutation_allowed",
+    "prompt434_commit_tag_direct_execution_allowed",
+    "prompt434_push_allowed",
+    "prompt434_pr_allowed",
+    "prompt434_merge_allowed",
+    "prompt434_rollback_allowed",
+    "prompt434_unbounded_loop_allowed",
+    "prompt434_daemon_mode_allowed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8900,6 +8966,32 @@ def _merge_prompt433_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT433_BOUNDED_HANDOFF_EXECUTION_ADAPTER_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt434_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt434_bounded_complete_autonomous_self_run_closure_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt434_bounded_complete_autonomous_self_run_closure_state)
+        if isinstance(
+            prompt434_bounded_complete_autonomous_self_run_closure_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT434_BOUNDED_COMPLETE_AUTONOMOUS_SELF_RUN_CLOSURE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -66583,6 +66675,676 @@ def _build_prompt433_bounded_handoff_execution_adapter_state(
             "prompt433_selected_execution": "blocked_unclassified_handoff",
             "prompt433_next_action": "review_prompt432_unclassified_handoff",
         }
+    )
+    return state
+
+
+def _build_prompt434_bounded_complete_autonomous_self_run_closure_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    closure_requested: bool = False,
+    allow_autonomous_closure: bool = False,
+    allow_next_cycle: bool = False,
+    current_cycle: Any = None,
+    max_cycles: Any = 2,
+    cycle_runner: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+
+    def _copy_cycle_payload(value: Any) -> Any:
+        if isinstance(value, Mapping):
+            return {
+                key: _copy_cycle_payload(item)
+                for key, item in value.items()
+                if isinstance(key, str)
+            }
+        if isinstance(value, list):
+            return [_copy_cycle_payload(item) for item in value]
+        if isinstance(value, tuple):
+            return [_copy_cycle_payload(item) for item in value]
+        return value
+
+    def _int_like_or_none(value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    effective_current_cycle = _int_like_or_none(current_cycle)
+    if effective_current_cycle is None:
+        for cycle_candidate in (
+            payload.get("prompt434_current_cycle"),
+            payload.get("prompt433_current_cycle"),
+            0,
+        ):
+            effective_current_cycle = _int_like_or_none(cycle_candidate)
+            if effective_current_cycle is not None:
+                break
+    if effective_current_cycle is None:
+        effective_current_cycle = 0
+
+    normalized_max_cycles = _int_like_or_none(max_cycles)
+    if normalized_max_cycles is None or normalized_max_cycles <= 0:
+        for max_cycle_candidate in (
+            payload.get("prompt434_max_cycles"),
+            payload.get("prompt433_max_cycles"),
+            2,
+        ):
+            normalized_max_cycles = _int_like_or_none(max_cycle_candidate)
+            if (
+                normalized_max_cycles is not None
+                and normalized_max_cycles > 0
+            ):
+                break
+    if normalized_max_cycles is None or normalized_max_cycles <= 0:
+        normalized_max_cycles = 2
+
+    next_cycle_number = effective_current_cycle + 1
+    cycle_capacity_available = next_cycle_number < normalized_max_cycles
+    cycle_limit_reached = not cycle_capacity_available
+    prompt433_status = _normalize_text(
+        payload.get("prompt433_bounded_handoff_execution_adapter_status"),
+        default="",
+    )
+    prompt433_result_ready = (
+        payload.get("prompt433_execution_result_available") is True
+        or payload.get("prompt433_stop_recorded") is True
+        or payload.get("prompt433_execution_error") is True
+        or prompt433_status == "execution_error"
+    )
+    selected_execution = _normalize_text(
+        payload.get("prompt433_selected_execution"),
+        default="",
+    )
+    stop_handoff_packet = payload.get("prompt433_stop_handoff_packet")
+    stop_handoff_reason = ""
+    if isinstance(stop_handoff_packet, Mapping):
+        stop_handoff_reason = _normalize_text(
+            stop_handoff_packet.get("stop_reason"),
+            default="",
+        )
+
+    state: dict[str, Any] = {
+        "prompt434_bounded_complete_autonomous_self_run_closure_enabled": True,
+        "prompt434_schema_version": _PROMPT434_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt434",
+        "prompt434_bounded_complete_autonomous_self_run_closure_ready": False,
+        "prompt434_bounded_complete_autonomous_self_run_closure_status": (
+            "blocked"
+        ),
+        "prompt434_bounded_complete_autonomous_self_run_closure_blocked_reason": (
+            ""
+        ),
+        "prompt434_closure_requested": bool(closure_requested),
+        "prompt434_allow_autonomous_closure": bool(allow_autonomous_closure),
+        "prompt434_allow_next_cycle": bool(allow_next_cycle),
+        "prompt434_prompt433_result_ready": prompt433_result_ready,
+        "prompt434_closure_ready": False,
+        "prompt434_selected_closure": "blocked",
+        "prompt434_current_cycle": effective_current_cycle,
+        "prompt434_next_cycle_number": next_cycle_number,
+        "prompt434_max_cycles": normalized_max_cycles,
+        "prompt434_cycle_capacity_available": cycle_capacity_available,
+        "prompt434_cycle_limit_reached": cycle_limit_reached,
+        "prompt434_complete_autonomous_self_run_candidate": False,
+        "prompt434_autonomous_cycle_complete": False,
+        "prompt434_next_cycle_start_attempted": False,
+        "prompt434_next_cycle_started": False,
+        "prompt434_cycle_runner_used": False,
+        "prompt434_next_prompt_selected": False,
+        "prompt434_next_prompt_generated": False,
+        "prompt434_next_command_ready": False,
+        "prompt434_next_prompt_id": None,
+        "prompt434_next_prompt_path": None,
+        "prompt434_next_prompt_text": None,
+        "prompt434_next_command_argv": None,
+        "prompt434_next_run_state_path": None,
+        "prompt434_next_manifest_path": None,
+        "prompt434_next_artifacts_dir": None,
+        "prompt434_next_out_dir": None,
+        "prompt434_next_job_id": None,
+        "prompt434_next_cycle_returncode": None,
+        "prompt434_next_cycle_receipt_path": None,
+        "prompt434_next_cycle_result_payload": {},
+        "prompt434_commit_sha": payload.get("prompt433_commit_sha"),
+        "prompt434_tag_name": payload.get("prompt433_tag_name"),
+        "prompt434_commit_tag_receipt_path": payload.get(
+            "prompt433_commit_tag_receipt_path"
+        ),
+        "prompt434_commit_tag_success": (
+            payload.get("prompt433_approve_commit_tag_execution_success")
+            is True
+        ),
+        "prompt434_targeted_fix_success_rejoin_candidate": False,
+        "prompt434_targeted_fix_rejoin_packet": {},
+        "prompt434_targeted_fix_returncode": payload.get(
+            "prompt433_targeted_fix_returncode"
+        ),
+        "prompt434_targeted_fix_prompt_path": payload.get(
+            "prompt433_targeted_fix_prompt_path"
+        ),
+        "prompt434_targeted_fix_receipt_path": payload.get(
+            "prompt433_targeted_fix_receipt_path"
+        ),
+        "prompt434_targeted_fix_result_payload": _copy_cycle_payload(
+            payload.get("prompt433_targeted_fix_result_payload", {})
+        ),
+        "prompt434_stop_required": False,
+        "prompt434_stop_reason": "",
+        "prompt434_execution_error": False,
+        "prompt434_execution_error_message": "",
+        "prompt434_next_action": "review_prompt433_handoff_execution_adapter",
+        "prompt434_codex_direct_invocation_allowed": False,
+        "prompt434_subprocess_direct_execution_allowed": False,
+        "prompt434_git_direct_mutation_allowed": False,
+        "prompt434_commit_tag_direct_execution_allowed": False,
+        "prompt434_push_allowed": False,
+        "prompt434_pr_allowed": False,
+        "prompt434_merge_allowed": False,
+        "prompt434_rollback_allowed": False,
+        "prompt434_unbounded_loop_allowed": False,
+        "prompt434_daemon_mode_allowed": False,
+    }
+
+    def _update_surface(
+        *,
+        status: str,
+        ready: bool,
+        blocked_reason: str,
+        closure_ready: bool,
+        selected_closure: str,
+        complete_candidate: bool,
+        cycle_complete: bool,
+        next_action: str,
+        stop_required: bool | None = None,
+        stop_reason: str | None = None,
+        execution_error: bool | None = None,
+        execution_error_message: str | None = None,
+    ) -> None:
+        state.update(
+            {
+                "prompt434_bounded_complete_autonomous_self_run_closure_status": (
+                    status
+                ),
+                "prompt434_bounded_complete_autonomous_self_run_closure_ready": (
+                    ready
+                ),
+                "prompt434_bounded_complete_autonomous_self_run_closure_blocked_reason": (
+                    blocked_reason
+                ),
+                "prompt434_closure_ready": closure_ready,
+                "prompt434_selected_closure": selected_closure,
+                "prompt434_complete_autonomous_self_run_candidate": (
+                    complete_candidate
+                ),
+                "prompt434_autonomous_cycle_complete": cycle_complete,
+                "prompt434_next_action": next_action,
+            }
+        )
+        if stop_required is not None:
+            state["prompt434_stop_required"] = stop_required
+        if stop_reason is not None:
+            state["prompt434_stop_reason"] = stop_reason
+        if execution_error is not None:
+            state["prompt434_execution_error"] = execution_error
+        if execution_error_message is not None:
+            state["prompt434_execution_error_message"] = (
+                execution_error_message
+            )
+
+    if not closure_requested:
+        _update_surface(
+            status="ready",
+            ready=True,
+            blocked_reason="",
+            closure_ready=False,
+            selected_closure="not_requested",
+            complete_candidate=False,
+            cycle_complete=False,
+            next_action="request_prompt434_autonomous_self_run_closure",
+        )
+        return state
+
+    if not allow_autonomous_closure:
+        _update_surface(
+            status="blocked",
+            ready=False,
+            blocked_reason="autonomous_closure_not_allowed",
+            closure_ready=False,
+            selected_closure="blocked",
+            complete_candidate=False,
+            cycle_complete=False,
+            next_action="allow_prompt434_autonomous_closure",
+        )
+        return state
+
+    if not prompt433_result_ready:
+        _update_surface(
+            status="blocked",
+            ready=False,
+            blocked_reason="prompt433_handoff_execution_result_not_ready",
+            closure_ready=False,
+            selected_closure="blocked",
+            complete_candidate=False,
+            cycle_complete=False,
+            next_action="review_prompt433_handoff_execution_adapter",
+        )
+        return state
+
+    if (
+        payload.get("prompt433_execution_error") is True
+        or prompt433_status == "execution_error"
+    ):
+        _update_surface(
+            status="execution_error",
+            ready=False,
+            blocked_reason="prompt433_execution_error",
+            closure_ready=False,
+            selected_closure="prompt433_execution_error_stop",
+            complete_candidate=False,
+            cycle_complete=False,
+            stop_required=True,
+            stop_reason="prompt433_execution_error",
+            execution_error=True,
+            execution_error_message=_normalize_text(
+                payload.get("prompt433_execution_error_message"),
+                default="",
+            ),
+            next_action="review_prompt433_handoff_execution_error",
+        )
+        return state
+
+    approve_success = (
+        selected_execution == "approve_commit_tag"
+        and payload.get("prompt433_approve_commit_tag_execution_success")
+        is True
+    )
+    if approve_success and (
+        payload.get("prompt433_cycle_closure_after_commit_tag") is True
+    ):
+        _update_surface(
+            status="cycle_closure_ready",
+            ready=True,
+            blocked_reason="",
+            closure_ready=True,
+            selected_closure="commit_tag_success_then_stop",
+            complete_candidate=True,
+            cycle_complete=True,
+            stop_required=True,
+            stop_reason="cycle_closure_after_commit_tag",
+            next_action="complete_prompt434_commit_tag_success_closure",
+        )
+        return state
+
+    next_cycle_candidate = (
+        payload.get("prompt433_next_cycle_continuation_candidate") is True
+    )
+    if (
+        approve_success
+        and next_cycle_candidate
+        and payload.get("prompt433_cycle_closure_after_commit_tag") is False
+    ):
+        if not allow_next_cycle:
+            _update_surface(
+                status="cycle_closure_ready",
+                ready=True,
+                blocked_reason="",
+                closure_ready=True,
+                selected_closure="next_cycle_not_allowed_stop",
+                complete_candidate=True,
+                cycle_complete=True,
+                stop_required=True,
+                stop_reason="next_cycle_not_allowed",
+                next_action="complete_prompt434_next_cycle_not_allowed_stop",
+            )
+            return state
+
+        if not cycle_capacity_available:
+            _update_surface(
+                status="cycle_closure_ready",
+                ready=True,
+                blocked_reason="",
+                closure_ready=True,
+                selected_closure="bounded_cycle_limit_stop",
+                complete_candidate=True,
+                cycle_complete=True,
+                stop_required=True,
+                stop_reason="bounded_cycle_limit_reached",
+                next_action="complete_prompt434_bounded_cycle_limit_stop",
+            )
+            return state
+
+        if not callable(cycle_runner):
+            _update_surface(
+                status="blocked",
+                ready=False,
+                blocked_reason="cycle_runner_missing",
+                closure_ready=False,
+                selected_closure="next_cycle_runner_missing",
+                complete_candidate=True,
+                cycle_complete=False,
+                stop_required=True,
+                stop_reason="cycle_runner_missing",
+                next_action="provide_prompt434_cycle_runner",
+            )
+            return state
+
+        state["prompt434_next_cycle_start_attempted"] = True
+        state["prompt434_cycle_runner_used"] = True
+        try:
+            runner_result = cycle_runner(
+                next_cycle_number=next_cycle_number,
+                current_cycle=effective_current_cycle,
+                max_cycles=normalized_max_cycles,
+                previous_commit_sha=_copy_cycle_payload(
+                    payload.get("prompt433_commit_sha")
+                ),
+                previous_tag_name=_copy_cycle_payload(
+                    payload.get("prompt433_tag_name")
+                ),
+                previous_commit_tag_receipt_path=_copy_cycle_payload(
+                    payload.get("prompt433_commit_tag_receipt_path")
+                ),
+                run_state_payload=_copy_cycle_payload(payload),
+            )
+        except Exception as exc:  # noqa: BLE001 - normalize injected runner failures.
+            _update_surface(
+                status="execution_error",
+                ready=False,
+                blocked_reason="cycle_runner_exception",
+                closure_ready=False,
+                selected_closure="next_cycle_execution",
+                complete_candidate=True,
+                cycle_complete=False,
+                stop_required=True,
+                stop_reason="cycle_runner_exception",
+                execution_error=True,
+                execution_error_message=f"cycle_runner_exception: {exc}",
+                next_action="review_prompt434_cycle_runner_error",
+            )
+            return state
+
+        if not isinstance(runner_result, dict):
+            _update_surface(
+                status="execution_error",
+                ready=False,
+                blocked_reason="cycle_runner_result_not_mapping",
+                closure_ready=False,
+                selected_closure="next_cycle_execution",
+                complete_candidate=True,
+                cycle_complete=False,
+                stop_required=True,
+                stop_reason="cycle_runner_result_not_mapping",
+                execution_error=True,
+                execution_error_message="cycle_runner_result_not_mapping",
+                next_action="review_prompt434_cycle_runner_error",
+            )
+            return state
+
+        allowed_result_keys = (
+            "status",
+            "next_prompt_id",
+            "next_prompt_path",
+            "next_prompt_text",
+            "next_command_argv",
+            "next_run_state_path",
+            "next_manifest_path",
+            "next_artifacts_dir",
+            "next_out_dir",
+            "next_job_id",
+            "returncode",
+            "stdout",
+            "stderr",
+            "receipt_path",
+            "result_payload",
+            "error_message",
+        )
+        filtered_result = {
+            key: _copy_cycle_payload(runner_result.get(key))
+            for key in allowed_result_keys
+            if key in runner_result
+        }
+        next_cycle_returncode = runner_result.get("returncode")
+        runner_status = _normalize_text(
+            runner_result.get("status"),
+            default="",
+        )
+        next_cycle_started = (
+            runner_status != "failed"
+            and (
+                next_cycle_returncode is None
+                or next_cycle_returncode == 0
+            )
+        )
+        next_command_argv = runner_result.get("next_command_argv")
+        state.update(
+            {
+                "prompt434_next_cycle_started": next_cycle_started,
+                "prompt434_next_prompt_selected": bool(
+                    runner_result.get("next_prompt_id")
+                    or runner_result.get("next_prompt_path")
+                ),
+                "prompt434_next_prompt_generated": bool(
+                    runner_result.get("next_prompt_path")
+                    or runner_result.get("next_prompt_text")
+                ),
+                "prompt434_next_command_ready": (
+                    isinstance(next_command_argv, list)
+                    and bool(next_command_argv)
+                ),
+                "prompt434_next_prompt_id": _copy_cycle_payload(
+                    runner_result.get("next_prompt_id")
+                ),
+                "prompt434_next_prompt_path": _copy_cycle_payload(
+                    runner_result.get("next_prompt_path")
+                ),
+                "prompt434_next_prompt_text": _copy_cycle_payload(
+                    runner_result.get("next_prompt_text")
+                ),
+                "prompt434_next_command_argv": _copy_cycle_payload(
+                    next_command_argv
+                ),
+                "prompt434_next_run_state_path": _copy_cycle_payload(
+                    runner_result.get("next_run_state_path")
+                ),
+                "prompt434_next_manifest_path": _copy_cycle_payload(
+                    runner_result.get("next_manifest_path")
+                ),
+                "prompt434_next_artifacts_dir": _copy_cycle_payload(
+                    runner_result.get("next_artifacts_dir")
+                ),
+                "prompt434_next_out_dir": _copy_cycle_payload(
+                    runner_result.get("next_out_dir")
+                ),
+                "prompt434_next_job_id": _copy_cycle_payload(
+                    runner_result.get("next_job_id")
+                ),
+                "prompt434_next_cycle_returncode": _copy_cycle_payload(
+                    next_cycle_returncode
+                ),
+                "prompt434_next_cycle_receipt_path": _copy_cycle_payload(
+                    runner_result.get("receipt_path")
+                ),
+                "prompt434_next_cycle_result_payload": (
+                    _copy_cycle_payload(runner_result.get("result_payload"))
+                    if "result_payload" in runner_result
+                    else filtered_result
+                ),
+            }
+        )
+        if next_cycle_started:
+            _update_surface(
+                status="next_cycle_started",
+                ready=True,
+                blocked_reason="",
+                closure_ready=True,
+                selected_closure="next_cycle_continuation",
+                complete_candidate=True,
+                cycle_complete=True,
+                stop_required=False,
+                stop_reason="",
+                next_action="continue_prompt434_bounded_autonomous_self_run",
+            )
+            return state
+
+        _update_surface(
+            status="next_cycle_start_failed",
+            ready=False,
+            blocked_reason="next_cycle_start_failed",
+            closure_ready=False,
+            selected_closure="next_cycle_continuation_failed",
+            complete_candidate=True,
+            cycle_complete=False,
+            stop_required=True,
+            stop_reason="next_cycle_start_failed",
+            next_action="review_prompt434_next_cycle_start_failure",
+        )
+        return state
+
+    if selected_execution == "approve_commit_tag" and (
+        payload.get("prompt433_approve_commit_tag_execution_failed") is True
+        or payload.get("prompt433_approve_commit_tag_execution_success")
+        is not True
+    ):
+        _update_surface(
+            status="blocked",
+            ready=False,
+            blocked_reason="commit_tag_execution_failed",
+            closure_ready=False,
+            selected_closure="commit_tag_failure_stop",
+            complete_candidate=False,
+            cycle_complete=False,
+            stop_required=True,
+            stop_reason="commit_tag_execution_failed",
+            next_action="review_prompt433_approve_commit_tag_failure",
+        )
+        return state
+
+    targeted_fix_returncode = payload.get("prompt433_targeted_fix_returncode")
+    if (
+        selected_execution == "targeted_fix"
+        and payload.get("prompt433_targeted_fix_success") is True
+        and payload.get("prompt433_targeted_fix_executed") is True
+        and targeted_fix_returncode == 0
+    ):
+        rejoin_packet = {
+            "rejoin_type": "targeted_fix_success",
+            "source_prompt": "prompt433",
+            "current_cycle": effective_current_cycle,
+            "max_cycles": normalized_max_cycles,
+            "targeted_fix_returncode": targeted_fix_returncode,
+            "targeted_fix_prompt_path": payload.get(
+                "prompt433_targeted_fix_prompt_path"
+            ),
+            "targeted_fix_receipt_path": payload.get(
+                "prompt433_targeted_fix_receipt_path"
+            ),
+            "targeted_fix_result_payload": _copy_cycle_payload(
+                payload.get("prompt433_targeted_fix_result_payload", {})
+            ),
+            "next_required_stage": (
+                "runtime_result_review_after_targeted_fix"
+            ),
+            "approve_route_candidate": True,
+            "commit_tag_execution_performed": False,
+            "next_cycle_started": False,
+        }
+        state.update(
+            {
+                "prompt434_targeted_fix_success_rejoin_candidate": True,
+                "prompt434_targeted_fix_rejoin_packet": rejoin_packet,
+            }
+        )
+        _update_surface(
+            status="targeted_fix_success_rejoin_ready",
+            ready=True,
+            blocked_reason="",
+            closure_ready=True,
+            selected_closure="targeted_fix_success_rejoin_review",
+            complete_candidate=True,
+            cycle_complete=False,
+            stop_required=False,
+            stop_reason="",
+            next_action=(
+                "prepare_prompt434_targeted_fix_success_rejoin_approve_route"
+            ),
+        )
+        return state
+
+    if selected_execution == "targeted_fix" and (
+        payload.get("prompt433_targeted_fix_failed") is True
+        or (
+            targeted_fix_returncode is not None
+            and targeted_fix_returncode != 0
+        )
+    ):
+        _update_surface(
+            status="targeted_fix_failure_stop",
+            ready=True,
+            blocked_reason="",
+            closure_ready=True,
+            selected_closure="targeted_fix_failure_stop",
+            complete_candidate=True,
+            cycle_complete=True,
+            stop_required=True,
+            stop_reason="targeted_fix_failed",
+            next_action="complete_prompt434_targeted_fix_failure_stop",
+        )
+        return state
+
+    if selected_execution == "targeted_fix" and (
+        payload.get("prompt433_targeted_fix_unknown") is True
+        or targeted_fix_returncode is None
+    ):
+        _update_surface(
+            status="targeted_fix_unknown_stop",
+            ready=True,
+            blocked_reason="",
+            closure_ready=True,
+            selected_closure="targeted_fix_unknown_stop",
+            complete_candidate=True,
+            cycle_complete=True,
+            stop_required=True,
+            stop_reason="targeted_fix_unknown",
+            next_action="complete_prompt434_targeted_fix_unknown_stop",
+        )
+        return state
+
+    if (
+        selected_execution == "stop"
+        and payload.get("prompt433_stop_recorded") is True
+    ):
+        _update_surface(
+            status="stop_closure_ready",
+            ready=True,
+            blocked_reason="",
+            closure_ready=True,
+            selected_closure="stop_closure",
+            complete_candidate=True,
+            cycle_complete=True,
+            stop_required=True,
+            stop_reason=(
+                _normalize_text(payload.get("prompt433_stop_reason"), default="")
+                or stop_handoff_reason
+            ),
+            next_action="complete_prompt434_stop_closure",
+        )
+        return state
+
+    _update_surface(
+        status="blocked",
+        ready=False,
+        blocked_reason="unclassified_prompt433_result",
+        closure_ready=False,
+        selected_closure="blocked_unclassified_prompt433_result",
+        complete_candidate=False,
+        cycle_complete=False,
+        stop_required=True,
+        stop_reason="unclassified_prompt433_result",
+        next_action="review_prompt433_unclassified_result",
     )
     return state
 
@@ -243517,6 +244279,26 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt433_bounded_handoff_execution_adapter_payload,
         }
+        prompt434_bounded_complete_autonomous_self_run_closure_payload = (
+            _build_prompt434_bounded_complete_autonomous_self_run_closure_state(
+                run_state_payload=run_state_payload,
+                closure_requested=bool(
+                    run_state_payload.get("prompt434_closure_requested")
+                ),
+                allow_autonomous_closure=bool(
+                    run_state_payload.get("prompt434_allow_autonomous_closure")
+                ),
+                allow_next_cycle=bool(
+                    run_state_payload.get("prompt434_allow_next_cycle")
+                ),
+                current_cycle=run_state_payload.get("prompt434_current_cycle"),
+                max_cycles=run_state_payload.get("prompt434_max_cycles"),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt434_bounded_complete_autonomous_self_run_closure_payload,
+        }
         compact_planning_summary = run_state_payload.get(
             "project_planning_summary_compact"
         )
@@ -243651,6 +244433,26 @@ class PlannedExecutionRunner:
                 "prompt433_next_action": (
                     prompt433_bounded_handoff_execution_adapter_payload.get(
                         "prompt433_next_action"
+                    )
+                ),
+                "prompt434_bounded_complete_autonomous_self_run_closure_status": (
+                    prompt434_bounded_complete_autonomous_self_run_closure_payload.get(
+                        "prompt434_bounded_complete_autonomous_self_run_closure_status"
+                    )
+                ),
+                "prompt434_selected_closure": (
+                    prompt434_bounded_complete_autonomous_self_run_closure_payload.get(
+                        "prompt434_selected_closure"
+                    )
+                ),
+                "prompt434_next_cycle_started": (
+                    prompt434_bounded_complete_autonomous_self_run_closure_payload.get(
+                        "prompt434_next_cycle_started"
+                    )
+                ),
+                "prompt434_next_action": (
+                    prompt434_bounded_complete_autonomous_self_run_closure_payload.get(
+                        "prompt434_next_action"
                     )
                 ),
             }
@@ -244006,6 +244808,33 @@ class PlannedExecutionRunner:
                     "run_state.prompt433_targeted_fix_unknown",
                     "run_state.prompt433_stop_recorded",
                     "run_state.prompt433_next_action",
+                    (
+                        "run_state."
+                        "prompt434_bounded_complete_autonomous_self_run_closure_status"
+                    ),
+                    (
+                        "run_state."
+                        "prompt434_bounded_complete_autonomous_self_run_closure_ready"
+                    ),
+                    "run_state.prompt434_closure_requested",
+                    "run_state.prompt434_allow_autonomous_closure",
+                    "run_state.prompt434_allow_next_cycle",
+                    "run_state.prompt434_prompt433_result_ready",
+                    "run_state.prompt434_closure_ready",
+                    "run_state.prompt434_selected_closure",
+                    "run_state.prompt434_current_cycle",
+                    "run_state.prompt434_next_cycle_number",
+                    "run_state.prompt434_max_cycles",
+                    "run_state.prompt434_cycle_capacity_available",
+                    "run_state.prompt434_cycle_limit_reached",
+                    "run_state.prompt434_complete_autonomous_self_run_candidate",
+                    "run_state.prompt434_autonomous_cycle_complete",
+                    "run_state.prompt434_next_cycle_start_attempted",
+                    "run_state.prompt434_next_cycle_started",
+                    "run_state.prompt434_cycle_runner_used",
+                    "run_state.prompt434_stop_required",
+                    "run_state.prompt434_execution_error",
+                    "run_state.prompt434_next_action",
                 ]
             )
         )
@@ -244436,6 +245265,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt433_bounded_handoff_execution_adapter_state=(
                     prompt433_bounded_handoff_execution_adapter_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt434_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt434_bounded_complete_autonomous_self_run_closure_state=(
+                    prompt434_bounded_complete_autonomous_self_run_closure_payload
                 ),
             )
         )
