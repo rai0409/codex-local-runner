@@ -3899,6 +3899,9 @@ _PROMPT428_SCHEMA_VERSION = (
 _PROMPT429_SCHEMA_VERSION = (
     "prompt429_bounded_runtime_launch_readiness_gate_surface_v1"
 )
+_PROMPT430_SCHEMA_VERSION = (
+    "prompt430_bounded_runtime_execution_adapter_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -5692,6 +5695,54 @@ _PROMPT429_BOUNDED_RUNTIME_LAUNCH_READINESS_GATE_KEYS: tuple[str, ...] = (
     "prompt429_daemon_mode_allowed",
     "prompt429_runtime_command_executed",
     "prompt429_next_action",
+)
+_PROMPT430_BOUNDED_RUNTIME_EXECUTION_ADAPTER_KEYS: tuple[str, ...] = (
+    "prompt430_bounded_runtime_execution_adapter_enabled",
+    "prompt430_schema_version",
+    "prompt430_bounded_runtime_execution_adapter_ready",
+    "prompt430_bounded_runtime_execution_adapter_status",
+    "prompt430_bounded_runtime_execution_adapter_blocked_reason",
+    "prompt430_execution_requested",
+    "prompt430_allow_runtime_execution",
+    "prompt430_prompt429_launch_packet_ready",
+    "prompt430_runtime_command_argv_ready",
+    "prompt430_command_runner_ready",
+    "prompt430_execution_ready",
+    "prompt430_execution_attempted",
+    "prompt430_execution_performed",
+    "prompt430_execution_result_available",
+    "prompt430_runtime_command_argv",
+    "prompt430_runtime_launch_packet",
+    "prompt430_runtime_execution_returncode",
+    "prompt430_runtime_execution_returncode_classification",
+    "prompt430_runtime_execution_stdout",
+    "prompt430_runtime_execution_stderr",
+    "prompt430_runtime_execution_stdout_path",
+    "prompt430_runtime_execution_stderr_path",
+    "prompt430_runtime_execution_receipt_path",
+    "prompt430_runtime_execution_result_payload",
+    "prompt430_runtime_execution_success",
+    "prompt430_runtime_execution_failed",
+    "prompt430_runtime_execution_unknown",
+    "prompt430_execution_error",
+    "prompt430_execution_error_message",
+    "prompt430_success_path_ready",
+    "prompt430_failure_review_required",
+    "prompt430_next_cycle_continuation_candidate",
+    "prompt430_targeted_fix_candidate",
+    "prompt430_commit_tag_candidate",
+    "prompt430_commit_tag_performed",
+    "prompt430_codex_direct_invocation_allowed",
+    "prompt430_subprocess_direct_execution_allowed",
+    "prompt430_git_mutation_allowed",
+    "prompt430_commit_tag_allowed",
+    "prompt430_push_allowed",
+    "prompt430_pr_allowed",
+    "prompt430_merge_allowed",
+    "prompt430_rollback_allowed",
+    "prompt430_unbounded_loop_allowed",
+    "prompt430_daemon_mode_allowed",
+    "prompt430_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -8596,6 +8647,32 @@ def _merge_prompt429_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT429_BOUNDED_RUNTIME_LAUNCH_READINESS_GATE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt430_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt430_bounded_runtime_execution_adapter_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt430_bounded_runtime_execution_adapter_state)
+        if isinstance(
+            prompt430_bounded_runtime_execution_adapter_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT430_BOUNDED_RUNTIME_EXECUTION_ADAPTER_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -65099,6 +65176,259 @@ def _build_prompt429_bounded_runtime_launch_readiness_gate_state(
         "prompt429_runtime_command_executed": False,
         "prompt429_next_action": next_action,
     }
+
+
+def _build_prompt430_bounded_runtime_execution_adapter_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execution_requested: bool = False,
+    allow_runtime_execution: bool = False,
+    command_runner: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    payload = (
+        run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    )
+    launch_packet = payload.get("prompt429_runtime_launch_packet")
+    launch_packet_copy = dict(launch_packet) if isinstance(launch_packet, Mapping) else {}
+    command_argv = launch_packet_copy.get("command_argv")
+    command_argv_ready = isinstance(command_argv, list) and len(command_argv) > 0
+    copied_command_argv = list(command_argv) if isinstance(command_argv, list) else []
+    prompt429_launch_packet_ready = (
+        payload.get("prompt429_bounded_runtime_launch_readiness_gate_ready")
+        is True
+        and payload.get("prompt429_bounded_runtime_launch_readiness_gate_status")
+        == "launch_packet_ready"
+        and payload.get("prompt429_launch_packet_ready") is True
+        and payload.get("prompt429_launch_allowed") is True
+        and payload.get("prompt429_launch_performed") is False
+        and isinstance(launch_packet, Mapping)
+        and launch_packet.get("launch_execution_policy") == "external_only"
+        and launch_packet.get("launch_execution_performed") is False
+    )
+    command_runner_ready = callable(command_runner)
+
+    state: dict[str, Any] = {
+        "prompt430_bounded_runtime_execution_adapter_enabled": True,
+        "prompt430_schema_version": _PROMPT430_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt430",
+        "prompt430_bounded_runtime_execution_adapter_ready": False,
+        "prompt430_bounded_runtime_execution_adapter_status": "blocked",
+        "prompt430_bounded_runtime_execution_adapter_blocked_reason": "",
+        "prompt430_execution_requested": bool(execution_requested),
+        "prompt430_allow_runtime_execution": bool(allow_runtime_execution),
+        "prompt430_prompt429_launch_packet_ready": prompt429_launch_packet_ready,
+        "prompt430_runtime_command_argv_ready": command_argv_ready,
+        "prompt430_command_runner_ready": command_runner_ready,
+        "prompt430_execution_ready": False,
+        "prompt430_execution_attempted": False,
+        "prompt430_execution_performed": False,
+        "prompt430_execution_result_available": False,
+        "prompt430_runtime_command_argv": copied_command_argv,
+        "prompt430_runtime_launch_packet": launch_packet_copy,
+        "prompt430_runtime_execution_returncode": None,
+        "prompt430_runtime_execution_returncode_classification": "unknown",
+        "prompt430_runtime_execution_stdout": None,
+        "prompt430_runtime_execution_stderr": None,
+        "prompt430_runtime_execution_stdout_path": None,
+        "prompt430_runtime_execution_stderr_path": None,
+        "prompt430_runtime_execution_receipt_path": None,
+        "prompt430_runtime_execution_result_payload": {},
+        "prompt430_runtime_execution_success": False,
+        "prompt430_runtime_execution_failed": False,
+        "prompt430_runtime_execution_unknown": False,
+        "prompt430_execution_error": False,
+        "prompt430_execution_error_message": "",
+        "prompt430_success_path_ready": False,
+        "prompt430_failure_review_required": False,
+        "prompt430_next_cycle_continuation_candidate": False,
+        "prompt430_targeted_fix_candidate": False,
+        "prompt430_commit_tag_candidate": False,
+        "prompt430_commit_tag_performed": False,
+        "prompt430_codex_direct_invocation_allowed": False,
+        "prompt430_subprocess_direct_execution_allowed": False,
+        "prompt430_git_mutation_allowed": False,
+        "prompt430_commit_tag_allowed": False,
+        "prompt430_push_allowed": False,
+        "prompt430_pr_allowed": False,
+        "prompt430_merge_allowed": False,
+        "prompt430_rollback_allowed": False,
+        "prompt430_unbounded_loop_allowed": False,
+        "prompt430_daemon_mode_allowed": False,
+        "prompt430_next_action": "",
+    }
+
+    if not execution_requested:
+        state.update(
+            {
+                "prompt430_bounded_runtime_execution_adapter_ready": True,
+                "prompt430_bounded_runtime_execution_adapter_status": "ready",
+                "prompt430_next_action": (
+                    "request_prompt430_runtime_execution"
+                ),
+            }
+        )
+        return state
+
+    if not allow_runtime_execution:
+        state.update(
+            {
+                "prompt430_bounded_runtime_execution_adapter_status": "blocked",
+                "prompt430_bounded_runtime_execution_adapter_blocked_reason": (
+                    "runtime_execution_not_allowed"
+                ),
+                "prompt430_next_action": (
+                    "allow_prompt430_runtime_execution"
+                ),
+            }
+        )
+        return state
+
+    if not prompt429_launch_packet_ready:
+        state.update(
+            {
+                "prompt430_bounded_runtime_execution_adapter_status": "blocked",
+                "prompt430_bounded_runtime_execution_adapter_blocked_reason": (
+                    "prompt429_launch_packet_not_ready"
+                ),
+                "prompt430_next_action": (
+                    "review_prompt429_runtime_launch_packet"
+                ),
+            }
+        )
+        return state
+
+    if not command_argv_ready:
+        state.update(
+            {
+                "prompt430_bounded_runtime_execution_adapter_status": "blocked",
+                "prompt430_bounded_runtime_execution_adapter_blocked_reason": (
+                    "runtime_command_argv_not_ready"
+                ),
+                "prompt430_next_action": (
+                    "fix_prompt429_runtime_command_argv"
+                ),
+            }
+        )
+        return state
+
+    if not command_runner_ready:
+        state.update(
+            {
+                "prompt430_bounded_runtime_execution_adapter_status": "blocked",
+                "prompt430_bounded_runtime_execution_adapter_blocked_reason": (
+                    "command_runner_missing"
+                ),
+                "prompt430_next_action": "provide_prompt430_command_runner",
+            }
+        )
+        return state
+
+    state["prompt430_execution_ready"] = True
+    state["prompt430_execution_attempted"] = True
+    try:
+        result = command_runner(
+            command_argv=list(copied_command_argv),
+            launch_packet=dict(launch_packet_copy),
+            run_state_payload=run_state_payload,
+        )
+    except Exception as exc:  # pragma: no cover - caller injected boundary.
+        state.update(
+            {
+                "prompt430_bounded_runtime_execution_adapter_ready": False,
+                "prompt430_bounded_runtime_execution_adapter_status": (
+                    "execution_error"
+                ),
+                "prompt430_execution_performed": False,
+                "prompt430_execution_result_available": False,
+                "prompt430_execution_error": True,
+                "prompt430_execution_error_message": str(exc),
+                "prompt430_runtime_execution_returncode": None,
+                "prompt430_runtime_execution_returncode_classification": (
+                    "execution_error"
+                ),
+                "prompt430_failure_review_required": True,
+                "prompt430_next_action": (
+                    "review_prompt430_runtime_execution_error"
+                ),
+            }
+        )
+        return state
+
+    if not isinstance(result, Mapping):
+        state.update(
+            {
+                "prompt430_bounded_runtime_execution_adapter_ready": False,
+                "prompt430_bounded_runtime_execution_adapter_status": (
+                    "execution_error"
+                ),
+                "prompt430_execution_performed": False,
+                "prompt430_execution_result_available": False,
+                "prompt430_execution_error": True,
+                "prompt430_execution_error_message": (
+                    "command_runner_result_not_mapping"
+                ),
+                "prompt430_runtime_execution_returncode": None,
+                "prompt430_runtime_execution_returncode_classification": (
+                    "execution_error"
+                ),
+                "prompt430_failure_review_required": True,
+                "prompt430_next_action": (
+                    "review_prompt430_runtime_execution_error"
+                ),
+            }
+        )
+        return state
+
+    result_payload = dict(result)
+    returncode = result_payload.get("returncode")
+    if returncode == 0:
+        returncode_classification = "success"
+    elif returncode is None:
+        returncode_classification = "unknown"
+    else:
+        returncode_classification = "failed"
+    execution_success = returncode == 0
+    execution_failed = returncode is not None and returncode != 0
+    execution_unknown = returncode is None
+
+    state.update(
+        {
+            "prompt430_bounded_runtime_execution_adapter_ready": True,
+            "prompt430_bounded_runtime_execution_adapter_status": "executed",
+            "prompt430_execution_performed": True,
+            "prompt430_execution_result_available": True,
+            "prompt430_runtime_execution_returncode": returncode,
+            "prompt430_runtime_execution_returncode_classification": (
+                returncode_classification
+            ),
+            "prompt430_runtime_execution_stdout": result_payload.get("stdout"),
+            "prompt430_runtime_execution_stderr": result_payload.get("stderr"),
+            "prompt430_runtime_execution_stdout_path": (
+                result_payload.get("stdout_path")
+            ),
+            "prompt430_runtime_execution_stderr_path": (
+                result_payload.get("stderr_path")
+            ),
+            "prompt430_runtime_execution_receipt_path": (
+                result_payload.get("receipt_path")
+            ),
+            "prompt430_runtime_execution_result_payload": result_payload,
+            "prompt430_runtime_execution_success": execution_success,
+            "prompt430_runtime_execution_failed": execution_failed,
+            "prompt430_runtime_execution_unknown": execution_unknown,
+            "prompt430_success_path_ready": execution_success,
+            "prompt430_failure_review_required": (
+                execution_unknown or execution_failed
+            ),
+            "prompt430_next_cycle_continuation_candidate": execution_success,
+            "prompt430_targeted_fix_candidate": execution_failed,
+            "prompt430_next_action": (
+                "review_prompt430_runtime_execution_result"
+            ),
+        }
+    )
+    return state
 
 
 def _build_prompt382_approve_commit_tag_execution_gate_state(
@@ -241969,6 +242299,21 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt429_bounded_runtime_launch_readiness_gate_payload,
         }
+        prompt430_bounded_runtime_execution_adapter_payload = (
+            _build_prompt430_bounded_runtime_execution_adapter_state(
+                run_state_payload=run_state_payload,
+                execution_requested=bool(
+                    run_state_payload.get("prompt430_execution_requested")
+                ),
+                allow_runtime_execution=bool(
+                    run_state_payload.get("prompt430_allow_runtime_execution")
+                ),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt430_bounded_runtime_execution_adapter_payload,
+        }
         compact_planning_summary = run_state_payload.get(
             "project_planning_summary_compact"
         )
@@ -242018,6 +242363,31 @@ class PlannedExecutionRunner:
                 "prompt429_next_action": (
                     prompt429_bounded_runtime_launch_readiness_gate_payload.get(
                         "prompt429_next_action"
+                    )
+                ),
+                "prompt430_bounded_runtime_execution_adapter_status": (
+                    prompt430_bounded_runtime_execution_adapter_payload.get(
+                        "prompt430_bounded_runtime_execution_adapter_status"
+                    )
+                ),
+                "prompt430_execution_ready": (
+                    prompt430_bounded_runtime_execution_adapter_payload.get(
+                        "prompt430_execution_ready"
+                    )
+                ),
+                "prompt430_execution_performed": (
+                    prompt430_bounded_runtime_execution_adapter_payload.get(
+                        "prompt430_execution_performed"
+                    )
+                ),
+                "prompt430_runtime_execution_returncode_classification": (
+                    prompt430_bounded_runtime_execution_adapter_payload.get(
+                        "prompt430_runtime_execution_returncode_classification"
+                    )
+                ),
+                "prompt430_next_action": (
+                    prompt430_bounded_runtime_execution_adapter_payload.get(
+                        "prompt430_next_action"
                     )
                 ),
             }
@@ -242270,6 +242640,36 @@ class PlannedExecutionRunner:
                     "run_state.prompt429_launch_performed",
                     "run_state.prompt429_runtime_command_executed",
                     "run_state.prompt429_next_action",
+                    (
+                        "run_state."
+                        "prompt430_bounded_runtime_execution_adapter_status"
+                    ),
+                    (
+                        "run_state."
+                        "prompt430_bounded_runtime_execution_adapter_ready"
+                    ),
+                    "run_state.prompt430_execution_requested",
+                    "run_state.prompt430_allow_runtime_execution",
+                    "run_state.prompt430_prompt429_launch_packet_ready",
+                    "run_state.prompt430_runtime_command_argv_ready",
+                    "run_state.prompt430_command_runner_ready",
+                    "run_state.prompt430_execution_ready",
+                    "run_state.prompt430_execution_attempted",
+                    "run_state.prompt430_execution_performed",
+                    "run_state.prompt430_execution_result_available",
+                    (
+                        "run_state."
+                        "prompt430_runtime_execution_returncode_classification"
+                    ),
+                    "run_state.prompt430_runtime_execution_success",
+                    "run_state.prompt430_runtime_execution_failed",
+                    "run_state.prompt430_runtime_execution_unknown",
+                    "run_state.prompt430_execution_error",
+                    "run_state.prompt430_success_path_ready",
+                    "run_state.prompt430_failure_review_required",
+                    "run_state.prompt430_next_cycle_continuation_candidate",
+                    "run_state.prompt430_targeted_fix_candidate",
+                    "run_state.prompt430_next_action",
                 ]
             )
         )
@@ -242668,6 +243068,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt429_bounded_runtime_launch_readiness_gate_state=(
                     prompt429_bounded_runtime_launch_readiness_gate_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt430_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt430_bounded_runtime_execution_adapter_state=(
+                    prompt430_bounded_runtime_execution_adapter_payload
                 ),
             )
         )
