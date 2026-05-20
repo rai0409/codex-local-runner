@@ -3957,6 +3957,9 @@ _PROMPT448_SCHEMA_VERSION = (
 _PROMPT449_SCHEMA_VERSION = (
     "prompt449_explicit_targeted_fix_execution_layer_v1"
 )
+_PROMPT450_SCHEMA_VERSION = (
+    "prompt450_prompt449_runtime_packet_execution_handoff_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6534,6 +6537,67 @@ _PROMPT449_EXPLICIT_TARGETED_FIX_EXECUTION_KEYS: tuple[str, ...] = (
     "prompt449_file_creation_allowed",
     "prompt449_blocked_reason",
     "prompt449_next_action",
+)
+_PROMPT450_PROMPT449_RUNTIME_PACKET_EXECUTION_KEYS: tuple[str, ...] = (
+    "prompt450_schema_version",
+    "prompt450_prompt449_runtime_packet_execution_status",
+    "prompt450_prompt449_status",
+    "prompt450_prompt449_next_action",
+    "prompt450_prompt449_runtime_command_json_ready",
+    "prompt450_prompt449_runtime_command_json",
+    "prompt450_prompt449_codex_reentry_allowed",
+    "prompt450_prompt449_codex_reentry_attempted",
+    "prompt450_prompt449_codex_reentry_performed",
+    "prompt450_prompt449_materialization_performed",
+    "prompt450_prompt449_artifact_path",
+    "prompt450_prompt449_blocked_reason",
+    "prompt450_runtime_packet_available",
+    "prompt450_runtime_packet_valid",
+    "prompt450_runtime_packet_safety_status",
+    "prompt450_runtime_command_json",
+    "prompt450_runtime_command_json_ready",
+    "prompt450_runtime_command_argv",
+    "prompt450_runtime_command_request_id",
+    "prompt450_runtime_command_prompt_artifact_path",
+    "prompt450_runtime_command_transport_mode",
+    "prompt450_runtime_command_request_codex_invocation",
+    "prompt450_runtime_command_allow_codex_invocation",
+    "prompt450_codex_reentry_required",
+    "prompt450_codex_reentry_allowed",
+    "prompt450_codex_reentry_attempted",
+    "prompt450_codex_reentry_performed",
+    "prompt450_codex_reentry_blocked_reason",
+    "prompt450_codex_reentry_returncode",
+    "prompt450_codex_reentry_returncode_classification",
+    "prompt450_codex_reentry_stdout_path",
+    "prompt450_codex_reentry_stderr_path",
+    "prompt450_codex_reentry_result_artifact_path",
+    "prompt450_codex_reentry_result_available",
+    "prompt450_retry_count_increment_required",
+    "prompt450_retry_count_increment_allowed",
+    "prompt450_retry_count_increment_attempted",
+    "prompt450_retry_count_increment_performed",
+    "prompt450_current_retry_count",
+    "prompt450_next_retry_count",
+    "prompt450_retry_limit",
+    "prompt450_reentry_result_review_required",
+    "prompt450_reentry_result_route_to_prompt442_required",
+    "prompt450_reentry_result_review_packet_ready",
+    "prompt450_reentry_prompt442_review_handoff_ready",
+    "prompt450_reentry_prompt442_review_handoff_source",
+    "prompt450_reentry_review_next_action",
+    "prompt450_prompt451_ready",
+    "prompt450_prompt451_blocked_reason",
+    "prompt450_prompt451_expected_scope",
+    "prompt450_prompt451_next_action",
+    "prompt450_git_mutation_allowed",
+    "prompt450_remote_mutation_allowed",
+    "prompt450_commit_tag_allowed",
+    "prompt450_push_allowed",
+    "prompt450_tests_allowed",
+    "prompt450_file_creation_allowed",
+    "prompt450_blocked_reason",
+    "prompt450_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -9881,6 +9945,32 @@ def _merge_prompt449_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT449_EXPLICIT_TARGETED_FIX_EXECUTION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt450_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt450_prompt449_runtime_packet_execution_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt450_prompt449_runtime_packet_execution_state)
+        if isinstance(
+            prompt450_prompt449_runtime_packet_execution_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT450_PROMPT449_RUNTIME_PACKET_EXECUTION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -69796,6 +69886,450 @@ def _build_prompt449_explicit_targeted_fix_execution_state(
             "prompt449_blocked_reason": "",
             "prompt449_next_action": "execute_prompt449_runtime_command_packet",
         }
+    )
+    return state
+
+
+def _prompt450_retry_value(
+    payload: Mapping[str, Any],
+    key: str,
+    default: int,
+) -> int:
+    value = _as_optional_int(payload.get(key))
+    if value is None or value < 0:
+        return default
+    return value
+
+
+def _prompt450_returncode_classification(returncode: int | None) -> str:
+    if returncode is None:
+        return "not_run"
+    return "success" if returncode == 0 else "failed"
+
+
+def _prompt450_runtime_command_json(payload: Mapping[str, Any]) -> dict[str, Any]:
+    runtime_command_json = payload.get("prompt449_runtime_command_json")
+    if isinstance(runtime_command_json, Mapping):
+        return dict(runtime_command_json)
+    return {}
+
+
+def _prompt450_runtime_packet_valid(
+    runtime_command_json: Mapping[str, Any],
+) -> bool:
+    command_argv = _normalize_string_list(
+        runtime_command_json.get("command_argv"),
+        sort_items=False,
+    )
+    return (
+        command_argv == ["codex", "exec", "-"]
+        and _normalize_text(runtime_command_json.get("request_id"), default="")
+        == "prompt449-targeted-fix-reentry"
+        and bool(
+            _normalize_text(
+                runtime_command_json.get("codex_prompt_artifact_path"),
+                default="",
+            )
+        )
+        and _normalize_text(
+            runtime_command_json.get("transport_mode"),
+            default="",
+        )
+        == "live"
+        and runtime_command_json.get("request_codex_invocation") is True
+        and runtime_command_json.get("allow_codex_invocation") is True
+    )
+
+
+def _prompt450_result_artifact_path(payload: Mapping[str, Any]) -> str:
+    result_payload = payload.get("prompt430_runtime_execution_result_payload")
+    if isinstance(result_payload, Mapping):
+        receipt_path = _normalize_text(
+            result_payload.get("receipt_path"),
+            default="",
+        )
+        if receipt_path:
+            return receipt_path
+    return _normalize_text(
+        payload.get("prompt430_runtime_execution_receipt_path"),
+        default="",
+    )
+
+
+def _prompt450_result_available(payload: Mapping[str, Any]) -> bool:
+    return (
+        payload.get("prompt449_reentry_result_available") is True
+        or payload.get("prompt441_codex_result_materialized") is True
+        or payload.get("prompt430_execution_result_available") is True
+        or bool(_prompt450_result_artifact_path(payload))
+    )
+
+
+def _build_prompt450_prompt449_runtime_packet_execution_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt449_status = _normalize_text(
+        payload.get("prompt449_explicit_targeted_fix_execution_status"),
+        default="",
+    )
+    prompt449_next_action = _normalize_text(
+        payload.get("prompt449_next_action"),
+        default="",
+    )
+    runtime_command_json = _prompt450_runtime_command_json(payload)
+    command_argv = _normalize_string_list(
+        runtime_command_json.get("command_argv"),
+        sort_items=False,
+    )
+    request_id = _normalize_text(
+        runtime_command_json.get("request_id"),
+        default="",
+    )
+    prompt_artifact_path = _normalize_text(
+        runtime_command_json.get("codex_prompt_artifact_path"),
+        default=_normalize_text(
+            payload.get("prompt449_targeted_fix_prompt_artifact_path"),
+            default="",
+        ),
+    )
+    transport_mode = _normalize_text(
+        runtime_command_json.get("transport_mode"),
+        default="",
+    )
+    runtime_packet_available = bool(runtime_command_json)
+    runtime_packet_valid = _prompt450_runtime_packet_valid(runtime_command_json)
+    current_retry_count = _prompt450_retry_value(
+        payload,
+        "prompt449_current_retry_count",
+        0,
+    )
+    next_retry_count = _prompt450_retry_value(
+        payload,
+        "prompt449_next_retry_count",
+        current_retry_count + 1,
+    )
+    retry_limit = _prompt450_retry_value(
+        payload,
+        "prompt449_retry_limit",
+        1,
+    )
+    returncode = _as_optional_int(payload.get("prompt441_codex_returncode"))
+    if returncode is None:
+        returncode = _as_optional_int(
+            payload.get("prompt430_runtime_execution_returncode")
+        )
+    returncode_classification = _normalize_text(
+        payload.get("prompt441_codex_returncode_classification")
+        or payload.get("prompt430_runtime_execution_returncode_classification"),
+        default=_prompt450_returncode_classification(returncode),
+    )
+    stdout_path = _normalize_text(
+        payload.get("prompt441_codex_stdout_path")
+        or payload.get("prompt430_runtime_execution_stdout_path"),
+        default="",
+    )
+    stderr_path = _normalize_text(
+        payload.get("prompt441_codex_stderr_path")
+        or payload.get("prompt430_runtime_execution_stderr_path"),
+        default="",
+    )
+    result_artifact_path = _prompt450_result_artifact_path(payload)
+    result_available = _prompt450_result_available(payload)
+
+    state: dict[str, Any] = {
+        "prompt450_schema_version": _PROMPT450_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt450",
+        "prompt450_prompt449_runtime_packet_execution_status": "blocked",
+        "prompt450_prompt449_status": prompt449_status,
+        "prompt450_prompt449_next_action": prompt449_next_action,
+        "prompt450_prompt449_runtime_command_json_ready": (
+            payload.get("prompt449_runtime_command_json_ready") is True
+        ),
+        "prompt450_prompt449_runtime_command_json": runtime_command_json,
+        "prompt450_prompt449_codex_reentry_allowed": (
+            payload.get("prompt449_codex_reentry_allowed") is True
+        ),
+        "prompt450_prompt449_codex_reentry_attempted": (
+            payload.get("prompt449_codex_reentry_attempted") is True
+        ),
+        "prompt450_prompt449_codex_reentry_performed": (
+            payload.get("prompt449_codex_reentry_performed") is True
+        ),
+        "prompt450_prompt449_materialization_performed": (
+            payload.get("prompt449_materialization_performed") is True
+        ),
+        "prompt450_prompt449_artifact_path": prompt_artifact_path,
+        "prompt450_prompt449_blocked_reason": _normalize_text(
+            payload.get("prompt449_blocked_reason"),
+            default="",
+        ),
+        "prompt450_runtime_packet_available": runtime_packet_available,
+        "prompt450_runtime_packet_valid": runtime_packet_valid,
+        "prompt450_runtime_packet_safety_status": "not_reviewed",
+        "prompt450_runtime_command_json": runtime_command_json,
+        "prompt450_runtime_command_json_ready": False,
+        "prompt450_runtime_command_argv": command_argv,
+        "prompt450_runtime_command_request_id": request_id,
+        "prompt450_runtime_command_prompt_artifact_path": prompt_artifact_path,
+        "prompt450_runtime_command_transport_mode": transport_mode,
+        "prompt450_runtime_command_request_codex_invocation": (
+            runtime_command_json.get("request_codex_invocation") is True
+        ),
+        "prompt450_runtime_command_allow_codex_invocation": (
+            runtime_command_json.get("allow_codex_invocation") is True
+        ),
+        "prompt450_codex_reentry_required": False,
+        "prompt450_codex_reentry_allowed": False,
+        "prompt450_codex_reentry_attempted": False,
+        "prompt450_codex_reentry_performed": False,
+        "prompt450_codex_reentry_blocked_reason": "",
+        "prompt450_codex_reentry_returncode": returncode,
+        "prompt450_codex_reentry_returncode_classification": (
+            returncode_classification if result_available else "not_run"
+        ),
+        "prompt450_codex_reentry_stdout_path": stdout_path,
+        "prompt450_codex_reentry_stderr_path": stderr_path,
+        "prompt450_codex_reentry_result_artifact_path": result_artifact_path,
+        "prompt450_codex_reentry_result_available": result_available,
+        "prompt450_retry_count_increment_required": False,
+        "prompt450_retry_count_increment_allowed": False,
+        "prompt450_retry_count_increment_attempted": False,
+        "prompt450_retry_count_increment_performed": False,
+        "prompt450_current_retry_count": current_retry_count,
+        "prompt450_next_retry_count": next_retry_count,
+        "prompt450_retry_limit": retry_limit,
+        "prompt450_reentry_result_review_required": False,
+        "prompt450_reentry_result_route_to_prompt442_required": False,
+        "prompt450_reentry_result_review_packet_ready": False,
+        "prompt450_reentry_prompt442_review_handoff_ready": False,
+        "prompt450_reentry_prompt442_review_handoff_source": "",
+        "prompt450_reentry_review_next_action": "",
+        "prompt450_prompt451_ready": False,
+        "prompt450_prompt451_blocked_reason": "",
+        "prompt450_prompt451_expected_scope": "",
+        "prompt450_prompt451_next_action": "",
+        "prompt450_git_mutation_allowed": False,
+        "prompt450_remote_mutation_allowed": False,
+        "prompt450_commit_tag_allowed": False,
+        "prompt450_push_allowed": False,
+        "prompt450_tests_allowed": False,
+        "prompt450_file_creation_allowed": False,
+        "prompt450_blocked_reason": (
+            f"prompt450_unsupported_prompt449_state_{prompt449_status}"
+            if prompt449_status
+            else "prompt450_missing_prompt449_state"
+        ),
+        "prompt450_next_action": "manual_review_prompt450_route",
+    }
+
+    if (
+        prompt449_status == "not_applicable"
+        and prompt449_next_action
+        == "prepare_prompt450_approve_commit_tag_execution_gate"
+    ):
+        state.update(
+            {
+                "prompt450_prompt449_runtime_packet_execution_status": (
+                    "not_applicable"
+                ),
+                "prompt450_codex_reentry_required": False,
+                "prompt450_codex_reentry_allowed": False,
+                "prompt450_codex_reentry_attempted": False,
+                "prompt450_codex_reentry_performed": False,
+                "prompt450_reentry_result_review_required": False,
+                "prompt450_reentry_result_route_to_prompt442_required": False,
+                "prompt450_reentry_result_review_packet_ready": False,
+                "prompt450_reentry_prompt442_review_handoff_ready": False,
+                "prompt450_prompt451_ready": True,
+                "prompt450_prompt451_blocked_reason": "",
+                "prompt450_prompt451_expected_scope": (
+                    "approve_commit_tag_post_commit_closure_next_cycle"
+                ),
+                "prompt450_prompt451_next_action": (
+                    "prepare_prompt451_approve_commit_tag_closure_and_next_cycle"
+                ),
+                "prompt450_blocked_reason": "",
+                "prompt450_next_action": (
+                    "prepare_prompt451_approve_commit_tag_closure_and_next_cycle"
+                ),
+            }
+        )
+        return state
+
+    review_handoff_path = (
+        prompt449_status == "executed"
+        or payload.get("prompt449_reentry_result_route_to_prompt442_required")
+        is True
+        or prompt449_next_action
+        in {
+            "review_prompt449_reentry_result_with_prompt442",
+            "handoff_prompt449_reentry_result_to_prompt442_review",
+            "prepare_prompt442_review_from_prompt449_reentry_result",
+        }
+    )
+    if review_handoff_path:
+        state.update(
+            {
+                "prompt450_prompt449_runtime_packet_execution_status": (
+                    "review_handoff_ready"
+                ),
+                "prompt450_codex_reentry_required": False,
+                "prompt450_codex_reentry_allowed": False,
+                "prompt450_codex_reentry_attempted": False,
+                "prompt450_codex_reentry_performed": False,
+                "prompt450_reentry_result_review_required": True,
+                "prompt450_reentry_result_route_to_prompt442_required": True,
+                "prompt450_reentry_result_review_packet_ready": result_available,
+                "prompt450_reentry_prompt442_review_handoff_ready": (
+                    result_available
+                ),
+                "prompt450_reentry_prompt442_review_handoff_source": (
+                    "prompt449_targeted_fix_reentry"
+                ),
+                "prompt450_reentry_review_next_action": (
+                    "review_prompt450_reentry_result_with_prompt442"
+                ),
+                "prompt450_blocked_reason": "",
+                "prompt450_next_action": (
+                    "review_prompt450_reentry_result_with_prompt442"
+                ),
+            }
+        )
+        return state
+
+    unsafe_state = (
+        prompt449_next_action == "stop_for_prompt442_unexpected_changes"
+        or payload.get("prompt449_blocked_reason")
+        == "prompt449_unsafe_changes_require_manual_review"
+        or payload.get("prompt449_git_mutation_allowed") is True
+        or payload.get("prompt449_remote_mutation_allowed") is True
+        or payload.get("prompt449_commit_tag_allowed") is True
+        or payload.get("prompt449_tests_allowed") is True
+    )
+    if unsafe_state:
+        state.update(
+            {
+                "prompt450_prompt449_runtime_packet_execution_status": "blocked",
+                "prompt450_runtime_packet_safety_status": "unsafe",
+                "prompt450_blocked_reason": (
+                    "prompt450_unsafe_changes_require_manual_review"
+                ),
+                "prompt450_next_action": (
+                    "stop_for_prompt442_unexpected_changes"
+                ),
+            }
+        )
+        return state
+
+    prepared_prompt449_packet = (
+        prompt449_status == "prepared"
+        and prompt449_next_action == "execute_prompt449_runtime_command_packet"
+        and payload.get("prompt449_runtime_command_json_ready") is True
+        and payload.get("prompt449_runtime_command_json_allow_codex_invocation")
+        is True
+        and payload.get("prompt449_runtime_command_json_request_codex_invocation")
+        is True
+        and payload.get("prompt449_codex_reentry_allowed") is True
+        and payload.get("prompt449_materialization_performed") is True
+        and payload.get("prompt449_git_mutation_allowed") is False
+        and payload.get("prompt449_remote_mutation_allowed") is False
+        and payload.get("prompt449_commit_tag_allowed") is False
+        and payload.get("prompt449_tests_allowed") is False
+    )
+    if prepared_prompt449_packet:
+        if not runtime_packet_available or not runtime_packet_valid:
+            state.update(
+                {
+                    "prompt450_prompt449_runtime_packet_execution_status": (
+                        "blocked"
+                    ),
+                    "prompt450_runtime_packet_safety_status": "invalid",
+                    "prompt450_blocked_reason": (
+                        "prompt450_missing_or_invalid_prompt449_runtime_packet"
+                    ),
+                    "prompt450_next_action": (
+                        "manual_review_prompt450_runtime_packet"
+                    ),
+                }
+            )
+            return state
+
+        state.update(
+            {
+                "prompt450_prompt449_runtime_packet_execution_status": (
+                    "prepared"
+                ),
+                "prompt450_runtime_packet_available": True,
+                "prompt450_runtime_packet_valid": True,
+                "prompt450_runtime_packet_safety_status": (
+                    "safe_to_execute_prompt449_runtime_packet"
+                ),
+                "prompt450_runtime_command_json_ready": True,
+                "prompt450_codex_reentry_required": True,
+                "prompt450_codex_reentry_allowed": True,
+                "prompt450_codex_reentry_attempted": False,
+                "prompt450_codex_reentry_performed": False,
+                "prompt450_codex_reentry_blocked_reason": (
+                    "prompt450_runtime_command_execution_packet_prepared_not_performed"
+                ),
+                "prompt450_codex_reentry_returncode": None,
+                "prompt450_codex_reentry_returncode_classification": "not_run",
+                "prompt450_codex_reentry_stdout_path": "",
+                "prompt450_codex_reentry_stderr_path": "",
+                "prompt450_codex_reentry_result_artifact_path": "",
+                "prompt450_codex_reentry_result_available": False,
+                "prompt450_retry_count_increment_required": True,
+                "prompt450_retry_count_increment_allowed": True,
+                "prompt450_retry_count_increment_attempted": False,
+                "prompt450_retry_count_increment_performed": False,
+                "prompt450_reentry_result_review_required": False,
+                "prompt450_reentry_result_route_to_prompt442_required": False,
+                "prompt450_reentry_result_review_packet_ready": False,
+                "prompt450_reentry_prompt442_review_handoff_ready": False,
+                "prompt450_reentry_review_next_action": "",
+                "prompt450_prompt451_ready": False,
+                "prompt450_prompt451_blocked_reason": (
+                    "prompt450_runtime_packet_not_executed"
+                ),
+                "prompt450_prompt451_expected_scope": (
+                    "execute_runtime_packet_before_prompt451"
+                ),
+                "prompt450_prompt451_next_action": (
+                    "execute_prompt450_runtime_command_packet"
+                ),
+                "prompt450_blocked_reason": "",
+                "prompt450_next_action": (
+                    "execute_prompt450_runtime_command_packet"
+                ),
+            }
+        )
+        return state
+
+    if prompt449_status == "prepared" and (
+        not runtime_packet_available or not runtime_packet_valid
+    ):
+        state.update(
+            {
+                "prompt450_prompt449_runtime_packet_execution_status": "blocked",
+                "prompt450_runtime_packet_safety_status": "invalid",
+                "prompt450_blocked_reason": (
+                    "prompt450_missing_or_invalid_prompt449_runtime_packet"
+                ),
+                "prompt450_next_action": (
+                    "manual_review_prompt450_runtime_packet"
+                ),
+            }
+        )
+        return state
+
+    state["prompt450_blocked_reason"] = (
+        f"prompt450_unsupported_prompt449_state_{prompt449_status}_"
+        f"next_action_{prompt449_next_action}"
+        if prompt449_status or prompt449_next_action
+        else "prompt450_missing_prompt449_state"
     )
     return state
 
@@ -249716,6 +250250,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt449_explicit_targeted_fix_execution_payload,
         }
+        prompt450_prompt449_runtime_packet_execution_payload = (
+            _build_prompt450_prompt449_runtime_packet_execution_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt450_prompt449_runtime_packet_execution_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -251379,6 +251922,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt449_explicit_targeted_fix_execution_state=(
                     prompt449_explicit_targeted_fix_execution_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt450_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt450_prompt449_runtime_packet_execution_state=(
+                    prompt450_prompt449_runtime_packet_execution_payload
                 ),
             )
         )
@@ -260408,6 +260959,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT449_EXPLICIT_TARGETED_FIX_EXECUTION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT450_PROMPT449_RUNTIME_PACKET_EXECUTION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
