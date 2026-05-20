@@ -3933,6 +3933,9 @@ _PROMPT440_SCHEMA_VERSION = (
 _PROMPT441_SCHEMA_VERSION = (
     "prompt441_bounded_codex_live_invocation_adapter_surface_v1"
 )
+_PROMPT442_SCHEMA_VERSION = (
+    "prompt442_codex_post_execution_diff_result_review_route_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6156,6 +6159,35 @@ _PROMPT441_BOUNDED_CODEX_INVOCATION_KEYS: tuple[str, ...] = (
     "prompt441_git_mutation_performed",
     "prompt441_remote_mutation_performed",
     "prompt441_commit_tag_performed",
+)
+_PROMPT442_CODEX_POST_EXECUTION_REVIEW_KEYS: tuple[str, ...] = (
+    "prompt442_schema_version",
+    "prompt442_codex_post_execution_review_enabled",
+    "prompt442_prompt441_result_available",
+    "prompt442_prompt441_returncode",
+    "prompt442_prompt441_returncode_classification",
+    "prompt442_git_status_short",
+    "prompt442_tracked_changed_files",
+    "prompt442_staged_changed_files",
+    "prompt442_untracked_files",
+    "prompt442_allowed_changed_files",
+    "prompt442_unexpected_changed_files",
+    "prompt442_unexpected_untracked_files",
+    "prompt442_post_codex_diff_empty",
+    "prompt442_post_codex_changes_present",
+    "prompt442_post_codex_change_safety_status",
+    "prompt442_codex_post_execution_route",
+    "prompt442_review_status",
+    "prompt442_blocked_reason",
+    "prompt442_next_action",
+    "prompt442_git_mutation_allowed",
+    "prompt442_commit_tag_allowed",
+    "prompt442_push_allowed",
+    "prompt442_pr_allowed",
+    "prompt442_merge_allowed",
+    "prompt442_rollback_allowed",
+    "prompt442_auto_stage_allowed",
+    "prompt442_auto_revert_allowed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -66668,6 +66700,276 @@ def _finalize_prompt441_bounded_codex_invocation_state(
         if key in result_payload:
             finalized[key] = result_payload.get(key)
     return finalized
+
+
+def _build_prompt442_codex_post_execution_review_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execution_repo_path: str,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    allowed_changed_files = sorted(
+        {
+            "automation/orchestration/planned_execution_runner.py",
+            "scripts/run_planned_execution.py",
+        }
+    )
+    prompt441_result_available = (
+        payload.get("prompt441_codex_result_materialized") is True
+    )
+    prompt441_returncode = _as_optional_int(
+        payload.get("prompt441_codex_returncode")
+    )
+    prompt441_returncode_classification = _normalize_text(
+        payload.get("prompt441_codex_returncode_classification"),
+        default="unknown",
+    )
+
+    state: dict[str, Any] = {
+        "prompt442_schema_version": _PROMPT442_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt442",
+        "prompt442_codex_post_execution_review_enabled": True,
+        "prompt442_prompt441_result_available": prompt441_result_available,
+        "prompt442_prompt441_returncode": prompt441_returncode,
+        "prompt442_prompt441_returncode_classification": (
+            prompt441_returncode_classification
+        ),
+        "prompt442_git_status_short": [],
+        "prompt442_tracked_changed_files": [],
+        "prompt442_staged_changed_files": [],
+        "prompt442_untracked_files": [],
+        "prompt442_allowed_changed_files": allowed_changed_files,
+        "prompt442_unexpected_changed_files": [],
+        "prompt442_unexpected_untracked_files": [],
+        "prompt442_post_codex_diff_empty": False,
+        "prompt442_post_codex_changes_present": False,
+        "prompt442_post_codex_change_safety_status": "not_reviewed",
+        "prompt442_codex_post_execution_route": "not_requested",
+        "prompt442_review_status": "not_requested",
+        "prompt442_blocked_reason": "",
+        "prompt442_next_action": "",
+        "prompt442_git_mutation_allowed": False,
+        "prompt442_commit_tag_allowed": False,
+        "prompt442_push_allowed": False,
+        "prompt442_pr_allowed": False,
+        "prompt442_merge_allowed": False,
+        "prompt442_rollback_allowed": False,
+        "prompt442_auto_stage_allowed": False,
+        "prompt442_auto_revert_allowed": False,
+    }
+
+    if not prompt441_result_available:
+        state.update(
+            {
+                "prompt442_codex_post_execution_route": (
+                    "codex_result_not_available"
+                ),
+                "prompt442_review_status": "blocked",
+                "prompt442_blocked_reason": (
+                    "prompt441_codex_result_not_available"
+                ),
+                "prompt442_next_action": "run_prompt441_codex_invocation",
+            }
+        )
+        return state
+
+    repo_path = _normalize_text(execution_repo_path, default="")
+
+    def _run_prompt442_git(args: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "-C", repo_path, *args],
+            text=True,
+            capture_output=True,
+            shell=False,
+            timeout=10,
+            check=False,
+        )
+
+    try:
+        if not repo_path:
+            raise RuntimeError("execution_repo_path_missing")
+        status_result = _run_prompt442_git(["status", "--short"])
+        tracked_result = _run_prompt442_git(["diff", "--name-only"])
+        staged_result = _run_prompt442_git(["diff", "--cached", "--name-only"])
+        untracked_result = _run_prompt442_git(
+            ["ls-files", "--others", "--exclude-standard"]
+        )
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+        state.update(
+            {
+                "prompt442_post_codex_change_safety_status": (
+                    "git_inspection_error"
+                ),
+                "prompt442_codex_post_execution_route": (
+                    "codex_git_inspection_error_stop"
+                ),
+                "prompt442_review_status": "stop",
+                "prompt442_blocked_reason": "prompt442_git_inspection_error",
+                "prompt442_next_action": (
+                    "stop_for_prompt442_git_inspection_error"
+                ),
+            }
+        )
+        return state
+
+    git_results = (status_result, tracked_result, staged_result, untracked_result)
+    if any(result.returncode != 0 for result in git_results):
+        state.update(
+            {
+                "prompt442_git_status_short": (
+                    status_result.stdout or ""
+                ).splitlines(),
+                "prompt442_post_codex_change_safety_status": (
+                    "git_inspection_error"
+                ),
+                "prompt442_codex_post_execution_route": (
+                    "codex_git_inspection_error_stop"
+                ),
+                "prompt442_review_status": "stop",
+                "prompt442_blocked_reason": "prompt442_git_inspection_error",
+                "prompt442_next_action": (
+                    "stop_for_prompt442_git_inspection_error"
+                ),
+            }
+        )
+        return state
+
+    tracked_changed_files = sorted(
+        line.strip()
+        for line in (tracked_result.stdout or "").splitlines()
+        if line.strip()
+    )
+    staged_changed_files = sorted(
+        line.strip()
+        for line in (staged_result.stdout or "").splitlines()
+        if line.strip()
+    )
+    untracked_files = sorted(
+        line.strip()
+        for line in (untracked_result.stdout or "").splitlines()
+        if line.strip()
+    )
+    status_short = [
+        line.rstrip()
+        for line in (status_result.stdout or "").splitlines()
+        if line.strip()
+    ]
+    allowed_set = set(allowed_changed_files)
+    unexpected_changed_files = sorted(
+        {
+            *[path for path in tracked_changed_files if path not in allowed_set],
+            *staged_changed_files,
+        }
+    )
+    unexpected_untracked_files = sorted(untracked_files)
+    changes_present = bool(
+        tracked_changed_files or staged_changed_files or untracked_files
+    )
+    diff_empty = not changes_present
+
+    if diff_empty:
+        safety_status = "clean_no_changes"
+    elif unexpected_untracked_files:
+        safety_status = "unexpected_untracked"
+    elif unexpected_changed_files:
+        safety_status = "unexpected_changes"
+    else:
+        safety_status = "allowed_changes"
+
+    state.update(
+        {
+            "prompt442_git_status_short": status_short,
+            "prompt442_tracked_changed_files": tracked_changed_files,
+            "prompt442_staged_changed_files": staged_changed_files,
+            "prompt442_untracked_files": untracked_files,
+            "prompt442_unexpected_changed_files": unexpected_changed_files,
+            "prompt442_unexpected_untracked_files": unexpected_untracked_files,
+            "prompt442_post_codex_diff_empty": diff_empty,
+            "prompt442_post_codex_changes_present": changes_present,
+            "prompt442_post_codex_change_safety_status": safety_status,
+        }
+    )
+
+    if unexpected_changed_files or unexpected_untracked_files:
+        state.update(
+            {
+                "prompt442_codex_post_execution_route": (
+                    "codex_unsafe_changes_stop"
+                ),
+                "prompt442_review_status": "stop",
+                "prompt442_blocked_reason": (
+                    "prompt442_unexpected_post_codex_changes"
+                ),
+                "prompt442_next_action": (
+                    "stop_for_prompt442_unexpected_changes"
+                ),
+            }
+        )
+        return state
+
+    success = (
+        prompt441_returncode == 0
+        or prompt441_returncode_classification == "success"
+    )
+    failed = (
+        (prompt441_returncode is not None and prompt441_returncode != 0)
+        or prompt441_returncode_classification in {
+            "failed",
+            "timeout",
+            "execution_error",
+            "nonzero",
+            "nonzero_exit",
+            "execution_failed",
+        }
+    )
+    if success and diff_empty:
+        state.update(
+            {
+                "prompt442_codex_post_execution_route": (
+                    "codex_success_no_changes"
+                ),
+                "prompt442_review_status": "reviewed",
+                "prompt442_next_action": "review_codex_no_changes",
+            }
+        )
+    elif success:
+        state.update(
+            {
+                "prompt442_codex_post_execution_route": (
+                    "codex_success_with_allowed_changes"
+                ),
+                "prompt442_review_status": "reviewed",
+                "prompt442_next_action": (
+                    "prepare_prompt443_success_diff_route"
+                ),
+            }
+        )
+    elif failed and diff_empty:
+        state.update(
+            {
+                "prompt442_codex_post_execution_route": (
+                    "codex_failed_no_changes"
+                ),
+                "prompt442_review_status": "reviewed",
+                "prompt442_next_action": (
+                    "prepare_prompt443_targeted_fix_route"
+                ),
+            }
+        )
+    else:
+        state.update(
+            {
+                "prompt442_codex_post_execution_route": (
+                    "codex_failed_with_changes"
+                ),
+                "prompt442_review_status": "reviewed",
+                "prompt442_next_action": (
+                    "prepare_prompt443_targeted_fix_route"
+                ),
+            }
+        )
+    return state
 
 
 def _build_prompt430_bounded_runtime_execution_adapter_state(
@@ -246513,6 +246815,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt438_runtime_result_classification_wiring_payload,
         }
+        prompt442_codex_post_execution_review_payload = (
+            _build_prompt442_codex_post_execution_review_state(
+                run_state_payload=run_state_payload,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt442_codex_post_execution_review_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -246876,6 +247188,46 @@ class PlannedExecutionRunner:
                 "prompt441_commit_tag_performed": (
                     prompt441_bounded_codex_invocation_payload.get(
                         "prompt441_commit_tag_performed"
+                    )
+                ),
+                "prompt442_review_status": (
+                    prompt442_codex_post_execution_review_payload.get(
+                        "prompt442_review_status"
+                    )
+                ),
+                "prompt442_codex_post_execution_route": (
+                    prompt442_codex_post_execution_review_payload.get(
+                        "prompt442_codex_post_execution_route"
+                    )
+                ),
+                "prompt442_post_codex_change_safety_status": (
+                    prompt442_codex_post_execution_review_payload.get(
+                        "prompt442_post_codex_change_safety_status"
+                    )
+                ),
+                "prompt442_post_codex_diff_empty": (
+                    prompt442_codex_post_execution_review_payload.get(
+                        "prompt442_post_codex_diff_empty"
+                    )
+                ),
+                "prompt442_post_codex_changes_present": (
+                    prompt442_codex_post_execution_review_payload.get(
+                        "prompt442_post_codex_changes_present"
+                    )
+                ),
+                "prompt442_unexpected_changed_files": (
+                    prompt442_codex_post_execution_review_payload.get(
+                        "prompt442_unexpected_changed_files"
+                    )
+                ),
+                "prompt442_unexpected_untracked_files": (
+                    prompt442_codex_post_execution_review_payload.get(
+                        "prompt442_unexpected_untracked_files"
+                    )
+                ),
+                "prompt442_next_action": (
+                    prompt442_codex_post_execution_review_payload.get(
+                        "prompt442_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -247342,6 +247694,42 @@ class PlannedExecutionRunner:
                     "run_state.prompt441_git_mutation_performed",
                     "run_state.prompt441_remote_mutation_performed",
                     "run_state.prompt441_commit_tag_performed",
+                    "run_state.prompt442_schema_version",
+                    (
+                        "run_state."
+                        "prompt442_codex_post_execution_review_enabled"
+                    ),
+                    "run_state.prompt442_prompt441_result_available",
+                    "run_state.prompt442_prompt441_returncode",
+                    (
+                        "run_state."
+                        "prompt442_prompt441_returncode_classification"
+                    ),
+                    "run_state.prompt442_git_status_short",
+                    "run_state.prompt442_tracked_changed_files",
+                    "run_state.prompt442_staged_changed_files",
+                    "run_state.prompt442_untracked_files",
+                    "run_state.prompt442_allowed_changed_files",
+                    "run_state.prompt442_unexpected_changed_files",
+                    "run_state.prompt442_unexpected_untracked_files",
+                    "run_state.prompt442_post_codex_diff_empty",
+                    "run_state.prompt442_post_codex_changes_present",
+                    (
+                        "run_state."
+                        "prompt442_post_codex_change_safety_status"
+                    ),
+                    "run_state.prompt442_codex_post_execution_route",
+                    "run_state.prompt442_review_status",
+                    "run_state.prompt442_blocked_reason",
+                    "run_state.prompt442_next_action",
+                    "run_state.prompt442_git_mutation_allowed",
+                    "run_state.prompt442_commit_tag_allowed",
+                    "run_state.prompt442_push_allowed",
+                    "run_state.prompt442_pr_allowed",
+                    "run_state.prompt442_merge_allowed",
+                    "run_state.prompt442_rollback_allowed",
+                    "run_state.prompt442_auto_stage_allowed",
+                    "run_state.prompt442_auto_revert_allowed",
                     (
                         "run_state."
                         "prompt430_bounded_runtime_execution_adapter_status"
@@ -256946,6 +257334,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT438_RUNTIME_RESULT_CLASSIFICATION_WIRING_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT442_CODEX_POST_EXECUTION_REVIEW_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
