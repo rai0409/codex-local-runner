@@ -3936,6 +3936,9 @@ _PROMPT441_SCHEMA_VERSION = (
 _PROMPT442_SCHEMA_VERSION = (
     "prompt442_codex_post_execution_diff_result_review_route_v1"
 )
+_PROMPT443_SCHEMA_VERSION = (
+    "prompt443_success_diff_approve_commit_tag_candidate_handoff_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6188,6 +6191,30 @@ _PROMPT442_CODEX_POST_EXECUTION_REVIEW_KEYS: tuple[str, ...] = (
     "prompt442_rollback_allowed",
     "prompt442_auto_stage_allowed",
     "prompt442_auto_revert_allowed",
+)
+_PROMPT443_SUCCESS_DIFF_HANDOFF_KEYS: tuple[str, ...] = (
+    "prompt443_schema_version",
+    "prompt443_success_diff_handoff_status",
+    "prompt443_prompt442_review_status",
+    "prompt443_prompt442_route",
+    "prompt443_prompt442_change_safety_status",
+    "prompt443_prompt442_changes_present",
+    "prompt443_prompt442_diff_empty",
+    "prompt443_allowed_changed_files",
+    "prompt443_unexpected_changed_files",
+    "prompt443_unexpected_untracked_files",
+    "prompt443_diff_summary_available",
+    "prompt443_diff_summary_source",
+    "prompt443_approve_commit_tag_candidate",
+    "prompt443_commit_message_candidate",
+    "prompt443_tag_name_candidate",
+    "prompt443_review_required",
+    "prompt443_commit_tag_allowed",
+    "prompt443_git_mutation_allowed",
+    "prompt443_remote_mutation_allowed",
+    "prompt443_codex_invocation_allowed",
+    "prompt443_blocked_reason",
+    "prompt443_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -9352,6 +9379,48 @@ def _merge_prompt441_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT441_BOUNDED_CODEX_INVOCATION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt442_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt442_codex_post_execution_review_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt442_codex_post_execution_review_state)
+        if isinstance(prompt442_codex_post_execution_review_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT442_CODEX_POST_EXECUTION_REVIEW_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt443_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt443_success_diff_handoff_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt443_success_diff_handoff_state)
+        if isinstance(prompt443_success_diff_handoff_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT443_SUCCESS_DIFF_HANDOFF_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -66969,6 +67038,136 @@ def _build_prompt442_codex_post_execution_review_state(
                 ),
             }
         )
+    return state
+
+
+def _build_prompt443_success_diff_handoff_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt442_review_status = _normalize_text(
+        payload.get("prompt442_review_status"),
+        default="",
+    )
+    prompt442_route = _normalize_text(
+        payload.get("prompt442_codex_post_execution_route"),
+        default="",
+    )
+    prompt442_change_safety_status = _normalize_text(
+        payload.get("prompt442_post_codex_change_safety_status"),
+        default="",
+    )
+    prompt442_changes_present = bool(
+        payload.get("prompt442_post_codex_changes_present", False)
+    )
+    prompt442_diff_empty = bool(
+        payload.get("prompt442_post_codex_diff_empty", False)
+    )
+    allowed_changed_files = _normalize_string_list(
+        payload.get("prompt442_allowed_changed_files"),
+        sort_items=True,
+    )
+    unexpected_changed_files = _normalize_string_list(
+        payload.get("prompt442_unexpected_changed_files"),
+        sort_items=True,
+    )
+    unexpected_untracked_files = _normalize_string_list(
+        payload.get("prompt442_unexpected_untracked_files"),
+        sort_items=True,
+    )
+
+    state: dict[str, Any] = {
+        "prompt443_schema_version": _PROMPT443_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt443",
+        "prompt443_success_diff_handoff_status": "blocked",
+        "prompt443_prompt442_review_status": prompt442_review_status,
+        "prompt443_prompt442_route": prompt442_route,
+        "prompt443_prompt442_change_safety_status": (
+            prompt442_change_safety_status
+        ),
+        "prompt443_prompt442_changes_present": prompt442_changes_present,
+        "prompt443_prompt442_diff_empty": prompt442_diff_empty,
+        "prompt443_allowed_changed_files": allowed_changed_files,
+        "prompt443_unexpected_changed_files": unexpected_changed_files,
+        "prompt443_unexpected_untracked_files": unexpected_untracked_files,
+        "prompt443_diff_summary_available": False,
+        "prompt443_diff_summary_source": "",
+        "prompt443_approve_commit_tag_candidate": False,
+        "prompt443_commit_message_candidate": "",
+        "prompt443_tag_name_candidate": "",
+        "prompt443_review_required": True,
+        "prompt443_commit_tag_allowed": False,
+        "prompt443_git_mutation_allowed": False,
+        "prompt443_remote_mutation_allowed": False,
+        "prompt443_codex_invocation_allowed": False,
+        "prompt443_blocked_reason": (
+            "prompt443_missing_prompt442_route"
+            if not prompt442_route
+            else f"prompt443_unsupported_prompt442_route_{prompt442_route}"
+        ),
+        "prompt443_next_action": "prepare_targeted_fix_or_manual_review",
+    }
+
+    ready_candidate = (
+        prompt442_route == "codex_success_with_allowed_changes"
+        and prompt442_change_safety_status == "allowed_changes"
+        and prompt442_changes_present is True
+        and prompt442_diff_empty is False
+        and unexpected_changed_files == []
+        and unexpected_untracked_files == []
+        and bool(allowed_changed_files)
+    )
+    if ready_candidate:
+        state.update(
+            {
+                "prompt443_success_diff_handoff_status": "ready",
+                "prompt443_diff_summary_available": True,
+                "prompt443_diff_summary_source": (
+                    "prompt442_allowed_changed_files"
+                ),
+                "prompt443_approve_commit_tag_candidate": True,
+                "prompt443_commit_message_candidate": (
+                    "Prompt443 approve Codex success diff candidate"
+                ),
+                "prompt443_tag_name_candidate": (
+                    "prompt443-success-diff-approve-candidate"
+                ),
+                "prompt443_review_required": True,
+                "prompt443_blocked_reason": "",
+                "prompt443_next_action": (
+                    "prepare_prompt444_or_prompt445_approve_commit_tag_gate"
+                ),
+            }
+        )
+    elif prompt442_route == "codex_success_no_changes":
+        state.update(
+            {
+                "prompt443_success_diff_handoff_status": "not_applicable",
+                "prompt443_approve_commit_tag_candidate": False,
+                "prompt443_review_required": False,
+                "prompt443_blocked_reason": (
+                    "prompt443_no_success_diff_to_handoff"
+                ),
+                "prompt443_next_action": "review_codex_no_changes",
+            }
+        )
+    elif prompt442_route == "codex_unsafe_changes_stop":
+        state.update(
+            {
+                "prompt443_success_diff_handoff_status": "blocked",
+                "prompt443_approve_commit_tag_candidate": False,
+                "prompt443_review_required": True,
+                "prompt443_blocked_reason": (
+                    "prompt443_prompt442_unsafe_changes"
+                ),
+                "prompt443_next_action": (
+                    "stop_for_prompt442_unexpected_changes"
+                ),
+            }
+        )
+
     return state
 
 
@@ -246825,6 +247024,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt442_codex_post_execution_review_payload,
         }
+        prompt443_success_diff_handoff_payload = (
+            _build_prompt443_success_diff_handoff_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt443_success_diff_handoff_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -247228,6 +247436,76 @@ class PlannedExecutionRunner:
                 "prompt442_next_action": (
                     prompt442_codex_post_execution_review_payload.get(
                         "prompt442_next_action"
+                    )
+                ),
+                "prompt443_success_diff_handoff_status": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_success_diff_handoff_status"
+                    )
+                ),
+                "prompt443_prompt442_route": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_prompt442_route"
+                    )
+                ),
+                "prompt443_prompt442_change_safety_status": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_prompt442_change_safety_status"
+                    )
+                ),
+                "prompt443_allowed_changed_files": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_allowed_changed_files"
+                    )
+                ),
+                "prompt443_approve_commit_tag_candidate": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_approve_commit_tag_candidate"
+                    )
+                ),
+                "prompt443_commit_message_candidate": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_commit_message_candidate"
+                    )
+                ),
+                "prompt443_tag_name_candidate": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_tag_name_candidate"
+                    )
+                ),
+                "prompt443_review_required": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_review_required"
+                    )
+                ),
+                "prompt443_commit_tag_allowed": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_commit_tag_allowed"
+                    )
+                ),
+                "prompt443_git_mutation_allowed": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_git_mutation_allowed"
+                    )
+                ),
+                "prompt443_remote_mutation_allowed": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_remote_mutation_allowed"
+                    )
+                ),
+                "prompt443_codex_invocation_allowed": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_codex_invocation_allowed"
+                    )
+                ),
+                "prompt443_blocked_reason": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_blocked_reason"
+                    )
+                ),
+                "prompt443_next_action": (
+                    prompt443_success_diff_handoff_payload.get(
+                        "prompt443_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -247730,6 +248008,31 @@ class PlannedExecutionRunner:
                     "run_state.prompt442_rollback_allowed",
                     "run_state.prompt442_auto_stage_allowed",
                     "run_state.prompt442_auto_revert_allowed",
+                    "run_state.prompt443_schema_version",
+                    "run_state.prompt443_success_diff_handoff_status",
+                    "run_state.prompt443_prompt442_review_status",
+                    "run_state.prompt443_prompt442_route",
+                    (
+                        "run_state."
+                        "prompt443_prompt442_change_safety_status"
+                    ),
+                    "run_state.prompt443_prompt442_changes_present",
+                    "run_state.prompt443_prompt442_diff_empty",
+                    "run_state.prompt443_allowed_changed_files",
+                    "run_state.prompt443_unexpected_changed_files",
+                    "run_state.prompt443_unexpected_untracked_files",
+                    "run_state.prompt443_diff_summary_available",
+                    "run_state.prompt443_diff_summary_source",
+                    "run_state.prompt443_approve_commit_tag_candidate",
+                    "run_state.prompt443_commit_message_candidate",
+                    "run_state.prompt443_tag_name_candidate",
+                    "run_state.prompt443_review_required",
+                    "run_state.prompt443_commit_tag_allowed",
+                    "run_state.prompt443_git_mutation_allowed",
+                    "run_state.prompt443_remote_mutation_allowed",
+                    "run_state.prompt443_codex_invocation_allowed",
+                    "run_state.prompt443_blocked_reason",
+                    "run_state.prompt443_next_action",
                     (
                         "run_state."
                         "prompt430_bounded_runtime_execution_adapter_status"
@@ -248329,6 +248632,22 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt441_bounded_codex_invocation_state=(
                     prompt441_bounded_codex_invocation_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt442_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt442_codex_post_execution_review_state=(
+                    prompt442_codex_post_execution_review_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt443_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt443_success_diff_handoff_state=(
+                    prompt443_success_diff_handoff_payload
                 ),
             )
         )
@@ -257337,6 +257656,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT442_CODEX_POST_EXECUTION_REVIEW_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT443_SUCCESS_DIFF_HANDOFF_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
