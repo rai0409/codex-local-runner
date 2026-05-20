@@ -22953,10 +22953,24 @@ def _build_local_codex_one_shot_prompt_markdown(
     selected_step_name: str,
     selected_step_operation: str,
     expected_changed_files: list[str],
+    explicit_allowed_tracked_files: list[str],
+    mutation_allowed: bool,
+    selected_step_authority_source: str,
+    selected_step_authority_artifact: str,
+    selected_step_authority_status: str,
+    stale_step_selection_conflict_detected: bool,
+    stale_step_selection_artifact_path: str,
+    stale_step_selection_status: str,
+    contract_fix_applied: bool,
     prompt_path: Path,
 ) -> str:
     expected_files_line = (
         ", ".join(expected_changed_files) if expected_changed_files else "none_provided"
+    )
+    explicit_allowed_files_line = (
+        ", ".join(explicit_allowed_tracked_files)
+        if explicit_allowed_tracked_files
+        else "none_provided"
     )
     return (
         "# Prompt332 One-Shot Local Codex Handoff Prompt\n\n"
@@ -22974,6 +22988,15 @@ def _build_local_codex_one_shot_prompt_markdown(
         f"- selected_step_name: `{selected_step_name}`\n"
         f"- selected_step_operation: `{selected_step_operation}`\n"
         f"- expected_changed_files: `{expected_files_line}`\n"
+        f"- explicit_allowed_tracked_files: `{explicit_allowed_files_line}`\n"
+        f"- mutation_allowed: `{str(bool(mutation_allowed)).lower()}`\n"
+        f"- selected_step_authority_source: `{selected_step_authority_source}`\n"
+        f"- selected_step_authority_artifact: `{selected_step_authority_artifact}`\n"
+        f"- selected_step_authority_status: `{selected_step_authority_status}`\n"
+        f"- stale_step_selection_conflict_detected: `{str(bool(stale_step_selection_conflict_detected)).lower()}`\n"
+        f"- stale_step_selection_artifact_path: `{stale_step_selection_artifact_path}`\n"
+        f"- stale_step_selection_status: `{stale_step_selection_status}`\n"
+        f"- contract_fix_applied: `{str(bool(contract_fix_applied)).lower()}`\n"
         f"- prompt_artifact_path: `{prompt_path}`\n\n"
         "Task:\n"
         "- Perform only the next local-only implementation slice selected by the controller.\n"
@@ -23081,6 +23104,27 @@ def _build_local_codex_one_shot_execution_handoff_state(
         current_cycle = _LOCAL_AUTONOMOUS_CYCLE_V2_CURRENT_CYCLE
     if max_cycles <= 0:
         max_cycles = _LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES
+    allowed_tracked_file = "automation/orchestration/planned_execution_runner.py"
+    explicit_allowed_tracked_files: list[str] = []
+    mutation_allowed = False
+    selected_step_authority_source = "prompt331_v2_local_autonomous_cycle_v2_decision"
+    selected_step_authority_artifact = str(prompt331_decision_path)
+    selected_step_authority_status = "blocked"
+    stale_step_selection_artifact_path = _LOCAL_END_TO_END_ONE_SHOT_STEP_SELECTION_PATH
+    stale_step_selection_status = "missing"
+    stale_step_selection_conflict_detected = False
+    contract_fix_applied = True
+
+    stale_step_selection_exists, stale_step_selection_valid, stale_step_selection_payload = (
+        _read_artifact(Path(stale_step_selection_artifact_path))
+    )
+    if stale_step_selection_exists and stale_step_selection_valid:
+        stale_step_selection_status = _normalize_text(
+            stale_step_selection_payload.get("status"),
+            default="invalid",
+        )
+    elif stale_step_selection_exists:
+        stale_step_selection_status = "invalid"
 
     safety_fields: dict[str, Any] = {
         "codex_invoked": False,
@@ -23330,10 +23374,38 @@ def _build_local_codex_one_shot_execution_handoff_state(
                     selected_step_id = 2
                     selected_step_name = "generate_next_codex_task"
                     selected_step_operation = "generate_next_codex_task"
+                    selected_step_authority_status = "ready"
                     next_action = "execute_local_codex_one_shot_adapter"
                     should_continue = True
                     changed_tracked_files = []
                     validation_errors = []
+                    explicit_allowed_tracked_files = [allowed_tracked_file]
+                    mutation_allowed = True
+                    stale_selected_step_id = _as_optional_int(
+                        stale_step_selection_payload.get("selected_step_id")
+                    )
+                    stale_selected_step_name = _normalize_text(
+                        stale_step_selection_payload.get("selected_step_name"),
+                        default="",
+                    )
+                    stale_selected_step_operation = _normalize_text(
+                        stale_step_selection_payload.get("selected_step_operation"),
+                        default="",
+                    )
+                    stale_step_selection_conflict_detected = bool(
+                        stale_step_selection_status == "blocked"
+                        and (
+                            stale_selected_step_id not in {None, 2}
+                            or (
+                                stale_selected_step_name
+                                and stale_selected_step_name != "generate_next_codex_task"
+                            )
+                            or (
+                                stale_selected_step_operation
+                                and stale_selected_step_operation != "generate_next_codex_task"
+                            )
+                        )
+                    )
                     prompt_path = _LOCAL_CODEX_ONE_SHOT_PROMPT_PATH
                     command_argv = list(_LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND)
                     command_display = " ".join(_LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND)
@@ -23359,6 +23431,15 @@ def _build_local_codex_one_shot_execution_handoff_state(
         "selected_step_id": selected_step_id,
         "selected_step_name": selected_step_name,
         "selected_step_operation": selected_step_operation,
+        "selected_step_authority_source": selected_step_authority_source,
+        "selected_step_authority_artifact": selected_step_authority_artifact,
+        "selected_step_authority_status": selected_step_authority_status,
+        "explicit_allowed_tracked_files": _normalize_string_list(explicit_allowed_tracked_files),
+        "mutation_allowed": mutation_allowed,
+        "stale_step_selection_conflict_detected": stale_step_selection_conflict_detected,
+        "stale_step_selection_artifact_path": stale_step_selection_artifact_path,
+        "stale_step_selection_status": stale_step_selection_status,
+        "contract_fix_applied": contract_fix_applied,
         "prompt_path": prompt_path,
         "prompt_exists": prompt_exists,
         "prompt_non_empty": prompt_non_empty,
@@ -23469,6 +23550,34 @@ def _build_local_codex_one_shot_execution_receipt(
         "selected_step_operation": (
             _normalize_text(state.get("selected_step_operation"), default="") or None
         ),
+        "selected_step_authority_source": _normalize_text(
+            state.get("selected_step_authority_source"),
+            default="prompt331_v2_local_autonomous_cycle_v2_decision",
+        ),
+        "selected_step_authority_artifact": _normalize_text(
+            state.get("selected_step_authority_artifact"),
+            default=_LOCAL_AUTONOMOUS_CYCLE_V2_DECISION_PATH,
+        ),
+        "selected_step_authority_status": _normalize_text(
+            state.get("selected_step_authority_status"),
+            default="blocked",
+        ),
+        "explicit_allowed_tracked_files": _normalize_string_list(
+            state.get("explicit_allowed_tracked_files")
+        ),
+        "mutation_allowed": bool(state.get("mutation_allowed", False)),
+        "stale_step_selection_conflict_detected": bool(
+            state.get("stale_step_selection_conflict_detected", False)
+        ),
+        "stale_step_selection_artifact_path": _normalize_text(
+            state.get("stale_step_selection_artifact_path"),
+            default=_LOCAL_END_TO_END_ONE_SHOT_STEP_SELECTION_PATH,
+        ),
+        "stale_step_selection_status": _normalize_text(
+            state.get("stale_step_selection_status"),
+            default="missing",
+        ),
+        "contract_fix_applied": bool(state.get("contract_fix_applied", False)),
         "prompt_path": (
             _normalize_text(state.get("prompt_path"), default="") or None
         ),
@@ -31164,7 +31273,40 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
                 default="generate_next_codex_task",
             ),
             expected_changed_files=_normalize_string_list(
-                local_autonomous_cycle_v2_decision_state.get("changed_tracked_files")
+                local_codex_one_shot_handoff_state.get("explicit_allowed_tracked_files")
+            ),
+            explicit_allowed_tracked_files=_normalize_string_list(
+                local_codex_one_shot_handoff_state.get("explicit_allowed_tracked_files")
+            ),
+            mutation_allowed=bool(local_codex_one_shot_handoff_state.get("mutation_allowed", False)),
+            selected_step_authority_source=_normalize_text(
+                local_codex_one_shot_handoff_state.get("selected_step_authority_source"),
+                default="prompt331_v2_local_autonomous_cycle_v2_decision",
+            ),
+            selected_step_authority_artifact=_normalize_text(
+                local_codex_one_shot_handoff_state.get("selected_step_authority_artifact"),
+                default=_LOCAL_AUTONOMOUS_CYCLE_V2_DECISION_PATH,
+            ),
+            selected_step_authority_status=_normalize_text(
+                local_codex_one_shot_handoff_state.get("selected_step_authority_status"),
+                default="blocked",
+            ),
+            stale_step_selection_conflict_detected=bool(
+                local_codex_one_shot_handoff_state.get(
+                    "stale_step_selection_conflict_detected",
+                    False,
+                )
+            ),
+            stale_step_selection_artifact_path=_normalize_text(
+                local_codex_one_shot_handoff_state.get("stale_step_selection_artifact_path"),
+                default=_LOCAL_END_TO_END_ONE_SHOT_STEP_SELECTION_PATH,
+            ),
+            stale_step_selection_status=_normalize_text(
+                local_codex_one_shot_handoff_state.get("stale_step_selection_status"),
+                default="missing",
+            ),
+            contract_fix_applied=bool(
+                local_codex_one_shot_handoff_state.get("contract_fix_applied", False)
             ),
             prompt_path=local_codex_one_shot_prompt_path,
         )
@@ -31206,6 +31348,9 @@ def _build_project_browser_autonomous_one_cycle_controller_state(
                 "selected_step_id": None,
                 "selected_step_name": None,
                 "selected_step_operation": None,
+                "explicit_allowed_tracked_files": [],
+                "mutation_allowed": False,
+                "selected_step_authority_status": "blocked",
                 "should_continue": False,
                 "next_action": "manual_review_local_codex_one_shot_prompt_artifact_write_failure",
                 "changed_tracked_files": [],
