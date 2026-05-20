@@ -3930,6 +3930,9 @@ _PROMPT439_SCHEMA_VERSION = (
 _PROMPT440_SCHEMA_VERSION = (
     "prompt440_live_safe_bounded_command_runner_surface_v1"
 )
+_PROMPT441_SCHEMA_VERSION = (
+    "prompt441_bounded_codex_live_invocation_adapter_surface_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6132,6 +6135,28 @@ _PROMPT440_LIVE_SAFE_BOUNDED_COMMAND_RUNNER_KEYS: tuple[str, ...] = (
     "prompt440_unbounded_loop_allowed",
     "prompt440_daemon_mode_allowed",
 )
+_PROMPT441_BOUNDED_CODEX_INVOCATION_KEYS: tuple[str, ...] = (
+    "prompt441_schema_version",
+    "prompt441_bounded_codex_invocation_status",
+    "prompt441_codex_invocation_requested",
+    "prompt441_codex_invocation_allowed",
+    "prompt441_codex_prompt_artifact_path",
+    "prompt441_codex_prompt_artifact_exists",
+    "prompt441_codex_command_argv",
+    "prompt441_codex_command_allowlisted",
+    "prompt441_codex_execution_attempted",
+    "prompt441_codex_execution_performed",
+    "prompt441_codex_returncode",
+    "prompt441_codex_returncode_classification",
+    "prompt441_codex_stdout_path",
+    "prompt441_codex_stderr_path",
+    "prompt441_codex_result_materialized",
+    "prompt441_blocked_reason",
+    "prompt441_next_action",
+    "prompt441_git_mutation_performed",
+    "prompt441_remote_mutation_performed",
+    "prompt441_commit_tag_performed",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -7487,6 +7512,8 @@ _LOCAL_CODEX_ONE_SHOT_EXECUTION_COMMAND: tuple[str, ...] = (
     "-c",
     "approval_policy=never",
 )
+_PROMPT441_CODEX_COMMAND_ARGV: tuple[str, ...] = ("codex", "exec", "-")
+_PROMPT441_CODEX_COMMAND_DISPLAY = "codex exec -"
 _LOCAL_TARGETED_CONTRACT_FIX_EXECUTION_COMMAND: tuple[str, ...] = (
     "codex",
     "exec",
@@ -9272,6 +9299,27 @@ def _merge_prompt438_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT438_RUNTIME_RESULT_CLASSIFICATION_WIRING_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt441_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt441_bounded_codex_invocation_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt441_bounded_codex_invocation_state)
+        if isinstance(prompt441_bounded_codex_invocation_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT441_BOUNDED_CODEX_INVOCATION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -65858,6 +65906,22 @@ def _normalize_prompt437_runtime_command_request(
                 errors.append(f"{optional_string_key}_must_be_string")
             else:
                 normalized[optional_string_key] = optional_value
+    for optional_bool_key in (
+        "request_codex_invocation",
+        "allow_codex_invocation",
+    ):
+        if optional_bool_key in payload:
+            optional_value = payload.get(optional_bool_key)
+            if not isinstance(optional_value, bool):
+                errors.append(f"{optional_bool_key}_must_be_bool")
+            else:
+                normalized[optional_bool_key] = optional_value
+    if "codex_prompt_artifact_path" in payload:
+        codex_prompt_artifact_path = payload.get("codex_prompt_artifact_path")
+        if not isinstance(codex_prompt_artifact_path, str):
+            errors.append("codex_prompt_artifact_path_must_be_string")
+        else:
+            normalized["codex_prompt_artifact_path"] = codex_prompt_artifact_path
 
     return normalized, ";".join(errors)
 
@@ -66310,6 +66374,299 @@ def _finalize_prompt440_live_safe_runtime_command_runner_state(
         finalized["prompt440_next_action"] = (
             "prompt440_live_safe_runtime_result_ready"
         )
+    return finalized
+
+
+def _prompt441_codex_command_allowlisted(command_argv: Any) -> bool:
+    return (
+        isinstance(command_argv, list)
+        and tuple(command_argv) == _PROMPT441_CODEX_COMMAND_ARGV
+    )
+
+
+def _build_prompt441_bounded_codex_invocation_state(
+    *,
+    transport_mode: str,
+    live_transport_enabled: bool,
+    prompt437_state: Mapping[str, Any],
+    request_runtime_execution: bool,
+    allow_runtime_execution: bool,
+) -> tuple[dict[str, Any], Callable[..., dict[str, Any]] | None]:
+    normalized_transport_mode = _normalize_text(transport_mode, default="dry-run")
+    prompt437_request_valid = (
+        prompt437_state.get("prompt437_runtime_command_request_valid") is True
+    )
+    runtime_request = prompt437_state.get("prompt437_runtime_command_request")
+    if not isinstance(runtime_request, Mapping):
+        runtime_request = {}
+    command_argv = prompt437_state.get("prompt437_runtime_command_argv")
+    copied_command_argv = list(command_argv) if isinstance(command_argv, list) else []
+    requested = runtime_request.get("request_codex_invocation") is True
+    allowed = runtime_request.get("allow_codex_invocation") is True
+    prompt_artifact_path_text = _normalize_text(
+        runtime_request.get("codex_prompt_artifact_path"),
+        default="",
+    )
+    prompt_artifact_exists = False
+    prompt_artifact_path: Path | None = None
+    if prompt_artifact_path_text:
+        prompt_artifact_path = Path(prompt_artifact_path_text)
+        prompt_artifact_exists = prompt_artifact_path.exists() and prompt_artifact_path.is_file()
+    command_allowlisted = _prompt441_codex_command_allowlisted(copied_command_argv)
+
+    state: dict[str, Any] = {
+        "prompt441_schema_version": _PROMPT441_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt441",
+        "prompt441_bounded_codex_invocation_status": "blocked",
+        "prompt441_codex_invocation_requested": requested,
+        "prompt441_codex_invocation_allowed": allowed,
+        "prompt441_codex_prompt_artifact_path": prompt_artifact_path_text,
+        "prompt441_codex_prompt_artifact_exists": prompt_artifact_exists,
+        "prompt441_codex_command_argv": copied_command_argv,
+        "prompt441_codex_command_allowlisted": command_allowlisted,
+        "prompt441_codex_execution_attempted": False,
+        "prompt441_codex_execution_performed": False,
+        "prompt441_codex_returncode": None,
+        "prompt441_codex_returncode_classification": "unknown",
+        "prompt441_codex_stdout_path": "",
+        "prompt441_codex_stderr_path": "",
+        "prompt441_codex_result_materialized": False,
+        "prompt441_blocked_reason": "",
+        "prompt441_next_action": "",
+        "prompt441_git_mutation_performed": False,
+        "prompt441_remote_mutation_performed": False,
+        "prompt441_commit_tag_performed": False,
+    }
+
+    live_enabled = normalized_transport_mode == "live" and bool(live_transport_enabled)
+    if not requested:
+        state.update(
+            {
+                "prompt441_bounded_codex_invocation_status": "not_requested",
+                "prompt441_blocked_reason": "prompt441_codex_invocation_not_requested",
+                "prompt441_next_action": "request_prompt441_codex_invocation",
+            }
+        )
+        return state, None
+    if not allowed:
+        state.update(
+            {
+                "prompt441_blocked_reason": "prompt441_codex_invocation_not_allowed",
+                "prompt441_next_action": "allow_prompt441_codex_invocation",
+            }
+        )
+        return state, None
+    if not live_enabled:
+        state.update(
+            {
+                "prompt441_blocked_reason": "prompt441_live_transport_not_enabled",
+                "prompt441_next_action": "enable_live_transport",
+            }
+        )
+        return state, None
+    if not request_runtime_execution:
+        state.update(
+            {
+                "prompt441_blocked_reason": "prompt441_runtime_execution_not_requested",
+                "prompt441_next_action": "request_prompt436_runtime_execution",
+            }
+        )
+        return state, None
+    if not allow_runtime_execution:
+        state.update(
+            {
+                "prompt441_blocked_reason": "prompt441_runtime_execution_not_allowed",
+                "prompt441_next_action": "allow_prompt436_runtime_execution",
+            }
+        )
+        return state, None
+    if not prompt437_request_valid:
+        state.update(
+            {
+                "prompt441_blocked_reason": "prompt437_runtime_command_request_not_valid",
+                "prompt441_next_action": "provide_prompt437_runtime_command_request",
+            }
+        )
+        return state, None
+    if not command_allowlisted:
+        state.update(
+            {
+                "prompt441_blocked_reason": "prompt441_codex_command_not_allowlisted",
+                "prompt441_codex_execution_attempted": False,
+                "prompt441_codex_execution_performed": False,
+                "prompt441_codex_result_materialized": False,
+                "prompt441_next_action": "use_prompt441_codex_exec_dash_command",
+            }
+        )
+        return state, None
+    if not prompt_artifact_path_text:
+        state.update(
+            {
+                "prompt441_blocked_reason": "prompt441_prompt_artifact_path_missing",
+                "prompt441_next_action": "provide_prompt441_prompt_artifact_path",
+            }
+        )
+        return state, None
+    if prompt_artifact_path is None or not prompt_artifact_exists:
+        state.update(
+            {
+                "prompt441_blocked_reason": "prompt441_prompt_artifact_not_found",
+                "prompt441_next_action": "provide_existing_prompt441_prompt_artifact",
+            }
+        )
+        return state, None
+
+    def _command_runner(
+        *,
+        command_argv: Sequence[str],
+        launch_packet: Mapping[str, Any],
+        run_state_payload: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        runtime_request_for_runner = (
+            launch_packet.get("runtime_command_request")
+            if isinstance(launch_packet, Mapping)
+            else {}
+        )
+        if not isinstance(runtime_request_for_runner, Mapping):
+            runtime_request_for_runner = {}
+        timeout_seconds = _prompt440_normalize_timeout_seconds(
+            runtime_request_for_runner.get("timeout_seconds")
+        )
+        payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+        out_dir_text = _normalize_text(payload.get("prompt428_expected_out_dir"), default="")
+        job_id_text = _normalize_text(payload.get("run_id"), default="")
+        if not job_id_text:
+            job_id_text = _normalize_text(payload.get("prompt428_expected_job_id"), default="")
+        output_root = Path(out_dir_text) if out_dir_text else Path(".")
+        result_dir = output_root / job_id_text if job_id_text else output_root
+        stdout_path = result_dir / "prompt441_codex_stdout.txt"
+        stderr_path = result_dir / "prompt441_codex_stderr.txt"
+        receipt_path = result_dir / "prompt441_codex_result.json"
+
+        result_payload: dict[str, Any] = {
+            "stdout_path": str(stdout_path),
+            "stderr_path": str(stderr_path),
+            "receipt_path": str(receipt_path),
+            "dry_run": False,
+            "execution_performed": False,
+            "command_argv": list(command_argv),
+            "request_id": _normalize_text(
+                runtime_request_for_runner.get("request_id"),
+                default="",
+            ),
+            "adapter": "prompt441_bounded_codex_invocation_adapter",
+            "runtime_command_request": dict(runtime_request_for_runner),
+            "timeout_seconds": timeout_seconds,
+            "run_state_id": job_id_text,
+            "prompt441_codex_invocation_requested": True,
+            "prompt441_codex_invocation_allowed": True,
+            "prompt441_codex_prompt_artifact_path": prompt_artifact_path_text,
+            "prompt441_codex_prompt_artifact_exists": True,
+            "prompt441_codex_command_argv": list(_PROMPT441_CODEX_COMMAND_ARGV),
+            "prompt441_codex_command_allowlisted": True,
+            "prompt441_codex_execution_attempted": True,
+            "prompt441_codex_execution_performed": False,
+            "prompt441_git_mutation_performed": False,
+            "prompt441_remote_mutation_performed": False,
+            "prompt441_commit_tag_performed": False,
+        }
+        prompt_text = prompt_artifact_path.read_text(encoding="utf-8")
+        try:
+            completed = subprocess.run(
+                list(_PROMPT441_CODEX_COMMAND_ARGV),
+                input=prompt_text,
+                capture_output=True,
+                text=True,
+                shell=False,
+                timeout=timeout_seconds,
+                check=False,
+            )
+            classification = "success" if completed.returncode == 0 else "failed"
+            stdout = completed.stdout
+            stderr = completed.stderr
+            result_payload.update(
+                {
+                    "returncode": completed.returncode,
+                    "returncode_classification": classification,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "execution_performed": True,
+                    "prompt441_bounded_codex_invocation_status": "executed",
+                    "prompt441_codex_execution_performed": True,
+                    "prompt441_codex_returncode": completed.returncode,
+                    "prompt441_codex_returncode_classification": classification,
+                    "prompt441_codex_stdout_path": str(stdout_path),
+                    "prompt441_codex_stderr_path": str(stderr_path),
+                    "prompt441_codex_result_materialized": True,
+                    "prompt441_next_action": "prompt441_codex_result_ready",
+                }
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+            stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+            result_payload.update(
+                {
+                    "returncode": None,
+                    "returncode_classification": "timeout",
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "execution_performed": True,
+                    "timeout": True,
+                    "prompt441_bounded_codex_invocation_status": "timeout",
+                    "prompt441_codex_execution_performed": True,
+                    "prompt441_codex_returncode": None,
+                    "prompt441_codex_returncode_classification": "timeout",
+                    "prompt441_codex_stdout_path": str(stdout_path),
+                    "prompt441_codex_stderr_path": str(stderr_path),
+                    "prompt441_codex_result_materialized": True,
+                    "prompt441_blocked_reason": "prompt441_codex_execution_timeout",
+                    "prompt441_next_action": "prompt441_codex_result_ready",
+                }
+            )
+
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(_normalize_text(result_payload.get("stdout"), default=""), encoding="utf-8")
+        stderr_path.write_text(_normalize_text(result_payload.get("stderr"), default=""), encoding="utf-8")
+        _write_json(receipt_path, result_payload)
+        return result_payload
+
+    state.update(
+        {
+            "prompt441_bounded_codex_invocation_status": "ready",
+            "prompt441_next_action": "review_prompt441_codex_result",
+        }
+    )
+    return state, _command_runner
+
+
+def _finalize_prompt441_bounded_codex_invocation_state(
+    *,
+    prompt441_state: Mapping[str, Any],
+    prompt430_state: Mapping[str, Any],
+) -> dict[str, Any]:
+    finalized = dict(prompt441_state)
+    result_payload = prompt430_state.get("prompt430_runtime_execution_result_payload")
+    if not isinstance(result_payload, Mapping):
+        return finalized
+
+    for key in (
+        "prompt441_bounded_codex_invocation_status",
+        "prompt441_codex_execution_attempted",
+        "prompt441_codex_execution_performed",
+        "prompt441_codex_returncode",
+        "prompt441_codex_returncode_classification",
+        "prompt441_codex_stdout_path",
+        "prompt441_codex_stderr_path",
+        "prompt441_codex_result_materialized",
+        "prompt441_blocked_reason",
+        "prompt441_next_action",
+        "prompt441_git_mutation_performed",
+        "prompt441_remote_mutation_performed",
+        "prompt441_commit_tag_performed",
+    ):
+        if key in result_payload:
+            finalized[key] = result_payload.get(key)
     return finalized
 
 
@@ -246071,6 +246428,27 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt440_live_safe_runtime_command_runner_payload,
         }
+        (
+            prompt441_bounded_codex_invocation_payload,
+            prompt441_command_runner,
+        ) = _build_prompt441_bounded_codex_invocation_state(
+            transport_mode=run_state_payload.get(
+                "prompt428_transport_mode",
+                "dry-run",
+            ),
+            live_transport_enabled=bool(live_transport_enabled),
+            prompt437_state=prompt437_runtime_command_artifact_wiring_payload,
+            request_runtime_execution=bool(
+                run_state_payload.get("prompt430_execution_requested")
+            ),
+            allow_runtime_execution=bool(
+                run_state_payload.get("prompt430_allow_runtime_execution")
+            ),
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt441_bounded_codex_invocation_payload,
+        }
         prompt430_command_runner = None
         if (
             dry_run
@@ -246080,6 +246458,8 @@ class PlannedExecutionRunner:
             is True
         ):
             prompt430_command_runner = _build_prompt430_dry_run_runtime_command_runner()
+        elif prompt441_command_runner is not None:
+            prompt430_command_runner = prompt441_command_runner
         elif not dry_run:
             prompt430_command_runner = prompt440_command_runner
         prompt430_bounded_runtime_execution_adapter_payload = (
@@ -246105,6 +246485,12 @@ class PlannedExecutionRunner:
                 prompt430_state=prompt430_bounded_runtime_execution_adapter_payload,
             )
         )
+        prompt441_bounded_codex_invocation_payload = (
+            _finalize_prompt441_bounded_codex_invocation_state(
+                prompt441_state=prompt441_bounded_codex_invocation_payload,
+                prompt430_state=prompt430_bounded_runtime_execution_adapter_payload,
+            )
+        )
         prompt437_runtime_command_artifact_wiring_payload = (
             _finalize_prompt437_runtime_command_artifact_wiring_state(
                 prompt437_state=prompt437_runtime_command_artifact_wiring_payload,
@@ -246114,6 +246500,7 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt440_live_safe_runtime_command_runner_payload,
+            **prompt441_bounded_codex_invocation_payload,
             **prompt437_runtime_command_artifact_wiring_payload,
             **prompt430_bounded_runtime_execution_adapter_payload,
         }
@@ -246188,6 +246575,12 @@ class PlannedExecutionRunner:
                     or (
                         prompt440_live_safe_runtime_command_runner_payload.get(
                             "prompt440_live_command_result_materialized"
+                        )
+                        is True
+                    )
+                    or (
+                        prompt441_bounded_codex_invocation_payload.get(
+                            "prompt441_codex_result_materialized"
                         )
                         is True
                     )
@@ -246428,6 +246821,61 @@ class PlannedExecutionRunner:
                 "prompt438_next_action": (
                     prompt438_runtime_result_classification_wiring_payload.get(
                         "prompt438_next_action"
+                    )
+                ),
+                "prompt441_bounded_codex_invocation_status": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_bounded_codex_invocation_status"
+                    )
+                ),
+                "prompt441_blocked_reason": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_blocked_reason"
+                    )
+                ),
+                "prompt441_next_action": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_next_action"
+                    )
+                ),
+                "prompt441_codex_result_materialized": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_codex_result_materialized"
+                    )
+                ),
+                "prompt441_codex_returncode": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_codex_returncode"
+                    )
+                ),
+                "prompt441_codex_returncode_classification": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_codex_returncode_classification"
+                    )
+                ),
+                "prompt441_codex_stdout_path": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_codex_stdout_path"
+                    )
+                ),
+                "prompt441_codex_stderr_path": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_codex_stderr_path"
+                    )
+                ),
+                "prompt441_git_mutation_performed": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_git_mutation_performed"
+                    )
+                ),
+                "prompt441_remote_mutation_performed": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_remote_mutation_performed"
+                    )
+                ),
+                "prompt441_commit_tag_performed": (
+                    prompt441_bounded_codex_invocation_payload.get(
+                        "prompt441_commit_tag_performed"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -246875,6 +247323,25 @@ class PlannedExecutionRunner:
                     ),
                     "run_state.prompt440_blocked_reason",
                     "run_state.prompt440_next_action",
+                    "run_state.prompt441_bounded_codex_invocation_status",
+                    "run_state.prompt441_codex_invocation_requested",
+                    "run_state.prompt441_codex_invocation_allowed",
+                    "run_state.prompt441_codex_prompt_artifact_path",
+                    "run_state.prompt441_codex_prompt_artifact_exists",
+                    "run_state.prompt441_codex_command_argv",
+                    "run_state.prompt441_codex_command_allowlisted",
+                    "run_state.prompt441_codex_execution_attempted",
+                    "run_state.prompt441_codex_execution_performed",
+                    "run_state.prompt441_codex_returncode",
+                    "run_state.prompt441_codex_returncode_classification",
+                    "run_state.prompt441_codex_stdout_path",
+                    "run_state.prompt441_codex_stderr_path",
+                    "run_state.prompt441_codex_result_materialized",
+                    "run_state.prompt441_blocked_reason",
+                    "run_state.prompt441_next_action",
+                    "run_state.prompt441_git_mutation_performed",
+                    "run_state.prompt441_remote_mutation_performed",
+                    "run_state.prompt441_commit_tag_performed",
                     (
                         "run_state."
                         "prompt430_bounded_runtime_execution_adapter_status"
@@ -247466,6 +247933,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt430_bounded_runtime_execution_adapter_state=(
                     prompt430_bounded_runtime_execution_adapter_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt441_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt441_bounded_codex_invocation_state=(
+                    prompt441_bounded_codex_invocation_payload
                 ),
             )
         )
