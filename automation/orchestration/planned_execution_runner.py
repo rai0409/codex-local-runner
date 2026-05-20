@@ -3960,6 +3960,9 @@ _PROMPT449_SCHEMA_VERSION = (
 _PROMPT450_SCHEMA_VERSION = (
     "prompt450_prompt449_runtime_packet_execution_handoff_v1"
 )
+_PROMPT451_SCHEMA_VERSION = (
+    "prompt451_minimal_autonomous_self_run_completion_layer_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6598,6 +6601,112 @@ _PROMPT450_PROMPT449_RUNTIME_PACKET_EXECUTION_KEYS: tuple[str, ...] = (
     "prompt450_file_creation_allowed",
     "prompt450_blocked_reason",
     "prompt450_next_action",
+)
+_PROMPT451_MINIMAL_AUTONOMOUS_COMPLETION_KEYS: tuple[str, ...] = (
+    "prompt451_schema_version",
+    "prompt451_minimal_autonomous_completion_status",
+    "prompt451_prompt450_status",
+    "prompt451_prompt450_next_action",
+    "prompt451_prompt450_runtime_packet_available",
+    "prompt451_prompt450_runtime_packet_valid",
+    "prompt451_prompt450_runtime_packet_safety_status",
+    "prompt451_prompt450_runtime_command_json_ready",
+    "prompt451_prompt450_runtime_command_json",
+    "prompt451_prompt450_codex_reentry_allowed",
+    "prompt451_prompt450_codex_reentry_attempted",
+    "prompt451_prompt450_codex_reentry_performed",
+    "prompt451_prompt450_prompt451_ready",
+    "prompt451_prompt450_expected_scope",
+    "prompt451_runtime_packet_execution_required",
+    "prompt451_runtime_packet_execution_allowed",
+    "prompt451_runtime_packet_execution_attempted",
+    "prompt451_runtime_packet_execution_performed",
+    "prompt451_runtime_packet_execution_blocked_reason",
+    "prompt451_runtime_command_json",
+    "prompt451_runtime_command_json_ready",
+    "prompt451_runtime_command_argv",
+    "prompt451_runtime_command_request_id",
+    "prompt451_runtime_command_prompt_artifact_path",
+    "prompt451_runtime_command_transport_mode",
+    "prompt451_runtime_command_request_codex_invocation",
+    "prompt451_runtime_command_allow_codex_invocation",
+    "prompt451_reentry_result_available",
+    "prompt451_reentry_returncode",
+    "prompt451_reentry_returncode_classification",
+    "prompt451_reentry_stdout_path",
+    "prompt451_reentry_stderr_path",
+    "prompt451_reentry_result_artifact_path",
+    "prompt451_reentry_review_required",
+    "prompt451_reentry_route_to_prompt442_required",
+    "prompt451_reentry_review_packet_ready",
+    "prompt451_reentry_prompt442_review_handoff_ready",
+    "prompt451_reentry_prompt442_review_handoff_source",
+    "prompt451_reentry_review_next_action",
+    "prompt451_prompt442_route",
+    "prompt451_prompt442_change_safety_status",
+    "prompt451_prompt442_changes_present",
+    "prompt451_prompt442_diff_empty",
+    "prompt451_prompt442_allowed_changed_files",
+    "prompt451_prompt442_unexpected_changed_files",
+    "prompt451_prompt442_unexpected_untracked_files",
+    "prompt451_prompt443_status",
+    "prompt451_prompt443_approve_commit_tag_candidate",
+    "prompt451_prompt443_commit_message_candidate",
+    "prompt451_prompt443_tag_name_candidate",
+    "prompt451_approve_candidate_inputs_available",
+    "prompt451_approve_candidate_ready",
+    "prompt451_approve_candidate_safety_status",
+    "prompt451_approve_candidate_blocked_reason",
+    "prompt451_commit_message_candidate",
+    "prompt451_tag_name_candidate",
+    "prompt451_commit_tag_required",
+    "prompt451_commit_tag_allowed",
+    "prompt451_commit_attempted",
+    "prompt451_commit_performed",
+    "prompt451_tag_attempted",
+    "prompt451_tag_performed",
+    "prompt451_commit_tag_blocked_reason",
+    "prompt451_commit_hash",
+    "prompt451_tag_name",
+    "prompt451_tag_points_at_head",
+    "prompt451_post_commit_clean_rerun_required",
+    "prompt451_post_commit_clean_rerun_request_ready",
+    "prompt451_post_commit_clean_rerun_attempted",
+    "prompt451_post_commit_clean_rerun_performed",
+    "prompt451_post_commit_clean_rerun_result_available",
+    "prompt451_post_commit_clean_rerun_expected_route",
+    "prompt451_post_commit_clean_rerun_blocked_reason",
+    "prompt451_post_commit_clean_rerun_next_action",
+    "prompt451_success_closure_candidate",
+    "prompt451_success_closure_ready",
+    "prompt451_success_closure_blocked_reason",
+    "prompt451_head_clean_required",
+    "prompt451_head_clean_observed",
+    "prompt451_expected_tag_observed",
+    "prompt451_no_unexpected_changes_observed",
+    "prompt451_autonomous_next_cycle_ready",
+    "prompt451_autonomous_next_cycle_request_ready",
+    "prompt451_autonomous_next_cycle_runtime_request_ready",
+    "prompt451_autonomous_next_cycle_prompt_request_ready",
+    "prompt451_autonomous_next_cycle_selected_prompt_id",
+    "prompt451_autonomous_next_cycle_selected_next_action",
+    "prompt451_autonomous_next_cycle_blocked_reason",
+    "prompt451_autonomous_next_cycle_stop_reason",
+    "prompt451_max_cycles",
+    "prompt451_current_cycle",
+    "prompt451_max_cycles_guard_ready",
+    "prompt451_max_cycles_reached",
+    "prompt451_retry_limit_guard_ready",
+    "prompt451_retry_limit_reached",
+    "prompt451_unsafe_stop_guard_ready",
+    "prompt451_unsafe_stop_required",
+    "prompt451_git_mutation_allowed",
+    "prompt451_remote_mutation_allowed",
+    "prompt451_push_allowed",
+    "prompt451_tests_allowed",
+    "prompt451_file_creation_allowed",
+    "prompt451_blocked_reason",
+    "prompt451_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -9971,6 +10080,27 @@ def _merge_prompt450_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT450_PROMPT449_RUNTIME_PACKET_EXECUTION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt451_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt451_minimal_autonomous_completion_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt451_minimal_autonomous_completion_state)
+        if isinstance(prompt451_minimal_autonomous_completion_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT451_MINIMAL_AUTONOMOUS_COMPLETION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -70475,6 +70605,613 @@ def _build_prompt450_prompt449_runtime_packet_execution_state(
         f"next_action_{prompt449_next_action}"
         if prompt449_status or prompt449_next_action
         else "prompt450_missing_prompt449_state"
+    )
+    return state
+
+
+def _prompt451_bool_input(payload: Mapping[str, Any], keys: Sequence[str]) -> bool:
+    for key in keys:
+        value = payload.get(key)
+        if value is True:
+            return True
+        if isinstance(value, str) and value.strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "allow",
+            "allowed",
+        }:
+            return True
+    return False
+
+
+def _prompt451_success_approve_candidate(payload: Mapping[str, Any]) -> bool:
+    return (
+        payload.get("prompt443_approve_commit_tag_candidate") is True
+        and payload.get("prompt443_success_diff_handoff_status") == "ready"
+        and payload.get("prompt442_codex_post_execution_route")
+        == "codex_success_with_allowed_changes"
+        and payload.get("prompt442_post_codex_change_safety_status")
+        == "allowed_changes"
+        and payload.get("prompt442_post_codex_changes_present") is True
+        and _normalize_string_list(payload.get("prompt442_unexpected_changed_files"))
+        == []
+        and _normalize_string_list(payload.get("prompt442_unexpected_untracked_files"))
+        == []
+    )
+
+
+def _build_prompt451_minimal_autonomous_completion_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+
+    prompt450_status = _normalize_text(
+        payload.get("prompt450_prompt449_runtime_packet_execution_status"),
+        default="",
+    )
+    prompt450_next_action = _normalize_text(
+        payload.get("prompt450_next_action"),
+        default="",
+    )
+    runtime_command_json = (
+        dict(payload.get("prompt450_runtime_command_json"))
+        if isinstance(payload.get("prompt450_runtime_command_json"), Mapping)
+        else {}
+    )
+    allowed_changed_files = _normalize_string_list(
+        payload.get("prompt442_allowed_changed_files")
+        or payload.get("prompt443_allowed_changed_files")
+    )
+    unexpected_changed_files = _normalize_string_list(
+        payload.get("prompt442_unexpected_changed_files")
+        or payload.get("prompt443_unexpected_changed_files")
+    )
+    unexpected_untracked_files = _normalize_string_list(
+        payload.get("prompt442_unexpected_untracked_files")
+        or payload.get("prompt443_unexpected_untracked_files")
+    )
+    current_cycle = _as_non_negative_int(
+        payload.get("prompt451_current_cycle")
+        if payload.get("prompt451_current_cycle") is not None
+        else payload.get("prompt427_current_cycle"),
+        default=0,
+    )
+    max_cycles = _as_non_negative_int(
+        payload.get("prompt451_max_cycles")
+        if payload.get("prompt451_max_cycles") is not None
+        else payload.get("prompt427_max_cycles"),
+        default=2,
+    )
+    retry_limit = _as_non_negative_int(
+        payload.get("prompt450_retry_limit")
+        if payload.get("prompt450_retry_limit") is not None
+        else payload.get("prompt444_retry_limit"),
+        default=1,
+    )
+    retry_count = _as_non_negative_int(
+        payload.get("prompt450_current_retry_count")
+        if payload.get("prompt450_current_retry_count") is not None
+        else payload.get("prompt444_retry_count"),
+        default=0,
+    )
+    max_cycles_reached = current_cycle >= max_cycles
+    retry_limit_reached = retry_count >= retry_limit
+    unsafe_stop_required = bool(
+        unexpected_changed_files
+        or unexpected_untracked_files
+        or payload.get("prompt442_post_codex_change_safety_status")
+        == "unexpected_changes"
+        or payload.get("prompt442_codex_post_execution_route")
+        == "manual_review_unexpected_changes"
+    )
+    explicit_commit_allowed = _prompt451_bool_input(
+        payload,
+        (
+            "allow_prompt451_commit",
+            "allow_prompt451_commit_tag",
+            "prompt451_commit_allowed_input",
+            "prompt451_commit_tag_allowed_input",
+            "request_prompt451_commit",
+            "request_prompt451_commit_tag",
+            "approve_commit_tag_allowed",
+            "prompt382_approve_commit_tag_allowed",
+            "prompt383_approve_commit_tag_execution_allowed",
+        ),
+    )
+    explicit_tag_allowed = _prompt451_bool_input(
+        payload,
+        (
+            "allow_prompt451_tag",
+            "allow_prompt451_commit_tag",
+            "prompt451_tag_allowed_input",
+            "prompt451_commit_tag_allowed_input",
+            "request_prompt451_tag",
+            "request_prompt451_commit_tag",
+            "approve_commit_tag_allowed",
+            "prompt382_approve_commit_tag_allowed",
+            "prompt383_approve_commit_tag_execution_allowed",
+        ),
+    )
+    explicit_commit_tag_allowed = explicit_commit_allowed and explicit_tag_allowed
+    commit_message_candidate = _normalize_text(
+        payload.get("prompt443_commit_message_candidate"),
+        default="Prompt451 approve autonomous success diff",
+    )
+    tag_name_candidate = _normalize_text(
+        payload.get("prompt443_tag_name_candidate"),
+        default="prompt451-autonomous-success-diff",
+    )
+    reentry_result_available = bool(
+        payload.get("prompt450_codex_reentry_result_available") is True
+        or payload.get("prompt449_reentry_result_available") is True
+        or payload.get("prompt441_codex_result_materialized") is True
+        or _normalize_text(
+            payload.get("prompt450_codex_reentry_result_artifact_path"),
+            default="",
+        )
+    )
+
+    state: dict[str, Any] = {
+        "prompt451_schema_version": _PROMPT451_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt451",
+        "prompt451_minimal_autonomous_completion_status": "blocked",
+        "prompt451_prompt450_status": prompt450_status,
+        "prompt451_prompt450_next_action": prompt450_next_action,
+        "prompt451_prompt450_runtime_packet_available": (
+            payload.get("prompt450_runtime_packet_available") is True
+        ),
+        "prompt451_prompt450_runtime_packet_valid": (
+            payload.get("prompt450_runtime_packet_valid") is True
+        ),
+        "prompt451_prompt450_runtime_packet_safety_status": _normalize_text(
+            payload.get("prompt450_runtime_packet_safety_status"),
+            default="",
+        ),
+        "prompt451_prompt450_runtime_command_json_ready": (
+            payload.get("prompt450_runtime_command_json_ready") is True
+        ),
+        "prompt451_prompt450_runtime_command_json": runtime_command_json,
+        "prompt451_prompt450_codex_reentry_allowed": (
+            payload.get("prompt450_codex_reentry_allowed") is True
+        ),
+        "prompt451_prompt450_codex_reentry_attempted": (
+            payload.get("prompt450_codex_reentry_attempted") is True
+        ),
+        "prompt451_prompt450_codex_reentry_performed": (
+            payload.get("prompt450_codex_reentry_performed") is True
+        ),
+        "prompt451_prompt450_prompt451_ready": (
+            payload.get("prompt450_prompt451_ready") is True
+        ),
+        "prompt451_prompt450_expected_scope": _normalize_text(
+            payload.get("prompt450_prompt451_expected_scope"),
+            default="",
+        ),
+        "prompt451_runtime_packet_execution_required": False,
+        "prompt451_runtime_packet_execution_allowed": False,
+        "prompt451_runtime_packet_execution_attempted": False,
+        "prompt451_runtime_packet_execution_performed": False,
+        "prompt451_runtime_packet_execution_blocked_reason": "",
+        "prompt451_runtime_command_json": runtime_command_json,
+        "prompt451_runtime_command_json_ready": False,
+        "prompt451_runtime_command_argv": _normalize_string_list(
+            payload.get("prompt450_runtime_command_argv"),
+            sort_items=False,
+        ),
+        "prompt451_runtime_command_request_id": _normalize_text(
+            payload.get("prompt450_runtime_command_request_id"),
+            default="",
+        ),
+        "prompt451_runtime_command_prompt_artifact_path": _normalize_text(
+            payload.get("prompt450_runtime_command_prompt_artifact_path"),
+            default="",
+        ),
+        "prompt451_runtime_command_transport_mode": _normalize_text(
+            payload.get("prompt450_runtime_command_transport_mode"),
+            default="",
+        ),
+        "prompt451_runtime_command_request_codex_invocation": (
+            payload.get("prompt450_runtime_command_request_codex_invocation")
+            is True
+        ),
+        "prompt451_runtime_command_allow_codex_invocation": (
+            payload.get("prompt450_runtime_command_allow_codex_invocation")
+            is True
+        ),
+        "prompt451_reentry_result_available": reentry_result_available,
+        "prompt451_reentry_returncode": _as_optional_int(
+            payload.get("prompt450_codex_reentry_returncode")
+        ),
+        "prompt451_reentry_returncode_classification": _normalize_text(
+            payload.get("prompt450_codex_reentry_returncode_classification"),
+            default="not_run" if not reentry_result_available else "unknown",
+        ),
+        "prompt451_reentry_stdout_path": _normalize_text(
+            payload.get("prompt450_codex_reentry_stdout_path"),
+            default="",
+        ),
+        "prompt451_reentry_stderr_path": _normalize_text(
+            payload.get("prompt450_codex_reentry_stderr_path"),
+            default="",
+        ),
+        "prompt451_reentry_result_artifact_path": _normalize_text(
+            payload.get("prompt450_codex_reentry_result_artifact_path"),
+            default="",
+        ),
+        "prompt451_reentry_review_required": False,
+        "prompt451_reentry_route_to_prompt442_required": False,
+        "prompt451_reentry_review_packet_ready": False,
+        "prompt451_reentry_prompt442_review_handoff_ready": False,
+        "prompt451_reentry_prompt442_review_handoff_source": "",
+        "prompt451_reentry_review_next_action": "",
+        "prompt451_prompt442_route": _normalize_text(
+            payload.get("prompt442_codex_post_execution_route"),
+            default="",
+        ),
+        "prompt451_prompt442_change_safety_status": _normalize_text(
+            payload.get("prompt442_post_codex_change_safety_status"),
+            default="",
+        ),
+        "prompt451_prompt442_changes_present": (
+            payload.get("prompt442_post_codex_changes_present") is True
+        ),
+        "prompt451_prompt442_diff_empty": (
+            payload.get("prompt442_post_codex_diff_empty") is True
+        ),
+        "prompt451_prompt442_allowed_changed_files": allowed_changed_files,
+        "prompt451_prompt442_unexpected_changed_files": unexpected_changed_files,
+        "prompt451_prompt442_unexpected_untracked_files": unexpected_untracked_files,
+        "prompt451_prompt443_status": _normalize_text(
+            payload.get("prompt443_success_diff_handoff_status"),
+            default="",
+        ),
+        "prompt451_prompt443_approve_commit_tag_candidate": (
+            payload.get("prompt443_approve_commit_tag_candidate") is True
+        ),
+        "prompt451_prompt443_commit_message_candidate": commit_message_candidate,
+        "prompt451_prompt443_tag_name_candidate": tag_name_candidate,
+        "prompt451_approve_candidate_inputs_available": False,
+        "prompt451_approve_candidate_ready": False,
+        "prompt451_approve_candidate_safety_status": "",
+        "prompt451_approve_candidate_blocked_reason": "",
+        "prompt451_commit_message_candidate": commit_message_candidate,
+        "prompt451_tag_name_candidate": tag_name_candidate,
+        "prompt451_commit_tag_required": False,
+        "prompt451_commit_tag_allowed": False,
+        "prompt451_commit_attempted": False,
+        "prompt451_commit_performed": False,
+        "prompt451_tag_attempted": False,
+        "prompt451_tag_performed": False,
+        "prompt451_commit_tag_blocked_reason": "",
+        "prompt451_commit_hash": _normalize_text(
+            payload.get("prompt451_commit_hash"),
+            default="",
+        ),
+        "prompt451_tag_name": _normalize_text(
+            payload.get("prompt451_tag_name"),
+            default="",
+        ),
+        "prompt451_tag_points_at_head": (
+            payload.get("prompt451_tag_points_at_head") is True
+        ),
+        "prompt451_post_commit_clean_rerun_required": False,
+        "prompt451_post_commit_clean_rerun_request_ready": False,
+        "prompt451_post_commit_clean_rerun_attempted": False,
+        "prompt451_post_commit_clean_rerun_performed": False,
+        "prompt451_post_commit_clean_rerun_result_available": (
+            payload.get("prompt451_post_commit_clean_rerun_result_available")
+            is True
+        ),
+        "prompt451_post_commit_clean_rerun_expected_route": "",
+        "prompt451_post_commit_clean_rerun_blocked_reason": "",
+        "prompt451_post_commit_clean_rerun_next_action": "",
+        "prompt451_success_closure_candidate": False,
+        "prompt451_success_closure_ready": False,
+        "prompt451_success_closure_blocked_reason": "",
+        "prompt451_head_clean_required": False,
+        "prompt451_head_clean_observed": (
+            payload.get("prompt451_head_clean_observed") is True
+        ),
+        "prompt451_expected_tag_observed": (
+            payload.get("prompt451_expected_tag_observed") is True
+        ),
+        "prompt451_no_unexpected_changes_observed": (
+            payload.get("prompt451_no_unexpected_changes_observed") is True
+        ),
+        "prompt451_autonomous_next_cycle_ready": False,
+        "prompt451_autonomous_next_cycle_request_ready": False,
+        "prompt451_autonomous_next_cycle_runtime_request_ready": False,
+        "prompt451_autonomous_next_cycle_prompt_request_ready": False,
+        "prompt451_autonomous_next_cycle_selected_prompt_id": _normalize_text(
+            payload.get("prompt401_selected_next_prompt_id")
+            or payload.get("prompt420_selected_prompt_id"),
+            default="",
+        ),
+        "prompt451_autonomous_next_cycle_selected_next_action": _normalize_text(
+            payload.get("prompt401_selected_next_prompt_action")
+            or payload.get("prompt420_next_action"),
+            default="",
+        ),
+        "prompt451_autonomous_next_cycle_blocked_reason": "",
+        "prompt451_autonomous_next_cycle_stop_reason": "",
+        "prompt451_max_cycles": max_cycles,
+        "prompt451_current_cycle": current_cycle,
+        "prompt451_max_cycles_guard_ready": True,
+        "prompt451_max_cycles_reached": max_cycles_reached,
+        "prompt451_retry_limit_guard_ready": True,
+        "prompt451_retry_limit_reached": retry_limit_reached,
+        "prompt451_unsafe_stop_guard_ready": True,
+        "prompt451_unsafe_stop_required": unsafe_stop_required,
+        "prompt451_git_mutation_allowed": False,
+        "prompt451_remote_mutation_allowed": False,
+        "prompt451_push_allowed": False,
+        "prompt451_tests_allowed": False,
+        "prompt451_file_creation_allowed": False,
+        "prompt451_blocked_reason": "prompt451_missing_supported_state",
+        "prompt451_next_action": "manual_review_prompt451_route",
+    }
+
+    if unsafe_stop_required:
+        state.update(
+            {
+                "prompt451_minimal_autonomous_completion_status": "stopped",
+                "prompt451_autonomous_next_cycle_stop_reason": "unsafe_changes",
+                "prompt451_blocked_reason": (
+                    "prompt451_unsafe_changes_require_manual_review"
+                ),
+                "prompt451_next_action": "stop_for_prompt442_unexpected_changes",
+            }
+        )
+        return state
+    if retry_limit_reached:
+        state.update(
+            {
+                "prompt451_minimal_autonomous_completion_status": "stopped",
+                "prompt451_autonomous_next_cycle_stop_reason": (
+                    "retry_limit_reached"
+                ),
+                "prompt451_next_action": "manual_review_retry_limit_reached",
+            }
+        )
+        return state
+    if max_cycles_reached:
+        state.update(
+            {
+                "prompt451_minimal_autonomous_completion_status": "stopped",
+                "prompt451_autonomous_next_cycle_stop_reason": (
+                    "max_cycles_reached"
+                ),
+                "prompt451_next_action": (
+                    "stop_autonomous_loop_max_cycles_reached"
+                ),
+            }
+        )
+        return state
+
+    runtime_packet_path = (
+        prompt450_status == "prepared"
+        and prompt450_next_action == "execute_prompt450_runtime_command_packet"
+        and payload.get("prompt450_runtime_packet_available") is True
+        and payload.get("prompt450_runtime_packet_valid") is True
+        and payload.get("prompt450_runtime_packet_safety_status")
+        == "safe_to_execute_prompt449_runtime_packet"
+        and payload.get("prompt450_runtime_command_json_ready") is True
+        and payload.get("prompt450_runtime_command_allow_codex_invocation")
+        is True
+        and payload.get("prompt450_runtime_command_request_codex_invocation")
+        is True
+        and payload.get("prompt450_codex_reentry_allowed") is True
+        and payload.get("prompt450_git_mutation_allowed") is False
+        and payload.get("prompt450_remote_mutation_allowed") is False
+        and payload.get("prompt450_commit_tag_allowed") is False
+        and payload.get("prompt450_push_allowed") is False
+        and payload.get("prompt450_tests_allowed") is False
+    )
+    if runtime_packet_path:
+        state.update(
+            {
+                "prompt451_minimal_autonomous_completion_status": (
+                    "runtime_packet_prepared"
+                ),
+                "prompt451_runtime_packet_execution_required": True,
+                "prompt451_runtime_packet_execution_allowed": True,
+                "prompt451_runtime_packet_execution_attempted": False,
+                "prompt451_runtime_packet_execution_performed": False,
+                "prompt451_runtime_packet_execution_blocked_reason": (
+                    "prompt451_runtime_packet_execution_prepared_not_performed"
+                ),
+                "prompt451_runtime_command_json_ready": True,
+                "prompt451_runtime_command_request_codex_invocation": True,
+                "prompt451_runtime_command_allow_codex_invocation": True,
+                "prompt451_blocked_reason": "",
+                "prompt451_next_action": (
+                    "execute_prompt451_runtime_command_packet"
+                ),
+            }
+        )
+        if reentry_result_available:
+            state.update(
+                {
+                    "prompt451_minimal_autonomous_completion_status": (
+                        "runtime_packet_executed"
+                    ),
+                    "prompt451_runtime_packet_execution_attempted": (
+                        payload.get("prompt450_codex_reentry_attempted") is True
+                    ),
+                    "prompt451_runtime_packet_execution_performed": (
+                        payload.get("prompt450_codex_reentry_performed") is True
+                    ),
+                    "prompt451_runtime_packet_execution_blocked_reason": "",
+                    "prompt451_reentry_review_required": True,
+                    "prompt451_reentry_route_to_prompt442_required": True,
+                    "prompt451_reentry_review_packet_ready": True,
+                    "prompt451_reentry_prompt442_review_handoff_ready": True,
+                    "prompt451_reentry_prompt442_review_handoff_source": (
+                        "prompt451_prompt450_runtime_packet_execution"
+                    ),
+                    "prompt451_reentry_review_next_action": (
+                        "review_prompt451_reentry_result_with_prompt442"
+                    ),
+                    "prompt451_next_action": (
+                        "review_prompt451_reentry_result_with_prompt442"
+                    ),
+                }
+            )
+        return state
+
+    review_required_path = (
+        payload.get("prompt450_reentry_result_route_to_prompt442_required")
+        is True
+        or prompt450_next_action == "review_prompt450_reentry_result_with_prompt442"
+        or payload.get("prompt451_reentry_route_to_prompt442_required") is True
+    )
+    if review_required_path:
+        state.update(
+            {
+                "prompt451_minimal_autonomous_completion_status": (
+                    "review_required"
+                ),
+                "prompt451_reentry_review_required": True,
+                "prompt451_reentry_route_to_prompt442_required": True,
+                "prompt451_reentry_review_packet_ready": reentry_result_available,
+                "prompt451_reentry_prompt442_review_handoff_ready": (
+                    reentry_result_available
+                ),
+                "prompt451_reentry_prompt442_review_handoff_source": (
+                    "prompt451_prompt450_runtime_packet_execution"
+                ),
+                "prompt451_reentry_review_next_action": (
+                    "review_prompt451_reentry_result_with_prompt442"
+                ),
+                "prompt451_blocked_reason": "",
+                "prompt451_next_action": (
+                    "review_prompt451_reentry_result_with_prompt442"
+                ),
+            }
+        )
+        return state
+
+    prompt450_success_continuation = (
+        prompt450_status == "not_applicable"
+        and payload.get("prompt450_prompt451_ready") is True
+        and prompt450_next_action
+        == "prepare_prompt451_approve_commit_tag_closure_and_next_cycle"
+    )
+    approve_candidate_path = (
+        prompt450_success_continuation
+        or _prompt451_success_approve_candidate(payload)
+    ) and _prompt451_success_approve_candidate(payload)
+    if approve_candidate_path:
+        commit_tag_blocked_reason = (
+            ""
+            if explicit_commit_tag_allowed
+            else "prompt451_commit_tag_not_explicitly_allowed"
+        )
+        state.update(
+            {
+                "prompt451_minimal_autonomous_completion_status": (
+                    "commit_tag_ready"
+                ),
+                "prompt451_approve_candidate_inputs_available": True,
+                "prompt451_approve_candidate_ready": True,
+                "prompt451_approve_candidate_safety_status": (
+                    "success_diff_allowed_changes"
+                ),
+                "prompt451_approve_candidate_blocked_reason": "",
+                "prompt451_commit_tag_required": True,
+                "prompt451_commit_tag_allowed": explicit_commit_tag_allowed,
+                "prompt451_git_mutation_allowed": explicit_commit_tag_allowed,
+                "prompt451_commit_tag_blocked_reason": commit_tag_blocked_reason,
+                "prompt451_post_commit_clean_rerun_required": True,
+                "prompt451_post_commit_clean_rerun_request_ready": True,
+                "prompt451_post_commit_clean_rerun_expected_route": (
+                    "clean_no_changes_or_targeted_fix_ready"
+                ),
+                "prompt451_post_commit_clean_rerun_next_action": (
+                    "run_prompt451_post_commit_clean_rerun_after_commit_tag"
+                ),
+                "prompt451_success_closure_candidate": True,
+                "prompt451_success_closure_ready": False,
+                "prompt451_success_closure_blocked_reason": (
+                    "prompt451_commit_tag_not_performed"
+                ),
+                "prompt451_autonomous_next_cycle_ready": False,
+                "prompt451_autonomous_next_cycle_blocked_reason": (
+                    "prompt451_success_closure_not_ready"
+                ),
+                "prompt451_blocked_reason": (
+                    "" if explicit_commit_tag_allowed else commit_tag_blocked_reason
+                ),
+                "prompt451_next_action": (
+                    "execute_prompt451_commit_tag_packet"
+                    if explicit_commit_tag_allowed
+                    else "request_explicit_prompt451_commit_tag_allow"
+                ),
+            }
+        )
+        if explicit_commit_tag_allowed:
+            state["prompt451_commit_tag_blocked_reason"] = (
+                "prompt451_commit_tag_execution_packet_prepared_not_performed"
+            )
+        return state
+
+    prior_commit_or_tag_observed = (
+        payload.get("prompt451_commit_performed") is True
+        or payload.get("prompt451_tag_points_at_head") is True
+        or payload.get("prompt451_expected_tag_observed") is True
+    )
+    clean_rerun_complete = (
+        prior_commit_or_tag_observed
+        and payload.get("prompt451_post_commit_clean_rerun_result_available")
+        is True
+        and payload.get("prompt451_head_clean_observed") is True
+        and payload.get("prompt451_expected_tag_observed") is True
+        and payload.get("prompt451_no_unexpected_changes_observed") is True
+    )
+    if clean_rerun_complete:
+        selected_prompt_id = state[
+            "prompt451_autonomous_next_cycle_selected_prompt_id"
+        ] or "prompt452"
+        selected_next_action = state[
+            "prompt451_autonomous_next_cycle_selected_next_action"
+        ] or "prepare_next_autonomous_prompt"
+        state.update(
+            {
+                "prompt451_minimal_autonomous_completion_status": "completed",
+                "prompt451_post_commit_clean_rerun_result_available": True,
+                "prompt451_success_closure_candidate": True,
+                "prompt451_success_closure_ready": True,
+                "prompt451_success_closure_blocked_reason": "",
+                "prompt451_head_clean_required": True,
+                "prompt451_head_clean_observed": True,
+                "prompt451_expected_tag_observed": True,
+                "prompt451_no_unexpected_changes_observed": True,
+                "prompt451_autonomous_next_cycle_ready": True,
+                "prompt451_autonomous_next_cycle_request_ready": True,
+                "prompt451_autonomous_next_cycle_runtime_request_ready": True,
+                "prompt451_autonomous_next_cycle_prompt_request_ready": True,
+                "prompt451_autonomous_next_cycle_selected_prompt_id": (
+                    selected_prompt_id
+                ),
+                "prompt451_autonomous_next_cycle_selected_next_action": (
+                    selected_next_action
+                ),
+                "prompt451_autonomous_next_cycle_blocked_reason": "",
+                "prompt451_autonomous_next_cycle_stop_reason": "",
+                "prompt451_blocked_reason": "",
+                "prompt451_next_action": "continue_autonomous_next_cycle",
+            }
+        )
+        return state
+
+    state["prompt451_blocked_reason"] = (
+        f"prompt451_unsupported_or_missing_state_prompt450_{prompt450_status}_"
+        f"next_action_{prompt450_next_action}"
+        if prompt450_status or prompt450_next_action
+        else "prompt451_missing_prompt450_state"
     )
     return state
 
@@ -250404,6 +251141,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt450_prompt449_runtime_packet_execution_payload,
         }
+        prompt451_minimal_autonomous_completion_payload = (
+            _build_prompt451_minimal_autonomous_completion_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt451_minimal_autonomous_completion_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -252075,6 +252821,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt450_prompt449_runtime_packet_execution_state=(
                     prompt450_prompt449_runtime_packet_execution_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt451_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt451_minimal_autonomous_completion_state=(
+                    prompt451_minimal_autonomous_completion_payload
                 ),
             )
         )
@@ -261107,6 +261861,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT450_PROMPT449_RUNTIME_PACKET_EXECUTION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT451_MINIMAL_AUTONOMOUS_COMPLETION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
