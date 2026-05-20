@@ -3942,6 +3942,9 @@ _PROMPT443_SCHEMA_VERSION = (
 _PROMPT444_SCHEMA_VERSION = (
     "prompt444_targeted_fix_reentry_packet_preparation_v1"
 )
+_PROMPT445_SCHEMA_VERSION = (
+    "prompt445_targeted_fix_prompt_materialization_planning_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6256,6 +6259,40 @@ _PROMPT444_TARGETED_FIX_REENTRY_PACKET_KEYS: tuple[str, ...] = (
     "prompt444_file_creation_allowed",
     "prompt444_blocked_reason",
     "prompt444_next_action",
+)
+_PROMPT445_TARGETED_FIX_PROMPT_MATERIALIZATION_KEYS: tuple[str, ...] = (
+    "prompt445_schema_version",
+    "prompt445_targeted_fix_materialization_status",
+    "prompt445_prompt444_status",
+    "prompt445_prompt444_failure_classification",
+    "prompt445_prompt444_failure_reason",
+    "prompt445_prompt444_retry_allowed",
+    "prompt445_prompt444_retry_count",
+    "prompt445_prompt444_retry_limit",
+    "prompt445_prompt444_artifact_path",
+    "prompt445_prompt444_inputs_available",
+    "prompt445_materialization_required",
+    "prompt445_materialization_allowed",
+    "prompt445_materialization_performed",
+    "prompt445_targeted_fix_prompt_artifact_path",
+    "prompt445_targeted_fix_prompt_artifact_planned",
+    "prompt445_targeted_fix_prompt_artifact_materialized",
+    "prompt445_targeted_fix_prompt_content_ready",
+    "prompt445_targeted_fix_prompt_content_summary",
+    "prompt445_targeted_fix_prompt_inputs_summary",
+    "prompt445_targeted_fix_prompt_instruction_profile",
+    "prompt445_retry_count_increment_required",
+    "prompt445_retry_count_increment_allowed",
+    "prompt445_retry_count_increment_performed",
+    "prompt445_next_retry_count",
+    "prompt445_codex_reentry_request_ready",
+    "prompt445_codex_reentry_allowed",
+    "prompt445_git_mutation_allowed",
+    "prompt445_remote_mutation_allowed",
+    "prompt445_commit_tag_allowed",
+    "prompt445_file_creation_allowed",
+    "prompt445_blocked_reason",
+    "prompt445_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -9483,6 +9520,27 @@ def _merge_prompt444_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT444_TARGETED_FIX_REENTRY_PACKET_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt445_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt445_targeted_fix_prompt_materialization_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt445_targeted_fix_prompt_materialization_state)
+        if isinstance(prompt445_targeted_fix_prompt_materialization_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT445_TARGETED_FIX_PROMPT_MATERIALIZATION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -67505,6 +67563,258 @@ def _build_prompt444_targeted_fix_reentry_packet_state(
                 ),
             }
         )
+    return state
+
+
+def _prompt445_prompt_content_summary(
+    *,
+    failure_classification: str,
+    failure_reason: str,
+    retry_count: int,
+    retry_limit: int,
+    next_action: str,
+) -> str:
+    return (
+        f"failure_classification={failure_classification or 'missing'}; "
+        f"failure_reason={failure_reason or 'none'}; "
+        f"retry={retry_count}/{retry_limit}; "
+        f"required_next_action={next_action or 'manual_review_prompt445_route'}"
+    )
+
+
+def _prompt445_prompt_inputs_summary(
+    payload: Mapping[str, Any],
+    *,
+    prompt444_status: str,
+    failure_classification: str,
+    failure_reason: str,
+    retry_count: int,
+    retry_limit: int,
+) -> dict[str, Any]:
+    return {
+        "prompt442_route": _normalize_text(
+            payload.get("prompt442_codex_post_execution_route"),
+            default="",
+        ),
+        "prompt442_change_safety_status": _normalize_text(
+            payload.get("prompt442_post_codex_change_safety_status"),
+            default="",
+        ),
+        "prompt443_status": _normalize_text(
+            payload.get("prompt443_success_diff_handoff_status"),
+            default="",
+        ),
+        "prompt444_failure_classification": failure_classification,
+        "prompt444_failure_reason": failure_reason,
+        "prompt444_retry_count": retry_count,
+        "prompt444_retry_limit": retry_limit,
+        "prompt444_status": prompt444_status,
+    }
+
+
+def _build_prompt445_targeted_fix_prompt_materialization_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt444_status = _normalize_text(
+        payload.get("prompt444_targeted_fix_reentry_status"),
+        default="",
+    )
+    failure_classification = _normalize_text(
+        payload.get("prompt444_failure_classification"),
+        default="",
+    )
+    failure_reason = _normalize_text(
+        payload.get("prompt444_failure_reason"),
+        default="",
+    )
+    retry_count = _prompt444_retry_value(payload, "prompt444_retry_count", 0)
+    retry_limit = _prompt444_retry_value(payload, "prompt444_retry_limit", 1)
+    retry_allowed = payload.get("prompt444_retry_allowed") is True
+    artifact_path = _normalize_text(
+        payload.get("prompt444_targeted_fix_prompt_artifact_path"),
+        default="",
+    )
+    prompt444_inputs_available = (
+        payload.get("prompt444_targeted_fix_prompt_inputs_available") is True
+    )
+    next_retry_count = retry_count + 1
+
+    state: dict[str, Any] = {
+        "prompt445_schema_version": _PROMPT445_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt445",
+        "prompt445_targeted_fix_materialization_status": "blocked",
+        "prompt445_prompt444_status": prompt444_status,
+        "prompt445_prompt444_failure_classification": failure_classification,
+        "prompt445_prompt444_failure_reason": failure_reason,
+        "prompt445_prompt444_retry_allowed": retry_allowed,
+        "prompt445_prompt444_retry_count": retry_count,
+        "prompt445_prompt444_retry_limit": retry_limit,
+        "prompt445_prompt444_artifact_path": artifact_path,
+        "prompt445_prompt444_inputs_available": prompt444_inputs_available,
+        "prompt445_materialization_required": False,
+        "prompt445_materialization_allowed": False,
+        "prompt445_materialization_performed": False,
+        "prompt445_targeted_fix_prompt_artifact_path": artifact_path,
+        "prompt445_targeted_fix_prompt_artifact_planned": False,
+        "prompt445_targeted_fix_prompt_artifact_materialized": False,
+        "prompt445_targeted_fix_prompt_content_ready": False,
+        "prompt445_targeted_fix_prompt_content_summary": (
+            _prompt445_prompt_content_summary(
+                failure_classification=failure_classification,
+                failure_reason=failure_reason,
+                retry_count=retry_count,
+                retry_limit=retry_limit,
+                next_action="manual_review_prompt445_route",
+            )
+        ),
+        "prompt445_targeted_fix_prompt_inputs_summary": (
+            _prompt445_prompt_inputs_summary(
+                payload,
+                prompt444_status=prompt444_status,
+                failure_classification=failure_classification,
+                failure_reason=failure_reason,
+                retry_count=retry_count,
+                retry_limit=retry_limit,
+            )
+        ),
+        "prompt445_targeted_fix_prompt_instruction_profile": "",
+        "prompt445_retry_count_increment_required": False,
+        "prompt445_retry_count_increment_allowed": False,
+        "prompt445_retry_count_increment_performed": False,
+        "prompt445_next_retry_count": next_retry_count,
+        "prompt445_codex_reentry_request_ready": False,
+        "prompt445_codex_reentry_allowed": False,
+        "prompt445_git_mutation_allowed": False,
+        "prompt445_remote_mutation_allowed": False,
+        "prompt445_commit_tag_allowed": False,
+        "prompt445_file_creation_allowed": False,
+        "prompt445_blocked_reason": (
+            f"prompt445_unsupported_prompt444_state_{prompt444_status}"
+            if prompt444_status
+            else "prompt445_missing_prompt444_state"
+        ),
+        "prompt445_next_action": "manual_review_prompt445_route",
+    }
+
+    ready_materialization_request = (
+        prompt444_status == "ready"
+        and retry_allowed is True
+        and payload.get("prompt444_targeted_fix_prompt_required") is True
+        and payload.get("prompt444_targeted_fix_prompt_artifact_planned") is True
+        and prompt444_inputs_available is True
+        and payload.get("prompt444_targeted_fix_reentry_candidate") is True
+        and payload.get("prompt444_targeted_fix_materialization_required") is True
+    )
+    if ready_materialization_request:
+        next_action = "prepare_prompt446_targeted_fix_codex_reentry_execution"
+        state.update(
+            {
+                "prompt445_targeted_fix_materialization_status": "ready",
+                "prompt445_materialization_required": True,
+                "prompt445_targeted_fix_prompt_artifact_planned": True,
+                "prompt445_targeted_fix_prompt_content_ready": True,
+                "prompt445_targeted_fix_prompt_content_summary": (
+                    _prompt445_prompt_content_summary(
+                        failure_classification=failure_classification,
+                        failure_reason=failure_reason,
+                        retry_count=retry_count,
+                        retry_limit=retry_limit,
+                        next_action=next_action,
+                    )
+                ),
+                "prompt445_targeted_fix_prompt_instruction_profile": (
+                    "bounded_targeted_fix_no_tests_no_git_mutation"
+                ),
+                "prompt445_retry_count_increment_required": True,
+                "prompt445_next_retry_count": next_retry_count,
+                "prompt445_codex_reentry_request_ready": True,
+                "prompt445_blocked_reason": "",
+                "prompt445_next_action": next_action,
+            }
+        )
+        return state
+
+    if (
+        prompt444_status == "not_applicable"
+        and failure_classification == "success_candidate_available"
+    ):
+        next_action = "prepare_prompt447_approve_commit_tag_execution_gate"
+        state.update(
+            {
+                "prompt445_targeted_fix_materialization_status": (
+                    "not_applicable"
+                ),
+                "prompt445_next_retry_count": retry_count,
+                "prompt445_blocked_reason": "",
+                "prompt445_next_action": next_action,
+                "prompt445_targeted_fix_prompt_content_summary": (
+                    _prompt445_prompt_content_summary(
+                        failure_classification=failure_classification,
+                        failure_reason=failure_reason,
+                        retry_count=retry_count,
+                        retry_limit=retry_limit,
+                        next_action=next_action,
+                    )
+                ),
+            }
+        )
+        return state
+
+    if (
+        prompt444_status == "blocked"
+        and payload.get("prompt444_blocked_reason")
+        == "prompt444_retry_limit_reached"
+    ):
+        next_action = "manual_review_retry_limit_reached"
+        state.update(
+            {
+                "prompt445_targeted_fix_materialization_status": "blocked",
+                "prompt445_next_retry_count": retry_count,
+                "prompt445_blocked_reason": "prompt445_retry_limit_reached",
+                "prompt445_next_action": next_action,
+                "prompt445_targeted_fix_prompt_content_summary": (
+                    _prompt445_prompt_content_summary(
+                        failure_classification=failure_classification,
+                        failure_reason=failure_reason,
+                        retry_count=retry_count,
+                        retry_limit=retry_limit,
+                        next_action=next_action,
+                    )
+                ),
+            }
+        )
+        return state
+
+    if (
+        failure_classification == "unsafe_changes"
+        or payload.get("prompt444_next_action")
+        == "stop_for_prompt442_unexpected_changes"
+    ):
+        next_action = "stop_for_prompt442_unexpected_changes"
+        state.update(
+            {
+                "prompt445_targeted_fix_materialization_status": "blocked",
+                "prompt445_next_retry_count": retry_count,
+                "prompt445_blocked_reason": (
+                    "prompt445_unsafe_changes_require_manual_review"
+                ),
+                "prompt445_next_action": next_action,
+                "prompt445_targeted_fix_prompt_content_summary": (
+                    _prompt445_prompt_content_summary(
+                        failure_classification=failure_classification,
+                        failure_reason=failure_reason,
+                        retry_count=retry_count,
+                        retry_limit=retry_limit,
+                        next_action=next_action,
+                    )
+                ),
+            }
+        )
+        return state
+
     return state
 
 
@@ -247379,6 +247689,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt444_targeted_fix_reentry_packet_payload,
         }
+        prompt445_targeted_fix_prompt_materialization_payload = (
+            _build_prompt445_targeted_fix_prompt_materialization_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt445_targeted_fix_prompt_materialization_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -249002,6 +249321,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt444_targeted_fix_reentry_packet_state=(
                     prompt444_targeted_fix_reentry_packet_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt445_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt445_targeted_fix_prompt_materialization_state=(
+                    prompt445_targeted_fix_prompt_materialization_payload
                 ),
             )
         )
@@ -258016,6 +258343,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT444_TARGETED_FIX_REENTRY_PACKET_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT445_TARGETED_FIX_PROMPT_MATERIALIZATION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
