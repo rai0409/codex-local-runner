@@ -3969,6 +3969,9 @@ _PROMPT452_SCHEMA_VERSION = (
 _PROMPT453_SCHEMA_VERSION = (
     "prompt453_commit_tag_ready_explicit_allow_packet_v1"
 )
+_PROMPT454_SCHEMA_VERSION = (
+    "prompt454_prompt452_runtime_evidence_repair_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6806,6 +6809,49 @@ _PROMPT453_COMMIT_TAG_READY_EXPLICIT_ALLOW_PACKET_KEYS: tuple[str, ...] = (
     "prompt453_remote_mutation_performed_observed",
     "prompt453_commit_tag_performed_observed",
     "prompt453_push_performed_observed",
+)
+_PROMPT454_PROMPT452_RUNTIME_EVIDENCE_REPAIR_KEYS: tuple[str, ...] = (
+    "prompt454_schema_version",
+    "prompt454_applicable",
+    "prompt454_prompt451_status",
+    "prompt454_prompt451_next_action",
+    "prompt454_prompt452_status",
+    "prompt454_prompt452_classification",
+    "prompt454_prompt452_blocked_reason",
+    "prompt454_prompt452_next_action",
+    "prompt454_repair_status",
+    "prompt454_repair_evidence_ready",
+    "prompt454_repair_evidence_missing_reason",
+    "prompt454_repair_source_kind",
+    "prompt454_repair_source_keys",
+    "prompt454_repaired_runtime_result_available",
+    "prompt454_repaired_returncode",
+    "prompt454_repaired_returncode_classification",
+    "prompt454_repaired_stdout_path",
+    "prompt454_repaired_stderr_path",
+    "prompt454_repaired_result_path",
+    "prompt454_repaired_tracked_diff_empty",
+    "prompt454_repaired_changed_files",
+    "prompt454_repaired_changed_files_known",
+    "prompt454_repaired_untracked_files",
+    "prompt454_repaired_untracked_files_known",
+    "prompt454_repaired_unexpected_files",
+    "prompt454_repaired_unexpected_files_known",
+    "prompt454_success_diff_ready",
+    "prompt454_no_changes_ready",
+    "prompt454_unexpected_changes_detected",
+    "prompt454_blocked_reason",
+    "prompt454_next_action",
+    "prompt454_git_mutation_allowed",
+    "prompt454_remote_mutation_allowed",
+    "prompt454_commit_tag_allowed",
+    "prompt454_push_allowed",
+    "prompt454_tests_allowed",
+    "prompt454_file_creation_allowed",
+    "prompt454_git_mutation_performed_observed",
+    "prompt454_remote_mutation_performed_observed",
+    "prompt454_commit_tag_performed_observed",
+    "prompt454_push_performed_observed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -10252,6 +10298,32 @@ def _merge_prompt453_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT453_COMMIT_TAG_READY_EXPLICIT_ALLOW_PACKET_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt454_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt454_prompt452_runtime_evidence_repair_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt454_prompt452_runtime_evidence_repair_state)
+        if isinstance(
+            prompt454_prompt452_runtime_evidence_repair_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT454_PROMPT452_RUNTIME_EVIDENCE_REPAIR_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -71935,6 +72007,534 @@ def _build_prompt452_prompt451_runtime_executed_review_closure_state(
             "prompt452_prompt442_style_review_blocked_reason": blocked_reason,
             "prompt452_blocked_reason": blocked_reason,
             "prompt452_next_action": "manual_review_prompt452_route",
+        }
+    )
+    return state
+
+
+_PROMPT454_APPLICABLE_PROMPT452_BLOCKED_REASONS = frozenset(
+    {
+        "prompt452_runtime_execution_failed",
+        "prompt452_runtime_execution_returncode_missing",
+        "prompt452_runtime_diff_evidence_missing",
+        "prompt452_runtime_changed_files_missing",
+        "prompt452_runtime_diff_evidence_ambiguous",
+    }
+)
+_PROMPT454_PLACEHOLDER_RETURNCODE_CLASSIFICATIONS = frozenset(
+    {"not_run", "not_available", "unknown", ""}
+)
+
+
+def _prompt454_source_family(key: str) -> str:
+    if key.startswith("prompt441_"):
+        return "prompt441"
+    if key.startswith("prompt449_"):
+        return "prompt449"
+    if key.startswith("prompt450_"):
+        return "prompt450"
+    if key.startswith("local_"):
+        return "local_codex"
+    if key.startswith("codex_") or key.startswith("runtime_") or key in {
+        "returncode",
+        "returncode_classification",
+        "tracked_diff_empty",
+        "changed_files",
+        "untracked_files",
+        "unexpected_files",
+    }:
+        return "generic_runtime"
+    if key.startswith("prompt452_"):
+        return "prompt452_fallback"
+    return ""
+
+
+def _prompt454_source_kind(keys: Sequence[str]) -> str:
+    families = {
+        family
+        for family in (_prompt454_source_family(key) for key in keys if key)
+        if family
+    }
+    if not families:
+        return "none"
+    if len(families) == 1:
+        return next(iter(families))
+    return "mixed"
+
+
+def _prompt454_safe_deferred_next_action(payload: Mapping[str, Any]) -> str:
+    for key in (
+        "prompt452_next_action",
+        "prompt451_next_action",
+        "prompt450_next_action",
+        "prompt449_next_action",
+        "next_action",
+        "next_run_action",
+    ):
+        value = _normalize_text(payload.get(key), default="")
+        if not value:
+            continue
+        lowered = value.lower()
+        if any(
+            marker in lowered
+            for marker in ("commit", "tag", "push", "execute", "codex")
+        ):
+            continue
+        return value
+    return "manual_review_prompt454_route"
+
+
+def _prompt454_first_returncode(
+    payload: Mapping[str, Any],
+    keys: Sequence[str],
+) -> tuple[str, int | None]:
+    fallback_key = ""
+    fallback_returncode: int | None = None
+    for key in keys:
+        if key not in payload:
+            continue
+        parsed = _as_optional_int(payload.get(key))
+        if parsed is None:
+            continue
+        if not key.startswith("prompt452_") or not fallback_key:
+            fallback_key = key
+            fallback_returncode = parsed
+        if key.startswith("prompt452_"):
+            continue
+        return key, parsed
+    return fallback_key, fallback_returncode
+
+
+def _prompt454_first_returncode_classification(
+    payload: Mapping[str, Any],
+    keys: Sequence[str],
+) -> tuple[str, str]:
+    fallback_key = ""
+    fallback_classification = ""
+    for key in keys:
+        if key not in payload:
+            continue
+        classification = _normalize_text(payload.get(key), default="").lower()
+        if not classification:
+            continue
+        if (
+            classification
+            not in _PROMPT454_PLACEHOLDER_RETURNCODE_CLASSIFICATIONS
+            and not key.startswith("prompt452_")
+        ):
+            return key, classification
+        if not fallback_key:
+            fallback_key = key
+            fallback_classification = classification
+    return fallback_key, fallback_classification
+
+
+def _prompt454_first_known_string_list(
+    payload: Mapping[str, Any],
+    keys: Sequence[str],
+) -> tuple[str, bool, list[str], bool]:
+    prompt452_fallback: tuple[str, bool, list[str], bool] | None = None
+    for key in keys:
+        if key not in payload:
+            continue
+        known = isinstance(payload.get(key), (list, tuple))
+        files = _normalize_string_list(payload.get(key), sort_items=False)
+        result = (key, known, files, not known)
+        if key.startswith("prompt452_"):
+            if prompt452_fallback is None:
+                prompt452_fallback = result
+            continue
+        return result
+    if prompt452_fallback is not None:
+        return prompt452_fallback
+    return "", False, [], False
+
+
+def _build_prompt454_prompt452_runtime_evidence_repair_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt451_status = _normalize_text(
+        payload.get("prompt451_minimal_autonomous_completion_status"),
+        default="",
+    )
+    prompt451_next_action = _normalize_text(
+        payload.get("prompt451_next_action"),
+        default="",
+    )
+    prompt452_status = _normalize_text(
+        payload.get("prompt452_review_closure_status"),
+        default="",
+    )
+    prompt452_classification = _normalize_text(
+        payload.get("prompt452_review_classification"),
+        default="",
+    )
+    prompt452_blocked_reason = _normalize_text(
+        payload.get("prompt452_blocked_reason"),
+        default="",
+    )
+    prompt452_next_action = _normalize_text(
+        payload.get("prompt452_next_action"),
+        default="",
+    )
+    applicable = (
+        prompt451_status == "runtime_packet_executed"
+        and prompt452_status == "blocked"
+        and prompt452_blocked_reason
+        in _PROMPT454_APPLICABLE_PROMPT452_BLOCKED_REASONS
+    )
+
+    result_available_key, result_available_value = _prompt452_first_present(
+        payload,
+        (
+            "prompt441_codex_result_available",
+            "prompt441_codex_result_materialized",
+            "prompt441_bounded_codex_invocation_result_available",
+            "prompt449_runtime_execution_result_available",
+            "prompt450_codex_reentry_result_available",
+            "local_codex_one_shot_execution_result_available",
+            "local_codex_one_shot_result_available",
+            "codex_execution_result_available",
+            "runtime_execution_result_available",
+            "prompt452_runtime_execution_result_available",
+        ),
+    )
+    result_path_key, result_path = _prompt452_first_text(
+        payload,
+        (
+            "prompt441_codex_result_path",
+            "prompt441_bounded_codex_invocation_result_path",
+            "prompt449_runtime_execution_result_path",
+            "prompt450_codex_reentry_result_path",
+            "local_codex_one_shot_execution_result_path",
+            "local_codex_one_shot_result_path",
+            "codex_execution_result_path",
+            "runtime_execution_result_path",
+            "prompt452_review_source_result_path",
+            "prompt452_runtime_execution_result_path",
+        ),
+    )
+    stdout_path_key, stdout_path = _prompt452_first_text(
+        payload,
+        (
+            "prompt441_codex_stdout_path",
+            "prompt449_runtime_execution_stdout_path",
+            "prompt450_codex_reentry_stdout_path",
+            "local_codex_one_shot_stdout_path",
+            "codex_execution_stdout_path",
+            "runtime_execution_stdout_path",
+            "prompt452_runtime_execution_stdout_path",
+        ),
+    )
+    stderr_path_key, stderr_path = _prompt452_first_text(
+        payload,
+        (
+            "prompt441_codex_stderr_path",
+            "prompt449_runtime_execution_stderr_path",
+            "prompt450_codex_reentry_stderr_path",
+            "local_codex_one_shot_stderr_path",
+            "codex_execution_stderr_path",
+            "runtime_execution_stderr_path",
+            "prompt452_runtime_execution_stderr_path",
+        ),
+    )
+    returncode_key, returncode = _prompt454_first_returncode(
+        payload,
+        (
+            "prompt441_codex_returncode",
+            "prompt441_bounded_codex_invocation_returncode",
+            "prompt449_runtime_execution_returncode",
+            "prompt450_codex_reentry_returncode",
+            "local_codex_one_shot_execution_returncode",
+            "local_codex_one_shot_returncode",
+            "codex_execution_returncode",
+            "runtime_execution_returncode",
+            "returncode",
+            "prompt452_runtime_execution_returncode",
+        ),
+    )
+    returncode_classification_key, returncode_classification = (
+        _prompt454_first_returncode_classification(
+            payload,
+            (
+                "prompt441_codex_returncode_classification",
+                "prompt441_bounded_codex_invocation_returncode_classification",
+                "prompt449_runtime_execution_returncode_classification",
+                "prompt450_codex_reentry_returncode_classification",
+                "local_codex_one_shot_execution_returncode_classification",
+                "local_codex_one_shot_returncode_classification",
+                "codex_execution_returncode_classification",
+                "runtime_execution_returncode_classification",
+                "returncode_classification",
+                "prompt452_runtime_execution_returncode_classification",
+            ),
+        )
+    )
+    tracked_diff_key, tracked_diff_value = _prompt452_first_present(
+        payload,
+        (
+            "prompt441_post_execution_tracked_diff_empty",
+            "prompt449_runtime_execution_tracked_diff_empty",
+            "prompt450_reentry_tracked_diff_empty",
+            "local_post_codex_diff_tracked_diff_empty",
+            "post_execution_tracked_diff_empty",
+            "tracked_diff_empty",
+            "prompt452_runtime_execution_tracked_diff_empty",
+        ),
+    )
+    tracked_diff_empty = _prompt452_boolish(tracked_diff_value)
+    changed_key, changed_known, changed_files, changed_ambiguous = (
+        _prompt454_first_known_string_list(
+            payload,
+            (
+                "prompt441_post_execution_changed_files",
+                "prompt449_runtime_execution_changed_files",
+                "prompt450_reentry_changed_files",
+                "local_post_codex_diff_changed_files",
+                "post_execution_changed_files",
+                "changed_files",
+                "prompt452_runtime_execution_changed_files",
+            ),
+        )
+    )
+    untracked_key, untracked_known, untracked_files, untracked_ambiguous = (
+        _prompt454_first_known_string_list(
+            payload,
+            (
+                "prompt441_post_execution_untracked_files",
+                "prompt449_runtime_execution_untracked_files",
+                "prompt450_reentry_untracked_files",
+                "post_execution_untracked_files",
+                "untracked_files",
+                "prompt452_runtime_execution_untracked_files",
+            ),
+        )
+    )
+    unexpected_key, unexpected_known, unexpected_files, unexpected_ambiguous = (
+        _prompt454_first_known_string_list(
+            payload,
+            (
+                "prompt441_post_execution_unexpected_files",
+                "prompt449_runtime_execution_unexpected_files",
+                "prompt450_reentry_unexpected_files",
+                "post_execution_unexpected_files",
+                "unexpected_files",
+                "prompt452_runtime_execution_unexpected_files",
+            ),
+        )
+    )
+
+    result_available = (
+        _prompt452_boolish(result_available_value) is True
+        or bool(result_path)
+        or returncode is not None
+        or returncode_classification
+        in _PROMPT452_SUCCESS_RETURNCODE_CLASSIFICATIONS
+    )
+    remote_mutation_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "remote_mutation_performed",
+            "prompt452_remote_mutation_performed_observed",
+        ),
+    )
+    commit_tag_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "commit_tag_performed",
+            "prompt452_commit_tag_performed_observed",
+        ),
+    )
+    push_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "push_performed",
+            "prompt452_push_performed_observed",
+        ),
+    )
+    git_mutation_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "git_mutation_performed",
+            "prompt452_git_mutation_performed_observed",
+        ),
+    )
+    mutation_blocks_success = (
+        remote_mutation_observed or commit_tag_observed or push_observed
+    )
+    runtime_success = (
+        (
+            returncode == 0
+            or returncode_classification
+            in _PROMPT452_SUCCESS_RETURNCODE_CLASSIFICATIONS
+        )
+        and returncode_classification
+        not in _PROMPT452_BLOCKED_RETURNCODE_CLASSIFICATIONS
+        and not mutation_blocks_success
+    )
+    source_keys = [
+        key
+        for key in (
+            result_available_key,
+            result_path_key,
+            returncode_key,
+            returncode_classification_key,
+            stdout_path_key,
+            stderr_path_key,
+            tracked_diff_key,
+            changed_key,
+            untracked_key,
+            unexpected_key,
+        )
+        if key
+    ]
+    source_kind = _prompt454_source_kind(source_keys)
+
+    state: dict[str, Any] = {
+        "prompt454_schema_version": _PROMPT454_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt454",
+        "prompt454_applicable": applicable,
+        "prompt454_prompt451_status": prompt451_status,
+        "prompt454_prompt451_next_action": prompt451_next_action,
+        "prompt454_prompt452_status": prompt452_status,
+        "prompt454_prompt452_classification": prompt452_classification,
+        "prompt454_prompt452_blocked_reason": prompt452_blocked_reason,
+        "prompt454_prompt452_next_action": prompt452_next_action,
+        "prompt454_repair_status": "blocked",
+        "prompt454_repair_evidence_ready": False,
+        "prompt454_repair_evidence_missing_reason": "",
+        "prompt454_repair_source_kind": source_kind,
+        "prompt454_repair_source_keys": source_keys,
+        "prompt454_repaired_runtime_result_available": result_available,
+        "prompt454_repaired_returncode": returncode,
+        "prompt454_repaired_returncode_classification": returncode_classification,
+        "prompt454_repaired_stdout_path": stdout_path,
+        "prompt454_repaired_stderr_path": stderr_path,
+        "prompt454_repaired_result_path": result_path,
+        "prompt454_repaired_tracked_diff_empty": tracked_diff_empty,
+        "prompt454_repaired_changed_files": changed_files,
+        "prompt454_repaired_changed_files_known": changed_known,
+        "prompt454_repaired_untracked_files": untracked_files,
+        "prompt454_repaired_untracked_files_known": untracked_known,
+        "prompt454_repaired_unexpected_files": unexpected_files,
+        "prompt454_repaired_unexpected_files_known": unexpected_known,
+        "prompt454_success_diff_ready": False,
+        "prompt454_no_changes_ready": False,
+        "prompt454_unexpected_changes_detected": False,
+        "prompt454_blocked_reason": "",
+        "prompt454_next_action": "manual_review_prompt454_route",
+        "prompt454_git_mutation_allowed": False,
+        "prompt454_remote_mutation_allowed": False,
+        "prompt454_commit_tag_allowed": False,
+        "prompt454_push_allowed": False,
+        "prompt454_tests_allowed": False,
+        "prompt454_file_creation_allowed": False,
+        "prompt454_git_mutation_performed_observed": git_mutation_observed,
+        "prompt454_remote_mutation_performed_observed": remote_mutation_observed,
+        "prompt454_commit_tag_performed_observed": commit_tag_observed,
+        "prompt454_push_performed_observed": push_observed,
+    }
+
+    if not applicable:
+        state.update(
+            {
+                "prompt454_repair_status": "not_applicable",
+                "prompt454_repair_evidence_missing_reason": (
+                    "prompt454_not_applicable"
+                ),
+                "prompt454_blocked_reason": "prompt454_not_applicable",
+                "prompt454_next_action": _prompt454_safe_deferred_next_action(
+                    payload
+                ),
+            }
+        )
+        return state
+
+    unexpected_changes = (
+        (untracked_known and bool(untracked_files))
+        or (unexpected_known and bool(unexpected_files))
+        or (tracked_diff_empty is True and bool(changed_files))
+        or (tracked_diff_empty is False and not changed_known)
+        or mutation_blocks_success
+        or changed_ambiguous
+        or untracked_ambiguous
+        or unexpected_ambiguous
+    )
+    if unexpected_changes:
+        reason = (
+            "prompt454_unexpected_runtime_mutation_observed"
+            if mutation_blocks_success
+            else "prompt454_runtime_diff_evidence_ambiguous"
+        )
+        state.update(
+            {
+                "prompt454_repair_status": "unexpected_changes",
+                "prompt454_repair_evidence_ready": True,
+                "prompt454_repair_evidence_missing_reason": "",
+                "prompt454_unexpected_changes_detected": True,
+                "prompt454_blocked_reason": reason,
+                "prompt454_next_action": "stop_for_prompt442_unexpected_changes",
+            }
+        )
+        return state
+
+    blocked_reason = ""
+    if not result_available:
+        blocked_reason = "prompt454_runtime_execution_result_missing"
+    elif returncode is None and not returncode_classification:
+        blocked_reason = "prompt454_runtime_execution_returncode_missing"
+    elif returncode_classification == "not_run":
+        blocked_reason = "prompt454_runtime_execution_result_not_success"
+    elif returncode is not None and returncode != 0:
+        blocked_reason = "prompt454_runtime_execution_result_not_success"
+    elif returncode_classification in _PROMPT452_BLOCKED_RETURNCODE_CLASSIFICATIONS:
+        blocked_reason = "prompt454_runtime_execution_result_not_success"
+    elif not runtime_success:
+        blocked_reason = "prompt454_runtime_execution_result_not_success"
+    elif tracked_diff_empty is None:
+        blocked_reason = "prompt454_runtime_diff_evidence_missing"
+    elif not changed_known:
+        blocked_reason = "prompt454_runtime_changed_files_missing"
+
+    if not blocked_reason and tracked_diff_empty is True and not changed_files:
+        state.update(
+            {
+                "prompt454_repair_status": "no_changes_ready",
+                "prompt454_repair_evidence_ready": True,
+                "prompt454_repair_evidence_missing_reason": "",
+                "prompt454_no_changes_ready": True,
+                "prompt454_next_action": (
+                    "prepare_prompt455_no_changes_next_cycle_continuation"
+                ),
+            }
+        )
+        return state
+    if not blocked_reason and tracked_diff_empty is False and changed_files:
+        state.update(
+            {
+                "prompt454_repair_status": "success_diff_ready",
+                "prompt454_repair_evidence_ready": True,
+                "prompt454_repair_evidence_missing_reason": "",
+                "prompt454_success_diff_ready": True,
+                "prompt454_next_action": (
+                    "prepare_prompt455_success_diff_commit_tag_closure"
+                ),
+            }
+        )
+        return state
+
+    if not blocked_reason:
+        blocked_reason = "prompt454_runtime_diff_evidence_ambiguous"
+    state.update(
+        {
+            "prompt454_repair_status": "blocked",
+            "prompt454_repair_evidence_ready": False,
+            "prompt454_repair_evidence_missing_reason": blocked_reason,
+            "prompt454_blocked_reason": blocked_reason,
+            "prompt454_next_action": "manual_review_prompt454_route",
         }
     )
     return state
@@ -252126,6 +252726,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt452_prompt451_runtime_executed_review_closure_payload,
         }
+        prompt454_prompt452_runtime_evidence_repair_payload = (
+            _build_prompt454_prompt452_runtime_evidence_repair_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt454_prompt452_runtime_evidence_repair_payload,
+        }
         prompt453_commit_tag_ready_explicit_allow_packet_payload = (
             _build_prompt453_commit_tag_ready_explicit_allow_packet_state(
                 run_state_payload=run_state_payload,
@@ -253822,6 +254431,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt452_prompt451_runtime_executed_review_closure_state=(
                     prompt452_prompt451_runtime_executed_review_closure_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt454_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt454_prompt452_runtime_evidence_repair_state=(
+                    prompt454_prompt452_runtime_evidence_repair_payload
                 ),
             )
         )
@@ -262868,6 +263485,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT452_PROMPT451_RUNTIME_EXECUTED_REVIEW_CLOSURE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT454_PROMPT452_RUNTIME_EVIDENCE_REPAIR_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT453_COMMIT_TAG_READY_EXPLICIT_ALLOW_PACKET_KEYS:
