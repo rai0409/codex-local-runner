@@ -3975,6 +3975,9 @@ _PROMPT454_SCHEMA_VERSION = (
 _PROMPT455_SCHEMA_VERSION = (
     "prompt455_explicit_commit_tag_allow_bridge_v1"
 )
+_PROMPT456_SCHEMA_VERSION = (
+    "prompt456_compressed_bounded_commit_tag_execution_gate_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6909,6 +6912,67 @@ _PROMPT455_EXPLICIT_COMMIT_TAG_ALLOW_BRIDGE_KEYS: tuple[str, ...] = (
     "prompt455_remote_mutation_performed_observed",
     "prompt455_commit_tag_performed_observed",
     "prompt455_push_performed_observed",
+)
+_PROMPT456_COMPRESSED_BOUNDED_COMMIT_TAG_EXECUTION_GATE_KEYS: tuple[str, ...] = (
+    "prompt456_schema_version",
+    "prompt456_applicable",
+    "prompt456_prompt451_status",
+    "prompt456_prompt451_next_action",
+    "prompt456_prompt453_status",
+    "prompt456_prompt453_next_action",
+    "prompt456_prompt455_status",
+    "prompt456_prompt455_next_action",
+    "prompt456_explicit_commit_tag_allow_required",
+    "prompt456_explicit_commit_tag_allow_present",
+    "prompt456_explicit_commit_tag_allow_source",
+    "prompt456_commit_tag_execution_gate_status",
+    "prompt456_commit_tag_execution_required",
+    "prompt456_commit_tag_execution_ready",
+    "prompt456_commit_tag_execution_allowed",
+    "prompt456_commit_tag_execution_attempted",
+    "prompt456_commit_tag_execution_performed",
+    "prompt456_commit_tag_execution_blocked_reason",
+    "prompt456_commit_message",
+    "prompt456_tag_name",
+    "prompt456_expected_head_before_commit",
+    "prompt456_expected_changed_files",
+    "prompt456_expected_clean_after_commit",
+    "prompt456_expected_tag_after_commit",
+    "prompt456_tag_uniqueness_check_required",
+    "prompt456_tag_uniqueness_ready",
+    "prompt456_tag_already_exists",
+    "prompt456_runtime_success_evidence_ready",
+    "prompt456_runtime_returncode",
+    "prompt456_runtime_returncode_classification",
+    "prompt456_approve_candidate_ready",
+    "prompt456_changed_files_known",
+    "prompt456_changed_files",
+    "prompt456_untracked_files_known",
+    "prompt456_untracked_files",
+    "prompt456_unexpected_files_known",
+    "prompt456_unexpected_files",
+    "prompt456_diff_safety_status",
+    "prompt456_evidence_missing_reason",
+    "prompt456_post_commit_clean_rerun_required",
+    "prompt456_post_commit_clean_rerun_request_ready",
+    "prompt456_success_closure_candidate_ready",
+    "prompt456_autonomous_next_cycle_after_commit_candidate_ready",
+    "prompt456_prompt457_expected_next_action",
+    "prompt456_prompt458_completion_candidate_ready",
+    "prompt456_prompt458_expected_completion_status",
+    "prompt456_prompt458_expected_next_action",
+    "prompt456_blocked_reason",
+    "prompt456_next_action",
+    "prompt456_git_mutation_allowed",
+    "prompt456_remote_mutation_allowed",
+    "prompt456_commit_tag_allowed",
+    "prompt456_push_allowed",
+    "prompt456_tests_allowed",
+    "prompt456_file_creation_allowed",
+    "prompt456_git_mutation_performed_observed",
+    "prompt456_remote_mutation_performed_observed",
+    "prompt456_commit_tag_performed_observed",
+    "prompt456_push_performed_observed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -10407,6 +10471,32 @@ def _merge_prompt455_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT455_EXPLICIT_COMMIT_TAG_ALLOW_BRIDGE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt456_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt456_compressed_bounded_commit_tag_execution_gate_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt456_compressed_bounded_commit_tag_execution_gate_state)
+        if isinstance(
+            prompt456_compressed_bounded_commit_tag_execution_gate_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT456_COMPRESSED_BOUNDED_COMMIT_TAG_EXECUTION_GATE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -67141,6 +67231,17 @@ def _normalize_prompt437_runtime_command_request(
     for optional_bool_key in (
         "request_codex_invocation",
         "allow_codex_invocation",
+        "prompt456_explicit_commit_tag_allow",
+        "prompt456_commit_tag_explicit_allow",
+        "prompt455_explicit_commit_tag_allow",
+        "prompt455_commit_tag_explicit_allow",
+        "prompt453_explicit_commit_tag_allow",
+        "prompt453_commit_tag_explicit_allow",
+        "explicit_commit_tag_allow",
+        "commit_tag_explicit_allow",
+        "approve_commit_tag_explicit_allow",
+        "allow_commit_tag_execution",
+        "request_commit_tag_execution",
     ):
         if optional_bool_key in payload:
             optional_value = payload.get(optional_bool_key)
@@ -67156,6 +67257,35 @@ def _normalize_prompt437_runtime_command_request(
             normalized["codex_prompt_artifact_path"] = codex_prompt_artifact_path
 
     return normalized, ";".join(errors)
+
+
+_EXPLICIT_COMMIT_TAG_ALLOW_KEYS = (
+    "prompt456_explicit_commit_tag_allow",
+    "prompt456_commit_tag_explicit_allow",
+    "prompt455_explicit_commit_tag_allow",
+    "prompt455_commit_tag_explicit_allow",
+    "prompt453_explicit_commit_tag_allow",
+    "prompt453_commit_tag_explicit_allow",
+    "explicit_commit_tag_allow",
+    "commit_tag_explicit_allow",
+    "approve_commit_tag_explicit_allow",
+    "allow_commit_tag_execution",
+    "request_commit_tag_execution",
+)
+
+
+def _extract_explicit_commit_tag_allow_metadata_from_mapping(
+    payload: Mapping[str, Any],
+) -> tuple[bool, str, list[str]]:
+    keys_present: list[str] = []
+    allow_source = ""
+    for key in _EXPLICIT_COMMIT_TAG_ALLOW_KEYS:
+        if key not in payload:
+            continue
+        keys_present.append(key)
+        if payload.get(key) is True and not allow_source:
+            allow_source = key
+    return bool(allow_source), allow_source, keys_present
 
 
 def _build_prompt437_runtime_command_artifact_wiring_state(
@@ -67176,6 +67306,9 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
     validation_status = "not_requested"
     next_action = "provide_prompt437_runtime_command_request"
     normalized_request: dict[str, Any] = {}
+    raw_explicit_allow_present = False
+    raw_explicit_allow_source = ""
+    raw_explicit_allow_keys_present: list[str] = []
 
     if request_provided and not allow_runtime_command_artifact:
         validation_status = "blocked"
@@ -67195,6 +67328,13 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
                 next_action = "fix_prompt437_runtime_command_request"
             else:
                 loaded = True
+                (
+                    raw_explicit_allow_present,
+                    raw_explicit_allow_source,
+                    raw_explicit_allow_keys_present,
+                ) = _extract_explicit_commit_tag_allow_metadata_from_mapping(
+                    raw_payload
+                )
                 normalized_request, validation_error = (
                     _normalize_prompt437_runtime_command_request(raw_payload)
                 )
@@ -67214,6 +67354,19 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
             validation_status = "error"
             blocked_reason = "runtime_command_artifact_read_error"
             next_action = "fix_prompt437_runtime_command_request"
+
+    (
+        normalized_explicit_allow_present,
+        normalized_explicit_allow_source,
+        normalized_explicit_allow_keys_present,
+    ) = _extract_explicit_commit_tag_allow_metadata_from_mapping(
+        normalized_request
+    )
+    explicit_allow_missing_reason = ""
+    if raw_explicit_allow_present and not normalized_explicit_allow_present:
+        explicit_allow_missing_reason = (
+            "runtime_command_json_explicit_allow_not_exposed"
+        )
 
     return {
         "prompt437_runtime_command_artifact_wiring_enabled": True,
@@ -67241,6 +67394,20 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
         "prompt437_blocked_reason": blocked_reason,
         "prompt437_next_action": next_action,
         "prompt437_runtime_command_request": normalized_request if valid else {},
+        "prompt456_runtime_command_explicit_commit_tag_allow_present": (
+            normalized_explicit_allow_present if valid else False
+        ),
+        "prompt456_runtime_command_explicit_commit_tag_allow_source": (
+            f"prompt437_runtime_command_request.{normalized_explicit_allow_source}"
+            if valid and normalized_explicit_allow_source
+            else ""
+        ),
+        "prompt456_runtime_command_explicit_commit_tag_allow_keys_present": (
+            list(normalized_explicit_allow_keys_present) if valid else []
+        ),
+        "prompt456_explicit_commit_tag_allow_source_missing_reason": (
+            explicit_allow_missing_reason
+        ),
         "prompt437_codex_direct_invocation_allowed": False,
         "prompt437_subprocess_direct_execution_allowed": False,
         "prompt437_git_direct_mutation_allowed": False,
@@ -73266,6 +73433,565 @@ def _build_prompt455_explicit_commit_tag_allow_bridge_state(
             "prompt455_next_action": "execute_prompt456_commit_tag_packet",
         }
     )
+    return state
+
+
+def _prompt456_explicit_commit_tag_allow_source(
+    payload: Mapping[str, Any],
+) -> tuple[bool, str]:
+    sources: list[tuple[str, Mapping[str, Any]]] = [("", payload)]
+    for container_key in ("payload", "config", "run_config", "request_payload"):
+        container = payload.get(container_key)
+        if isinstance(container, Mapping):
+            sources.append((f"{container_key}.", container))
+    for prefix, source_payload in sources:
+        for key in _EXPLICIT_COMMIT_TAG_ALLOW_KEYS:
+            if _prompt451_bool_input(source_payload, (key,)):
+                return True, f"{prefix}{key}"
+    (
+        runtime_allow_present,
+        runtime_allow_source,
+        _runtime_allow_keys_present,
+    ) = _prompt456_runtime_command_explicit_commit_tag_allow_metadata(payload)
+    if runtime_allow_present:
+        return True, runtime_allow_source
+    return False, ""
+
+
+def _prompt456_runtime_command_explicit_commit_tag_allow_metadata(
+    payload: Mapping[str, Any],
+) -> tuple[bool, str, list[str]]:
+    surfaces: list[tuple[str, Mapping[str, Any]]] = []
+    seen_surface_ids: set[int] = set()
+
+    def add_surface(name: str, value: Any) -> None:
+        if not isinstance(value, Mapping):
+            return
+        surface_id = id(value)
+        if surface_id in seen_surface_ids:
+            return
+        seen_surface_ids.add(surface_id)
+        surfaces.append((name, value))
+
+    for key in (
+        "prompt437_runtime_command_request",
+        "prompt447_runtime_command_json",
+        "prompt448_runtime_command_json",
+        "prompt449_runtime_command_json",
+        "prompt450_runtime_command_json",
+        "prompt451_runtime_command_json",
+    ):
+        add_surface(key, payload.get(key))
+
+    for key, value in payload.items():
+        if not isinstance(key, str):
+            continue
+        if (
+            "runtime_command_json" in key
+            or "runtime_command_request" in key
+            or "runtime_command_payload" in key
+        ):
+            add_surface(key, value)
+
+    keys_present_with_source: list[str] = []
+    for surface_name, surface in surfaces:
+        (
+            allow_present,
+            allow_source,
+            keys_present,
+        ) = _extract_explicit_commit_tag_allow_metadata_from_mapping(surface)
+        keys_present_with_source.extend(
+            f"{surface_name}.{key}" for key in keys_present
+        )
+        if allow_present:
+            return (
+                True,
+                f"{surface_name}.{allow_source}",
+                keys_present_with_source,
+            )
+
+    return False, "", keys_present_with_source
+
+
+def _prompt456_first_known_string_list(
+    payload: Mapping[str, Any],
+    keys: Sequence[str],
+) -> tuple[bool, list[str]]:
+    for key in keys:
+        if key not in payload:
+            continue
+        value = payload.get(key)
+        if isinstance(value, (list, tuple)):
+            return True, _normalize_string_list(value, sort_items=False)
+        return False, []
+    return False, []
+
+
+def _prompt456_tag_uniqueness_state(
+    payload: Mapping[str, Any],
+) -> tuple[bool, bool]:
+    for key in (
+        "prompt456_tag_already_exists",
+        "prompt456_target_tag_already_exists",
+        "prompt455_tag_already_exists",
+        "prompt453_tag_already_exists",
+        "target_tag_already_exists",
+        "tag_already_exists",
+    ):
+        if key not in payload:
+            continue
+        value = payload.get(key)
+        if _prompt452_boolish(value) is True:
+            return True, True
+        if value is False or (
+            isinstance(value, str)
+            and value.strip().lower() in {"0", "false", "no", "absent"}
+        ):
+            return True, False
+    return False, False
+
+
+def _build_prompt456_compressed_bounded_commit_tag_execution_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt451_status = _normalize_text(
+        payload.get("prompt451_minimal_autonomous_completion_status"),
+        default="",
+    )
+    prompt451_next_action = _normalize_text(
+        payload.get("prompt451_next_action"),
+        default="",
+    )
+    prompt453_status = _normalize_text(
+        payload.get("prompt453_commit_tag_packet_status"),
+        default="",
+    )
+    prompt453_next_action = _normalize_text(
+        payload.get("prompt453_next_action"),
+        default="",
+    )
+    prompt455_status = _normalize_text(
+        payload.get("prompt455_explicit_allow_bridge_status"),
+        default="",
+    )
+    prompt455_next_action = _normalize_text(
+        payload.get("prompt455_next_action"),
+        default="",
+    )
+    applicable = (
+        prompt455_status in {"explicit_allow_required", "execution_packet_ready"}
+        or prompt455_next_action
+        in {
+            "request_explicit_prompt455_commit_tag_allow",
+            "execute_prompt456_commit_tag_packet",
+        }
+        or prompt453_status == "explicit_allow_required"
+        or prompt451_status == "commit_tag_ready"
+    )
+    explicit_allow_present, explicit_allow_source = (
+        _prompt456_explicit_commit_tag_allow_source(payload)
+    )
+    (
+        runtime_explicit_allow_present,
+        runtime_explicit_allow_source,
+        runtime_explicit_allow_keys_present,
+    ) = _prompt456_runtime_command_explicit_commit_tag_allow_metadata(payload)
+    explicit_allow_source_missing_reason = _normalize_text(
+        payload.get("prompt456_explicit_commit_tag_allow_source_missing_reason"),
+        default="",
+    )
+
+    returncode_key, runtime_returncode = _prompt454_first_returncode(
+        payload,
+        (
+            "prompt455_runtime_returncode",
+            "prompt454_repaired_returncode",
+            "prompt452_runtime_execution_returncode",
+            "prompt451_reentry_returncode",
+            "runtime_execution_returncode",
+            "codex_execution_returncode",
+            "returncode",
+        ),
+    )
+    classification_key, runtime_classification = (
+        _prompt454_first_returncode_classification(
+            payload,
+            (
+                "prompt455_runtime_returncode_classification",
+                "prompt454_repaired_returncode_classification",
+                "prompt452_runtime_execution_returncode_classification",
+                "prompt451_reentry_returncode_classification",
+                "runtime_execution_returncode_classification",
+                "codex_execution_returncode_classification",
+                "returncode_classification",
+            ),
+        )
+    )
+    runtime_success_evidence_ready = bool(
+        payload.get("prompt455_runtime_success_evidence_ready") is True
+        or runtime_returncode == 0
+        or runtime_classification in _PROMPT452_SUCCESS_RETURNCODE_CLASSIFICATIONS
+    )
+    approve_candidate_ready = bool(
+        payload.get("prompt455_approve_candidate_ready") is True
+        or payload.get("prompt453_approve_candidate_ready") is True
+        or payload.get("prompt451_approve_candidate_ready") is True
+        or payload.get("prompt451_prompt443_approve_commit_tag_candidate") is True
+    )
+    changed_files_known, changed_files = _prompt456_first_known_string_list(
+        payload,
+        (
+            "prompt455_changed_files",
+            "prompt453_changed_files",
+            "prompt454_repaired_changed_files",
+            "prompt451_prompt442_allowed_changed_files",
+            "prompt442_allowed_changed_files",
+            "prompt443_allowed_changed_files",
+        ),
+    )
+    expected_files_known, expected_changed_files = (
+        _prompt456_first_known_string_list(
+            payload,
+            (
+                "prompt455_expected_changed_files",
+                "prompt456_expected_changed_files",
+                "expected_changed_files",
+            ),
+        )
+    )
+    if not changed_files_known and expected_files_known:
+        changed_files_known = True
+        changed_files = list(expected_changed_files)
+    untracked_files_known, untracked_files = _prompt456_first_known_string_list(
+        payload,
+        (
+            "prompt455_untracked_files",
+            "prompt453_untracked_files",
+            "prompt454_repaired_untracked_files",
+            "prompt451_prompt442_unexpected_untracked_files",
+            "prompt442_unexpected_untracked_files",
+            "prompt443_unexpected_untracked_files",
+        ),
+    )
+    unexpected_files_known, unexpected_files = _prompt456_first_known_string_list(
+        payload,
+        (
+            "prompt455_unexpected_files",
+            "prompt453_unexpected_files",
+            "prompt454_repaired_unexpected_files",
+            "prompt451_prompt442_unexpected_changed_files",
+            "prompt442_unexpected_changed_files",
+            "prompt443_unexpected_changed_files",
+        ),
+    )
+    commit_message = _normalize_text(
+        payload.get("prompt455_commit_message")
+        or payload.get("prompt453_commit_message")
+        or payload.get("prompt451_commit_message_candidate")
+        or payload.get("prompt451_prompt443_commit_message_candidate"),
+        default="Prompt456 execute compressed bounded commit tag packet",
+    )
+    if commit_message in {
+        "Prompt455 prepare explicit commit tag execution bridge",
+        "Prompt453 prepare commit tag closure packet",
+    }:
+        commit_message = "Prompt456 execute compressed bounded commit tag packet"
+    tag_name = _normalize_text(
+        payload.get("prompt455_tag_name")
+        or payload.get("prompt453_tag_name")
+        or payload.get("prompt451_tag_name_candidate")
+        or payload.get("prompt451_prompt443_tag_name_candidate"),
+        default="prompt456-compressed-bounded-commit-tag-execution-gate",
+    )
+    if tag_name in {
+        "prompt455-explicit-commit-tag-allow-bridge",
+        "prompt453-commit-tag-ready-explicit-allow-packet",
+    }:
+        tag_name = "prompt456-compressed-bounded-commit-tag-execution-gate"
+    expected_head = _normalize_text(
+        payload.get("prompt455_expected_head_before_commit")
+        or payload.get("prompt453_expected_head_before_commit")
+        or payload.get("expected_head_before_commit")
+        or payload.get("head_before_commit"),
+        default="",
+    )
+    expected_clean_after_commit = bool(
+        payload.get("prompt455_expected_clean_after_commit") is True
+        or payload.get("prompt453_expected_clean_after_commit") is True
+        or payload.get("prompt451_head_clean_required") is True
+    )
+    diff_safety_status = _normalize_text(
+        payload.get("prompt455_diff_safety_status")
+        or payload.get("prompt453_diff_safety_status")
+        or payload.get("prompt451_approve_candidate_safety_status")
+        or payload.get("prompt451_prompt442_change_safety_status")
+        or payload.get("prompt442_post_codex_change_safety_status"),
+        default="",
+    )
+
+    tag_uniqueness_ready, tag_already_exists = _prompt456_tag_uniqueness_state(
+        payload
+    )
+    git_mutation_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "prompt456_git_mutation_performed_observed",
+            "prompt455_git_mutation_performed_observed",
+            "prompt453_git_mutation_performed_observed",
+            "prompt454_git_mutation_performed_observed",
+            "git_mutation_performed_observed",
+            "git_mutation_performed",
+        ),
+    )
+    remote_mutation_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "prompt456_remote_mutation_performed_observed",
+            "prompt455_remote_mutation_performed_observed",
+            "prompt453_remote_mutation_performed_observed",
+            "prompt454_remote_mutation_performed_observed",
+            "remote_mutation_performed_observed",
+            "remote_mutation_performed",
+        ),
+    )
+    commit_tag_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "prompt456_commit_tag_performed_observed",
+            "prompt456_commit_tag_execution_performed",
+            "prompt455_commit_tag_execution_performed",
+            "prompt455_commit_tag_performed_observed",
+            "commit_tag_performed_observed",
+            "commit_tag_performed",
+        ),
+    )
+    push_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "prompt456_push_performed_observed",
+            "prompt455_push_performed_observed",
+            "prompt453_push_performed_observed",
+            "prompt454_push_performed_observed",
+            "push_performed_observed",
+            "push_performed",
+        ),
+    )
+
+    changed_files_safe_or_expected = changed_files_known
+    untracked_files_safe = (not untracked_files_known) or not untracked_files
+    unexpected_files_safe = (not unexpected_files_known) or not unexpected_files
+    no_remote_or_push = not (remote_mutation_observed or push_observed)
+    prompt456_execution_observed = bool(
+        commit_tag_observed
+        and no_remote_or_push
+        and runtime_success_evidence_ready
+        and explicit_allow_present
+    )
+
+    evidence_missing_reason = ""
+    if not applicable:
+        evidence_missing_reason = "prompt456_not_applicable"
+    elif not runtime_success_evidence_ready:
+        evidence_missing_reason = "prompt456_runtime_success_evidence_missing"
+    elif not approve_candidate_ready:
+        evidence_missing_reason = "prompt456_approve_candidate_missing"
+    elif not changed_files_safe_or_expected:
+        evidence_missing_reason = "prompt456_changed_files_evidence_missing"
+    elif untracked_files_known and untracked_files:
+        evidence_missing_reason = "prompt456_untracked_files_observed"
+    elif unexpected_files_known and unexpected_files:
+        evidence_missing_reason = "prompt456_unexpected_files_observed"
+    elif not tag_name:
+        evidence_missing_reason = "prompt456_tag_name_missing"
+    elif tag_already_exists:
+        evidence_missing_reason = "prompt456_tag_already_exists"
+    elif remote_mutation_observed or push_observed:
+        evidence_missing_reason = "prompt456_remote_or_push_mutation_observed"
+    elif commit_tag_observed and not prompt456_execution_observed:
+        evidence_missing_reason = "prompt456_prior_commit_tag_mutation_observed"
+
+    closure_ready = False
+    state: dict[str, Any] = {
+        "prompt456_schema_version": _PROMPT456_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt456",
+        "prompt456_applicable": applicable,
+        "prompt456_prompt451_status": prompt451_status,
+        "prompt456_prompt451_next_action": prompt451_next_action,
+        "prompt456_prompt453_status": prompt453_status,
+        "prompt456_prompt453_next_action": prompt453_next_action,
+        "prompt456_prompt455_status": prompt455_status,
+        "prompt456_prompt455_next_action": prompt455_next_action,
+        "prompt456_explicit_commit_tag_allow_required": False,
+        "prompt456_explicit_commit_tag_allow_present": explicit_allow_present,
+        "prompt456_explicit_commit_tag_allow_source": explicit_allow_source,
+        "prompt456_runtime_command_explicit_commit_tag_allow_present": (
+            runtime_explicit_allow_present
+        ),
+        "prompt456_runtime_command_explicit_commit_tag_allow_source": (
+            runtime_explicit_allow_source
+        ),
+        "prompt456_runtime_command_explicit_commit_tag_allow_keys_present": (
+            runtime_explicit_allow_keys_present
+        ),
+        "prompt456_explicit_commit_tag_allow_source_missing_reason": (
+            explicit_allow_source_missing_reason
+        ),
+        "prompt456_commit_tag_execution_gate_status": "blocked",
+        "prompt456_commit_tag_execution_required": False,
+        "prompt456_commit_tag_execution_ready": False,
+        "prompt456_commit_tag_execution_allowed": False,
+        "prompt456_commit_tag_execution_attempted": False,
+        "prompt456_commit_tag_execution_performed": False,
+        "prompt456_commit_tag_execution_blocked_reason": evidence_missing_reason,
+        "prompt456_commit_message": commit_message,
+        "prompt456_tag_name": tag_name,
+        "prompt456_expected_head_before_commit": expected_head,
+        "prompt456_expected_changed_files": changed_files,
+        "prompt456_expected_clean_after_commit": expected_clean_after_commit,
+        "prompt456_expected_tag_after_commit": tag_name,
+        "prompt456_tag_uniqueness_check_required": True,
+        "prompt456_tag_uniqueness_ready": tag_uniqueness_ready,
+        "prompt456_tag_already_exists": tag_already_exists,
+        "prompt456_runtime_success_evidence_ready": runtime_success_evidence_ready,
+        "prompt456_runtime_returncode": runtime_returncode,
+        "prompt456_runtime_returncode_classification": runtime_classification,
+        "prompt456_approve_candidate_ready": approve_candidate_ready,
+        "prompt456_changed_files_known": changed_files_known,
+        "prompt456_changed_files": changed_files,
+        "prompt456_untracked_files_known": untracked_files_known,
+        "prompt456_untracked_files": untracked_files,
+        "prompt456_unexpected_files_known": unexpected_files_known,
+        "prompt456_unexpected_files": unexpected_files,
+        "prompt456_diff_safety_status": diff_safety_status,
+        "prompt456_evidence_missing_reason": evidence_missing_reason,
+        "prompt456_post_commit_clean_rerun_required": False,
+        "prompt456_post_commit_clean_rerun_request_ready": False,
+        "prompt456_success_closure_candidate_ready": False,
+        "prompt456_autonomous_next_cycle_after_commit_candidate_ready": False,
+        "prompt456_prompt457_expected_next_action": "",
+        "prompt456_prompt458_completion_candidate_ready": False,
+        "prompt456_prompt458_expected_completion_status": "",
+        "prompt456_prompt458_expected_next_action": "",
+        "prompt456_blocked_reason": evidence_missing_reason,
+        "prompt456_next_action": "manual_review_prompt456_route",
+        "prompt456_git_mutation_allowed": False,
+        "prompt456_remote_mutation_allowed": False,
+        "prompt456_commit_tag_allowed": False,
+        "prompt456_push_allowed": False,
+        "prompt456_tests_allowed": False,
+        "prompt456_file_creation_allowed": False,
+        "prompt456_git_mutation_performed_observed": git_mutation_observed,
+        "prompt456_remote_mutation_performed_observed": remote_mutation_observed,
+        "prompt456_commit_tag_performed_observed": commit_tag_observed,
+        "prompt456_push_performed_observed": push_observed,
+    }
+
+    if not applicable:
+        state.update(
+            {
+                "prompt456_commit_tag_execution_gate_status": "not_applicable",
+                "prompt456_commit_tag_execution_blocked_reason": (
+                    "prompt456_not_applicable"
+                ),
+                "prompt456_blocked_reason": "prompt456_not_applicable",
+                "prompt456_next_action": "manual_review_prompt456_route",
+            }
+        )
+        return state
+
+    if prompt456_execution_observed:
+        closure_ready = True
+        state.update(
+            {
+                "prompt456_commit_tag_execution_gate_status": (
+                    "execution_observed"
+                ),
+                "prompt456_explicit_commit_tag_allow_required": True,
+                "prompt456_commit_tag_execution_required": True,
+                "prompt456_commit_tag_execution_performed": True,
+                "prompt456_commit_tag_execution_blocked_reason": "",
+                "prompt456_blocked_reason": "",
+                "prompt456_next_action": (
+                    "run_prompt457_post_commit_clean_rerun_closure"
+                ),
+            }
+        )
+    elif not explicit_allow_present:
+        state.update(
+            {
+                "prompt456_commit_tag_execution_gate_status": (
+                    "explicit_allow_required"
+                ),
+                "prompt456_explicit_commit_tag_allow_required": True,
+                "prompt456_explicit_commit_tag_allow_present": False,
+                "prompt456_commit_tag_execution_required": True,
+                "prompt456_commit_tag_execution_ready": False,
+                "prompt456_commit_tag_execution_allowed": False,
+                "prompt456_commit_tag_execution_blocked_reason": (
+                    "prompt456_explicit_commit_tag_allow_required"
+                ),
+                "prompt456_blocked_reason": (
+                    "prompt456_explicit_commit_tag_allow_required"
+                ),
+                "prompt456_next_action": (
+                    "request_explicit_prompt456_commit_tag_allow"
+                ),
+            }
+        )
+        return state
+    elif evidence_missing_reason:
+        state.update(
+            {
+                "prompt456_commit_tag_execution_gate_status": "blocked",
+                "prompt456_explicit_commit_tag_allow_required": True,
+                "prompt456_commit_tag_execution_required": True,
+                "prompt456_commit_tag_execution_ready": False,
+                "prompt456_commit_tag_execution_allowed": False,
+                "prompt456_commit_tag_execution_blocked_reason": (
+                    evidence_missing_reason
+                ),
+                "prompt456_blocked_reason": evidence_missing_reason,
+                "prompt456_next_action": "manual_review_prompt456_route",
+            }
+        )
+        return state
+    else:
+        closure_ready = True
+        state.update(
+            {
+                "prompt456_commit_tag_execution_gate_status": "execution_ready",
+                "prompt456_explicit_commit_tag_allow_required": True,
+                "prompt456_commit_tag_execution_required": True,
+                "prompt456_commit_tag_execution_ready": True,
+                "prompt456_commit_tag_execution_allowed": True,
+                "prompt456_commit_tag_execution_blocked_reason": "",
+                "prompt456_blocked_reason": "",
+                "prompt456_next_action": "execute_prompt456_commit_tag_packet",
+                "prompt456_git_mutation_allowed": True,
+                "prompt456_commit_tag_allowed": True,
+            }
+        )
+
+    if closure_ready:
+        state.update(
+            {
+                "prompt456_post_commit_clean_rerun_required": True,
+                "prompt456_post_commit_clean_rerun_request_ready": True,
+                "prompt456_success_closure_candidate_ready": True,
+                "prompt456_autonomous_next_cycle_after_commit_candidate_ready": True,
+                "prompt456_prompt457_expected_next_action": (
+                    "run_prompt457_post_commit_clean_rerun_closure"
+                ),
+                "prompt456_prompt458_completion_candidate_ready": True,
+                "prompt456_prompt458_expected_completion_status": "completed",
+                "prompt456_prompt458_expected_next_action": (
+                    "continue_autonomous_next_cycle"
+                ),
+            }
+        )
     return state
 
 
@@ -253239,6 +253965,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt455_explicit_commit_tag_allow_bridge_payload,
         }
+        prompt456_compressed_bounded_commit_tag_execution_gate_payload = (
+            _build_prompt456_compressed_bounded_commit_tag_execution_gate_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt456_compressed_bounded_commit_tag_execution_gate_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -254950,6 +255685,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt455_explicit_commit_tag_allow_bridge_state=(
                     prompt455_explicit_commit_tag_allow_bridge_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt456_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt456_compressed_bounded_commit_tag_execution_gate_state=(
+                    prompt456_compressed_bounded_commit_tag_execution_gate_payload
                 ),
             )
         )
@@ -263997,6 +264740,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT455_EXPLICIT_COMMIT_TAG_ALLOW_BRIDGE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT456_COMPRESSED_BOUNDED_COMMIT_TAG_EXECUTION_GATE_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
