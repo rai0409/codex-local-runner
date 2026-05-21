@@ -3966,6 +3966,9 @@ _PROMPT451_SCHEMA_VERSION = (
 _PROMPT452_SCHEMA_VERSION = (
     "prompt452_prompt451_runtime_executed_review_closure_v1"
 )
+_PROMPT453_SCHEMA_VERSION = (
+    "prompt453_commit_tag_ready_explicit_allow_packet_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -6763,6 +6766,46 @@ _PROMPT452_PROMPT451_RUNTIME_EXECUTED_REVIEW_CLOSURE_KEYS: tuple[str, ...] = (
     "prompt452_remote_mutation_performed_observed",
     "prompt452_commit_tag_performed_observed",
     "prompt452_push_performed_observed",
+)
+_PROMPT453_COMMIT_TAG_READY_EXPLICIT_ALLOW_PACKET_KEYS: tuple[str, ...] = (
+    "prompt453_schema_version",
+    "prompt453_applicable",
+    "prompt453_source_route",
+    "prompt453_prompt451_status",
+    "prompt453_prompt451_next_action",
+    "prompt453_commit_tag_packet_status",
+    "prompt453_commit_tag_packet_required",
+    "prompt453_commit_tag_packet_ready",
+    "prompt453_commit_tag_packet_blocked_reason",
+    "prompt453_commit_tag_packet_explicit_allow_required",
+    "prompt453_commit_tag_packet_explicit_allow_present",
+    "prompt453_commit_tag_packet_execution_allowed",
+    "prompt453_commit_tag_packet_execution_attempted",
+    "prompt453_commit_tag_packet_execution_performed",
+    "prompt453_commit_message",
+    "prompt453_tag_name",
+    "prompt453_approve_candidate_ready",
+    "prompt453_changed_files",
+    "prompt453_untracked_files",
+    "prompt453_unexpected_files",
+    "prompt453_diff_safety_status",
+    "prompt453_evidence_missing_reason",
+    "prompt453_post_commit_clean_rerun_required",
+    "prompt453_post_commit_clean_rerun_request_ready",
+    "prompt453_success_closure_candidate_ready",
+    "prompt453_autonomous_next_cycle_after_commit_candidate_ready",
+    "prompt453_blocked_reason",
+    "prompt453_next_action",
+    "prompt453_git_mutation_allowed",
+    "prompt453_remote_mutation_allowed",
+    "prompt453_commit_tag_allowed",
+    "prompt453_push_allowed",
+    "prompt453_tests_allowed",
+    "prompt453_file_creation_allowed",
+    "prompt453_git_mutation_performed_observed",
+    "prompt453_remote_mutation_performed_observed",
+    "prompt453_commit_tag_performed_observed",
+    "prompt453_push_performed_observed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -10183,6 +10226,32 @@ def _merge_prompt452_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT452_PROMPT451_RUNTIME_EXECUTED_REVIEW_CLOSURE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt453_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt453_commit_tag_ready_explicit_allow_packet_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt453_commit_tag_ready_explicit_allow_packet_state)
+        if isinstance(
+            prompt453_commit_tag_ready_explicit_allow_packet_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT453_COMMIT_TAG_READY_EXPLICIT_ALLOW_PACKET_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -71866,6 +71935,249 @@ def _build_prompt452_prompt451_runtime_executed_review_closure_state(
             "prompt452_prompt442_style_review_blocked_reason": blocked_reason,
             "prompt452_blocked_reason": blocked_reason,
             "prompt452_next_action": "manual_review_prompt452_route",
+        }
+    )
+    return state
+
+
+def _prompt453_explicit_commit_tag_allow_present(
+    payload: Mapping[str, Any],
+) -> bool:
+    return _prompt451_bool_input(
+        payload,
+        (
+            "prompt453_explicit_commit_tag_allow",
+            "prompt453_commit_tag_explicit_allow",
+            "explicit_commit_tag_allow",
+            "commit_tag_explicit_allow",
+            "approve_commit_tag_explicit_allow",
+            "allow_commit_tag_execution",
+            "request_commit_tag_execution",
+        ),
+    )
+
+
+def _prompt453_safe_deferred_next_action(payload: Mapping[str, Any]) -> str:
+    for key in (
+        "prompt452_next_action",
+        "prompt451_next_action",
+        "prompt450_next_action",
+        "next_action",
+        "next_run_action",
+    ):
+        value = _normalize_text(payload.get(key), default="")
+        if not value:
+            continue
+        lowered = value.lower()
+        if any(
+            marker in lowered
+            for marker in ("commit", "tag", "push", "execute", "codex")
+        ):
+            continue
+        return value
+    return "manual_review_prompt453_route"
+
+
+def _build_prompt453_commit_tag_ready_explicit_allow_packet_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt451_status = _normalize_text(
+        payload.get("prompt451_minimal_autonomous_completion_status"),
+        default="",
+    )
+    prompt451_next_action = _normalize_text(
+        payload.get("prompt451_next_action"),
+        default="",
+    )
+    applicable = (
+        prompt451_status == "commit_tag_ready"
+        and prompt451_next_action
+        == "request_explicit_prompt451_commit_tag_allow"
+    )
+    explicit_allow_present = _prompt453_explicit_commit_tag_allow_present(payload)
+    changed_files = _normalize_string_list(
+        payload.get("prompt451_prompt442_allowed_changed_files")
+        or payload.get("prompt442_allowed_changed_files")
+        or payload.get("prompt443_allowed_changed_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        payload.get("prompt451_prompt442_unexpected_untracked_files")
+        or payload.get("prompt442_unexpected_untracked_files")
+        or payload.get("prompt443_unexpected_untracked_files"),
+        sort_items=False,
+    )
+    unexpected_files = _normalize_string_list(
+        payload.get("prompt451_prompt442_unexpected_changed_files")
+        or payload.get("prompt442_unexpected_changed_files")
+        or payload.get("prompt443_unexpected_changed_files"),
+        sort_items=False,
+    )
+    approve_candidate_ready = (
+        payload.get("prompt451_approve_candidate_ready") is True
+    )
+    diff_safety_status = _normalize_text(
+        payload.get("prompt451_approve_candidate_safety_status")
+        or payload.get("prompt451_prompt442_change_safety_status")
+        or payload.get("prompt442_post_codex_change_safety_status"),
+        default="",
+    )
+    evidence_missing_reason = ""
+    if not applicable:
+        evidence_missing_reason = "prompt453_not_applicable"
+    elif not approve_candidate_ready:
+        evidence_missing_reason = "prompt453_approve_candidate_not_ready"
+    elif unexpected_files or untracked_files:
+        evidence_missing_reason = "prompt453_unexpected_files_present"
+
+    git_mutation_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "git_mutation_performed",
+            "git_mutation_performed_observed",
+            "prompt451_git_mutation_performed_observed",
+            "prompt452_git_mutation_performed_observed",
+        ),
+    )
+    remote_mutation_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "remote_mutation_performed",
+            "remote_mutation_performed_observed",
+            "prompt451_remote_mutation_performed_observed",
+            "prompt452_remote_mutation_performed_observed",
+        ),
+    )
+    commit_tag_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "commit_tag_performed",
+            "commit_tag_performed_observed",
+            "prompt451_commit_performed",
+            "prompt451_tag_performed",
+            "prompt451_commit_tag_performed_observed",
+            "prompt452_commit_tag_performed_observed",
+        ),
+    )
+    push_observed = _prompt452_observed_mutation(
+        payload,
+        (
+            "push_performed",
+            "push_performed_observed",
+            "prompt451_push_performed_observed",
+            "prompt452_push_performed_observed",
+        ),
+    )
+
+    state: dict[str, Any] = {
+        "prompt453_schema_version": _PROMPT453_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt453",
+        "prompt453_applicable": applicable,
+        "prompt453_source_route": (
+            "prompt451_commit_tag_ready_explicit_allow"
+            if applicable
+            else "prompt453_not_applicable"
+        ),
+        "prompt453_prompt451_status": prompt451_status,
+        "prompt453_prompt451_next_action": prompt451_next_action,
+        "prompt453_commit_tag_packet_status": "blocked",
+        "prompt453_commit_tag_packet_required": False,
+        "prompt453_commit_tag_packet_ready": False,
+        "prompt453_commit_tag_packet_blocked_reason": "",
+        "prompt453_commit_tag_packet_explicit_allow_required": False,
+        "prompt453_commit_tag_packet_explicit_allow_present": False,
+        "prompt453_commit_tag_packet_execution_allowed": False,
+        "prompt453_commit_tag_packet_execution_attempted": False,
+        "prompt453_commit_tag_packet_execution_performed": False,
+        "prompt453_commit_message": _normalize_text(
+            payload.get("prompt453_commit_message"),
+            default="Prompt453 prepare commit tag closure packet",
+        ),
+        "prompt453_tag_name": _normalize_text(
+            payload.get("prompt453_tag_name"),
+            default="prompt453-commit-tag-ready-explicit-allow-packet",
+        ),
+        "prompt453_approve_candidate_ready": approve_candidate_ready,
+        "prompt453_changed_files": changed_files,
+        "prompt453_untracked_files": untracked_files,
+        "prompt453_unexpected_files": unexpected_files,
+        "prompt453_diff_safety_status": diff_safety_status,
+        "prompt453_evidence_missing_reason": evidence_missing_reason,
+        "prompt453_post_commit_clean_rerun_required": (
+            payload.get("prompt451_post_commit_clean_rerun_required") is True
+        ),
+        "prompt453_post_commit_clean_rerun_request_ready": (
+            payload.get("prompt451_post_commit_clean_rerun_request_ready") is True
+        ),
+        "prompt453_success_closure_candidate_ready": (
+            payload.get("prompt451_success_closure_candidate") is True
+        ),
+        "prompt453_autonomous_next_cycle_after_commit_candidate_ready": (
+            payload.get("prompt451_autonomous_next_cycle_ready") is True
+            or payload.get("prompt451_post_commit_clean_rerun_request_ready")
+            is True
+        ),
+        "prompt453_blocked_reason": "",
+        "prompt453_next_action": "manual_review_prompt453_route",
+        "prompt453_git_mutation_allowed": False,
+        "prompt453_remote_mutation_allowed": False,
+        "prompt453_commit_tag_allowed": False,
+        "prompt453_push_allowed": False,
+        "prompt453_tests_allowed": False,
+        "prompt453_file_creation_allowed": False,
+        "prompt453_git_mutation_performed_observed": git_mutation_observed,
+        "prompt453_remote_mutation_performed_observed": remote_mutation_observed,
+        "prompt453_commit_tag_performed_observed": commit_tag_observed,
+        "prompt453_push_performed_observed": push_observed,
+    }
+
+    if not applicable:
+        state.update(
+            {
+                "prompt453_commit_tag_packet_status": "not_applicable",
+                "prompt453_next_action": _prompt453_safe_deferred_next_action(
+                    payload
+                ),
+            }
+        )
+        return state
+
+    if not explicit_allow_present:
+        state.update(
+            {
+                "prompt453_commit_tag_packet_status": "explicit_allow_required",
+                "prompt453_commit_tag_packet_required": True,
+                "prompt453_commit_tag_packet_ready": True,
+                "prompt453_commit_tag_packet_blocked_reason": (
+                    "prompt453_commit_tag_explicit_allow_required"
+                ),
+                "prompt453_commit_tag_packet_explicit_allow_required": True,
+                "prompt453_commit_tag_packet_explicit_allow_present": False,
+                "prompt453_commit_tag_packet_execution_allowed": False,
+                "prompt453_blocked_reason": (
+                    "prompt453_commit_tag_explicit_allow_required"
+                ),
+                "prompt453_next_action": (
+                    "request_explicit_prompt453_commit_tag_allow"
+                ),
+            }
+        )
+        return state
+
+    state.update(
+        {
+            "prompt453_commit_tag_packet_status": "ready",
+            "prompt453_commit_tag_packet_required": True,
+            "prompt453_commit_tag_packet_ready": True,
+            "prompt453_commit_tag_packet_blocked_reason": "",
+            "prompt453_commit_tag_packet_explicit_allow_required": True,
+            "prompt453_commit_tag_packet_explicit_allow_present": True,
+            "prompt453_commit_tag_packet_execution_allowed": True,
+            "prompt453_blocked_reason": "",
+            "prompt453_next_action": "execute_prompt454_commit_tag_packet",
         }
     )
     return state
@@ -251814,6 +252126,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt452_prompt451_runtime_executed_review_closure_payload,
         }
+        prompt453_commit_tag_ready_explicit_allow_packet_payload = (
+            _build_prompt453_commit_tag_ready_explicit_allow_packet_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt453_commit_tag_ready_explicit_allow_packet_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -253501,6 +253822,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt452_prompt451_runtime_executed_review_closure_state=(
                     prompt452_prompt451_runtime_executed_review_closure_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt453_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt453_commit_tag_ready_explicit_allow_packet_state=(
+                    prompt453_commit_tag_ready_explicit_allow_packet_payload
                 ),
             )
         )
@@ -262539,6 +262868,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT452_PROMPT451_RUNTIME_EXECUTED_REVIEW_CLOSURE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT453_COMMIT_TAG_READY_EXPLICIT_ALLOW_PACKET_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
