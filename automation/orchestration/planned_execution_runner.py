@@ -3987,6 +3987,9 @@ _PROMPT458_SCHEMA_VERSION = (
 _PROMPT459_SCHEMA_VERSION = (
     "prompt459_bounded_local_commit_tag_packet_executor_v1"
 )
+_PROMPT460_SCHEMA_VERSION = (
+    "prompt460_existing_commit_tag_executor_connector_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7143,6 +7146,63 @@ _PROMPT459_BOUNDED_LOCAL_COMMIT_TAG_PACKET_EXECUTOR_KEYS: tuple[str, ...] = (
     "prompt459_remote_mutation_performed_observed",
     "prompt459_commit_tag_performed_observed",
     "prompt459_push_performed_observed",
+)
+_PROMPT460_EXISTING_COMMIT_TAG_EXECUTOR_CONNECTOR_KEYS: tuple[str, ...] = (
+    "prompt460_schema_version",
+    "prompt460_applicable",
+    "prompt460_prompt456_status",
+    "prompt460_prompt456_next_action",
+    "prompt460_prompt459_status",
+    "prompt460_prompt459_blocked_reason",
+    "prompt460_prompt459_fix_plan_next_action",
+    "prompt460_executor_connector_status",
+    "prompt460_executor_connector_ready",
+    "prompt460_existing_executor_found",
+    "prompt460_local_executor_enabled",
+    "prompt460_explicit_allow_present",
+    "prompt460_safety_guards_ready",
+    "prompt460_commit_tag_execution_required",
+    "prompt460_commit_tag_execution_ready",
+    "prompt460_commit_tag_execution_allowed",
+    "prompt460_commit_tag_execution_attempted",
+    "prompt460_commit_tag_execution_performed",
+    "prompt460_git_add_performed",
+    "prompt460_git_commit_performed",
+    "prompt460_git_tag_performed",
+    "prompt460_expected_changed_files",
+    "prompt460_actual_changed_files",
+    "prompt460_actual_untracked_files",
+    "prompt460_tag_name",
+    "prompt460_commit_message",
+    "prompt460_tag_already_exists",
+    "prompt460_pre_commit_head",
+    "prompt460_post_commit_head",
+    "prompt460_commit_sha",
+    "prompt460_tags_at_head_after_execution",
+    "prompt460_commit_tag_receipt_ready",
+    "prompt460_commit_tag_receipt_path",
+    "prompt460_commit_tag_result_payload_ready",
+    "prompt460_commit_tag_result_payload",
+    "prompt460_post_commit_clean_rerun_required",
+    "prompt460_post_commit_clean_rerun_request_ready",
+    "prompt460_success_closure_candidate_ready",
+    "prompt460_autonomous_next_cycle_candidate_ready",
+    "prompt460_prompt457_expected_next_action",
+    "prompt460_prompt458_expected_next_action",
+    "prompt460_blocked_reason",
+    "prompt460_next_action",
+    "prompt460_git_mutation_allowed",
+    "prompt460_commit_tag_allowed",
+    "prompt460_remote_mutation_allowed",
+    "prompt460_push_allowed",
+    "prompt460_tests_allowed",
+    "prompt460_file_creation_allowed",
+    "prompt460_merge_allowed",
+    "prompt460_pr_allowed",
+    "prompt460_git_mutation_performed_observed",
+    "prompt460_commit_tag_performed_observed",
+    "prompt460_remote_mutation_performed_observed",
+    "prompt460_push_performed_observed",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -10745,6 +10805,32 @@ def _merge_prompt459_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT459_BOUNDED_LOCAL_COMMIT_TAG_PACKET_EXECUTOR_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt460_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt460_existing_commit_tag_executor_connector_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt460_existing_commit_tag_executor_connector_state)
+        if isinstance(
+            prompt460_existing_commit_tag_executor_connector_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT460_EXISTING_COMMIT_TAG_EXECUTOR_CONNECTOR_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -75403,6 +75489,427 @@ def _build_prompt459_bounded_local_commit_tag_packet_executor_state(
         }
     )
     return state
+
+
+def _prompt460_git_status_files(
+    *,
+    repo_path: str,
+) -> tuple[bool, list[str], list[str]]:
+    try:
+        status_result = _run_git(
+            repo_path,
+            ["status", "--short"],
+            timeout_seconds=10.0,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, [], []
+    if status_result.returncode != 0:
+        return False, [], []
+    changed_files: set[str] = set()
+    untracked_files: set[str] = set()
+    for line in (status_result.stdout or "").splitlines():
+        if not line.strip():
+            continue
+        path = _parse_git_status_path(line)
+        if not path:
+            continue
+        if line.startswith("?? "):
+            untracked_files.add(path)
+        else:
+            changed_files.add(path)
+    return True, sorted(changed_files), sorted(untracked_files)
+
+
+def _prompt460_git_text(
+    *,
+    repo_path: str,
+    args: list[str],
+    timeout_seconds: float = 10.0,
+) -> str:
+    try:
+        result = _run_git(repo_path, args, timeout_seconds=timeout_seconds)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return (result.stdout or "").strip()
+
+
+def _prompt460_tag_exists(
+    *,
+    repo_path: str,
+    tag_name: str,
+) -> bool:
+    if not tag_name:
+        return False
+    try:
+        result = _run_git(
+            repo_path,
+            ["rev-parse", "--verify", "--quiet", f"refs/tags/{tag_name}"],
+            timeout_seconds=10.0,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _build_prompt460_existing_commit_tag_executor_connector_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    repo_path: str,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt456_status = _normalize_text(
+        payload.get("prompt456_commit_tag_execution_gate_status"),
+        default="",
+    )
+    prompt456_next_action = _normalize_text(
+        payload.get("prompt456_next_action"),
+        default="",
+    )
+    prompt459_status = _normalize_text(
+        payload.get("prompt459_commit_tag_execution_status"),
+        default="",
+    )
+    prompt459_blocked_reason = _normalize_text(
+        payload.get("prompt459_blocked_reason"),
+        default="",
+    )
+    prompt459_fix_plan_next_action = _normalize_text(
+        payload.get("prompt459_fix_plan_next_action"),
+        default="",
+    )
+    prompt458_next_action = _normalize_text(
+        payload.get("prompt458_next_action"),
+        default="",
+    )
+    applicable = bool(
+        prompt459_blocked_reason
+        == "prompt459_existing_commit_tag_executor_not_available"
+        or prompt459_fix_plan_next_action
+        == "implement_prompt459_existing_commit_tag_executor_connector"
+        or prompt456_next_action == "execute_prompt456_commit_tag_packet"
+        or prompt458_next_action == "execute_prompt456_commit_tag_packet"
+        or payload.get("prompt456_commit_tag_execution_allowed") is True
+    )
+    explicit_allow_present = bool(
+        payload.get("prompt459_explicit_allow_present") is True
+        or payload.get("prompt456_explicit_commit_tag_allow_present") is True
+        or payload.get("prompt455_explicit_commit_tag_allow_present") is True
+        or payload.get("prompt453_commit_tag_packet_explicit_allow_present") is True
+    )
+    execution_gate_ready = bool(
+        (
+            payload.get("prompt456_commit_tag_execution_ready") is True
+            and payload.get("prompt456_commit_tag_execution_allowed") is True
+        )
+        or (
+            payload.get("prompt459_commit_tag_execution_ready") is True
+            and prompt459_blocked_reason
+            == "prompt459_existing_commit_tag_executor_not_available"
+        )
+    )
+    upstream_execution_allowed = bool(
+        payload.get("prompt456_commit_tag_execution_allowed") is True
+        or payload.get("prompt459_commit_tag_execution_allowed") is True
+        or payload.get("prompt455_commit_tag_execution_allowed_for_prompt456")
+        is True
+    )
+    expected_changed_files = _prompt459_first_non_empty_string_list(
+        payload,
+        (
+            "prompt459_expected_changed_files",
+            "prompt456_expected_changed_files",
+            "prompt455_expected_changed_files",
+            "prompt459_actual_changed_files",
+            "prompt456_changed_files",
+        ),
+    )
+    repo_available = bool(repo_path and Path(repo_path).is_dir())
+    actual_known = False
+    actual_changed_files: list[str] = []
+    actual_untracked_files: list[str] = []
+    if repo_available:
+        actual_known, actual_changed_files, actual_untracked_files = (
+            _prompt460_git_status_files(repo_path=repo_path)
+        )
+    if not expected_changed_files and actual_known:
+        fallback_files = {
+            "automation/orchestration/planned_execution_runner.py",
+            "scripts/run_planned_execution.py",
+        }
+        actual_set_for_fallback = set(actual_changed_files)
+        if actual_set_for_fallback and actual_set_for_fallback.issubset(
+            fallback_files
+        ):
+            expected_changed_files = sorted(fallback_files)
+    expected_set = set(expected_changed_files)
+    actual_set = set(actual_changed_files)
+    changed_files_match = bool(
+        actual_known
+        and expected_changed_files
+        and actual_changed_files
+        and actual_set.issubset(expected_set)
+    )
+    commit_message = _normalize_text(
+        payload.get("prompt459_commit_message")
+        or payload.get("prompt456_commit_message")
+        or payload.get("prompt455_commit_message"),
+        default="",
+    )
+    tag_name = _normalize_text(
+        payload.get("prompt459_tag_name")
+        or payload.get("prompt456_tag_name")
+        or payload.get("prompt455_tag_name"),
+        default="",
+    )
+    pre_commit_head = (
+        _prompt460_git_text(repo_path=repo_path, args=["rev-parse", "HEAD"])
+        if repo_available
+        else ""
+    )
+    tag_already_exists = bool(
+        payload.get("prompt459_tag_already_exists") is True
+        or payload.get("prompt456_tag_already_exists") is True
+        or _prompt460_tag_exists(repo_path=repo_path, tag_name=tag_name)
+    )
+    tag_ref_valid = False
+    if repo_available and tag_name:
+        try:
+            tag_ref_result = _run_git(
+                repo_path,
+                ["check-ref-format", f"refs/tags/{tag_name}"],
+                timeout_seconds=10.0,
+            )
+            tag_ref_valid = tag_ref_result.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            tag_ref_valid = False
+    remote_mutation_observed = bool(
+        payload.get("prompt459_remote_mutation_performed_observed") is True
+        or payload.get("prompt458_remote_mutation_performed_observed") is True
+        or payload.get("prompt457_remote_mutation_performed_observed") is True
+        or payload.get("prompt456_remote_mutation_performed_observed") is True
+    )
+    push_observed = bool(
+        payload.get("prompt459_push_performed_observed") is True
+        or payload.get("prompt458_push_performed_observed") is True
+        or payload.get("prompt457_push_performed_observed") is True
+        or payload.get("prompt456_push_performed_observed") is True
+    )
+    prior_commit_tag_observed = bool(
+        payload.get("prompt459_commit_tag_performed_observed") is True
+        or payload.get("prompt458_commit_tag_execution_performed_observed") is True
+        or payload.get("prompt457_commit_tag_execution_performed_observed") is True
+        or payload.get("prompt456_commit_tag_execution_performed") is True
+    )
+    prior_git_mutation_observed = bool(
+        payload.get("prompt459_git_mutation_performed_observed") is True
+        or payload.get("prompt458_git_mutation_performed_observed") is True
+        or payload.get("prompt457_git_mutation_performed_observed") is True
+        or payload.get("prompt456_git_mutation_performed_observed") is True
+    )
+
+    blocked_reason = ""
+    if not applicable:
+        blocked_reason = "prompt460_not_applicable"
+    elif not explicit_allow_present:
+        blocked_reason = "prompt460_explicit_allow_missing"
+    elif not execution_gate_ready or not upstream_execution_allowed:
+        blocked_reason = "prompt460_execution_gate_not_ready"
+    elif not repo_available:
+        blocked_reason = "prompt460_local_executor_unavailable"
+    elif not expected_changed_files or not actual_known:
+        blocked_reason = "prompt460_expected_changed_files_missing"
+    elif not changed_files_match:
+        blocked_reason = "prompt460_expected_changed_files_mismatch"
+    elif actual_untracked_files:
+        blocked_reason = "prompt460_untracked_files_observed"
+    elif not tag_name:
+        blocked_reason = "prompt460_tag_name_missing"
+    elif not commit_message:
+        blocked_reason = "prompt460_commit_message_missing"
+    elif tag_already_exists:
+        blocked_reason = "prompt460_tag_already_exists"
+    elif remote_mutation_observed or push_observed:
+        blocked_reason = "prompt460_remote_or_push_mutation_observed"
+    elif prior_git_mutation_observed or prior_commit_tag_observed:
+        blocked_reason = "prompt460_prior_commit_tag_mutation_observed"
+    elif not tag_ref_valid:
+        blocked_reason = "prompt460_local_executor_failed"
+
+    safety_guards_ready = not blocked_reason
+    result_payload: dict[str, Any] = {}
+    post_commit_head = ""
+    commit_sha = ""
+    tags_at_head_after_execution: list[str] = []
+    git_add_performed = False
+    git_commit_performed = False
+    git_tag_performed = False
+    execution_attempted = False
+    execution_performed = False
+
+    if safety_guards_ready:
+        execution_attempted = True
+        command_summary: dict[str, Any] = {}
+        try:
+            add_result = _run_git(
+                repo_path,
+                ["add", "--", *sorted(expected_set)],
+                timeout_seconds=20.0,
+            )
+            command_summary["git_add_rc"] = add_result.returncode
+            git_add_performed = add_result.returncode == 0
+            if add_result.returncode != 0:
+                blocked_reason = "prompt460_local_executor_failed"
+            else:
+                commit_result = _run_git(
+                    repo_path,
+                    [
+                        "-c",
+                        "user.name=Codex Local Runner",
+                        "-c",
+                        "user.email=codex-local-runner@example.com",
+                        "commit",
+                        "-m",
+                        commit_message,
+                    ],
+                    timeout_seconds=30.0,
+                )
+                command_summary["git_commit_rc"] = commit_result.returncode
+                git_commit_performed = commit_result.returncode == 0
+                if commit_result.returncode != 0:
+                    blocked_reason = "prompt460_local_executor_failed"
+                else:
+                    post_commit_head = _prompt460_git_text(
+                        repo_path=repo_path,
+                        args=["rev-parse", "HEAD"],
+                    )
+                    commit_sha = post_commit_head
+                    tag_result = _run_git(
+                        repo_path,
+                        ["tag", tag_name],
+                        timeout_seconds=20.0,
+                    )
+                    command_summary["git_tag_rc"] = tag_result.returncode
+                    git_tag_performed = tag_result.returncode == 0
+                    if tag_result.returncode != 0:
+                        blocked_reason = "prompt460_local_executor_failed"
+                    else:
+                        tags_at_head_after_execution = _normalize_string_list(
+                            _prompt460_git_text(
+                                repo_path=repo_path,
+                                args=["tag", "--points-at", "HEAD"],
+                            ).splitlines(),
+                            sort_items=True,
+                        )
+                        execution_performed = True
+            result_payload = {
+                "schema_version": _PROMPT460_SCHEMA_VERSION,
+                "status": "performed" if execution_performed else "blocked",
+                "blocked_reason": blocked_reason,
+                "commit_sha": commit_sha,
+                "tag_name": tag_name,
+                "commit_message": commit_message,
+                "pre_commit_head": pre_commit_head,
+                "post_commit_head": post_commit_head,
+                "expected_changed_files": sorted(expected_set),
+                "actual_changed_files": actual_changed_files,
+                "command_summary": command_summary,
+            }
+        except (OSError, subprocess.TimeoutExpired):
+            blocked_reason = "prompt460_local_executor_failed"
+            result_payload = {
+                "schema_version": _PROMPT460_SCHEMA_VERSION,
+                "status": "blocked",
+                "blocked_reason": blocked_reason,
+                "commit_sha": "",
+                "tag_name": tag_name,
+                "commit_message": commit_message,
+                "pre_commit_head": pre_commit_head,
+                "post_commit_head": "",
+                "expected_changed_files": sorted(expected_set),
+                "actual_changed_files": actual_changed_files,
+                "command_summary": {},
+            }
+
+    performed = execution_performed and not blocked_reason
+    connector_status = "performed" if performed else "blocked"
+    next_action = (
+        "run_prompt457_post_commit_clean_rerun_closure"
+        if performed
+        else "manual_review_prompt460_route"
+    )
+    return {
+        "prompt460_schema_version": _PROMPT460_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt460",
+        "prompt460_applicable": applicable,
+        "prompt460_prompt456_status": prompt456_status,
+        "prompt460_prompt456_next_action": prompt456_next_action,
+        "prompt460_prompt459_status": prompt459_status,
+        "prompt460_prompt459_blocked_reason": prompt459_blocked_reason,
+        "prompt460_prompt459_fix_plan_next_action": (
+            prompt459_fix_plan_next_action
+        ),
+        "prompt460_executor_connector_status": connector_status,
+        "prompt460_executor_connector_ready": performed,
+        "prompt460_existing_executor_found": repo_available,
+        "prompt460_local_executor_enabled": performed,
+        "prompt460_explicit_allow_present": explicit_allow_present,
+        "prompt460_safety_guards_ready": safety_guards_ready,
+        "prompt460_commit_tag_execution_required": applicable,
+        "prompt460_commit_tag_execution_ready": performed,
+        "prompt460_commit_tag_execution_allowed": performed,
+        "prompt460_commit_tag_execution_attempted": execution_attempted,
+        "prompt460_commit_tag_execution_performed": performed,
+        "prompt460_git_add_performed": git_add_performed,
+        "prompt460_git_commit_performed": git_commit_performed,
+        "prompt460_git_tag_performed": git_tag_performed,
+        "prompt460_expected_changed_files": sorted(expected_set),
+        "prompt460_actual_changed_files": actual_changed_files,
+        "prompt460_actual_untracked_files": actual_untracked_files,
+        "prompt460_tag_name": tag_name,
+        "prompt460_commit_message": commit_message,
+        "prompt460_tag_already_exists": tag_already_exists,
+        "prompt460_pre_commit_head": pre_commit_head,
+        "prompt460_post_commit_head": post_commit_head,
+        "prompt460_commit_sha": commit_sha,
+        "prompt460_tags_at_head_after_execution": (
+            tags_at_head_after_execution
+        ),
+        "prompt460_commit_tag_receipt_ready": bool(result_payload),
+        "prompt460_commit_tag_receipt_path": "",
+        "prompt460_commit_tag_result_payload_ready": bool(result_payload),
+        "prompt460_commit_tag_result_payload": result_payload,
+        "prompt460_post_commit_clean_rerun_required": performed,
+        "prompt460_post_commit_clean_rerun_request_ready": performed,
+        "prompt460_success_closure_candidate_ready": performed,
+        "prompt460_autonomous_next_cycle_candidate_ready": performed,
+        "prompt460_prompt457_expected_next_action": (
+            "run_prompt457_post_commit_clean_rerun_closure" if performed else ""
+        ),
+        "prompt460_prompt458_expected_next_action": (
+            "run_prompt457_post_commit_clean_rerun_closure" if performed else ""
+        ),
+        "prompt460_blocked_reason": "" if performed else blocked_reason,
+        "prompt460_next_action": next_action,
+        "prompt460_git_mutation_allowed": performed,
+        "prompt460_commit_tag_allowed": performed,
+        "prompt460_remote_mutation_allowed": False,
+        "prompt460_push_allowed": False,
+        "prompt460_tests_allowed": False,
+        "prompt460_file_creation_allowed": False,
+        "prompt460_merge_allowed": False,
+        "prompt460_pr_allowed": False,
+        "prompt460_git_mutation_performed_observed": (
+            git_add_performed or git_commit_performed or git_tag_performed
+        ),
+        "prompt460_commit_tag_performed_observed": (
+            git_commit_performed or git_tag_performed
+        ),
+        "prompt460_remote_mutation_performed_observed": False,
+        "prompt460_push_performed_observed": False,
+    }
 
 
 def _build_prompt430_bounded_runtime_execution_adapter_state(
@@ -255411,6 +255918,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt459_bounded_local_commit_tag_packet_executor_payload,
         }
+        prompt460_existing_commit_tag_executor_connector_payload = (
+            _build_prompt460_existing_commit_tag_executor_connector_state(
+                run_state_payload=run_state_payload,
+                repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt460_existing_commit_tag_executor_connector_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -255909,6 +256426,31 @@ class PlannedExecutionRunner:
                 "prompt459_next_action": (
                     prompt459_bounded_local_commit_tag_packet_executor_payload.get(
                         "prompt459_next_action"
+                    )
+                ),
+                "prompt460_executor_connector_status": (
+                    prompt460_existing_commit_tag_executor_connector_payload.get(
+                        "prompt460_executor_connector_status"
+                    )
+                ),
+                "prompt460_commit_tag_execution_performed": (
+                    prompt460_existing_commit_tag_executor_connector_payload.get(
+                        "prompt460_commit_tag_execution_performed"
+                    )
+                ),
+                "prompt460_blocked_reason": (
+                    prompt460_existing_commit_tag_executor_connector_payload.get(
+                        "prompt460_blocked_reason"
+                    )
+                ),
+                "prompt460_post_commit_clean_rerun_request_ready": (
+                    prompt460_existing_commit_tag_executor_connector_payload.get(
+                        "prompt460_post_commit_clean_rerun_request_ready"
+                    )
+                ),
+                "prompt460_next_action": (
+                    prompt460_existing_commit_tag_executor_connector_payload.get(
+                        "prompt460_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -257179,6 +257721,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt459_bounded_local_commit_tag_packet_executor_state=(
                     prompt459_bounded_local_commit_tag_packet_executor_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt460_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt460_existing_commit_tag_executor_connector_state=(
+                    prompt460_existing_commit_tag_executor_connector_payload
                 ),
             )
         )
@@ -259149,6 +259699,36 @@ class PlannedExecutionRunner:
                     "prompt371_next_action"
                 ),
                 default="hold_for_followup",
+            ),
+            "prompt460_executor_connector_status": _normalize_text(
+                prompt460_existing_commit_tag_executor_connector_payload.get(
+                    "prompt460_executor_connector_status"
+                ),
+                default="blocked",
+            ),
+            "prompt460_commit_tag_execution_performed": bool(
+                prompt460_existing_commit_tag_executor_connector_payload.get(
+                    "prompt460_commit_tag_execution_performed",
+                    False,
+                )
+            ),
+            "prompt460_post_commit_clean_rerun_request_ready": bool(
+                prompt460_existing_commit_tag_executor_connector_payload.get(
+                    "prompt460_post_commit_clean_rerun_request_ready",
+                    False,
+                )
+            ),
+            "prompt460_blocked_reason": _normalize_text(
+                prompt460_existing_commit_tag_executor_connector_payload.get(
+                    "prompt460_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt460_next_action": _normalize_text(
+                prompt460_existing_commit_tag_executor_connector_payload.get(
+                    "prompt460_next_action"
+                ),
+                default="manual_review_prompt460_route",
             ),
         }
         if decision_error:
