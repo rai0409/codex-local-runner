@@ -3996,6 +3996,9 @@ _PROMPT461_SCHEMA_VERSION = (
 _PROMPT462_SCHEMA_VERSION = (
     "prompt462_completed_next_cycle_smoke_regression_guard_v1"
 )
+_PROMPT463_SCHEMA_VERSION = (
+    "prompt463_one_cycle_next_prompt_selection_smoke_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7322,6 +7325,68 @@ _PROMPT462_COMPLETED_NEXT_CYCLE_SMOKE_REGRESSION_GUARD_KEYS: tuple[str, ...] = (
     "prompt462_smoke_passed",
     "prompt462_blocked_reason",
     "prompt462_next_action",
+)
+_PROMPT463_ONE_CYCLE_NEXT_PROMPT_SELECTION_SMOKE_KEYS: tuple[str, ...] = (
+    "prompt463_schema_version",
+    "prompt463_applicable",
+    "prompt463_prompt462_status",
+    "prompt463_prompt462_next_action",
+    "prompt463_prompt462_smoke_passed",
+    "prompt463_prompt462_next_cycle_request_ready",
+    "prompt463_prompt462_next_cycle_runtime_request_ready",
+    "prompt463_prompt462_next_cycle_prompt_request_ready",
+    "prompt463_selection_input_ready",
+    "prompt463_selection_input_source",
+    "prompt463_selection_input_missing_reason",
+    "prompt463_completed_previous_cycle_evidence_ready",
+    "prompt463_next_cycle_request_evidence_ready",
+    "prompt463_next_cycle_prompt_request_evidence_ready",
+    "prompt463_next_prompt_selection_status",
+    "prompt463_next_prompt_selection_ready",
+    "prompt463_selected_prompt_id",
+    "prompt463_selected_prompt_title",
+    "prompt463_selected_prompt_purpose",
+    "prompt463_selected_next_action",
+    "prompt463_selection_reason",
+    "prompt463_selection_blocked_reason",
+    "prompt463_prompt464_handoff_ready",
+    "prompt463_prompt464_expected_scope",
+    "prompt463_prompt464_expected_next_action",
+    "prompt463_prompt464_prompt_request_ready",
+    "prompt463_prompt464_runtime_request_ready",
+    "prompt463_prompt464_execution_allowed",
+    "prompt463_prompt464_expected_selected_prompt_id",
+    "prompt463_current_cycle",
+    "prompt463_max_cycles",
+    "prompt463_one_cycle_only",
+    "prompt463_max_cycles_guard_ready",
+    "prompt463_max_cycles_reached",
+    "prompt463_retry_limit_guard_ready",
+    "prompt463_retry_limit_reached",
+    "prompt463_unsafe_stop_guard_ready",
+    "prompt463_unsafe_stop_required",
+    "prompt463_unbounded_loop_allowed",
+    "prompt463_regression_guard_status",
+    "prompt463_selection_regression_detected",
+    "prompt463_safety_regression_detected",
+    "prompt463_regression_blocked_reason",
+    "prompt463_git_mutation_allowed",
+    "prompt463_commit_tag_allowed",
+    "prompt463_remote_mutation_allowed",
+    "prompt463_push_allowed",
+    "prompt463_tests_allowed",
+    "prompt463_file_creation_allowed",
+    "prompt463_merge_allowed",
+    "prompt463_pr_allowed",
+    "prompt463_codex_invocation_allowed",
+    "prompt463_git_mutation_performed_observed",
+    "prompt463_commit_tag_performed_observed",
+    "prompt463_remote_mutation_performed_observed",
+    "prompt463_push_performed_observed",
+    "prompt463_codex_invocation_performed_observed",
+    "prompt463_smoke_passed",
+    "prompt463_blocked_reason",
+    "prompt463_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -11002,6 +11067,32 @@ def _merge_prompt462_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT462_COMPLETED_NEXT_CYCLE_SMOKE_REGRESSION_GUARD_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt463_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt463_one_cycle_next_prompt_selection_smoke_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt463_one_cycle_next_prompt_selection_smoke_state)
+        if isinstance(
+            prompt463_one_cycle_next_prompt_selection_smoke_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT463_ONE_CYCLE_NEXT_PROMPT_SELECTION_SMOKE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -77055,6 +77146,351 @@ def _build_prompt462_completed_next_cycle_smoke_regression_guard_state(
             "prompt462_blocked_reason": "",
             "prompt462_next_action": (
                 "prepare_prompt463_one_cycle_next_prompt_selection_smoke"
+            ),
+        }
+    )
+    return state
+
+
+def _build_prompt463_one_cycle_next_prompt_selection_smoke_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt462_status = _normalize_text(
+        payload.get("prompt462_next_cycle_smoke_status"),
+        default="",
+    )
+    prompt462_next_action = _normalize_text(
+        payload.get("prompt462_next_action"),
+        default="",
+    )
+    prompt462_smoke_passed = payload.get("prompt462_smoke_passed") is True
+    prompt462_next_cycle_request_ready = (
+        payload.get("prompt462_next_cycle_request_ready") is True
+    )
+    prompt462_next_cycle_runtime_request_ready = (
+        payload.get("prompt462_next_cycle_runtime_request_ready") is True
+    )
+    prompt462_next_cycle_prompt_request_ready = (
+        payload.get("prompt462_next_cycle_prompt_request_ready") is True
+    )
+    prompt462_completed_evidence_ready = (
+        payload.get("prompt462_completed_evidence_ready") is True
+    )
+
+    applicable = bool(
+        prompt462_status == "ready"
+        or prompt462_smoke_passed
+        or prompt462_next_action
+        == "prepare_prompt463_one_cycle_next_prompt_selection_smoke"
+        or prompt462_next_cycle_prompt_request_ready
+        or prompt462_next_cycle_request_ready
+    )
+    selection_input_ready = bool(
+        applicable
+        and prompt462_status == "ready"
+        and prompt462_smoke_passed
+        and prompt462_completed_evidence_ready
+        and prompt462_next_cycle_request_ready
+        and prompt462_next_cycle_runtime_request_ready
+        and prompt462_next_cycle_prompt_request_ready
+    )
+    selection_input_source = (
+        "prompt462_completed_next_cycle_smoke_regression_guard"
+        if selection_input_ready
+        else ""
+    )
+    selection_input_missing_reason = (
+        "" if selection_input_ready else "prompt463_prompt462_ready_evidence_missing"
+    )
+
+    current_cycle = _as_non_negative_int(
+        payload.get("autonomous-current-cycle")
+        if payload.get("autonomous-current-cycle") is not None
+        else payload.get("prompt435_autonomous_current_cycle")
+        if payload.get("prompt435_autonomous_current_cycle") is not None
+        else payload.get("autonomous_current_cycle")
+        if payload.get("autonomous_current_cycle") is not None
+        else payload.get("prompt462_current_cycle")
+        if payload.get("prompt462_current_cycle") is not None
+        else payload.get("prompt451_current_cycle")
+        if payload.get("prompt451_current_cycle") is not None
+        else payload.get("prompt427_current_cycle"),
+        default=0,
+    )
+    max_cycles = _as_non_negative_int(
+        payload.get("autonomous-max-cycles")
+        if payload.get("autonomous-max-cycles") is not None
+        else payload.get("prompt435_autonomous_max_cycles")
+        if payload.get("prompt435_autonomous_max_cycles") is not None
+        else payload.get("autonomous_max_cycles")
+        if payload.get("autonomous_max_cycles") is not None
+        else payload.get("prompt462_max_cycles")
+        if payload.get("prompt462_max_cycles") is not None
+        else payload.get("prompt451_max_cycles")
+        if payload.get("prompt451_max_cycles") is not None
+        else payload.get("prompt427_max_cycles"),
+        default=1,
+    )
+    if max_cycles <= 0:
+        max_cycles = 1
+    max_cycles_reached = current_cycle >= max_cycles
+    retry_limit_reached = bool(
+        payload.get("prompt463_retry_limit_reached") is True
+        or payload.get("prompt462_retry_limit_reached") is True
+        or payload.get("retry_limit_reached") is True
+    )
+    unsafe_stop_required = bool(
+        payload.get("prompt463_unsafe_stop_required") is True
+        or payload.get("prompt462_unsafe_stop_required") is True
+        or payload.get("unsafe_stop_required") is True
+        or payload.get("global_stop_recommended") is True
+        or payload.get("global_stop") is True
+    )
+    safety_flag_regression = any(
+        payload.get(key) is True
+        for key in (
+            "prompt463_git_mutation_allowed",
+            "prompt463_commit_tag_allowed",
+            "prompt463_remote_mutation_allowed",
+            "prompt463_push_allowed",
+            "prompt463_tests_allowed",
+            "prompt463_file_creation_allowed",
+            "prompt463_merge_allowed",
+            "prompt463_pr_allowed",
+            "prompt463_codex_invocation_allowed",
+            "prompt463_unbounded_loop_allowed",
+        )
+    )
+    remote_or_push_mutation_observed = bool(
+        payload.get("prompt463_remote_mutation_performed_observed") is True
+        or payload.get("prompt463_push_performed_observed") is True
+        or payload.get("prompt462_remote_mutation_performed_observed") is True
+        or payload.get("prompt462_push_performed_observed") is True
+        or payload.get("remote_mutation_performed_observed") is True
+        or payload.get("push_performed_observed") is True
+    )
+    git_or_commit_tag_mutation_observed = bool(
+        payload.get("prompt463_git_mutation_performed_observed") is True
+        or payload.get("prompt463_commit_tag_performed_observed") is True
+        or payload.get("prompt462_git_mutation_performed_observed") is True
+        or payload.get("prompt462_commit_tag_performed_observed") is True
+    )
+    codex_invocation_observed = bool(
+        payload.get("prompt463_codex_invocation_performed_observed") is True
+        or payload.get("codex_invocation_performed_observed") is True
+    )
+    unbounded_loop_not_allowed = bool(
+        payload.get("prompt463_unbounded_loop_allowed") is True
+        or payload.get("prompt462_unbounded_loop_allowed") is True
+        or payload.get("unbounded_loop_allowed") is True
+    )
+    selection_regression_detected = bool(applicable and not selection_input_ready)
+    safety_regression_detected = bool(
+        safety_flag_regression or retry_limit_reached or unsafe_stop_required
+    )
+
+    blocked_reason = ""
+    if remote_or_push_mutation_observed:
+        blocked_reason = "prompt463_remote_or_push_mutation_observed"
+    elif git_or_commit_tag_mutation_observed:
+        blocked_reason = "prompt463_git_or_commit_tag_mutation_observed"
+    elif codex_invocation_observed:
+        blocked_reason = "prompt463_codex_invocation_observed"
+    elif unbounded_loop_not_allowed:
+        blocked_reason = "prompt463_unbounded_loop_not_allowed"
+    elif safety_regression_detected:
+        blocked_reason = "prompt463_safety_regression_detected"
+    elif selection_regression_detected:
+        blocked_reason = "prompt463_selection_regression_detected"
+
+    state: dict[str, Any] = {
+        "prompt463_schema_version": _PROMPT463_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt463",
+        "prompt463_applicable": applicable,
+        "prompt463_prompt462_status": prompt462_status,
+        "prompt463_prompt462_next_action": prompt462_next_action,
+        "prompt463_prompt462_smoke_passed": prompt462_smoke_passed,
+        "prompt463_prompt462_next_cycle_request_ready": (
+            prompt462_next_cycle_request_ready
+        ),
+        "prompt463_prompt462_next_cycle_runtime_request_ready": (
+            prompt462_next_cycle_runtime_request_ready
+        ),
+        "prompt463_prompt462_next_cycle_prompt_request_ready": (
+            prompt462_next_cycle_prompt_request_ready
+        ),
+        "prompt463_selection_input_ready": False,
+        "prompt463_selection_input_source": selection_input_source,
+        "prompt463_selection_input_missing_reason": selection_input_missing_reason,
+        "prompt463_completed_previous_cycle_evidence_ready": (
+            prompt462_completed_evidence_ready
+        ),
+        "prompt463_next_cycle_request_evidence_ready": (
+            prompt462_next_cycle_request_ready
+        ),
+        "prompt463_next_cycle_prompt_request_evidence_ready": (
+            prompt462_next_cycle_prompt_request_ready
+        ),
+        "prompt463_next_prompt_selection_status": "blocked",
+        "prompt463_next_prompt_selection_ready": False,
+        "prompt463_selected_prompt_id": "",
+        "prompt463_selected_prompt_title": "",
+        "prompt463_selected_prompt_purpose": "",
+        "prompt463_selected_next_action": "",
+        "prompt463_selection_reason": "",
+        "prompt463_selection_blocked_reason": blocked_reason,
+        "prompt463_prompt464_handoff_ready": False,
+        "prompt463_prompt464_expected_scope": "",
+        "prompt463_prompt464_expected_next_action": "",
+        "prompt463_prompt464_prompt_request_ready": False,
+        "prompt463_prompt464_runtime_request_ready": False,
+        "prompt463_prompt464_execution_allowed": False,
+        "prompt463_prompt464_expected_selected_prompt_id": "",
+        "prompt463_current_cycle": current_cycle,
+        "prompt463_max_cycles": max_cycles,
+        "prompt463_one_cycle_only": True,
+        "prompt463_max_cycles_guard_ready": not max_cycles_reached,
+        "prompt463_max_cycles_reached": max_cycles_reached,
+        "prompt463_retry_limit_guard_ready": not retry_limit_reached,
+        "prompt463_retry_limit_reached": retry_limit_reached,
+        "prompt463_unsafe_stop_guard_ready": not unsafe_stop_required,
+        "prompt463_unsafe_stop_required": unsafe_stop_required,
+        "prompt463_unbounded_loop_allowed": False,
+        "prompt463_regression_guard_status": "blocked",
+        "prompt463_selection_regression_detected": selection_regression_detected,
+        "prompt463_safety_regression_detected": safety_regression_detected,
+        "prompt463_regression_blocked_reason": blocked_reason,
+        "prompt463_git_mutation_allowed": False,
+        "prompt463_commit_tag_allowed": False,
+        "prompt463_remote_mutation_allowed": False,
+        "prompt463_push_allowed": False,
+        "prompt463_tests_allowed": False,
+        "prompt463_file_creation_allowed": False,
+        "prompt463_merge_allowed": False,
+        "prompt463_pr_allowed": False,
+        "prompt463_codex_invocation_allowed": False,
+        "prompt463_git_mutation_performed_observed": git_or_commit_tag_mutation_observed,
+        "prompt463_commit_tag_performed_observed": (
+            payload.get("prompt463_commit_tag_performed_observed") is True
+            or payload.get("prompt462_commit_tag_performed_observed") is True
+        ),
+        "prompt463_remote_mutation_performed_observed": (
+            remote_or_push_mutation_observed
+        ),
+        "prompt463_push_performed_observed": (
+            payload.get("prompt463_push_performed_observed") is True
+            or payload.get("prompt462_push_performed_observed") is True
+            or payload.get("push_performed_observed") is True
+        ),
+        "prompt463_codex_invocation_performed_observed": (
+            codex_invocation_observed
+        ),
+        "prompt463_smoke_passed": False,
+        "prompt463_blocked_reason": blocked_reason,
+        "prompt463_next_action": "manual_review_prompt463_route",
+    }
+
+    if not applicable:
+        state.update(
+            {
+                "prompt463_next_prompt_selection_status": "not_applicable",
+                "prompt463_selection_input_ready": False,
+                "prompt463_selection_input_missing_reason": (
+                    "prompt463_prompt462_ready_evidence_missing"
+                ),
+                "prompt463_regression_guard_status": "not_applicable",
+                "prompt463_regression_blocked_reason": "",
+                "prompt463_selection_blocked_reason": (
+                    "prompt463_prompt462_ready_evidence_missing"
+                ),
+                "prompt463_smoke_passed": False,
+                "prompt463_blocked_reason": "",
+                "prompt463_next_action": "manual_review_prompt463_route",
+            }
+        )
+        return state
+
+    if max_cycles_reached:
+        state.update(
+            {
+                "prompt463_next_prompt_selection_status": "stopped",
+                "prompt463_regression_guard_status": "passed",
+                "prompt463_selection_regression_detected": False,
+                "prompt463_safety_regression_detected": False,
+                "prompt463_regression_blocked_reason": "",
+                "prompt463_selection_blocked_reason": "",
+                "prompt463_smoke_passed": True,
+                "prompt463_blocked_reason": "",
+                "prompt463_next_action": (
+                    "stop_autonomous_loop_max_cycles_reached"
+                ),
+            }
+        )
+        return state
+
+    if blocked_reason:
+        state.update(
+            {
+                "prompt463_next_prompt_selection_status": "blocked",
+                "prompt463_regression_guard_status": "blocked",
+                "prompt463_selection_blocked_reason": blocked_reason,
+                "prompt463_smoke_passed": False,
+                "prompt463_blocked_reason": blocked_reason,
+                "prompt463_next_action": "manual_review_prompt463_route",
+            }
+        )
+        return state
+
+    state.update(
+        {
+            "prompt463_selection_input_ready": True,
+            "prompt463_selection_input_source": (
+                "prompt462_completed_next_cycle_smoke_regression_guard"
+            ),
+            "prompt463_selection_input_missing_reason": "",
+            "prompt463_next_prompt_selection_status": "ready",
+            "prompt463_next_prompt_selection_ready": True,
+            "prompt463_selected_prompt_id": "prompt464",
+            "prompt463_selected_prompt_title": (
+                "one-cycle next prompt materialization smoke"
+            ),
+            "prompt463_selected_prompt_purpose": (
+                "materialize one bounded next-cycle prompt request and runtime "
+                "packet without executing Codex"
+            ),
+            "prompt463_selected_next_action": (
+                "prepare_prompt464_one_cycle_next_prompt_materialization_smoke"
+            ),
+            "prompt463_selection_reason": (
+                "prompt463_fastest_safe_next_step_after_prompt462_ready"
+            ),
+            "prompt463_selection_blocked_reason": "",
+            "prompt463_prompt464_handoff_ready": True,
+            "prompt463_prompt464_expected_scope": (
+                "materialize_one_bounded_next_cycle_prompt_request_and_runtime_"
+                "packet_without_codex_execution"
+            ),
+            "prompt463_prompt464_expected_next_action": (
+                "prepare_prompt464_one_cycle_next_prompt_materialization_smoke"
+            ),
+            "prompt463_prompt464_prompt_request_ready": True,
+            "prompt463_prompt464_runtime_request_ready": True,
+            "prompt463_prompt464_execution_allowed": False,
+            "prompt463_prompt464_expected_selected_prompt_id": "prompt464",
+            "prompt463_max_cycles_guard_ready": True,
+            "prompt463_retry_limit_guard_ready": True,
+            "prompt463_unsafe_stop_guard_ready": True,
+            "prompt463_regression_guard_status": "passed",
+            "prompt463_selection_regression_detected": False,
+            "prompt463_safety_regression_detected": False,
+            "prompt463_regression_blocked_reason": "",
+            "prompt463_smoke_passed": True,
+            "prompt463_blocked_reason": "",
+            "prompt463_next_action": (
+                "prepare_prompt464_one_cycle_next_prompt_materialization_smoke"
             ),
         }
     )
@@ -257095,6 +257531,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt462_completed_next_cycle_smoke_regression_guard_payload,
         }
+        prompt463_one_cycle_next_prompt_selection_smoke_payload = (
+            _build_prompt463_one_cycle_next_prompt_selection_smoke_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt463_one_cycle_next_prompt_selection_smoke_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -257663,6 +258108,31 @@ class PlannedExecutionRunner:
                 "prompt462_next_action": (
                     prompt462_completed_next_cycle_smoke_regression_guard_payload.get(
                         "prompt462_next_action"
+                    )
+                ),
+                "prompt463_next_prompt_selection_status": (
+                    prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                        "prompt463_next_prompt_selection_status"
+                    )
+                ),
+                "prompt463_selected_prompt_id": (
+                    prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                        "prompt463_selected_prompt_id"
+                    )
+                ),
+                "prompt463_prompt464_handoff_ready": (
+                    prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                        "prompt463_prompt464_handoff_ready"
+                    )
+                ),
+                "prompt463_smoke_passed": (
+                    prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                        "prompt463_smoke_passed"
+                    )
+                ),
+                "prompt463_next_action": (
+                    prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                        "prompt463_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -258957,6 +259427,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt462_completed_next_cycle_smoke_regression_guard_state=(
                     prompt462_completed_next_cycle_smoke_regression_guard_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt463_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt463_one_cycle_next_prompt_selection_smoke_state=(
+                    prompt463_one_cycle_next_prompt_selection_smoke_payload
                 ),
             )
         )
@@ -261011,6 +261489,36 @@ class PlannedExecutionRunner:
                     "prompt462_next_action"
                 ),
                 default="manual_review_prompt462_route",
+            ),
+            "prompt463_next_prompt_selection_status": _normalize_text(
+                prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                    "prompt463_next_prompt_selection_status"
+                ),
+                default="blocked",
+            ),
+            "prompt463_selected_prompt_id": _normalize_text(
+                prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                    "prompt463_selected_prompt_id"
+                ),
+                default="",
+            ),
+            "prompt463_prompt464_handoff_ready": bool(
+                prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                    "prompt463_prompt464_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt463_smoke_passed": bool(
+                prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                    "prompt463_smoke_passed",
+                    False,
+                )
+            ),
+            "prompt463_next_action": _normalize_text(
+                prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
+                    "prompt463_next_action"
+                ),
+                default="manual_review_prompt463_route",
             ),
         }
         if decision_error:
@@ -268109,6 +268617,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT462_COMPLETED_NEXT_CYCLE_SMOKE_REGRESSION_GUARD_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT463_ONE_CYCLE_NEXT_PROMPT_SELECTION_SMOKE_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
