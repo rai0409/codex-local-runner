@@ -4014,6 +4014,9 @@ _PROMPT467_SCHEMA_VERSION = (
 _PROMPT468_SCHEMA_VERSION = (
     "prompt468_full_no_human_autonomous_loop_regression_rerun_v1"
 )
+_PROMPT469_SCHEMA_VERSION = (
+    "prompt469_changed_diff_route_and_targeted_fix_request_guard_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7733,6 +7736,48 @@ _PROMPT468_FULL_NO_HUMAN_LOOP_REGRESSION_RERUN_KEYS: tuple[str, ...] = (
     "prompt468_blocked_reason",
     "prompt468_blocked_reasons",
     "prompt468_next_action",
+)
+_PROMPT469_CHANGED_DIFF_ROUTE_GUARD_KEYS: tuple[str, ...] = (
+    "prompt469_schema_version",
+    "prompt469_applicable",
+    "prompt469_route_router_status",
+    "prompt469_route_router_ready",
+    "prompt469_upstream_prompt468_evidence_ready",
+    "prompt469_execution_evidence_ready",
+    "prompt469_execution_success",
+    "prompt469_execution_failed_or_blocked",
+    "prompt469_diff_evidence_known",
+    "prompt469_tracked_diff_empty",
+    "prompt469_tracked_diff_present",
+    "prompt469_changed_files",
+    "prompt469_untracked_files",
+    "prompt469_unexpected_files",
+    "prompt469_untracked_or_unexpected_files_present",
+    "prompt469_route_decision_status",
+    "prompt469_route_decision",
+    "prompt469_success_no_changes_route_ready",
+    "prompt469_success_with_changes_route_ready",
+    "prompt469_failed_execution_route_ready",
+    "prompt469_targeted_fix_request_ready",
+    "prompt469_targeted_fix_reason",
+    "prompt469_targeted_fix_input_changed_files",
+    "prompt469_targeted_fix_input_execution_classification",
+    "prompt469_targeted_fix_next_prompt_id",
+    "prompt469_targeted_fix_next_action",
+    "prompt469_human_review_required",
+    "prompt469_human_intervention_required",
+    "prompt469_auto_route_allowed",
+    "prompt469_codex_invocation_allowed",
+    "prompt469_file_creation_allowed",
+    "prompt469_tests_allowed",
+    "prompt469_commit_tag_allowed",
+    "prompt469_push_allowed",
+    "prompt469_pr_allowed",
+    "prompt469_merge_allowed",
+    "prompt469_unbounded_loop_allowed",
+    "prompt469_blocked_reason",
+    "prompt469_blocked_reasons",
+    "prompt469_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -11569,6 +11614,27 @@ def _merge_prompt468_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT468_FULL_NO_HUMAN_LOOP_REGRESSION_RERUN_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt469_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt469_changed_diff_route_guard_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt469_changed_diff_route_guard_state)
+        if isinstance(prompt469_changed_diff_route_guard_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT469_CHANGED_DIFF_ROUTE_GUARD_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -79876,6 +79942,237 @@ def _build_prompt468_full_no_human_loop_regression_rerun_state(
             if upstream_evidence_ready
             else "manual_review_prompt468_regression_blocked"
         ),
+    }
+
+
+def _build_prompt469_changed_diff_route_guard_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+
+    upstream_prompt468_evidence_ready = bool(
+        payload.get("prompt468_full_no_human_loop_regression_status") == "passed"
+        and payload.get("prompt468_full_no_human_loop_regression_ready") is True
+        and payload.get("prompt468_upstream_evidence_ready") is True
+        and payload.get("prompt468_regression_passed") is True
+        and payload.get("prompt468_minimal_no_human_loop_revalidated") is True
+        and payload.get("prompt468_human_intervention_required") is False
+        and payload.get("prompt468_auto_continue_allowed") is True
+        and payload.get("prompt468_next_action")
+        == "prepare_prompt469_changed_diff_route_guard"
+    )
+
+    execution_attempted = payload.get("prompt465_execution_attempted") is True
+    execution_performed = payload.get("prompt465_execution_performed") is True
+    codex_invocation_attempted = (
+        payload.get("prompt465_codex_invocation_attempted") is True
+    )
+    codex_invocation_performed = (
+        payload.get("prompt465_codex_invocation_performed") is True
+    )
+    runtime_result_available = (
+        payload.get("prompt465_runtime_result_available") is True
+    )
+    runtime_result_payload_ready = (
+        payload.get("prompt465_runtime_result_payload_ready") is True
+    )
+    prompt465_status = _normalize_text(
+        payload.get("prompt465_execution_smoke_status"),
+        default="",
+    )
+    execution_classification = _normalize_text(
+        payload.get("prompt465_execution_returncode_classification"),
+        default="",
+    )
+    if not execution_classification:
+        execution_classification = _normalize_text(
+            payload.get("prompt466_execution_result_classification"),
+            default="unknown",
+        )
+    if prompt465_status == "blocked" and execution_classification == "unknown":
+        execution_classification = "blocked"
+
+    execution_success = execution_classification == "success"
+    execution_failed_or_blocked = execution_classification in {"failed", "blocked"}
+    execution_evidence_ready = bool(
+        execution_classification in {"success", "failed", "blocked"}
+        and (
+            (
+                execution_attempted
+                and (
+                    execution_performed
+                    or execution_classification in {"failed", "blocked"}
+                )
+            )
+            or prompt465_status == "blocked"
+        )
+        and (
+            codex_invocation_attempted
+            or codex_invocation_performed
+            or prompt465_status == "blocked"
+        )
+        and (
+            not execution_success
+            or (
+                execution_performed
+                and codex_invocation_performed
+                and runtime_result_available
+                and runtime_result_payload_ready
+            )
+        )
+    )
+
+    changed_files = _normalize_string_list(
+        payload.get("prompt465_post_execution_changed_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        payload.get("prompt465_post_execution_untracked_files"),
+        sort_items=False,
+    )
+    unexpected_files = _normalize_string_list(
+        payload.get("prompt465_post_execution_unexpected_files"),
+        sort_items=False,
+    )
+    tracked_diff_empty_value = payload.get(
+        "prompt465_post_execution_tracked_diff_empty"
+    )
+    changed_files_known = (
+        payload.get("prompt465_post_execution_changed_files_known") is True
+    )
+    untracked_files_known = (
+        payload.get("prompt465_post_execution_untracked_files_known") is True
+    )
+    unexpected_files_known = (
+        payload.get("prompt465_post_execution_unexpected_files_known") is True
+    )
+    diff_evidence_known = bool(
+        isinstance(tracked_diff_empty_value, bool) and changed_files_known
+    )
+    untracked_or_unexpected_files_known = bool(
+        untracked_files_known and unexpected_files_known
+    )
+    tracked_diff_empty = (
+        tracked_diff_empty_value
+        if isinstance(tracked_diff_empty_value, bool)
+        else False
+    )
+    tracked_diff_present = bool(diff_evidence_known and changed_files)
+    untracked_or_unexpected_files_present = bool(untracked_files or unexpected_files)
+
+    blocked_reasons: list[str] = []
+    if not upstream_prompt468_evidence_ready:
+        blocked_reasons.append("prompt468_regression_evidence_missing")
+    if not execution_evidence_ready:
+        blocked_reasons.append("prompt469_execution_evidence_missing")
+    if not diff_evidence_known:
+        blocked_reasons.append("prompt469_diff_evidence_unknown")
+    if not untracked_or_unexpected_files_known:
+        blocked_reasons.append("prompt469_untracked_or_unexpected_files_unknown")
+
+    next_prompt_id = "prompt470"
+    next_action = "manual_review_prompt469_route_router_blocked"
+    route_router_status = "blocked"
+    route_router_ready = False
+    route_decision_status = "blocked"
+    route_decision = "blocked"
+    success_no_changes_route_ready = False
+    success_with_changes_route_ready = False
+    failed_execution_route_ready = False
+    targeted_fix_request_ready = False
+    targeted_fix_reason = ""
+    human_review_required = True
+    human_intervention_required = True
+    auto_route_allowed = False
+
+    if not blocked_reasons:
+        route_router_ready = True
+        route_decision_status = "ready"
+        human_review_required = False
+        human_intervention_required = False
+        auto_route_allowed = True
+        next_action = "prepare_prompt470_bounded_targeted_fix_execution_and_review"
+        if execution_success and tracked_diff_present:
+            route_router_status = "ready"
+            route_decision = "success_with_tracked_changes_prepare_targeted_fix"
+            success_with_changes_route_ready = True
+            targeted_fix_request_ready = True
+            targeted_fix_reason = (
+                "tracked_changes_present_after_successful_execution"
+            )
+        elif execution_success:
+            route_router_status = "observed_no_changes"
+            route_decision = "success_no_changes_continue_observed"
+            success_no_changes_route_ready = True
+        else:
+            route_router_status = "ready_failed_execution"
+            route_decision = "failed_execution_prepare_targeted_fix"
+            failed_execution_route_ready = True
+            targeted_fix_request_ready = True
+            targeted_fix_reason = "failed_or_blocked_execution"
+
+    blocked_reason = blocked_reasons[0] if blocked_reasons else ""
+
+    return {
+        "prompt469_schema_version": _PROMPT469_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt469",
+        "prompt469_applicable": True,
+        "prompt469_route_router_status": route_router_status,
+        "prompt469_route_router_ready": route_router_ready,
+        "prompt469_upstream_prompt468_evidence_ready": (
+            upstream_prompt468_evidence_ready
+        ),
+        "prompt469_execution_evidence_ready": execution_evidence_ready,
+        "prompt469_execution_success": execution_success,
+        "prompt469_execution_failed_or_blocked": execution_failed_or_blocked,
+        "prompt469_diff_evidence_known": diff_evidence_known,
+        "prompt469_tracked_diff_empty": bool(
+            diff_evidence_known and tracked_diff_empty and not changed_files
+        ),
+        "prompt469_tracked_diff_present": tracked_diff_present,
+        "prompt469_changed_files": changed_files,
+        "prompt469_untracked_files": untracked_files,
+        "prompt469_unexpected_files": unexpected_files,
+        "prompt469_untracked_or_unexpected_files_present": (
+            untracked_or_unexpected_files_present
+        ),
+        "prompt469_route_decision_status": route_decision_status,
+        "prompt469_route_decision": route_decision,
+        "prompt469_success_no_changes_route_ready": (
+            success_no_changes_route_ready
+        ),
+        "prompt469_success_with_changes_route_ready": (
+            success_with_changes_route_ready
+        ),
+        "prompt469_failed_execution_route_ready": failed_execution_route_ready,
+        "prompt469_targeted_fix_request_ready": targeted_fix_request_ready,
+        "prompt469_targeted_fix_reason": targeted_fix_reason,
+        "prompt469_targeted_fix_input_changed_files": (
+            changed_files if targeted_fix_request_ready else []
+        ),
+        "prompt469_targeted_fix_input_execution_classification": (
+            execution_classification
+        ),
+        "prompt469_targeted_fix_next_prompt_id": next_prompt_id,
+        "prompt469_targeted_fix_next_action": (
+            "prepare_prompt470_bounded_targeted_fix_execution_and_review"
+        ),
+        "prompt469_human_review_required": human_review_required,
+        "prompt469_human_intervention_required": human_intervention_required,
+        "prompt469_auto_route_allowed": auto_route_allowed,
+        "prompt469_codex_invocation_allowed": False,
+        "prompt469_file_creation_allowed": False,
+        "prompt469_tests_allowed": False,
+        "prompt469_commit_tag_allowed": False,
+        "prompt469_push_allowed": False,
+        "prompt469_pr_allowed": False,
+        "prompt469_merge_allowed": False,
+        "prompt469_unbounded_loop_allowed": False,
+        "prompt469_blocked_reason": blocked_reason,
+        "prompt469_blocked_reasons": blocked_reasons,
+        "prompt469_next_action": next_action,
     }
 
 
@@ -259969,6 +260266,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt468_full_no_human_loop_regression_rerun_payload,
         }
+        prompt469_changed_diff_route_guard_payload = (
+            _build_prompt469_changed_diff_route_guard_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt469_changed_diff_route_guard_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -260742,6 +261048,71 @@ class PlannedExecutionRunner:
                 "prompt468_next_action": (
                     prompt468_full_no_human_loop_regression_rerun_payload.get(
                         "prompt468_next_action"
+                    )
+                ),
+                "prompt469_route_router_status": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_route_router_status"
+                    )
+                ),
+                "prompt469_route_router_ready": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_route_router_ready"
+                    )
+                ),
+                "prompt469_upstream_prompt468_evidence_ready": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_upstream_prompt468_evidence_ready"
+                    )
+                ),
+                "prompt469_execution_evidence_ready": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_execution_evidence_ready"
+                    )
+                ),
+                "prompt469_execution_success": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_execution_success"
+                    )
+                ),
+                "prompt469_diff_evidence_known": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_diff_evidence_known"
+                    )
+                ),
+                "prompt469_tracked_diff_present": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_tracked_diff_present"
+                    )
+                ),
+                "prompt469_route_decision_status": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_route_decision_status"
+                    )
+                ),
+                "prompt469_route_decision": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_route_decision"
+                    )
+                ),
+                "prompt469_success_no_changes_route_ready": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_success_no_changes_route_ready"
+                    )
+                ),
+                "prompt469_targeted_fix_request_ready": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_targeted_fix_request_ready"
+                    )
+                ),
+                "prompt469_auto_route_allowed": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_auto_route_allowed"
+                    )
+                ),
+                "prompt469_next_action": (
+                    prompt469_changed_diff_route_guard_payload.get(
+                        "prompt469_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -262084,6 +262455,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt468_full_no_human_loop_regression_rerun_state=(
                     prompt468_full_no_human_loop_regression_rerun_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt469_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt469_changed_diff_route_guard_state=(
+                    prompt469_changed_diff_route_guard_payload
                 ),
             )
         )
@@ -264432,6 +264811,84 @@ class PlannedExecutionRunner:
                     "prompt468_next_action"
                 ),
                 default="manual_review_prompt468_regression_blocked",
+            ),
+            "prompt469_route_router_status": _normalize_text(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_route_router_status"
+                ),
+                default="blocked",
+            ),
+            "prompt469_route_router_ready": bool(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_route_router_ready",
+                    False,
+                )
+            ),
+            "prompt469_upstream_prompt468_evidence_ready": bool(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_upstream_prompt468_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt469_execution_evidence_ready": bool(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_execution_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt469_execution_success": bool(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_execution_success",
+                    False,
+                )
+            ),
+            "prompt469_diff_evidence_known": bool(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_diff_evidence_known",
+                    False,
+                )
+            ),
+            "prompt469_tracked_diff_present": bool(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_tracked_diff_present",
+                    False,
+                )
+            ),
+            "prompt469_route_decision_status": _normalize_text(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_route_decision_status"
+                ),
+                default="blocked",
+            ),
+            "prompt469_route_decision": _normalize_text(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_route_decision"
+                ),
+                default="blocked",
+            ),
+            "prompt469_success_no_changes_route_ready": bool(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_success_no_changes_route_ready",
+                    False,
+                )
+            ),
+            "prompt469_targeted_fix_request_ready": bool(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_targeted_fix_request_ready",
+                    False,
+                )
+            ),
+            "prompt469_auto_route_allowed": bool(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_auto_route_allowed",
+                    False,
+                )
+            ),
+            "prompt469_next_action": _normalize_text(
+                prompt469_changed_diff_route_guard_payload.get(
+                    "prompt469_next_action"
+                ),
+                default="manual_review_prompt469_route_router_blocked",
             ),
         }
         if decision_error:
@@ -271548,6 +272005,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT468_FULL_NO_HUMAN_LOOP_REGRESSION_RERUN_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT469_CHANGED_DIFF_ROUTE_GUARD_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
