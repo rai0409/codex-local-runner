@@ -4008,6 +4008,9 @@ _PROMPT465_SCHEMA_VERSION = (
 _PROMPT466_SCHEMA_VERSION = (
     "prompt466_execution_result_review_route_decision_v1"
 )
+_PROMPT467_SCHEMA_VERSION = (
+    "prompt467_no_human_next_cycle_continuation_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7627,6 +7630,75 @@ _PROMPT466_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS: tuple[str, ...] = (
     "prompt466_review_passed",
     "prompt466_blocked_reason",
     "prompt466_next_action",
+)
+_PROMPT467_NO_HUMAN_NEXT_CYCLE_CONTINUATION_KEYS: tuple[str, ...] = (
+    "prompt467_schema_version",
+    "prompt467_applicable",
+    "prompt467_prompt466_status",
+    "prompt467_prompt466_next_action",
+    "prompt467_prompt466_route_decision",
+    "prompt467_prompt466_human_intervention_required",
+    "prompt467_prompt466_auto_route_allowed",
+    "prompt467_prompt466_handoff_ready",
+    "prompt467_prompt466_no_human_continuation_ready",
+    "prompt467_prompt466_next_cycle_request_ready",
+    "prompt467_continuation_input_ready",
+    "prompt467_continuation_input_source",
+    "prompt467_continuation_input_missing_reason",
+    "prompt467_reviewed_route_evidence_ready",
+    "prompt467_no_human_evidence_ready",
+    "prompt467_next_cycle_request_evidence_ready",
+    "prompt467_no_human_continuation_status",
+    "prompt467_no_human_continuation_ready",
+    "prompt467_human_review_required",
+    "prompt467_human_intervention_required",
+    "prompt467_auto_continue_allowed",
+    "prompt467_continuation_reason",
+    "prompt467_continuation_blocked_reason",
+    "prompt467_next_cycle_request_ready",
+    "prompt467_next_cycle_runtime_request_ready",
+    "prompt467_next_cycle_prompt_request_ready",
+    "prompt467_next_cycle_selected_action",
+    "prompt467_next_cycle_selected_prompt_id",
+    "prompt467_next_cycle_selected_prompt_title",
+    "prompt467_next_cycle_selected_prompt_purpose",
+    "prompt467_next_cycle_expected_next_action",
+    "prompt467_minimal_no_human_loop_completed",
+    "prompt467_minimal_no_human_loop_completion_status",
+    "prompt467_minimal_no_human_loop_completion_reason",
+    "prompt467_completed_stages",
+    "prompt467_missing_stages",
+    "prompt467_completed_stage_count",
+    "prompt467_required_stage_count",
+    "prompt467_current_cycle",
+    "prompt467_max_cycles",
+    "prompt467_one_cycle_only",
+    "prompt467_max_cycles_guard_ready",
+    "prompt467_max_cycles_reached",
+    "prompt467_retry_limit_guard_ready",
+    "prompt467_retry_limit_reached",
+    "prompt467_unsafe_stop_guard_ready",
+    "prompt467_unsafe_stop_required",
+    "prompt467_unbounded_loop_allowed",
+    "prompt467_git_mutation_allowed",
+    "prompt467_commit_tag_allowed",
+    "prompt467_remote_mutation_allowed",
+    "prompt467_push_allowed",
+    "prompt467_tests_allowed",
+    "prompt467_file_creation_allowed",
+    "prompt467_merge_allowed",
+    "prompt467_pr_allowed",
+    "prompt467_codex_invocation_allowed",
+    "prompt467_git_mutation_performed_observed",
+    "prompt467_commit_tag_performed_observed",
+    "prompt467_remote_mutation_performed_observed",
+    "prompt467_push_performed_observed",
+    "prompt467_tests_performed_observed",
+    "prompt467_file_creation_performed_observed",
+    "prompt467_codex_invocation_performed_observed",
+    "prompt467_smoke_passed",
+    "prompt467_blocked_reason",
+    "prompt467_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -11411,6 +11483,32 @@ def _merge_prompt466_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT466_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt467_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt467_no_human_next_cycle_continuation_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt467_no_human_next_cycle_continuation_state)
+        if isinstance(
+            prompt467_no_human_next_cycle_continuation_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT467_NO_HUMAN_NEXT_CYCLE_CONTINUATION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -79145,6 +79243,385 @@ def _build_prompt466_execution_result_review_route_decision_state(
         ),
         "prompt466_blocked_reason": blocked_reason,
         "prompt466_next_action": next_action,
+    }
+
+
+def _build_prompt467_no_human_next_cycle_continuation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt466_status = _normalize_text(
+        payload.get("prompt466_execution_result_review_status"),
+        default="",
+    )
+    prompt466_next_action = _normalize_text(
+        payload.get("prompt466_next_action"),
+        default="",
+    )
+    prompt466_route_decision = _normalize_text(
+        payload.get("prompt466_route_decision"),
+        default="",
+    )
+    prompt466_human_intervention_required = (
+        payload.get("prompt466_human_intervention_required") is True
+    )
+    prompt466_auto_route_allowed = (
+        payload.get("prompt466_auto_route_allowed") is True
+    )
+    prompt466_handoff_ready = (
+        payload.get("prompt466_prompt467_handoff_ready") is True
+    )
+    prompt466_no_human_continuation_ready = (
+        payload.get("prompt466_prompt467_no_human_continuation_ready") is True
+    )
+    prompt466_next_cycle_request_ready = (
+        payload.get("prompt466_prompt467_next_cycle_request_ready") is True
+    )
+
+    applicable = bool(
+        prompt466_next_action == "prepare_prompt467_no_human_next_cycle_continuation"
+        or prompt466_handoff_ready
+        or prompt466_no_human_continuation_ready
+        or prompt466_next_cycle_request_ready
+        or payload.get("prompt466_human_intervention_required") is False
+        or prompt466_auto_route_allowed
+    )
+    reviewed_route_evidence_ready = bool(
+        prompt466_status == "reviewed"
+        and prompt466_route_decision in {
+            "success_no_changes_continue",
+            "success_with_expected_changes_reviewless_continue",
+        }
+    )
+    no_human_evidence_ready = bool(
+        reviewed_route_evidence_ready
+        and not prompt466_human_intervention_required
+        and prompt466_auto_route_allowed
+        and prompt466_handoff_ready
+        and prompt466_no_human_continuation_ready
+    )
+    next_cycle_request_evidence_ready = bool(
+        no_human_evidence_ready and prompt466_next_cycle_request_ready
+    )
+    continuation_input_ready = bool(
+        no_human_evidence_ready and next_cycle_request_evidence_ready
+    )
+
+    current_cycle = _as_non_negative_int(
+        payload.get("autonomous-current-cycle")
+        if payload.get("autonomous-current-cycle") is not None
+        else (
+            payload.get("autonomous_current_cycle")
+            if payload.get("autonomous_current_cycle") is not None
+            else (
+                payload.get("prompt435_autonomous_current_cycle")
+                if payload.get("prompt435_autonomous_current_cycle") is not None
+                else payload.get("prompt466_current_cycle")
+            )
+        ),
+        default=0,
+    )
+    max_cycles = _as_non_negative_int(
+        payload.get("autonomous-max-cycles")
+        if payload.get("autonomous-max-cycles") is not None
+        else (
+            payload.get("autonomous_max_cycles")
+            if payload.get("autonomous_max_cycles") is not None
+            else (
+                payload.get("prompt435_autonomous_max_cycles")
+                if payload.get("prompt435_autonomous_max_cycles") is not None
+                else payload.get("prompt466_max_cycles")
+            )
+        ),
+        default=1,
+    )
+    if max_cycles <= 0:
+        max_cycles = 1
+    max_cycles_reached = current_cycle >= max_cycles
+    retry_limit_reached = bool(
+        payload.get("prompt467_retry_limit_reached") is True
+        or payload.get("prompt466_retry_limit_reached") is True
+    )
+    unsafe_stop_required = bool(
+        payload.get("prompt467_unsafe_stop_required") is True
+        or payload.get("prompt466_unsafe_stop_required") is True
+    )
+
+    remote_or_push_mutation_observed = bool(
+        payload.get("prompt467_remote_mutation_performed_observed") is True
+        or payload.get("prompt467_push_performed_observed") is True
+        or payload.get("prompt466_remote_mutation_performed_observed") is True
+        or payload.get("prompt466_push_performed_observed") is True
+        or payload.get("remote_mutation_performed_observed") is True
+        or payload.get("push_performed_observed") is True
+    )
+    git_or_commit_tag_mutation_observed = bool(
+        payload.get("prompt467_git_mutation_performed_observed") is True
+        or payload.get("prompt467_commit_tag_performed_observed") is True
+        or payload.get("prompt466_git_mutation_performed_observed") is True
+        or payload.get("prompt466_commit_tag_performed_observed") is True
+    )
+    tests_observed = bool(
+        payload.get("prompt467_tests_performed_observed") is True
+        or payload.get("prompt466_tests_performed_observed") is True
+        or payload.get("tests_performed_observed") is True
+    )
+    file_creation_observed = bool(
+        payload.get("prompt467_file_creation_performed_observed") is True
+        or payload.get("prompt466_file_creation_performed_observed") is True
+    )
+    codex_invocation_observed = bool(
+        payload.get("prompt467_codex_invocation_performed_observed") is True
+        or payload.get("prompt466_codex_invocation_performed_observed") is True
+    )
+    unbounded_loop_requested = bool(
+        payload.get("prompt467_unbounded_loop_allowed") is True
+        or payload.get("unbounded_loop_allowed") is True
+    )
+    safety_regression_detected = bool(
+        retry_limit_reached
+        or unsafe_stop_required
+        or any(
+            payload.get(key) is True
+            for key in (
+                "prompt467_git_mutation_allowed",
+                "prompt467_commit_tag_allowed",
+                "prompt467_remote_mutation_allowed",
+                "prompt467_push_allowed",
+                "prompt467_tests_allowed",
+                "prompt467_file_creation_allowed",
+                "prompt467_merge_allowed",
+                "prompt467_pr_allowed",
+                "prompt467_codex_invocation_allowed",
+            )
+        )
+    )
+
+    continuation_input_missing_reason = ""
+    blocked_reason = ""
+    if not continuation_input_ready:
+        continuation_input_missing_reason = (
+            "prompt467_prompt466_no_human_continuation_evidence_missing"
+        )
+    if applicable and prompt466_human_intervention_required:
+        blocked_reason = "prompt467_prompt466_human_intervention_required"
+    elif remote_or_push_mutation_observed:
+        blocked_reason = "prompt467_remote_or_push_mutation_observed"
+    elif git_or_commit_tag_mutation_observed:
+        blocked_reason = "prompt467_git_or_commit_tag_mutation_observed"
+    elif tests_observed:
+        blocked_reason = "prompt467_tests_observed"
+    elif codex_invocation_observed:
+        blocked_reason = "prompt467_codex_invocation_observed"
+    elif file_creation_observed:
+        blocked_reason = "prompt467_file_creation_observed"
+    elif unbounded_loop_requested:
+        blocked_reason = "prompt467_unbounded_loop_not_allowed"
+    elif safety_regression_detected:
+        blocked_reason = "prompt467_safety_regression_detected"
+
+    required_stages = {
+        "prompt461_completed_closure": (
+            payload.get("prompt461_completion_status") == "completed"
+        ),
+        "prompt462_next_cycle_smoke_ready": (
+            payload.get("prompt462_smoke_passed") is True
+        ),
+        "prompt463_next_prompt_selected": (
+            payload.get("prompt463_next_prompt_selection_status") == "ready"
+        ),
+        "prompt464_runtime_packet_materialized": (
+            payload.get("prompt464_runtime_packet_status") == "ready"
+        ),
+        "prompt465_bounded_execution_performed": (
+            payload.get("prompt465_execution_smoke_status") == "performed"
+        ),
+        "prompt466_execution_result_reviewed": prompt466_status == "reviewed",
+    }
+
+    status = "not_applicable"
+    no_human_continuation_ready = False
+    human_review_required = True
+    human_intervention_required = bool(prompt466_human_intervention_required)
+    auto_continue_allowed = False
+    continuation_reason = ""
+    next_action = "manual_review_prompt467_route"
+    next_cycle_request_ready = False
+    next_cycle_runtime_request_ready = False
+    next_cycle_prompt_request_ready = False
+    minimal_loop_completed = False
+    minimal_loop_completion_status = "not_completed"
+    minimal_loop_completion_reason = ""
+    smoke_passed = False
+
+    if blocked_reason:
+        status = "blocked"
+        human_review_required = True
+        human_intervention_required = bool(prompt466_human_intervention_required)
+    elif not applicable or not continuation_input_ready:
+        status = "not_applicable"
+        blocked_reason = continuation_input_missing_reason
+        human_intervention_required = False
+    elif max_cycles_reached:
+        status = "stopped"
+        human_review_required = False
+        human_intervention_required = False
+        smoke_passed = True
+        next_action = "stop_autonomous_loop_max_cycles_reached"
+        minimal_loop_completed = True
+        minimal_loop_completion_status = "completed"
+        minimal_loop_completion_reason = (
+            "prompt467_completed_execution_review_and_no_human_continuation"
+        )
+    else:
+        status = "ready"
+        no_human_continuation_ready = True
+        human_review_required = False
+        human_intervention_required = False
+        auto_continue_allowed = True
+        continuation_reason = "prompt467_prompt466_reviewed_success_no_human_route"
+        next_cycle_request_ready = True
+        next_cycle_runtime_request_ready = True
+        next_cycle_prompt_request_ready = True
+        minimal_loop_completed = True
+        minimal_loop_completion_status = "completed"
+        minimal_loop_completion_reason = (
+            "prompt467_completed_execution_review_and_no_human_continuation"
+        )
+        smoke_passed = True
+        next_action = "prepare_prompt468_full_no_human_loop_regression_rerun"
+
+    required_stages["prompt467_no_human_continuation_ready"] = status == "ready"
+    completed_stages = [
+        stage for stage, completed in required_stages.items() if completed
+    ]
+    missing_stages = [
+        stage for stage, completed in required_stages.items() if not completed
+    ]
+
+    return {
+        "prompt467_schema_version": _PROMPT467_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt467",
+        "prompt467_applicable": applicable,
+        "prompt467_prompt466_status": prompt466_status,
+        "prompt467_prompt466_next_action": prompt466_next_action,
+        "prompt467_prompt466_route_decision": prompt466_route_decision,
+        "prompt467_prompt466_human_intervention_required": (
+            prompt466_human_intervention_required
+        ),
+        "prompt467_prompt466_auto_route_allowed": prompt466_auto_route_allowed,
+        "prompt467_prompt466_handoff_ready": prompt466_handoff_ready,
+        "prompt467_prompt466_no_human_continuation_ready": (
+            prompt466_no_human_continuation_ready
+        ),
+        "prompt467_prompt466_next_cycle_request_ready": (
+            prompt466_next_cycle_request_ready
+        ),
+        "prompt467_continuation_input_ready": continuation_input_ready,
+        "prompt467_continuation_input_source": (
+            "prompt466_execution_result_review_route_decision"
+            if continuation_input_ready
+            else ""
+        ),
+        "prompt467_continuation_input_missing_reason": (
+            continuation_input_missing_reason
+        ),
+        "prompt467_reviewed_route_evidence_ready": reviewed_route_evidence_ready,
+        "prompt467_no_human_evidence_ready": no_human_evidence_ready,
+        "prompt467_next_cycle_request_evidence_ready": (
+            next_cycle_request_evidence_ready
+        ),
+        "prompt467_no_human_continuation_status": status,
+        "prompt467_no_human_continuation_ready": no_human_continuation_ready,
+        "prompt467_human_review_required": human_review_required,
+        "prompt467_human_intervention_required": human_intervention_required,
+        "prompt467_auto_continue_allowed": auto_continue_allowed,
+        "prompt467_continuation_reason": continuation_reason,
+        "prompt467_continuation_blocked_reason": blocked_reason,
+        "prompt467_next_cycle_request_ready": next_cycle_request_ready,
+        "prompt467_next_cycle_runtime_request_ready": (
+            next_cycle_runtime_request_ready
+        ),
+        "prompt467_next_cycle_prompt_request_ready": (
+            next_cycle_prompt_request_ready
+        ),
+        "prompt467_next_cycle_selected_action": (
+            "select_next_prompt_for_following_cycle"
+            if next_cycle_prompt_request_ready
+            else ""
+        ),
+        "prompt467_next_cycle_selected_prompt_id": (
+            "prompt468" if next_cycle_prompt_request_ready else ""
+        ),
+        "prompt467_next_cycle_selected_prompt_title": (
+            "full no-human autonomous loop regression rerun"
+            if next_cycle_prompt_request_ready
+            else ""
+        ),
+        "prompt467_next_cycle_selected_prompt_purpose": (
+            "rerun the minimal no-human loop evidence path as a regression guard"
+            if next_cycle_prompt_request_ready
+            else ""
+        ),
+        "prompt467_next_cycle_expected_next_action": (
+            "prepare_prompt468_full_no_human_loop_regression_rerun"
+            if next_cycle_prompt_request_ready
+            else ""
+        ),
+        "prompt467_minimal_no_human_loop_completed": minimal_loop_completed,
+        "prompt467_minimal_no_human_loop_completion_status": (
+            minimal_loop_completion_status
+        ),
+        "prompt467_minimal_no_human_loop_completion_reason": (
+            minimal_loop_completion_reason
+        ),
+        "prompt467_completed_stages": completed_stages,
+        "prompt467_missing_stages": missing_stages,
+        "prompt467_completed_stage_count": len(completed_stages),
+        "prompt467_required_stage_count": len(required_stages),
+        "prompt467_current_cycle": current_cycle,
+        "prompt467_max_cycles": max_cycles,
+        "prompt467_one_cycle_only": True,
+        "prompt467_max_cycles_guard_ready": not max_cycles_reached,
+        "prompt467_max_cycles_reached": max_cycles_reached,
+        "prompt467_retry_limit_guard_ready": not retry_limit_reached,
+        "prompt467_retry_limit_reached": retry_limit_reached,
+        "prompt467_unsafe_stop_guard_ready": not unsafe_stop_required,
+        "prompt467_unsafe_stop_required": unsafe_stop_required,
+        "prompt467_unbounded_loop_allowed": False,
+        "prompt467_git_mutation_allowed": False,
+        "prompt467_commit_tag_allowed": False,
+        "prompt467_remote_mutation_allowed": False,
+        "prompt467_push_allowed": False,
+        "prompt467_tests_allowed": False,
+        "prompt467_file_creation_allowed": False,
+        "prompt467_merge_allowed": False,
+        "prompt467_pr_allowed": False,
+        "prompt467_codex_invocation_allowed": False,
+        "prompt467_git_mutation_performed_observed": (
+            git_or_commit_tag_mutation_observed
+        ),
+        "prompt467_commit_tag_performed_observed": (
+            payload.get("prompt467_commit_tag_performed_observed") is True
+            or payload.get("prompt466_commit_tag_performed_observed") is True
+        ),
+        "prompt467_remote_mutation_performed_observed": (
+            remote_or_push_mutation_observed
+        ),
+        "prompt467_push_performed_observed": (
+            payload.get("prompt467_push_performed_observed") is True
+            or payload.get("prompt466_push_performed_observed") is True
+        ),
+        "prompt467_tests_performed_observed": tests_observed,
+        "prompt467_file_creation_performed_observed": file_creation_observed,
+        "prompt467_codex_invocation_performed_observed": (
+            codex_invocation_observed
+        ),
+        "prompt467_smoke_passed": smoke_passed,
+        "prompt467_blocked_reason": blocked_reason,
+        "prompt467_next_action": next_action,
     }
 
 
@@ -259220,6 +259697,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt466_execution_result_review_route_decision_payload,
         }
+        prompt467_no_human_next_cycle_continuation_payload = (
+            _build_prompt467_no_human_next_cycle_continuation_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt467_no_human_next_cycle_continuation_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -259908,6 +260394,46 @@ class PlannedExecutionRunner:
                 "prompt466_next_action": (
                     prompt466_execution_result_review_route_decision_payload.get(
                         "prompt466_next_action"
+                    )
+                ),
+                "prompt467_no_human_continuation_status": (
+                    prompt467_no_human_next_cycle_continuation_payload.get(
+                        "prompt467_no_human_continuation_status"
+                    )
+                ),
+                "prompt467_no_human_continuation_ready": (
+                    prompt467_no_human_next_cycle_continuation_payload.get(
+                        "prompt467_no_human_continuation_ready"
+                    )
+                ),
+                "prompt467_human_intervention_required": (
+                    prompt467_no_human_next_cycle_continuation_payload.get(
+                        "prompt467_human_intervention_required"
+                    )
+                ),
+                "prompt467_auto_continue_allowed": (
+                    prompt467_no_human_next_cycle_continuation_payload.get(
+                        "prompt467_auto_continue_allowed"
+                    )
+                ),
+                "prompt467_next_cycle_request_ready": (
+                    prompt467_no_human_next_cycle_continuation_payload.get(
+                        "prompt467_next_cycle_request_ready"
+                    )
+                ),
+                "prompt467_next_cycle_selected_prompt_id": (
+                    prompt467_no_human_next_cycle_continuation_payload.get(
+                        "prompt467_next_cycle_selected_prompt_id"
+                    )
+                ),
+                "prompt467_minimal_no_human_loop_completed": (
+                    prompt467_no_human_next_cycle_continuation_payload.get(
+                        "prompt467_minimal_no_human_loop_completed"
+                    )
+                ),
+                "prompt467_next_action": (
+                    prompt467_no_human_next_cycle_continuation_payload.get(
+                        "prompt467_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -261234,6 +261760,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt466_execution_result_review_route_decision_state=(
                     prompt466_execution_result_review_route_decision_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt467_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt467_no_human_next_cycle_continuation_state=(
+                    prompt467_no_human_next_cycle_continuation_payload
                 ),
             )
         )
@@ -263432,6 +263966,54 @@ class PlannedExecutionRunner:
                     "prompt466_next_action"
                 ),
                 default="manual_review_prompt466_route",
+            ),
+            "prompt467_no_human_continuation_status": _normalize_text(
+                prompt467_no_human_next_cycle_continuation_payload.get(
+                    "prompt467_no_human_continuation_status"
+                ),
+                default="not_applicable",
+            ),
+            "prompt467_no_human_continuation_ready": bool(
+                prompt467_no_human_next_cycle_continuation_payload.get(
+                    "prompt467_no_human_continuation_ready",
+                    False,
+                )
+            ),
+            "prompt467_human_intervention_required": bool(
+                prompt467_no_human_next_cycle_continuation_payload.get(
+                    "prompt467_human_intervention_required",
+                    False,
+                )
+            ),
+            "prompt467_auto_continue_allowed": bool(
+                prompt467_no_human_next_cycle_continuation_payload.get(
+                    "prompt467_auto_continue_allowed",
+                    False,
+                )
+            ),
+            "prompt467_next_cycle_request_ready": bool(
+                prompt467_no_human_next_cycle_continuation_payload.get(
+                    "prompt467_next_cycle_request_ready",
+                    False,
+                )
+            ),
+            "prompt467_next_cycle_selected_prompt_id": _normalize_text(
+                prompt467_no_human_next_cycle_continuation_payload.get(
+                    "prompt467_next_cycle_selected_prompt_id"
+                ),
+                default="",
+            ),
+            "prompt467_minimal_no_human_loop_completed": bool(
+                prompt467_no_human_next_cycle_continuation_payload.get(
+                    "prompt467_minimal_no_human_loop_completed",
+                    False,
+                )
+            ),
+            "prompt467_next_action": _normalize_text(
+                prompt467_no_human_next_cycle_continuation_payload.get(
+                    "prompt467_next_action"
+                ),
+                default="manual_review_prompt467_route",
             ),
         }
         if decision_error:
@@ -270542,6 +271124,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT466_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT467_NO_HUMAN_NEXT_CYCLE_CONTINUATION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
