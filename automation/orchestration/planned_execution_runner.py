@@ -4011,6 +4011,9 @@ _PROMPT466_SCHEMA_VERSION = (
 _PROMPT467_SCHEMA_VERSION = (
     "prompt467_no_human_next_cycle_continuation_v1"
 )
+_PROMPT468_SCHEMA_VERSION = (
+    "prompt468_full_no_human_autonomous_loop_regression_rerun_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7699,6 +7702,37 @@ _PROMPT467_NO_HUMAN_NEXT_CYCLE_CONTINUATION_KEYS: tuple[str, ...] = (
     "prompt467_smoke_passed",
     "prompt467_blocked_reason",
     "prompt467_next_action",
+)
+_PROMPT468_FULL_NO_HUMAN_LOOP_REGRESSION_RERUN_KEYS: tuple[str, ...] = (
+    "prompt468_schema_version",
+    "prompt468_applicable",
+    "prompt468_full_no_human_loop_regression_status",
+    "prompt468_full_no_human_loop_regression_ready",
+    "prompt468_upstream_evidence_ready",
+    "prompt468_completion_closure_evidence_ready",
+    "prompt468_next_cycle_request_evidence_ready",
+    "prompt468_next_prompt_selection_evidence_ready",
+    "prompt468_materialization_evidence_ready",
+    "prompt468_bounded_execution_evidence_ready",
+    "prompt468_post_execution_diff_evidence_ready",
+    "prompt468_automatic_review_route_evidence_ready",
+    "prompt468_no_human_continuation_evidence_ready",
+    "prompt468_regression_passed",
+    "prompt468_minimal_no_human_loop_revalidated",
+    "prompt468_human_review_required",
+    "prompt468_human_intervention_required",
+    "prompt468_auto_continue_allowed",
+    "prompt468_codex_invocation_allowed",
+    "prompt468_file_creation_allowed",
+    "prompt468_tests_allowed",
+    "prompt468_commit_tag_allowed",
+    "prompt468_push_allowed",
+    "prompt468_pr_allowed",
+    "prompt468_merge_allowed",
+    "prompt468_unbounded_loop_allowed",
+    "prompt468_blocked_reason",
+    "prompt468_blocked_reasons",
+    "prompt468_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -11509,6 +11543,32 @@ def _merge_prompt467_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT467_NO_HUMAN_NEXT_CYCLE_CONTINUATION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt468_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt468_full_no_human_loop_regression_rerun_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt468_full_no_human_loop_regression_rerun_state)
+        if isinstance(
+            prompt468_full_no_human_loop_regression_rerun_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT468_FULL_NO_HUMAN_LOOP_REGRESSION_RERUN_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -79622,6 +79682,200 @@ def _build_prompt467_no_human_next_cycle_continuation_state(
         "prompt467_smoke_passed": smoke_passed,
         "prompt467_blocked_reason": blocked_reason,
         "prompt467_next_action": next_action,
+    }
+
+
+def _build_prompt468_full_no_human_loop_regression_rerun_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+
+    evidence_groups: tuple[tuple[str, str, tuple[tuple[str, Any], ...]], ...] = (
+        (
+            "prompt468_completion_closure_evidence_ready",
+            "prompt461_completion_closure_evidence_missing",
+            (
+                ("prompt461_completion_status", "completed"),
+                ("prompt461_success_closure_ready", True),
+                ("prompt461_autonomous_next_cycle_ready", True),
+                (
+                    "prompt461_next_action",
+                    "continue_autonomous_next_cycle",
+                ),
+            ),
+        ),
+        (
+            "prompt468_next_cycle_request_evidence_ready",
+            "prompt462_next_cycle_request_evidence_missing",
+            (
+                ("prompt462_next_cycle_smoke_status", "ready"),
+                ("prompt462_next_cycle_request_ready", True),
+                ("prompt462_next_cycle_runtime_request_ready", True),
+                ("prompt462_next_cycle_prompt_request_ready", True),
+                ("prompt462_smoke_passed", True),
+            ),
+        ),
+        (
+            "prompt468_next_prompt_selection_evidence_ready",
+            "prompt463_next_prompt_selection_evidence_missing",
+            (
+                ("prompt463_next_prompt_selection_status", "ready"),
+                ("prompt463_selected_prompt_id", "prompt464"),
+                ("prompt463_prompt464_handoff_ready", True),
+                ("prompt463_prompt464_prompt_request_ready", True),
+                ("prompt463_prompt464_runtime_request_ready", True),
+                ("prompt463_prompt464_execution_allowed", False),
+            ),
+        ),
+        (
+            "prompt468_materialization_evidence_ready",
+            "prompt464_materialization_evidence_missing",
+            (
+                ("prompt464_prompt_materialization_status", "ready"),
+                ("prompt464_materialized_prompt_id", "prompt465"),
+                ("prompt464_runtime_packet_status", "ready"),
+                ("prompt464_runtime_packet_ready", True),
+                (
+                    "prompt464_runtime_packet_codex_invocation_requested",
+                    True,
+                ),
+                (
+                    "prompt464_runtime_packet_codex_invocation_allowed",
+                    False,
+                ),
+                ("prompt464_runtime_packet_execution_allowed", False),
+                ("prompt464_prompt465_handoff_ready", True),
+            ),
+        ),
+        (
+            "prompt468_bounded_execution_evidence_ready",
+            "prompt465_bounded_execution_evidence_missing",
+            (
+                ("prompt465_execution_smoke_status", "performed"),
+                ("prompt465_execution_allowed", True),
+                ("prompt465_execution_attempted", True),
+                ("prompt465_execution_performed", True),
+                ("prompt465_codex_invocation_attempted", True),
+                ("prompt465_codex_invocation_performed", True),
+                ("prompt465_execution_returncode", 0),
+                (
+                    "prompt465_execution_returncode_classification",
+                    "success",
+                ),
+                ("prompt465_runtime_result_available", True),
+                ("prompt465_runtime_result_payload_ready", True),
+                ("prompt465_execution_result_review_ready", True),
+                ("prompt465_prompt466_handoff_ready", True),
+            ),
+        ),
+        (
+            "prompt468_post_execution_diff_evidence_ready",
+            "prompt465_post_execution_diff_evidence_missing",
+            (
+                ("prompt465_post_execution_tracked_diff_empty", True),
+                ("prompt465_post_execution_changed_files", []),
+                ("prompt465_post_execution_untracked_files", []),
+                ("prompt465_post_execution_unexpected_files", []),
+                ("prompt465_post_execution_changed_files_known", True),
+                ("prompt465_post_execution_untracked_files_known", True),
+                ("prompt465_post_execution_unexpected_files_known", True),
+            ),
+        ),
+        (
+            "prompt468_automatic_review_route_evidence_ready",
+            "prompt466_automatic_review_route_evidence_missing",
+            (
+                ("prompt466_execution_result_review_status", "reviewed"),
+                ("prompt466_diff_evidence_ready", True),
+                ("prompt466_route_decision_status", "ready"),
+                (
+                    "prompt466_route_decision",
+                    "success_no_changes_continue",
+                ),
+                ("prompt466_human_intervention_required", False),
+                ("prompt466_auto_route_allowed", True),
+                ("prompt466_prompt467_handoff_ready", True),
+                (
+                    "prompt466_prompt467_no_human_continuation_ready",
+                    True,
+                ),
+                ("prompt466_prompt467_next_cycle_request_ready", True),
+                (
+                    "prompt466_next_action",
+                    "prepare_prompt467_no_human_next_cycle_continuation",
+                ),
+            ),
+        ),
+        (
+            "prompt468_no_human_continuation_evidence_ready",
+            "prompt467_no_human_continuation_evidence_missing",
+            (
+                ("prompt467_no_human_continuation_status", "ready"),
+                ("prompt467_no_human_continuation_ready", True),
+                ("prompt467_human_review_required", False),
+                ("prompt467_human_intervention_required", False),
+                ("prompt467_auto_continue_allowed", True),
+                ("prompt467_next_cycle_request_ready", True),
+                ("prompt467_next_cycle_runtime_request_ready", True),
+                ("prompt467_next_cycle_prompt_request_ready", True),
+                ("prompt467_next_cycle_selected_prompt_id", "prompt468"),
+                ("prompt467_minimal_no_human_loop_completed", True),
+                (
+                    "prompt467_minimal_no_human_loop_completion_status",
+                    "completed",
+                ),
+                (
+                    "prompt467_next_action",
+                    "prepare_prompt468_full_no_human_loop_regression_rerun",
+                ),
+            ),
+        ),
+    )
+
+    evidence_ready: dict[str, bool] = {}
+    blocked_reasons: list[str] = []
+    for output_key, blocked_reason, requirements in evidence_groups:
+        group_ready = all(payload.get(key) == expected for key, expected in requirements)
+        evidence_ready[output_key] = group_ready
+        if not group_ready:
+            blocked_reasons.append(blocked_reason)
+
+    upstream_evidence_ready = not blocked_reasons
+    status = "passed" if upstream_evidence_ready else "blocked"
+    blocked_reason = blocked_reasons[0] if blocked_reasons else ""
+
+    return {
+        "prompt468_schema_version": _PROMPT468_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt468",
+        "prompt468_applicable": True,
+        "prompt468_full_no_human_loop_regression_status": status,
+        "prompt468_full_no_human_loop_regression_ready": (
+            upstream_evidence_ready
+        ),
+        "prompt468_upstream_evidence_ready": upstream_evidence_ready,
+        **evidence_ready,
+        "prompt468_regression_passed": upstream_evidence_ready,
+        "prompt468_minimal_no_human_loop_revalidated": upstream_evidence_ready,
+        "prompt468_human_review_required": not upstream_evidence_ready,
+        "prompt468_human_intervention_required": not upstream_evidence_ready,
+        "prompt468_auto_continue_allowed": upstream_evidence_ready,
+        "prompt468_codex_invocation_allowed": False,
+        "prompt468_file_creation_allowed": False,
+        "prompt468_tests_allowed": False,
+        "prompt468_commit_tag_allowed": False,
+        "prompt468_push_allowed": False,
+        "prompt468_pr_allowed": False,
+        "prompt468_merge_allowed": False,
+        "prompt468_unbounded_loop_allowed": False,
+        "prompt468_blocked_reason": blocked_reason,
+        "prompt468_blocked_reasons": blocked_reasons,
+        "prompt468_next_action": (
+            "prepare_prompt469_changed_diff_route_guard"
+            if upstream_evidence_ready
+            else "manual_review_prompt468_regression_blocked"
+        ),
     }
 
 
@@ -259706,6 +259960,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt467_no_human_next_cycle_continuation_payload,
         }
+        prompt468_full_no_human_loop_regression_rerun_payload = (
+            _build_prompt468_full_no_human_loop_regression_rerun_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt468_full_no_human_loop_regression_rerun_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -260434,6 +260697,51 @@ class PlannedExecutionRunner:
                 "prompt467_next_action": (
                     prompt467_no_human_next_cycle_continuation_payload.get(
                         "prompt467_next_action"
+                    )
+                ),
+                "prompt468_full_no_human_loop_regression_status": (
+                    prompt468_full_no_human_loop_regression_rerun_payload.get(
+                        "prompt468_full_no_human_loop_regression_status"
+                    )
+                ),
+                "prompt468_full_no_human_loop_regression_ready": (
+                    prompt468_full_no_human_loop_regression_rerun_payload.get(
+                        "prompt468_full_no_human_loop_regression_ready"
+                    )
+                ),
+                "prompt468_upstream_evidence_ready": (
+                    prompt468_full_no_human_loop_regression_rerun_payload.get(
+                        "prompt468_upstream_evidence_ready"
+                    )
+                ),
+                "prompt468_regression_passed": (
+                    prompt468_full_no_human_loop_regression_rerun_payload.get(
+                        "prompt468_regression_passed"
+                    )
+                ),
+                "prompt468_minimal_no_human_loop_revalidated": (
+                    prompt468_full_no_human_loop_regression_rerun_payload.get(
+                        "prompt468_minimal_no_human_loop_revalidated"
+                    )
+                ),
+                "prompt468_human_intervention_required": (
+                    prompt468_full_no_human_loop_regression_rerun_payload.get(
+                        "prompt468_human_intervention_required"
+                    )
+                ),
+                "prompt468_auto_continue_allowed": (
+                    prompt468_full_no_human_loop_regression_rerun_payload.get(
+                        "prompt468_auto_continue_allowed"
+                    )
+                ),
+                "prompt468_blocked_reason": (
+                    prompt468_full_no_human_loop_regression_rerun_payload.get(
+                        "prompt468_blocked_reason"
+                    )
+                ),
+                "prompt468_next_action": (
+                    prompt468_full_no_human_loop_regression_rerun_payload.get(
+                        "prompt468_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -261768,6 +262076,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt467_no_human_next_cycle_continuation_state=(
                     prompt467_no_human_next_cycle_continuation_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt468_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt468_full_no_human_loop_regression_rerun_state=(
+                    prompt468_full_no_human_loop_regression_rerun_payload
                 ),
             )
         )
@@ -264014,6 +264330,108 @@ class PlannedExecutionRunner:
                     "prompt467_next_action"
                 ),
                 default="manual_review_prompt467_route",
+            ),
+            "prompt468_full_no_human_loop_regression_status": _normalize_text(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_full_no_human_loop_regression_status"
+                ),
+                default="blocked",
+            ),
+            "prompt468_full_no_human_loop_regression_ready": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_full_no_human_loop_regression_ready",
+                    False,
+                )
+            ),
+            "prompt468_upstream_evidence_ready": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_upstream_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt468_regression_passed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_regression_passed",
+                    False,
+                )
+            ),
+            "prompt468_minimal_no_human_loop_revalidated": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_minimal_no_human_loop_revalidated",
+                    False,
+                )
+            ),
+            "prompt468_human_intervention_required": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_human_intervention_required",
+                    True,
+                )
+            ),
+            "prompt468_auto_continue_allowed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_auto_continue_allowed",
+                    False,
+                )
+            ),
+            "prompt468_codex_invocation_allowed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_codex_invocation_allowed",
+                    False,
+                )
+            ),
+            "prompt468_file_creation_allowed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_file_creation_allowed",
+                    False,
+                )
+            ),
+            "prompt468_tests_allowed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_tests_allowed",
+                    False,
+                )
+            ),
+            "prompt468_commit_tag_allowed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_commit_tag_allowed",
+                    False,
+                )
+            ),
+            "prompt468_push_allowed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_push_allowed",
+                    False,
+                )
+            ),
+            "prompt468_pr_allowed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_pr_allowed",
+                    False,
+                )
+            ),
+            "prompt468_merge_allowed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_merge_allowed",
+                    False,
+                )
+            ),
+            "prompt468_unbounded_loop_allowed": bool(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_unbounded_loop_allowed",
+                    False,
+                )
+            ),
+            "prompt468_blocked_reason": _normalize_text(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_blocked_reason"
+                ),
+                default="",
+            ),
+            "prompt468_next_action": _normalize_text(
+                prompt468_full_no_human_loop_regression_rerun_payload.get(
+                    "prompt468_next_action"
+                ),
+                default="manual_review_prompt468_regression_blocked",
             ),
         }
         if decision_error:
@@ -271127,6 +271545,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT467_NO_HUMAN_NEXT_CYCLE_CONTINUATION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT468_FULL_NO_HUMAN_LOOP_REGRESSION_RERUN_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
