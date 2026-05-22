@@ -4002,6 +4002,9 @@ _PROMPT463_SCHEMA_VERSION = (
 _PROMPT464_SCHEMA_VERSION = (
     "prompt464_one_cycle_next_prompt_materialization_smoke_v1"
 )
+_PROMPT465_SCHEMA_VERSION = (
+    "prompt465_bounded_one_cycle_execution_smoke_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7466,6 +7469,79 @@ _PROMPT464_ONE_CYCLE_NEXT_PROMPT_MATERIALIZATION_SMOKE_KEYS: tuple[str, ...] = (
     "prompt464_smoke_passed",
     "prompt464_blocked_reason",
     "prompt464_next_action",
+)
+_PROMPT465_BOUNDED_ONE_CYCLE_EXECUTION_SMOKE_KEYS: tuple[str, ...] = (
+    "prompt465_schema_version",
+    "prompt465_applicable",
+    "prompt465_prompt464_status",
+    "prompt465_prompt464_next_action",
+    "prompt465_prompt464_runtime_packet_ready",
+    "prompt465_prompt464_handoff_ready",
+    "prompt465_prompt464_execution_smoke_ready",
+    "prompt465_runtime_packet_consumed",
+    "prompt465_runtime_packet_source",
+    "prompt465_runtime_packet_missing_reason",
+    "prompt465_runtime_packet_request_id",
+    "prompt465_runtime_packet_command_argv",
+    "prompt465_runtime_packet_transport_mode",
+    "prompt465_runtime_packet_codex_invocation_requested",
+    "prompt465_execution_explicit_allow_required",
+    "prompt465_execution_explicit_allow_present",
+    "prompt465_execution_explicit_allow_source",
+    "prompt465_execution_allowed",
+    "prompt465_execution_smoke_status",
+    "prompt465_execution_smoke_ready",
+    "prompt465_execution_attempted",
+    "prompt465_execution_performed",
+    "prompt465_codex_invocation_attempted",
+    "prompt465_codex_invocation_performed",
+    "prompt465_codex_invocation_allowed",
+    "prompt465_execution_returncode",
+    "prompt465_execution_returncode_classification",
+    "prompt465_execution_stdout_path",
+    "prompt465_execution_stderr_path",
+    "prompt465_runtime_result_available",
+    "prompt465_runtime_result_path",
+    "prompt465_runtime_result_payload_ready",
+    "prompt465_post_execution_tracked_diff_empty",
+    "prompt465_post_execution_changed_files",
+    "prompt465_post_execution_untracked_files",
+    "prompt465_post_execution_unexpected_files",
+    "prompt465_post_execution_changed_files_known",
+    "prompt465_post_execution_untracked_files_known",
+    "prompt465_post_execution_unexpected_files_known",
+    "prompt465_prompt466_handoff_ready",
+    "prompt465_prompt466_expected_scope",
+    "prompt465_prompt466_expected_next_action",
+    "prompt465_execution_result_review_ready",
+    "prompt465_execution_result_review_required",
+    "prompt465_current_cycle",
+    "prompt465_max_cycles",
+    "prompt465_one_cycle_only",
+    "prompt465_max_cycles_guard_ready",
+    "prompt465_max_cycles_reached",
+    "prompt465_retry_limit_guard_ready",
+    "prompt465_retry_limit_reached",
+    "prompt465_unsafe_stop_guard_ready",
+    "prompt465_unsafe_stop_required",
+    "prompt465_unbounded_loop_allowed",
+    "prompt465_git_mutation_allowed",
+    "prompt465_commit_tag_allowed",
+    "prompt465_remote_mutation_allowed",
+    "prompt465_push_allowed",
+    "prompt465_tests_allowed",
+    "prompt465_file_creation_allowed",
+    "prompt465_merge_allowed",
+    "prompt465_pr_allowed",
+    "prompt465_git_mutation_performed_observed",
+    "prompt465_commit_tag_performed_observed",
+    "prompt465_remote_mutation_performed_observed",
+    "prompt465_push_performed_observed",
+    "prompt465_tests_performed_observed",
+    "prompt465_file_creation_performed_observed",
+    "prompt465_smoke_passed",
+    "prompt465_blocked_reason",
+    "prompt465_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -11198,6 +11274,32 @@ def _merge_prompt464_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT464_ONE_CYCLE_NEXT_PROMPT_MATERIALIZATION_SMOKE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt465_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt465_bounded_one_cycle_execution_smoke_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt465_bounded_one_cycle_execution_smoke_state)
+        if isinstance(
+            prompt465_bounded_one_cycle_execution_smoke_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT465_BOUNDED_ONE_CYCLE_EXECUTION_SMOKE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -67943,6 +68045,12 @@ def _normalize_prompt437_runtime_command_request(
         "approve_commit_tag_explicit_allow",
         "allow_commit_tag_execution",
         "request_commit_tag_execution",
+        "prompt465_explicit_execution_allow",
+        "prompt465_allow_bounded_execution_smoke",
+        "prompt465_allow_codex_invocation",
+        "prompt465_bounded_execution_explicit_allow",
+        "allow_prompt465_execution",
+        "allow_bounded_one_cycle_execution_smoke",
         "prompt461_prompt460_performed_evidence",
         "prompt461_post_reconcile_clean_evidence",
         "prompt461_final_clean_evidence",
@@ -78001,6 +78109,505 @@ def _build_prompt464_one_cycle_next_prompt_materialization_smoke_state(
             "prompt464_next_action": (
                 "prepare_prompt465_bounded_one_cycle_execution_smoke"
             ),
+        }
+    )
+    return state
+
+
+def _build_prompt465_bounded_one_cycle_execution_smoke_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    artifact_root = run_root if run_root is not None else Path(".")
+    stdout_path = artifact_root / "prompt465_bounded_one_cycle_execution_stdout.txt"
+    stderr_path = artifact_root / "prompt465_bounded_one_cycle_execution_stderr.txt"
+    result_path = artifact_root / "prompt465_bounded_one_cycle_execution_result.json"
+
+    prompt464_status = _normalize_text(
+        payload.get("prompt464_runtime_packet_status"),
+        default="",
+    )
+    prompt464_next_action = _normalize_text(
+        payload.get("prompt464_next_action"),
+        default="",
+    )
+    prompt464_runtime_packet_ready = (
+        payload.get("prompt464_runtime_packet_ready") is True
+    )
+    prompt464_handoff_ready = (
+        payload.get("prompt464_prompt465_handoff_ready") is True
+    )
+    prompt464_execution_smoke_ready = (
+        payload.get("prompt464_prompt465_execution_smoke_ready") is True
+    )
+    prompt464_materialized_prompt_id = _normalize_text(
+        payload.get("prompt464_materialized_prompt_id"),
+        default="",
+    )
+    applicable = bool(
+        prompt464_next_action == "prepare_prompt465_bounded_one_cycle_execution_smoke"
+        or prompt464_status == "ready"
+        or prompt464_runtime_packet_ready
+        or prompt464_handoff_ready
+        or prompt464_execution_smoke_ready
+        or prompt464_materialized_prompt_id == "prompt465"
+    )
+    packet_exists = bool(
+        prompt464_status == "ready"
+        and prompt464_runtime_packet_ready
+        and prompt464_handoff_ready
+        and prompt464_execution_smoke_ready
+    )
+    command_argv = (
+        list(payload.get("prompt464_runtime_packet_command_argv"))
+        if isinstance(payload.get("prompt464_runtime_packet_command_argv"), list)
+        else []
+    )
+    transport_mode = _normalize_text(
+        payload.get("prompt464_runtime_packet_transport_mode"),
+        default="",
+    )
+    request_id = _normalize_text(
+        payload.get("prompt464_runtime_packet_request_id"),
+        default="",
+    )
+    invocation_requested = (
+        payload.get("prompt464_runtime_packet_codex_invocation_requested") is True
+    )
+
+    allow_keys = (
+        "prompt465_explicit_execution_allow",
+        "prompt465_allow_bounded_execution_smoke",
+        "prompt465_allow_codex_invocation",
+        "prompt465_bounded_execution_explicit_allow",
+        "allow_prompt465_execution",
+        "allow_bounded_one_cycle_execution_smoke",
+    )
+
+    def _find_explicit_allow_source(source: Mapping[str, Any], prefix: str) -> str:
+        for key in allow_keys:
+            if source.get(key) is True:
+                return f"{prefix}.{key}" if prefix else key
+        for nested_key in (
+            "runtime_command_request",
+            "prompt437_runtime_command_request",
+            "prompt465_runtime_command_request",
+            "approved_restart_payload",
+            "prompt465_approved_restart_payload",
+        ):
+            nested = source.get(nested_key)
+            if isinstance(nested, Mapping):
+                nested_source = _find_explicit_allow_source(nested, nested_key)
+                if nested_source:
+                    return nested_source
+        return ""
+
+    explicit_allow_source = _find_explicit_allow_source(payload, "")
+    explicit_allow_present = bool(explicit_allow_source)
+
+    current_cycle = _as_non_negative_int(
+        payload.get("prompt465_current_cycle")
+        if payload.get("prompt465_current_cycle") is not None
+        else payload.get("prompt464_current_cycle")
+        if payload.get("prompt464_current_cycle") is not None
+        else payload.get("autonomous_current_cycle")
+        if payload.get("autonomous_current_cycle") is not None
+        else payload.get("autonomous-current-cycle"),
+        default=0,
+    )
+    max_cycles = _as_non_negative_int(
+        payload.get("prompt465_max_cycles")
+        if payload.get("prompt465_max_cycles") is not None
+        else payload.get("prompt464_max_cycles")
+        if payload.get("prompt464_max_cycles") is not None
+        else payload.get("autonomous_max_cycles")
+        if payload.get("autonomous_max_cycles") is not None
+        else payload.get("autonomous-max-cycles"),
+        default=1,
+    )
+    if max_cycles <= 0:
+        max_cycles = 1
+    max_cycles_reached = current_cycle >= max_cycles
+    retry_limit_reached = bool(
+        payload.get("prompt465_retry_limit_reached") is True
+        or payload.get("prompt464_retry_limit_reached") is True
+        or payload.get("retry_limit_reached") is True
+    )
+    unsafe_stop_required = bool(
+        payload.get("prompt465_unsafe_stop_required") is True
+        or payload.get("prompt464_unsafe_stop_required") is True
+        or payload.get("unsafe_stop_required") is True
+        or payload.get("global_stop_recommended") is True
+        or payload.get("global_stop") is True
+    )
+    remote_or_push_mutation_observed = bool(
+        payload.get("prompt465_remote_mutation_performed_observed") is True
+        or payload.get("prompt465_push_performed_observed") is True
+        or payload.get("prompt464_remote_mutation_performed_observed") is True
+        or payload.get("prompt464_push_performed_observed") is True
+        or payload.get("remote_mutation_performed_observed") is True
+        or payload.get("push_performed_observed") is True
+    )
+    git_or_commit_tag_mutation_observed = bool(
+        payload.get("prompt465_git_mutation_performed_observed") is True
+        or payload.get("prompt465_commit_tag_performed_observed") is True
+        or payload.get("prompt464_git_mutation_performed_observed") is True
+        or payload.get("prompt464_commit_tag_performed_observed") is True
+    )
+    tests_observed = bool(
+        payload.get("prompt465_tests_performed_observed") is True
+        or payload.get("tests_performed_observed") is True
+    )
+    file_creation_observed = bool(
+        payload.get("prompt465_file_creation_performed_observed") is True
+        or payload.get("prompt464_file_creation_performed_observed") is True
+        or payload.get("file_creation_performed_observed") is True
+    )
+    safety_flag_regression = any(
+        payload.get(key) is True
+        for key in (
+            "prompt465_commit_tag_allowed",
+            "prompt465_remote_mutation_allowed",
+            "prompt465_push_allowed",
+            "prompt465_tests_allowed",
+            "prompt465_merge_allowed",
+            "prompt465_pr_allowed",
+            "prompt465_unbounded_loop_allowed",
+        )
+    )
+    unbounded_loop_not_allowed = bool(
+        payload.get("prompt465_unbounded_loop_allowed") is True
+        or payload.get("prompt464_unbounded_loop_allowed") is True
+        or payload.get("unbounded_loop_allowed") is True
+    )
+
+    blocked_reason = ""
+    if not packet_exists:
+        blocked_reason = "prompt465_prompt464_runtime_packet_missing"
+    elif not explicit_allow_present:
+        blocked_reason = "prompt465_execution_explicit_allow_required"
+    elif command_argv != ["codex", "exec", "-"]:
+        blocked_reason = "prompt465_invalid_runtime_packet_command"
+    elif transport_mode != "live":
+        blocked_reason = "prompt465_invalid_runtime_packet_transport"
+    elif remote_or_push_mutation_observed:
+        blocked_reason = "prompt465_remote_or_push_mutation_observed"
+    elif git_or_commit_tag_mutation_observed:
+        blocked_reason = "prompt465_git_or_commit_tag_mutation_observed"
+    elif tests_observed:
+        blocked_reason = "prompt465_tests_observed"
+    elif unbounded_loop_not_allowed:
+        blocked_reason = "prompt465_unbounded_loop_not_allowed"
+    elif safety_flag_regression or retry_limit_reached or unsafe_stop_required:
+        blocked_reason = "prompt465_safety_regression_detected"
+
+    execution_allowed = bool(
+        packet_exists
+        and explicit_allow_present
+        and not max_cycles_reached
+        and not blocked_reason
+    )
+
+    state: dict[str, Any] = {
+        "prompt465_schema_version": _PROMPT465_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt465",
+        "prompt465_applicable": applicable,
+        "prompt465_prompt464_status": prompt464_status,
+        "prompt465_prompt464_next_action": prompt464_next_action,
+        "prompt465_prompt464_runtime_packet_ready": prompt464_runtime_packet_ready,
+        "prompt465_prompt464_handoff_ready": prompt464_handoff_ready,
+        "prompt465_prompt464_execution_smoke_ready": (
+            prompt464_execution_smoke_ready
+        ),
+        "prompt465_runtime_packet_consumed": packet_exists,
+        "prompt465_runtime_packet_source": (
+            "prompt464_one_cycle_next_prompt_materialization_smoke"
+            if packet_exists
+            else ""
+        ),
+        "prompt465_runtime_packet_missing_reason": (
+            "" if packet_exists else "prompt465_prompt464_runtime_packet_missing"
+        ),
+        "prompt465_runtime_packet_request_id": request_id,
+        "prompt465_runtime_packet_command_argv": command_argv,
+        "prompt465_runtime_packet_transport_mode": transport_mode,
+        "prompt465_runtime_packet_codex_invocation_requested": (
+            invocation_requested
+        ),
+        "prompt465_execution_explicit_allow_required": True,
+        "prompt465_execution_explicit_allow_present": explicit_allow_present,
+        "prompt465_execution_explicit_allow_source": explicit_allow_source,
+        "prompt465_execution_allowed": execution_allowed,
+        "prompt465_execution_smoke_status": "blocked",
+        "prompt465_execution_smoke_ready": False,
+        "prompt465_execution_attempted": False,
+        "prompt465_execution_performed": False,
+        "prompt465_codex_invocation_attempted": False,
+        "prompt465_codex_invocation_performed": False,
+        "prompt465_codex_invocation_allowed": execution_allowed,
+        "prompt465_execution_returncode": None,
+        "prompt465_execution_returncode_classification": "not_run",
+        "prompt465_execution_stdout_path": "",
+        "prompt465_execution_stderr_path": "",
+        "prompt465_runtime_result_available": False,
+        "prompt465_runtime_result_path": "",
+        "prompt465_runtime_result_payload_ready": False,
+        "prompt465_post_execution_tracked_diff_empty": True,
+        "prompt465_post_execution_changed_files": [],
+        "prompt465_post_execution_untracked_files": [],
+        "prompt465_post_execution_unexpected_files": [],
+        "prompt465_post_execution_changed_files_known": True,
+        "prompt465_post_execution_untracked_files_known": True,
+        "prompt465_post_execution_unexpected_files_known": True,
+        "prompt465_prompt466_handoff_ready": False,
+        "prompt465_prompt466_expected_scope": "",
+        "prompt465_prompt466_expected_next_action": "",
+        "prompt465_execution_result_review_ready": False,
+        "prompt465_execution_result_review_required": False,
+        "prompt465_current_cycle": current_cycle,
+        "prompt465_max_cycles": max_cycles,
+        "prompt465_one_cycle_only": True,
+        "prompt465_max_cycles_guard_ready": not max_cycles_reached,
+        "prompt465_max_cycles_reached": max_cycles_reached,
+        "prompt465_retry_limit_guard_ready": not retry_limit_reached,
+        "prompt465_retry_limit_reached": retry_limit_reached,
+        "prompt465_unsafe_stop_guard_ready": not unsafe_stop_required,
+        "prompt465_unsafe_stop_required": unsafe_stop_required,
+        "prompt465_unbounded_loop_allowed": False,
+        "prompt465_git_mutation_allowed": False,
+        "prompt465_commit_tag_allowed": False,
+        "prompt465_remote_mutation_allowed": False,
+        "prompt465_push_allowed": False,
+        "prompt465_tests_allowed": False,
+        "prompt465_file_creation_allowed": execution_allowed,
+        "prompt465_merge_allowed": False,
+        "prompt465_pr_allowed": False,
+        "prompt465_git_mutation_performed_observed": (
+            git_or_commit_tag_mutation_observed
+        ),
+        "prompt465_commit_tag_performed_observed": (
+            payload.get("prompt465_commit_tag_performed_observed") is True
+            or payload.get("prompt464_commit_tag_performed_observed") is True
+        ),
+        "prompt465_remote_mutation_performed_observed": (
+            remote_or_push_mutation_observed
+        ),
+        "prompt465_push_performed_observed": (
+            payload.get("prompt465_push_performed_observed") is True
+            or payload.get("prompt464_push_performed_observed") is True
+            or payload.get("push_performed_observed") is True
+        ),
+        "prompt465_tests_performed_observed": tests_observed,
+        "prompt465_file_creation_performed_observed": file_creation_observed,
+        "prompt465_smoke_passed": False,
+        "prompt465_blocked_reason": blocked_reason,
+        "prompt465_next_action": "manual_review_prompt465_route",
+    }
+
+    if not applicable or not packet_exists:
+        state.update(
+            {
+                "prompt465_execution_smoke_status": "not_applicable",
+                "prompt465_runtime_packet_consumed": False,
+                "prompt465_runtime_packet_missing_reason": (
+                    "prompt465_prompt464_runtime_packet_missing"
+                ),
+                "prompt465_smoke_passed": False,
+                "prompt465_next_action": "manual_review_prompt465_route",
+            }
+        )
+        return state
+
+    if not explicit_allow_present:
+        state.update(
+            {
+                "prompt465_execution_smoke_status": "explicit_allow_required",
+                "prompt465_execution_allowed": False,
+                "prompt465_codex_invocation_allowed": False,
+                "prompt465_smoke_passed": True,
+                "prompt465_blocked_reason": (
+                    "prompt465_execution_explicit_allow_required"
+                ),
+                "prompt465_next_action": (
+                    "request_explicit_prompt465_bounded_execution_allow"
+                ),
+            }
+        )
+        return state
+
+    if max_cycles_reached:
+        state.update(
+            {
+                "prompt465_execution_smoke_status": "stopped",
+                "prompt465_max_cycles_reached": True,
+                "prompt465_execution_allowed": False,
+                "prompt465_codex_invocation_allowed": False,
+                "prompt465_smoke_passed": True,
+                "prompt465_blocked_reason": "",
+                "prompt465_next_action": "stop_autonomous_loop_max_cycles_reached",
+            }
+        )
+        return state
+
+    if blocked_reason:
+        state.update(
+            {
+                "prompt465_execution_smoke_status": "blocked",
+                "prompt465_execution_allowed": False,
+                "prompt465_codex_invocation_allowed": False,
+                "prompt465_smoke_passed": False,
+                "prompt465_next_action": "manual_review_prompt465_route",
+            }
+        )
+        return state
+
+    prompt_body = (
+        "Mode: Scout\n"
+        "Goal: perform one bounded Prompt465 Codex execution smoke and report "
+        "whether the invocation starts and exits.\n"
+        "Allowed files: read-only inspection of the current repository.\n"
+        "Forbidden files: no file edits are requested.\n"
+        "Expected artifact/output: concise terminal response only.\n"
+        "Allowed validation commands: none.\n"
+        "Out of scope: tests, git commands, commit/tag, push, merge, PRs, "
+        "remote mutation, and additional autonomous cycles.\n"
+    )
+
+    returncode: int | None = None
+    stdout_text = ""
+    stderr_text = ""
+    runtime_result_payload: dict[str, Any] = {}
+    try:
+        completed = subprocess.run(
+            command_argv,
+            input=prompt_body,
+            text=True,
+            capture_output=True,
+            cwd=str(execution_repo_path) if execution_repo_path else None,
+            timeout=120,
+            check=False,
+        )
+        returncode = completed.returncode
+        stdout_text = completed.stdout or ""
+        stderr_text = completed.stderr or ""
+        classification = "success" if returncode == 0 else "failed"
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(stdout_text, encoding="utf-8")
+        stderr_path.write_text(stderr_text, encoding="utf-8")
+        runtime_result_payload = {
+            "schema_version": _PROMPT465_SCHEMA_VERSION,
+            "source_prompt": "prompt465",
+            "request_id": request_id,
+            "command_argv": command_argv,
+            "transport_mode": transport_mode,
+            "returncode": returncode,
+            "returncode_classification": classification,
+            "stdout_path": str(stdout_path),
+            "stderr_path": str(stderr_path),
+            "bounded": True,
+            "one_cycle_only": True,
+            "tests_allowed": False,
+            "remote_mutation_allowed": False,
+            "commit_tag_allowed": False,
+            "push_allowed": False,
+            "merge_allowed": False,
+            "pr_allowed": False,
+            "unbounded_loop_allowed": False,
+        }
+        _write_json(result_path, runtime_result_payload)
+    except subprocess.TimeoutExpired as exc:
+        returncode = None
+        stdout_text = _normalize_text(exc.stdout, default="")
+        stderr_text = _normalize_text(exc.stderr, default="prompt465_codex_invocation_timeout")
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(stdout_text, encoding="utf-8")
+        stderr_path.write_text(stderr_text, encoding="utf-8")
+        state.update(
+            {
+                "prompt465_execution_smoke_status": "blocked",
+                "prompt465_execution_smoke_ready": False,
+                "prompt465_execution_attempted": True,
+                "prompt465_codex_invocation_attempted": True,
+                "prompt465_execution_returncode": None,
+                "prompt465_execution_returncode_classification": "unknown",
+                "prompt465_execution_stdout_path": str(stdout_path),
+                "prompt465_execution_stderr_path": str(stderr_path),
+                "prompt465_blocked_reason": "prompt465_codex_invocation_failed",
+                "prompt465_next_action": "manual_review_prompt465_route",
+            }
+        )
+        return state
+    except OSError as exc:
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        stderr_path.write_text(str(exc), encoding="utf-8")
+        state.update(
+            {
+                "prompt465_execution_smoke_status": "blocked",
+                "prompt465_execution_smoke_ready": False,
+                "prompt465_execution_attempted": True,
+                "prompt465_codex_invocation_attempted": True,
+                "prompt465_execution_returncode": None,
+                "prompt465_execution_returncode_classification": "unknown",
+                "prompt465_execution_stdout_path": str(stdout_path),
+                "prompt465_execution_stderr_path": str(stderr_path),
+                "prompt465_blocked_reason": "prompt465_codex_invocation_failed",
+                "prompt465_next_action": "manual_review_prompt465_route",
+            }
+        )
+        return state
+
+    state.update(
+        {
+            "prompt465_execution_smoke_status": "performed",
+            "prompt465_execution_smoke_ready": True,
+            "prompt465_execution_attempted": True,
+            "prompt465_execution_performed": True,
+            "prompt465_codex_invocation_attempted": True,
+            "prompt465_codex_invocation_performed": True,
+            "prompt465_codex_invocation_allowed": True,
+            "prompt465_execution_returncode": returncode,
+            "prompt465_execution_returncode_classification": (
+                "success" if returncode == 0 else "failed"
+            ),
+            "prompt465_execution_stdout_path": str(stdout_path),
+            "prompt465_execution_stderr_path": str(stderr_path),
+            "prompt465_runtime_result_available": bool(runtime_result_payload),
+            "prompt465_runtime_result_path": str(result_path),
+            "prompt465_runtime_result_payload_ready": bool(runtime_result_payload),
+            "prompt465_post_execution_tracked_diff_empty": None,
+            "prompt465_post_execution_changed_files": _normalize_string_list(
+                payload.get("prompt465_post_execution_changed_files"),
+                sort_items=False,
+            ),
+            "prompt465_post_execution_untracked_files": _normalize_string_list(
+                payload.get("prompt465_post_execution_untracked_files"),
+                sort_items=False,
+            ),
+            "prompt465_post_execution_unexpected_files": _normalize_string_list(
+                payload.get("prompt465_post_execution_unexpected_files"),
+                sort_items=False,
+            ),
+            "prompt465_post_execution_changed_files_known": False,
+            "prompt465_post_execution_untracked_files_known": False,
+            "prompt465_post_execution_unexpected_files_known": False,
+            "prompt465_prompt466_handoff_ready": True,
+            "prompt465_prompt466_expected_scope": (
+                "review_prompt465_bounded_execution_result_and_route_next_no_"
+                "human_continuation"
+            ),
+            "prompt465_prompt466_expected_next_action": (
+                "review_prompt465_bounded_execution_result"
+            ),
+            "prompt465_execution_result_review_ready": True,
+            "prompt465_execution_result_review_required": True,
+            "prompt465_file_creation_performed_observed": True,
+            "prompt465_smoke_passed": True,
+            "prompt465_blocked_reason": "",
+            "prompt465_next_action": "review_prompt465_bounded_execution_result",
         }
     )
     return state
@@ -258058,6 +258665,17 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt464_one_cycle_next_prompt_materialization_smoke_payload,
         }
+        prompt465_bounded_one_cycle_execution_smoke_payload = (
+            _build_prompt465_bounded_one_cycle_execution_smoke_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt465_bounded_one_cycle_execution_smoke_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -258686,6 +259304,36 @@ class PlannedExecutionRunner:
                 "prompt464_next_action": (
                     prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
                         "prompt464_next_action"
+                    )
+                ),
+                "prompt465_execution_smoke_status": (
+                    prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                        "prompt465_execution_smoke_status"
+                    )
+                ),
+                "prompt465_runtime_packet_consumed": (
+                    prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                        "prompt465_runtime_packet_consumed"
+                    )
+                ),
+                "prompt465_execution_performed": (
+                    prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                        "prompt465_execution_performed"
+                    )
+                ),
+                "prompt465_runtime_result_available": (
+                    prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                        "prompt465_runtime_result_available"
+                    )
+                ),
+                "prompt465_prompt466_handoff_ready": (
+                    prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                        "prompt465_prompt466_handoff_ready"
+                    )
+                ),
+                "prompt465_next_action": (
+                    prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                        "prompt465_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -259996,6 +260644,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt464_one_cycle_next_prompt_materialization_smoke_state=(
                     prompt464_one_cycle_next_prompt_materialization_smoke_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt465_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt465_bounded_one_cycle_execution_smoke_state=(
+                    prompt465_bounded_one_cycle_execution_smoke_payload
                 ),
             )
         )
@@ -262122,6 +262778,42 @@ class PlannedExecutionRunner:
                     "prompt464_next_action"
                 ),
                 default="manual_review_prompt464_route",
+            ),
+            "prompt465_execution_smoke_status": _normalize_text(
+                prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                    "prompt465_execution_smoke_status"
+                ),
+                default="blocked",
+            ),
+            "prompt465_runtime_packet_consumed": bool(
+                prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                    "prompt465_runtime_packet_consumed",
+                    False,
+                )
+            ),
+            "prompt465_execution_performed": bool(
+                prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                    "prompt465_execution_performed",
+                    False,
+                )
+            ),
+            "prompt465_runtime_result_available": bool(
+                prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                    "prompt465_runtime_result_available",
+                    False,
+                )
+            ),
+            "prompt465_prompt466_handoff_ready": bool(
+                prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                    "prompt465_prompt466_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt465_next_action": _normalize_text(
+                prompt465_bounded_one_cycle_execution_smoke_payload.get(
+                    "prompt465_next_action"
+                ),
+                default="manual_review_prompt465_route",
             ),
         }
         if decision_error:
@@ -269226,6 +269918,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT464_ONE_CYCLE_NEXT_PROMPT_MATERIALIZATION_SMOKE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT465_BOUNDED_ONE_CYCLE_EXECUTION_SMOKE_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
