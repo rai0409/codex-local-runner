@@ -3999,6 +3999,9 @@ _PROMPT462_SCHEMA_VERSION = (
 _PROMPT463_SCHEMA_VERSION = (
     "prompt463_one_cycle_next_prompt_selection_smoke_v1"
 )
+_PROMPT464_SCHEMA_VERSION = (
+    "prompt464_one_cycle_next_prompt_materialization_smoke_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7387,6 +7390,82 @@ _PROMPT463_ONE_CYCLE_NEXT_PROMPT_SELECTION_SMOKE_KEYS: tuple[str, ...] = (
     "prompt463_smoke_passed",
     "prompt463_blocked_reason",
     "prompt463_next_action",
+)
+_PROMPT464_ONE_CYCLE_NEXT_PROMPT_MATERIALIZATION_SMOKE_KEYS: tuple[str, ...] = (
+    "prompt464_schema_version",
+    "prompt464_applicable",
+    "prompt464_prompt463_status",
+    "prompt464_prompt463_next_action",
+    "prompt464_prompt463_selected_prompt_id",
+    "prompt464_prompt463_handoff_ready",
+    "prompt464_prompt463_prompt_request_ready",
+    "prompt464_prompt463_runtime_request_ready",
+    "prompt464_materialization_input_ready",
+    "prompt464_materialization_input_source",
+    "prompt464_materialization_input_missing_reason",
+    "prompt464_prompt_selection_evidence_ready",
+    "prompt464_prompt_request_evidence_ready",
+    "prompt464_runtime_request_evidence_ready",
+    "prompt464_prompt_materialization_status",
+    "prompt464_prompt_materialization_ready",
+    "prompt464_materialized_prompt_id",
+    "prompt464_materialized_prompt_title",
+    "prompt464_materialized_prompt_purpose",
+    "prompt464_materialized_prompt_body_ready",
+    "prompt464_materialized_prompt_body_digest",
+    "prompt464_materialized_prompt_body_preview",
+    "prompt464_materialized_prompt_file_created",
+    "prompt464_materialized_prompt_artifact_path",
+    "prompt464_materialized_prompt_write_allowed",
+    "prompt464_runtime_packet_status",
+    "prompt464_runtime_packet_ready",
+    "prompt464_runtime_packet_request_id",
+    "prompt464_runtime_packet_command_argv",
+    "prompt464_runtime_packet_transport_mode",
+    "prompt464_runtime_packet_codex_invocation_requested",
+    "prompt464_runtime_packet_codex_invocation_allowed",
+    "prompt464_runtime_packet_execution_allowed",
+    "prompt464_runtime_packet_execution_attempted",
+    "prompt464_runtime_packet_execution_performed",
+    "prompt464_prompt465_handoff_ready",
+    "prompt464_prompt465_expected_scope",
+    "prompt464_prompt465_expected_next_action",
+    "prompt464_prompt465_runtime_packet_ready",
+    "prompt464_prompt465_execution_smoke_ready",
+    "prompt464_prompt465_execution_allowed",
+    "prompt464_current_cycle",
+    "prompt464_max_cycles",
+    "prompt464_one_cycle_only",
+    "prompt464_max_cycles_guard_ready",
+    "prompt464_max_cycles_reached",
+    "prompt464_retry_limit_guard_ready",
+    "prompt464_retry_limit_reached",
+    "prompt464_unsafe_stop_guard_ready",
+    "prompt464_unsafe_stop_required",
+    "prompt464_unbounded_loop_allowed",
+    "prompt464_regression_guard_status",
+    "prompt464_materialization_regression_detected",
+    "prompt464_runtime_packet_regression_detected",
+    "prompt464_safety_regression_detected",
+    "prompt464_regression_blocked_reason",
+    "prompt464_git_mutation_allowed",
+    "prompt464_commit_tag_allowed",
+    "prompt464_remote_mutation_allowed",
+    "prompt464_push_allowed",
+    "prompt464_tests_allowed",
+    "prompt464_file_creation_allowed",
+    "prompt464_merge_allowed",
+    "prompt464_pr_allowed",
+    "prompt464_codex_invocation_allowed",
+    "prompt464_git_mutation_performed_observed",
+    "prompt464_commit_tag_performed_observed",
+    "prompt464_remote_mutation_performed_observed",
+    "prompt464_push_performed_observed",
+    "prompt464_file_creation_performed_observed",
+    "prompt464_codex_invocation_performed_observed",
+    "prompt464_smoke_passed",
+    "prompt464_blocked_reason",
+    "prompt464_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -11093,6 +11172,32 @@ def _merge_prompt463_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT463_ONE_CYCLE_NEXT_PROMPT_SELECTION_SMOKE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt464_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt464_one_cycle_next_prompt_materialization_smoke_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt464_one_cycle_next_prompt_materialization_smoke_state)
+        if isinstance(
+            prompt464_one_cycle_next_prompt_materialization_smoke_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT464_ONE_CYCLE_NEXT_PROMPT_MATERIALIZATION_SMOKE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -77491,6 +77596,410 @@ def _build_prompt463_one_cycle_next_prompt_selection_smoke_state(
             "prompt463_blocked_reason": "",
             "prompt463_next_action": (
                 "prepare_prompt464_one_cycle_next_prompt_materialization_smoke"
+            ),
+        }
+    )
+    return state
+
+
+def _build_prompt464_one_cycle_next_prompt_materialization_smoke_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    expected_next_action = (
+        "prepare_prompt464_one_cycle_next_prompt_materialization_smoke"
+    )
+    prompt463_status = _normalize_text(
+        payload.get("prompt463_next_prompt_selection_status"),
+        default="",
+    )
+    prompt463_next_action = _normalize_text(
+        payload.get("prompt463_next_action"),
+        default="",
+    )
+    prompt463_selected_prompt_id = _normalize_text(
+        payload.get("prompt463_selected_prompt_id"),
+        default="",
+    )
+    prompt463_selected_next_action = _normalize_text(
+        payload.get("prompt463_selected_next_action"),
+        default="",
+    )
+    prompt463_handoff_ready = (
+        payload.get("prompt463_prompt464_handoff_ready") is True
+    )
+    prompt463_prompt_request_ready = (
+        payload.get("prompt463_prompt464_prompt_request_ready") is True
+    )
+    prompt463_runtime_request_ready = (
+        payload.get("prompt463_prompt464_runtime_request_ready") is True
+    )
+
+    applicable = bool(
+        prompt463_status == "ready"
+        or prompt463_selected_prompt_id == "prompt464"
+        or prompt463_selected_next_action == expected_next_action
+        or prompt463_handoff_ready
+        or prompt463_next_action == expected_next_action
+    )
+    prompt_selection_evidence_ready = bool(
+        prompt463_status == "ready"
+        and prompt463_selected_prompt_id == "prompt464"
+        and prompt463_selected_next_action == expected_next_action
+        and prompt463_handoff_ready
+        and prompt463_next_action == expected_next_action
+    )
+    prompt_request_evidence_ready = prompt463_prompt_request_ready
+    runtime_request_evidence_ready = prompt463_runtime_request_ready
+    materialization_input_ready = bool(
+        applicable
+        and prompt_selection_evidence_ready
+        and prompt_request_evidence_ready
+        and runtime_request_evidence_ready
+    )
+    materialization_input_source = (
+        "prompt463_one_cycle_next_prompt_selection_smoke"
+        if materialization_input_ready
+        else ""
+    )
+    materialization_input_missing_reason = (
+        ""
+        if materialization_input_ready
+        else "prompt464_prompt463_ready_evidence_missing"
+    )
+
+    current_cycle = _as_non_negative_int(
+        payload.get("autonomous-current-cycle")
+        if payload.get("autonomous-current-cycle") is not None
+        else payload.get("prompt435_autonomous_current_cycle")
+        if payload.get("prompt435_autonomous_current_cycle") is not None
+        else payload.get("autonomous_current_cycle")
+        if payload.get("autonomous_current_cycle") is not None
+        else payload.get("prompt464_current_cycle")
+        if payload.get("prompt464_current_cycle") is not None
+        else payload.get("prompt463_current_cycle")
+        if payload.get("prompt463_current_cycle") is not None
+        else payload.get("prompt462_current_cycle")
+        if payload.get("prompt462_current_cycle") is not None
+        else payload.get("prompt451_current_cycle")
+        if payload.get("prompt451_current_cycle") is not None
+        else payload.get("prompt427_current_cycle"),
+        default=0,
+    )
+    max_cycles = _as_non_negative_int(
+        payload.get("autonomous-max-cycles")
+        if payload.get("autonomous-max-cycles") is not None
+        else payload.get("prompt435_autonomous_max_cycles")
+        if payload.get("prompt435_autonomous_max_cycles") is not None
+        else payload.get("autonomous_max_cycles")
+        if payload.get("autonomous_max_cycles") is not None
+        else payload.get("prompt464_max_cycles")
+        if payload.get("prompt464_max_cycles") is not None
+        else payload.get("prompt463_max_cycles")
+        if payload.get("prompt463_max_cycles") is not None
+        else payload.get("prompt462_max_cycles")
+        if payload.get("prompt462_max_cycles") is not None
+        else payload.get("prompt451_max_cycles")
+        if payload.get("prompt451_max_cycles") is not None
+        else payload.get("prompt427_max_cycles"),
+        default=1,
+    )
+    if max_cycles <= 0:
+        max_cycles = 1
+    max_cycles_reached = current_cycle >= max_cycles
+    retry_limit_reached = bool(
+        payload.get("prompt464_retry_limit_reached") is True
+        or payload.get("prompt463_retry_limit_reached") is True
+        or payload.get("retry_limit_reached") is True
+    )
+    unsafe_stop_required = bool(
+        payload.get("prompt464_unsafe_stop_required") is True
+        or payload.get("prompt463_unsafe_stop_required") is True
+        or payload.get("unsafe_stop_required") is True
+        or payload.get("global_stop_recommended") is True
+        or payload.get("global_stop") is True
+    )
+    safety_flag_regression = any(
+        payload.get(key) is True
+        for key in (
+            "prompt464_git_mutation_allowed",
+            "prompt464_commit_tag_allowed",
+            "prompt464_remote_mutation_allowed",
+            "prompt464_push_allowed",
+            "prompt464_tests_allowed",
+            "prompt464_file_creation_allowed",
+            "prompt464_merge_allowed",
+            "prompt464_pr_allowed",
+            "prompt464_codex_invocation_allowed",
+            "prompt464_unbounded_loop_allowed",
+        )
+    )
+    remote_or_push_mutation_observed = bool(
+        payload.get("prompt464_remote_mutation_performed_observed") is True
+        or payload.get("prompt464_push_performed_observed") is True
+        or payload.get("prompt463_remote_mutation_performed_observed") is True
+        or payload.get("prompt463_push_performed_observed") is True
+        or payload.get("remote_mutation_performed_observed") is True
+        or payload.get("push_performed_observed") is True
+    )
+    git_or_commit_tag_mutation_observed = bool(
+        payload.get("prompt464_git_mutation_performed_observed") is True
+        or payload.get("prompt464_commit_tag_performed_observed") is True
+        or payload.get("prompt463_git_mutation_performed_observed") is True
+        or payload.get("prompt463_commit_tag_performed_observed") is True
+    )
+    file_creation_observed = bool(
+        payload.get("prompt464_file_creation_performed_observed") is True
+        or payload.get("file_creation_performed_observed") is True
+    )
+    codex_invocation_observed = bool(
+        payload.get("prompt464_codex_invocation_performed_observed") is True
+        or payload.get("prompt463_codex_invocation_performed_observed") is True
+        or payload.get("codex_invocation_performed_observed") is True
+    )
+    unbounded_loop_not_allowed = bool(
+        payload.get("prompt464_unbounded_loop_allowed") is True
+        or payload.get("prompt463_unbounded_loop_allowed") is True
+        or payload.get("unbounded_loop_allowed") is True
+    )
+    materialization_regression_detected = bool(
+        applicable and not materialization_input_ready
+    )
+    runtime_packet_regression_detected = False
+    safety_regression_detected = bool(
+        safety_flag_regression or retry_limit_reached or unsafe_stop_required
+    )
+
+    blocked_reason = ""
+    if not applicable:
+        blocked_reason = "prompt464_prompt463_ready_evidence_missing"
+    elif remote_or_push_mutation_observed:
+        blocked_reason = "prompt464_remote_or_push_mutation_observed"
+    elif git_or_commit_tag_mutation_observed:
+        blocked_reason = "prompt464_git_or_commit_tag_mutation_observed"
+    elif file_creation_observed:
+        blocked_reason = "prompt464_file_creation_observed"
+    elif codex_invocation_observed:
+        blocked_reason = "prompt464_codex_invocation_observed"
+    elif unbounded_loop_not_allowed:
+        blocked_reason = "prompt464_unbounded_loop_not_allowed"
+    elif safety_regression_detected:
+        blocked_reason = "prompt464_safety_regression_detected"
+    elif materialization_regression_detected:
+        blocked_reason = "prompt464_materialization_regression_detected"
+    elif runtime_packet_regression_detected:
+        blocked_reason = "prompt464_runtime_packet_regression_detected"
+
+    prompt_body_preview = (
+        "Prompt465 will consume the Prompt464 runtime packet and perform one "
+        "bounded execution smoke without push, PR, merge, tests, or "
+        "unbounded loop."
+    )
+    prompt_body_digest = hashlib.sha256(
+        prompt_body_preview.encode("utf-8")
+    ).hexdigest()
+
+    state: dict[str, Any] = {
+        "prompt464_schema_version": _PROMPT464_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt464",
+        "prompt464_applicable": applicable,
+        "prompt464_prompt463_status": prompt463_status,
+        "prompt464_prompt463_next_action": prompt463_next_action,
+        "prompt464_prompt463_selected_prompt_id": prompt463_selected_prompt_id,
+        "prompt464_prompt463_handoff_ready": prompt463_handoff_ready,
+        "prompt464_prompt463_prompt_request_ready": (
+            prompt463_prompt_request_ready
+        ),
+        "prompt464_prompt463_runtime_request_ready": (
+            prompt463_runtime_request_ready
+        ),
+        "prompt464_materialization_input_ready": materialization_input_ready,
+        "prompt464_materialization_input_source": materialization_input_source,
+        "prompt464_materialization_input_missing_reason": (
+            materialization_input_missing_reason
+        ),
+        "prompt464_prompt_selection_evidence_ready": (
+            prompt_selection_evidence_ready
+        ),
+        "prompt464_prompt_request_evidence_ready": (
+            prompt_request_evidence_ready
+        ),
+        "prompt464_runtime_request_evidence_ready": (
+            runtime_request_evidence_ready
+        ),
+        "prompt464_prompt_materialization_status": "blocked",
+        "prompt464_prompt_materialization_ready": False,
+        "prompt464_materialized_prompt_id": "prompt465",
+        "prompt464_materialized_prompt_title": (
+            "bounded one-cycle execution smoke"
+        ),
+        "prompt464_materialized_prompt_purpose": (
+            "consume Prompt464 runtime packet and perform one bounded "
+            "execution smoke"
+        ),
+        "prompt464_materialized_prompt_body_ready": True,
+        "prompt464_materialized_prompt_body_digest": prompt_body_digest,
+        "prompt464_materialized_prompt_body_preview": prompt_body_preview,
+        "prompt464_materialized_prompt_file_created": False,
+        "prompt464_materialized_prompt_artifact_path": "",
+        "prompt464_materialized_prompt_write_allowed": False,
+        "prompt464_runtime_packet_status": "blocked",
+        "prompt464_runtime_packet_ready": False,
+        "prompt464_runtime_packet_request_id": (
+            "prompt465-bounded-one-cycle-execution-smoke"
+        ),
+        "prompt464_runtime_packet_command_argv": ["codex", "exec", "-"],
+        "prompt464_runtime_packet_transport_mode": "live",
+        "prompt464_runtime_packet_codex_invocation_requested": True,
+        "prompt464_runtime_packet_codex_invocation_allowed": False,
+        "prompt464_runtime_packet_execution_allowed": False,
+        "prompt464_runtime_packet_execution_attempted": False,
+        "prompt464_runtime_packet_execution_performed": False,
+        "prompt464_prompt465_handoff_ready": False,
+        "prompt464_prompt465_expected_scope": "",
+        "prompt464_prompt465_expected_next_action": "",
+        "prompt464_prompt465_runtime_packet_ready": False,
+        "prompt464_prompt465_execution_smoke_ready": False,
+        "prompt464_prompt465_execution_allowed": False,
+        "prompt464_current_cycle": current_cycle,
+        "prompt464_max_cycles": max_cycles,
+        "prompt464_one_cycle_only": True,
+        "prompt464_max_cycles_guard_ready": not max_cycles_reached,
+        "prompt464_max_cycles_reached": max_cycles_reached,
+        "prompt464_retry_limit_guard_ready": not retry_limit_reached,
+        "prompt464_retry_limit_reached": retry_limit_reached,
+        "prompt464_unsafe_stop_guard_ready": not unsafe_stop_required,
+        "prompt464_unsafe_stop_required": unsafe_stop_required,
+        "prompt464_unbounded_loop_allowed": False,
+        "prompt464_regression_guard_status": "blocked",
+        "prompt464_materialization_regression_detected": (
+            materialization_regression_detected
+        ),
+        "prompt464_runtime_packet_regression_detected": (
+            runtime_packet_regression_detected
+        ),
+        "prompt464_safety_regression_detected": safety_regression_detected,
+        "prompt464_regression_blocked_reason": blocked_reason,
+        "prompt464_git_mutation_allowed": False,
+        "prompt464_commit_tag_allowed": False,
+        "prompt464_remote_mutation_allowed": False,
+        "prompt464_push_allowed": False,
+        "prompt464_tests_allowed": False,
+        "prompt464_file_creation_allowed": False,
+        "prompt464_merge_allowed": False,
+        "prompt464_pr_allowed": False,
+        "prompt464_codex_invocation_allowed": False,
+        "prompt464_git_mutation_performed_observed": (
+            git_or_commit_tag_mutation_observed
+        ),
+        "prompt464_commit_tag_performed_observed": (
+            payload.get("prompt464_commit_tag_performed_observed") is True
+            or payload.get("prompt463_commit_tag_performed_observed") is True
+        ),
+        "prompt464_remote_mutation_performed_observed": (
+            remote_or_push_mutation_observed
+        ),
+        "prompt464_push_performed_observed": (
+            payload.get("prompt464_push_performed_observed") is True
+            or payload.get("prompt463_push_performed_observed") is True
+            or payload.get("push_performed_observed") is True
+        ),
+        "prompt464_file_creation_performed_observed": file_creation_observed,
+        "prompt464_codex_invocation_performed_observed": (
+            codex_invocation_observed
+        ),
+        "prompt464_smoke_passed": False,
+        "prompt464_blocked_reason": blocked_reason,
+        "prompt464_next_action": "manual_review_prompt464_route",
+    }
+
+    if not applicable:
+        state.update(
+            {
+                "prompt464_prompt_materialization_status": "not_applicable",
+                "prompt464_runtime_packet_status": "not_applicable",
+                "prompt464_materialization_input_ready": False,
+                "prompt464_materialization_input_missing_reason": (
+                    "prompt464_prompt463_ready_evidence_missing"
+                ),
+                "prompt464_regression_guard_status": "not_applicable",
+                "prompt464_regression_blocked_reason": "",
+                "prompt464_smoke_passed": False,
+                "prompt464_blocked_reason": "",
+                "prompt464_next_action": "manual_review_prompt464_route",
+            }
+        )
+        return state
+
+    if max_cycles_reached:
+        state.update(
+            {
+                "prompt464_prompt_materialization_status": "stopped",
+                "prompt464_runtime_packet_status": "stopped",
+                "prompt464_max_cycles_reached": True,
+                "prompt464_regression_guard_status": "passed",
+                "prompt464_materialization_regression_detected": False,
+                "prompt464_runtime_packet_regression_detected": False,
+                "prompt464_safety_regression_detected": False,
+                "prompt464_regression_blocked_reason": "",
+                "prompt464_smoke_passed": True,
+                "prompt464_blocked_reason": "",
+                "prompt464_next_action": (
+                    "stop_autonomous_loop_max_cycles_reached"
+                ),
+            }
+        )
+        return state
+
+    if blocked_reason:
+        state.update(
+            {
+                "prompt464_prompt_materialization_status": "blocked",
+                "prompt464_runtime_packet_status": "blocked",
+                "prompt464_regression_guard_status": "blocked",
+                "prompt464_smoke_passed": False,
+                "prompt464_blocked_reason": blocked_reason,
+                "prompt464_next_action": "manual_review_prompt464_route",
+            }
+        )
+        return state
+
+    state.update(
+        {
+            "prompt464_materialization_input_ready": True,
+            "prompt464_materialization_input_source": (
+                "prompt463_one_cycle_next_prompt_selection_smoke"
+            ),
+            "prompt464_materialization_input_missing_reason": "",
+            "prompt464_prompt_materialization_status": "ready",
+            "prompt464_prompt_materialization_ready": True,
+            "prompt464_runtime_packet_status": "ready",
+            "prompt464_runtime_packet_ready": True,
+            "prompt464_prompt465_handoff_ready": True,
+            "prompt464_prompt465_expected_scope": (
+                "consume_prompt464_runtime_packet_and_perform_one_bounded_"
+                "execution_smoke"
+            ),
+            "prompt464_prompt465_expected_next_action": (
+                "prepare_prompt465_bounded_one_cycle_execution_smoke"
+            ),
+            "prompt464_prompt465_runtime_packet_ready": True,
+            "prompt464_prompt465_execution_smoke_ready": True,
+            "prompt464_prompt465_execution_allowed": False,
+            "prompt464_max_cycles_guard_ready": True,
+            "prompt464_retry_limit_guard_ready": True,
+            "prompt464_unsafe_stop_guard_ready": True,
+            "prompt464_regression_guard_status": "passed",
+            "prompt464_materialization_regression_detected": False,
+            "prompt464_runtime_packet_regression_detected": False,
+            "prompt464_safety_regression_detected": False,
+            "prompt464_regression_blocked_reason": "",
+            "prompt464_smoke_passed": True,
+            "prompt464_blocked_reason": "",
+            "prompt464_next_action": (
+                "prepare_prompt465_bounded_one_cycle_execution_smoke"
             ),
         }
     )
@@ -257540,6 +258049,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt463_one_cycle_next_prompt_selection_smoke_payload,
         }
+        prompt464_one_cycle_next_prompt_materialization_smoke_payload = (
+            _build_prompt464_one_cycle_next_prompt_materialization_smoke_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt464_one_cycle_next_prompt_materialization_smoke_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -258133,6 +258651,41 @@ class PlannedExecutionRunner:
                 "prompt463_next_action": (
                     prompt463_one_cycle_next_prompt_selection_smoke_payload.get(
                         "prompt463_next_action"
+                    )
+                ),
+                "prompt464_prompt_materialization_status": (
+                    prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                        "prompt464_prompt_materialization_status"
+                    )
+                ),
+                "prompt464_materialized_prompt_id": (
+                    prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                        "prompt464_materialized_prompt_id"
+                    )
+                ),
+                "prompt464_runtime_packet_status": (
+                    prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                        "prompt464_runtime_packet_status"
+                    )
+                ),
+                "prompt464_runtime_packet_ready": (
+                    prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                        "prompt464_runtime_packet_ready"
+                    )
+                ),
+                "prompt464_prompt465_handoff_ready": (
+                    prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                        "prompt464_prompt465_handoff_ready"
+                    )
+                ),
+                "prompt464_smoke_passed": (
+                    prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                        "prompt464_smoke_passed"
+                    )
+                ),
+                "prompt464_next_action": (
+                    prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                        "prompt464_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -259435,6 +259988,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt463_one_cycle_next_prompt_selection_smoke_state=(
                     prompt463_one_cycle_next_prompt_selection_smoke_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt464_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt464_one_cycle_next_prompt_materialization_smoke_state=(
+                    prompt464_one_cycle_next_prompt_materialization_smoke_payload
                 ),
             )
         )
@@ -261519,6 +262080,48 @@ class PlannedExecutionRunner:
                     "prompt463_next_action"
                 ),
                 default="manual_review_prompt463_route",
+            ),
+            "prompt464_prompt_materialization_status": _normalize_text(
+                prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                    "prompt464_prompt_materialization_status"
+                ),
+                default="blocked",
+            ),
+            "prompt464_materialized_prompt_id": _normalize_text(
+                prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                    "prompt464_materialized_prompt_id"
+                ),
+                default="",
+            ),
+            "prompt464_runtime_packet_status": _normalize_text(
+                prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                    "prompt464_runtime_packet_status"
+                ),
+                default="blocked",
+            ),
+            "prompt464_runtime_packet_ready": bool(
+                prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                    "prompt464_runtime_packet_ready",
+                    False,
+                )
+            ),
+            "prompt464_prompt465_handoff_ready": bool(
+                prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                    "prompt464_prompt465_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt464_smoke_passed": bool(
+                prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                    "prompt464_smoke_passed",
+                    False,
+                )
+            ),
+            "prompt464_next_action": _normalize_text(
+                prompt464_one_cycle_next_prompt_materialization_smoke_payload.get(
+                    "prompt464_next_action"
+                ),
+                default="manual_review_prompt464_route",
             ),
         }
         if decision_error:
@@ -268620,6 +269223,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT463_ONE_CYCLE_NEXT_PROMPT_SELECTION_SMOKE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT464_ONE_CYCLE_NEXT_PROMPT_MATERIALIZATION_SMOKE_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
