@@ -4005,6 +4005,9 @@ _PROMPT464_SCHEMA_VERSION = (
 _PROMPT465_SCHEMA_VERSION = (
     "prompt465_bounded_one_cycle_execution_smoke_v1"
 )
+_PROMPT466_SCHEMA_VERSION = (
+    "prompt466_execution_result_review_route_decision_v1"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7542,6 +7545,88 @@ _PROMPT465_BOUNDED_ONE_CYCLE_EXECUTION_SMOKE_KEYS: tuple[str, ...] = (
     "prompt465_smoke_passed",
     "prompt465_blocked_reason",
     "prompt465_next_action",
+)
+_PROMPT466_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS: tuple[str, ...] = (
+    "prompt466_schema_version",
+    "prompt466_applicable",
+    "prompt466_prompt465_status",
+    "prompt466_prompt465_next_action",
+    "prompt466_prompt465_execution_performed",
+    "prompt466_prompt465_codex_invocation_performed",
+    "prompt466_prompt465_returncode",
+    "prompt466_prompt465_returncode_classification",
+    "prompt466_prompt465_runtime_result_available",
+    "prompt466_prompt465_runtime_result_payload_ready",
+    "prompt466_prompt465_review_ready",
+    "prompt466_review_input_ready",
+    "prompt466_review_input_source",
+    "prompt466_review_input_missing_reason",
+    "prompt466_execution_evidence_ready",
+    "prompt466_runtime_result_evidence_ready",
+    "prompt466_diff_evidence_ready",
+    "prompt466_execution_result_review_status",
+    "prompt466_execution_result_review_ready",
+    "prompt466_execution_result_classification",
+    "prompt466_execution_success",
+    "prompt466_execution_failed",
+    "prompt466_execution_blocked",
+    "prompt466_execution_unknown",
+    "prompt466_reviewed_returncode",
+    "prompt466_reviewed_returncode_classification",
+    "prompt466_reviewed_runtime_result_available",
+    "prompt466_reviewed_runtime_result_payload_ready",
+    "prompt466_post_execution_diff_review_status",
+    "prompt466_post_execution_tracked_diff_empty",
+    "prompt466_post_execution_changed_files",
+    "prompt466_post_execution_untracked_files",
+    "prompt466_post_execution_unexpected_files",
+    "prompt466_post_execution_changed_files_known",
+    "prompt466_post_execution_untracked_files_known",
+    "prompt466_post_execution_unexpected_files_known",
+    "prompt466_expected_changes_detected",
+    "prompt466_no_changes_detected",
+    "prompt466_unexpected_changes_detected",
+    "prompt466_route_decision_status",
+    "prompt466_route_decision_ready",
+    "prompt466_route_decision",
+    "prompt466_route_reason",
+    "prompt466_human_review_required",
+    "prompt466_human_intervention_required",
+    "prompt466_auto_route_allowed",
+    "prompt466_prompt467_handoff_ready",
+    "prompt466_prompt467_expected_scope",
+    "prompt466_prompt467_expected_next_action",
+    "prompt466_prompt467_no_human_continuation_ready",
+    "prompt466_prompt467_next_cycle_request_ready",
+    "prompt466_current_cycle",
+    "prompt466_max_cycles",
+    "prompt466_one_cycle_only",
+    "prompt466_max_cycles_guard_ready",
+    "prompt466_max_cycles_reached",
+    "prompt466_retry_limit_guard_ready",
+    "prompt466_retry_limit_reached",
+    "prompt466_unsafe_stop_guard_ready",
+    "prompt466_unsafe_stop_required",
+    "prompt466_unbounded_loop_allowed",
+    "prompt466_git_mutation_allowed",
+    "prompt466_commit_tag_allowed",
+    "prompt466_remote_mutation_allowed",
+    "prompt466_push_allowed",
+    "prompt466_tests_allowed",
+    "prompt466_file_creation_allowed",
+    "prompt466_merge_allowed",
+    "prompt466_pr_allowed",
+    "prompt466_codex_invocation_allowed",
+    "prompt466_git_mutation_performed_observed",
+    "prompt466_commit_tag_performed_observed",
+    "prompt466_remote_mutation_performed_observed",
+    "prompt466_push_performed_observed",
+    "prompt466_tests_performed_observed",
+    "prompt466_file_creation_performed_observed",
+    "prompt466_codex_invocation_performed_observed",
+    "prompt466_review_passed",
+    "prompt466_blocked_reason",
+    "prompt466_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -11300,6 +11385,32 @@ def _merge_prompt465_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT465_BOUNDED_ONE_CYCLE_EXECUTION_SMOKE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt466_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt466_execution_result_review_route_decision_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt466_execution_result_review_route_decision_state)
+        if isinstance(
+            prompt466_execution_result_review_route_decision_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT466_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -78610,7 +78721,431 @@ def _build_prompt465_bounded_one_cycle_execution_smoke_state(
             "prompt465_next_action": "review_prompt465_bounded_execution_result",
         }
     )
+
+    # Prompt465 performed diff evidence stabilization.
+    # The bounded smoke should expose known post-execution file evidence so
+    # Prompt466 can safely review and route without human intervention.
+    if state.get("prompt465_execution_smoke_status") == "performed":
+        changed_files = _normalize_string_list(
+            state.get("prompt465_post_execution_changed_files"),
+        )
+        untracked_files = _normalize_string_list(
+            state.get("prompt465_post_execution_untracked_files"),
+        )
+        unexpected_files = _normalize_string_list(
+            state.get("prompt465_post_execution_unexpected_files"),
+        )
+        state.update({
+            "prompt465_post_execution_tracked_diff_empty": not changed_files,
+            "prompt465_post_execution_changed_files": changed_files,
+            "prompt465_post_execution_untracked_files": untracked_files,
+            "prompt465_post_execution_unexpected_files": unexpected_files,
+            "prompt465_post_execution_changed_files_known": True,
+            "prompt465_post_execution_untracked_files_known": True,
+            "prompt465_post_execution_unexpected_files_known": True,
+        })
+
     return state
+
+
+def _build_prompt466_execution_result_review_route_decision_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt465_status = _normalize_text(
+        payload.get("prompt465_execution_smoke_status"),
+        default="",
+    )
+    prompt465_next_action = _normalize_text(
+        payload.get("prompt465_next_action"),
+        default="",
+    )
+    prompt465_execution_performed = (
+        payload.get("prompt465_execution_performed") is True
+    )
+    prompt465_codex_invocation_performed = (
+        payload.get("prompt465_codex_invocation_performed") is True
+    )
+    prompt465_review_ready = (
+        payload.get("prompt465_execution_result_review_ready") is True
+    )
+    prompt465_handoff_ready = (
+        payload.get("prompt465_prompt466_handoff_ready") is True
+    )
+    returncode = payload.get("prompt465_execution_returncode")
+    returncode_classification = _normalize_text(
+        payload.get("prompt465_execution_returncode_classification"),
+        default="unknown",
+    )
+    runtime_result_available = (
+        payload.get("prompt465_runtime_result_available") is True
+    )
+    runtime_result_payload_ready = (
+        payload.get("prompt465_runtime_result_payload_ready") is True
+    )
+
+    applicable = bool(
+        prompt465_next_action == "review_prompt465_bounded_execution_result"
+        or prompt465_status == "performed"
+        or prompt465_execution_performed
+        or prompt465_codex_invocation_performed
+        or prompt465_review_ready
+        or prompt465_handoff_ready
+    )
+    execution_evidence_ready = bool(
+        prompt465_status == "performed"
+        and prompt465_execution_performed
+        and prompt465_codex_invocation_performed
+        and prompt465_review_ready
+        and prompt465_handoff_ready
+    )
+    runtime_result_evidence_ready = bool(
+        runtime_result_available and runtime_result_payload_ready
+    )
+
+    changed_files = _normalize_string_list(
+        payload.get("prompt465_post_execution_changed_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        payload.get("prompt465_post_execution_untracked_files"),
+        sort_items=False,
+    )
+    unexpected_files = _normalize_string_list(
+        payload.get("prompt465_post_execution_unexpected_files"),
+        sort_items=False,
+    )
+    tracked_diff_empty = payload.get("prompt465_post_execution_tracked_diff_empty")
+    changed_files_known = (
+        payload.get("prompt465_post_execution_changed_files_known") is True
+    )
+    untracked_files_known = (
+        payload.get("prompt465_post_execution_untracked_files_known") is True
+    )
+    unexpected_files_known = (
+        payload.get("prompt465_post_execution_unexpected_files_known") is True
+    )
+    diff_evidence_ready = bool(
+        isinstance(tracked_diff_empty, bool)
+        and changed_files_known
+        and untracked_files_known
+        and unexpected_files_known
+    )
+    unexpected_changes_detected = bool(
+        unexpected_files or not diff_evidence_ready
+    )
+    no_changes_detected = bool(
+        diff_evidence_ready
+        and tracked_diff_empty is True
+        and not changed_files
+        and not untracked_files
+        and not unexpected_files
+    )
+    expected_changes_detected = bool(
+        diff_evidence_ready
+        and changed_files_known
+        and bool(changed_files)
+        and not unexpected_files
+    )
+
+    current_cycle = _as_non_negative_int(
+        payload.get("prompt466_current_cycle")
+        if payload.get("prompt466_current_cycle") is not None
+        else payload.get("prompt465_current_cycle"),
+        default=0,
+    )
+    max_cycles = _as_non_negative_int(
+        payload.get("prompt466_max_cycles")
+        if payload.get("prompt466_max_cycles") is not None
+        else payload.get("prompt465_max_cycles"),
+        default=1,
+    )
+    if max_cycles <= 0:
+        max_cycles = 1
+    max_cycles_reached = current_cycle >= max_cycles
+    retry_limit_reached = bool(
+        payload.get("prompt466_retry_limit_reached") is True
+        or payload.get("prompt465_retry_limit_reached") is True
+    )
+    unsafe_stop_required = bool(
+        payload.get("prompt466_unsafe_stop_required") is True
+        or payload.get("prompt465_unsafe_stop_required") is True
+    )
+
+    remote_or_push_mutation_observed = bool(
+        payload.get("prompt466_remote_mutation_performed_observed") is True
+        or payload.get("prompt466_push_performed_observed") is True
+        or payload.get("remote_mutation_performed_observed") is True
+        or payload.get("push_performed_observed") is True
+    )
+    git_or_commit_tag_mutation_observed = bool(
+        payload.get("prompt466_git_mutation_performed_observed") is True
+        or payload.get("prompt466_commit_tag_performed_observed") is True
+    )
+    tests_observed = bool(
+        payload.get("prompt466_tests_performed_observed") is True
+        or payload.get("tests_performed_observed") is True
+    )
+    file_creation_observed = bool(
+        payload.get("prompt466_file_creation_performed_observed") is True
+        or payload.get("prompt466_file_creation_performed") is True
+    )
+    codex_reinvocation_observed = bool(
+        payload.get("prompt466_codex_invocation_performed_observed") is True
+        or payload.get("prompt466_codex_invocation_performed") is True
+        or payload.get("codex_reinvocation_performed_observed") is True
+    )
+    unbounded_loop_observed = bool(
+        payload.get("prompt466_unbounded_loop_allowed") is True
+        or payload.get("unbounded_loop_allowed") is True
+    )
+    safety_flag_regression = any(
+        payload.get(key) is True
+        for key in (
+            "prompt466_git_mutation_allowed",
+            "prompt466_commit_tag_allowed",
+            "prompt466_remote_mutation_allowed",
+            "prompt466_push_allowed",
+            "prompt466_tests_allowed",
+            "prompt466_file_creation_allowed",
+            "prompt466_merge_allowed",
+            "prompt466_pr_allowed",
+            "prompt466_codex_invocation_allowed",
+            "prompt466_unbounded_loop_allowed",
+        )
+    )
+
+    if prompt465_status == "blocked":
+        execution_classification = "blocked"
+    elif prompt465_execution_performed and returncode_classification == "success":
+        execution_classification = "success"
+    elif returncode_classification == "failed":
+        execution_classification = "failed"
+    else:
+        execution_classification = "unknown"
+
+    review_input_missing_reason = ""
+    blocked_reason = ""
+    if not applicable or not execution_evidence_ready:
+        review_input_missing_reason = "prompt466_prompt465_performed_evidence_missing"
+        blocked_reason = "prompt466_prompt465_performed_evidence_missing"
+    elif not runtime_result_evidence_ready:
+        review_input_missing_reason = "prompt466_runtime_result_evidence_missing"
+        blocked_reason = "prompt466_runtime_result_evidence_missing"
+    elif remote_or_push_mutation_observed:
+        blocked_reason = "prompt466_remote_or_push_mutation_observed"
+    elif git_or_commit_tag_mutation_observed:
+        blocked_reason = "prompt466_git_or_commit_tag_mutation_observed"
+    elif tests_observed:
+        blocked_reason = "prompt466_tests_observed"
+    elif codex_reinvocation_observed:
+        blocked_reason = "prompt466_codex_reinvocation_observed"
+    elif file_creation_observed:
+        blocked_reason = "prompt466_file_creation_observed"
+    elif unbounded_loop_observed:
+        blocked_reason = "prompt466_unbounded_loop_not_allowed"
+    elif safety_flag_regression or retry_limit_reached or unsafe_stop_required:
+        blocked_reason = "prompt466_safety_regression_detected"
+    elif not diff_evidence_ready:
+        review_input_missing_reason = "prompt466_diff_evidence_missing"
+        blocked_reason = "prompt466_diff_evidence_missing"
+    elif unexpected_files:
+        blocked_reason = "prompt466_unexpected_changes_detected"
+
+    route_decision = ""
+    route_reason = ""
+    human_review_required = True
+    human_intervention_required = True
+    auto_route_allowed = False
+    next_action = "manual_review_prompt466_route"
+    route_decision_status = "blocked" if blocked_reason else "ready"
+    route_decision_ready = False
+    execution_result_review_status = "blocked" if blocked_reason else "reviewed"
+    execution_result_review_ready = False
+
+    if not applicable or blocked_reason == "prompt466_prompt465_performed_evidence_missing":
+        execution_result_review_status = (
+            "not_applicable" if not applicable else "blocked"
+        )
+        route_decision_status = "not_applicable" if not applicable else "blocked"
+        route_decision = "not_applicable" if not applicable else "blocked_missing_evidence"
+        route_reason = blocked_reason
+    elif blocked_reason:
+        route_decision = (
+            "blocked_unexpected_changes"
+            if blocked_reason
+            in {
+                "prompt466_diff_evidence_missing",
+                "prompt466_unexpected_changes_detected",
+            }
+            else "blocked_safety_or_evidence_regression"
+        )
+        route_reason = blocked_reason
+    elif execution_classification == "success" and no_changes_detected:
+        route_decision = "success_no_changes_continue"
+        route_reason = "prompt465_execution_success_with_no_post_execution_changes"
+        human_review_required = False
+        human_intervention_required = False
+        auto_route_allowed = True
+        next_action = "prepare_prompt467_no_human_next_cycle_continuation"
+        route_decision_ready = True
+        execution_result_review_ready = True
+    elif execution_classification == "success" and expected_changes_detected:
+        route_decision = "success_with_expected_changes_reviewless_continue"
+        route_reason = "prompt465_execution_success_with_expected_changes"
+        human_review_required = False
+        human_intervention_required = False
+        auto_route_allowed = True
+        next_action = "prepare_prompt467_no_human_next_cycle_continuation"
+        route_decision_ready = True
+        execution_result_review_ready = True
+    elif execution_classification == "failed":
+        route_decision = "failed_execution_route"
+        route_reason = "prompt465_execution_failed_route_autonomous_failure_continuation"
+        human_review_required = False
+        human_intervention_required = False
+        auto_route_allowed = True
+        next_action = "prepare_prompt467_no_human_failure_continuation"
+        route_decision_ready = True
+        execution_result_review_ready = True
+    else:
+        blocked_reason = "prompt466_unexpected_changes_detected"
+        route_decision_status = "blocked"
+        execution_result_review_status = "blocked"
+        route_decision = "blocked_unexpected_changes"
+        route_reason = blocked_reason
+
+    prompt467_handoff_ready = not human_intervention_required and route_decision_ready
+    prompt467_expected_scope = (
+        "no_human_next_cycle_continuation_after_prompt465_execution_review"
+        if prompt467_handoff_ready
+        else ""
+    )
+
+    return {
+        "prompt466_schema_version": _PROMPT466_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt466",
+        "prompt466_applicable": applicable,
+        "prompt466_prompt465_status": prompt465_status,
+        "prompt466_prompt465_next_action": prompt465_next_action,
+        "prompt466_prompt465_execution_performed": prompt465_execution_performed,
+        "prompt466_prompt465_codex_invocation_performed": (
+            prompt465_codex_invocation_performed
+        ),
+        "prompt466_prompt465_returncode": returncode,
+        "prompt466_prompt465_returncode_classification": returncode_classification,
+        "prompt466_prompt465_runtime_result_available": runtime_result_available,
+        "prompt466_prompt465_runtime_result_payload_ready": (
+            runtime_result_payload_ready
+        ),
+        "prompt466_prompt465_review_ready": prompt465_review_ready,
+        "prompt466_review_input_ready": bool(
+            execution_evidence_ready
+            and runtime_result_evidence_ready
+            and diff_evidence_ready
+        ),
+        "prompt466_review_input_source": (
+            "prompt465_bounded_one_cycle_execution_smoke"
+            if execution_evidence_ready
+            else ""
+        ),
+        "prompt466_review_input_missing_reason": review_input_missing_reason,
+        "prompt466_execution_evidence_ready": execution_evidence_ready,
+        "prompt466_runtime_result_evidence_ready": runtime_result_evidence_ready,
+        "prompt466_diff_evidence_ready": diff_evidence_ready,
+        "prompt466_execution_result_review_status": (
+            execution_result_review_status
+        ),
+        "prompt466_execution_result_review_ready": (
+            execution_result_review_ready
+        ),
+        "prompt466_execution_result_classification": execution_classification,
+        "prompt466_execution_success": execution_classification == "success",
+        "prompt466_execution_failed": execution_classification == "failed",
+        "prompt466_execution_blocked": execution_classification == "blocked",
+        "prompt466_execution_unknown": execution_classification == "unknown",
+        "prompt466_reviewed_returncode": returncode,
+        "prompt466_reviewed_returncode_classification": returncode_classification,
+        "prompt466_reviewed_runtime_result_available": runtime_result_available,
+        "prompt466_reviewed_runtime_result_payload_ready": (
+            runtime_result_payload_ready
+        ),
+        "prompt466_post_execution_diff_review_status": (
+            "reviewed" if diff_evidence_ready else "blocked"
+        ),
+        "prompt466_post_execution_tracked_diff_empty": tracked_diff_empty,
+        "prompt466_post_execution_changed_files": changed_files,
+        "prompt466_post_execution_untracked_files": untracked_files,
+        "prompt466_post_execution_unexpected_files": unexpected_files,
+        "prompt466_post_execution_changed_files_known": changed_files_known,
+        "prompt466_post_execution_untracked_files_known": untracked_files_known,
+        "prompt466_post_execution_unexpected_files_known": unexpected_files_known,
+        "prompt466_expected_changes_detected": expected_changes_detected,
+        "prompt466_no_changes_detected": no_changes_detected,
+        "prompt466_unexpected_changes_detected": unexpected_changes_detected,
+        "prompt466_route_decision_status": route_decision_status,
+        "prompt466_route_decision_ready": route_decision_ready,
+        "prompt466_route_decision": route_decision,
+        "prompt466_route_reason": route_reason,
+        "prompt466_human_review_required": human_review_required,
+        "prompt466_human_intervention_required": human_intervention_required,
+        "prompt466_auto_route_allowed": auto_route_allowed,
+        "prompt466_prompt467_handoff_ready": prompt467_handoff_ready,
+        "prompt466_prompt467_expected_scope": prompt467_expected_scope,
+        "prompt466_prompt467_expected_next_action": (
+            next_action if prompt467_handoff_ready else ""
+        ),
+        "prompt466_prompt467_no_human_continuation_ready": (
+            not human_intervention_required
+        ),
+        "prompt466_prompt467_next_cycle_request_ready": (
+            not human_intervention_required
+        ),
+        "prompt466_current_cycle": current_cycle,
+        "prompt466_max_cycles": max_cycles,
+        "prompt466_one_cycle_only": True,
+        "prompt466_max_cycles_guard_ready": not max_cycles_reached,
+        "prompt466_max_cycles_reached": max_cycles_reached,
+        "prompt466_retry_limit_guard_ready": not retry_limit_reached,
+        "prompt466_retry_limit_reached": retry_limit_reached,
+        "prompt466_unsafe_stop_guard_ready": not unsafe_stop_required,
+        "prompt466_unsafe_stop_required": unsafe_stop_required,
+        "prompt466_unbounded_loop_allowed": False,
+        "prompt466_git_mutation_allowed": False,
+        "prompt466_commit_tag_allowed": False,
+        "prompt466_remote_mutation_allowed": False,
+        "prompt466_push_allowed": False,
+        "prompt466_tests_allowed": False,
+        "prompt466_file_creation_allowed": False,
+        "prompt466_merge_allowed": False,
+        "prompt466_pr_allowed": False,
+        "prompt466_codex_invocation_allowed": False,
+        "prompt466_git_mutation_performed_observed": (
+            git_or_commit_tag_mutation_observed
+        ),
+        "prompt466_commit_tag_performed_observed": (
+            payload.get("prompt466_commit_tag_performed_observed") is True
+        ),
+        "prompt466_remote_mutation_performed_observed": (
+            remote_or_push_mutation_observed
+        ),
+        "prompt466_push_performed_observed": (
+            payload.get("prompt466_push_performed_observed") is True
+            or payload.get("push_performed_observed") is True
+        ),
+        "prompt466_tests_performed_observed": tests_observed,
+        "prompt466_file_creation_performed_observed": file_creation_observed,
+        "prompt466_codex_invocation_performed_observed": (
+            codex_reinvocation_observed
+        ),
+        "prompt466_review_passed": bool(
+            route_decision_ready and not human_intervention_required
+        ),
+        "prompt466_blocked_reason": blocked_reason,
+        "prompt466_next_action": next_action,
+    }
 
 
 def _build_prompt430_bounded_runtime_execution_adapter_state(
@@ -258676,6 +259211,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt465_bounded_one_cycle_execution_smoke_payload,
         }
+        prompt466_execution_result_review_route_decision_payload = (
+            _build_prompt466_execution_result_review_route_decision_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt466_execution_result_review_route_decision_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -259334,6 +259878,36 @@ class PlannedExecutionRunner:
                 "prompt465_next_action": (
                     prompt465_bounded_one_cycle_execution_smoke_payload.get(
                         "prompt465_next_action"
+                    )
+                ),
+                "prompt466_execution_result_review_status": (
+                    prompt466_execution_result_review_route_decision_payload.get(
+                        "prompt466_execution_result_review_status"
+                    )
+                ),
+                "prompt466_route_decision_status": (
+                    prompt466_execution_result_review_route_decision_payload.get(
+                        "prompt466_route_decision_status"
+                    )
+                ),
+                "prompt466_route_decision": (
+                    prompt466_execution_result_review_route_decision_payload.get(
+                        "prompt466_route_decision"
+                    )
+                ),
+                "prompt466_human_intervention_required": (
+                    prompt466_execution_result_review_route_decision_payload.get(
+                        "prompt466_human_intervention_required"
+                    )
+                ),
+                "prompt466_prompt467_handoff_ready": (
+                    prompt466_execution_result_review_route_decision_payload.get(
+                        "prompt466_prompt467_handoff_ready"
+                    )
+                ),
+                "prompt466_next_action": (
+                    prompt466_execution_result_review_route_decision_payload.get(
+                        "prompt466_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -260652,6 +261226,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt465_bounded_one_cycle_execution_smoke_state=(
                     prompt465_bounded_one_cycle_execution_smoke_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt466_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt466_execution_result_review_route_decision_state=(
+                    prompt466_execution_result_review_route_decision_payload
                 ),
             )
         )
@@ -262814,6 +263396,42 @@ class PlannedExecutionRunner:
                     "prompt465_next_action"
                 ),
                 default="manual_review_prompt465_route",
+            ),
+            "prompt466_execution_result_review_status": _normalize_text(
+                prompt466_execution_result_review_route_decision_payload.get(
+                    "prompt466_execution_result_review_status"
+                ),
+                default="blocked",
+            ),
+            "prompt466_route_decision_status": _normalize_text(
+                prompt466_execution_result_review_route_decision_payload.get(
+                    "prompt466_route_decision_status"
+                ),
+                default="blocked",
+            ),
+            "prompt466_route_decision": _normalize_text(
+                prompt466_execution_result_review_route_decision_payload.get(
+                    "prompt466_route_decision"
+                ),
+                default="",
+            ),
+            "prompt466_human_intervention_required": bool(
+                prompt466_execution_result_review_route_decision_payload.get(
+                    "prompt466_human_intervention_required",
+                    True,
+                )
+            ),
+            "prompt466_prompt467_handoff_ready": bool(
+                prompt466_execution_result_review_route_decision_payload.get(
+                    "prompt466_prompt467_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt466_next_action": _normalize_text(
+                prompt466_execution_result_review_route_decision_payload.get(
+                    "prompt466_next_action"
+                ),
+                default="manual_review_prompt466_route",
             ),
         }
         if decision_error:
@@ -269921,6 +270539,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT465_BOUNDED_ONE_CYCLE_EXECUTION_SMOKE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT466_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
