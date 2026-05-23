@@ -318,6 +318,51 @@ PROMPT472_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt472_next_action",
 )
 
+PROMPT473_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt473_schema_version",
+    "prompt473_applicable",
+    "prompt473_changed_diff_fixture_status",
+    "prompt473_changed_diff_fixture_ready",
+    "prompt473_upstream_prompt472_evidence_ready",
+    "prompt473_prompt472_evidence_source",
+    "prompt473_prompt472_current_fields_evidence_ready",
+    "prompt473_prompt472_explicit_flags_evidence_ready",
+    "prompt473_prompt472_historical_repo_evidence_ready",
+    "prompt473_execution_success_fixture_ready",
+    "prompt473_execution_returncode_classification",
+    "prompt473_diff_evidence_known",
+    "prompt473_tracked_diff_present",
+    "prompt473_changed_files",
+    "prompt473_untracked_files",
+    "prompt473_unexpected_files",
+    "prompt473_allowed_tracked_files",
+    "prompt473_unexpected_tracked_files",
+    "prompt473_prompt469_changed_route_ready",
+    "prompt473_prompt469_route_decision",
+    "prompt473_prompt470_targeted_fix_required",
+    "prompt473_prompt470_targeted_fix_request_ready",
+    "prompt473_prompt470_targeted_fix_execution_allowed",
+    "prompt473_prompt470_blocked_without_explicit_allow",
+    "prompt473_targeted_fix_boundary_ready",
+    "prompt473_targeted_fix_performed",
+    "prompt473_commit_tag_attempted",
+    "prompt473_fixture_only",
+    "prompt473_human_review_required",
+    "prompt473_human_intervention_required",
+    "prompt473_auto_route_allowed",
+    "prompt473_codex_invocation_allowed",
+    "prompt473_file_creation_allowed",
+    "prompt473_tests_allowed",
+    "prompt473_commit_tag_allowed",
+    "prompt473_push_allowed",
+    "prompt473_pr_allowed",
+    "prompt473_merge_allowed",
+    "prompt473_unbounded_loop_allowed",
+    "prompt473_blocked_reason",
+    "prompt473_blocked_reasons",
+    "prompt473_next_action",
+)
+
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "state",
     "orchestration_state",
@@ -377,6 +422,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT470_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT471_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT472_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT473_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
     "prompt356_stale_blockers_present",
@@ -2820,6 +2866,39 @@ def select_manifest_run_state_summary_compact(
             "prompt472_unbounded_loop_allowed",
         }
     )
+    bool_fields.update(
+        {
+            "prompt473_applicable",
+            "prompt473_changed_diff_fixture_ready",
+            "prompt473_upstream_prompt472_evidence_ready",
+            "prompt473_prompt472_current_fields_evidence_ready",
+            "prompt473_prompt472_explicit_flags_evidence_ready",
+            "prompt473_prompt472_historical_repo_evidence_ready",
+            "prompt473_execution_success_fixture_ready",
+            "prompt473_diff_evidence_known",
+            "prompt473_tracked_diff_present",
+            "prompt473_prompt469_changed_route_ready",
+            "prompt473_prompt470_targeted_fix_required",
+            "prompt473_prompt470_targeted_fix_request_ready",
+            "prompt473_prompt470_targeted_fix_execution_allowed",
+            "prompt473_prompt470_blocked_without_explicit_allow",
+            "prompt473_targeted_fix_boundary_ready",
+            "prompt473_targeted_fix_performed",
+            "prompt473_commit_tag_attempted",
+            "prompt473_fixture_only",
+            "prompt473_human_review_required",
+            "prompt473_human_intervention_required",
+            "prompt473_auto_route_allowed",
+            "prompt473_codex_invocation_allowed",
+            "prompt473_file_creation_allowed",
+            "prompt473_tests_allowed",
+            "prompt473_commit_tag_allowed",
+            "prompt473_push_allowed",
+            "prompt473_pr_allowed",
+            "prompt473_merge_allowed",
+            "prompt473_unbounded_loop_allowed",
+        }
+    )
     list_fields.update(
         {
             "prompt471_allowed_tracked_files",
@@ -2834,6 +2913,16 @@ def select_manifest_run_state_summary_compact(
         {
             "prompt472_tags_at_head",
             "prompt472_blocked_reasons",
+        }
+    )
+    list_fields.update(
+        {
+            "prompt473_changed_files",
+            "prompt473_untracked_files",
+            "prompt473_unexpected_files",
+            "prompt473_allowed_tracked_files",
+            "prompt473_unexpected_tracked_files",
+            "prompt473_blocked_reasons",
         }
     )
     int_fields.update({"prompt471_commit_returncode", "prompt471_tag_returncode"})
