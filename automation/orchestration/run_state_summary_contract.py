@@ -272,6 +272,47 @@ PROMPT471_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt471_next_action",
 )
 
+PROMPT472_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt472_schema_version",
+    "prompt472_applicable",
+    "prompt472_post_commit_clean_rerun_status",
+    "prompt472_post_commit_clean_rerun_ready",
+    "prompt472_upstream_prompt471_evidence_ready",
+    "prompt472_prompt471_tag_name",
+    "prompt472_prompt471_tag_at_head",
+    "prompt472_prompt471_head_subject_ok",
+    "prompt472_current_head_short",
+    "prompt472_current_head_subject",
+    "prompt472_tags_at_head",
+    "prompt472_worktree_clean",
+    "prompt472_post_commit_route_confirmed",
+    "prompt472_post_commit_safety_confirmed",
+    "prompt472_final_clean_and_tag_confirmed",
+    "prompt472_next_cycle_continuation_ready",
+    "prompt472_next_cycle_request_ready",
+    "prompt472_next_cycle_runtime_request_ready",
+    "prompt472_next_cycle_prompt_request_ready",
+    "prompt472_next_cycle_selected_prompt_id",
+    "prompt472_next_cycle_selected_next_action",
+    "prompt472_full_compressed_development_loop_confirmed",
+    "prompt472_loop_completion_status",
+    "prompt472_human_review_required",
+    "prompt472_human_intervention_required",
+    "prompt472_auto_continue_allowed",
+    "prompt472_auto_route_allowed",
+    "prompt472_codex_invocation_allowed",
+    "prompt472_file_creation_allowed",
+    "prompt472_tests_allowed",
+    "prompt472_commit_tag_allowed",
+    "prompt472_push_allowed",
+    "prompt472_pr_allowed",
+    "prompt472_merge_allowed",
+    "prompt472_unbounded_loop_allowed",
+    "prompt472_blocked_reason",
+    "prompt472_blocked_reasons",
+    "prompt472_next_action",
+)
+
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "state",
     "orchestration_state",
@@ -330,6 +371,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *OPERATOR_SUMMARY_SAFE_FIELDS,
     *PROMPT470_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT471_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT472_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
     "prompt356_stale_blockers_present",
@@ -2739,6 +2781,36 @@ def select_manifest_run_state_summary_compact(
             "prompt471_unbounded_loop_allowed",
         }
     )
+    bool_fields.update(
+        {
+            "prompt472_applicable",
+            "prompt472_post_commit_clean_rerun_ready",
+            "prompt472_upstream_prompt471_evidence_ready",
+            "prompt472_prompt471_tag_at_head",
+            "prompt472_prompt471_head_subject_ok",
+            "prompt472_worktree_clean",
+            "prompt472_post_commit_route_confirmed",
+            "prompt472_post_commit_safety_confirmed",
+            "prompt472_final_clean_and_tag_confirmed",
+            "prompt472_next_cycle_continuation_ready",
+            "prompt472_next_cycle_request_ready",
+            "prompt472_next_cycle_runtime_request_ready",
+            "prompt472_next_cycle_prompt_request_ready",
+            "prompt472_full_compressed_development_loop_confirmed",
+            "prompt472_human_review_required",
+            "prompt472_human_intervention_required",
+            "prompt472_auto_continue_allowed",
+            "prompt472_auto_route_allowed",
+            "prompt472_codex_invocation_allowed",
+            "prompt472_file_creation_allowed",
+            "prompt472_tests_allowed",
+            "prompt472_commit_tag_allowed",
+            "prompt472_push_allowed",
+            "prompt472_pr_allowed",
+            "prompt472_merge_allowed",
+            "prompt472_unbounded_loop_allowed",
+        }
+    )
     list_fields.update(
         {
             "prompt471_allowed_tracked_files",
@@ -2747,6 +2819,12 @@ def select_manifest_run_state_summary_compact(
             "prompt471_untracked_files",
             "prompt471_post_commit_tag_at_head",
             "prompt471_blocked_reasons",
+        }
+    )
+    list_fields.update(
+        {
+            "prompt472_tags_at_head",
+            "prompt472_blocked_reasons",
         }
     )
     int_fields.update({"prompt471_commit_returncode", "prompt471_tag_returncode"})

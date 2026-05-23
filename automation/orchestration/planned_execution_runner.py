@@ -4023,6 +4023,13 @@ _PROMPT470_SCHEMA_VERSION = (
 _PROMPT471_SCHEMA_VERSION = "prompt471_commit_tag_candidate_execution_gate_v1"
 _PROMPT471_COMMIT_MESSAGE = "Prompt471 add commit tag candidate execution gate"
 _PROMPT471_TAG_NAME = "prompt471-commit-tag-candidate-execution-gate"
+_PROMPT472_SCHEMA_VERSION = (
+    "prompt472_post_commit_clean_rerun_next_cycle_continuation_v1"
+)
+_PROMPT472_NEXT_PROMPT_ID = "prompt473"
+_PROMPT472_NEXT_ACTION = (
+    "prepare_prompt473_changed_or_failed_route_fixture_execution"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7884,6 +7891,46 @@ _PROMPT471_COMMIT_TAG_CANDIDATE_EXECUTION_GATE_KEYS: tuple[str, ...] = (
     "prompt471_blocked_reason",
     "prompt471_blocked_reasons",
     "prompt471_next_action",
+)
+_PROMPT472_POST_COMMIT_CLEAN_RERUN_NEXT_CYCLE_KEYS: tuple[str, ...] = (
+    "prompt472_schema_version",
+    "prompt472_applicable",
+    "prompt472_post_commit_clean_rerun_status",
+    "prompt472_post_commit_clean_rerun_ready",
+    "prompt472_upstream_prompt471_evidence_ready",
+    "prompt472_prompt471_tag_name",
+    "prompt472_prompt471_tag_at_head",
+    "prompt472_prompt471_head_subject_ok",
+    "prompt472_current_head_short",
+    "prompt472_current_head_subject",
+    "prompt472_tags_at_head",
+    "prompt472_worktree_clean",
+    "prompt472_post_commit_route_confirmed",
+    "prompt472_post_commit_safety_confirmed",
+    "prompt472_final_clean_and_tag_confirmed",
+    "prompt472_next_cycle_continuation_ready",
+    "prompt472_next_cycle_request_ready",
+    "prompt472_next_cycle_runtime_request_ready",
+    "prompt472_next_cycle_prompt_request_ready",
+    "prompt472_next_cycle_selected_prompt_id",
+    "prompt472_next_cycle_selected_next_action",
+    "prompt472_full_compressed_development_loop_confirmed",
+    "prompt472_loop_completion_status",
+    "prompt472_human_review_required",
+    "prompt472_human_intervention_required",
+    "prompt472_auto_continue_allowed",
+    "prompt472_auto_route_allowed",
+    "prompt472_codex_invocation_allowed",
+    "prompt472_file_creation_allowed",
+    "prompt472_tests_allowed",
+    "prompt472_commit_tag_allowed",
+    "prompt472_push_allowed",
+    "prompt472_pr_allowed",
+    "prompt472_merge_allowed",
+    "prompt472_unbounded_loop_allowed",
+    "prompt472_blocked_reason",
+    "prompt472_blocked_reasons",
+    "prompt472_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -11783,6 +11830,27 @@ def _merge_prompt471_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT471_COMMIT_TAG_CANDIDATE_EXECUTION_GATE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt472_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt472_post_commit_clean_rerun_next_cycle_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt472_post_commit_clean_rerun_next_cycle_state)
+        if isinstance(prompt472_post_commit_clean_rerun_next_cycle_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT472_POST_COMMIT_CLEAN_RERUN_NEXT_CYCLE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -80888,6 +80956,192 @@ def _prompt471_tags_at_head(*, repo_path: str) -> list[str]:
     if completed is None or completed.returncode != 0:
         return []
     return _normalize_string_list(completed.stdout.splitlines(), sort_items=False)
+
+
+def _prompt472_git_stdout(
+    *,
+    repo_path: str,
+    argv: Sequence[str],
+) -> tuple[bool, str]:
+    completed = _prompt471_git(repo_path, argv)
+    if completed is None or completed.returncode != 0:
+        return False, ""
+    return True, _normalize_text(completed.stdout, default="")
+
+
+def _prompt472_upstream_prompt471_evidence_ready(payload: Mapping[str, Any]) -> bool:
+    route_decision = _normalize_text(
+        payload.get("prompt471_input_post_fix_route_decision"),
+        default="",
+    )
+    return bool(
+        payload.get("prompt471_upstream_prompt470_evidence_ready") is True
+        and route_decision
+        in {
+            "no_targeted_fix_required_prepare_commit_tag_candidate",
+            "targeted_fix_success_prepare_commit_tag_candidate",
+        }
+        and payload.get("prompt471_tag_name") == _PROMPT471_TAG_NAME
+        and payload.get("prompt471_tag_already_exists") is True
+        and payload.get("prompt471_codex_invocation_allowed") is False
+        and payload.get("prompt471_tests_allowed") is False
+        and payload.get("prompt471_push_allowed") is False
+        and payload.get("prompt471_pr_allowed") is False
+        and payload.get("prompt471_merge_allowed") is False
+        and payload.get("prompt471_unbounded_loop_allowed") is False
+    )
+
+
+def _build_prompt472_post_commit_clean_rerun_next_cycle_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+
+    head_short_known, head_short_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("rev-parse", "--short", "HEAD"),
+    )
+    head_subject_known, head_subject_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("log", "-1", "--pretty=%s"),
+    )
+    tags_known, tags_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("tag", "--points-at", "HEAD"),
+    )
+    worktree_known, worktree_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("status", "--short"),
+    )
+
+    current_head_short = (
+        head_short_stdout.splitlines()[0].strip()
+        if head_short_known and head_short_stdout.splitlines()
+        else ""
+    )
+    current_head_subject = (
+        head_subject_stdout.splitlines()[0].strip()
+        if head_subject_known and head_subject_stdout.splitlines()
+        else ""
+    )
+    tags_at_head = (
+        _normalize_string_list(tags_stdout.splitlines(), sort_items=False)
+        if tags_known
+        else []
+    )
+    worktree_clean = bool(worktree_known and not worktree_stdout.strip())
+    repo_state_known = bool(
+        head_short_known and head_subject_known and tags_known and worktree_known
+    )
+
+    prompt471_tag_at_head = _PROMPT471_TAG_NAME in tags_at_head
+    prompt471_head_subject_ok = (
+        current_head_subject == _PROMPT471_COMMIT_MESSAGE
+    )
+    upstream_ready = _prompt472_upstream_prompt471_evidence_ready(payload)
+    route_decision = _normalize_text(
+        payload.get("prompt471_input_post_fix_route_decision"),
+        default="",
+    )
+    post_commit_route_confirmed = bool(
+        payload.get("prompt471_upstream_prompt470_evidence_ready") is True
+        and route_decision
+        in {
+            "no_targeted_fix_required_prepare_commit_tag_candidate",
+            "targeted_fix_success_prepare_commit_tag_candidate",
+        }
+    )
+    post_commit_safety_confirmed = bool(
+        payload.get("prompt471_codex_invocation_allowed") is False
+        and payload.get("prompt471_tests_allowed") is False
+        and payload.get("prompt471_push_allowed") is False
+        and payload.get("prompt471_pr_allowed") is False
+        and payload.get("prompt471_merge_allowed") is False
+        and payload.get("prompt471_unbounded_loop_allowed") is False
+    )
+    final_clean_and_tag_confirmed = bool(
+        repo_state_known
+        and prompt471_tag_at_head
+        and prompt471_head_subject_ok
+        and worktree_clean
+    )
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt471_evidence_missing")
+    if repo_state_known and not prompt471_tag_at_head:
+        blocked_reasons.append("prompt471_tag_not_at_head")
+    if repo_state_known and not prompt471_head_subject_ok:
+        blocked_reasons.append("prompt471_head_subject_mismatch")
+    if repo_state_known and not worktree_clean:
+        blocked_reasons.append("prompt472_worktree_not_clean")
+    if not post_commit_route_confirmed:
+        blocked_reasons.append("prompt471_post_commit_route_not_confirmed")
+    if not post_commit_safety_confirmed:
+        blocked_reasons.append("prompt471_post_commit_safety_not_confirmed")
+    if not repo_state_known:
+        blocked_reasons.append("prompt472_repo_state_unknown")
+
+    confirmed = not blocked_reasons
+    return {
+        "prompt472_schema_version": _PROMPT472_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt472",
+        "prompt472_applicable": True,
+        "prompt472_post_commit_clean_rerun_status": (
+            "confirmed" if confirmed else "blocked"
+        ),
+        "prompt472_post_commit_clean_rerun_ready": confirmed,
+        "prompt472_upstream_prompt471_evidence_ready": upstream_ready,
+        "prompt472_prompt471_tag_name": _PROMPT471_TAG_NAME,
+        "prompt472_prompt471_tag_at_head": prompt471_tag_at_head,
+        "prompt472_prompt471_head_subject_ok": prompt471_head_subject_ok,
+        "prompt472_current_head_short": current_head_short,
+        "prompt472_current_head_subject": current_head_subject,
+        "prompt472_tags_at_head": tags_at_head,
+        "prompt472_worktree_clean": worktree_clean,
+        "prompt472_post_commit_route_confirmed": post_commit_route_confirmed,
+        "prompt472_post_commit_safety_confirmed": post_commit_safety_confirmed,
+        "prompt472_final_clean_and_tag_confirmed": final_clean_and_tag_confirmed,
+        "prompt472_next_cycle_continuation_ready": confirmed,
+        "prompt472_next_cycle_request_ready": confirmed,
+        "prompt472_next_cycle_runtime_request_ready": confirmed,
+        "prompt472_next_cycle_prompt_request_ready": confirmed,
+        "prompt472_next_cycle_selected_prompt_id": (
+            _PROMPT472_NEXT_PROMPT_ID if confirmed else ""
+        ),
+        "prompt472_next_cycle_selected_next_action": (
+            _PROMPT472_NEXT_ACTION if confirmed else ""
+        ),
+        "prompt472_full_compressed_development_loop_confirmed": confirmed,
+        "prompt472_loop_completion_status": (
+            "completed" if confirmed else "blocked"
+        ),
+        "prompt472_human_review_required": not confirmed,
+        "prompt472_human_intervention_required": not confirmed,
+        "prompt472_auto_continue_allowed": confirmed,
+        "prompt472_auto_route_allowed": confirmed,
+        "prompt472_codex_invocation_allowed": False,
+        "prompt472_file_creation_allowed": False,
+        "prompt472_tests_allowed": False,
+        "prompt472_commit_tag_allowed": False,
+        "prompt472_push_allowed": False,
+        "prompt472_pr_allowed": False,
+        "prompt472_merge_allowed": False,
+        "prompt472_unbounded_loop_allowed": False,
+        "prompt472_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt472_blocked_reasons": blocked_reasons,
+        "prompt472_next_action": (
+            _PROMPT472_NEXT_ACTION
+            if confirmed
+            else "manual_review_prompt472_post_commit_clean_rerun_blocked"
+        ),
+    }
 
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -261263,6 +261517,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt471_commit_tag_candidate_execution_gate_payload,
         }
+        prompt472_post_commit_clean_rerun_next_cycle_payload = (
+            _build_prompt472_post_commit_clean_rerun_next_cycle_state(
+                run_state_payload=run_state_payload,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt472_post_commit_clean_rerun_next_cycle_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -262206,6 +262470,51 @@ class PlannedExecutionRunner:
                 "prompt471_next_action": (
                     prompt471_commit_tag_candidate_execution_gate_payload.get(
                         "prompt471_next_action"
+                    )
+                ),
+                "prompt472_post_commit_clean_rerun_status": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_post_commit_clean_rerun_status"
+                    )
+                ),
+                "prompt472_post_commit_clean_rerun_ready": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_post_commit_clean_rerun_ready"
+                    )
+                ),
+                "prompt472_upstream_prompt471_evidence_ready": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_upstream_prompt471_evidence_ready"
+                    )
+                ),
+                "prompt472_prompt471_tag_at_head": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_prompt471_tag_at_head"
+                    )
+                ),
+                "prompt472_prompt471_head_subject_ok": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_prompt471_head_subject_ok"
+                    )
+                ),
+                "prompt472_worktree_clean": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_worktree_clean"
+                    )
+                ),
+                "prompt472_next_cycle_continuation_ready": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_next_cycle_continuation_ready"
+                    )
+                ),
+                "prompt472_full_compressed_development_loop_confirmed": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_full_compressed_development_loop_confirmed"
+                    )
+                ),
+                "prompt472_next_action": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -263572,6 +263881,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt471_commit_tag_candidate_execution_gate_state=(
                     prompt471_commit_tag_candidate_execution_gate_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt472_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt472_post_commit_clean_rerun_next_cycle_state=(
+                    prompt472_post_commit_clean_rerun_next_cycle_payload
                 ),
             )
         )
@@ -266160,6 +266477,60 @@ class PlannedExecutionRunner:
                     "prompt471_next_action"
                 ),
                 default="manual_review_prompt471_commit_tag_candidate_blocked",
+            ),
+            "prompt472_post_commit_clean_rerun_status": _normalize_text(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_post_commit_clean_rerun_status"
+                ),
+                default="blocked",
+            ),
+            "prompt472_post_commit_clean_rerun_ready": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_post_commit_clean_rerun_ready",
+                    False,
+                )
+            ),
+            "prompt472_upstream_prompt471_evidence_ready": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_upstream_prompt471_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt472_prompt471_tag_at_head": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_prompt471_tag_at_head",
+                    False,
+                )
+            ),
+            "prompt472_prompt471_head_subject_ok": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_prompt471_head_subject_ok",
+                    False,
+                )
+            ),
+            "prompt472_worktree_clean": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_worktree_clean",
+                    False,
+                )
+            ),
+            "prompt472_next_cycle_continuation_ready": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_next_cycle_continuation_ready",
+                    False,
+                )
+            ),
+            "prompt472_full_compressed_development_loop_confirmed": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_full_compressed_development_loop_confirmed",
+                    False,
+                )
+            ),
+            "prompt472_next_action": _normalize_text(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_next_action"
+                ),
+                default="manual_review_prompt472_post_commit_clean_rerun_blocked",
             ),
         }
         if decision_error:
@@ -273285,6 +273656,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT471_COMMIT_TAG_CANDIDATE_EXECUTION_GATE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT472_POST_COMMIT_CLEAN_RERUN_NEXT_CYCLE_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
