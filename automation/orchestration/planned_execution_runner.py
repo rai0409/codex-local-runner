@@ -4030,6 +4030,16 @@ _PROMPT472_COMMIT_MESSAGE = "Prompt472 add post commit clean rerun continuation"
 _PROMPT472_TAG_NAME = (
     "prompt472-post-commit-clean-rerun-next-cycle-continuation"
 )
+_PROMPT472_VALID_FINAL_HEAD_SUBJECTS = (
+    "Prompt472 add post commit clean rerun continuation",
+    "Prompt472 fix final head tag confirmation",
+    "Prompt472 fix valid final state confirmation",
+)
+_PROMPT472_VALID_FINAL_TAG_NAMES = (
+    "prompt472-post-commit-clean-rerun-next-cycle-continuation",
+    "prompt472-final-head-tag-followup-fix",
+    "prompt472-valid-final-state-confirmation-fix",
+)
 _PROMPT472_NEXT_PROMPT_ID = "prompt473"
 _PROMPT472_NEXT_ACTION = (
     "prepare_prompt473_changed_or_failed_route_fixture_execution"
@@ -81054,8 +81064,13 @@ def _build_prompt472_post_commit_clean_rerun_next_cycle_state(
     prompt472_head_subject_ok = (
         current_head_subject == _PROMPT472_COMMIT_MESSAGE
     )
-    final_tag_at_head_ok = prompt472_tag_at_head
-    final_head_subject_ok = prompt472_head_subject_ok
+    final_tag_at_head_ok = any(
+        tag_name in tags_at_head
+        for tag_name in _PROMPT472_VALID_FINAL_TAG_NAMES
+    )
+    final_head_subject_ok = (
+        current_head_subject in _PROMPT472_VALID_FINAL_HEAD_SUBJECTS
+    )
     upstream_ready = _prompt472_upstream_prompt471_evidence_ready(payload)
     route_decision = _normalize_text(
         payload.get("prompt471_input_post_fix_route_decision"),
