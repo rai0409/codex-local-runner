@@ -4169,6 +4169,17 @@ _PROMPT479_SUCCESS_NEXT_ACTION = (
 _PROMPT479_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt479_daemon_lite_boundary_blocked"
 )
+_PROMPT480_SCHEMA_VERSION = "prompt480_daemon_lite_workspace_safety_stop_contract_v1"
+_PROMPT480_ALLOWED_TRACKED_FILES = _PROMPT479_ALLOWED_TRACKED_FILES
+_PROMPT480_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt481_daemon_lite_repeated_cycle_smoke"
+)
+_PROMPT480_STOPPED_NEXT_ACTION = (
+    "manual_review_prompt480_daemon_lite_safety_stop_triggered"
+)
+_PROMPT480_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt480_workspace_safety_contract_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8461,6 +8472,53 @@ _PROMPT479_DAEMON_LITE_BOUNDARY_KEYS: tuple[str, ...] = (
     "prompt479_blocked_reasons",
     "prompt479_next_action",
 )
+_PROMPT480_WORKSPACE_SAFETY_STOP_KEYS: tuple[str, ...] = (
+    "prompt480_schema_version",
+    "prompt480_applicable",
+    "prompt480_workspace_safety_stop_status",
+    "prompt480_workspace_safety_stop_ready",
+    "prompt480_upstream_prompt479_evidence_ready",
+    "prompt480_prompt479_evidence_source",
+    "prompt480_prompt479_current_fields_evidence_ready",
+    "prompt480_prompt479_explicit_flags_evidence_ready",
+    "prompt480_prompt479_historical_repo_evidence_ready",
+    "prompt480_current_head_short",
+    "prompt480_current_head_subject",
+    "prompt480_tags_at_head",
+    "prompt480_changed_tracked_files",
+    "prompt480_unexpected_tracked_files",
+    "prompt480_untracked_files",
+    "prompt480_unexpected_files",
+    "prompt480_daemon_lite_execution_attempted",
+    "prompt480_daemon_lite_execution_performed",
+    "prompt480_workspace_dirty_detected",
+    "prompt480_unexpected_files_detected",
+    "prompt480_manual_stop_requested",
+    "prompt480_stop_on_worktree_dirty",
+    "prompt480_stop_on_unexpected_files",
+    "prompt480_stop_on_manual_stop_flag",
+    "prompt480_workspace_safety_stop_contract_ready",
+    "prompt480_safety_stop_triggered",
+    "prompt480_safety_stop_reason",
+    "prompt480_safety_stop_reasons",
+    "prompt480_continue_allowed",
+    "prompt480_prompt481_handoff_ready",
+    "prompt480_human_review_required",
+    "prompt480_human_intervention_required",
+    "prompt480_auto_continue_allowed",
+    "prompt480_auto_route_allowed",
+    "prompt480_codex_invocation_allowed",
+    "prompt480_file_creation_allowed",
+    "prompt480_tests_allowed",
+    "prompt480_commit_tag_allowed",
+    "prompt480_push_allowed",
+    "prompt480_pr_allowed",
+    "prompt480_merge_allowed",
+    "prompt480_unbounded_loop_allowed",
+    "prompt480_blocked_reason",
+    "prompt480_blocked_reasons",
+    "prompt480_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -12527,6 +12585,27 @@ def _merge_prompt479_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT479_DAEMON_LITE_BOUNDARY_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt480_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt480_workspace_safety_stop_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt480_workspace_safety_stop_state)
+        if isinstance(prompt480_workspace_safety_stop_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT480_WORKSPACE_SAFETY_STOP_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -69208,6 +69287,13 @@ def _normalize_prompt437_runtime_command_request(
     normalized: dict[str, Any] = {
         "command_argv": normalized_command_argv,
     }
+    for key in (
+        "prompt480_manual_stop_requested",
+        "daemon_lite_manual_stop_requested",
+        "manual_stop_requested",
+    ):
+        if key in payload:
+            normalized[key] = payload.get(key)
     if "cwd" in payload:
         cwd = payload.get("cwd")
         if not isinstance(cwd, str):
@@ -84797,6 +84883,294 @@ def _build_prompt479_daemon_lite_boundary_state(
         "prompt479_next_action": (
             _PROMPT479_SUCCESS_NEXT_ACTION if ready else _PROMPT479_BLOCKED_NEXT_ACTION
         ),
+    }
+
+
+def _prompt480_prompt479_current_fields_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt479_daemon_lite_boundary_status") == "ready"
+        and payload.get("prompt479_daemon_lite_boundary_ready") is True
+        and payload.get("prompt479_limit_stop_contract_ready") is True
+        and payload.get("prompt479_prompt480_handoff_ready") is True
+        and payload.get("prompt479_next_action") == _PROMPT479_SUCCESS_NEXT_ACTION
+    )
+
+
+def _prompt480_prompt479_explicit_flags_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt479_daemon_lite_boundary_ready") is True
+        and payload.get("prompt479_limit_stop_contract_ready") is True
+        and payload.get("prompt479_prompt480_handoff_ready") is True
+        and payload.get("prompt479_post_commit_final_confirmed") is True
+    )
+
+
+def _prompt480_prompt479_historical_repo_evidence_ready(
+    *,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> bool:
+    subject_ok = bool(
+        current_head_subject
+        == "Prompt479 add daemon lite boundary limit stop contract"
+        or current_head_subject.startswith("Prompt479 fix ")
+        or current_head_subject.startswith("Prompt480 ")
+    )
+    tag_ok = any(
+        tag == "prompt479-daemon-lite-boundary-limit-stop-contract"
+        or tag.startswith("prompt479-daemon-lite-")
+        or tag.startswith("prompt479-")
+        for tag in tags_at_head
+    )
+    tracked_files_limited = bool(
+        not unexpected_tracked_files
+        and all(
+            path in _PROMPT480_ALLOWED_TRACKED_FILES
+            for path in changed_tracked_files
+        )
+    )
+    return bool(subject_ok and tag_ok and tracked_files_limited)
+
+
+def _prompt480_prompt479_evidence_bridge(
+    *,
+    payload: Mapping[str, Any],
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> dict[str, Any]:
+    current_fields_ready = _prompt480_prompt479_current_fields_evidence_ready(payload)
+    explicit_flags_ready = _prompt480_prompt479_explicit_flags_evidence_ready(payload)
+    historical_repo_ready = _prompt480_prompt479_historical_repo_evidence_ready(
+        current_head_subject=current_head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    if current_fields_ready:
+        evidence_source = "current_fields"
+    elif explicit_flags_ready:
+        evidence_source = "explicit_flags"
+    elif historical_repo_ready:
+        evidence_source = "historical_repo"
+    else:
+        evidence_source = ""
+    return {
+        "ready": bool(current_fields_ready or explicit_flags_ready or historical_repo_ready),
+        "source": evidence_source,
+        "current_fields_ready": current_fields_ready,
+        "explicit_flags_ready": explicit_flags_ready,
+        "historical_repo_ready": historical_repo_ready,
+    }
+
+
+def _prompt480_manual_stop_requested(
+    payload: Mapping[str, Any],
+    *,
+    extra_payloads: Sequence[Mapping[str, Any] | None] = (),
+) -> bool:
+    return any(
+        surface.get(key) is True
+        for surface in _prompt478_runtime_allow_surfaces(
+            payload,
+            extra_payloads=extra_payloads,
+        )
+        for key in (
+            "prompt480_manual_stop_requested",
+            "daemon_lite_manual_stop_requested",
+            "manual_stop_requested",
+        )
+    )
+
+
+def _build_prompt480_workspace_safety_stop_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    manual_stop_payloads: Sequence[Mapping[str, Any] | None] = (),
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=_PROMPT480_ALLOWED_TRACKED_FILES,
+    )
+    changed_tracked_files = _normalize_string_list(
+        diff.get("changed_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        diff.get("untracked_files"),
+        sort_items=False,
+    )
+    unexpected_tracked_files = _normalize_string_list(
+        diff.get("unexpected_files"),
+        sort_items=False,
+    )
+    unexpected_files = list(untracked_files)
+    unexpected_files.extend(
+        path for path in unexpected_tracked_files if path not in unexpected_files
+    )
+
+    head_short = ""
+    head_short_known, head_short_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("rev-parse", "--short", "HEAD"),
+    )
+    if head_short_known and head_short_stdout.splitlines():
+        head_short = head_short_stdout.splitlines()[0].strip()
+    head_subject = ""
+    head_subject_known, head_subject_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("log", "-1", "--pretty=%s"),
+    )
+    if head_subject_known and head_subject_stdout.splitlines():
+        head_subject = head_subject_stdout.splitlines()[0].strip()
+    tags_at_head = _prompt471_tags_at_head(repo_path=repo_path)
+
+    prompt479_evidence = _prompt480_prompt479_evidence_bridge(
+        payload=payload,
+        current_head_subject=head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    upstream_ready = prompt479_evidence["ready"] is True
+    manual_stop_requested = _prompt480_manual_stop_requested(
+        payload,
+        extra_payloads=manual_stop_payloads,
+    )
+    stop_on_worktree_dirty = True
+    stop_on_unexpected_files = True
+    stop_on_manual_stop_flag = True
+    contract_ready = bool(
+        stop_on_worktree_dirty
+        and stop_on_unexpected_files
+        and stop_on_manual_stop_flag
+    )
+    workspace_dirty_detected = bool(unexpected_tracked_files or untracked_files)
+    unexpected_files_detected = bool(unexpected_files)
+
+    safety_stop_reasons: list[str] = []
+    if stop_on_worktree_dirty and workspace_dirty_detected:
+        safety_stop_reasons.append("prompt480_worktree_dirty_stop")
+    if stop_on_unexpected_files and unexpected_files_detected:
+        safety_stop_reasons.append("prompt480_unexpected_files_stop")
+    if stop_on_manual_stop_flag and manual_stop_requested:
+        safety_stop_reasons.append("prompt480_manual_stop_requested")
+    safety_stop_triggered = bool(safety_stop_reasons)
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt479_evidence_missing")
+    if not contract_ready:
+        blocked_reasons.append("prompt480_workspace_safety_contract_not_ready")
+    if unexpected_tracked_files:
+        blocked_reasons.append("prompt480_unexpected_tracked_files_present")
+    if untracked_files or unexpected_files:
+        blocked_reasons.append("prompt480_untracked_or_unexpected_files_present")
+
+    if upstream_ready and contract_ready and safety_stop_triggered:
+        status = "stopped"
+        ready = True
+        continue_allowed = False
+        prompt481_handoff_ready = False
+        human_review_required = True
+        human_intervention_required = True
+        auto_continue_allowed = False
+        auto_route_allowed = False
+        next_action = _PROMPT480_STOPPED_NEXT_ACTION
+    elif upstream_ready and contract_ready:
+        status = "ready"
+        ready = True
+        continue_allowed = True
+        prompt481_handoff_ready = True
+        human_review_required = False
+        human_intervention_required = False
+        auto_continue_allowed = True
+        auto_route_allowed = True
+        next_action = _PROMPT480_SUCCESS_NEXT_ACTION
+        blocked_reasons = []
+    else:
+        status = "blocked"
+        ready = False
+        continue_allowed = False
+        prompt481_handoff_ready = False
+        human_review_required = True
+        human_intervention_required = True
+        auto_continue_allowed = False
+        auto_route_allowed = False
+        next_action = _PROMPT480_BLOCKED_NEXT_ACTION
+
+    if (
+        not prompt481_handoff_ready
+        and "prompt480_prompt481_handoff_not_ready" not in blocked_reasons
+    ):
+        blocked_reasons.append("prompt480_prompt481_handoff_not_ready")
+
+    return {
+        "prompt480_schema_version": _PROMPT480_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt480",
+        "prompt480_applicable": True,
+        "prompt480_workspace_safety_stop_status": status,
+        "prompt480_workspace_safety_stop_ready": ready,
+        "prompt480_upstream_prompt479_evidence_ready": upstream_ready,
+        "prompt480_prompt479_evidence_source": prompt479_evidence["source"],
+        "prompt480_prompt479_current_fields_evidence_ready": prompt479_evidence[
+            "current_fields_ready"
+        ],
+        "prompt480_prompt479_explicit_flags_evidence_ready": prompt479_evidence[
+            "explicit_flags_ready"
+        ],
+        "prompt480_prompt479_historical_repo_evidence_ready": prompt479_evidence[
+            "historical_repo_ready"
+        ],
+        "prompt480_current_head_short": head_short,
+        "prompt480_current_head_subject": head_subject,
+        "prompt480_tags_at_head": tags_at_head,
+        "prompt480_changed_tracked_files": changed_tracked_files,
+        "prompt480_unexpected_tracked_files": unexpected_tracked_files,
+        "prompt480_untracked_files": untracked_files,
+        "prompt480_unexpected_files": unexpected_files,
+        "prompt480_daemon_lite_execution_attempted": False,
+        "prompt480_daemon_lite_execution_performed": False,
+        "prompt480_workspace_dirty_detected": workspace_dirty_detected,
+        "prompt480_unexpected_files_detected": unexpected_files_detected,
+        "prompt480_manual_stop_requested": manual_stop_requested,
+        "prompt480_stop_on_worktree_dirty": stop_on_worktree_dirty,
+        "prompt480_stop_on_unexpected_files": stop_on_unexpected_files,
+        "prompt480_stop_on_manual_stop_flag": stop_on_manual_stop_flag,
+        "prompt480_workspace_safety_stop_contract_ready": contract_ready,
+        "prompt480_safety_stop_triggered": safety_stop_triggered,
+        "prompt480_safety_stop_reason": (
+            safety_stop_reasons[0] if safety_stop_reasons else ""
+        ),
+        "prompt480_safety_stop_reasons": safety_stop_reasons,
+        "prompt480_continue_allowed": continue_allowed,
+        "prompt480_prompt481_handoff_ready": prompt481_handoff_ready,
+        "prompt480_human_review_required": human_review_required,
+        "prompt480_human_intervention_required": human_intervention_required,
+        "prompt480_auto_continue_allowed": auto_continue_allowed,
+        "prompt480_auto_route_allowed": auto_route_allowed,
+        "prompt480_codex_invocation_allowed": False,
+        "prompt480_file_creation_allowed": False,
+        "prompt480_tests_allowed": False,
+        "prompt480_commit_tag_allowed": False,
+        "prompt480_push_allowed": False,
+        "prompt480_pr_allowed": False,
+        "prompt480_merge_allowed": False,
+        "prompt480_unbounded_loop_allowed": False,
+        "prompt480_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
+        "prompt480_blocked_reasons": blocked_reasons,
+        "prompt480_next_action": next_action,
     }
 
 
@@ -265267,6 +265641,24 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt479_daemon_lite_boundary_payload,
         }
+        prompt480_workspace_safety_stop_payload = (
+            _build_prompt480_workspace_safety_stop_state(
+                run_state_payload=run_state_payload,
+                manual_stop_payloads=(
+                    approved_restart_payload_for_bounded_local_loop,
+                    prior_approved_restart_execution_contract_payload,
+                    prompt437_runtime_command_artifact_wiring_payload,
+                    prompt437_runtime_command_artifact_wiring_payload.get(
+                        "prompt437_runtime_command_request"
+                    ),
+                ),
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt480_workspace_safety_stop_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -267705,6 +268097,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt479_daemon_lite_boundary_state=(
                     prompt479_daemon_lite_boundary_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt480_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt480_workspace_safety_stop_state=(
+                    prompt480_workspace_safety_stop_payload
                 ),
             )
         )
@@ -270516,6 +270916,11 @@ class PlannedExecutionRunner:
             if key in prompt479_daemon_lite_boundary_payload:
                 manifest["decision_summary"][key] = (
                     prompt479_daemon_lite_boundary_payload.get(key)
+                )
+        for key in _PROMPT480_WORKSPACE_SAFETY_STOP_KEYS:
+            if key in prompt480_workspace_safety_stop_payload:
+                manifest["decision_summary"][key] = (
+                    prompt480_workspace_safety_stop_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -277661,6 +278066,12 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT478_TWO_CYCLE_LIVE_EXECUTION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT479_DAEMON_LITE_BOUNDARY_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT480_WORKSPACE_SAFETY_STOP_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
