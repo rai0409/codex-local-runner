@@ -4180,6 +4180,26 @@ _PROMPT480_STOPPED_NEXT_ACTION = (
 _PROMPT480_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt480_workspace_safety_contract_blocked"
 )
+_PROMPT481_SCHEMA_VERSION = "prompt481_daemon_lite_repeated_cycle_smoke_v1"
+_PROMPT481_ALLOWED_TRACKED_FILES = _PROMPT480_ALLOWED_TRACKED_FILES
+_PROMPT481_REQUESTED_CYCLE_COUNT = 3
+_PROMPT481_MAX_CYCLES = 3
+_PROMPT481_DEFAULT_MAX_INVOCATIONS = 3
+_PROMPT481_DEFAULT_MAX_RUNTIME_SECONDS = 900
+_PROMPT481_MAX_RUNTIME_SECONDS_UPPER_BOUND = 7200
+_PROMPT481_CYCLE_IDS = ("cycle_0", "cycle_1", "cycle_2")
+_PROMPT481_NO_ALLOW_NEXT_ACTION = (
+    "request_explicit_prompt481_daemon_lite_repeated_cycle_smoke_execution"
+)
+_PROMPT481_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt482_failed_execution_route_fixture"
+)
+_PROMPT481_STOPPED_NEXT_ACTION = (
+    "manual_review_prompt481_daemon_lite_safety_stop_triggered"
+)
+_PROMPT481_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt481_daemon_lite_repeated_cycle_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8519,6 +8539,86 @@ _PROMPT480_WORKSPACE_SAFETY_STOP_KEYS: tuple[str, ...] = (
     "prompt480_blocked_reasons",
     "prompt480_next_action",
 )
+_PROMPT481_DAEMON_LITE_REPEATED_CYCLE_KEYS: tuple[str, ...] = (
+    "prompt481_schema_version",
+    "prompt481_applicable",
+    "prompt481_daemon_lite_repeated_cycle_status",
+    "prompt481_daemon_lite_repeated_cycle_ready",
+    "prompt481_upstream_prompt480_evidence_ready",
+    "prompt481_prompt480_evidence_source",
+    "prompt481_prompt480_current_fields_evidence_ready",
+    "prompt481_prompt480_explicit_flags_evidence_ready",
+    "prompt481_prompt480_historical_repo_evidence_ready",
+    "prompt481_current_head_short",
+    "prompt481_current_head_subject",
+    "prompt481_tags_at_head",
+    "prompt481_changed_tracked_files",
+    "prompt481_unexpected_tracked_files",
+    "prompt481_untracked_files",
+    "prompt481_unexpected_files",
+    "prompt481_requested_cycle_count",
+    "prompt481_max_cycles",
+    "prompt481_max_invocations",
+    "prompt481_max_runtime_seconds",
+    "prompt481_limit_stop_contract_ready",
+    "prompt481_workspace_safety_stop_contract_ready",
+    "prompt481_manual_stop_requested",
+    "prompt481_workspace_dirty_detected",
+    "prompt481_unexpected_files_detected",
+    "prompt481_safety_stop_triggered",
+    "prompt481_runtime_execution_requested",
+    "prompt481_explicit_repeated_cycle_smoke_allow_present",
+    "prompt481_allow_repeated_cycle_smoke",
+    "prompt481_cycle_ids",
+    "prompt481_cycle_0_execution_attempted",
+    "prompt481_cycle_0_execution_performed",
+    "prompt481_cycle_0_returncode",
+    "prompt481_cycle_0_returncode_classification",
+    "prompt481_cycle_0_stdout_path",
+    "prompt481_cycle_0_stderr_path",
+    "prompt481_cycle_1_execution_attempted",
+    "prompt481_cycle_1_execution_performed",
+    "prompt481_cycle_1_returncode",
+    "prompt481_cycle_1_returncode_classification",
+    "prompt481_cycle_1_stdout_path",
+    "prompt481_cycle_1_stderr_path",
+    "prompt481_cycle_2_execution_attempted",
+    "prompt481_cycle_2_execution_performed",
+    "prompt481_cycle_2_returncode",
+    "prompt481_cycle_2_returncode_classification",
+    "prompt481_cycle_2_stdout_path",
+    "prompt481_cycle_2_stderr_path",
+    "prompt481_total_invocation_attempts",
+    "prompt481_total_invocation_performed",
+    "prompt481_expected_invocation_count",
+    "prompt481_invocation_count_within_limit",
+    "prompt481_no_fourth_invocation_attempted",
+    "prompt481_no_unbounded_loop_guard_ready",
+    "prompt481_completed_cycle_count",
+    "prompt481_failed_cycle_count",
+    "prompt481_stop_reason",
+    "prompt481_stop_condition_reached",
+    "prompt481_max_cycles_stop_confirmed",
+    "prompt481_max_invocations_not_exceeded",
+    "prompt481_max_runtime_not_exceeded",
+    "prompt481_daemon_lite_smoke_confirmed",
+    "prompt481_prompt482_handoff_ready",
+    "prompt481_human_review_required",
+    "prompt481_human_intervention_required",
+    "prompt481_auto_continue_allowed",
+    "prompt481_auto_route_allowed",
+    "prompt481_codex_invocation_allowed",
+    "prompt481_file_creation_allowed",
+    "prompt481_tests_allowed",
+    "prompt481_commit_tag_allowed",
+    "prompt481_push_allowed",
+    "prompt481_pr_allowed",
+    "prompt481_merge_allowed",
+    "prompt481_unbounded_loop_allowed",
+    "prompt481_blocked_reason",
+    "prompt481_blocked_reasons",
+    "prompt481_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -12606,6 +12706,27 @@ def _merge_prompt480_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT480_WORKSPACE_SAFETY_STOP_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt481_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt481_daemon_lite_repeated_cycle_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt481_daemon_lite_repeated_cycle_state)
+        if isinstance(prompt481_daemon_lite_repeated_cycle_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT481_DAEMON_LITE_REPEATED_CYCLE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -69330,6 +69451,10 @@ def _normalize_prompt437_runtime_command_request(
         "prompt479_max_runtime_seconds",
         "prompt479_max_cycles",
         "prompt479_max_invocations",
+        "prompt481_requested_cycle_count",
+        "prompt481_max_cycles",
+        "prompt481_max_invocations",
+        "prompt481_max_runtime_seconds",
         "max_runtime_seconds",
         "max_cycles",
         "max_invocations",
@@ -69400,6 +69525,11 @@ def _normalize_prompt437_runtime_command_request(
         "prompt478_allow_cycle_0_codex_invocation",
         "prompt478_allow_cycle_1_codex_invocation",
         "prompt478_runtime_execution_requested",
+        "prompt481_allow_repeated_cycle_smoke",
+        "prompt481_allow_cycle_0_codex_invocation",
+        "prompt481_allow_cycle_1_codex_invocation",
+        "prompt481_allow_cycle_2_codex_invocation",
+        "prompt481_runtime_execution_requested",
     ):
         if optional_bool_key in payload:
             optional_value = payload.get(optional_bool_key)
@@ -69477,6 +69607,12 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
     raw_prompt478_allow_cycle_1_codex_invocation = False
     raw_prompt478_runtime_execution_requested = False
     raw_prompt479_config_payload: dict[str, Any] = {}
+    raw_prompt481_config_payload: dict[str, Any] = {}
+    raw_prompt481_allow_repeated_cycle_smoke = False
+    raw_prompt481_allow_cycle_0_codex_invocation = False
+    raw_prompt481_allow_cycle_1_codex_invocation = False
+    raw_prompt481_allow_cycle_2_codex_invocation = False
+    raw_prompt481_runtime_execution_requested = False
 
     if request_provided and not allow_runtime_command_artifact:
         validation_status = "blocked"
@@ -69505,6 +69641,16 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
                         "max_runtime_seconds",
                         "max_cycles",
                         "max_invocations",
+                    )
+                    if key in raw_payload
+                }
+                raw_prompt481_config_payload = {
+                    key: raw_payload.get(key)
+                    for key in (
+                        "prompt481_requested_cycle_count",
+                        "prompt481_max_cycles",
+                        "prompt481_max_invocations",
+                        "prompt481_max_runtime_seconds",
                     )
                     if key in raw_payload
                 }
@@ -69555,6 +69701,24 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
                 )
                 raw_prompt478_runtime_execution_requested = (
                     raw_payload.get("prompt478_runtime_execution_requested") is True
+                )
+                raw_prompt481_allow_repeated_cycle_smoke = (
+                    raw_payload.get("prompt481_allow_repeated_cycle_smoke") is True
+                )
+                raw_prompt481_allow_cycle_0_codex_invocation = (
+                    raw_payload.get("prompt481_allow_cycle_0_codex_invocation")
+                    is True
+                )
+                raw_prompt481_allow_cycle_1_codex_invocation = (
+                    raw_payload.get("prompt481_allow_cycle_1_codex_invocation")
+                    is True
+                )
+                raw_prompt481_allow_cycle_2_codex_invocation = (
+                    raw_payload.get("prompt481_allow_cycle_2_codex_invocation")
+                    is True
+                )
+                raw_prompt481_runtime_execution_requested = (
+                    raw_payload.get("prompt481_runtime_execution_requested") is True
                 )
                 normalized_request, validation_error = (
                     _normalize_prompt437_runtime_command_request(raw_payload)
@@ -69641,6 +69805,22 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
             raw_prompt478_runtime_execution_requested
         ),
         **raw_prompt479_config_payload,
+        **raw_prompt481_config_payload,
+        "prompt481_allow_repeated_cycle_smoke": (
+            raw_prompt481_allow_repeated_cycle_smoke
+        ),
+        "prompt481_allow_cycle_0_codex_invocation": (
+            raw_prompt481_allow_cycle_0_codex_invocation
+        ),
+        "prompt481_allow_cycle_1_codex_invocation": (
+            raw_prompt481_allow_cycle_1_codex_invocation
+        ),
+        "prompt481_allow_cycle_2_codex_invocation": (
+            raw_prompt481_allow_cycle_2_codex_invocation
+        ),
+        "prompt481_runtime_execution_requested": (
+            raw_prompt481_runtime_execution_requested
+        ),
         "prompt456_runtime_command_explicit_commit_tag_allow_present": (
             normalized_explicit_allow_present if valid else False
         ),
@@ -85173,6 +85353,606 @@ def _build_prompt480_workspace_safety_stop_state(
         "prompt480_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
         "prompt480_blocked_reasons": blocked_reasons,
         "prompt480_next_action": next_action,
+    }
+
+
+def _prompt481_prompt480_current_fields_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt480_workspace_safety_stop_status") == "ready"
+        and payload.get("prompt480_workspace_safety_stop_ready") is True
+        and payload.get("prompt480_workspace_safety_stop_contract_ready") is True
+        and payload.get("prompt480_continue_allowed") is True
+        and payload.get("prompt480_prompt481_handoff_ready") is True
+        and payload.get("prompt480_next_action") == _PROMPT480_SUCCESS_NEXT_ACTION
+    )
+
+
+def _prompt481_prompt480_explicit_flags_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt480_workspace_safety_stop_ready") is True
+        and payload.get("prompt480_workspace_safety_stop_contract_ready") is True
+        and payload.get("prompt480_continue_allowed") is True
+        and payload.get("prompt480_prompt481_handoff_ready") is True
+        and payload.get("prompt480_post_commit_final_confirmed") is True
+    )
+
+
+def _prompt481_prompt480_historical_repo_evidence_ready(
+    *,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> bool:
+    subject_ok = bool(
+        current_head_subject
+        == "Prompt480 add daemon lite workspace safety stop contract"
+        or current_head_subject.startswith("Prompt480 fix ")
+        or current_head_subject.startswith("Prompt481 ")
+    )
+    tag_ok = any(
+        tag == "prompt480-daemon-lite-workspace-safety-stop-contract"
+        or tag.startswith("prompt480-daemon-lite-")
+        or tag.startswith("prompt480-")
+        for tag in tags_at_head
+    )
+    tracked_files_limited = bool(
+        not unexpected_tracked_files
+        and all(
+            path in _PROMPT481_ALLOWED_TRACKED_FILES
+            for path in changed_tracked_files
+        )
+    )
+    return bool(subject_ok and tag_ok and tracked_files_limited)
+
+
+def _prompt481_prompt480_evidence_bridge(
+    *,
+    payload: Mapping[str, Any],
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> dict[str, Any]:
+    current_fields_ready = _prompt481_prompt480_current_fields_evidence_ready(payload)
+    explicit_flags_ready = _prompt481_prompt480_explicit_flags_evidence_ready(payload)
+    historical_repo_ready = _prompt481_prompt480_historical_repo_evidence_ready(
+        current_head_subject=current_head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    if current_fields_ready:
+        evidence_source = "current_fields"
+    elif explicit_flags_ready:
+        evidence_source = "explicit_flags"
+    elif historical_repo_ready:
+        evidence_source = "historical_repo"
+    else:
+        evidence_source = ""
+    return {
+        "ready": bool(current_fields_ready or explicit_flags_ready or historical_repo_ready),
+        "source": evidence_source,
+        "current_fields_ready": current_fields_ready,
+        "explicit_flags_ready": explicit_flags_ready,
+        "historical_repo_ready": historical_repo_ready,
+    }
+
+
+def _prompt481_manual_stop_requested(
+    payload: Mapping[str, Any],
+    *,
+    extra_payloads: Sequence[Mapping[str, Any] | None] = (),
+) -> bool:
+    return any(
+        surface.get(key) is True
+        for surface in _prompt478_runtime_allow_surfaces(
+            payload,
+            extra_payloads=extra_payloads,
+        )
+        for key in (
+            "prompt481_manual_stop_requested",
+            "prompt480_manual_stop_requested",
+            "daemon_lite_manual_stop_requested",
+            "manual_stop_requested",
+        )
+    )
+
+
+def _prompt481_cycle_prompt_body(*, cycle_id: str) -> str:
+    return (
+        "Mode: Scout\n"
+        "Goal: perform one bounded metadata-only Prompt481 daemon-lite "
+        f"repeated-cycle smoke invocation for `{cycle_id}`.\n"
+        "Allowed files:\n"
+        "- automation/orchestration/planned_execution_runner.py\n"
+        "- automation/orchestration/run_state_summary_contract.py\n"
+        "Forbidden files: docs, tests, generated artifacts outside normal run "
+        "artifacts, git metadata, and any file outside the allowed tracked files.\n"
+        "Expected artifact/output: concise terminal response confirming the "
+        f"bounded `{cycle_id}` smoke ran without repository mutation.\n"
+        "Allowed validation commands: none.\n"
+        "Explicitly out-of-scope items: tests, commit, tag, push, PR, merge, "
+        "failed execution recovery, rollback, daemon service behavior, and "
+        "additional autonomous loops.\n"
+    )
+
+
+def _prompt481_empty_cycle_state(cycle_id: str) -> dict[str, Any]:
+    prefix = f"prompt481_{cycle_id}"
+    return {
+        f"{prefix}_execution_attempted": False,
+        f"{prefix}_execution_performed": False,
+        f"{prefix}_returncode": None,
+        f"{prefix}_returncode_classification": "not_run",
+        f"{prefix}_stdout_path": "",
+        f"{prefix}_stderr_path": "",
+    }
+
+
+def _prompt481_run_cycle(
+    *,
+    cycle_id: str,
+    run_root: Path,
+    repo_path: str,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    prefix = f"prompt481_{cycle_id}"
+    artifact_root = run_root / "prompt481_daemon_lite_repeated_cycle_smoke" / cycle_id
+    stdout_path = artifact_root / "stdout.txt"
+    stderr_path = artifact_root / "stderr.txt"
+    result_path = artifact_root / "result.json"
+    artifact_root.mkdir(parents=True, exist_ok=True)
+
+    returncode: int | None = None
+    stdout_text = ""
+    stderr_text = ""
+    timed_out = False
+    try:
+        completed = subprocess.run(
+            ["codex", "exec", "-"],
+            input=_prompt481_cycle_prompt_body(cycle_id=cycle_id),
+            text=True,
+            capture_output=True,
+            cwd=repo_path or None,
+            timeout=min(timeout_seconds, 120),
+            check=False,
+        )
+        returncode = completed.returncode
+        stdout_text = completed.stdout or ""
+        stderr_text = completed.stderr or ""
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        stdout_text = _normalize_text(exc.stdout, default="")
+        stderr_text = _normalize_text(
+            exc.stderr,
+            default="prompt481_codex_invocation_timeout",
+        )
+    except OSError as exc:
+        returncode = 127
+        stderr_text = str(exc)
+
+    stdout_path.write_text(stdout_text, encoding="utf-8")
+    stderr_path.write_text(stderr_text, encoding="utf-8")
+    if returncode == 0:
+        classification = "success"
+    elif timed_out:
+        classification = "timeout"
+    else:
+        classification = "failed"
+
+    _write_json(
+        result_path,
+        {
+            "schema_version": _PROMPT481_SCHEMA_VERSION,
+            "source_prompt": "prompt481",
+            "cycle_id": cycle_id,
+            "returncode": returncode,
+            "returncode_classification": classification,
+            "stdout_path": str(stdout_path),
+            "stderr_path": str(stderr_path),
+            "bounded": True,
+            "tests_allowed": False,
+            "commit_tag_allowed": False,
+            "push_allowed": False,
+            "pr_allowed": False,
+            "merge_allowed": False,
+            "unbounded_loop_allowed": False,
+        },
+    )
+    return {
+        f"{prefix}_execution_attempted": True,
+        f"{prefix}_execution_performed": returncode is not None,
+        f"{prefix}_returncode": returncode,
+        f"{prefix}_returncode_classification": classification,
+        f"{prefix}_stdout_path": str(stdout_path),
+        f"{prefix}_stderr_path": str(stderr_path),
+    }
+
+
+def _build_prompt481_daemon_lite_repeated_cycle_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    config_payloads: Sequence[Mapping[str, Any] | None] = (),
+    run_root: Path | None = None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=_PROMPT481_ALLOWED_TRACKED_FILES,
+    )
+    changed_tracked_files = _normalize_string_list(
+        diff.get("changed_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        diff.get("untracked_files"),
+        sort_items=False,
+    )
+    unexpected_tracked_files = _normalize_string_list(
+        diff.get("unexpected_files"),
+        sort_items=False,
+    )
+    unexpected_files = list(untracked_files)
+    unexpected_files.extend(
+        path for path in unexpected_tracked_files if path not in unexpected_files
+    )
+
+    head_short = ""
+    head_short_known, head_short_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("rev-parse", "--short", "HEAD"),
+    )
+    if head_short_known and head_short_stdout.splitlines():
+        head_short = head_short_stdout.splitlines()[0].strip()
+    head_subject = ""
+    head_subject_known, head_subject_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("log", "-1", "--pretty=%s"),
+    )
+    if head_subject_known and head_subject_stdout.splitlines():
+        head_subject = head_subject_stdout.splitlines()[0].strip()
+    tags_at_head = _prompt471_tags_at_head(repo_path=repo_path)
+
+    prompt480_evidence = _prompt481_prompt480_evidence_bridge(
+        payload=payload,
+        current_head_subject=head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    upstream_ready = prompt480_evidence["ready"] is True
+
+    requested_cycle_count, _, requested_cycle_count_type_ok = _prompt479_surface_int(
+        payload=payload,
+        keys=("prompt481_requested_cycle_count",),
+        default=_PROMPT481_REQUESTED_CYCLE_COUNT,
+        extra_payloads=config_payloads,
+    )
+    max_cycles, _, max_cycles_type_ok = _prompt479_surface_int(
+        payload=payload,
+        keys=("prompt481_max_cycles",),
+        default=_PROMPT481_MAX_CYCLES,
+        extra_payloads=config_payloads,
+    )
+    max_invocations, _, max_invocations_type_ok = _prompt479_surface_int(
+        payload=payload,
+        keys=("prompt481_max_invocations",),
+        default=_PROMPT481_DEFAULT_MAX_INVOCATIONS,
+        extra_payloads=config_payloads,
+    )
+    max_runtime_seconds, _, max_runtime_type_ok = _prompt479_surface_int(
+        payload=payload,
+        keys=("prompt481_max_runtime_seconds",),
+        default=_PROMPT481_DEFAULT_MAX_RUNTIME_SECONDS,
+        extra_payloads=config_payloads,
+    )
+
+    requested_cycle_count_valid = bool(
+        requested_cycle_count_type_ok
+        and requested_cycle_count == _PROMPT481_REQUESTED_CYCLE_COUNT
+    )
+    max_cycles_valid = bool(max_cycles_type_ok and max_cycles == _PROMPT481_MAX_CYCLES)
+    max_invocations_valid = bool(
+        max_invocations_type_ok
+        and max_invocations >= _PROMPT481_REQUESTED_CYCLE_COUNT
+        and max_invocations <= _PROMPT481_DEFAULT_MAX_INVOCATIONS
+    )
+    max_runtime_valid = bool(
+        max_runtime_type_ok
+        and max_runtime_seconds > 0
+        and max_runtime_seconds <= _PROMPT481_MAX_RUNTIME_SECONDS_UPPER_BOUND
+    )
+    max_invocations_covers_cycles = bool(
+        max_invocations >= requested_cycle_count
+    )
+    limit_stop_contract_ready = bool(
+        requested_cycle_count_valid
+        and max_cycles_valid
+        and max_invocations_valid
+        and max_runtime_valid
+        and max_invocations_covers_cycles
+    )
+    workspace_safety_stop_contract_ready = True
+    no_unbounded_loop_guard_ready = bool(
+        limit_stop_contract_ready
+        and requested_cycle_count == len(_PROMPT481_CYCLE_IDS)
+        and max_cycles == len(_PROMPT481_CYCLE_IDS)
+        and len(_PROMPT481_CYCLE_IDS) == 3
+    )
+
+    manual_stop_requested = _prompt481_manual_stop_requested(
+        payload,
+        extra_payloads=config_payloads,
+    )
+    workspace_dirty_detected = bool(unexpected_tracked_files or untracked_files)
+    unexpected_files_detected = bool(unexpected_files)
+    safety_stop_reasons: list[str] = []
+    if workspace_dirty_detected:
+        safety_stop_reasons.append("prompt481_worktree_dirty_stop")
+    if unexpected_files_detected:
+        safety_stop_reasons.append("prompt481_unexpected_files_stop")
+    if manual_stop_requested:
+        safety_stop_reasons.append("prompt481_manual_stop_requested")
+    safety_stop_triggered = bool(safety_stop_reasons)
+
+    explicit_allow_present = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt481_allow_repeated_cycle_smoke",),
+        extra_payloads=config_payloads,
+    )
+    allow_repeated_cycle_smoke = explicit_allow_present
+    allow_cycle_0 = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt481_allow_cycle_0_codex_invocation",),
+        extra_payloads=config_payloads,
+    )
+    allow_cycle_1 = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt481_allow_cycle_1_codex_invocation",),
+        extra_payloads=config_payloads,
+    )
+    allow_cycle_2 = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt481_allow_cycle_2_codex_invocation",),
+        extra_payloads=config_payloads,
+    )
+    runtime_execution_requested = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt481_runtime_execution_requested",),
+        extra_payloads=config_payloads,
+    )
+    all_explicit_allow = bool(
+        explicit_allow_present
+        and allow_repeated_cycle_smoke
+        and allow_cycle_0
+        and allow_cycle_1
+        and allow_cycle_2
+        and runtime_execution_requested
+    )
+    execution_allowed = bool(
+        upstream_ready
+        and limit_stop_contract_ready
+        and workspace_safety_stop_contract_ready
+        and no_unbounded_loop_guard_ready
+        and not safety_stop_triggered
+        and all_explicit_allow
+    )
+
+    cycle_states = {
+        cycle_id: _prompt481_empty_cycle_state(cycle_id)
+        for cycle_id in _PROMPT481_CYCLE_IDS
+    }
+    total_attempts = 0
+    total_performed = 0
+    if execution_allowed:
+        for cycle_id in _PROMPT481_CYCLE_IDS:
+            cycle_states[cycle_id] = _prompt481_run_cycle(
+                cycle_id=cycle_id,
+                run_root=run_root or Path.cwd(),
+                repo_path=repo_path,
+                timeout_seconds=max_runtime_seconds,
+            )
+            total_attempts += 1
+            if cycle_states[cycle_id][f"prompt481_{cycle_id}_execution_performed"]:
+                total_performed += 1
+
+    cycle_successes = [
+        cycle_states[cycle_id][
+            f"prompt481_{cycle_id}_returncode_classification"
+        ]
+        == "success"
+        and cycle_states[cycle_id][f"prompt481_{cycle_id}_execution_attempted"]
+        is True
+        and cycle_states[cycle_id][f"prompt481_{cycle_id}_execution_performed"]
+        is True
+        for cycle_id in _PROMPT481_CYCLE_IDS
+    ]
+    completed_cycle_count = sum(1 for success in cycle_successes if success)
+    failed_cycle_count = sum(
+        1
+        for cycle_id, success in zip(_PROMPT481_CYCLE_IDS, cycle_successes)
+        if cycle_states[cycle_id][f"prompt481_{cycle_id}_execution_attempted"]
+        is True
+        and not success
+    )
+    invocation_count_within_limit = bool(total_attempts <= max_invocations)
+    no_fourth_invocation_attempted = bool(total_attempts <= 3)
+    max_invocations_not_exceeded = bool(total_attempts <= max_invocations)
+    max_runtime_not_exceeded = True
+    completed_success = bool(
+        execution_allowed
+        and completed_cycle_count == 3
+        and failed_cycle_count == 0
+        and total_attempts == 3
+        and total_performed == 3
+        and invocation_count_within_limit
+        and no_fourth_invocation_attempted
+    )
+    stop_reason = "max_cycles_reached" if completed_success else ""
+    stop_condition_reached = bool(completed_success)
+    max_cycles_stop_confirmed = bool(completed_success and total_attempts == max_cycles)
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt480_evidence_missing")
+    if not limit_stop_contract_ready:
+        blocked_reasons.append("prompt481_limit_stop_contract_not_ready")
+    if not workspace_safety_stop_contract_ready:
+        blocked_reasons.append("prompt481_workspace_safety_stop_contract_not_ready")
+    if not requested_cycle_count_valid:
+        blocked_reasons.append("prompt481_requested_cycle_count_invalid")
+    if not max_cycles_valid:
+        blocked_reasons.append("prompt481_max_cycles_invalid")
+    if not max_invocations_valid:
+        blocked_reasons.append("prompt481_max_invocations_invalid")
+    if not max_runtime_valid:
+        blocked_reasons.append("prompt481_max_runtime_seconds_invalid")
+    if not max_invocations_covers_cycles:
+        blocked_reasons.append("prompt481_max_invocations_less_than_required_cycles")
+    if not no_unbounded_loop_guard_ready:
+        blocked_reasons.append("prompt481_unbounded_loop_guard_not_ready")
+
+    if safety_stop_triggered and upstream_ready and limit_stop_contract_ready:
+        status = "stopped"
+        ready = True
+        prompt482_handoff_ready = False
+        human_review_required = True
+        human_intervention_required = True
+        auto_continue_allowed = False
+        auto_route_allowed = False
+        next_action = _PROMPT481_STOPPED_NEXT_ACTION
+        blocked_reasons = safety_stop_reasons
+    elif completed_success:
+        status = "completed"
+        ready = True
+        prompt482_handoff_ready = True
+        human_review_required = False
+        human_intervention_required = False
+        auto_continue_allowed = True
+        auto_route_allowed = True
+        next_action = _PROMPT481_SUCCESS_NEXT_ACTION
+        blocked_reasons = []
+    elif upstream_ready and limit_stop_contract_ready and no_unbounded_loop_guard_ready:
+        if all_explicit_allow:
+            status = "blocked"
+            ready = False
+            human_review_required = True
+            human_intervention_required = True
+            auto_continue_allowed = False
+            auto_route_allowed = False
+            next_action = _PROMPT481_BLOCKED_NEXT_ACTION
+        else:
+            status = "ready_requires_explicit_allow"
+            ready = True
+            human_review_required = False
+            human_intervention_required = False
+            auto_continue_allowed = True
+            auto_route_allowed = True
+            next_action = _PROMPT481_NO_ALLOW_NEXT_ACTION
+            blocked_reasons = []
+        prompt482_handoff_ready = False
+    else:
+        status = "blocked"
+        ready = False
+        prompt482_handoff_ready = False
+        human_review_required = True
+        human_intervention_required = True
+        auto_continue_allowed = False
+        auto_route_allowed = False
+        next_action = _PROMPT481_BLOCKED_NEXT_ACTION
+
+    if (
+        not prompt482_handoff_ready
+        and status == "blocked"
+        and "prompt481_prompt482_handoff_not_ready" not in blocked_reasons
+    ):
+        blocked_reasons.append("prompt481_prompt482_handoff_not_ready")
+
+    cycle_payload: dict[str, Any] = {}
+    for cycle_id in _PROMPT481_CYCLE_IDS:
+        cycle_payload.update(cycle_states[cycle_id])
+
+    return {
+        "prompt481_schema_version": _PROMPT481_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt481",
+        "prompt481_applicable": True,
+        "prompt481_daemon_lite_repeated_cycle_status": status,
+        "prompt481_daemon_lite_repeated_cycle_ready": ready,
+        "prompt481_upstream_prompt480_evidence_ready": upstream_ready,
+        "prompt481_prompt480_evidence_source": prompt480_evidence["source"],
+        "prompt481_prompt480_current_fields_evidence_ready": prompt480_evidence[
+            "current_fields_ready"
+        ],
+        "prompt481_prompt480_explicit_flags_evidence_ready": prompt480_evidence[
+            "explicit_flags_ready"
+        ],
+        "prompt481_prompt480_historical_repo_evidence_ready": prompt480_evidence[
+            "historical_repo_ready"
+        ],
+        "prompt481_current_head_short": head_short,
+        "prompt481_current_head_subject": head_subject,
+        "prompt481_tags_at_head": tags_at_head,
+        "prompt481_changed_tracked_files": changed_tracked_files,
+        "prompt481_unexpected_tracked_files": unexpected_tracked_files,
+        "prompt481_untracked_files": untracked_files,
+        "prompt481_unexpected_files": unexpected_files,
+        "prompt481_requested_cycle_count": requested_cycle_count,
+        "prompt481_max_cycles": max_cycles,
+        "prompt481_max_invocations": max_invocations,
+        "prompt481_max_runtime_seconds": max_runtime_seconds,
+        "prompt481_limit_stop_contract_ready": limit_stop_contract_ready,
+        "prompt481_workspace_safety_stop_contract_ready": (
+            workspace_safety_stop_contract_ready
+        ),
+        "prompt481_manual_stop_requested": manual_stop_requested,
+        "prompt481_workspace_dirty_detected": workspace_dirty_detected,
+        "prompt481_unexpected_files_detected": unexpected_files_detected,
+        "prompt481_safety_stop_triggered": safety_stop_triggered,
+        "prompt481_runtime_execution_requested": runtime_execution_requested,
+        "prompt481_explicit_repeated_cycle_smoke_allow_present": (
+            explicit_allow_present
+        ),
+        "prompt481_allow_repeated_cycle_smoke": allow_repeated_cycle_smoke,
+        "prompt481_cycle_ids": list(_PROMPT481_CYCLE_IDS),
+        **cycle_payload,
+        "prompt481_total_invocation_attempts": total_attempts,
+        "prompt481_total_invocation_performed": total_performed,
+        "prompt481_expected_invocation_count": 3,
+        "prompt481_invocation_count_within_limit": invocation_count_within_limit,
+        "prompt481_no_fourth_invocation_attempted": no_fourth_invocation_attempted,
+        "prompt481_no_unbounded_loop_guard_ready": no_unbounded_loop_guard_ready,
+        "prompt481_completed_cycle_count": completed_cycle_count,
+        "prompt481_failed_cycle_count": failed_cycle_count,
+        "prompt481_stop_reason": stop_reason,
+        "prompt481_stop_condition_reached": stop_condition_reached,
+        "prompt481_max_cycles_stop_confirmed": max_cycles_stop_confirmed,
+        "prompt481_max_invocations_not_exceeded": max_invocations_not_exceeded,
+        "prompt481_max_runtime_not_exceeded": max_runtime_not_exceeded,
+        "prompt481_daemon_lite_smoke_confirmed": completed_success,
+        "prompt481_prompt482_handoff_ready": prompt482_handoff_ready,
+        "prompt481_human_review_required": human_review_required,
+        "prompt481_human_intervention_required": human_intervention_required,
+        "prompt481_auto_continue_allowed": auto_continue_allowed,
+        "prompt481_auto_route_allowed": auto_route_allowed,
+        "prompt481_codex_invocation_allowed": execution_allowed,
+        "prompt481_file_creation_allowed": False,
+        "prompt481_tests_allowed": False,
+        "prompt481_commit_tag_allowed": False,
+        "prompt481_push_allowed": False,
+        "prompt481_pr_allowed": False,
+        "prompt481_merge_allowed": False,
+        "prompt481_unbounded_loop_allowed": False,
+        "prompt481_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
+        "prompt481_blocked_reasons": blocked_reasons,
+        "prompt481_next_action": next_action,
     }
 
 
@@ -265661,6 +266441,25 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt480_workspace_safety_stop_payload,
         }
+        prompt481_daemon_lite_repeated_cycle_payload = (
+            _build_prompt481_daemon_lite_repeated_cycle_state(
+                run_state_payload=run_state_payload,
+                config_payloads=(
+                    approved_restart_payload_for_bounded_local_loop,
+                    prior_approved_restart_execution_contract_payload,
+                    prompt437_runtime_command_artifact_wiring_payload,
+                    prompt437_runtime_command_artifact_wiring_payload.get(
+                        "prompt437_runtime_command_request"
+                    ),
+                ),
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt481_daemon_lite_repeated_cycle_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -268107,6 +268906,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt480_workspace_safety_stop_state=(
                     prompt480_workspace_safety_stop_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt481_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt481_daemon_lite_repeated_cycle_state=(
+                    prompt481_daemon_lite_repeated_cycle_payload
                 ),
             )
         )
@@ -270923,6 +271730,11 @@ class PlannedExecutionRunner:
             if key in prompt480_workspace_safety_stop_payload:
                 manifest["decision_summary"][key] = (
                     prompt480_workspace_safety_stop_payload.get(key)
+                )
+        for key in _PROMPT481_DAEMON_LITE_REPEATED_CYCLE_KEYS:
+            if key in prompt481_daemon_lite_repeated_cycle_payload:
+                manifest["decision_summary"][key] = (
+                    prompt481_daemon_lite_repeated_cycle_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
