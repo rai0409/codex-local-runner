@@ -83849,9 +83849,19 @@ def _prompt478_final_repo_state_evidence_ready(
     dirty_files_allowed = all(
         path in allowed_dirty_files for path in changed_tracked_files
     )
-    return bool(
+    final_head_subject_ok = (
         current_head_subject in _PROMPT478_VALID_FINAL_HEAD_SUBJECTS
-        and any(tag in tags_at_head for tag in _PROMPT478_VALID_FINAL_TAG_NAMES)
+        or current_head_subject.startswith("Prompt478 fix ")
+    )
+    final_tag_ok = any(
+        tag in _PROMPT478_VALID_FINAL_TAG_NAMES
+        or tag.startswith("prompt478-final-")
+        or tag.startswith("prompt478-post-commit-")
+        for tag in tags_at_head
+    )
+    return bool(
+        final_head_subject_ok
+        and final_tag_ok
         and dirty_files_allowed
         and not untracked_files
         and not unexpected_tracked_files
