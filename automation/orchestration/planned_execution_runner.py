@@ -4121,6 +4121,30 @@ _PROMPT477_NEXT_ACTION = "prepare_prompt478_two_cycle_live_codex_execution_smoke
 _PROMPT477_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt477_two_cycle_readiness_blocked"
 )
+_PROMPT478_SCHEMA_VERSION = "prompt478_two_cycle_live_codex_execution_smoke_v1"
+_PROMPT478_ALLOWED_TRACKED_FILES = (
+    "automation/orchestration/planned_execution_runner.py",
+    "automation/orchestration/run_state_summary_contract.py",
+)
+_PROMPT478_VALID_PROMPT477_HEAD_SUBJECTS = (
+    "Prompt477 add two cycle live execution readiness smoke",
+    "Prompt478 add bounded two cycle live codex execution smoke",
+)
+_PROMPT478_VALID_PROMPT477_TAG_NAME = (
+    "prompt477-two-cycle-live-execution-readiness-smoke"
+)
+_PROMPT478_REQUESTED_CYCLE_COUNT = 2
+_PROMPT478_MAX_CYCLE_COUNT = 2
+_PROMPT478_CYCLE_IDS = ("cycle_0", "cycle_1")
+_PROMPT478_BLOCKED_NEXT_ACTION = (
+    "request_explicit_prompt478_two_cycle_live_execution"
+)
+_PROMPT478_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt479_failed_execution_route_fixture"
+)
+_PROMPT478_REVIEW_NEXT_ACTION = (
+    "manual_review_prompt478_two_cycle_live_execution_result"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8286,6 +8310,81 @@ _PROMPT477_TWO_CYCLE_READINESS_KEYS: tuple[str, ...] = (
     "prompt477_blocked_reasons",
     "prompt477_next_action",
 )
+_PROMPT478_TWO_CYCLE_LIVE_EXECUTION_KEYS: tuple[str, ...] = (
+    "prompt478_schema_version",
+    "prompt478_applicable",
+    "prompt478_two_cycle_live_execution_status",
+    "prompt478_two_cycle_live_execution_ready",
+    "prompt478_upstream_prompt477_evidence_ready",
+    "prompt478_prompt477_evidence_source",
+    "prompt478_prompt477_current_fields_evidence_ready",
+    "prompt478_prompt477_explicit_flags_evidence_ready",
+    "prompt478_prompt477_historical_repo_evidence_ready",
+    "prompt478_requested_cycle_count",
+    "prompt478_max_cycle_count",
+    "prompt478_cycle_ids",
+    "prompt478_explicit_two_cycle_live_allow_present",
+    "prompt478_allow_two_cycle_live_execution",
+    "prompt478_allow_cycle_0_codex_invocation",
+    "prompt478_allow_cycle_1_codex_invocation",
+    "prompt478_runtime_execution_requested",
+    "prompt478_two_cycle_live_execution_allowed",
+    "prompt478_cycle_0_codex_invocation_allowed",
+    "prompt478_cycle_1_codex_invocation_allowed",
+    "prompt478_total_codex_invocation_attempts",
+    "prompt478_total_codex_invocation_performed",
+    "prompt478_expected_codex_invocation_count",
+    "prompt478_invocation_count_within_limit",
+    "prompt478_no_third_invocation_attempted",
+    "prompt478_no_unbounded_loop_guard_ready",
+    "prompt478_cycle_0_execution_attempted",
+    "prompt478_cycle_0_execution_performed",
+    "prompt478_cycle_0_returncode",
+    "prompt478_cycle_0_returncode_classification",
+    "prompt478_cycle_0_stdout_path",
+    "prompt478_cycle_0_stderr_path",
+    "prompt478_cycle_0_diff_evidence_known",
+    "prompt478_cycle_0_changed_files",
+    "prompt478_cycle_0_untracked_files",
+    "prompt478_cycle_0_unexpected_files",
+    "prompt478_cycle_0_review_status",
+    "prompt478_cycle_0_route_decision_status",
+    "prompt478_cycle_0_route_decision",
+    "prompt478_cycle_1_execution_attempted",
+    "prompt478_cycle_1_execution_performed",
+    "prompt478_cycle_1_returncode",
+    "prompt478_cycle_1_returncode_classification",
+    "prompt478_cycle_1_stdout_path",
+    "prompt478_cycle_1_stderr_path",
+    "prompt478_cycle_1_diff_evidence_known",
+    "prompt478_cycle_1_changed_files",
+    "prompt478_cycle_1_untracked_files",
+    "prompt478_cycle_1_unexpected_files",
+    "prompt478_cycle_1_review_status",
+    "prompt478_cycle_1_route_decision_status",
+    "prompt478_cycle_1_route_decision",
+    "prompt478_combined_changed_files",
+    "prompt478_combined_untracked_files",
+    "prompt478_combined_unexpected_files",
+    "prompt478_unexpected_tracked_files",
+    "prompt478_two_cycle_result_review_status",
+    "prompt478_prompt479_handoff_ready",
+    "prompt478_multiple_cycle_live_codex_smoke_confirmed",
+    "prompt478_human_review_required",
+    "prompt478_human_intervention_required",
+    "prompt478_auto_route_allowed",
+    "prompt478_codex_invocation_allowed",
+    "prompt478_file_creation_allowed",
+    "prompt478_tests_allowed",
+    "prompt478_commit_tag_allowed",
+    "prompt478_push_allowed",
+    "prompt478_pr_allowed",
+    "prompt478_merge_allowed",
+    "prompt478_unbounded_loop_allowed",
+    "prompt478_blocked_reason",
+    "prompt478_blocked_reasons",
+    "prompt478_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -12310,6 +12409,27 @@ def _merge_prompt477_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT477_TWO_CYCLE_READINESS_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt478_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt478_two_cycle_live_execution_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt478_two_cycle_live_execution_state)
+        if isinstance(prompt478_two_cycle_live_execution_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT478_TWO_CYCLE_LIVE_EXECUTION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -69074,6 +69194,11 @@ def _normalize_prompt437_runtime_command_request(
         "prompt474_allow_bounded_targeted_fix_execution",
         "prompt474_allow_codex_invocation",
         "prompt474_runtime_execution_requested",
+        "prompt478_explicit_two_cycle_live_allow_present",
+        "prompt478_allow_two_cycle_live_execution",
+        "prompt478_allow_cycle_0_codex_invocation",
+        "prompt478_allow_cycle_1_codex_invocation",
+        "prompt478_runtime_execution_requested",
     ):
         if optional_bool_key in payload:
             optional_value = payload.get(optional_bool_key)
@@ -69145,6 +69270,11 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
     raw_prompt474_allow_bounded_targeted_fix_execution = False
     raw_prompt474_allow_codex_invocation = False
     raw_prompt474_runtime_execution_requested = False
+    raw_prompt478_explicit_two_cycle_live_allow_present = False
+    raw_prompt478_allow_two_cycle_live_execution = False
+    raw_prompt478_allow_cycle_0_codex_invocation = False
+    raw_prompt478_allow_cycle_1_codex_invocation = False
+    raw_prompt478_runtime_execution_requested = False
 
     if request_provided and not allow_runtime_command_artifact:
         validation_status = "blocked"
@@ -69190,6 +69320,27 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
                 raw_prompt474_runtime_execution_requested = (
                     raw_payload.get("prompt474_runtime_execution_requested") is True
                     or raw_payload.get("request_codex_invocation") is True
+                )
+                raw_prompt478_explicit_two_cycle_live_allow_present = (
+                    raw_payload.get(
+                        "prompt478_explicit_two_cycle_live_allow_present"
+                    )
+                    is True
+                )
+                raw_prompt478_allow_two_cycle_live_execution = (
+                    raw_payload.get("prompt478_allow_two_cycle_live_execution")
+                    is True
+                )
+                raw_prompt478_allow_cycle_0_codex_invocation = (
+                    raw_payload.get("prompt478_allow_cycle_0_codex_invocation")
+                    is True
+                )
+                raw_prompt478_allow_cycle_1_codex_invocation = (
+                    raw_payload.get("prompt478_allow_cycle_1_codex_invocation")
+                    is True
+                )
+                raw_prompt478_runtime_execution_requested = (
+                    raw_payload.get("prompt478_runtime_execution_requested") is True
                 )
                 normalized_request, validation_error = (
                     _normalize_prompt437_runtime_command_request(raw_payload)
@@ -69259,6 +69410,21 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
         "prompt474_allow_codex_invocation": raw_prompt474_allow_codex_invocation,
         "prompt474_runtime_execution_requested": (
             raw_prompt474_runtime_execution_requested
+        ),
+        "prompt478_explicit_two_cycle_live_allow_present": (
+            raw_prompt478_explicit_two_cycle_live_allow_present
+        ),
+        "prompt478_allow_two_cycle_live_execution": (
+            raw_prompt478_allow_two_cycle_live_execution
+        ),
+        "prompt478_allow_cycle_0_codex_invocation": (
+            raw_prompt478_allow_cycle_0_codex_invocation
+        ),
+        "prompt478_allow_cycle_1_codex_invocation": (
+            raw_prompt478_allow_cycle_1_codex_invocation
+        ),
+        "prompt478_runtime_execution_requested": (
+            raw_prompt478_runtime_execution_requested
         ),
         "prompt456_runtime_command_explicit_commit_tag_allow_present": (
             normalized_explicit_allow_present if valid else False
@@ -80896,6 +81062,84 @@ def _prompt470_bool_from_any_existing(
     return any(payload.get(key) is True for key in keys)
 
 
+def _prompt478_runtime_allow_surfaces(
+    payload: Mapping[str, Any],
+    extra_payloads: Sequence[Mapping[str, Any] | None] = (),
+) -> list[Mapping[str, Any]]:
+    surfaces: list[Mapping[str, Any]] = []
+    seen_surface_ids: set[int] = set()
+
+    def add_surface(value: Any) -> None:
+        if not isinstance(value, Mapping):
+            return
+        surface_id = id(value)
+        if surface_id in seen_surface_ids:
+            return
+        seen_surface_ids.add(surface_id)
+        surfaces.append(value)
+
+    add_surface(payload)
+    for extra_payload in extra_payloads:
+        add_surface(extra_payload)
+
+    explicit_surface_keys = (
+        "prompt437_runtime_command_request",
+        "prompt430_runtime_execution_result_payload",
+        "runtime_command_request",
+        "runtime_command_payload",
+        "runtime_execution_payload",
+        "request_payload",
+        "payload",
+        "config",
+        "run_config",
+        "approved_restart_payload",
+        "approved_restart_contract_payload",
+        "final_payload",
+        "approved_payload",
+        "prompt447_runtime_command_json",
+        "prompt448_runtime_command_json",
+        "prompt449_runtime_command_json",
+        "prompt450_runtime_command_json",
+        "prompt451_runtime_command_json",
+    )
+    for surface in list(surfaces):
+        for surface_key in explicit_surface_keys:
+            add_surface(surface.get(surface_key))
+
+    for surface in list(surfaces):
+        for key, value in surface.items():
+            if not isinstance(key, str):
+                continue
+            if (
+                "runtime_command_json" in key
+                or "runtime_command_request" in key
+                or "runtime_command_payload" in key
+                or "runtime_execution_payload" in key
+                or "approved_restart" in key
+                or "final_payload" in key
+                or "approved_payload" in key
+            ):
+                add_surface(value)
+
+    return surfaces
+
+
+def _prompt478_bool_from_allow_surfaces(
+    payload: Mapping[str, Any],
+    keys: Sequence[str],
+    *,
+    extra_payloads: Sequence[Mapping[str, Any] | None] = (),
+) -> bool:
+    return any(
+        surface.get(key) is True
+        for surface in _prompt478_runtime_allow_surfaces(
+            payload,
+            extra_payloads=extra_payloads,
+        )
+        for key in keys
+    )
+
+
 def _prompt470_route_evidence_ready(payload: Mapping[str, Any]) -> bool:
     return bool(
         payload.get("prompt469_route_router_ready") is True
@@ -83486,6 +83730,554 @@ def _build_prompt477_two_cycle_readiness_state(
         "prompt477_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
         "prompt477_blocked_reasons": blocked_reasons,
         "prompt477_next_action": _PROMPT477_NEXT_ACTION if ready else _PROMPT477_BLOCKED_NEXT_ACTION,
+    }
+
+
+def _prompt478_prompt477_current_fields_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt477_two_cycle_readiness_status") == "ready"
+        and payload.get("prompt477_two_cycle_readiness_ready") is True
+        and payload.get("prompt477_requested_cycle_count") == 2
+        and payload.get("prompt477_max_cycle_count") == 2
+        and payload.get("prompt477_cycle_ids") == ["cycle_0", "cycle_1"]
+        and payload.get("prompt477_cycle_0_plan_ready") is True
+        and payload.get("prompt477_cycle_1_plan_ready") is True
+        and payload.get("prompt477_no_unbounded_loop_guard_ready") is True
+        and payload.get("prompt477_prompt478_live_execution_smoke_request_ready")
+        is True
+        and payload.get("prompt477_prompt478_expected_live_invocation_count") == 2
+        and payload.get("prompt477_prompt478_handoff_ready") is True
+        and payload.get("prompt477_next_action") == _PROMPT477_NEXT_ACTION
+    )
+
+
+def _prompt478_prompt477_explicit_flags_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt477_two_cycle_readiness_ready") is True
+        and payload.get("prompt477_prompt478_handoff_ready") is True
+        and payload.get("prompt477_prompt478_max_cycles") == 2
+        and payload.get("prompt477_prompt478_expected_live_invocation_count") == 2
+    )
+
+
+def _prompt478_prompt477_historical_repo_evidence_ready(
+    *,
+    repo_path: str,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> bool:
+    if not repo_path:
+        return False
+    subject_ok = bool(
+        current_head_subject in _PROMPT478_VALID_PROMPT477_HEAD_SUBJECTS
+        or current_head_subject.startswith("Prompt478 ")
+    )
+    tag_context_ready = bool(
+        _PROMPT478_VALID_PROMPT477_TAG_NAME in tags_at_head
+        or _prompt477_tag_in_lineage(
+            repo_path=repo_path,
+            tag_name=_PROMPT478_VALID_PROMPT477_TAG_NAME,
+        )
+    )
+    tracked_files_limited = bool(
+        not unexpected_tracked_files
+        and all(path in _PROMPT478_ALLOWED_TRACKED_FILES for path in changed_tracked_files)
+    )
+    return bool(subject_ok and tag_context_ready and tracked_files_limited)
+
+
+def _prompt478_prompt477_evidence_bridge(
+    *,
+    payload: Mapping[str, Any],
+    repo_path: str,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> dict[str, Any]:
+    current_fields_ready = _prompt478_prompt477_current_fields_evidence_ready(payload)
+    explicit_flags_ready = _prompt478_prompt477_explicit_flags_evidence_ready(payload)
+    historical_repo_ready = _prompt478_prompt477_historical_repo_evidence_ready(
+        repo_path=repo_path,
+        current_head_subject=current_head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    if current_fields_ready:
+        evidence_source = "current_fields"
+    elif explicit_flags_ready:
+        evidence_source = "explicit_flags"
+    elif historical_repo_ready:
+        evidence_source = "historical_repo"
+    else:
+        evidence_source = ""
+    return {
+        "ready": bool(current_fields_ready or explicit_flags_ready or historical_repo_ready),
+        "source": evidence_source,
+        "current_fields_ready": current_fields_ready,
+        "explicit_flags_ready": explicit_flags_ready,
+        "historical_repo_ready": historical_repo_ready,
+    }
+
+
+def _prompt478_cycle_prompt_body(*, cycle_id: str) -> str:
+    return (
+        "Mode: Scout\n"
+        f"Goal: perform Prompt478 bounded live Codex execution smoke for {cycle_id} "
+        "without changing repository files.\n"
+        "Allowed files:\n"
+        "- automation/orchestration/planned_execution_runner.py\n"
+        "- automation/orchestration/run_state_summary_contract.py\n"
+        "Forbidden files: docs, tests, generated artifacts outside normal run "
+        "artifacts, git metadata, and any file outside the allowed tracked files.\n"
+        "Expected artifact/output: concise terminal response confirming the bounded "
+        f"{cycle_id} smoke ran.\n"
+        "Allowed validation commands: none.\n"
+        "Explicitly out-of-scope items: tests, commit, tag, push, PR, merge, failed "
+        "execution recovery, rollback, and additional autonomous loops.\n"
+    )
+
+
+def _prompt478_ordered_union(*values: Sequence[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for item in _normalize_string_list(value, sort_items=False):
+            if item in seen:
+                continue
+            seen.add(item)
+            out.append(item)
+    return out
+
+
+def _prompt478_empty_cycle_state(cycle_id: str) -> dict[str, Any]:
+    prefix = f"prompt478_{cycle_id}"
+    return {
+        f"{prefix}_execution_attempted": False,
+        f"{prefix}_execution_performed": False,
+        f"{prefix}_returncode": None,
+        f"{prefix}_returncode_classification": "not_run",
+        f"{prefix}_stdout_path": "",
+        f"{prefix}_stderr_path": "",
+        f"{prefix}_diff_evidence_known": False,
+        f"{prefix}_changed_files": [],
+        f"{prefix}_untracked_files": [],
+        f"{prefix}_unexpected_files": [],
+        f"{prefix}_review_status": "not_reviewed",
+        f"{prefix}_route_decision_status": "blocked",
+        f"{prefix}_route_decision": "not_run",
+    }
+
+
+def _prompt478_run_cycle(
+    *,
+    cycle_id: str,
+    cycle_index: int,
+    run_root: Path,
+    repo_path: str,
+) -> dict[str, Any]:
+    prefix = f"prompt478_{cycle_id}"
+    artifact_root = run_root / "prompt478_two_cycle_live_codex_execution" / cycle_id
+    stdout_path = artifact_root / "stdout.txt"
+    stderr_path = artifact_root / "stderr.txt"
+    result_path = artifact_root / "result.json"
+    artifact_root.mkdir(parents=True, exist_ok=True)
+
+    returncode: int | None = None
+    stdout_text = ""
+    stderr_text = ""
+    timed_out = False
+    try:
+        completed = subprocess.run(
+            ["codex", "exec", "-"],
+            input=_prompt478_cycle_prompt_body(cycle_id=cycle_id),
+            text=True,
+            capture_output=True,
+            cwd=repo_path or None,
+            timeout=120,
+            check=False,
+        )
+        returncode = completed.returncode
+        stdout_text = completed.stdout or ""
+        stderr_text = completed.stderr or ""
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        returncode = None
+        stdout_text = _normalize_text(exc.stdout, default="")
+        stderr_text = _normalize_text(exc.stderr, default="prompt478_codex_invocation_timeout")
+    except OSError as exc:
+        returncode = 127
+        stderr_text = str(exc)
+
+    stdout_path.write_text(stdout_text, encoding="utf-8")
+    stderr_path.write_text(stderr_text, encoding="utf-8")
+    if returncode == 0:
+        classification = "success"
+    elif timed_out:
+        classification = "timeout"
+    else:
+        classification = "failed"
+
+    diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=_PROMPT478_ALLOWED_TRACKED_FILES,
+    )
+    diff_known = diff.get("known") is True
+    changed_files = _normalize_string_list(diff.get("changed_files"), sort_items=False)
+    untracked_files = _normalize_string_list(diff.get("untracked_files"), sort_items=False)
+    unexpected_files = _normalize_string_list(diff.get("unexpected_files"), sort_items=False)
+    cycle_clean = bool(
+        classification == "success"
+        and diff_known
+        and not untracked_files
+        and not unexpected_files
+    )
+    route_decision = (
+        "cycle_success_continue"
+        if cycle_index == 0 and cycle_clean
+        else "cycle_success_prepare_prompt479_handoff"
+        if cycle_clean
+        else "cycle_result_requires_manual_review"
+    )
+    route_decision_status = "ready" if cycle_clean else "blocked"
+    review_status = "reviewed" if diff_known else "reviewed_blocked"
+    result_payload = {
+        "schema_version": _PROMPT478_SCHEMA_VERSION,
+        "source_prompt": "prompt478",
+        "cycle_id": cycle_id,
+        "returncode": returncode,
+        "returncode_classification": classification,
+        "stdout_path": str(stdout_path),
+        "stderr_path": str(stderr_path),
+        "diff_evidence_known": diff_known,
+        "changed_files": changed_files,
+        "untracked_files": untracked_files,
+        "unexpected_files": unexpected_files,
+        "review_status": review_status,
+        "route_decision_status": route_decision_status,
+        "route_decision": route_decision,
+        "bounded": True,
+        "max_invocations": _PROMPT478_MAX_CYCLE_COUNT,
+        "tests_allowed": False,
+        "commit_tag_allowed": False,
+        "push_allowed": False,
+        "pr_allowed": False,
+        "merge_allowed": False,
+        "unbounded_loop_allowed": False,
+    }
+    _write_json(result_path, result_payload)
+    return {
+        f"{prefix}_execution_attempted": True,
+        f"{prefix}_execution_performed": returncode is not None,
+        f"{prefix}_returncode": returncode,
+        f"{prefix}_returncode_classification": classification,
+        f"{prefix}_stdout_path": str(stdout_path),
+        f"{prefix}_stderr_path": str(stderr_path),
+        f"{prefix}_diff_evidence_known": diff_known,
+        f"{prefix}_changed_files": changed_files,
+        f"{prefix}_untracked_files": untracked_files,
+        f"{prefix}_unexpected_files": unexpected_files,
+        f"{prefix}_review_status": review_status,
+        f"{prefix}_route_decision_status": route_decision_status,
+        f"{prefix}_route_decision": route_decision,
+    }
+
+
+def _build_prompt478_two_cycle_live_execution_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    allow_signal_payloads: Sequence[Mapping[str, Any] | None] = (),
+    run_root: Path | None = None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=_PROMPT478_ALLOWED_TRACKED_FILES,
+    )
+    changed_tracked_files = _normalize_string_list(
+        diff.get("changed_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        diff.get("untracked_files"),
+        sort_items=False,
+    )
+    unexpected_tracked_files = _normalize_string_list(
+        diff.get("unexpected_files"),
+        sort_items=False,
+    )
+    unexpected_files = list(untracked_files)
+    unexpected_files.extend(
+        path for path in unexpected_tracked_files if path not in unexpected_files
+    )
+
+    head_subject = ""
+    head_subject_known, head_subject_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("log", "-1", "--pretty=%s"),
+    )
+    if head_subject_known and head_subject_stdout.splitlines():
+        head_subject = head_subject_stdout.splitlines()[0].strip()
+    tags_at_head = _prompt471_tags_at_head(repo_path=repo_path)
+    prompt477_evidence = _prompt478_prompt477_evidence_bridge(
+        payload=payload,
+        repo_path=repo_path,
+        current_head_subject=head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    upstream_ready = prompt477_evidence["ready"] is True
+
+    requested_cycle_count = _PROMPT478_REQUESTED_CYCLE_COUNT
+    max_cycle_count = _PROMPT478_MAX_CYCLE_COUNT
+    cycle_ids = list(_PROMPT478_CYCLE_IDS)
+    cycle_count_is_two = bool(requested_cycle_count == 2 and len(cycle_ids) == 2)
+    max_cycles_bounded = max_cycle_count == 2
+    no_unbounded_loop_guard_ready = bool(
+        cycle_count_is_two
+        and max_cycles_bounded
+        and requested_cycle_count == max_cycle_count
+    )
+    explicit_allow_present = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt478_explicit_two_cycle_live_allow_present",),
+        extra_payloads=allow_signal_payloads,
+    )
+    allow_two_cycle_live_execution = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt478_allow_two_cycle_live_execution",),
+        extra_payloads=allow_signal_payloads,
+    )
+    allow_cycle_0 = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt478_allow_cycle_0_codex_invocation",),
+        extra_payloads=allow_signal_payloads,
+    )
+    allow_cycle_1 = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt478_allow_cycle_1_codex_invocation",),
+        extra_payloads=allow_signal_payloads,
+    )
+    runtime_execution_requested = _prompt478_bool_from_allow_surfaces(
+        payload,
+        ("prompt478_runtime_execution_requested",),
+        extra_payloads=allow_signal_payloads,
+    )
+    all_explicit_allow = bool(
+        explicit_allow_present
+        and allow_two_cycle_live_execution
+        and allow_cycle_0
+        and allow_cycle_1
+        and runtime_execution_requested
+    )
+    execution_allowed = bool(
+        upstream_ready
+        and cycle_count_is_two
+        and max_cycles_bounded
+        and no_unbounded_loop_guard_ready
+        and all_explicit_allow
+    )
+
+    cycle_0_state = _prompt478_empty_cycle_state("cycle_0")
+    cycle_1_state = _prompt478_empty_cycle_state("cycle_1")
+    total_attempts = 0
+    total_performed = 0
+    if execution_allowed:
+        cycle_0_state = _prompt478_run_cycle(
+            cycle_id="cycle_0",
+            cycle_index=0,
+            run_root=run_root or Path.cwd(),
+            repo_path=repo_path,
+        )
+        total_attempts += 1
+        if cycle_0_state["prompt478_cycle_0_execution_performed"] is True:
+            total_performed += 1
+        cycle_1_state = _prompt478_run_cycle(
+            cycle_id="cycle_1",
+            cycle_index=1,
+            run_root=run_root or Path.cwd(),
+            repo_path=repo_path,
+        )
+        total_attempts += 1
+        if cycle_1_state["prompt478_cycle_1_execution_performed"] is True:
+            total_performed += 1
+
+    combined_changed_files = _prompt478_ordered_union(
+        cycle_0_state["prompt478_cycle_0_changed_files"],
+        cycle_1_state["prompt478_cycle_1_changed_files"],
+    )
+    combined_untracked_files = _prompt478_ordered_union(
+        cycle_0_state["prompt478_cycle_0_untracked_files"],
+        cycle_1_state["prompt478_cycle_1_untracked_files"],
+    )
+    combined_unexpected_files = _prompt478_ordered_union(
+        cycle_0_state["prompt478_cycle_0_unexpected_files"],
+        cycle_1_state["prompt478_cycle_1_unexpected_files"],
+    )
+    if not execution_allowed:
+        combined_changed_files = changed_tracked_files
+        combined_untracked_files = untracked_files
+        combined_unexpected_files = unexpected_files
+
+    invocation_count_within_limit = total_attempts <= _PROMPT478_MAX_CYCLE_COUNT
+    no_third_invocation_attempted = total_attempts <= 2
+    cycle_0_success = bool(
+        cycle_0_state["prompt478_cycle_0_execution_attempted"] is True
+        and cycle_0_state["prompt478_cycle_0_execution_performed"] is True
+        and cycle_0_state["prompt478_cycle_0_returncode_classification"] == "success"
+        and cycle_0_state["prompt478_cycle_0_diff_evidence_known"] is True
+        and cycle_0_state["prompt478_cycle_0_review_status"] == "reviewed"
+        and cycle_0_state["prompt478_cycle_0_route_decision_status"] == "ready"
+    )
+    cycle_1_success = bool(
+        cycle_1_state["prompt478_cycle_1_execution_attempted"] is True
+        and cycle_1_state["prompt478_cycle_1_execution_performed"] is True
+        and cycle_1_state["prompt478_cycle_1_returncode_classification"] == "success"
+        and cycle_1_state["prompt478_cycle_1_diff_evidence_known"] is True
+        and cycle_1_state["prompt478_cycle_1_review_status"] == "reviewed"
+        and cycle_1_state["prompt478_cycle_1_route_decision_status"] == "ready"
+    )
+    no_untracked_or_unexpected = bool(
+        not combined_untracked_files
+        and not combined_unexpected_files
+        and not unexpected_tracked_files
+    )
+    exact_two_invocations = bool(total_attempts == 2 and total_performed == 2)
+    performed_success = bool(
+        execution_allowed
+        and exact_two_invocations
+        and invocation_count_within_limit
+        and no_third_invocation_attempted
+        and cycle_0_success
+        and cycle_1_success
+        and no_untracked_or_unexpected
+        and no_unbounded_loop_guard_ready
+    )
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt477_evidence_missing")
+    if not all_explicit_allow:
+        blocked_reasons.append("prompt478_explicit_two_cycle_live_allow_missing")
+    if not cycle_count_is_two:
+        blocked_reasons.append("prompt478_cycle_count_not_two")
+    if not max_cycles_bounded:
+        blocked_reasons.append("prompt478_max_cycles_not_bounded")
+    if not invocation_count_within_limit:
+        blocked_reasons.append("prompt478_invocation_count_exceeded")
+    if execution_allowed and not cycle_0_success:
+        blocked_reasons.append("prompt478_cycle_0_execution_failed_or_missing")
+    if execution_allowed and not cycle_1_success:
+        blocked_reasons.append("prompt478_cycle_1_execution_failed_or_missing")
+    if unexpected_tracked_files or combined_unexpected_files:
+        blocked_reasons.append("prompt478_unexpected_tracked_files_present")
+    if combined_untracked_files or combined_unexpected_files:
+        blocked_reasons.append("prompt478_untracked_or_unexpected_files_present")
+    if not no_unbounded_loop_guard_ready:
+        blocked_reasons.append("prompt478_unbounded_loop_guard_failed")
+    if execution_allowed and not performed_success:
+        blocked_reasons.append("prompt478_prompt479_handoff_not_ready")
+
+    if performed_success:
+        status = "performed"
+        ready = True
+        result_review_status = "reviewed"
+        prompt479_handoff_ready = True
+        confirmed = True
+        human_review_required = False
+        human_intervention_required = False
+        auto_route_allowed = True
+        next_action = _PROMPT478_SUCCESS_NEXT_ACTION
+        blocked_reasons = []
+    elif upstream_ready and not all_explicit_allow:
+        status = "blocked"
+        ready = False
+        result_review_status = "not_reviewed"
+        prompt479_handoff_ready = False
+        confirmed = False
+        human_review_required = False
+        human_intervention_required = False
+        auto_route_allowed = True
+        next_action = _PROMPT478_BLOCKED_NEXT_ACTION
+    else:
+        status = "reviewed_blocked"
+        ready = False
+        result_review_status = "reviewed_blocked"
+        prompt479_handoff_ready = False
+        confirmed = False
+        human_review_required = True
+        human_intervention_required = True
+        auto_route_allowed = False
+        next_action = _PROMPT478_REVIEW_NEXT_ACTION
+
+    return {
+        "prompt478_schema_version": _PROMPT478_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt478",
+        "prompt478_applicable": True,
+        "prompt478_two_cycle_live_execution_status": status,
+        "prompt478_two_cycle_live_execution_ready": ready,
+        "prompt478_upstream_prompt477_evidence_ready": upstream_ready,
+        "prompt478_prompt477_evidence_source": prompt477_evidence["source"],
+        "prompt478_prompt477_current_fields_evidence_ready": prompt477_evidence[
+            "current_fields_ready"
+        ],
+        "prompt478_prompt477_explicit_flags_evidence_ready": prompt477_evidence[
+            "explicit_flags_ready"
+        ],
+        "prompt478_prompt477_historical_repo_evidence_ready": prompt477_evidence[
+            "historical_repo_ready"
+        ],
+        "prompt478_requested_cycle_count": requested_cycle_count,
+        "prompt478_max_cycle_count": max_cycle_count,
+        "prompt478_cycle_ids": cycle_ids,
+        "prompt478_explicit_two_cycle_live_allow_present": explicit_allow_present,
+        "prompt478_allow_two_cycle_live_execution": allow_two_cycle_live_execution,
+        "prompt478_allow_cycle_0_codex_invocation": allow_cycle_0,
+        "prompt478_allow_cycle_1_codex_invocation": allow_cycle_1,
+        "prompt478_runtime_execution_requested": runtime_execution_requested,
+        "prompt478_two_cycle_live_execution_allowed": execution_allowed,
+        "prompt478_cycle_0_codex_invocation_allowed": execution_allowed,
+        "prompt478_cycle_1_codex_invocation_allowed": execution_allowed,
+        "prompt478_total_codex_invocation_attempts": total_attempts,
+        "prompt478_total_codex_invocation_performed": total_performed,
+        "prompt478_expected_codex_invocation_count": 2,
+        "prompt478_invocation_count_within_limit": invocation_count_within_limit,
+        "prompt478_no_third_invocation_attempted": no_third_invocation_attempted,
+        "prompt478_no_unbounded_loop_guard_ready": no_unbounded_loop_guard_ready,
+        **cycle_0_state,
+        **cycle_1_state,
+        "prompt478_combined_changed_files": combined_changed_files,
+        "prompt478_combined_untracked_files": combined_untracked_files,
+        "prompt478_combined_unexpected_files": combined_unexpected_files,
+        "prompt478_unexpected_tracked_files": unexpected_tracked_files,
+        "prompt478_two_cycle_result_review_status": result_review_status,
+        "prompt478_prompt479_handoff_ready": prompt479_handoff_ready,
+        "prompt478_multiple_cycle_live_codex_smoke_confirmed": confirmed,
+        "prompt478_human_review_required": human_review_required,
+        "prompt478_human_intervention_required": human_intervention_required,
+        "prompt478_auto_route_allowed": auto_route_allowed,
+        "prompt478_codex_invocation_allowed": execution_allowed,
+        "prompt478_file_creation_allowed": False,
+        "prompt478_tests_allowed": False,
+        "prompt478_commit_tag_allowed": False,
+        "prompt478_push_allowed": False,
+        "prompt478_pr_allowed": False,
+        "prompt478_merge_allowed": False,
+        "prompt478_unbounded_loop_allowed": False,
+        "prompt478_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
+        "prompt478_blocked_reasons": blocked_reasons,
+        "prompt478_next_action": next_action,
     }
 
 
@@ -263923,6 +264715,21 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt477_two_cycle_readiness_payload,
         }
+        prompt478_two_cycle_live_execution_payload = (
+            _build_prompt478_two_cycle_live_execution_state(
+                run_state_payload=run_state_payload,
+                allow_signal_payloads=(
+                    approved_restart_payload_for_bounded_local_loop,
+                    prior_approved_restart_execution_contract_payload,
+                ),
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt478_two_cycle_live_execution_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -266345,6 +267152,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt477_two_cycle_readiness_state=(
                     prompt477_two_cycle_readiness_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt478_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt478_two_cycle_live_execution_state=(
+                    prompt478_two_cycle_live_execution_payload
                 ),
             )
         )
@@ -269146,6 +269961,11 @@ class PlannedExecutionRunner:
             if key in prompt477_two_cycle_readiness_payload:
                 manifest["decision_summary"][key] = (
                     prompt477_two_cycle_readiness_payload.get(key)
+                )
+        for key in _PROMPT478_TWO_CYCLE_LIVE_EXECUTION_KEYS:
+            if key in prompt478_two_cycle_live_execution_payload:
+                manifest["decision_summary"][key] = (
+                    prompt478_two_cycle_live_execution_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -276288,6 +277108,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT477_TWO_CYCLE_READINESS_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT478_TWO_CYCLE_LIVE_EXECUTION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
