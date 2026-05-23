@@ -4020,6 +4020,9 @@ _PROMPT469_SCHEMA_VERSION = (
 _PROMPT470_SCHEMA_VERSION = (
     "prompt470_bounded_targeted_fix_execution_and_post_fix_review_v1"
 )
+_PROMPT471_SCHEMA_VERSION = "prompt471_commit_tag_candidate_execution_gate_v1"
+_PROMPT471_COMMIT_MESSAGE = "Prompt471 add commit tag candidate execution gate"
+_PROMPT471_TAG_NAME = "prompt471-commit-tag-candidate-execution-gate"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -7833,6 +7836,54 @@ _PROMPT470_BOUNDED_TARGETED_FIX_EXECUTION_KEYS: tuple[str, ...] = (
     "prompt470_blocked_reason",
     "prompt470_blocked_reasons",
     "prompt470_next_action",
+)
+_PROMPT471_COMMIT_TAG_CANDIDATE_EXECUTION_GATE_KEYS: tuple[str, ...] = (
+    "prompt471_schema_version",
+    "prompt471_applicable",
+    "prompt471_commit_tag_candidate_status",
+    "prompt471_commit_tag_candidate_ready",
+    "prompt471_upstream_prompt470_evidence_ready",
+    "prompt471_input_post_fix_route_decision",
+    "prompt471_allowed_tracked_files",
+    "prompt471_changed_tracked_files",
+    "prompt471_unexpected_tracked_files",
+    "prompt471_untracked_files",
+    "prompt471_worktree_evidence_ready",
+    "prompt471_tag_name",
+    "prompt471_tag_already_exists",
+    "prompt471_commit_message",
+    "prompt471_explicit_commit_tag_allow_present",
+    "prompt471_allow_commit",
+    "prompt471_allow_tag",
+    "prompt471_allow_git_mutation",
+    "prompt471_runtime_commit_tag_execution_requested",
+    "prompt471_commit_tag_execution_allowed",
+    "prompt471_commit_attempted",
+    "prompt471_commit_performed",
+    "prompt471_tag_attempted",
+    "prompt471_tag_performed",
+    "prompt471_commit_returncode",
+    "prompt471_tag_returncode",
+    "prompt471_post_commit_head",
+    "prompt471_post_commit_tag_at_head",
+    "prompt471_post_commit_worktree_clean",
+    "prompt471_prompt472_handoff_ready",
+    "prompt471_post_commit_clean_rerun_request_ready",
+    "prompt471_next_cycle_continuation_request_ready",
+    "prompt471_human_review_required",
+    "prompt471_human_intervention_required",
+    "prompt471_auto_route_allowed",
+    "prompt471_codex_invocation_allowed",
+    "prompt471_file_creation_allowed",
+    "prompt471_tests_allowed",
+    "prompt471_commit_tag_allowed",
+    "prompt471_push_allowed",
+    "prompt471_pr_allowed",
+    "prompt471_merge_allowed",
+    "prompt471_unbounded_loop_allowed",
+    "prompt471_blocked_reason",
+    "prompt471_blocked_reasons",
+    "prompt471_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -11711,6 +11762,27 @@ def _merge_prompt470_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT470_BOUNDED_TARGETED_FIX_EXECUTION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt471_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt471_commit_tag_candidate_execution_gate_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt471_commit_tag_candidate_execution_gate_state)
+        if isinstance(prompt471_commit_tag_candidate_execution_gate_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT471_COMMIT_TAG_CANDIDATE_EXECUTION_GATE_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -80736,6 +80808,335 @@ def _build_prompt470_bounded_targeted_fix_execution_state(
                 "prepare_prompt471_commit_tag_candidate_and_execution_gate"
                 if clean_success
                 else "manual_review_prompt470_targeted_fix_result"
+            ),
+        }
+    )
+    return base_state
+
+
+def _prompt471_bool_from_any_existing(
+    payload: Mapping[str, Any],
+    keys: Sequence[str],
+) -> bool:
+    return any(payload.get(key) is True for key in keys)
+
+
+def _prompt471_upstream_evidence_ready(payload: Mapping[str, Any]) -> bool:
+    route_decision = _normalize_text(
+        payload.get("prompt470_post_fix_route_decision"),
+        default="",
+    )
+    return bool(
+        payload.get("prompt470_bounded_targeted_fix_ready") is True
+        and payload.get("prompt470_upstream_prompt469_evidence_ready") is True
+        and payload.get("prompt470_post_fix_route_decision_status") == "ready"
+        and payload.get("prompt470_prompt471_handoff_ready") is True
+        and payload.get("prompt470_commit_tag_candidate_request_ready") is True
+        and payload.get("prompt470_human_intervention_required") is False
+        and payload.get("prompt470_auto_route_allowed") is True
+        and payload.get("prompt470_next_action")
+        == "prepare_prompt471_commit_tag_candidate_and_execution_gate"
+        and route_decision
+        in {
+            "no_targeted_fix_required_prepare_commit_tag_candidate",
+            "targeted_fix_success_prepare_commit_tag_candidate",
+        }
+    )
+
+
+def _prompt471_git(
+    repo_path: str,
+    argv: Sequence[str],
+    *,
+    timeout: int = 30,
+) -> subprocess.CompletedProcess[str] | None:
+    if not repo_path:
+        return None
+    try:
+        return subprocess.run(
+            ["git", *argv],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def _prompt471_tag_exists(*, repo_path: str, tag_name: str) -> bool | None:
+    completed = _prompt471_git(
+        repo_path,
+        ("rev-parse", "-q", "--verify", f"refs/tags/{tag_name}"),
+    )
+    if completed is None:
+        return None
+    return completed.returncode == 0
+
+
+def _prompt471_head(*, repo_path: str) -> str:
+    completed = _prompt471_git(repo_path, ("rev-parse", "HEAD"))
+    if completed is None or completed.returncode != 0:
+        return ""
+    lines = _normalize_text(completed.stdout, default="").splitlines()
+    return lines[0].strip() if lines else ""
+
+
+def _prompt471_tags_at_head(*, repo_path: str) -> list[str]:
+    completed = _prompt471_git(repo_path, ("tag", "--points-at", "HEAD"))
+    if completed is None or completed.returncode != 0:
+        return []
+    return _normalize_string_list(completed.stdout.splitlines(), sort_items=False)
+
+
+def _build_prompt471_commit_tag_candidate_execution_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    allowed_tracked_files = [
+        "automation/orchestration/planned_execution_runner.py",
+        "automation/orchestration/run_state_summary_contract.py",
+    ]
+    route_decision = _normalize_text(
+        payload.get("prompt470_post_fix_route_decision"),
+        default="",
+    )
+    upstream_ready = _prompt471_upstream_evidence_ready(payload)
+    explicit_allow_present = _prompt471_bool_from_any_existing(
+        payload,
+        ("prompt471_explicit_commit_tag_allow_present",),
+    )
+    allow_commit = _prompt471_bool_from_any_existing(
+        payload,
+        ("prompt471_allow_commit",),
+    )
+    allow_tag = _prompt471_bool_from_any_existing(
+        payload,
+        ("prompt471_allow_tag",),
+    )
+    allow_git_mutation = _prompt471_bool_from_any_existing(
+        payload,
+        ("prompt471_allow_git_mutation",),
+    )
+    runtime_execution_requested = _prompt471_bool_from_any_existing(
+        payload,
+        ("prompt471_runtime_commit_tag_execution_requested",),
+    )
+
+    worktree = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=allowed_tracked_files,
+    )
+    worktree_evidence_ready = worktree.get("known") is True
+    changed_tracked_files = _normalize_string_list(
+        worktree.get("changed_files"),
+        sort_items=False,
+    )
+    unexpected_tracked_files = _normalize_string_list(
+        worktree.get("unexpected_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        worktree.get("untracked_files"),
+        sort_items=False,
+    )
+    tag_exists = _prompt471_tag_exists(
+        repo_path=repo_path,
+        tag_name=_PROMPT471_TAG_NAME,
+    )
+    tag_evidence_ready = tag_exists is not None
+    tag_already_exists = bool(tag_exists is True)
+    all_explicit_allow_signals = bool(
+        explicit_allow_present
+        and allow_commit
+        and allow_tag
+        and allow_git_mutation
+        and runtime_execution_requested
+    )
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt470_handoff_evidence_missing")
+    if upstream_ready and route_decision not in {
+        "no_targeted_fix_required_prepare_commit_tag_candidate",
+        "targeted_fix_success_prepare_commit_tag_candidate",
+    }:
+        blocked_reasons.append("prompt470_post_fix_route_not_commit_candidate")
+    if not worktree_evidence_ready or not tag_evidence_ready:
+        blocked_reasons.append("prompt471_worktree_evidence_unknown")
+    if unexpected_tracked_files:
+        blocked_reasons.append("prompt471_unexpected_tracked_files_present")
+    if untracked_files:
+        blocked_reasons.append("prompt471_untracked_files_present")
+    if worktree_evidence_ready and not changed_tracked_files:
+        blocked_reasons.append("prompt471_no_changed_tracked_files_for_commit")
+    if tag_already_exists:
+        blocked_reasons.append("prompt471_tag_already_exists")
+
+    candidate_valid = not blocked_reasons
+    execution_allowed = bool(candidate_valid and all_explicit_allow_signals)
+    base_state: dict[str, Any] = {
+        "prompt471_schema_version": _PROMPT471_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt471",
+        "prompt471_applicable": True,
+        "prompt471_commit_tag_candidate_status": "blocked",
+        "prompt471_commit_tag_candidate_ready": False,
+        "prompt471_upstream_prompt470_evidence_ready": upstream_ready,
+        "prompt471_input_post_fix_route_decision": route_decision,
+        "prompt471_allowed_tracked_files": allowed_tracked_files,
+        "prompt471_changed_tracked_files": changed_tracked_files,
+        "prompt471_unexpected_tracked_files": unexpected_tracked_files,
+        "prompt471_untracked_files": untracked_files,
+        "prompt471_worktree_evidence_ready": bool(
+            worktree_evidence_ready and tag_evidence_ready
+        ),
+        "prompt471_tag_name": _PROMPT471_TAG_NAME,
+        "prompt471_tag_already_exists": tag_already_exists,
+        "prompt471_commit_message": _PROMPT471_COMMIT_MESSAGE,
+        "prompt471_explicit_commit_tag_allow_present": explicit_allow_present,
+        "prompt471_allow_commit": allow_commit,
+        "prompt471_allow_tag": allow_tag,
+        "prompt471_allow_git_mutation": allow_git_mutation,
+        "prompt471_runtime_commit_tag_execution_requested": runtime_execution_requested,
+        "prompt471_commit_tag_execution_allowed": execution_allowed,
+        "prompt471_commit_attempted": False,
+        "prompt471_commit_performed": False,
+        "prompt471_tag_attempted": False,
+        "prompt471_tag_performed": False,
+        "prompt471_commit_returncode": None,
+        "prompt471_tag_returncode": None,
+        "prompt471_post_commit_head": "",
+        "prompt471_post_commit_tag_at_head": [],
+        "prompt471_post_commit_worktree_clean": False,
+        "prompt471_prompt472_handoff_ready": False,
+        "prompt471_post_commit_clean_rerun_request_ready": False,
+        "prompt471_next_cycle_continuation_request_ready": False,
+        "prompt471_human_review_required": True,
+        "prompt471_human_intervention_required": True,
+        "prompt471_auto_route_allowed": False,
+        "prompt471_codex_invocation_allowed": False,
+        "prompt471_file_creation_allowed": False,
+        "prompt471_tests_allowed": False,
+        "prompt471_commit_tag_allowed": execution_allowed,
+        "prompt471_push_allowed": False,
+        "prompt471_pr_allowed": False,
+        "prompt471_merge_allowed": False,
+        "prompt471_unbounded_loop_allowed": False,
+        "prompt471_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
+        "prompt471_blocked_reasons": blocked_reasons,
+        "prompt471_next_action": "manual_review_prompt471_commit_tag_candidate_blocked",
+    }
+
+    if blocked_reasons:
+        return base_state
+
+    if not execution_allowed:
+        base_state.update(
+            {
+                "prompt471_commit_tag_candidate_status": "ready",
+                "prompt471_commit_tag_candidate_ready": True,
+                "prompt471_commit_tag_execution_allowed": False,
+                "prompt471_commit_tag_allowed": False,
+                "prompt471_human_review_required": False,
+                "prompt471_human_intervention_required": False,
+                "prompt471_auto_route_allowed": True,
+                "prompt471_next_action": (
+                    "request_explicit_prompt471_commit_tag_execution"
+                ),
+            }
+        )
+        return base_state
+
+    add_completed = _prompt471_git(repo_path, ("add", "--", *allowed_tracked_files))
+    commit_completed = None
+    tag_completed = None
+    if add_completed is not None and add_completed.returncode == 0:
+        commit_completed = _prompt471_git(
+            repo_path,
+            ("commit", "-m", _PROMPT471_COMMIT_MESSAGE),
+            timeout=60,
+        )
+    tag_should_run = commit_completed is not None and commit_completed.returncode == 0
+    if tag_should_run:
+        tag_completed = _prompt471_git(
+            repo_path,
+            ("tag", _PROMPT471_TAG_NAME),
+            timeout=30,
+        )
+
+    commit_returncode = (
+        commit_completed.returncode if commit_completed is not None else None
+    )
+    tag_returncode = tag_completed.returncode if tag_completed is not None else None
+    commit_performed = commit_returncode == 0
+    tag_performed = tag_returncode == 0
+    post_commit_worktree = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=allowed_tracked_files,
+    )
+    post_commit_worktree_clean = bool(
+        post_commit_worktree.get("known") is True
+        and not _normalize_string_list(
+            post_commit_worktree.get("changed_files"),
+            sort_items=False,
+        )
+        and not _normalize_string_list(
+            post_commit_worktree.get("untracked_files"),
+            sort_items=False,
+        )
+    )
+    post_commit_head = _prompt471_head(repo_path=repo_path)
+    post_commit_tags = _prompt471_tags_at_head(repo_path=repo_path)
+    execution_blocked_reasons: list[str] = []
+    if not commit_performed:
+        execution_blocked_reasons.append("prompt471_commit_failed")
+    if commit_performed and not tag_performed:
+        execution_blocked_reasons.append("prompt471_tag_failed")
+    if commit_performed and tag_performed and not post_commit_worktree_clean:
+        execution_blocked_reasons.append("prompt471_post_commit_worktree_not_clean")
+    success = bool(
+        commit_performed
+        and tag_performed
+        and _PROMPT471_TAG_NAME in post_commit_tags
+        and post_commit_worktree_clean
+    )
+
+    base_state.update(
+        {
+            "prompt471_commit_tag_candidate_status": (
+                "performed" if success else "blocked"
+            ),
+            "prompt471_commit_tag_candidate_ready": success,
+            "prompt471_commit_tag_execution_allowed": True,
+            "prompt471_commit_attempted": True,
+            "prompt471_commit_performed": commit_performed,
+            "prompt471_tag_attempted": tag_should_run,
+            "prompt471_tag_performed": tag_performed,
+            "prompt471_commit_returncode": commit_returncode,
+            "prompt471_tag_returncode": tag_returncode,
+            "prompt471_post_commit_head": post_commit_head,
+            "prompt471_post_commit_tag_at_head": post_commit_tags,
+            "prompt471_post_commit_worktree_clean": post_commit_worktree_clean,
+            "prompt471_prompt472_handoff_ready": success,
+            "prompt471_post_commit_clean_rerun_request_ready": success,
+            "prompt471_next_cycle_continuation_request_ready": success,
+            "prompt471_human_review_required": not success,
+            "prompt471_human_intervention_required": not success,
+            "prompt471_auto_route_allowed": success,
+            "prompt471_commit_tag_allowed": True,
+            "prompt471_blocked_reason": (
+                execution_blocked_reasons[0] if execution_blocked_reasons else ""
+            ),
+            "prompt471_blocked_reasons": execution_blocked_reasons,
+            "prompt471_next_action": (
+                "prepare_prompt472_post_commit_clean_rerun_next_cycle_continuation"
+                if success
+                else "manual_review_prompt471_commit_tag_candidate_blocked"
             ),
         }
     )
@@ -260852,6 +261253,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt470_bounded_targeted_fix_execution_payload,
         }
+        prompt471_commit_tag_candidate_execution_gate_payload = (
+            _build_prompt471_commit_tag_candidate_execution_gate_state(
+                run_state_payload=run_state_payload,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt471_commit_tag_candidate_execution_gate_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -261755,6 +262166,46 @@ class PlannedExecutionRunner:
                 "prompt470_next_action": (
                     prompt470_bounded_targeted_fix_execution_payload.get(
                         "prompt470_next_action"
+                    )
+                ),
+                "prompt471_commit_tag_candidate_status": (
+                    prompt471_commit_tag_candidate_execution_gate_payload.get(
+                        "prompt471_commit_tag_candidate_status"
+                    )
+                ),
+                "prompt471_commit_tag_candidate_ready": (
+                    prompt471_commit_tag_candidate_execution_gate_payload.get(
+                        "prompt471_commit_tag_candidate_ready"
+                    )
+                ),
+                "prompt471_upstream_prompt470_evidence_ready": (
+                    prompt471_commit_tag_candidate_execution_gate_payload.get(
+                        "prompt471_upstream_prompt470_evidence_ready"
+                    )
+                ),
+                "prompt471_commit_tag_execution_allowed": (
+                    prompt471_commit_tag_candidate_execution_gate_payload.get(
+                        "prompt471_commit_tag_execution_allowed"
+                    )
+                ),
+                "prompt471_commit_performed": (
+                    prompt471_commit_tag_candidate_execution_gate_payload.get(
+                        "prompt471_commit_performed"
+                    )
+                ),
+                "prompt471_tag_performed": (
+                    prompt471_commit_tag_candidate_execution_gate_payload.get(
+                        "prompt471_tag_performed"
+                    )
+                ),
+                "prompt471_prompt472_handoff_ready": (
+                    prompt471_commit_tag_candidate_execution_gate_payload.get(
+                        "prompt471_prompt472_handoff_ready"
+                    )
+                ),
+                "prompt471_next_action": (
+                    prompt471_commit_tag_candidate_execution_gate_payload.get(
+                        "prompt471_next_action"
                     )
                 ),
                 "prompt431_runtime_execution_result_review_route_decision_status": (
@@ -263113,6 +263564,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt470_bounded_targeted_fix_execution_state=(
                     prompt470_bounded_targeted_fix_execution_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt471_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt471_commit_tag_candidate_execution_gate_state=(
+                    prompt471_commit_tag_candidate_execution_gate_payload
                 ),
             )
         )
@@ -265623,6 +266082,84 @@ class PlannedExecutionRunner:
                     "prompt470_next_action"
                 ),
                 default="manual_review_prompt470_targeted_fix_result",
+            ),
+            "prompt471_commit_tag_candidate_status": _normalize_text(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_commit_tag_candidate_status"
+                ),
+                default="blocked",
+            ),
+            "prompt471_commit_tag_candidate_ready": bool(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_commit_tag_candidate_ready",
+                    False,
+                )
+            ),
+            "prompt471_upstream_prompt470_evidence_ready": bool(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_upstream_prompt470_evidence_ready",
+                    False,
+                )
+            ),
+            "prompt471_input_post_fix_route_decision": _normalize_text(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_input_post_fix_route_decision"
+                ),
+                default="",
+            ),
+            "prompt471_changed_tracked_files": _normalize_string_list(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_changed_tracked_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt471_unexpected_tracked_files": _normalize_string_list(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_unexpected_tracked_files"
+                ),
+                sort_items=False,
+            ),
+            "prompt471_tag_name": _normalize_text(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_tag_name"
+                ),
+                default=_PROMPT471_TAG_NAME,
+            ),
+            "prompt471_tag_already_exists": bool(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_tag_already_exists",
+                    False,
+                )
+            ),
+            "prompt471_commit_tag_execution_allowed": bool(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_commit_tag_execution_allowed",
+                    False,
+                )
+            ),
+            "prompt471_commit_performed": bool(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_commit_performed",
+                    False,
+                )
+            ),
+            "prompt471_tag_performed": bool(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_tag_performed",
+                    False,
+                )
+            ),
+            "prompt471_prompt472_handoff_ready": bool(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_prompt472_handoff_ready",
+                    False,
+                )
+            ),
+            "prompt471_next_action": _normalize_text(
+                prompt471_commit_tag_candidate_execution_gate_payload.get(
+                    "prompt471_next_action"
+                ),
+                default="manual_review_prompt471_commit_tag_candidate_blocked",
             ),
         }
         if decision_error:
@@ -272745,6 +273282,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT470_BOUNDED_TARGETED_FIX_EXECUTION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT471_COMMIT_TAG_CANDIDATE_EXECUTION_GATE_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
