@@ -4026,6 +4026,10 @@ _PROMPT471_TAG_NAME = "prompt471-commit-tag-candidate-execution-gate"
 _PROMPT472_SCHEMA_VERSION = (
     "prompt472_post_commit_clean_rerun_next_cycle_continuation_v1"
 )
+_PROMPT472_COMMIT_MESSAGE = "Prompt472 add post commit clean rerun continuation"
+_PROMPT472_TAG_NAME = (
+    "prompt472-post-commit-clean-rerun-next-cycle-continuation"
+)
 _PROMPT472_NEXT_PROMPT_ID = "prompt473"
 _PROMPT472_NEXT_ACTION = (
     "prepare_prompt473_changed_or_failed_route_fixture_execution"
@@ -7901,6 +7905,11 @@ _PROMPT472_POST_COMMIT_CLEAN_RERUN_NEXT_CYCLE_KEYS: tuple[str, ...] = (
     "prompt472_prompt471_tag_name",
     "prompt472_prompt471_tag_at_head",
     "prompt472_prompt471_head_subject_ok",
+    "prompt472_prompt472_tag_name",
+    "prompt472_prompt472_tag_at_head",
+    "prompt472_prompt472_head_subject_ok",
+    "prompt472_final_head_subject_ok",
+    "prompt472_final_tag_at_head_ok",
     "prompt472_current_head_short",
     "prompt472_current_head_subject",
     "prompt472_tags_at_head",
@@ -81041,6 +81050,12 @@ def _build_prompt472_post_commit_clean_rerun_next_cycle_state(
     prompt471_head_subject_ok = (
         current_head_subject == _PROMPT471_COMMIT_MESSAGE
     )
+    prompt472_tag_at_head = _PROMPT472_TAG_NAME in tags_at_head
+    prompt472_head_subject_ok = (
+        current_head_subject == _PROMPT472_COMMIT_MESSAGE
+    )
+    final_tag_at_head_ok = prompt472_tag_at_head
+    final_head_subject_ok = prompt472_head_subject_ok
     upstream_ready = _prompt472_upstream_prompt471_evidence_ready(payload)
     route_decision = _normalize_text(
         payload.get("prompt471_input_post_fix_route_decision"),
@@ -81064,18 +81079,18 @@ def _build_prompt472_post_commit_clean_rerun_next_cycle_state(
     )
     final_clean_and_tag_confirmed = bool(
         repo_state_known
-        and prompt471_tag_at_head
-        and prompt471_head_subject_ok
+        and final_tag_at_head_ok
+        and final_head_subject_ok
         and worktree_clean
     )
 
     blocked_reasons: list[str] = []
     if not upstream_ready:
         blocked_reasons.append("prompt471_evidence_missing")
-    if repo_state_known and not prompt471_tag_at_head:
-        blocked_reasons.append("prompt471_tag_not_at_head")
-    if repo_state_known and not prompt471_head_subject_ok:
-        blocked_reasons.append("prompt471_head_subject_mismatch")
+    if repo_state_known and not final_tag_at_head_ok:
+        blocked_reasons.append("prompt472_tag_not_at_head")
+    if repo_state_known and not final_head_subject_ok:
+        blocked_reasons.append("prompt472_head_subject_mismatch")
     if repo_state_known and not worktree_clean:
         blocked_reasons.append("prompt472_worktree_not_clean")
     if not post_commit_route_confirmed:
@@ -81099,6 +81114,11 @@ def _build_prompt472_post_commit_clean_rerun_next_cycle_state(
         "prompt472_prompt471_tag_name": _PROMPT471_TAG_NAME,
         "prompt472_prompt471_tag_at_head": prompt471_tag_at_head,
         "prompt472_prompt471_head_subject_ok": prompt471_head_subject_ok,
+        "prompt472_prompt472_tag_name": _PROMPT472_TAG_NAME,
+        "prompt472_prompt472_tag_at_head": prompt472_tag_at_head,
+        "prompt472_prompt472_head_subject_ok": prompt472_head_subject_ok,
+        "prompt472_final_head_subject_ok": final_head_subject_ok,
+        "prompt472_final_tag_at_head_ok": final_tag_at_head_ok,
         "prompt472_current_head_short": current_head_short,
         "prompt472_current_head_subject": current_head_subject,
         "prompt472_tags_at_head": tags_at_head,
@@ -262497,6 +262517,26 @@ class PlannedExecutionRunner:
                         "prompt472_prompt471_head_subject_ok"
                     )
                 ),
+                "prompt472_prompt472_tag_at_head": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_prompt472_tag_at_head"
+                    )
+                ),
+                "prompt472_prompt472_head_subject_ok": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_prompt472_head_subject_ok"
+                    )
+                ),
+                "prompt472_final_head_subject_ok": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_final_head_subject_ok"
+                    )
+                ),
+                "prompt472_final_tag_at_head_ok": (
+                    prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                        "prompt472_final_tag_at_head_ok"
+                    )
+                ),
                 "prompt472_worktree_clean": (
                     prompt472_post_commit_clean_rerun_next_cycle_payload.get(
                         "prompt472_worktree_clean"
@@ -266505,6 +266545,30 @@ class PlannedExecutionRunner:
             "prompt472_prompt471_head_subject_ok": bool(
                 prompt472_post_commit_clean_rerun_next_cycle_payload.get(
                     "prompt472_prompt471_head_subject_ok",
+                    False,
+                )
+            ),
+            "prompt472_prompt472_tag_at_head": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_prompt472_tag_at_head",
+                    False,
+                )
+            ),
+            "prompt472_prompt472_head_subject_ok": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_prompt472_head_subject_ok",
+                    False,
+                )
+            ),
+            "prompt472_final_head_subject_ok": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_final_head_subject_ok",
+                    False,
+                )
+            ),
+            "prompt472_final_tag_at_head_ok": bool(
+                prompt472_post_commit_clean_rerun_next_cycle_payload.get(
+                    "prompt472_final_tag_at_head_ok",
                     False,
                 )
             ),
