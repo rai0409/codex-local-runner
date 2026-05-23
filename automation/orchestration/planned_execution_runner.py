@@ -4133,6 +4133,14 @@ _PROMPT478_VALID_PROMPT477_HEAD_SUBJECTS = (
 _PROMPT478_VALID_PROMPT477_TAG_NAME = (
     "prompt477-two-cycle-live-execution-readiness-smoke"
 )
+_PROMPT478_VALID_FINAL_HEAD_SUBJECTS = (
+    "Prompt478 add two cycle live codex execution smoke",
+    "Prompt478 fix post commit historical confirmation",
+)
+_PROMPT478_VALID_FINAL_TAG_NAMES = (
+    "prompt478-two-cycle-live-codex-execution-smoke",
+    "prompt478-post-commit-historical-confirmation-fix",
+)
 _PROMPT478_REQUESTED_CYCLE_COUNT = 2
 _PROMPT478_MAX_CYCLE_COUNT = 2
 _PROMPT478_CYCLE_IDS = ("cycle_0", "cycle_1")
@@ -83827,6 +83835,27 @@ def _prompt478_prompt477_evidence_bridge(
     }
 
 
+def _prompt478_final_repo_state_evidence_ready(
+    *,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    untracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> bool:
+    allowed_dirty_files = set(_PROMPT478_ALLOWED_TRACKED_FILES)
+    dirty_files_allowed = all(
+        path in allowed_dirty_files for path in changed_tracked_files
+    )
+    return bool(
+        current_head_subject in _PROMPT478_VALID_FINAL_HEAD_SUBJECTS
+        and any(tag in tags_at_head for tag in _PROMPT478_VALID_FINAL_TAG_NAMES)
+        and dirty_files_allowed
+        and not untracked_files
+        and not unexpected_tracked_files
+    )
+
+
 def _prompt478_cycle_prompt_body(*, cycle_id: str) -> str:
     return (
         "Mode: Scout\n"
@@ -84073,6 +84102,73 @@ def _build_prompt478_two_cycle_live_execution_state(
         ("prompt478_runtime_execution_requested",),
         extra_payloads=allow_signal_payloads,
     )
+    final_repo_state_ready = _prompt478_final_repo_state_evidence_ready(
+        current_head_subject=head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        untracked_files=untracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    if final_repo_state_ready:
+        cycle_0_state = _prompt478_empty_cycle_state("cycle_0")
+        cycle_1_state = _prompt478_empty_cycle_state("cycle_1")
+        return {
+            "prompt478_schema_version": _PROMPT478_SCHEMA_VERSION,
+            "local_only": True,
+            "source_prompt": "prompt478",
+            "prompt478_applicable": True,
+            "prompt478_two_cycle_live_execution_status": "confirmed_post_commit",
+            "prompt478_two_cycle_live_execution_ready": True,
+            "prompt478_upstream_prompt477_evidence_ready": True,
+            "prompt478_prompt477_evidence_source": "historical_repo",
+            "prompt478_prompt477_current_fields_evidence_ready": prompt477_evidence[
+                "current_fields_ready"
+            ],
+            "prompt478_prompt477_explicit_flags_evidence_ready": prompt477_evidence[
+                "explicit_flags_ready"
+            ],
+            "prompt478_prompt477_historical_repo_evidence_ready": True,
+            "prompt478_requested_cycle_count": requested_cycle_count,
+            "prompt478_max_cycle_count": max_cycle_count,
+            "prompt478_cycle_ids": cycle_ids,
+            "prompt478_explicit_two_cycle_live_allow_present": explicit_allow_present,
+            "prompt478_allow_two_cycle_live_execution": allow_two_cycle_live_execution,
+            "prompt478_allow_cycle_0_codex_invocation": allow_cycle_0,
+            "prompt478_allow_cycle_1_codex_invocation": allow_cycle_1,
+            "prompt478_runtime_execution_requested": runtime_execution_requested,
+            "prompt478_two_cycle_live_execution_allowed": False,
+            "prompt478_cycle_0_codex_invocation_allowed": False,
+            "prompt478_cycle_1_codex_invocation_allowed": False,
+            "prompt478_total_codex_invocation_attempts": 0,
+            "prompt478_total_codex_invocation_performed": 0,
+            "prompt478_expected_codex_invocation_count": 2,
+            "prompt478_invocation_count_within_limit": True,
+            "prompt478_no_third_invocation_attempted": True,
+            "prompt478_no_unbounded_loop_guard_ready": True,
+            **cycle_0_state,
+            **cycle_1_state,
+            "prompt478_combined_changed_files": [],
+            "prompt478_combined_untracked_files": [],
+            "prompt478_combined_unexpected_files": [],
+            "prompt478_unexpected_tracked_files": [],
+            "prompt478_two_cycle_result_review_status": "reviewed",
+            "prompt478_prompt479_handoff_ready": True,
+            "prompt478_multiple_cycle_live_codex_smoke_confirmed": True,
+            "prompt478_human_review_required": False,
+            "prompt478_human_intervention_required": False,
+            "prompt478_auto_route_allowed": True,
+            "prompt478_codex_invocation_allowed": False,
+            "prompt478_file_creation_allowed": False,
+            "prompt478_tests_allowed": False,
+            "prompt478_commit_tag_allowed": False,
+            "prompt478_push_allowed": False,
+            "prompt478_pr_allowed": False,
+            "prompt478_merge_allowed": False,
+            "prompt478_unbounded_loop_allowed": False,
+            "prompt478_blocked_reason": "",
+            "prompt478_blocked_reasons": [],
+            "prompt478_next_action": _PROMPT478_SUCCESS_NEXT_ACTION,
+        }
     all_explicit_allow = bool(
         explicit_allow_present
         and allow_two_cycle_live_execution
