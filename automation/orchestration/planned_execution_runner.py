@@ -4102,6 +4102,25 @@ _PROMPT476_PRE_COMMIT_NEXT_ACTION = (
 _PROMPT476_CONFIRMED_NEXT_ACTION = (
     "prepare_prompt477_multiple_cycle_success_path_smoke"
 )
+_PROMPT477_SCHEMA_VERSION = "prompt477_two_cycle_live_execution_readiness_smoke_v1"
+_PROMPT477_ALLOWED_TRACKED_FILES = _PROMPT476_ALLOWED_TRACKED_FILES
+_PROMPT477_VALID_FINAL_HEAD_SUBJECTS = (
+    "Prompt476 add targeted fix post commit clean continuation",
+    "Prompt477 add two cycle live execution readiness smoke",
+    "Prompt477 fix two cycle readiness final confirmation",
+)
+_PROMPT477_VALID_FINAL_TAG_NAMES = (
+    "prompt476-targeted-fix-post-commit-clean-continuation",
+    "prompt477-two-cycle-live-execution-readiness-smoke",
+    "prompt477-two-cycle-readiness-final-confirmation",
+)
+_PROMPT477_REQUESTED_CYCLE_COUNT = 2
+_PROMPT477_MAX_CYCLE_COUNT = 2
+_PROMPT477_CYCLE_IDS = ("cycle_0", "cycle_1")
+_PROMPT477_NEXT_ACTION = "prepare_prompt478_two_cycle_live_codex_execution_smoke"
+_PROMPT477_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt477_two_cycle_readiness_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8207,6 +8226,66 @@ _PROMPT476_TARGETED_FIX_SUCCESS_LOOP_KEYS: tuple[str, ...] = (
     "prompt476_blocked_reasons",
     "prompt476_next_action",
 )
+_PROMPT477_TWO_CYCLE_READINESS_KEYS: tuple[str, ...] = (
+    "prompt477_schema_version",
+    "prompt477_applicable",
+    "prompt477_two_cycle_readiness_status",
+    "prompt477_two_cycle_readiness_ready",
+    "prompt477_upstream_prompt476_evidence_ready",
+    "prompt477_prompt476_evidence_source",
+    "prompt477_prompt476_current_fields_evidence_ready",
+    "prompt477_prompt476_explicit_flags_evidence_ready",
+    "prompt477_prompt476_historical_repo_evidence_ready",
+    "prompt477_current_head_short",
+    "prompt477_current_head_subject",
+    "prompt477_tags_at_head",
+    "prompt477_valid_final_head_subjects",
+    "prompt477_valid_final_tags",
+    "prompt477_final_head_subject_ok",
+    "prompt477_final_tag_at_head_ok",
+    "prompt477_worktree_clean",
+    "prompt477_changed_tracked_files",
+    "prompt477_unexpected_tracked_files",
+    "prompt477_untracked_files",
+    "prompt477_unexpected_files",
+    "prompt477_requested_cycle_count",
+    "prompt477_max_cycle_count",
+    "prompt477_cycle_ids",
+    "prompt477_cycle_0_plan_ready",
+    "prompt477_cycle_1_plan_ready",
+    "prompt477_cycle_0_requires_explicit_live_allow",
+    "prompt477_cycle_1_requires_explicit_live_allow",
+    "prompt477_cycle_0_codex_invocation_allowed",
+    "prompt477_cycle_1_codex_invocation_allowed",
+    "prompt477_cycle_0_execution_performed",
+    "prompt477_cycle_1_execution_performed",
+    "prompt477_cycle_0_expected_mutation_boundary_ready",
+    "prompt477_cycle_1_expected_mutation_boundary_ready",
+    "prompt477_per_cycle_review_boundary_ready",
+    "prompt477_per_cycle_commit_tag_boundary_ready",
+    "prompt477_per_cycle_post_commit_clean_boundary_ready",
+    "prompt477_no_unbounded_loop_guard_ready",
+    "prompt477_prompt478_live_execution_smoke_request_ready",
+    "prompt477_prompt478_explicit_allow_required",
+    "prompt477_prompt478_max_cycles",
+    "prompt477_prompt478_expected_live_invocation_count",
+    "prompt477_prompt478_handoff_ready",
+    "prompt477_human_review_required",
+    "prompt477_human_intervention_required",
+    "prompt477_auto_continue_allowed",
+    "prompt477_auto_route_allowed",
+    "prompt477_codex_invocation_allowed",
+    "prompt477_file_creation_allowed",
+    "prompt477_tests_allowed",
+    "prompt477_commit_tag_allowed",
+    "prompt477_push_allowed",
+    "prompt477_pr_allowed",
+    "prompt477_merge_allowed",
+    "prompt477_unbounded_loop_allowed",
+    "prompt477_blocked_reason",
+    "prompt477_blocked_reasons",
+    "prompt477_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -12210,6 +12289,27 @@ def _merge_prompt476_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT476_TARGETED_FIX_SUCCESS_LOOP_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt477_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt477_two_cycle_readiness_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt477_two_cycle_readiness_state)
+        if isinstance(prompt477_two_cycle_readiness_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT477_TWO_CYCLE_READINESS_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -83077,6 +83177,315 @@ def _build_prompt476_targeted_fix_success_loop_state(
         "prompt476_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
         "prompt476_blocked_reasons": blocked_reasons,
         "prompt476_next_action": next_action,
+    }
+
+
+def _prompt477_prompt476_current_fields_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt476_targeted_fix_success_loop_status") == "confirmed"
+        and payload.get("prompt476_targeted_fix_success_loop_ready") is True
+        and payload.get(
+            "prompt476_success_changed_diff_autonomous_development_loop_confirmed"
+        )
+        is True
+        and payload.get("prompt476_loop_completion_status") == "completed"
+        and payload.get("prompt476_next_cycle_continuation_ready") is True
+        and payload.get("prompt476_next_cycle_request_ready") is True
+        and payload.get("prompt476_next_cycle_runtime_request_ready") is True
+        and payload.get("prompt476_next_cycle_prompt_request_ready") is True
+        and payload.get("prompt476_next_action") == _PROMPT476_CONFIRMED_NEXT_ACTION
+    )
+
+
+def _prompt477_prompt476_explicit_flags_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt476_success_changed_diff_loop_confirmed") is True
+        and payload.get("prompt476_loop_completion_status_completed") is True
+        and payload.get("prompt476_next_cycle_continuation_ready") is True
+        and payload.get("prompt476_next_cycle_runtime_request_ready") is True
+        and payload.get("prompt476_next_cycle_prompt_request_ready") is True
+    )
+
+
+def _prompt477_tag_in_lineage(*, repo_path: str, tag_name: str) -> bool:
+    if not repo_path or not tag_name:
+        return False
+    if _prompt471_tag_exists(repo_path=repo_path, tag_name=tag_name) is not True:
+        return False
+    ancestor_result = _prompt471_git(
+        repo_path,
+        ("merge-base", "--is-ancestor", f"refs/tags/{tag_name}", "HEAD"),
+    )
+    return bool(ancestor_result is not None and ancestor_result.returncode == 0)
+
+
+def _prompt477_prompt476_historical_repo_evidence_ready(
+    *,
+    repo_path: str,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> bool:
+    if not repo_path:
+        return False
+    subject_ok = bool(
+        current_head_subject in _PROMPT477_VALID_FINAL_HEAD_SUBJECTS
+        or current_head_subject.startswith("Prompt477 ")
+    )
+    prompt476_tag = "prompt476-targeted-fix-post-commit-clean-continuation"
+    prompt476_tag_context_ready = bool(
+        prompt476_tag in tags_at_head
+        or _prompt477_tag_in_lineage(repo_path=repo_path, tag_name=prompt476_tag)
+    )
+    tracked_files_limited = bool(
+        not unexpected_tracked_files
+        and all(path in _PROMPT477_ALLOWED_TRACKED_FILES for path in changed_tracked_files)
+    )
+    return bool(subject_ok and prompt476_tag_context_ready and tracked_files_limited)
+
+
+def _prompt477_prompt476_evidence_bridge(
+    *,
+    payload: Mapping[str, Any],
+    repo_path: str,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> dict[str, Any]:
+    current_fields_ready = _prompt477_prompt476_current_fields_evidence_ready(payload)
+    explicit_flags_ready = _prompt477_prompt476_explicit_flags_evidence_ready(payload)
+    historical_repo_ready = _prompt477_prompt476_historical_repo_evidence_ready(
+        repo_path=repo_path,
+        current_head_subject=current_head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    if current_fields_ready:
+        evidence_source = "current_fields"
+    elif explicit_flags_ready:
+        evidence_source = "explicit_flags"
+    elif historical_repo_ready:
+        evidence_source = "historical_repo"
+    else:
+        evidence_source = ""
+    return {
+        "ready": bool(current_fields_ready or explicit_flags_ready or historical_repo_ready),
+        "source": evidence_source,
+        "current_fields_ready": current_fields_ready,
+        "explicit_flags_ready": explicit_flags_ready,
+        "historical_repo_ready": historical_repo_ready,
+    }
+
+
+def _build_prompt477_two_cycle_readiness_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=_PROMPT477_ALLOWED_TRACKED_FILES,
+    )
+    changed_tracked_files = _normalize_string_list(
+        diff.get("changed_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        diff.get("untracked_files"),
+        sort_items=False,
+    )
+    unexpected_tracked_files = _normalize_string_list(
+        diff.get("unexpected_files"),
+        sort_items=False,
+    )
+    unexpected_files = list(untracked_files)
+    unexpected_files.extend(
+        path for path in unexpected_tracked_files if path not in unexpected_files
+    )
+
+    head_short = ""
+    head_subject = ""
+    head_short_known, head_short_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("rev-parse", "--short", "HEAD"),
+    )
+    if head_short_known and head_short_stdout.splitlines():
+        head_short = head_short_stdout.splitlines()[0].strip()
+    head_subject_known, head_subject_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("log", "-1", "--pretty=%s"),
+    )
+    if head_subject_known and head_subject_stdout.splitlines():
+        head_subject = head_subject_stdout.splitlines()[0].strip()
+    tags_at_head = _prompt471_tags_at_head(repo_path=repo_path)
+
+    final_head_subject_ok = head_subject in _PROMPT477_VALID_FINAL_HEAD_SUBJECTS
+    final_tag_at_head_ok = any(
+        tag_name in tags_at_head for tag_name in _PROMPT477_VALID_FINAL_TAG_NAMES
+    )
+    prompt477_post_commit_context = bool(
+        head_subject in _PROMPT477_VALID_FINAL_HEAD_SUBJECTS[1:]
+        and any(
+            tag_name in tags_at_head
+            for tag_name in _PROMPT477_VALID_FINAL_TAG_NAMES[1:]
+        )
+    )
+    worktree_clean = bool(
+        diff.get("known") is True and not changed_tracked_files and not untracked_files
+    )
+    post_commit_clean_ok = bool(not prompt477_post_commit_context or worktree_clean)
+    no_unexpected_files = bool(
+        not unexpected_tracked_files and not untracked_files and not unexpected_files
+    )
+
+    prompt476_evidence = _prompt477_prompt476_evidence_bridge(
+        payload=payload,
+        repo_path=repo_path,
+        current_head_subject=head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    upstream_ready = prompt476_evidence["ready"] is True
+    requested_cycle_count = _PROMPT477_REQUESTED_CYCLE_COUNT
+    max_cycle_count = _PROMPT477_MAX_CYCLE_COUNT
+    cycle_ids = list(_PROMPT477_CYCLE_IDS)
+    cycle_count_is_two = bool(requested_cycle_count == 2 and len(cycle_ids) == 2)
+    max_cycles_bounded = max_cycle_count == 2
+    cycle_0_plan_ready = bool(cycle_count_is_two and cycle_ids[0] == "cycle_0")
+    cycle_1_plan_ready = bool(cycle_count_is_two and cycle_ids[1] == "cycle_1")
+    cycle_plan_ready = bool(cycle_0_plan_ready and cycle_1_plan_ready)
+    cycle_0_mutation_boundary_ready = True
+    cycle_1_mutation_boundary_ready = True
+    per_cycle_review_boundary_ready = True
+    per_cycle_commit_tag_boundary_ready = True
+    per_cycle_post_commit_clean_boundary_ready = True
+    no_unbounded_loop_guard_ready = bool(
+        cycle_count_is_two
+        and max_cycles_bounded
+        and max_cycle_count == requested_cycle_count
+    )
+    ready = bool(
+        upstream_ready
+        and final_head_subject_ok
+        and final_tag_at_head_ok
+        and post_commit_clean_ok
+        and no_unexpected_files
+        and cycle_plan_ready
+        and cycle_0_mutation_boundary_ready
+        and cycle_1_mutation_boundary_ready
+        and per_cycle_review_boundary_ready
+        and per_cycle_commit_tag_boundary_ready
+        and per_cycle_post_commit_clean_boundary_ready
+        and no_unbounded_loop_guard_ready
+    )
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt476_evidence_missing")
+    if not final_head_subject_ok:
+        blocked_reasons.append("prompt477_final_head_subject_mismatch")
+    if not final_tag_at_head_ok:
+        blocked_reasons.append("prompt477_final_tag_not_at_head")
+    if unexpected_tracked_files:
+        blocked_reasons.append("prompt477_unexpected_tracked_files_present")
+    if untracked_files or unexpected_files:
+        blocked_reasons.append("prompt477_untracked_or_unexpected_files_present")
+    if not cycle_count_is_two:
+        blocked_reasons.append("prompt477_cycle_count_not_two")
+    if not max_cycles_bounded:
+        blocked_reasons.append("prompt477_max_cycles_not_bounded")
+    if not cycle_plan_ready:
+        blocked_reasons.append("prompt477_cycle_plan_not_ready")
+    if not no_unbounded_loop_guard_ready:
+        blocked_reasons.append("prompt477_unbounded_loop_guard_not_ready")
+    if not ready:
+        blocked_reasons.append("prompt477_prompt478_handoff_not_ready")
+
+    return {
+        "prompt477_schema_version": _PROMPT477_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt477",
+        "prompt477_applicable": True,
+        "prompt477_two_cycle_readiness_status": "ready" if ready else "blocked",
+        "prompt477_two_cycle_readiness_ready": ready,
+        "prompt477_upstream_prompt476_evidence_ready": upstream_ready,
+        "prompt477_prompt476_evidence_source": prompt476_evidence["source"],
+        "prompt477_prompt476_current_fields_evidence_ready": prompt476_evidence[
+            "current_fields_ready"
+        ],
+        "prompt477_prompt476_explicit_flags_evidence_ready": prompt476_evidence[
+            "explicit_flags_ready"
+        ],
+        "prompt477_prompt476_historical_repo_evidence_ready": prompt476_evidence[
+            "historical_repo_ready"
+        ],
+        "prompt477_current_head_short": head_short,
+        "prompt477_current_head_subject": head_subject,
+        "prompt477_tags_at_head": tags_at_head,
+        "prompt477_valid_final_head_subjects": list(_PROMPT477_VALID_FINAL_HEAD_SUBJECTS),
+        "prompt477_valid_final_tags": list(_PROMPT477_VALID_FINAL_TAG_NAMES),
+        "prompt477_final_head_subject_ok": final_head_subject_ok,
+        "prompt477_final_tag_at_head_ok": final_tag_at_head_ok,
+        "prompt477_worktree_clean": worktree_clean,
+        "prompt477_changed_tracked_files": changed_tracked_files,
+        "prompt477_unexpected_tracked_files": unexpected_tracked_files,
+        "prompt477_untracked_files": untracked_files,
+        "prompt477_unexpected_files": unexpected_files,
+        "prompt477_requested_cycle_count": requested_cycle_count,
+        "prompt477_max_cycle_count": max_cycle_count,
+        "prompt477_cycle_ids": cycle_ids,
+        "prompt477_cycle_0_plan_ready": cycle_0_plan_ready,
+        "prompt477_cycle_1_plan_ready": cycle_1_plan_ready,
+        "prompt477_cycle_0_requires_explicit_live_allow": True,
+        "prompt477_cycle_1_requires_explicit_live_allow": True,
+        "prompt477_cycle_0_codex_invocation_allowed": False,
+        "prompt477_cycle_1_codex_invocation_allowed": False,
+        "prompt477_cycle_0_execution_performed": False,
+        "prompt477_cycle_1_execution_performed": False,
+        "prompt477_cycle_0_expected_mutation_boundary_ready": (
+            cycle_0_mutation_boundary_ready
+        ),
+        "prompt477_cycle_1_expected_mutation_boundary_ready": (
+            cycle_1_mutation_boundary_ready
+        ),
+        "prompt477_per_cycle_review_boundary_ready": per_cycle_review_boundary_ready,
+        "prompt477_per_cycle_commit_tag_boundary_ready": (
+            per_cycle_commit_tag_boundary_ready
+        ),
+        "prompt477_per_cycle_post_commit_clean_boundary_ready": (
+            per_cycle_post_commit_clean_boundary_ready
+        ),
+        "prompt477_no_unbounded_loop_guard_ready": no_unbounded_loop_guard_ready,
+        "prompt477_prompt478_live_execution_smoke_request_ready": ready,
+        "prompt477_prompt478_explicit_allow_required": True,
+        "prompt477_prompt478_max_cycles": max_cycle_count,
+        "prompt477_prompt478_expected_live_invocation_count": requested_cycle_count,
+        "prompt477_prompt478_handoff_ready": ready,
+        "prompt477_human_review_required": not ready,
+        "prompt477_human_intervention_required": not ready,
+        "prompt477_auto_continue_allowed": ready,
+        "prompt477_auto_route_allowed": ready,
+        "prompt477_codex_invocation_allowed": False,
+        "prompt477_file_creation_allowed": False,
+        "prompt477_tests_allowed": False,
+        "prompt477_commit_tag_allowed": False,
+        "prompt477_push_allowed": False,
+        "prompt477_pr_allowed": False,
+        "prompt477_merge_allowed": False,
+        "prompt477_unbounded_loop_allowed": False,
+        "prompt477_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
+        "prompt477_blocked_reasons": blocked_reasons,
+        "prompt477_next_action": _PROMPT477_NEXT_ACTION if ready else _PROMPT477_BLOCKED_NEXT_ACTION,
     }
 
 
@@ -263504,6 +263913,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt476_targeted_fix_success_loop_payload,
         }
+        prompt477_two_cycle_readiness_payload = (
+            _build_prompt477_two_cycle_readiness_state(
+                run_state_payload=run_state_payload,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt477_two_cycle_readiness_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -265918,6 +266337,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt476_targeted_fix_success_loop_state=(
                     prompt476_targeted_fix_success_loop_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt477_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt477_two_cycle_readiness_state=(
+                    prompt477_two_cycle_readiness_payload
                 ),
             )
         )
@@ -268714,6 +269141,11 @@ class PlannedExecutionRunner:
             if key in prompt476_targeted_fix_success_loop_payload:
                 manifest["decision_summary"][key] = (
                     prompt476_targeted_fix_success_loop_payload.get(key)
+                )
+        for key in _PROMPT477_TWO_CYCLE_READINESS_KEYS:
+            if key in prompt477_two_cycle_readiness_payload:
+                manifest["decision_summary"][key] = (
+                    prompt477_two_cycle_readiness_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -275853,6 +276285,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT476_TARGETED_FIX_SUCCESS_LOOP_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT477_TWO_CYCLE_READINESS_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
