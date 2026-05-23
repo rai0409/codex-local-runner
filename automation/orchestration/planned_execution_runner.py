@@ -4136,10 +4136,12 @@ _PROMPT478_VALID_PROMPT477_TAG_NAME = (
 _PROMPT478_VALID_FINAL_HEAD_SUBJECTS = (
     "Prompt478 add two cycle live codex execution smoke",
     "Prompt478 fix post commit historical confirmation",
+    "Prompt478 fix final repo state confirmation",
 )
 _PROMPT478_VALID_FINAL_TAG_NAMES = (
     "prompt478-two-cycle-live-codex-execution-smoke",
     "prompt478-post-commit-historical-confirmation-fix",
+    "prompt478-final-repo-state-confirmation-fix",
 )
 _PROMPT478_REQUESTED_CYCLE_COUNT = 2
 _PROMPT478_MAX_CYCLE_COUNT = 2
