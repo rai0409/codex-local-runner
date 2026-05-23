@@ -85398,6 +85398,8 @@ def _prompt481_prompt480_historical_repo_evidence_ready(
         tag == "prompt480-daemon-lite-workspace-safety-stop-contract"
         or tag.startswith("prompt480-daemon-lite-")
         or tag.startswith("prompt480-")
+        or tag == "prompt481-daemon-lite-repeated-cycle-smoke"
+        or tag.startswith("prompt481-daemon-lite-")
         for tag in tags_at_head
     )
     tracked_files_limited = bool(
