@@ -84547,6 +84547,8 @@ def _prompt479_prompt478_historical_repo_evidence_ready(
         tag == "prompt478-two-cycle-live-codex-execution-smoke"
         or tag.startswith("prompt478-final-")
         or tag.startswith("prompt478-post-commit-")
+        or tag == "prompt479-daemon-lite-boundary-limit-stop-contract"
+        or tag.startswith("prompt479-daemon-lite-")
         for tag in tags_at_head
     )
     tracked_files_limited = bool(
