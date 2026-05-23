@@ -84926,6 +84926,8 @@ def _prompt480_prompt479_historical_repo_evidence_ready(
         tag == "prompt479-daemon-lite-boundary-limit-stop-contract"
         or tag.startswith("prompt479-daemon-lite-")
         or tag.startswith("prompt479-")
+        or tag == "prompt480-daemon-lite-workspace-safety-stop-contract"
+        or tag.startswith("prompt480-daemon-lite-")
         for tag in tags_at_head
     )
     tracked_files_limited = bool(
