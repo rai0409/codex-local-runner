@@ -4155,6 +4155,20 @@ _PROMPT478_SUCCESS_NEXT_ACTION = (
 _PROMPT478_REVIEW_NEXT_ACTION = (
     "manual_review_prompt478_two_cycle_live_execution_result"
 )
+_PROMPT479_SCHEMA_VERSION = "prompt479_daemon_lite_boundary_limit_stop_contract_v1"
+_PROMPT479_ALLOWED_TRACKED_FILES = _PROMPT478_ALLOWED_TRACKED_FILES
+_PROMPT479_DEFAULT_MAX_RUNTIME_SECONDS = 900
+_PROMPT479_DEFAULT_MAX_CYCLES = 3
+_PROMPT479_DEFAULT_MAX_INVOCATIONS = 3
+_PROMPT479_MAX_RUNTIME_SECONDS_UPPER_BOUND = 7200
+_PROMPT479_MAX_CYCLES_UPPER_BOUND = 10
+_PROMPT479_MAX_INVOCATIONS_UPPER_BOUND = 10
+_PROMPT479_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt480_daemon_lite_workspace_safety_stop_contract"
+)
+_PROMPT479_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt479_daemon_lite_boundary_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8395,6 +8409,58 @@ _PROMPT478_TWO_CYCLE_LIVE_EXECUTION_KEYS: tuple[str, ...] = (
     "prompt478_blocked_reasons",
     "prompt478_next_action",
 )
+_PROMPT479_DAEMON_LITE_BOUNDARY_KEYS: tuple[str, ...] = (
+    "prompt479_schema_version",
+    "prompt479_applicable",
+    "prompt479_daemon_lite_boundary_status",
+    "prompt479_daemon_lite_boundary_ready",
+    "prompt479_upstream_prompt478_evidence_ready",
+    "prompt479_prompt478_evidence_source",
+    "prompt479_prompt478_current_fields_evidence_ready",
+    "prompt479_prompt478_explicit_flags_evidence_ready",
+    "prompt479_prompt478_historical_repo_evidence_ready",
+    "prompt479_current_head_short",
+    "prompt479_current_head_subject",
+    "prompt479_tags_at_head",
+    "prompt479_changed_tracked_files",
+    "prompt479_unexpected_tracked_files",
+    "prompt479_untracked_files",
+    "prompt479_unexpected_files",
+    "prompt479_daemon_lite_mode",
+    "prompt479_daemon_lite_execution_attempted",
+    "prompt479_daemon_lite_execution_performed",
+    "prompt479_max_runtime_seconds",
+    "prompt479_max_cycles",
+    "prompt479_max_invocations",
+    "prompt479_max_runtime_seconds_configured",
+    "prompt479_max_cycles_configured",
+    "prompt479_max_invocations_configured",
+    "prompt479_max_runtime_seconds_bounded",
+    "prompt479_max_cycles_bounded",
+    "prompt479_max_invocations_bounded",
+    "prompt479_max_invocations_covers_cycles",
+    "prompt479_limit_stop_contract_ready",
+    "prompt479_stop_on_max_runtime_seconds",
+    "prompt479_stop_on_max_cycles",
+    "prompt479_stop_on_max_invocations",
+    "prompt479_unbounded_loop_guard_ready",
+    "prompt479_prompt480_handoff_ready",
+    "prompt479_human_review_required",
+    "prompt479_human_intervention_required",
+    "prompt479_auto_continue_allowed",
+    "prompt479_auto_route_allowed",
+    "prompt479_codex_invocation_allowed",
+    "prompt479_file_creation_allowed",
+    "prompt479_tests_allowed",
+    "prompt479_commit_tag_allowed",
+    "prompt479_push_allowed",
+    "prompt479_pr_allowed",
+    "prompt479_merge_allowed",
+    "prompt479_unbounded_loop_allowed",
+    "prompt479_blocked_reason",
+    "prompt479_blocked_reasons",
+    "prompt479_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -12440,6 +12506,27 @@ def _merge_prompt478_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT478_TWO_CYCLE_LIVE_EXECUTION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt479_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt479_daemon_lite_boundary_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt479_daemon_lite_boundary_state)
+        if isinstance(prompt479_daemon_lite_boundary_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT479_DAEMON_LITE_BOUNDARY_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -69153,6 +69240,24 @@ def _normalize_prompt437_runtime_command_request(
             errors.append("timeout_seconds_must_be_positive_int")
         else:
             normalized["timeout_seconds"] = timeout_seconds
+    for optional_int_key in (
+        "prompt479_max_runtime_seconds",
+        "prompt479_max_cycles",
+        "prompt479_max_invocations",
+        "max_runtime_seconds",
+        "max_cycles",
+        "max_invocations",
+    ):
+        if optional_int_key not in payload:
+            continue
+        optional_int_value = payload.get(optional_int_key)
+        if isinstance(optional_int_value, bool) or not isinstance(
+            optional_int_value,
+            int,
+        ):
+            errors.append(f"{optional_int_key}_must_be_int")
+        else:
+            normalized[optional_int_key] = optional_int_value
     if "dry_run_expected_returncode" in payload:
         dry_run_expected_returncode = payload.get("dry_run_expected_returncode")
         if isinstance(dry_run_expected_returncode, bool) or not isinstance(
@@ -69285,6 +69390,7 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
     raw_prompt478_allow_cycle_0_codex_invocation = False
     raw_prompt478_allow_cycle_1_codex_invocation = False
     raw_prompt478_runtime_execution_requested = False
+    raw_prompt479_config_payload: dict[str, Any] = {}
 
     if request_provided and not allow_runtime_command_artifact:
         validation_status = "blocked"
@@ -69304,6 +69410,18 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
                 next_action = "fix_prompt437_runtime_command_request"
             else:
                 loaded = True
+                raw_prompt479_config_payload = {
+                    key: raw_payload.get(key)
+                    for key in (
+                        "prompt479_max_runtime_seconds",
+                        "prompt479_max_cycles",
+                        "prompt479_max_invocations",
+                        "max_runtime_seconds",
+                        "max_cycles",
+                        "max_invocations",
+                    )
+                    if key in raw_payload
+                }
                 (
                     raw_explicit_allow_present,
                     raw_explicit_allow_source,
@@ -69436,6 +69554,7 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
         "prompt478_runtime_execution_requested": (
             raw_prompt478_runtime_execution_requested
         ),
+        **raw_prompt479_config_payload,
         "prompt456_runtime_command_explicit_commit_tag_allow_present": (
             normalized_explicit_allow_present if valid else False
         ),
@@ -84386,6 +84505,296 @@ def _build_prompt478_two_cycle_live_execution_state(
         "prompt478_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
         "prompt478_blocked_reasons": blocked_reasons,
         "prompt478_next_action": next_action,
+    }
+
+
+def _prompt479_prompt478_current_fields_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt478_two_cycle_live_execution_status")
+        in {"performed", "confirmed_post_commit"}
+        and payload.get("prompt478_two_cycle_live_execution_ready") is True
+        and payload.get("prompt478_multiple_cycle_live_codex_smoke_confirmed") is True
+        and payload.get("prompt478_prompt479_handoff_ready") is True
+        and payload.get("prompt478_next_action") == _PROMPT478_SUCCESS_NEXT_ACTION
+    )
+
+
+def _prompt479_prompt478_explicit_flags_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt478_multiple_cycle_live_codex_smoke_confirmed") is True
+        and payload.get("prompt478_prompt479_handoff_ready") is True
+        and payload.get("prompt478_post_commit_final_confirmed") is True
+    )
+
+
+def _prompt479_prompt478_historical_repo_evidence_ready(
+    *,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> bool:
+    subject_ok = bool(
+        current_head_subject == "Prompt478 add two cycle live codex execution smoke"
+        or current_head_subject.startswith("Prompt478 fix ")
+        or current_head_subject.startswith("Prompt479 ")
+    )
+    tag_ok = any(
+        tag == "prompt478-two-cycle-live-codex-execution-smoke"
+        or tag.startswith("prompt478-final-")
+        or tag.startswith("prompt478-post-commit-")
+        for tag in tags_at_head
+    )
+    tracked_files_limited = bool(
+        not unexpected_tracked_files
+        and all(path in _PROMPT479_ALLOWED_TRACKED_FILES for path in changed_tracked_files)
+    )
+    return bool(subject_ok and tag_ok and tracked_files_limited)
+
+
+def _prompt479_prompt478_evidence_bridge(
+    *,
+    payload: Mapping[str, Any],
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> dict[str, Any]:
+    current_fields_ready = _prompt479_prompt478_current_fields_evidence_ready(payload)
+    explicit_flags_ready = _prompt479_prompt478_explicit_flags_evidence_ready(payload)
+    historical_repo_ready = _prompt479_prompt478_historical_repo_evidence_ready(
+        current_head_subject=current_head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    if current_fields_ready:
+        evidence_source = "current_fields"
+    elif explicit_flags_ready:
+        evidence_source = "explicit_flags"
+    elif historical_repo_ready:
+        evidence_source = "historical_repo"
+    else:
+        evidence_source = ""
+    return {
+        "ready": bool(current_fields_ready or explicit_flags_ready or historical_repo_ready),
+        "source": evidence_source,
+        "current_fields_ready": current_fields_ready,
+        "explicit_flags_ready": explicit_flags_ready,
+        "historical_repo_ready": historical_repo_ready,
+    }
+
+
+def _prompt479_surface_int(
+    *,
+    payload: Mapping[str, Any],
+    keys: Sequence[str],
+    default: int,
+    extra_payloads: Sequence[Mapping[str, Any] | None] = (),
+) -> tuple[int, bool, bool]:
+    for surface in _prompt478_runtime_allow_surfaces(
+        payload,
+        extra_payloads=extra_payloads,
+    ):
+        for key in keys:
+            if key not in surface:
+                continue
+            value = surface.get(key)
+            if isinstance(value, bool) or not isinstance(value, int):
+                return default, True, False
+            return value, True, True
+    return default, True, True
+
+
+def _build_prompt479_daemon_lite_boundary_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    config_payloads: Sequence[Mapping[str, Any] | None] = (),
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=_PROMPT479_ALLOWED_TRACKED_FILES,
+    )
+    changed_tracked_files = _normalize_string_list(
+        diff.get("changed_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        diff.get("untracked_files"),
+        sort_items=False,
+    )
+    unexpected_tracked_files = _normalize_string_list(
+        diff.get("unexpected_files"),
+        sort_items=False,
+    )
+    unexpected_files = list(untracked_files)
+    unexpected_files.extend(
+        path for path in unexpected_tracked_files if path not in unexpected_files
+    )
+
+    head_short = ""
+    head_short_known, head_short_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("rev-parse", "--short", "HEAD"),
+    )
+    if head_short_known and head_short_stdout.splitlines():
+        head_short = head_short_stdout.splitlines()[0].strip()
+    head_subject = ""
+    head_subject_known, head_subject_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("log", "-1", "--pretty=%s"),
+    )
+    if head_subject_known and head_subject_stdout.splitlines():
+        head_subject = head_subject_stdout.splitlines()[0].strip()
+    tags_at_head = _prompt471_tags_at_head(repo_path=repo_path)
+
+    prompt478_evidence = _prompt479_prompt478_evidence_bridge(
+        payload=payload,
+        current_head_subject=head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    upstream_ready = prompt478_evidence["ready"] is True
+
+    max_runtime_seconds, runtime_configured, runtime_type_ok = _prompt479_surface_int(
+        payload=payload,
+        keys=("prompt479_max_runtime_seconds", "max_runtime_seconds"),
+        default=_PROMPT479_DEFAULT_MAX_RUNTIME_SECONDS,
+        extra_payloads=config_payloads,
+    )
+    max_cycles, cycles_configured, cycles_type_ok = _prompt479_surface_int(
+        payload=payload,
+        keys=("prompt479_max_cycles", "max_cycles"),
+        default=_PROMPT479_DEFAULT_MAX_CYCLES,
+        extra_payloads=config_payloads,
+    )
+    max_invocations, invocations_configured, invocations_type_ok = (
+        _prompt479_surface_int(
+            payload=payload,
+            keys=("prompt479_max_invocations", "max_invocations"),
+            default=_PROMPT479_DEFAULT_MAX_INVOCATIONS,
+            extra_payloads=config_payloads,
+        )
+    )
+
+    max_runtime_seconds_bounded = bool(
+        runtime_type_ok
+        and max_runtime_seconds > 0
+        and max_runtime_seconds <= _PROMPT479_MAX_RUNTIME_SECONDS_UPPER_BOUND
+    )
+    max_cycles_bounded = bool(
+        cycles_type_ok
+        and max_cycles > 0
+        and max_cycles <= _PROMPT479_MAX_CYCLES_UPPER_BOUND
+    )
+    max_invocations_bounded = bool(
+        invocations_type_ok
+        and max_invocations > 0
+        and max_invocations <= _PROMPT479_MAX_INVOCATIONS_UPPER_BOUND
+    )
+    max_invocations_covers_cycles = bool(max_invocations >= max_cycles)
+    limit_stop_contract_ready = bool(
+        max_runtime_seconds_bounded
+        and max_cycles_bounded
+        and max_invocations_bounded
+        and max_invocations_covers_cycles
+    )
+    unbounded_loop_guard_ready = bool(limit_stop_contract_ready)
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt478_evidence_missing")
+    if unexpected_tracked_files:
+        blocked_reasons.append("prompt479_unexpected_tracked_files_present")
+    if untracked_files or unexpected_files:
+        blocked_reasons.append("prompt479_untracked_or_unexpected_files_present")
+    if not max_runtime_seconds_bounded:
+        blocked_reasons.append("prompt479_max_runtime_seconds_invalid_or_unbounded")
+    if not max_cycles_bounded:
+        blocked_reasons.append("prompt479_max_cycles_invalid_or_unbounded")
+    if not max_invocations_bounded:
+        blocked_reasons.append("prompt479_max_invocations_invalid_or_unbounded")
+    if not max_invocations_covers_cycles:
+        blocked_reasons.append("prompt479_max_invocations_less_than_max_cycles")
+    if not unbounded_loop_guard_ready:
+        blocked_reasons.append("prompt479_unbounded_loop_guard_not_ready")
+
+    ready_without_handoff_reason = bool(not blocked_reasons)
+    prompt480_handoff_ready = ready_without_handoff_reason
+    if not prompt480_handoff_ready:
+        blocked_reasons.append("prompt479_prompt480_handoff_not_ready")
+
+    ready = bool(not blocked_reasons)
+    status = "ready" if ready else "blocked"
+    return {
+        "prompt479_schema_version": _PROMPT479_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt479",
+        "prompt479_applicable": True,
+        "prompt479_daemon_lite_boundary_status": status,
+        "prompt479_daemon_lite_boundary_ready": ready,
+        "prompt479_upstream_prompt478_evidence_ready": upstream_ready,
+        "prompt479_prompt478_evidence_source": prompt478_evidence["source"],
+        "prompt479_prompt478_current_fields_evidence_ready": prompt478_evidence[
+            "current_fields_ready"
+        ],
+        "prompt479_prompt478_explicit_flags_evidence_ready": prompt478_evidence[
+            "explicit_flags_ready"
+        ],
+        "prompt479_prompt478_historical_repo_evidence_ready": prompt478_evidence[
+            "historical_repo_ready"
+        ],
+        "prompt479_current_head_short": head_short,
+        "prompt479_current_head_subject": head_subject,
+        "prompt479_tags_at_head": tags_at_head,
+        "prompt479_changed_tracked_files": changed_tracked_files,
+        "prompt479_unexpected_tracked_files": unexpected_tracked_files,
+        "prompt479_untracked_files": untracked_files,
+        "prompt479_unexpected_files": unexpected_files,
+        "prompt479_daemon_lite_mode": "metadata_only_boundary",
+        "prompt479_daemon_lite_execution_attempted": False,
+        "prompt479_daemon_lite_execution_performed": False,
+        "prompt479_max_runtime_seconds": max_runtime_seconds,
+        "prompt479_max_cycles": max_cycles,
+        "prompt479_max_invocations": max_invocations,
+        "prompt479_max_runtime_seconds_configured": runtime_configured,
+        "prompt479_max_cycles_configured": cycles_configured,
+        "prompt479_max_invocations_configured": invocations_configured,
+        "prompt479_max_runtime_seconds_bounded": max_runtime_seconds_bounded,
+        "prompt479_max_cycles_bounded": max_cycles_bounded,
+        "prompt479_max_invocations_bounded": max_invocations_bounded,
+        "prompt479_max_invocations_covers_cycles": max_invocations_covers_cycles,
+        "prompt479_limit_stop_contract_ready": limit_stop_contract_ready,
+        "prompt479_stop_on_max_runtime_seconds": max_runtime_seconds_bounded,
+        "prompt479_stop_on_max_cycles": max_cycles_bounded,
+        "prompt479_stop_on_max_invocations": max_invocations_bounded,
+        "prompt479_unbounded_loop_guard_ready": unbounded_loop_guard_ready,
+        "prompt479_prompt480_handoff_ready": prompt480_handoff_ready,
+        "prompt479_human_review_required": not ready,
+        "prompt479_human_intervention_required": not ready,
+        "prompt479_auto_continue_allowed": ready,
+        "prompt479_auto_route_allowed": ready,
+        "prompt479_codex_invocation_allowed": False,
+        "prompt479_file_creation_allowed": False,
+        "prompt479_tests_allowed": False,
+        "prompt479_commit_tag_allowed": False,
+        "prompt479_push_allowed": False,
+        "prompt479_pr_allowed": False,
+        "prompt479_merge_allowed": False,
+        "prompt479_unbounded_loop_allowed": False,
+        "prompt479_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
+        "prompt479_blocked_reasons": blocked_reasons,
+        "prompt479_next_action": (
+            _PROMPT479_SUCCESS_NEXT_ACTION if ready else _PROMPT479_BLOCKED_NEXT_ACTION
+        ),
     }
 
 
@@ -264838,6 +265247,24 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt478_two_cycle_live_execution_payload,
         }
+        prompt479_daemon_lite_boundary_payload = (
+            _build_prompt479_daemon_lite_boundary_state(
+                run_state_payload=run_state_payload,
+                config_payloads=(
+                    approved_restart_payload_for_bounded_local_loop,
+                    prior_approved_restart_execution_contract_payload,
+                    prompt437_runtime_command_artifact_wiring_payload,
+                    prompt437_runtime_command_artifact_wiring_payload.get(
+                        "prompt437_runtime_command_request"
+                    ),
+                ),
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt479_daemon_lite_boundary_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -267268,6 +267695,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt478_two_cycle_live_execution_state=(
                     prompt478_two_cycle_live_execution_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt479_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt479_daemon_lite_boundary_state=(
+                    prompt479_daemon_lite_boundary_payload
                 ),
             )
         )
@@ -270074,6 +270509,11 @@ class PlannedExecutionRunner:
             if key in prompt478_two_cycle_live_execution_payload:
                 manifest["decision_summary"][key] = (
                     prompt478_two_cycle_live_execution_payload.get(key)
+                )
+        for key in _PROMPT479_DAEMON_LITE_BOUNDARY_KEYS:
+            if key in prompt479_daemon_lite_boundary_payload:
+                manifest["decision_summary"][key] = (
+                    prompt479_daemon_lite_boundary_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
