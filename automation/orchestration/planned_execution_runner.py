@@ -4054,6 +4054,11 @@ _PROMPT473_ALLOWED_TRACKED_FILES = (
 _PROMPT473_NEXT_ACTION = (
     "prepare_prompt474_bounded_targeted_fix_execution_performed_path"
 )
+_PROMPT474_SCHEMA_VERSION = (
+    "prompt474_bounded_targeted_fix_execution_and_post_fix_review_v1"
+)
+_PROMPT474_ALLOWED_TRACKED_FILES = _PROMPT473_ALLOWED_TRACKED_FILES
+_PROMPT474_PROMPT473_TAG_NAME = "prompt473-changed-diff-targeted-fix-boundary"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8005,6 +8010,59 @@ _PROMPT473_CHANGED_DIFF_TARGETED_FIX_BOUNDARY_KEYS: tuple[str, ...] = (
     "prompt473_blocked_reasons",
     "prompt473_next_action",
 )
+_PROMPT474_BOUNDED_TARGETED_FIX_EXECUTION_KEYS: tuple[str, ...] = (
+    "prompt474_schema_version",
+    "prompt474_applicable",
+    "prompt474_bounded_targeted_fix_status",
+    "prompt474_bounded_targeted_fix_ready",
+    "prompt474_upstream_prompt473_evidence_ready",
+    "prompt474_prompt473_evidence_source",
+    "prompt474_prompt473_current_fields_evidence_ready",
+    "prompt474_prompt473_explicit_flags_evidence_ready",
+    "prompt474_prompt473_historical_repo_evidence_ready",
+    "prompt474_targeted_fix_required",
+    "prompt474_targeted_fix_request_ready",
+    "prompt474_explicit_targeted_fix_allow_present",
+    "prompt474_allow_bounded_targeted_fix_execution",
+    "prompt474_allow_codex_invocation",
+    "prompt474_runtime_execution_requested",
+    "prompt474_targeted_fix_execution_allowed",
+    "prompt474_codex_invocation_attempted",
+    "prompt474_codex_invocation_performed",
+    "prompt474_execution_attempted",
+    "prompt474_execution_performed",
+    "prompt474_execution_returncode",
+    "prompt474_execution_returncode_classification",
+    "prompt474_stdout_path",
+    "prompt474_stderr_path",
+    "prompt474_runtime_result_available",
+    "prompt474_runtime_result_payload_ready",
+    "prompt474_post_fix_diff_evidence_known",
+    "prompt474_post_fix_tracked_diff_empty",
+    "prompt474_post_fix_changed_files",
+    "prompt474_post_fix_untracked_files",
+    "prompt474_post_fix_unexpected_files",
+    "prompt474_post_fix_review_status",
+    "prompt474_post_fix_route_decision_status",
+    "prompt474_post_fix_route_decision",
+    "prompt474_prompt475_handoff_ready",
+    "prompt474_commit_tag_candidate_request_ready",
+    "prompt474_retry_targeted_fix_request_ready",
+    "prompt474_human_review_required",
+    "prompt474_human_intervention_required",
+    "prompt474_auto_route_allowed",
+    "prompt474_codex_invocation_allowed",
+    "prompt474_file_creation_allowed",
+    "prompt474_tests_allowed",
+    "prompt474_commit_tag_allowed",
+    "prompt474_push_allowed",
+    "prompt474_pr_allowed",
+    "prompt474_merge_allowed",
+    "prompt474_unbounded_loop_allowed",
+    "prompt474_blocked_reason",
+    "prompt474_blocked_reasons",
+    "prompt474_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -11945,6 +12003,27 @@ def _merge_prompt473_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT473_CHANGED_DIFF_TARGETED_FIX_BOUNDARY_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt474_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt474_bounded_targeted_fix_execution_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt474_bounded_targeted_fix_execution_state)
+        if isinstance(prompt474_bounded_targeted_fix_execution_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT474_BOUNDED_TARGETED_FIX_EXECUTION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -68705,6 +68784,10 @@ def _normalize_prompt437_runtime_command_request(
         "prompt460_final_clean_ok",
         "post_reconcile_clean_ok",
         "final_clean_ok",
+        "prompt474_explicit_targeted_fix_allow_present",
+        "prompt474_allow_bounded_targeted_fix_execution",
+        "prompt474_allow_codex_invocation",
+        "prompt474_runtime_execution_requested",
     ):
         if optional_bool_key in payload:
             optional_value = payload.get(optional_bool_key)
@@ -68772,6 +68855,10 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
     raw_explicit_allow_present = False
     raw_explicit_allow_source = ""
     raw_explicit_allow_keys_present: list[str] = []
+    raw_prompt474_explicit_targeted_fix_allow_present = False
+    raw_prompt474_allow_bounded_targeted_fix_execution = False
+    raw_prompt474_allow_codex_invocation = False
+    raw_prompt474_runtime_execution_requested = False
 
     if request_provided and not allow_runtime_command_artifact:
         validation_status = "blocked"
@@ -68797,6 +68884,26 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
                     raw_explicit_allow_keys_present,
                 ) = _extract_explicit_commit_tag_allow_metadata_from_mapping(
                     raw_payload
+                )
+                raw_prompt474_explicit_targeted_fix_allow_present = (
+                    raw_payload.get(
+                        "prompt474_explicit_targeted_fix_allow_present"
+                    )
+                    is True
+                )
+                raw_prompt474_allow_bounded_targeted_fix_execution = (
+                    raw_payload.get(
+                        "prompt474_allow_bounded_targeted_fix_execution"
+                    )
+                    is True
+                )
+                raw_prompt474_allow_codex_invocation = (
+                    raw_payload.get("prompt474_allow_codex_invocation") is True
+                    or raw_payload.get("allow_codex_invocation") is True
+                )
+                raw_prompt474_runtime_execution_requested = (
+                    raw_payload.get("prompt474_runtime_execution_requested") is True
+                    or raw_payload.get("request_codex_invocation") is True
                 )
                 normalized_request, validation_error = (
                     _normalize_prompt437_runtime_command_request(raw_payload)
@@ -68857,6 +68964,16 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
         "prompt437_blocked_reason": blocked_reason,
         "prompt437_next_action": next_action,
         "prompt437_runtime_command_request": normalized_request if valid else {},
+        "prompt474_explicit_targeted_fix_allow_present": (
+            raw_prompt474_explicit_targeted_fix_allow_present
+        ),
+        "prompt474_allow_bounded_targeted_fix_execution": (
+            raw_prompt474_allow_bounded_targeted_fix_execution
+        ),
+        "prompt474_allow_codex_invocation": raw_prompt474_allow_codex_invocation,
+        "prompt474_runtime_execution_requested": (
+            raw_prompt474_runtime_execution_requested
+        ),
         "prompt456_runtime_command_explicit_commit_tag_allow_present": (
             normalized_explicit_allow_present if valid else False
         ),
@@ -81508,6 +81625,468 @@ def _build_prompt473_changed_diff_targeted_fix_boundary_state(
             else "manual_review_prompt473_changed_diff_boundary_blocked"
         ),
     }
+
+
+def _prompt474_bool_from_any_existing(
+    payload: Mapping[str, Any],
+    keys: Sequence[str],
+) -> bool:
+    surfaces: list[Mapping[str, Any]] = [payload]
+    for surface_key in (
+        "prompt437_runtime_command_request",
+        "prompt430_runtime_execution_result_payload",
+        "prompt447_runtime_command_json",
+        "prompt448_runtime_command_json",
+        "prompt449_runtime_command_json",
+        "prompt450_runtime_command_json",
+    ):
+        surface = payload.get(surface_key)
+        if isinstance(surface, Mapping):
+            surfaces.append(surface)
+    return any(surface.get(key) is True for surface in surfaces for key in keys)
+
+
+def _prompt474_historical_prompt473_repo_evidence_ready(
+    *,
+    repo_path: str,
+    changed_files: Sequence[str],
+    allowed_tracked_files: Sequence[str],
+) -> bool:
+    if not repo_path:
+        return False
+    allowed = set(_normalize_string_list(allowed_tracked_files, sort_items=False))
+    if any(path not in allowed for path in changed_files):
+        return False
+
+    head_known, head_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("log", "-1", "--pretty=%s"),
+    )
+    current_head_subject = (
+        head_stdout.splitlines()[0].strip()
+        if head_known and head_stdout.splitlines()
+        else ""
+    )
+    subject_ok = bool(
+        current_head_subject == "Prompt473 add changed diff targeted fix boundary"
+        or current_head_subject.startswith("Prompt474 ")
+    )
+
+    tags_known, tags_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("tag", "--points-at", "HEAD"),
+    )
+    tag_at_head = bool(
+        tags_known
+        and _PROMPT474_PROMPT473_TAG_NAME
+        in _normalize_string_list(tags_stdout.splitlines(), sort_items=False)
+    )
+    tag_in_lineage = _prompt471_tag_exists(
+        repo_path=repo_path,
+        tag_name=_PROMPT474_PROMPT473_TAG_NAME,
+    )
+    if tag_in_lineage:
+        ancestor_result = _prompt471_git(
+            repo_path,
+            (
+                "merge-base",
+                "--is-ancestor",
+                f"refs/tags/{_PROMPT474_PROMPT473_TAG_NAME}",
+                "HEAD",
+            ),
+        )
+        tag_in_lineage = (
+            ancestor_result is not None and ancestor_result.returncode == 0
+        )
+
+    return bool(subject_ok or tag_at_head or tag_in_lineage)
+
+
+def _prompt474_prompt473_evidence_bridge(
+    *,
+    payload: Mapping[str, Any],
+    repo_path: str,
+    changed_files: Sequence[str],
+    allowed_tracked_files: Sequence[str],
+) -> dict[str, Any]:
+    current_fields_ready = bool(
+        payload.get("prompt473_changed_diff_fixture_status") == "ready"
+        and payload.get("prompt473_changed_diff_fixture_ready") is True
+        and payload.get("prompt473_prompt469_route_decision")
+        == "success_with_tracked_changes_prepare_targeted_fix"
+        and payload.get("prompt473_prompt470_targeted_fix_required") is True
+        and payload.get("prompt473_prompt470_targeted_fix_request_ready") is True
+        and payload.get("prompt473_targeted_fix_boundary_ready") is True
+        and payload.get("prompt473_targeted_fix_performed") is False
+        and payload.get("prompt473_next_action") == _PROMPT473_NEXT_ACTION
+    )
+    explicit_flags_ready = bool(
+        payload.get("prompt473_changed_diff_boundary_confirmed") is True
+        and payload.get("prompt473_targeted_fix_required_confirmed") is True
+        and payload.get("prompt473_targeted_fix_boundary_ready") is True
+        and payload.get("prompt473_route_decision_success_with_changes") is True
+    )
+    historical_repo_ready = _prompt474_historical_prompt473_repo_evidence_ready(
+        repo_path=repo_path,
+        changed_files=changed_files,
+        allowed_tracked_files=allowed_tracked_files,
+    )
+    if current_fields_ready:
+        evidence_source = "current_fields"
+    elif explicit_flags_ready:
+        evidence_source = "explicit_flags"
+    elif historical_repo_ready:
+        evidence_source = "historical_repo"
+    else:
+        evidence_source = ""
+
+    return {
+        "ready": bool(
+            current_fields_ready
+            or explicit_flags_ready
+            or historical_repo_ready
+        ),
+        "source": evidence_source,
+        "current_fields_ready": current_fields_ready,
+        "explicit_flags_ready": explicit_flags_ready,
+        "historical_repo_ready": historical_repo_ready,
+    }
+
+
+def _prompt474_targeted_fix_prompt_body(
+    *,
+    changed_files: Sequence[str],
+) -> str:
+    files = "\n".join(f"- {path}" for path in changed_files) or "- none"
+    return (
+        "Mode: Repair\n"
+        "Goal: perform one bounded targeted_fix for the Prompt473 changed-diff "
+        "success path and leave only tracked changes needed for the current "
+        "bounded fix.\n"
+        "Allowed files:\n"
+        f"{files}\n"
+        "Forbidden files: docs, tests, generated artifacts, git metadata, "
+        "and any file outside the allowed files list.\n"
+        "Expected artifact/output: concise terminal response describing the "
+        "single targeted fix result.\n"
+        "Allowed validation commands: none.\n"
+        "Explicitly out-of-scope items: tests, commit, tag, push, merge, "
+        "open PRs, remote mutation, failed execution recovery, and additional "
+        "autonomous loops.\n"
+    )
+
+
+def _build_prompt474_bounded_targeted_fix_execution_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    run_root: Path | None = None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    allowed_tracked_files = list(_PROMPT474_ALLOWED_TRACKED_FILES)
+    pre_fix_diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=allowed_tracked_files,
+    )
+    pre_fix_changed_files = _normalize_string_list(
+        pre_fix_diff.get("changed_files"),
+        sort_items=False,
+    )
+    prompt473_evidence = _prompt474_prompt473_evidence_bridge(
+        payload=payload,
+        repo_path=repo_path,
+        changed_files=pre_fix_changed_files,
+        allowed_tracked_files=allowed_tracked_files,
+    )
+    upstream_ready = prompt473_evidence["ready"] is True
+    targeted_fix_required = upstream_ready
+    targeted_fix_request_ready = bool(upstream_ready and targeted_fix_required)
+
+    explicit_allow_present = _prompt474_bool_from_any_existing(
+        payload,
+        ("prompt474_explicit_targeted_fix_allow_present",),
+    )
+    allow_bounded_execution = _prompt474_bool_from_any_existing(
+        payload,
+        ("prompt474_allow_bounded_targeted_fix_execution",),
+    )
+    allow_codex_invocation = _prompt474_bool_from_any_existing(
+        payload,
+        (
+            "prompt474_allow_codex_invocation",
+            "allow_codex_invocation",
+        ),
+    )
+    runtime_execution_requested = _prompt474_bool_from_any_existing(
+        payload,
+        (
+            "prompt474_runtime_execution_requested",
+            "prompt436_request_runtime_execution",
+            "prompt430_execution_requested",
+            "prompt440_prompt436_runtime_execution_requested",
+            "request_codex_invocation",
+        ),
+    )
+    execution_allowed = bool(
+        targeted_fix_request_ready
+        and explicit_allow_present
+        and allow_bounded_execution
+        and allow_codex_invocation
+        and runtime_execution_requested
+    )
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt473_evidence_missing")
+
+    base_state: dict[str, Any] = {
+        "prompt474_schema_version": _PROMPT474_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt474",
+        "prompt474_applicable": True,
+        "prompt474_bounded_targeted_fix_status": "blocked",
+        "prompt474_bounded_targeted_fix_ready": False,
+        "prompt474_upstream_prompt473_evidence_ready": upstream_ready,
+        "prompt474_prompt473_evidence_source": prompt473_evidence["source"],
+        "prompt474_prompt473_current_fields_evidence_ready": prompt473_evidence[
+            "current_fields_ready"
+        ],
+        "prompt474_prompt473_explicit_flags_evidence_ready": prompt473_evidence[
+            "explicit_flags_ready"
+        ],
+        "prompt474_prompt473_historical_repo_evidence_ready": prompt473_evidence[
+            "historical_repo_ready"
+        ],
+        "prompt474_targeted_fix_required": targeted_fix_required,
+        "prompt474_targeted_fix_request_ready": targeted_fix_request_ready,
+        "prompt474_explicit_targeted_fix_allow_present": explicit_allow_present,
+        "prompt474_allow_bounded_targeted_fix_execution": allow_bounded_execution,
+        "prompt474_allow_codex_invocation": allow_codex_invocation,
+        "prompt474_runtime_execution_requested": runtime_execution_requested,
+        "prompt474_targeted_fix_execution_allowed": execution_allowed,
+        "prompt474_codex_invocation_attempted": False,
+        "prompt474_codex_invocation_performed": False,
+        "prompt474_execution_attempted": False,
+        "prompt474_execution_performed": False,
+        "prompt474_execution_returncode": None,
+        "prompt474_execution_returncode_classification": "not_run",
+        "prompt474_stdout_path": "",
+        "prompt474_stderr_path": "",
+        "prompt474_runtime_result_available": False,
+        "prompt474_runtime_result_payload_ready": False,
+        "prompt474_post_fix_diff_evidence_known": False,
+        "prompt474_post_fix_tracked_diff_empty": False,
+        "prompt474_post_fix_changed_files": [],
+        "prompt474_post_fix_untracked_files": [],
+        "prompt474_post_fix_unexpected_files": [],
+        "prompt474_post_fix_review_status": "not_reviewed",
+        "prompt474_post_fix_route_decision_status": "blocked",
+        "prompt474_post_fix_route_decision": "blocked",
+        "prompt474_prompt475_handoff_ready": False,
+        "prompt474_commit_tag_candidate_request_ready": False,
+        "prompt474_retry_targeted_fix_request_ready": False,
+        "prompt474_human_review_required": True,
+        "prompt474_human_intervention_required": True,
+        "prompt474_auto_route_allowed": False,
+        "prompt474_codex_invocation_allowed": execution_allowed,
+        "prompt474_file_creation_allowed": False,
+        "prompt474_tests_allowed": False,
+        "prompt474_commit_tag_allowed": False,
+        "prompt474_push_allowed": False,
+        "prompt474_pr_allowed": False,
+        "prompt474_merge_allowed": False,
+        "prompt474_unbounded_loop_allowed": False,
+        "prompt474_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
+        "prompt474_blocked_reasons": blocked_reasons,
+        "prompt474_next_action": "manual_review_prompt474_targeted_fix_result",
+    }
+
+    if blocked_reasons:
+        return base_state
+
+    if not execution_allowed:
+        base_state.update(
+            {
+                "prompt474_bounded_targeted_fix_status": "blocked",
+                "prompt474_bounded_targeted_fix_ready": False,
+                "prompt474_targeted_fix_required": True,
+                "prompt474_targeted_fix_request_ready": True,
+                "prompt474_targeted_fix_execution_allowed": False,
+                "prompt474_codex_invocation_allowed": False,
+                "prompt474_execution_returncode_classification": "not_run",
+                "prompt474_post_fix_review_status": "blocked",
+                "prompt474_post_fix_route_decision_status": "blocked",
+                "prompt474_post_fix_route_decision": (
+                    "targeted_fix_required_but_not_explicitly_allowed"
+                ),
+                "prompt474_prompt475_handoff_ready": False,
+                "prompt474_commit_tag_candidate_request_ready": False,
+                "prompt474_retry_targeted_fix_request_ready": False,
+                "prompt474_human_review_required": False,
+                "prompt474_human_intervention_required": False,
+                "prompt474_auto_route_allowed": True,
+                "prompt474_blocked_reason": (
+                    "prompt474_explicit_targeted_fix_allow_missing"
+                ),
+                "prompt474_blocked_reasons": [
+                    "prompt474_explicit_targeted_fix_allow_missing"
+                ],
+                "prompt474_next_action": (
+                    "request_explicit_prompt474_targeted_fix_execution"
+                ),
+            }
+        )
+        return base_state
+
+    artifact_root = (run_root or Path.cwd()) / "prompt474_bounded_targeted_fix"
+    stdout_path = artifact_root / "stdout.txt"
+    stderr_path = artifact_root / "stderr.txt"
+    result_path = artifact_root / "result.json"
+    command_argv = ["codex", "exec", "-"]
+    returncode: int | None = None
+    classification = "unknown"
+    runtime_result_payload: dict[str, Any] = {}
+    try:
+        completed = subprocess.run(
+            command_argv,
+            input=_prompt474_targeted_fix_prompt_body(
+                changed_files=allowed_tracked_files,
+            ),
+            text=True,
+            capture_output=True,
+            cwd=repo_path or None,
+            timeout=120,
+            check=False,
+        )
+        returncode = completed.returncode
+        classification = "success" if returncode == 0 else "failed"
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(completed.stdout or "", encoding="utf-8")
+        stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+        runtime_result_payload = {
+            "schema_version": _PROMPT474_SCHEMA_VERSION,
+            "source_prompt": "prompt474",
+            "command_argv": command_argv,
+            "returncode": returncode,
+            "returncode_classification": classification,
+            "stdout_path": str(stdout_path),
+            "stderr_path": str(stderr_path),
+            "bounded": True,
+            "single_invocation_only": True,
+            "tests_allowed": False,
+            "commit_tag_allowed": False,
+            "push_allowed": False,
+            "merge_allowed": False,
+            "pr_allowed": False,
+            "unbounded_loop_allowed": False,
+        }
+        _write_json(result_path, runtime_result_payload)
+    except subprocess.TimeoutExpired as exc:
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(
+            _normalize_text(exc.stdout, default=""),
+            encoding="utf-8",
+        )
+        stderr_path.write_text(
+            _normalize_text(exc.stderr, default="prompt474_codex_invocation_timeout"),
+            encoding="utf-8",
+        )
+        classification = "unknown"
+    except OSError as exc:
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text(str(exc), encoding="utf-8")
+        classification = "unknown"
+
+    post_fix_diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=allowed_tracked_files,
+    )
+    diff_known = post_fix_diff.get("known") is True
+    untracked_files = _normalize_string_list(
+        post_fix_diff.get("untracked_files"),
+        sort_items=False,
+    )
+    unexpected_files = _normalize_string_list(
+        post_fix_diff.get("unexpected_files"),
+        sort_items=False,
+    )
+    failed_or_unsafe_reasons: list[str] = []
+    if classification != "success":
+        failed_or_unsafe_reasons.append("prompt474_targeted_fix_execution_failed")
+    if not runtime_result_payload:
+        failed_or_unsafe_reasons.append("prompt474_runtime_result_missing")
+    if not diff_known:
+        failed_or_unsafe_reasons.append("prompt474_post_fix_diff_evidence_unknown")
+    if post_fix_diff.get("tracked_diff_empty") is True:
+        failed_or_unsafe_reasons.append("prompt474_post_fix_tracked_diff_empty")
+    if untracked_files or unexpected_files:
+        failed_or_unsafe_reasons.append(
+            "prompt474_untracked_or_unexpected_files_present"
+        )
+    clean_success = not failed_or_unsafe_reasons
+    if not clean_success and "prompt474_post_fix_review_blocked" not in failed_or_unsafe_reasons:
+        failed_or_unsafe_reasons.append("prompt474_post_fix_review_blocked")
+
+    base_state.update(
+        {
+            "prompt474_bounded_targeted_fix_status": (
+                "performed" if clean_success else "reviewed_blocked"
+            ),
+            "prompt474_bounded_targeted_fix_ready": clean_success,
+            "prompt474_targeted_fix_execution_allowed": True,
+            "prompt474_codex_invocation_attempted": True,
+            "prompt474_codex_invocation_performed": returncode is not None,
+            "prompt474_execution_attempted": True,
+            "prompt474_execution_performed": returncode is not None,
+            "prompt474_execution_returncode": returncode,
+            "prompt474_execution_returncode_classification": classification,
+            "prompt474_stdout_path": str(stdout_path),
+            "prompt474_stderr_path": str(stderr_path),
+            "prompt474_runtime_result_available": bool(runtime_result_payload),
+            "prompt474_runtime_result_payload_ready": bool(runtime_result_payload),
+            "prompt474_post_fix_diff_evidence_known": diff_known,
+            "prompt474_post_fix_tracked_diff_empty": bool(
+                post_fix_diff.get("tracked_diff_empty") is True
+            ),
+            "prompt474_post_fix_changed_files": _normalize_string_list(
+                post_fix_diff.get("changed_files"),
+                sort_items=False,
+            ),
+            "prompt474_post_fix_untracked_files": untracked_files,
+            "prompt474_post_fix_unexpected_files": unexpected_files,
+            "prompt474_post_fix_review_status": (
+                "reviewed" if clean_success else "reviewed_blocked"
+            ),
+            "prompt474_post_fix_route_decision_status": (
+                "ready" if clean_success else "blocked"
+            ),
+            "prompt474_post_fix_route_decision": (
+                "targeted_fix_success_prepare_commit_tag_candidate"
+                if clean_success
+                else "targeted_fix_result_requires_manual_review_or_retry"
+            ),
+            "prompt474_prompt475_handoff_ready": clean_success,
+            "prompt474_commit_tag_candidate_request_ready": clean_success,
+            "prompt474_retry_targeted_fix_request_ready": bool(
+                not clean_success and diff_known and not untracked_files and not unexpected_files
+            ),
+            "prompt474_human_review_required": not clean_success,
+            "prompt474_human_intervention_required": not clean_success,
+            "prompt474_auto_route_allowed": clean_success,
+            "prompt474_blocked_reason": (
+                failed_or_unsafe_reasons[0] if failed_or_unsafe_reasons else ""
+            ),
+            "prompt474_blocked_reasons": failed_or_unsafe_reasons,
+            "prompt474_next_action": (
+                "prepare_prompt475_targeted_fix_commit_tag_execution_gate"
+                if clean_success
+                else "manual_review_prompt474_targeted_fix_result"
+            ),
+        }
+    )
+    return base_state
 
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -261903,6 +262482,17 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt473_changed_diff_targeted_fix_boundary_payload,
         }
+        prompt474_bounded_targeted_fix_execution_payload = (
+            _build_prompt474_bounded_targeted_fix_execution_state(
+                run_state_payload=run_state_payload,
+                run_root=run_root,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt474_bounded_targeted_fix_execution_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -264293,6 +264883,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt473_changed_diff_targeted_fix_boundary_state=(
                     prompt473_changed_diff_targeted_fix_boundary_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt474_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt474_bounded_targeted_fix_execution_state=(
+                    prompt474_bounded_targeted_fix_execution_payload
                 ),
             )
         )
@@ -267075,6 +267673,11 @@ class PlannedExecutionRunner:
                 default="manual_review_prompt473_changed_diff_boundary_blocked",
             ),
         }
+        for key in _PROMPT474_BOUNDED_TARGETED_FIX_EXECUTION_KEYS:
+            if key in prompt474_bounded_targeted_fix_execution_payload:
+                manifest["decision_summary"][key] = (
+                    prompt474_bounded_targeted_fix_execution_payload.get(key)
+                )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
         manifest["progression_summary"] = {
@@ -274204,6 +274807,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT473_CHANGED_DIFF_TARGETED_FIX_BOUNDARY_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT474_BOUNDED_TARGETED_FIX_EXECUTION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
