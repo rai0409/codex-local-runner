@@ -4247,6 +4247,13 @@ _PROMPT484C_SUCCESS_NEXT_ACTION = (
 _PROMPT484C_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt484c_prompt_generation_request_blocked"
 )
+_PROMPT484D_SCHEMA_VERSION = "prompt484d_existing_loop_bridge_v1"
+_PROMPT484D_SUCCESS_NEXT_ACTION = (
+    "supply_chatgpt_generated_prompt_to_existing_intake"
+)
+_PROMPT484D_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt484d_existing_loop_bridge_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8877,6 +8884,43 @@ _PROMPT484C_SELECTED_ROLE_PROMPT_GENERATION_REQUEST_COMPACT_KEYS: tuple[str, ...
     "prompt484c_source_role_id",
     "prompt484c_source_role_text_non_empty",
     "prompt484c_next_action",
+)
+_PROMPT484D_EXISTING_LOOP_BRIDGE_KEYS: tuple[str, ...] = (
+    "prompt484d_schema_version",
+    "prompt484d_applicable",
+    "prompt484d_existing_loop_bridge_status",
+    "prompt484d_existing_loop_bridge_ready",
+    "prompt484d_prompt484c_request_ready",
+    "prompt484d_prompt484c_source_role_id",
+    "prompt484d_prompt484c_source_role_text_non_empty",
+    "prompt484d_existing_prompt_generation_artifacts_detected",
+    "prompt484d_bridge_target",
+    "prompt484d_chatgpt_prompt_generation_request_ready",
+    "prompt484d_generated_prompt_intake_expected",
+    "prompt484d_codex_execution_bridge_deferred",
+    "prompt484d_codex_invocation_allowed",
+    "prompt484d_codex_invocation_performed",
+    "prompt484d_chatgpt_call_allowed",
+    "prompt484d_chatgpt_call_performed",
+    "prompt484d_runner_prompt_generation_allowed",
+    "prompt484d_runtime_execution_allowed",
+    "prompt484d_git_mutation_allowed",
+    "prompt484d_remote_mutation_allowed",
+    "prompt484d_all_roles_iteration_deferred",
+    "prompt484d_completion_until_done_deferred",
+    "prompt484d_blocked_reason",
+    "prompt484d_blocked_reasons",
+    "prompt484d_next_action",
+)
+_PROMPT484D_EXISTING_LOOP_BRIDGE_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt484d_existing_loop_bridge_status",
+    "prompt484d_existing_loop_bridge_ready",
+    "prompt484d_prompt484c_request_ready",
+    "prompt484d_existing_prompt_generation_artifacts_detected",
+    "prompt484d_bridge_target",
+    "prompt484d_chatgpt_prompt_generation_request_ready",
+    "prompt484d_generated_prompt_intake_expected",
+    "prompt484d_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -87290,6 +87334,110 @@ def _build_prompt484c_selected_role_prompt_generation_request_state(
             _PROMPT484C_SUCCESS_NEXT_ACTION
             if ready
             else _PROMPT484C_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
+def _build_prompt484d_existing_loop_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt484c_request_ready = (
+        payload.get("prompt484c_prompt_generation_request_ready") is True
+    )
+    prompt484c_source_role_id = _normalize_text(
+        payload.get("prompt484c_source_role_id"),
+        default="",
+    )
+    prompt484c_source_role_text_non_empty = (
+        payload.get("prompt484c_source_role_text_non_empty") is True
+    )
+    prompt484c_next_action = _normalize_text(
+        payload.get("prompt484c_next_action"),
+        default="",
+    )
+    prompt484c_ready = bool(
+        prompt484c_request_ready
+        and prompt484c_source_role_id
+        and prompt484c_source_role_text_non_empty
+        and prompt484c_next_action == _PROMPT484C_SUCCESS_NEXT_ACTION
+    )
+
+    prompt377_detected = any(
+        key in payload
+        for key in (
+            "prompt377_chatgpt_prompt_generation_request_status",
+            "prompt377_chatgpt_prompt_generation_request_ready",
+            "prompt377_generated_prompt_intake_contract_ready",
+        )
+    )
+    prompt385_detected = any(
+        key in payload
+        for key in (
+            "prompt385_success_path_next_cycle_handoff_status",
+            "prompt385_next_prompt_generation_request_ready",
+            "prompt385_generated_prompt_intake_expected",
+        )
+    )
+    bridge_target = ""
+    if prompt377_detected:
+        bridge_target = "prompt377_chatgpt_prompt_generation_request"
+    elif prompt385_detected:
+        bridge_target = "prompt385_next_prompt_generation_request"
+    bridge_detected = bool(bridge_target)
+
+    blocked_reasons: list[str] = []
+    if not prompt484c_request_ready:
+        blocked_reasons.append("prompt484c_prompt_generation_request_missing_or_not_ready")
+    if not prompt484c_source_role_id:
+        blocked_reasons.append("prompt484c_source_role_id_missing")
+    if not prompt484c_source_role_text_non_empty:
+        blocked_reasons.append("prompt484c_source_role_text_empty")
+    if prompt484c_next_action != _PROMPT484C_SUCCESS_NEXT_ACTION:
+        blocked_reasons.append("prompt484c_next_action_unexpected")
+    if not bridge_detected:
+        blocked_reasons.append("existing_prompt_generation_bridge_target_missing")
+
+    ready = bool(prompt484c_ready and bridge_detected and not blocked_reasons)
+
+    return {
+        "prompt484d_schema_version": _PROMPT484D_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt484d",
+        "prompt484d_applicable": True,
+        "prompt484d_existing_loop_bridge_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt484d_existing_loop_bridge_ready": ready,
+        "prompt484d_prompt484c_request_ready": prompt484c_request_ready,
+        "prompt484d_prompt484c_source_role_id": prompt484c_source_role_id,
+        "prompt484d_prompt484c_source_role_text_non_empty": (
+            prompt484c_source_role_text_non_empty
+        ),
+        "prompt484d_existing_prompt_generation_artifacts_detected": bridge_detected,
+        "prompt484d_bridge_target": bridge_target,
+        "prompt484d_chatgpt_prompt_generation_request_ready": ready,
+        "prompt484d_generated_prompt_intake_expected": ready,
+        "prompt484d_codex_execution_bridge_deferred": True,
+        "prompt484d_codex_invocation_allowed": False,
+        "prompt484d_codex_invocation_performed": False,
+        "prompt484d_chatgpt_call_allowed": False,
+        "prompt484d_chatgpt_call_performed": False,
+        "prompt484d_runner_prompt_generation_allowed": False,
+        "prompt484d_runtime_execution_allowed": False,
+        "prompt484d_git_mutation_allowed": False,
+        "prompt484d_remote_mutation_allowed": False,
+        "prompt484d_all_roles_iteration_deferred": True,
+        "prompt484d_completion_until_done_deferred": True,
+        "prompt484d_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt484d_blocked_reasons": blocked_reasons,
+        "prompt484d_next_action": (
+            _PROMPT484D_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT484D_BLOCKED_NEXT_ACTION
         ),
     }
 
@@ -267862,6 +268010,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt484c_selected_role_prompt_generation_request_payload,
         }
+        prompt484d_existing_loop_bridge_payload = (
+            _build_prompt484d_existing_loop_bridge_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt484d_existing_loop_bridge_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -273202,6 +273359,11 @@ class PlannedExecutionRunner:
             if key in prompt484c_selected_role_prompt_generation_request_payload:
                 manifest["decision_summary"][key] = (
                     prompt484c_selected_role_prompt_generation_request_payload.get(key)
+                )
+        for key in _PROMPT484D_EXISTING_LOOP_BRIDGE_KEYS:
+            if key in prompt484d_existing_loop_bridge_payload:
+                manifest["decision_summary"][key] = (
+                    prompt484d_existing_loop_bridge_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -280371,6 +280533,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT484C_SELECTED_ROLE_PROMPT_GENERATION_REQUEST_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT484D_EXISTING_LOOP_BRIDGE_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:

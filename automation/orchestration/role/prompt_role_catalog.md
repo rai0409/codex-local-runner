@@ -131,3 +131,49 @@ ChatGPT note:
 Use this role as a prompt-generation basis.
 Do not paste this role directly as the Codex prompt.
 Generate a separate detailed Codex implementation prompt for Prompt484c.
+
+## role: prompt484c_existing_loop_bridge
+
+Use when:
+Prompt484c selected-role prompt generation request is committed and verified, and existing success-loop artifacts prompt377/prompt378/prompt379/prompt385 are present but Prompt484c next_action is not directly consumed by the existing loop.
+
+Goal:
+ChatGPT generates a Codex implementation prompt for Prompt484d.
+The prompt must add a metadata-only bridge from Prompt484c prompt generation request into the existing ChatGPT prompt generation / generated prompt intake / Codex execution bridge loop.
+
+Required constraints:
+- consume Prompt484c fields from run_state
+- bridge Prompt484c request into existing prompt377 or prompt385 prompt-generation request semantics
+- do not invoke Codex
+- do not call ChatGPT inside runner
+- do not execute runtime cycles
+- do not generate the final Codex prompt text inside runner
+- do not run tests
+- do not commit/tag
+- do not push/PR/merge
+- do not modify subprocess timeout logic
+- do not modify Prompt482/Prompt483 behavior
+
+Success:
+- prompt484d_existing_loop_bridge_status="ready"
+- prompt484d_existing_loop_bridge_ready=True
+- prompt484d_prompt484c_request_ready=True
+- prompt484d_existing_prompt_generation_artifacts_detected=True
+- prompt484d_bridge_target is either "prompt377_chatgpt_prompt_generation_request" or "prompt385_next_prompt_generation_request"
+- prompt484d_chatgpt_prompt_generation_request_ready=True
+- prompt484d_generated_prompt_intake_expected=True
+- prompt484d_codex_execution_bridge_deferred=True
+- prompt484d_next_action="supply_chatgpt_generated_prompt_to_existing_intake"
+
+Do not:
+- implement all-role automatic iteration
+- implement completion-until-done
+- implement failed execution recovery
+- invoke Codex
+- mutate git
+- modify unrelated prompt builders
+
+ChatGPT note:
+Use this role as a prompt-generation basis.
+Do not paste this role directly as the Codex prompt.
+Generate a separate detailed Codex implementation prompt for Prompt484d.
