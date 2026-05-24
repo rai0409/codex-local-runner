@@ -989,6 +989,27 @@ PROMPT484_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt484_next_action",
 )
 
+PROMPT484F_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt484f_schema_version",
+    "prompt484f_applicable",
+    "prompt484f_role_driven_cycle_status",
+    "prompt484f_role_driven_cycle_ready",
+    "prompt484f_source_role_id",
+    "prompt484f_prompt484e_handoff_ready",
+    "prompt484f_prompt378_supply_expected",
+    "prompt484f_prompt379_live_execution_expected",
+    "prompt484f_codex_execution_count_limit",
+    "prompt484f_commit_tag_deferred",
+    "prompt484f_auto_commit_allowed",
+    "prompt484f_auto_tag_allowed",
+    "prompt484f_remote_mutation_allowed",
+    "prompt484f_completion_until_done_deferred",
+    "prompt484f_all_roles_iteration_deferred",
+    "prompt484f_blocked_reason",
+    "prompt484f_blocked_reasons",
+    "prompt484f_next_action",
+)
+
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "state",
     "orchestration_state",
@@ -1060,6 +1081,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT482_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT483_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT484_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT484F_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
     "prompt356_stale_blockers_present",
@@ -3749,6 +3771,21 @@ def select_manifest_run_state_summary_compact(
             "prompt484_human_intervention_required",
         }
     )
+    bool_fields.update(
+        {
+            "prompt484f_applicable",
+            "prompt484f_role_driven_cycle_ready",
+            "prompt484f_prompt484e_handoff_ready",
+            "prompt484f_prompt378_supply_expected",
+            "prompt484f_prompt379_live_execution_expected",
+            "prompt484f_commit_tag_deferred",
+            "prompt484f_auto_commit_allowed",
+            "prompt484f_auto_tag_allowed",
+            "prompt484f_remote_mutation_allowed",
+            "prompt484f_completion_until_done_deferred",
+            "prompt484f_all_roles_iteration_deferred",
+        }
+    )
     list_fields.update(
         {
             "prompt480_tags_at_head",
@@ -3794,6 +3831,7 @@ def select_manifest_run_state_summary_compact(
     list_fields.update(
         {
             "prompt484_blocked_reasons",
+            "prompt484f_blocked_reasons",
         }
     )
     int_fields.update(
@@ -3822,6 +3860,7 @@ def select_manifest_run_state_summary_compact(
             "prompt484_expected_invocation_count",
             "prompt484_completed_cycle_count",
             "prompt484_failed_cycle_count",
+            "prompt484f_codex_execution_count_limit",
         }
     )
     int_fields.add("prompt367_returncode")

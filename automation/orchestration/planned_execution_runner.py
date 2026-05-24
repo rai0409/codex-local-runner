@@ -4261,6 +4261,16 @@ _PROMPT484E_SUCCESS_NEXT_ACTION = (
 _PROMPT484E_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt484e_generated_prompt_intake_handoff_blocked"
 )
+_PROMPT484F_SCHEMA_VERSION = (
+    "prompt484f_role_driven_single_codex_execution_cycle_v1"
+)
+_PROMPT484F_SOURCE_ROLE_ID = "prompt484f_role_driven_single_codex_execution_cycle"
+_PROMPT484F_SUCCESS_NEXT_ACTION = (
+    "run_prompt378_prompt379_single_role_driven_cycle"
+)
+_PROMPT484F_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt484f_role_driven_cycle_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8969,6 +8979,46 @@ _PROMPT484E_GENERATED_PROMPT_INTAKE_HANDOFF_COMPACT_KEYS: tuple[str, ...] = (
     "prompt484e_generated_prompt_supplied",
     "prompt484e_codex_execution_bridge_ready",
     "prompt484e_next_action",
+)
+_PROMPT484F_ROLE_DRIVEN_SINGLE_CODEX_EXECUTION_CYCLE_KEYS: tuple[str, ...] = (
+    "prompt484f_schema_version",
+    "prompt484f_applicable",
+    "prompt484f_role_driven_cycle_status",
+    "prompt484f_role_driven_cycle_ready",
+    "prompt484f_source_role_id",
+    "prompt484f_prompt484e_handoff_ready",
+    "prompt484f_prompt378_supply_expected",
+    "prompt484f_prompt379_live_execution_expected",
+    "prompt484f_codex_execution_count_limit",
+    "prompt484f_commit_tag_deferred",
+    "prompt484f_auto_commit_allowed",
+    "prompt484f_auto_tag_allowed",
+    "prompt484f_remote_mutation_allowed",
+    "prompt484f_completion_until_done_deferred",
+    "prompt484f_all_roles_iteration_deferred",
+    "prompt484f_blocked_reason",
+    "prompt484f_blocked_reasons",
+    "prompt484f_next_action",
+)
+_PROMPT484F_ROLE_DRIVEN_SINGLE_CODEX_EXECUTION_CYCLE_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt484f_schema_version",
+    "prompt484f_applicable",
+    "prompt484f_role_driven_cycle_status",
+    "prompt484f_role_driven_cycle_ready",
+    "prompt484f_source_role_id",
+    "prompt484f_prompt484e_handoff_ready",
+    "prompt484f_prompt378_supply_expected",
+    "prompt484f_prompt379_live_execution_expected",
+    "prompt484f_codex_execution_count_limit",
+    "prompt484f_commit_tag_deferred",
+    "prompt484f_auto_commit_allowed",
+    "prompt484f_auto_tag_allowed",
+    "prompt484f_remote_mutation_allowed",
+    "prompt484f_completion_until_done_deferred",
+    "prompt484f_all_roles_iteration_deferred",
+    "prompt484f_blocked_reason",
+    "prompt484f_blocked_reasons",
+    "prompt484f_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -87572,6 +87622,65 @@ def _build_prompt484e_generated_prompt_intake_handoff_state(
             _PROMPT484E_SUCCESS_NEXT_ACTION
             if ready
             else _PROMPT484E_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
+def _build_prompt484f_role_driven_single_codex_execution_cycle_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt484e_handoff_ready = (
+        payload.get("prompt484e_generated_prompt_intake_handoff_ready") is True
+    )
+    prompt484e_next_action = _normalize_text(
+        payload.get("prompt484e_next_action"),
+        default="",
+    )
+
+    blocked_reasons: list[str] = []
+    if not prompt484e_handoff_ready:
+        blocked_reasons.append(
+            "prompt484e_generated_prompt_intake_handoff_readiness_missing_or_not_ready"
+        )
+    if prompt484e_next_action != _PROMPT484E_SUCCESS_NEXT_ACTION:
+        blocked_reasons.append("prompt484e_next_action_unexpected")
+
+    ready = bool(
+        prompt484e_handoff_ready
+        and prompt484e_next_action == _PROMPT484E_SUCCESS_NEXT_ACTION
+        and not blocked_reasons
+    )
+
+    return {
+        "prompt484f_schema_version": _PROMPT484F_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt484f",
+        "prompt484f_applicable": True,
+        "prompt484f_role_driven_cycle_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt484f_role_driven_cycle_ready": ready,
+        "prompt484f_source_role_id": _PROMPT484F_SOURCE_ROLE_ID,
+        "prompt484f_prompt484e_handoff_ready": prompt484e_handoff_ready,
+        "prompt484f_prompt378_supply_expected": True,
+        "prompt484f_prompt379_live_execution_expected": True,
+        "prompt484f_codex_execution_count_limit": 1,
+        "prompt484f_commit_tag_deferred": True,
+        "prompt484f_auto_commit_allowed": False,
+        "prompt484f_auto_tag_allowed": False,
+        "prompt484f_remote_mutation_allowed": False,
+        "prompt484f_completion_until_done_deferred": True,
+        "prompt484f_all_roles_iteration_deferred": True,
+        "prompt484f_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt484f_blocked_reasons": blocked_reasons,
+        "prompt484f_next_action": (
+            _PROMPT484F_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT484F_BLOCKED_NEXT_ACTION
         ),
     }
 
@@ -268162,6 +268271,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt484e_generated_prompt_intake_handoff_payload,
         }
+        prompt484f_role_driven_single_codex_execution_cycle_payload = (
+            _build_prompt484f_role_driven_single_codex_execution_cycle_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt484f_role_driven_single_codex_execution_cycle_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -273512,6 +273630,11 @@ class PlannedExecutionRunner:
             if key in prompt484e_generated_prompt_intake_handoff_payload:
                 manifest["decision_summary"][key] = (
                     prompt484e_generated_prompt_intake_handoff_payload.get(key)
+                )
+        for key in _PROMPT484F_ROLE_DRIVEN_SINGLE_CODEX_EXECUTION_CYCLE_KEYS:
+            if key in prompt484f_role_driven_single_codex_execution_cycle_payload:
+                manifest["decision_summary"][key] = (
+                    prompt484f_role_driven_single_codex_execution_cycle_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -280687,6 +280810,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT484E_GENERATED_PROMPT_INTAKE_HANDOFF_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT484F_ROLE_DRIVEN_SINGLE_CODEX_EXECUTION_CYCLE_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
