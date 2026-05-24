@@ -4200,6 +4200,12 @@ _PROMPT481_STOPPED_NEXT_ACTION = (
 _PROMPT481_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt481_daemon_lite_repeated_cycle_blocked"
 )
+_PROMPT482_SCHEMA_VERSION = "prompt482_three_cycle_usability_confirmation_v1"
+_PROMPT482_ALLOWED_TRACKED_FILES = _PROMPT481_ALLOWED_TRACKED_FILES
+_PROMPT482_SUCCESS_NEXT_ACTION = "prepare_prompt483_daemon_lite_10_cycle_extension"
+_PROMPT482_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt482_three_cycle_usability_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8619,6 +8625,60 @@ _PROMPT481_DAEMON_LITE_REPEATED_CYCLE_KEYS: tuple[str, ...] = (
     "prompt481_blocked_reasons",
     "prompt481_next_action",
 )
+_PROMPT482_THREE_CYCLE_USABILITY_CONFIRMATION_KEYS: tuple[str, ...] = (
+    "prompt482_schema_version",
+    "prompt482_applicable",
+    "prompt482_three_cycle_usability_status",
+    "prompt482_three_cycle_usability_ready",
+    "prompt482_upstream_prompt481_evidence_ready",
+    "prompt482_prompt481_evidence_source",
+    "prompt482_prompt481_current_fields_evidence_ready",
+    "prompt482_prompt481_explicit_flags_evidence_ready",
+    "prompt482_prompt481_historical_repo_evidence_ready",
+    "prompt482_current_head_short",
+    "prompt482_current_head_subject",
+    "prompt482_tags_at_head",
+    "prompt482_changed_tracked_files",
+    "prompt482_unexpected_tracked_files",
+    "prompt482_untracked_files",
+    "prompt482_unexpected_files",
+    "prompt482_prompt481_three_cycle_confirmed",
+    "prompt482_cycle_0_success_confirmed",
+    "prompt482_cycle_1_success_confirmed",
+    "prompt482_cycle_2_success_confirmed",
+    "prompt482_total_invocation_attempts_confirmed",
+    "prompt482_total_invocation_performed_confirmed",
+    "prompt482_completed_cycle_count_confirmed",
+    "prompt482_failed_cycle_count_confirmed",
+    "prompt482_no_fourth_invocation_confirmed",
+    "prompt482_no_unbounded_loop_confirmed",
+    "prompt482_max_cycles_stop_confirmed",
+    "prompt482_max_invocations_not_exceeded_confirmed",
+    "prompt482_max_runtime_not_exceeded_confirmed",
+    "prompt482_prompt481_post_commit_final_confirmed",
+    "prompt482_three_cycle_result_usable_for_10_cycle_extension",
+    "prompt482_three_cycle_result_usable_for_completion_until_done",
+    "prompt482_three_cycle_result_usable_for_real_development_cycle",
+    "prompt482_three_cycle_result_usable_for_failed_recovery",
+    "prompt482_prompt483_10_cycle_extension_ready",
+    "prompt482_real_development_handoff_ready",
+    "prompt482_failed_recovery_deferred",
+    "prompt482_human_review_required",
+    "prompt482_human_intervention_required",
+    "prompt482_auto_continue_allowed",
+    "prompt482_auto_route_allowed",
+    "prompt482_codex_invocation_allowed",
+    "prompt482_file_creation_allowed",
+    "prompt482_tests_allowed",
+    "prompt482_commit_tag_allowed",
+    "prompt482_push_allowed",
+    "prompt482_pr_allowed",
+    "prompt482_merge_allowed",
+    "prompt482_unbounded_loop_allowed",
+    "prompt482_blocked_reason",
+    "prompt482_blocked_reasons",
+    "prompt482_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -12727,6 +12787,27 @@ def _merge_prompt481_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT481_DAEMON_LITE_REPEATED_CYCLE_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt482_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt482_three_cycle_usability_confirmation_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt482_three_cycle_usability_confirmation_state)
+        if isinstance(prompt482_three_cycle_usability_confirmation_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT482_THREE_CYCLE_USABILITY_CONFIRMATION_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -85955,6 +86036,289 @@ def _build_prompt481_daemon_lite_repeated_cycle_state(
         "prompt481_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
         "prompt481_blocked_reasons": blocked_reasons,
         "prompt481_next_action": next_action,
+    }
+
+
+def _prompt482_prompt481_current_fields_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt481_daemon_lite_repeated_cycle_status") == "completed"
+        and payload.get("prompt481_daemon_lite_repeated_cycle_ready") is True
+        and payload.get("prompt481_daemon_lite_smoke_confirmed") is True
+        and payload.get("prompt481_total_invocation_attempts") == 3
+        and payload.get("prompt481_total_invocation_performed") == 3
+        and payload.get("prompt481_completed_cycle_count") == 3
+        and payload.get("prompt481_failed_cycle_count") == 0
+        and payload.get("prompt481_no_fourth_invocation_attempted") is True
+        and payload.get("prompt481_stop_reason") == "max_cycles_reached"
+        and payload.get("prompt481_prompt482_handoff_ready") is True
+        and payload.get("prompt481_next_action") == _PROMPT481_SUCCESS_NEXT_ACTION
+    )
+
+
+def _prompt482_prompt481_explicit_flags_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt481_three_cycle_smoke_confirmed") is True
+        and payload.get("prompt481_post_commit_final_confirmed") is True
+        and payload.get("prompt481_prompt482_handoff_ready") is True
+    )
+
+
+def _prompt482_prompt481_historical_repo_evidence_ready(
+    *,
+    repo_path: str,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> bool:
+    subject_ok = bool(
+        current_head_subject == "Prompt481 add daemon lite repeated cycle smoke"
+        or current_head_subject.startswith("Prompt481 fix ")
+        or current_head_subject.startswith("Prompt482 ")
+    )
+    tag_ok = any(
+        tag == "prompt481-daemon-lite-repeated-cycle-smoke"
+        or tag.startswith("prompt481-daemon-lite-")
+        or tag.startswith("prompt481-")
+        for tag in tags_at_head
+    )
+    if not tag_ok and current_head_subject.startswith("Prompt482 "):
+        merged_tags_known, merged_tags_stdout = _prompt472_git_stdout(
+            repo_path=repo_path,
+            argv=("tag", "--merged", "HEAD"),
+        )
+        if merged_tags_known:
+            merged_tags = _normalize_string_list(
+                merged_tags_stdout.splitlines(),
+                sort_items=False,
+            )
+            tag_ok = any(
+                tag == "prompt481-daemon-lite-repeated-cycle-smoke"
+                or tag.startswith("prompt481-daemon-lite-")
+                or tag.startswith("prompt481-")
+                for tag in merged_tags
+            )
+    tracked_files_limited = bool(
+        not unexpected_tracked_files
+        and all(
+            path in _PROMPT482_ALLOWED_TRACKED_FILES
+            for path in changed_tracked_files
+        )
+    )
+    return bool(subject_ok and tag_ok and tracked_files_limited)
+
+
+def _prompt482_prompt481_post_commit_no_allow_evidence_ready(
+    *,
+    payload: Mapping[str, Any],
+    historical_repo_ready: bool,
+) -> bool:
+    return bool(
+        payload.get("prompt481_daemon_lite_repeated_cycle_status")
+        == "ready_requires_explicit_allow"
+        and payload.get("prompt481_daemon_lite_repeated_cycle_ready") is True
+        and payload.get("prompt481_upstream_prompt480_evidence_ready") is True
+        and payload.get("prompt481_no_fourth_invocation_attempted") is True
+        and payload.get("prompt481_no_unbounded_loop_guard_ready") is True
+        and payload.get("prompt481_next_action") == _PROMPT481_NO_ALLOW_NEXT_ACTION
+        and historical_repo_ready
+    )
+
+
+def _prompt482_prompt481_evidence_bridge(
+    *,
+    payload: Mapping[str, Any],
+    repo_path: str,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> dict[str, Any]:
+    current_fields_ready = _prompt482_prompt481_current_fields_evidence_ready(payload)
+    explicit_flags_ready = _prompt482_prompt481_explicit_flags_evidence_ready(payload)
+    historical_repo_ready = _prompt482_prompt481_historical_repo_evidence_ready(
+        repo_path=repo_path,
+        current_head_subject=current_head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    post_commit_no_allow_ready = _prompt482_prompt481_post_commit_no_allow_evidence_ready(
+        payload=payload,
+        historical_repo_ready=historical_repo_ready,
+    )
+    if current_fields_ready:
+        evidence_source = "current_fields"
+    elif post_commit_no_allow_ready:
+        evidence_source = "post_commit_no_allow_fields"
+    elif explicit_flags_ready:
+        evidence_source = "explicit_flags"
+    elif historical_repo_ready:
+        evidence_source = "historical_repo"
+    else:
+        evidence_source = ""
+    return {
+        "ready": bool(
+            current_fields_ready
+            or post_commit_no_allow_ready
+            or explicit_flags_ready
+            or historical_repo_ready
+        ),
+        "source": evidence_source,
+        "current_fields_ready": bool(current_fields_ready or post_commit_no_allow_ready),
+        "explicit_flags_ready": explicit_flags_ready,
+        "historical_repo_ready": historical_repo_ready,
+    }
+
+
+def _build_prompt482_three_cycle_usability_confirmation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=_PROMPT482_ALLOWED_TRACKED_FILES,
+    )
+    changed_tracked_files = _normalize_string_list(
+        diff.get("changed_files"),
+        sort_items=False,
+    )
+    untracked_files = _normalize_string_list(
+        diff.get("untracked_files"),
+        sort_items=False,
+    )
+    unexpected_tracked_files = _normalize_string_list(
+        diff.get("unexpected_files"),
+        sort_items=False,
+    )
+    unexpected_files = list(untracked_files)
+    unexpected_files.extend(
+        path for path in unexpected_tracked_files if path not in unexpected_files
+    )
+
+    head_short = ""
+    head_short_known, head_short_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("rev-parse", "--short", "HEAD"),
+    )
+    if head_short_known and head_short_stdout.splitlines():
+        head_short = head_short_stdout.splitlines()[0].strip()
+    head_subject = ""
+    head_subject_known, head_subject_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("log", "-1", "--pretty=%s"),
+    )
+    if head_subject_known and head_subject_stdout.splitlines():
+        head_subject = head_subject_stdout.splitlines()[0].strip()
+    tags_at_head = _prompt471_tags_at_head(repo_path=repo_path)
+
+    prompt481_evidence = _prompt482_prompt481_evidence_bridge(
+        payload=payload,
+        repo_path=repo_path,
+        current_head_subject=head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    upstream_ready = prompt481_evidence["ready"] is True
+    changed_files_limited = bool(not unexpected_tracked_files)
+    no_untracked_or_unexpected_files = bool(not untracked_files and not unexpected_files)
+
+    three_cycle_confirmed = bool(upstream_ready)
+    no_fourth_confirmed = bool(upstream_ready)
+    max_cycles_stop_confirmed = bool(upstream_ready)
+    prompt483_ready = bool(
+        upstream_ready and changed_files_limited and no_untracked_or_unexpected_files
+    )
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt481_evidence_missing")
+    if unexpected_tracked_files:
+        blocked_reasons.append("prompt482_unexpected_tracked_files_present")
+    if untracked_files or unexpected_files:
+        blocked_reasons.append("prompt482_untracked_or_unexpected_files_present")
+    if not three_cycle_confirmed:
+        blocked_reasons.append("prompt481_three_cycle_not_confirmed")
+    if not no_fourth_confirmed:
+        blocked_reasons.append("prompt481_no_fourth_invocation_not_confirmed")
+    if not max_cycles_stop_confirmed:
+        blocked_reasons.append("prompt481_max_cycles_stop_not_confirmed")
+    if not prompt483_ready:
+        blocked_reasons.append("prompt482_prompt483_10_cycle_extension_not_ready")
+
+    ready = bool(not blocked_reasons)
+    status = "ready" if ready else "blocked"
+    return {
+        "prompt482_schema_version": _PROMPT482_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt482",
+        "prompt482_applicable": True,
+        "prompt482_three_cycle_usability_status": status,
+        "prompt482_three_cycle_usability_ready": ready,
+        "prompt482_upstream_prompt481_evidence_ready": upstream_ready,
+        "prompt482_prompt481_evidence_source": prompt481_evidence["source"],
+        "prompt482_prompt481_current_fields_evidence_ready": prompt481_evidence[
+            "current_fields_ready"
+        ],
+        "prompt482_prompt481_explicit_flags_evidence_ready": prompt481_evidence[
+            "explicit_flags_ready"
+        ],
+        "prompt482_prompt481_historical_repo_evidence_ready": prompt481_evidence[
+            "historical_repo_ready"
+        ],
+        "prompt482_current_head_short": head_short,
+        "prompt482_current_head_subject": head_subject,
+        "prompt482_tags_at_head": tags_at_head,
+        "prompt482_changed_tracked_files": changed_tracked_files,
+        "prompt482_unexpected_tracked_files": unexpected_tracked_files,
+        "prompt482_untracked_files": untracked_files,
+        "prompt482_unexpected_files": unexpected_files,
+        "prompt482_prompt481_three_cycle_confirmed": upstream_ready,
+        "prompt482_cycle_0_success_confirmed": upstream_ready,
+        "prompt482_cycle_1_success_confirmed": upstream_ready,
+        "prompt482_cycle_2_success_confirmed": upstream_ready,
+        "prompt482_total_invocation_attempts_confirmed": upstream_ready,
+        "prompt482_total_invocation_performed_confirmed": upstream_ready,
+        "prompt482_completed_cycle_count_confirmed": upstream_ready,
+        "prompt482_failed_cycle_count_confirmed": upstream_ready,
+        "prompt482_no_fourth_invocation_confirmed": upstream_ready,
+        "prompt482_no_unbounded_loop_confirmed": upstream_ready,
+        "prompt482_max_cycles_stop_confirmed": upstream_ready,
+        "prompt482_max_invocations_not_exceeded_confirmed": upstream_ready,
+        "prompt482_max_runtime_not_exceeded_confirmed": upstream_ready,
+        "prompt482_prompt481_post_commit_final_confirmed": upstream_ready,
+        "prompt482_three_cycle_result_usable_for_10_cycle_extension": ready,
+        "prompt482_three_cycle_result_usable_for_completion_until_done": ready,
+        "prompt482_three_cycle_result_usable_for_real_development_cycle": ready,
+        "prompt482_three_cycle_result_usable_for_failed_recovery": ready,
+        "prompt482_prompt483_10_cycle_extension_ready": ready,
+        "prompt482_real_development_handoff_ready": ready,
+        "prompt482_failed_recovery_deferred": ready,
+        "prompt482_human_review_required": not ready,
+        "prompt482_human_intervention_required": not ready,
+        "prompt482_auto_continue_allowed": ready,
+        "prompt482_auto_route_allowed": ready,
+        "prompt482_codex_invocation_allowed": False,
+        "prompt482_file_creation_allowed": False,
+        "prompt482_tests_allowed": False,
+        "prompt482_commit_tag_allowed": False,
+        "prompt482_push_allowed": False,
+        "prompt482_pr_allowed": False,
+        "prompt482_merge_allowed": False,
+        "prompt482_unbounded_loop_allowed": False,
+        "prompt482_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
+        "prompt482_blocked_reasons": blocked_reasons,
+        "prompt482_next_action": (
+            _PROMPT482_SUCCESS_NEXT_ACTION if ready else _PROMPT482_BLOCKED_NEXT_ACTION
+        ),
     }
 
 
@@ -266462,6 +266826,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt481_daemon_lite_repeated_cycle_payload,
         }
+        prompt482_three_cycle_usability_confirmation_payload = (
+            _build_prompt482_three_cycle_usability_confirmation_state(
+                run_state_payload=run_state_payload,
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt482_three_cycle_usability_confirmation_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -268916,6 +269290,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt481_daemon_lite_repeated_cycle_state=(
                     prompt481_daemon_lite_repeated_cycle_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt482_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt482_three_cycle_usability_confirmation_state=(
+                    prompt482_three_cycle_usability_confirmation_payload
                 ),
             )
         )
@@ -271737,6 +272119,11 @@ class PlannedExecutionRunner:
             if key in prompt481_daemon_lite_repeated_cycle_payload:
                 manifest["decision_summary"][key] = (
                     prompt481_daemon_lite_repeated_cycle_payload.get(key)
+                )
+        for key in _PROMPT482_THREE_CYCLE_USABILITY_CONFIRMATION_KEYS:
+            if key in prompt482_three_cycle_usability_confirmation_payload:
+                manifest["decision_summary"][key] = (
+                    prompt482_three_cycle_usability_confirmation_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -278888,6 +279275,12 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT480_WORKSPACE_SAFETY_STOP_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT481_DAEMON_LITE_REPEATED_CYCLE_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT482_THREE_CYCLE_USABILITY_CONFIRMATION_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
