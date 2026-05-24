@@ -226,3 +226,62 @@ ChatGPT note:
 Use this role as a prompt-generation basis.
 Do not paste this role directly as the Codex prompt.
 Generate a separate detailed Codex implementation prompt for Prompt484e.
+
+## role: prompt484f_role_driven_single_codex_execution_cycle
+
+Use when:
+Prompt484e is committed and verified, Prompt378 supplied generated prompt intake is verified, and the next step is to run one real role-driven Codex implementation cycle through the existing Prompt378→Prompt379 bridge.
+
+Goal:
+ChatGPT generates one Prompt378-valid Codex implementation prompt from a selected role.
+The generated prompt must be supplied to Prompt378 and executed by Prompt379 through live transport.
+
+Required constraints:
+- use existing role catalog as the source of task intent
+- generate a Prompt378-valid Codex prompt outside the runner
+- supply the generated prompt through --prompt378-generated-prompt-path
+- execute through Prompt379 live transport
+- allow exactly one Codex execution
+- require clean worktree before execution
+- after execution, capture changed files and route to review
+- do not auto-commit
+- do not auto-tag
+- do not push/PR/merge
+- do not implement completion-until-done yet
+- do not implement all-role automatic iteration yet
+
+Success:
+- prompt484f_role_driven_cycle_status="ready"
+- prompt484f_role_driven_cycle_ready=True
+- prompt484f_source_role_id is non-empty
+- prompt484f_generated_prompt_for_prompt378_ready=True
+- prompt484f_prompt378_supply_expected=True
+- prompt484f_prompt379_live_execution_expected=True
+- prompt484f_codex_execution_count_limit=1
+- prompt484f_commit_tag_deferred=True
+- prompt484f_next_action="generate_prompt378_valid_codex_prompt_for_selected_role"
+
+Do not:
+- bypass Prompt378 validation
+- bypass Prompt379 tracked diff guard
+- auto-commit
+- auto-tag
+- push/PR/merge
+- run tests unless the generated prompt explicitly allows only py_compile
+- modify Prompt482/Prompt483 behavior
+- modify subprocess timeout behavior
+
+ChatGPT note:
+Use this role as the basis for generating one concrete Prompt378-valid Codex prompt.
+The generated prompt must include literal validator tokens:
+- success-path-only
+- local-only
+- no remote mutation
+- no tests
+- allowed files
+- forbidden files
+- expected artifacts or fields
+- expected artifact or output
+- validation commands
+- out of scope
+- next_action
