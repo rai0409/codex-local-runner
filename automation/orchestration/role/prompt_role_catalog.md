@@ -87,3 +87,47 @@ ChatGPT note:
 Use this role as a prompt-generation basis.
 Do not paste this role directly as the Codex prompt.
 Generate a separate detailed Codex implementation prompt for Prompt484b.
+
+## role: selected_role_prompt_generation_request
+
+Use when:
+Prompt484b role selection layer is committed and verified, and the next step is to expose a metadata-only ChatGPT prompt generation request from the selected role.
+
+Goal:
+ChatGPT generates a Codex implementation prompt for Prompt484c.
+The prompt must add a metadata-only prompt generation request packet that uses the selected role id/text from Prompt484b and exposes what ChatGPT should generate next.
+
+Required constraints:
+- consume Prompt484b selected role metadata from run_state
+- do not generate the Codex prompt inside runner
+- do not invoke Codex
+- do not execute runtime cycles
+- do not run tests
+- do not commit/tag
+- do not push/PR/merge
+- do not implement all-role iteration yet
+
+Success:
+- prompt484c_prompt_generation_request_status="ready"
+- prompt484c_prompt_generation_request_ready=True
+- prompt484c_source_role_id="role_to_prompt_selection_layer"
+- prompt484c_source_role_text_non_empty=True
+- prompt484c_chatgpt_generation_required=True
+- prompt484c_runner_generation_allowed=False
+- prompt484c_codex_prompt_ready=False
+- prompt484c_next_action="chatgpt_generate_codex_prompt_from_prompt484c_request"
+
+Do not:
+- implement Codex invocation
+- implement prompt text generation by runner
+- implement all-role automatic iteration
+- implement completion-until-done
+- modify Prompt482/Prompt483 behavior
+- modify Codex one-shot timeout behavior
+- modify subprocess timeout logic
+- implement unrelated fixes
+
+ChatGPT note:
+Use this role as a prompt-generation basis.
+Do not paste this role directly as the Codex prompt.
+Generate a separate detailed Codex implementation prompt for Prompt484c.

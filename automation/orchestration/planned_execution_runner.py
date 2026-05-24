@@ -4238,6 +4238,15 @@ _PROMPT484B_SUCCESS_NEXT_ACTION = (
 _PROMPT484B_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt484b_role_selection_blocked"
 )
+_PROMPT484C_SCHEMA_VERSION = (
+    "prompt484c_selected_role_prompt_generation_request_v1"
+)
+_PROMPT484C_SUCCESS_NEXT_ACTION = (
+    "chatgpt_generate_codex_prompt_from_prompt484c_request"
+)
+_PROMPT484C_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt484c_prompt_generation_request_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8839,6 +8848,36 @@ _PROMPT484B_ROLE_SELECTION_LAYER_COMPACT_KEYS: tuple[str, ...] = (
     "prompt484b_selected_role_found",
     "prompt484b_next_action",
 )
+_PROMPT484C_SELECTED_ROLE_PROMPT_GENERATION_REQUEST_KEYS: tuple[str, ...] = (
+    "prompt484c_schema_version",
+    "prompt484c_applicable",
+    "prompt484c_prompt_generation_request_status",
+    "prompt484c_prompt_generation_request_ready",
+    "prompt484c_source_role_id",
+    "prompt484c_source_role_text",
+    "prompt484c_source_role_text_non_empty",
+    "prompt484c_source_role_ready",
+    "prompt484c_chatgpt_generation_required",
+    "prompt484c_runner_generation_allowed",
+    "prompt484c_codex_prompt_ready",
+    "prompt484c_codex_prompt_artifact_path",
+    "prompt484c_codex_invocation_allowed",
+    "prompt484c_runtime_execution_allowed",
+    "prompt484c_git_mutation_allowed",
+    "prompt484c_remote_mutation_allowed",
+    "prompt484c_all_roles_iteration_deferred",
+    "prompt484c_completion_until_done_deferred",
+    "prompt484c_blocked_reason",
+    "prompt484c_blocked_reasons",
+    "prompt484c_next_action",
+)
+_PROMPT484C_SELECTED_ROLE_PROMPT_GENERATION_REQUEST_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt484c_prompt_generation_request_status",
+    "prompt484c_prompt_generation_request_ready",
+    "prompt484c_source_role_id",
+    "prompt484c_source_role_text_non_empty",
+    "prompt484c_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -13031,6 +13070,32 @@ def _merge_prompt484b_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT484B_ROLE_SELECTION_LAYER_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt484c_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt484c_selected_role_prompt_generation_request_state: (
+        Mapping[str, Any] | None
+    ),
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt484c_selected_role_prompt_generation_request_state)
+        if isinstance(
+            prompt484c_selected_role_prompt_generation_request_state,
+            Mapping,
+        )
+        else {}
+    )
+    for key in _PROMPT484C_SELECTED_ROLE_PROMPT_GENERATION_REQUEST_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -87135,6 +87200,96 @@ def _build_prompt484b_role_selection_layer_state(
             _PROMPT484B_SUCCESS_NEXT_ACTION
             if ready
             else _PROMPT484B_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
+def _build_prompt484c_selected_role_prompt_generation_request_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt484b_status = _normalize_text(
+        payload.get("prompt484b_role_selection_status"),
+        default="",
+    )
+    prompt484b_ready = payload.get("prompt484b_role_selection_ready") is True
+    source_role_id = _normalize_text(
+        payload.get("prompt484b_selected_role_id"),
+        default="",
+    )
+    source_role_found = payload.get("prompt484b_selected_role_found") is True
+    source_role_text = _normalize_text(
+        payload.get("prompt484b_selected_role_text"),
+        default="",
+    )
+    source_role_text_non_empty = (
+        payload.get("prompt484b_selected_role_text_non_empty") is True
+        and bool(source_role_text.strip())
+    )
+    prompt484b_next_action = _normalize_text(
+        payload.get("prompt484b_next_action"),
+        default="",
+    )
+
+    blocked_reasons: list[str] = []
+    if prompt484b_status != "ready":
+        blocked_reasons.append("prompt484b_role_selection_status_not_ready")
+    if not prompt484b_ready:
+        blocked_reasons.append("prompt484b_role_selection_not_ready")
+    if not source_role_id:
+        blocked_reasons.append("prompt484b_selected_role_id_missing")
+    if not source_role_found:
+        blocked_reasons.append("prompt484b_selected_role_not_found")
+    if not source_role_text_non_empty:
+        blocked_reasons.append("prompt484b_selected_role_text_empty")
+    if (
+        prompt484b_ready
+        and prompt484b_next_action
+        and prompt484b_next_action != _PROMPT484B_SUCCESS_NEXT_ACTION
+    ):
+        blocked_reasons.append("prompt484b_next_action_unexpected")
+
+    ready = bool(
+        prompt484b_status == "ready"
+        and prompt484b_ready
+        and source_role_id
+        and source_role_found
+        and source_role_text_non_empty
+        and not blocked_reasons
+    )
+
+    return {
+        "prompt484c_schema_version": _PROMPT484C_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt484c",
+        "prompt484c_applicable": True,
+        "prompt484c_prompt_generation_request_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt484c_prompt_generation_request_ready": ready,
+        "prompt484c_source_role_id": source_role_id,
+        "prompt484c_source_role_text": source_role_text,
+        "prompt484c_source_role_text_non_empty": source_role_text_non_empty,
+        "prompt484c_source_role_ready": ready,
+        "prompt484c_chatgpt_generation_required": True,
+        "prompt484c_runner_generation_allowed": False,
+        "prompt484c_codex_prompt_ready": False,
+        "prompt484c_codex_prompt_artifact_path": "",
+        "prompt484c_codex_invocation_allowed": False,
+        "prompt484c_runtime_execution_allowed": False,
+        "prompt484c_git_mutation_allowed": False,
+        "prompt484c_remote_mutation_allowed": False,
+        "prompt484c_all_roles_iteration_deferred": True,
+        "prompt484c_completion_until_done_deferred": True,
+        "prompt484c_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt484c_blocked_reasons": blocked_reasons,
+        "prompt484c_next_action": (
+            _PROMPT484C_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT484C_BLOCKED_NEXT_ACTION
         ),
     }
 
@@ -267698,6 +267853,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt484b_role_selection_layer_payload,
         }
+        prompt484c_selected_role_prompt_generation_request_payload = (
+            _build_prompt484c_selected_role_prompt_generation_request_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt484c_selected_role_prompt_generation_request_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -270184,6 +270348,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt484b_role_selection_layer_state=(
                     prompt484b_role_selection_layer_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt484c_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt484c_selected_role_prompt_generation_request_state=(
+                    prompt484c_selected_role_prompt_generation_request_payload
                 ),
             )
         )
@@ -273025,6 +273197,11 @@ class PlannedExecutionRunner:
             if key in prompt484b_role_selection_layer_payload:
                 manifest["decision_summary"][key] = (
                     prompt484b_role_selection_layer_payload.get(key)
+                )
+        for key in _PROMPT484C_SELECTED_ROLE_PROMPT_GENERATION_REQUEST_KEYS:
+            if key in prompt484c_selected_role_prompt_generation_request_payload:
+                manifest["decision_summary"][key] = (
+                    prompt484c_selected_role_prompt_generation_request_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -280191,6 +280368,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT484B_ROLE_SELECTION_LAYER_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT484C_SELECTED_ROLE_PROMPT_GENERATION_REQUEST_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
