@@ -1,31 +1,37 @@
 # Prompt Role Catalog
 
-## role: daemon_lite_10_cycle_extension
+## role: daemon_lite_10_cycle_no_allow_boundary
 
 Use when:
-Prompt482 three-cycle usability confirmation is complete, Prompt483 role catalog reader handoff is complete, and the next step is to extend the existing daemon-lite smoke from 3 cycles to 10 cycles.
+Prompt482 three-cycle usability confirmation is complete, Prompt483 role catalog reader handoff is complete, and the next step is to add only the no-allow boundary for a bounded 10-cycle daemon-lite smoke.
 
 Goal:
-ChatGPT generates a Codex implementation prompt for Prompt484.
-The prompt must implement a bounded daemon-lite 10-cycle smoke based on the existing Prompt481 repeated-cycle smoke pattern.
+ChatGPT generates a Codex implementation prompt for Prompt484a.
+The prompt must add metadata/run_state support for the 10-cycle daemon-lite no-allow boundary only.
 
 Required constraints:
 - requested_cycle_count=10
 - max_cycles=10
 - max_invocations=10
 - max_runtime_seconds=1800
+- no Codex/runtime cycle execution in this role
+- no explicit-allow execution in this role
 
 Success:
-- cycle_0 through cycle_9 are attempted and performed
-- total_invocation_attempts=10
-- total_invocation_performed=10
-- no_11th_invocation_attempted=True
-- stop_reason="max_cycles_reached"
+- prompt484_daemon_lite_10_cycle_status="ready_requires_explicit_allow"
+- prompt484_daemon_lite_10_cycle_ready=True
+- prompt484_total_invocation_attempts=0
+- prompt484_total_invocation_performed=0
+- prompt484_no_11th_invocation_attempted=True
+- prompt484_next_action="request_explicit_prompt484_daemon_lite_10_cycle_smoke_execution"
 
 Do not:
+- implement explicit 10-cycle execution
 - implement real development task selection
 - implement failed execution recovery
 - implement completion-until-done
+- modify Codex one-shot timeout behavior
+- modify subprocess timeout logic
 - commit/tag
 - run tests
 - push/PR/merge
@@ -35,4 +41,4 @@ Do not:
 ChatGPT note:
 Use this role as a prompt-generation basis.
 Do not paste this role directly as the Codex prompt.
-Generate a separate detailed Codex implementation prompt for Prompt484.
+Generate a separate detailed Codex implementation prompt for Prompt484a.
