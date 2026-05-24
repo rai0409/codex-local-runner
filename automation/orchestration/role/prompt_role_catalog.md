@@ -177,3 +177,52 @@ ChatGPT note:
 Use this role as a prompt-generation basis.
 Do not paste this role directly as the Codex prompt.
 Generate a separate detailed Codex implementation prompt for Prompt484d.
+
+## role: prompt484d_generated_prompt_intake_handoff
+
+Use when:
+Prompt484d existing-loop bridge is committed and verified, and the next step is to supply a ChatGPT-generated Codex prompt into the existing prompt378 generated prompt intake path.
+
+Goal:
+ChatGPT generates a Codex implementation prompt for Prompt484e.
+The prompt must add a metadata-only handoff that connects Prompt484d bridge output to the existing prompt378 generated prompt intake contract.
+
+Required constraints:
+- consume Prompt484d fields from run_state
+- require prompt484d_existing_loop_bridge_ready=True
+- require prompt484d_next_action="supply_chatgpt_generated_prompt_to_existing_intake"
+- expose the expected generated prompt input path/field for prompt378
+- do not generate the final Codex prompt text inside runner
+- do not invoke Codex
+- do not call ChatGPT inside runner
+- do not execute runtime cycles
+- do not run tests
+- do not commit/tag
+- do not push/PR/merge
+- do not implement all-role automatic iteration yet
+
+Success:
+- prompt484e_generated_prompt_intake_handoff_status="ready"
+- prompt484e_generated_prompt_intake_handoff_ready=True
+- prompt484e_prompt484d_bridge_ready=True
+- prompt484e_bridge_target="prompt377_chatgpt_prompt_generation_request"
+- prompt484e_generated_prompt_intake_target="prompt378_chatgpt_generated_prompt_intake"
+- prompt484e_expected_generated_prompt_path_field="prompt378_generated_prompt_path"
+- prompt484e_generated_prompt_supplied=False
+- prompt484e_codex_execution_bridge_ready=False
+- prompt484e_next_action="supply_generated_prompt_file_for_prompt378_intake"
+
+Do not:
+- implement Codex invocation
+- implement ChatGPT invocation
+- implement completion-until-done
+- implement failed execution recovery
+- mutate git
+- modify subprocess timeout logic
+- modify Prompt482/Prompt483 behavior
+- modify unrelated prompt builders
+
+ChatGPT note:
+Use this role as a prompt-generation basis.
+Do not paste this role directly as the Codex prompt.
+Generate a separate detailed Codex implementation prompt for Prompt484e.
