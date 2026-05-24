@@ -955,6 +955,40 @@ PROMPT483_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt483_next_action",
 )
 
+PROMPT484_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt484_schema_version",
+    "prompt484_applicable",
+    "prompt484_daemon_lite_10_cycle_status",
+    "prompt484_daemon_lite_10_cycle_ready",
+    "prompt484_upstream_prompt483_evidence_ready",
+    "prompt484_requested_cycle_count",
+    "prompt484_max_cycles",
+    "prompt484_max_invocations",
+    "prompt484_max_runtime_seconds",
+    "prompt484_runtime_execution_requested",
+    "prompt484_explicit_10_cycle_smoke_allow_present",
+    "prompt484_allow_10_cycle_smoke",
+    "prompt484_total_invocation_attempts",
+    "prompt484_total_invocation_performed",
+    "prompt484_expected_invocation_count",
+    "prompt484_invocation_count_within_limit",
+    "prompt484_no_11th_invocation_attempted",
+    "prompt484_no_unbounded_loop_guard_ready",
+    "prompt484_completed_cycle_count",
+    "prompt484_failed_cycle_count",
+    "prompt484_daemon_lite_10_cycle_smoke_confirmed",
+    "prompt484_completion_until_done_handoff_ready",
+    "prompt484_real_development_deferred",
+    "prompt484_failed_recovery_deferred",
+    "prompt484_auto_continue_allowed",
+    "prompt484_auto_route_allowed",
+    "prompt484_blocked_reason",
+    "prompt484_blocked_reasons",
+    "prompt484_human_review_required",
+    "prompt484_human_intervention_required",
+    "prompt484_next_action",
+)
+
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "state",
     "orchestration_state",
@@ -1025,6 +1059,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT481_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT482_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT483_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT484_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
     "prompt356_stale_blockers_present",
@@ -3693,6 +3728,27 @@ def select_manifest_run_state_summary_compact(
             "prompt483_unbounded_loop_allowed",
         }
     )
+    bool_fields.update(
+        {
+            "prompt484_applicable",
+            "prompt484_daemon_lite_10_cycle_ready",
+            "prompt484_upstream_prompt483_evidence_ready",
+            "prompt484_runtime_execution_requested",
+            "prompt484_explicit_10_cycle_smoke_allow_present",
+            "prompt484_allow_10_cycle_smoke",
+            "prompt484_invocation_count_within_limit",
+            "prompt484_no_11th_invocation_attempted",
+            "prompt484_no_unbounded_loop_guard_ready",
+            "prompt484_daemon_lite_10_cycle_smoke_confirmed",
+            "prompt484_completion_until_done_handoff_ready",
+            "prompt484_real_development_deferred",
+            "prompt484_failed_recovery_deferred",
+            "prompt484_auto_continue_allowed",
+            "prompt484_auto_route_allowed",
+            "prompt484_human_review_required",
+            "prompt484_human_intervention_required",
+        }
+    )
     list_fields.update(
         {
             "prompt480_tags_at_head",
@@ -3735,6 +3791,11 @@ def select_manifest_run_state_summary_compact(
             "prompt483_blocked_reasons",
         }
     )
+    list_fields.update(
+        {
+            "prompt484_blocked_reasons",
+        }
+    )
     int_fields.update(
         {
             "prompt471_commit_returncode",
@@ -3752,6 +3813,15 @@ def select_manifest_run_state_summary_compact(
             "prompt481_completed_cycle_count",
             "prompt481_failed_cycle_count",
             "prompt483_selected_role_text_length",
+            "prompt484_requested_cycle_count",
+            "prompt484_max_cycles",
+            "prompt484_max_invocations",
+            "prompt484_max_runtime_seconds",
+            "prompt484_total_invocation_attempts",
+            "prompt484_total_invocation_performed",
+            "prompt484_expected_invocation_count",
+            "prompt484_completed_cycle_count",
+            "prompt484_failed_cycle_count",
         }
     )
     int_fields.add("prompt367_returncode")
