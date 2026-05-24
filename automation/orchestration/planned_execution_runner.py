@@ -4280,6 +4280,26 @@ _PROMPT484G_SUCCESS_NEXT_ACTION = (
 _PROMPT484G_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt484g_execution_request_blocked"
 )
+_PROMPT484H_SCHEMA_VERSION = (
+    "prompt484h_prompt378_generation_request_packet_v1"
+)
+_PROMPT484H_SUCCESS_NEXT_ACTION = "chatgpt_generate_prompt378_valid_prompt"
+_PROMPT484H_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt484h_prompt378_generation_request_blocked"
+)
+_PROMPT484H_REQUIRED_VALIDATOR_TOKENS: tuple[str, ...] = (
+    "success-path-only",
+    "local-only",
+    "no remote mutation",
+    "no tests",
+    "allowed files",
+    "forbidden files",
+    "expected artifacts or fields",
+    "expected artifact or output",
+    "validation commands",
+    "out of scope",
+    "next_action",
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -9068,6 +9088,50 @@ _PROMPT484G_ROLE_DRIVEN_EXECUTION_REQUEST_PACKET_COMPACT_KEYS: tuple[str, ...] =
     "prompt484g_blocked_reason",
     "prompt484g_blocked_reasons",
     "prompt484g_next_action",
+)
+_PROMPT484H_PROMPT378_GENERATION_REQUEST_PACKET_KEYS: tuple[str, ...] = (
+    "prompt484h_schema_version",
+    "prompt484h_applicable",
+    "prompt484h_prompt378_generation_request_status",
+    "prompt484h_prompt378_generation_request_ready",
+    "prompt484h_prompt484g_ready",
+    "prompt484h_selected_role_id",
+    "prompt484h_generation_owner",
+    "prompt484h_runner_generation_allowed",
+    "prompt484h_codex_generation_allowed",
+    "prompt484h_prompt378_validator_tokens_required",
+    "prompt484h_required_validator_tokens",
+    "prompt484h_prompt378_supply_expected",
+    "prompt484h_prompt379_live_execution_expected",
+    "prompt484h_codex_execution_count_limit",
+    "prompt484h_auto_commit_allowed",
+    "prompt484h_auto_tag_allowed",
+    "prompt484h_remote_mutation_allowed",
+    "prompt484h_blocked_reason",
+    "prompt484h_blocked_reasons",
+    "prompt484h_next_action",
+)
+_PROMPT484H_PROMPT378_GENERATION_REQUEST_PACKET_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt484h_schema_version",
+    "prompt484h_applicable",
+    "prompt484h_prompt378_generation_request_status",
+    "prompt484h_prompt378_generation_request_ready",
+    "prompt484h_prompt484g_ready",
+    "prompt484h_selected_role_id",
+    "prompt484h_generation_owner",
+    "prompt484h_runner_generation_allowed",
+    "prompt484h_codex_generation_allowed",
+    "prompt484h_prompt378_validator_tokens_required",
+    "prompt484h_required_validator_tokens",
+    "prompt484h_prompt378_supply_expected",
+    "prompt484h_prompt379_live_execution_expected",
+    "prompt484h_codex_execution_count_limit",
+    "prompt484h_auto_commit_allowed",
+    "prompt484h_auto_tag_allowed",
+    "prompt484h_remote_mutation_allowed",
+    "prompt484h_blocked_reason",
+    "prompt484h_blocked_reasons",
+    "prompt484h_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -87820,6 +87884,126 @@ def _build_prompt484g_role_driven_execution_request_packet_state(
             _PROMPT484G_SUCCESS_NEXT_ACTION
             if ready
             else _PROMPT484G_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
+def _build_prompt484h_prompt378_generation_request_packet_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt484g_ready = (
+        payload.get("prompt484g_role_driven_execution_request_ready") is True
+    )
+    prompt484g_next_action = _normalize_text(
+        payload.get("prompt484g_next_action"),
+        default="",
+    )
+    prompt484g_selected_role_id = _normalize_text(
+        payload.get("prompt484g_selected_role_id"),
+        default="",
+    )
+    prompt484g_prompt378_generation_required = payload.get(
+        "prompt484g_prompt378_generation_required"
+    )
+    prompt484g_prompt378_supply_expected = payload.get(
+        "prompt484g_prompt378_supply_expected"
+    )
+    prompt484g_prompt379_live_execution_expected = payload.get(
+        "prompt484g_prompt379_live_execution_expected"
+    )
+    prompt484g_codex_execution_count_limit = payload.get(
+        "prompt484g_codex_execution_count_limit"
+    )
+    prompt484g_auto_commit_allowed = payload.get(
+        "prompt484g_auto_commit_allowed"
+    )
+    prompt484g_auto_tag_allowed = payload.get("prompt484g_auto_tag_allowed")
+    prompt484g_remote_mutation_allowed = payload.get(
+        "prompt484g_remote_mutation_allowed"
+    )
+
+    blocked_reasons: list[str] = []
+    if not prompt484g_ready:
+        blocked_reasons.append(
+            "prompt484g_role_driven_execution_request_ready_missing_or_not_ready"
+        )
+    if prompt484g_next_action != _PROMPT484G_SUCCESS_NEXT_ACTION:
+        blocked_reasons.append("prompt484g_next_action_unexpected")
+    if prompt484g_selected_role_id != _PROMPT484F_SOURCE_ROLE_ID:
+        blocked_reasons.append("prompt484g_selected_role_id_unexpected")
+    if prompt484g_prompt378_generation_required is not True:
+        blocked_reasons.append(
+            "prompt484g_prompt378_generation_required_missing_or_unexpected"
+        )
+    if prompt484g_prompt378_supply_expected is not True:
+        blocked_reasons.append(
+            "prompt484g_prompt378_supply_expected_missing_or_unexpected"
+        )
+    if prompt484g_prompt379_live_execution_expected is not True:
+        blocked_reasons.append(
+            "prompt484g_prompt379_live_execution_expected_missing_or_unexpected"
+        )
+    if prompt484g_codex_execution_count_limit != 1:
+        blocked_reasons.append(
+            "prompt484g_codex_execution_count_limit_unexpected"
+        )
+    if prompt484g_auto_commit_allowed is not False:
+        blocked_reasons.append("prompt484g_auto_commit_allowed_unexpected")
+    if prompt484g_auto_tag_allowed is not False:
+        blocked_reasons.append("prompt484g_auto_tag_allowed_unexpected")
+    if prompt484g_remote_mutation_allowed is not False:
+        blocked_reasons.append(
+            "prompt484g_remote_mutation_allowed_unexpected"
+        )
+
+    ready = bool(
+        prompt484g_ready
+        and prompt484g_next_action == _PROMPT484G_SUCCESS_NEXT_ACTION
+        and prompt484g_selected_role_id == _PROMPT484F_SOURCE_ROLE_ID
+        and prompt484g_prompt378_generation_required is True
+        and prompt484g_prompt378_supply_expected is True
+        and prompt484g_prompt379_live_execution_expected is True
+        and prompt484g_codex_execution_count_limit == 1
+        and prompt484g_auto_commit_allowed is False
+        and prompt484g_auto_tag_allowed is False
+        and prompt484g_remote_mutation_allowed is False
+        and not blocked_reasons
+    )
+
+    return {
+        "prompt484h_schema_version": _PROMPT484H_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt484h",
+        "prompt484h_applicable": True,
+        "prompt484h_prompt378_generation_request_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt484h_prompt378_generation_request_ready": ready,
+        "prompt484h_prompt484g_ready": prompt484g_ready,
+        "prompt484h_selected_role_id": _PROMPT484F_SOURCE_ROLE_ID,
+        "prompt484h_generation_owner": "chatgpt",
+        "prompt484h_runner_generation_allowed": False,
+        "prompt484h_codex_generation_allowed": False,
+        "prompt484h_prompt378_validator_tokens_required": True,
+        "prompt484h_required_validator_tokens": list(
+            _PROMPT484H_REQUIRED_VALIDATOR_TOKENS
+        ),
+        "prompt484h_prompt378_supply_expected": True,
+        "prompt484h_prompt379_live_execution_expected": True,
+        "prompt484h_codex_execution_count_limit": 1,
+        "prompt484h_auto_commit_allowed": False,
+        "prompt484h_auto_tag_allowed": False,
+        "prompt484h_remote_mutation_allowed": False,
+        "prompt484h_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt484h_blocked_reasons": blocked_reasons,
+        "prompt484h_next_action": (
+            _PROMPT484H_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT484H_BLOCKED_NEXT_ACTION
         ),
     }
 
@@ -268428,6 +268612,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt484g_role_driven_execution_request_packet_payload,
         }
+        prompt484h_prompt378_generation_request_packet_payload = (
+            _build_prompt484h_prompt378_generation_request_packet_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt484h_prompt378_generation_request_packet_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -273788,6 +273981,11 @@ class PlannedExecutionRunner:
             if key in prompt484g_role_driven_execution_request_packet_payload:
                 manifest["decision_summary"][key] = (
                     prompt484g_role_driven_execution_request_packet_payload.get(key)
+                )
+        for key in _PROMPT484H_PROMPT378_GENERATION_REQUEST_PACKET_KEYS:
+            if key in prompt484h_prompt378_generation_request_packet_payload:
+                manifest["decision_summary"][key] = (
+                    prompt484h_prompt378_generation_request_packet_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -280969,6 +281167,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT484G_ROLE_DRIVEN_EXECUTION_REQUEST_PACKET_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT484H_PROMPT378_GENERATION_REQUEST_PACKET_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:

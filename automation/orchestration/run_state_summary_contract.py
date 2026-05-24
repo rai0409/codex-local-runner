@@ -1031,6 +1031,29 @@ PROMPT484G_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt484g_next_action",
 )
 
+PROMPT484H_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt484h_schema_version",
+    "prompt484h_applicable",
+    "prompt484h_prompt378_generation_request_status",
+    "prompt484h_prompt378_generation_request_ready",
+    "prompt484h_prompt484g_ready",
+    "prompt484h_selected_role_id",
+    "prompt484h_generation_owner",
+    "prompt484h_runner_generation_allowed",
+    "prompt484h_codex_generation_allowed",
+    "prompt484h_prompt378_validator_tokens_required",
+    "prompt484h_required_validator_tokens",
+    "prompt484h_prompt378_supply_expected",
+    "prompt484h_prompt379_live_execution_expected",
+    "prompt484h_codex_execution_count_limit",
+    "prompt484h_auto_commit_allowed",
+    "prompt484h_auto_tag_allowed",
+    "prompt484h_remote_mutation_allowed",
+    "prompt484h_blocked_reason",
+    "prompt484h_blocked_reasons",
+    "prompt484h_next_action",
+)
+
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "state",
     "orchestration_state",
@@ -1104,6 +1127,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT484_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT484F_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT484G_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT484H_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
     "prompt356_stale_blockers_present",
@@ -3817,6 +3841,17 @@ def select_manifest_run_state_summary_compact(
             "prompt484g_remote_mutation_allowed",
             "prompt484g_completion_until_done_deferred",
             "prompt484g_all_roles_iteration_deferred",
+            "prompt484h_applicable",
+            "prompt484h_prompt378_generation_request_ready",
+            "prompt484h_prompt484g_ready",
+            "prompt484h_runner_generation_allowed",
+            "prompt484h_codex_generation_allowed",
+            "prompt484h_prompt378_validator_tokens_required",
+            "prompt484h_prompt378_supply_expected",
+            "prompt484h_prompt379_live_execution_expected",
+            "prompt484h_auto_commit_allowed",
+            "prompt484h_auto_tag_allowed",
+            "prompt484h_remote_mutation_allowed",
         }
     )
     list_fields.update(
@@ -3866,6 +3901,8 @@ def select_manifest_run_state_summary_compact(
             "prompt484_blocked_reasons",
             "prompt484f_blocked_reasons",
             "prompt484g_blocked_reasons",
+            "prompt484h_required_validator_tokens",
+            "prompt484h_blocked_reasons",
         }
     )
     int_fields.update(
@@ -3896,6 +3933,7 @@ def select_manifest_run_state_summary_compact(
             "prompt484_failed_cycle_count",
             "prompt484f_codex_execution_count_limit",
             "prompt484g_codex_execution_count_limit",
+            "prompt484h_codex_execution_count_limit",
         }
     )
     int_fields.add("prompt367_returncode")
