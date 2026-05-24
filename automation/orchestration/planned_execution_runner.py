@@ -4206,6 +4206,21 @@ _PROMPT482_SUCCESS_NEXT_ACTION = "prepare_prompt483_daemon_lite_10_cycle_extensi
 _PROMPT482_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt482_three_cycle_usability_blocked"
 )
+_PROMPT483_SCHEMA_VERSION = "prompt483_role_catalog_reader_handoff_v1"
+_PROMPT483_DEFAULT_ROLE_CATALOG_PATH = (
+    "automation/orchestration/role/prompt_role_catalog.md"
+)
+_PROMPT483_DEFAULT_SELECTED_ROLE_ID = "daemon_lite_10_cycle_extension"
+_PROMPT483_ALLOWED_TRACKED_FILES = (
+    "automation/orchestration/planned_execution_runner.py",
+    "automation/orchestration/run_state_summary_contract.py",
+)
+_PROMPT483_SUCCESS_NEXT_ACTION = (
+    "chatgpt_generate_prompt484_from_selected_role_text"
+)
+_PROMPT483_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt483_role_catalog_reader_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8679,6 +8694,66 @@ _PROMPT482_THREE_CYCLE_USABILITY_CONFIRMATION_KEYS: tuple[str, ...] = (
     "prompt482_blocked_reasons",
     "prompt482_next_action",
 )
+_PROMPT483_ROLE_CATALOG_READER_HANDOFF_KEYS: tuple[str, ...] = (
+    "prompt483_schema_version",
+    "prompt483_applicable",
+    "prompt483_role_catalog_reader_status",
+    "prompt483_role_catalog_reader_ready",
+    "prompt483_upstream_prompt482_evidence_ready",
+    "prompt483_prompt482_evidence_source",
+    "prompt483_prompt482_current_fields_evidence_ready",
+    "prompt483_prompt482_explicit_flags_evidence_ready",
+    "prompt483_prompt482_historical_repo_evidence_ready",
+    "prompt483_current_head_short",
+    "prompt483_current_head_subject",
+    "prompt483_tags_at_head",
+    "prompt483_changed_tracked_files",
+    "prompt483_unexpected_tracked_files",
+    "prompt483_untracked_files",
+    "prompt483_unexpected_files",
+    "prompt483_role_catalog_path",
+    "prompt483_role_catalog_exists",
+    "prompt483_role_catalog_readable",
+    "prompt483_role_catalog_non_empty",
+    "prompt483_selected_role_id",
+    "prompt483_selected_role_found",
+    "prompt483_selected_role_text",
+    "prompt483_selected_role_text_non_empty",
+    "prompt483_selected_role_text_length",
+    "prompt483_selected_role_contains_use_when",
+    "prompt483_selected_role_contains_goal",
+    "prompt483_selected_role_contains_success",
+    "prompt483_selected_role_contains_do_not",
+    "prompt483_chatgpt_role_catalog_read_ready",
+    "prompt483_chatgpt_selected_role_handoff_ready",
+    "prompt483_chatgpt_next_prompt_generation_basis_ready",
+    "prompt483_runner_generated_prompt_allowed",
+    "prompt483_chatgpt_prompt_generation_required",
+    "prompt483_codex_role_design_allowed",
+    "prompt483_codex_prompt_implementation_only",
+    "prompt483_next_prompt_target_role_id",
+    "prompt483_next_prompt_target_prompt_id",
+    "prompt483_prompt484_generation_ready",
+    "prompt483_daemon_lite_10_cycle_extension_deferred",
+    "prompt483_completion_until_done_deferred",
+    "prompt483_real_development_deferred",
+    "prompt483_failed_recovery_deferred",
+    "prompt483_human_review_required",
+    "prompt483_human_intervention_required",
+    "prompt483_auto_continue_allowed",
+    "prompt483_auto_route_allowed",
+    "prompt483_codex_invocation_allowed",
+    "prompt483_file_creation_allowed",
+    "prompt483_tests_allowed",
+    "prompt483_commit_tag_allowed",
+    "prompt483_push_allowed",
+    "prompt483_pr_allowed",
+    "prompt483_merge_allowed",
+    "prompt483_unbounded_loop_allowed",
+    "prompt483_blocked_reason",
+    "prompt483_blocked_reasons",
+    "prompt483_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -12808,6 +12883,27 @@ def _merge_prompt482_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT482_THREE_CYCLE_USABILITY_CONFIRMATION_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt483_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt483_role_catalog_reader_handoff_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt483_role_catalog_reader_handoff_state)
+        if isinstance(prompt483_role_catalog_reader_handoff_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT483_ROLE_CATALOG_READER_HANDOFF_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -69561,7 +69657,15 @@ def _normalize_prompt437_runtime_command_request(
             normalized["dry_run_expected_returncode"] = (
                 dry_run_expected_returncode
             )
-    for optional_string_key in ("request_id", "description"):
+    for optional_string_key in (
+        "request_id",
+        "description",
+        "prompt483_role_catalog_path",
+        "prompt483_selected_role_id",
+        "prompt_role_catalog_path",
+        "prompt_role_id",
+        "selected_role_id",
+    ):
         if optional_string_key in payload:
             optional_value = payload.get(optional_string_key)
             if not isinstance(optional_value, str):
@@ -69694,6 +69798,7 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
     raw_prompt481_allow_cycle_1_codex_invocation = False
     raw_prompt481_allow_cycle_2_codex_invocation = False
     raw_prompt481_runtime_execution_requested = False
+    raw_prompt483_config_payload: dict[str, Any] = {}
 
     if request_provided and not allow_runtime_command_artifact:
         validation_status = "blocked"
@@ -69732,6 +69837,17 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
                         "prompt481_max_cycles",
                         "prompt481_max_invocations",
                         "prompt481_max_runtime_seconds",
+                    )
+                    if key in raw_payload
+                }
+                raw_prompt483_config_payload = {
+                    key: raw_payload.get(key)
+                    for key in (
+                        "prompt483_role_catalog_path",
+                        "prompt483_selected_role_id",
+                        "prompt_role_catalog_path",
+                        "prompt_role_id",
+                        "selected_role_id",
                     )
                     if key in raw_payload
                 }
@@ -69887,6 +70003,7 @@ def _build_prompt437_runtime_command_artifact_wiring_state(
         ),
         **raw_prompt479_config_payload,
         **raw_prompt481_config_payload,
+        **raw_prompt483_config_payload,
         "prompt481_allow_repeated_cycle_smoke": (
             raw_prompt481_allow_repeated_cycle_smoke
         ),
@@ -86318,6 +86435,389 @@ def _build_prompt482_three_cycle_usability_confirmation_state(
         "prompt482_blocked_reasons": blocked_reasons,
         "prompt482_next_action": (
             _PROMPT482_SUCCESS_NEXT_ACTION if ready else _PROMPT482_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
+def _prompt483_prompt482_current_fields_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt482_three_cycle_usability_status") == "ready"
+        and payload.get("prompt482_three_cycle_usability_ready") is True
+        and payload.get("prompt482_upstream_prompt481_evidence_ready") is True
+        and payload.get("prompt482_three_cycle_result_usable_for_10_cycle_extension")
+        is True
+        and payload.get("prompt482_prompt483_10_cycle_extension_ready") is True
+        and payload.get("prompt482_next_action") == _PROMPT482_SUCCESS_NEXT_ACTION
+    )
+
+
+def _prompt483_prompt482_explicit_flags_evidence_ready(
+    payload: Mapping[str, Any],
+) -> bool:
+    return bool(
+        payload.get("prompt482_three_cycle_usability_ready") is True
+        and payload.get("prompt482_three_cycle_result_usable_for_10_cycle_extension")
+        is True
+        and payload.get("prompt482_prompt483_10_cycle_extension_ready") is True
+        and payload.get("prompt482_post_commit_final_confirmed") is True
+    )
+
+
+def _prompt483_prompt482_historical_repo_evidence_ready(
+    *,
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> bool:
+    subject_ok = bool(
+        current_head_subject == "Prompt482 add three cycle usability confirmation"
+        or current_head_subject.startswith("Prompt482 fix ")
+        or current_head_subject == "Prompt483 add role catalog reader handoff"
+        or current_head_subject.startswith("Prompt483 fix ")
+    )
+    tag_ok = any(
+        tag == "prompt482-three-cycle-usability-confirmation"
+        or tag.startswith("prompt482-")
+        or tag == "prompt483-role-catalog-reader-handoff"
+        or tag.startswith("prompt483-")
+        for tag in tags_at_head
+    )
+    tracked_files_limited = bool(
+        not unexpected_tracked_files
+        and all(
+            path in _PROMPT483_ALLOWED_TRACKED_FILES
+            for path in changed_tracked_files
+        )
+    )
+    return bool(subject_ok and tag_ok and tracked_files_limited)
+
+
+def _prompt483_prompt482_evidence_bridge(
+    *,
+    payload: Mapping[str, Any],
+    current_head_subject: str,
+    tags_at_head: Sequence[str],
+    changed_tracked_files: Sequence[str],
+    unexpected_tracked_files: Sequence[str],
+) -> dict[str, Any]:
+    current_fields_ready = _prompt483_prompt482_current_fields_evidence_ready(payload)
+    explicit_flags_ready = _prompt483_prompt482_explicit_flags_evidence_ready(payload)
+    historical_repo_ready = _prompt483_prompt482_historical_repo_evidence_ready(
+        current_head_subject=current_head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    if current_fields_ready:
+        evidence_source = "current_fields"
+    elif explicit_flags_ready:
+        evidence_source = "explicit_flags"
+    elif historical_repo_ready:
+        evidence_source = "historical_repo"
+    else:
+        evidence_source = ""
+    return {
+        "ready": bool(
+            current_fields_ready or explicit_flags_ready or historical_repo_ready
+        ),
+        "source": evidence_source,
+        "current_fields_ready": current_fields_ready,
+        "explicit_flags_ready": explicit_flags_ready,
+        "historical_repo_ready": historical_repo_ready,
+    }
+
+
+def _prompt483_first_text_from_payloads(
+    payloads: Sequence[Mapping[str, Any] | None],
+    keys: Sequence[str],
+    *,
+    default: str,
+) -> str:
+    for payload in payloads:
+        if not isinstance(payload, Mapping):
+            continue
+        for key in keys:
+            if key not in payload:
+                continue
+            value = _normalize_text(payload.get(key), default="")
+            if value:
+                return value
+    return default
+
+
+def _prompt483_resolve_repo_relative_path(
+    *,
+    repo_path: str,
+    path_text: str,
+) -> Path:
+    path = Path(path_text)
+    if path.is_absolute():
+        return path
+    return Path(repo_path) / path
+
+
+def _prompt483_untracked_files(*, repo_path: str) -> list[str]:
+    if not repo_path:
+        return []
+    try:
+        completed = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if completed.returncode != 0:
+        return []
+    return _normalize_string_list(completed.stdout.splitlines(), sort_items=False)
+
+
+def _prompt483_extract_selected_role_text(
+    *,
+    catalog_text: str,
+    selected_role_id: str,
+) -> str:
+    if not catalog_text or not selected_role_id:
+        return ""
+    lines = catalog_text.splitlines(keepends=True)
+    match_index: int | None = None
+    match_level = 0
+    needles = (
+        f"role: {selected_role_id}",
+        f"Role: {selected_role_id}",
+    )
+    for index, line in enumerate(lines):
+        stripped = line.lstrip()
+        hashes = len(stripped) - len(stripped.lstrip("#"))
+        if hashes <= 0 or hashes > 6:
+            continue
+        after_hashes = stripped[hashes:]
+        if not after_hashes.startswith(" "):
+            continue
+        heading_text = after_hashes.strip()
+        if any(needle in heading_text for needle in needles):
+            match_index = index
+            match_level = hashes
+            break
+    if match_index is None:
+        return ""
+    end_index = len(lines)
+    for index in range(match_index + 1, len(lines)):
+        stripped = lines[index].lstrip()
+        hashes = len(stripped) - len(stripped.lstrip("#"))
+        if hashes <= 0 or hashes > 6:
+            continue
+        after_hashes = stripped[hashes:]
+        if after_hashes.startswith(" ") and hashes <= match_level:
+            end_index = index
+            break
+    return "".join(lines[match_index:end_index]).strip()
+
+
+def _build_prompt483_role_catalog_reader_handoff_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    config_payloads: Sequence[Mapping[str, Any] | None] = (),
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    source_payloads: tuple[Mapping[str, Any] | None, ...] = (
+        payload,
+        *tuple(config_payloads),
+    )
+    catalog_path_text = _prompt483_first_text_from_payloads(
+        source_payloads,
+        ("prompt483_role_catalog_path", "prompt_role_catalog_path"),
+        default=_PROMPT483_DEFAULT_ROLE_CATALOG_PATH,
+    )
+    selected_role_id = _prompt483_first_text_from_payloads(
+        source_payloads,
+        ("prompt483_selected_role_id", "prompt_role_id", "selected_role_id"),
+        default=_PROMPT483_DEFAULT_SELECTED_ROLE_ID,
+    )
+
+    diff = _prompt470_collect_post_fix_diff(
+        repo_path=repo_path,
+        allowed_tracked_files=_PROMPT483_ALLOWED_TRACKED_FILES,
+    )
+    changed_tracked_files = _normalize_string_list(
+        diff.get("changed_files"),
+        sort_items=False,
+    )
+    unexpected_tracked_files = _normalize_string_list(
+        diff.get("unexpected_files"),
+        sort_items=False,
+    )
+    untracked_files = _prompt483_untracked_files(repo_path=repo_path)
+    allowed_untracked_files = {catalog_path_text}
+    unexpected_files = [
+        path for path in untracked_files if path not in allowed_untracked_files
+    ]
+    unexpected_files.extend(
+        path for path in unexpected_tracked_files if path not in unexpected_files
+    )
+
+    head_short = ""
+    head_short_known, head_short_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("rev-parse", "--short", "HEAD"),
+    )
+    if head_short_known and head_short_stdout.splitlines():
+        head_short = head_short_stdout.splitlines()[0].strip()
+    head_subject = ""
+    head_subject_known, head_subject_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("log", "-1", "--pretty=%s"),
+    )
+    if head_subject_known and head_subject_stdout.splitlines():
+        head_subject = head_subject_stdout.splitlines()[0].strip()
+    tags_at_head = _prompt471_tags_at_head(repo_path=repo_path)
+
+    prompt482_evidence = _prompt483_prompt482_evidence_bridge(
+        payload=payload,
+        current_head_subject=head_subject,
+        tags_at_head=tags_at_head,
+        changed_tracked_files=changed_tracked_files,
+        unexpected_tracked_files=unexpected_tracked_files,
+    )
+    upstream_ready = prompt482_evidence["ready"] is True
+
+    catalog_path = _prompt483_resolve_repo_relative_path(
+        repo_path=repo_path,
+        path_text=catalog_path_text,
+    )
+    catalog_exists = catalog_path.exists()
+    catalog_readable = False
+    catalog_text = ""
+    if catalog_exists:
+        try:
+            catalog_text = catalog_path.read_text(encoding="utf-8")
+            catalog_readable = True
+        except OSError:
+            catalog_readable = False
+            catalog_text = ""
+    catalog_non_empty = bool(catalog_text.strip())
+    selected_role_text = _prompt483_extract_selected_role_text(
+        catalog_text=catalog_text,
+        selected_role_id=selected_role_id,
+    )
+    selected_role_found = bool(selected_role_text)
+    selected_role_text_non_empty = bool(selected_role_text.strip())
+    selected_role_text_length = len(selected_role_text)
+
+    blocked_reasons: list[str] = []
+    if not upstream_ready:
+        blocked_reasons.append("prompt482_evidence_missing")
+    if unexpected_tracked_files:
+        blocked_reasons.append("prompt483_unexpected_tracked_files_present")
+    if unexpected_files:
+        blocked_reasons.append("prompt483_untracked_or_unexpected_files_present")
+    if not catalog_exists:
+        blocked_reasons.append("prompt483_role_catalog_missing")
+    if catalog_exists and not catalog_readable:
+        blocked_reasons.append("prompt483_role_catalog_not_readable")
+    if catalog_readable and not catalog_non_empty:
+        blocked_reasons.append("prompt483_role_catalog_empty")
+    if not selected_role_id:
+        blocked_reasons.append("prompt483_selected_role_id_missing")
+    elif catalog_non_empty and not selected_role_found:
+        blocked_reasons.append("prompt483_selected_role_not_found")
+    if selected_role_found and not selected_role_text_non_empty:
+        blocked_reasons.append("prompt483_selected_role_text_empty")
+
+    basis_ready = bool(
+        upstream_ready
+        and catalog_exists
+        and catalog_readable
+        and catalog_non_empty
+        and selected_role_id
+        and selected_role_found
+        and selected_role_text_non_empty
+        and not unexpected_tracked_files
+        and not unexpected_files
+    )
+    if not basis_ready:
+        blocked_reasons.append("prompt483_prompt484_generation_basis_not_ready")
+
+    ready = bool(basis_ready and not blocked_reasons)
+    status = "ready" if ready else "blocked"
+    return {
+        "prompt483_schema_version": _PROMPT483_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt483",
+        "prompt483_applicable": True,
+        "prompt483_role_catalog_reader_status": status,
+        "prompt483_role_catalog_reader_ready": ready,
+        "prompt483_upstream_prompt482_evidence_ready": upstream_ready,
+        "prompt483_prompt482_evidence_source": prompt482_evidence["source"],
+        "prompt483_prompt482_current_fields_evidence_ready": prompt482_evidence[
+            "current_fields_ready"
+        ],
+        "prompt483_prompt482_explicit_flags_evidence_ready": prompt482_evidence[
+            "explicit_flags_ready"
+        ],
+        "prompt483_prompt482_historical_repo_evidence_ready": prompt482_evidence[
+            "historical_repo_ready"
+        ],
+        "prompt483_current_head_short": head_short,
+        "prompt483_current_head_subject": head_subject,
+        "prompt483_tags_at_head": tags_at_head,
+        "prompt483_changed_tracked_files": changed_tracked_files,
+        "prompt483_unexpected_tracked_files": unexpected_tracked_files,
+        "prompt483_untracked_files": untracked_files,
+        "prompt483_unexpected_files": unexpected_files,
+        "prompt483_role_catalog_path": catalog_path_text,
+        "prompt483_role_catalog_exists": catalog_exists,
+        "prompt483_role_catalog_readable": catalog_readable,
+        "prompt483_role_catalog_non_empty": catalog_non_empty,
+        "prompt483_selected_role_id": selected_role_id,
+        "prompt483_selected_role_found": selected_role_found,
+        "prompt483_selected_role_text": selected_role_text,
+        "prompt483_selected_role_text_non_empty": selected_role_text_non_empty,
+        "prompt483_selected_role_text_length": selected_role_text_length,
+        "prompt483_selected_role_contains_use_when": "Use when:" in selected_role_text,
+        "prompt483_selected_role_contains_goal": "Goal:" in selected_role_text,
+        "prompt483_selected_role_contains_success": "Success:" in selected_role_text,
+        "prompt483_selected_role_contains_do_not": "Do not:" in selected_role_text,
+        "prompt483_chatgpt_role_catalog_read_ready": ready,
+        "prompt483_chatgpt_selected_role_handoff_ready": ready,
+        "prompt483_chatgpt_next_prompt_generation_basis_ready": ready,
+        "prompt483_runner_generated_prompt_allowed": False,
+        "prompt483_chatgpt_prompt_generation_required": True,
+        "prompt483_codex_role_design_allowed": False,
+        "prompt483_codex_prompt_implementation_only": True,
+        "prompt483_next_prompt_target_role_id": selected_role_id,
+        "prompt483_next_prompt_target_prompt_id": "prompt484",
+        "prompt483_prompt484_generation_ready": ready,
+        "prompt483_daemon_lite_10_cycle_extension_deferred": True,
+        "prompt483_completion_until_done_deferred": True,
+        "prompt483_real_development_deferred": True,
+        "prompt483_failed_recovery_deferred": True,
+        "prompt483_human_review_required": not ready,
+        "prompt483_human_intervention_required": not ready,
+        "prompt483_auto_continue_allowed": ready,
+        "prompt483_auto_route_allowed": ready,
+        "prompt483_codex_invocation_allowed": False,
+        "prompt483_file_creation_allowed": False,
+        "prompt483_tests_allowed": False,
+        "prompt483_commit_tag_allowed": False,
+        "prompt483_push_allowed": False,
+        "prompt483_pr_allowed": False,
+        "prompt483_merge_allowed": False,
+        "prompt483_unbounded_loop_allowed": False,
+        "prompt483_blocked_reason": blocked_reasons[0] if blocked_reasons else "",
+        "prompt483_blocked_reasons": blocked_reasons,
+        "prompt483_next_action": (
+            _PROMPT483_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT483_BLOCKED_NEXT_ACTION
         ),
     }
 
@@ -266836,6 +267336,24 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt482_three_cycle_usability_confirmation_payload,
         }
+        prompt483_role_catalog_reader_handoff_payload = (
+            _build_prompt483_role_catalog_reader_handoff_state(
+                run_state_payload=run_state_payload,
+                config_payloads=(
+                    approved_restart_payload_for_bounded_local_loop,
+                    prior_approved_restart_execution_contract_payload,
+                    prompt437_runtime_command_artifact_wiring_payload,
+                    prompt437_runtime_command_artifact_wiring_payload.get(
+                        "prompt437_runtime_command_request"
+                    ),
+                ),
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt483_role_catalog_reader_handoff_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -269298,6 +269816,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt482_three_cycle_usability_confirmation_state=(
                     prompt482_three_cycle_usability_confirmation_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt483_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt483_role_catalog_reader_handoff_state=(
+                    prompt483_role_catalog_reader_handoff_payload
                 ),
             )
         )
@@ -272124,6 +272650,11 @@ class PlannedExecutionRunner:
             if key in prompt482_three_cycle_usability_confirmation_payload:
                 manifest["decision_summary"][key] = (
                     prompt482_three_cycle_usability_confirmation_payload.get(key)
+                )
+        for key in _PROMPT483_ROLE_CATALOG_READER_HANDOFF_KEYS:
+            if key in prompt483_role_catalog_reader_handoff_payload:
+                manifest["decision_summary"][key] = (
+                    prompt483_role_catalog_reader_handoff_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -279281,6 +279812,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT482_THREE_CYCLE_USABILITY_CONFIRMATION_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT483_ROLE_CATALOG_READER_HANDOFF_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:

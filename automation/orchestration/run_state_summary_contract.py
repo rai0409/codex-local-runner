@@ -894,6 +894,67 @@ PROMPT482_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt482_next_action",
 )
 
+PROMPT483_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt483_schema_version",
+    "prompt483_applicable",
+    "prompt483_role_catalog_reader_status",
+    "prompt483_role_catalog_reader_ready",
+    "prompt483_upstream_prompt482_evidence_ready",
+    "prompt483_prompt482_evidence_source",
+    "prompt483_prompt482_current_fields_evidence_ready",
+    "prompt483_prompt482_explicit_flags_evidence_ready",
+    "prompt483_prompt482_historical_repo_evidence_ready",
+    "prompt483_current_head_short",
+    "prompt483_current_head_subject",
+    "prompt483_tags_at_head",
+    "prompt483_changed_tracked_files",
+    "prompt483_unexpected_tracked_files",
+    "prompt483_untracked_files",
+    "prompt483_unexpected_files",
+    "prompt483_role_catalog_path",
+    "prompt483_role_catalog_exists",
+    "prompt483_role_catalog_readable",
+    "prompt483_role_catalog_non_empty",
+    "prompt483_selected_role_id",
+    "prompt483_selected_role_found",
+    "prompt483_selected_role_text",
+    "prompt483_selected_role_text_non_empty",
+    "prompt483_selected_role_text_length",
+    "prompt483_selected_role_contains_use_when",
+    "prompt483_selected_role_contains_goal",
+    "prompt483_selected_role_contains_success",
+    "prompt483_selected_role_contains_do_not",
+    "prompt483_chatgpt_role_catalog_read_ready",
+    "prompt483_chatgpt_selected_role_handoff_ready",
+    "prompt483_chatgpt_next_prompt_generation_basis_ready",
+    "prompt483_runner_generated_prompt_allowed",
+    "prompt483_chatgpt_prompt_generation_required",
+    "prompt483_codex_role_design_allowed",
+    "prompt483_codex_prompt_implementation_only",
+    "prompt483_next_prompt_target_role_id",
+    "prompt483_next_prompt_target_prompt_id",
+    "prompt483_prompt484_generation_ready",
+    "prompt483_daemon_lite_10_cycle_extension_deferred",
+    "prompt483_completion_until_done_deferred",
+    "prompt483_real_development_deferred",
+    "prompt483_failed_recovery_deferred",
+    "prompt483_human_review_required",
+    "prompt483_human_intervention_required",
+    "prompt483_auto_continue_allowed",
+    "prompt483_auto_route_allowed",
+    "prompt483_codex_invocation_allowed",
+    "prompt483_file_creation_allowed",
+    "prompt483_tests_allowed",
+    "prompt483_commit_tag_allowed",
+    "prompt483_push_allowed",
+    "prompt483_pr_allowed",
+    "prompt483_merge_allowed",
+    "prompt483_unbounded_loop_allowed",
+    "prompt483_blocked_reason",
+    "prompt483_blocked_reasons",
+    "prompt483_next_action",
+)
+
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "state",
     "orchestration_state",
@@ -963,6 +1024,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT480_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT481_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT482_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT483_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
     "prompt356_stale_blockers_present",
@@ -3588,6 +3650,49 @@ def select_manifest_run_state_summary_compact(
             "prompt482_unbounded_loop_allowed",
         }
     )
+    bool_fields.update(
+        {
+            "prompt483_applicable",
+            "prompt483_role_catalog_reader_ready",
+            "prompt483_upstream_prompt482_evidence_ready",
+            "prompt483_prompt482_current_fields_evidence_ready",
+            "prompt483_prompt482_explicit_flags_evidence_ready",
+            "prompt483_prompt482_historical_repo_evidence_ready",
+            "prompt483_role_catalog_exists",
+            "prompt483_role_catalog_readable",
+            "prompt483_role_catalog_non_empty",
+            "prompt483_selected_role_found",
+            "prompt483_selected_role_text_non_empty",
+            "prompt483_selected_role_contains_use_when",
+            "prompt483_selected_role_contains_goal",
+            "prompt483_selected_role_contains_success",
+            "prompt483_selected_role_contains_do_not",
+            "prompt483_chatgpt_role_catalog_read_ready",
+            "prompt483_chatgpt_selected_role_handoff_ready",
+            "prompt483_chatgpt_next_prompt_generation_basis_ready",
+            "prompt483_runner_generated_prompt_allowed",
+            "prompt483_chatgpt_prompt_generation_required",
+            "prompt483_codex_role_design_allowed",
+            "prompt483_codex_prompt_implementation_only",
+            "prompt483_prompt484_generation_ready",
+            "prompt483_daemon_lite_10_cycle_extension_deferred",
+            "prompt483_completion_until_done_deferred",
+            "prompt483_real_development_deferred",
+            "prompt483_failed_recovery_deferred",
+            "prompt483_human_review_required",
+            "prompt483_human_intervention_required",
+            "prompt483_auto_continue_allowed",
+            "prompt483_auto_route_allowed",
+            "prompt483_codex_invocation_allowed",
+            "prompt483_file_creation_allowed",
+            "prompt483_tests_allowed",
+            "prompt483_commit_tag_allowed",
+            "prompt483_push_allowed",
+            "prompt483_pr_allowed",
+            "prompt483_merge_allowed",
+            "prompt483_unbounded_loop_allowed",
+        }
+    )
     list_fields.update(
         {
             "prompt480_tags_at_head",
@@ -3620,6 +3725,16 @@ def select_manifest_run_state_summary_compact(
             "prompt482_blocked_reasons",
         }
     )
+    list_fields.update(
+        {
+            "prompt483_tags_at_head",
+            "prompt483_changed_tracked_files",
+            "prompt483_unexpected_tracked_files",
+            "prompt483_untracked_files",
+            "prompt483_unexpected_files",
+            "prompt483_blocked_reasons",
+        }
+    )
     int_fields.update(
         {
             "prompt471_commit_returncode",
@@ -3636,6 +3751,7 @@ def select_manifest_run_state_summary_compact(
             "prompt481_expected_invocation_count",
             "prompt481_completed_cycle_count",
             "prompt481_failed_cycle_count",
+            "prompt483_selected_role_text_length",
         }
     )
     int_fields.add("prompt367_returncode")
