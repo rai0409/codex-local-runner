@@ -1010,6 +1010,27 @@ PROMPT484F_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt484f_next_action",
 )
 
+PROMPT484G_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt484g_schema_version",
+    "prompt484g_applicable",
+    "prompt484g_role_driven_execution_request_status",
+    "prompt484g_role_driven_execution_request_ready",
+    "prompt484g_prompt484f_ready",
+    "prompt484g_selected_role_id",
+    "prompt484g_prompt378_generation_required",
+    "prompt484g_prompt378_supply_expected",
+    "prompt484g_prompt379_live_execution_expected",
+    "prompt484g_codex_execution_count_limit",
+    "prompt484g_auto_commit_allowed",
+    "prompt484g_auto_tag_allowed",
+    "prompt484g_remote_mutation_allowed",
+    "prompt484g_completion_until_done_deferred",
+    "prompt484g_all_roles_iteration_deferred",
+    "prompt484g_blocked_reason",
+    "prompt484g_blocked_reasons",
+    "prompt484g_next_action",
+)
+
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "state",
     "orchestration_state",
@@ -1082,6 +1103,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT483_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT484_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT484F_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT484G_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
     "prompt356_stale_blockers_present",
@@ -3784,6 +3806,17 @@ def select_manifest_run_state_summary_compact(
             "prompt484f_remote_mutation_allowed",
             "prompt484f_completion_until_done_deferred",
             "prompt484f_all_roles_iteration_deferred",
+            "prompt484g_applicable",
+            "prompt484g_role_driven_execution_request_ready",
+            "prompt484g_prompt484f_ready",
+            "prompt484g_prompt378_generation_required",
+            "prompt484g_prompt378_supply_expected",
+            "prompt484g_prompt379_live_execution_expected",
+            "prompt484g_auto_commit_allowed",
+            "prompt484g_auto_tag_allowed",
+            "prompt484g_remote_mutation_allowed",
+            "prompt484g_completion_until_done_deferred",
+            "prompt484g_all_roles_iteration_deferred",
         }
     )
     list_fields.update(
@@ -3832,6 +3865,7 @@ def select_manifest_run_state_summary_compact(
         {
             "prompt484_blocked_reasons",
             "prompt484f_blocked_reasons",
+            "prompt484g_blocked_reasons",
         }
     )
     int_fields.update(
@@ -3861,6 +3895,7 @@ def select_manifest_run_state_summary_compact(
             "prompt484_completed_cycle_count",
             "prompt484_failed_cycle_count",
             "prompt484f_codex_execution_count_limit",
+            "prompt484g_codex_execution_count_limit",
         }
     )
     int_fields.add("prompt367_returncode")

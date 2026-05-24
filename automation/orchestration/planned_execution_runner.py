@@ -4271,6 +4271,15 @@ _PROMPT484F_SUCCESS_NEXT_ACTION = (
 _PROMPT484F_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt484f_role_driven_cycle_blocked"
 )
+_PROMPT484G_SCHEMA_VERSION = (
+    "prompt484g_role_driven_execution_request_packet_v1"
+)
+_PROMPT484G_SUCCESS_NEXT_ACTION = (
+    "generate_prompt378_valid_prompt_for_prompt379_live_execution"
+)
+_PROMPT484G_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt484g_execution_request_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -9019,6 +9028,46 @@ _PROMPT484F_ROLE_DRIVEN_SINGLE_CODEX_EXECUTION_CYCLE_COMPACT_KEYS: tuple[str, ..
     "prompt484f_blocked_reason",
     "prompt484f_blocked_reasons",
     "prompt484f_next_action",
+)
+_PROMPT484G_ROLE_DRIVEN_EXECUTION_REQUEST_PACKET_KEYS: tuple[str, ...] = (
+    "prompt484g_schema_version",
+    "prompt484g_applicable",
+    "prompt484g_role_driven_execution_request_status",
+    "prompt484g_role_driven_execution_request_ready",
+    "prompt484g_prompt484f_ready",
+    "prompt484g_selected_role_id",
+    "prompt484g_prompt378_generation_required",
+    "prompt484g_prompt378_supply_expected",
+    "prompt484g_prompt379_live_execution_expected",
+    "prompt484g_codex_execution_count_limit",
+    "prompt484g_auto_commit_allowed",
+    "prompt484g_auto_tag_allowed",
+    "prompt484g_remote_mutation_allowed",
+    "prompt484g_completion_until_done_deferred",
+    "prompt484g_all_roles_iteration_deferred",
+    "prompt484g_blocked_reason",
+    "prompt484g_blocked_reasons",
+    "prompt484g_next_action",
+)
+_PROMPT484G_ROLE_DRIVEN_EXECUTION_REQUEST_PACKET_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt484g_schema_version",
+    "prompt484g_applicable",
+    "prompt484g_role_driven_execution_request_status",
+    "prompt484g_role_driven_execution_request_ready",
+    "prompt484g_prompt484f_ready",
+    "prompt484g_selected_role_id",
+    "prompt484g_prompt378_generation_required",
+    "prompt484g_prompt378_supply_expected",
+    "prompt484g_prompt379_live_execution_expected",
+    "prompt484g_codex_execution_count_limit",
+    "prompt484g_auto_commit_allowed",
+    "prompt484g_auto_tag_allowed",
+    "prompt484g_remote_mutation_allowed",
+    "prompt484g_completion_until_done_deferred",
+    "prompt484g_all_roles_iteration_deferred",
+    "prompt484g_blocked_reason",
+    "prompt484g_blocked_reasons",
+    "prompt484g_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -87681,6 +87730,96 @@ def _build_prompt484f_role_driven_single_codex_execution_cycle_state(
             _PROMPT484F_SUCCESS_NEXT_ACTION
             if ready
             else _PROMPT484F_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
+def _build_prompt484g_role_driven_execution_request_packet_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt484f_ready = payload.get("prompt484f_role_driven_cycle_ready") is True
+    prompt484f_next_action = _normalize_text(
+        payload.get("prompt484f_next_action"),
+        default="",
+    )
+    prompt484f_source_role_id = _normalize_text(
+        payload.get("prompt484f_source_role_id"),
+        default="",
+    )
+    prompt484f_codex_execution_count_limit = payload.get(
+        "prompt484f_codex_execution_count_limit"
+    )
+    prompt484f_auto_commit_allowed = payload.get(
+        "prompt484f_auto_commit_allowed"
+    )
+    prompt484f_auto_tag_allowed = payload.get("prompt484f_auto_tag_allowed")
+    prompt484f_remote_mutation_allowed = payload.get(
+        "prompt484f_remote_mutation_allowed"
+    )
+
+    blocked_reasons: list[str] = []
+    if not prompt484f_ready:
+        blocked_reasons.append(
+            "prompt484f_role_driven_cycle_ready_missing_or_not_ready"
+        )
+    if prompt484f_next_action != _PROMPT484F_SUCCESS_NEXT_ACTION:
+        blocked_reasons.append("prompt484f_next_action_unexpected")
+    if prompt484f_source_role_id != _PROMPT484F_SOURCE_ROLE_ID:
+        blocked_reasons.append("prompt484f_source_role_id_unexpected")
+    if prompt484f_codex_execution_count_limit != 1:
+        blocked_reasons.append(
+            "prompt484f_codex_execution_count_limit_unexpected"
+        )
+    if prompt484f_auto_commit_allowed is not False:
+        blocked_reasons.append("prompt484f_auto_commit_allowed_unexpected")
+    if prompt484f_auto_tag_allowed is not False:
+        blocked_reasons.append("prompt484f_auto_tag_allowed_unexpected")
+    if prompt484f_remote_mutation_allowed is not False:
+        blocked_reasons.append(
+            "prompt484f_remote_mutation_allowed_unexpected"
+        )
+
+    ready = bool(
+        prompt484f_ready
+        and prompt484f_next_action == _PROMPT484F_SUCCESS_NEXT_ACTION
+        and prompt484f_source_role_id == _PROMPT484F_SOURCE_ROLE_ID
+        and prompt484f_codex_execution_count_limit == 1
+        and prompt484f_auto_commit_allowed is False
+        and prompt484f_auto_tag_allowed is False
+        and prompt484f_remote_mutation_allowed is False
+        and not blocked_reasons
+    )
+
+    return {
+        "prompt484g_schema_version": _PROMPT484G_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt484g",
+        "prompt484g_applicable": True,
+        "prompt484g_role_driven_execution_request_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt484g_role_driven_execution_request_ready": ready,
+        "prompt484g_prompt484f_ready": prompt484f_ready,
+        "prompt484g_selected_role_id": _PROMPT484F_SOURCE_ROLE_ID,
+        "prompt484g_prompt378_generation_required": True,
+        "prompt484g_prompt378_supply_expected": True,
+        "prompt484g_prompt379_live_execution_expected": True,
+        "prompt484g_codex_execution_count_limit": 1,
+        "prompt484g_auto_commit_allowed": False,
+        "prompt484g_auto_tag_allowed": False,
+        "prompt484g_remote_mutation_allowed": False,
+        "prompt484g_completion_until_done_deferred": True,
+        "prompt484g_all_roles_iteration_deferred": True,
+        "prompt484g_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt484g_blocked_reasons": blocked_reasons,
+        "prompt484g_next_action": (
+            _PROMPT484G_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT484G_BLOCKED_NEXT_ACTION
         ),
     }
 
@@ -268280,6 +268419,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt484f_role_driven_single_codex_execution_cycle_payload,
         }
+        prompt484g_role_driven_execution_request_packet_payload = (
+            _build_prompt484g_role_driven_execution_request_packet_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt484g_role_driven_execution_request_packet_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -273635,6 +273783,11 @@ class PlannedExecutionRunner:
             if key in prompt484f_role_driven_single_codex_execution_cycle_payload:
                 manifest["decision_summary"][key] = (
                     prompt484f_role_driven_single_codex_execution_cycle_payload.get(key)
+                )
+        for key in _PROMPT484G_ROLE_DRIVEN_EXECUTION_REQUEST_PACKET_KEYS:
+            if key in prompt484g_role_driven_execution_request_packet_payload:
+                manifest["decision_summary"][key] = (
+                    prompt484g_role_driven_execution_request_packet_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -280813,6 +280966,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT484F_ROLE_DRIVEN_SINGLE_CODEX_EXECUTION_CYCLE_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT484G_ROLE_DRIVEN_EXECUTION_REQUEST_PACKET_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
