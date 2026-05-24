@@ -42,3 +42,48 @@ ChatGPT note:
 Use this role as a prompt-generation basis.
 Do not paste this role directly as the Codex prompt.
 Generate a separate detailed Codex implementation prompt for Prompt484a.
+
+## role: role_to_prompt_selection_layer
+
+Use when:
+Prompt484a no-allow boundary fields are implemented and verified, and the next step is to add a metadata-only role selection layer for the role-to-prompt loop.
+
+Goal:
+ChatGPT generates a Codex implementation prompt for Prompt484b.
+The prompt must add a metadata-only role selection layer that selects the current role from the role catalog and exposes it in run_state for ChatGPT prompt generation.
+
+Required constraints:
+- read/select the current role from automation/orchestration/role/prompt_role_catalog.md
+- default current role may be daemon_lite_10_cycle_no_allow_boundary until iteration support is added
+- do not depend on Prompt482 evidence
+- do not modify Prompt483 default selected role
+- do not invoke Codex
+- do not execute runtime cycles
+- do not run tests
+- do not commit/tag
+- do not push/PR/merge
+- do not implement all-role iteration yet
+
+Success:
+- prompt484b_role_selection_status="ready"
+- prompt484b_role_selection_ready=True
+- prompt484b_selected_role_id is non-empty
+- prompt484b_selected_role_found=True
+- prompt484b_selected_role_text_non_empty=True
+- prompt484b_chatgpt_prompt_generation_required=True
+- prompt484b_runner_prompt_generation_allowed=False
+- prompt484b_next_action="chatgpt_generate_codex_prompt_from_selected_role"
+
+Do not:
+- implement explicit 10-cycle execution
+- implement all-role automatic iteration
+- implement completion-until-done
+- modify Prompt482/Prompt483 behavior
+- modify Codex one-shot timeout behavior
+- modify subprocess timeout logic
+- implement unrelated fixes
+
+ChatGPT note:
+Use this role as a prompt-generation basis.
+Do not paste this role directly as the Codex prompt.
+Generate a separate detailed Codex implementation prompt for Prompt484b.

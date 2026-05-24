@@ -4230,6 +4230,14 @@ _PROMPT484_SUCCESS_NEXT_ACTION = (
 _PROMPT484_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt484_daemon_lite_10_cycle_blocked"
 )
+_PROMPT484B_SCHEMA_VERSION = "prompt484b_role_selection_layer_v1"
+_PROMPT484B_DEFAULT_SELECTED_ROLE_ID = "role_to_prompt_selection_layer"
+_PROMPT484B_SUCCESS_NEXT_ACTION = (
+    "chatgpt_generate_codex_prompt_from_selected_role"
+)
+_PROMPT484B_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt484b_role_selection_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8796,6 +8804,41 @@ _PROMPT484_DAEMON_LITE_10_CYCLE_NO_ALLOW_BOUNDARY_KEYS: tuple[str, ...] = (
     "prompt484_human_intervention_required",
     "prompt484_next_action",
 )
+_PROMPT484B_ROLE_SELECTION_LAYER_KEYS: tuple[str, ...] = (
+    "prompt484b_schema_version",
+    "prompt484b_applicable",
+    "prompt484b_role_selection_status",
+    "prompt484b_role_selection_ready",
+    "prompt484b_role_catalog_path",
+    "prompt484b_role_catalog_exists",
+    "prompt484b_role_catalog_readable",
+    "prompt484b_role_catalog_non_empty",
+    "prompt484b_selected_role_id",
+    "prompt484b_selected_role_source",
+    "prompt484b_selected_role_found",
+    "prompt484b_selected_role_text",
+    "prompt484b_selected_role_text_non_empty",
+    "prompt484b_selected_role_text_length",
+    "prompt484b_chatgpt_prompt_generation_required",
+    "prompt484b_runner_prompt_generation_allowed",
+    "prompt484b_codex_implementation_allowed",
+    "prompt484b_codex_invocation_allowed",
+    "prompt484b_runtime_execution_allowed",
+    "prompt484b_git_mutation_allowed",
+    "prompt484b_remote_mutation_allowed",
+    "prompt484b_all_roles_iteration_deferred",
+    "prompt484b_completion_until_done_deferred",
+    "prompt484b_blocked_reason",
+    "prompt484b_blocked_reasons",
+    "prompt484b_next_action",
+)
+_PROMPT484B_ROLE_SELECTION_LAYER_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt484b_role_selection_status",
+    "prompt484b_role_selection_ready",
+    "prompt484b_selected_role_id",
+    "prompt484b_selected_role_found",
+    "prompt484b_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -12967,6 +13010,27 @@ def _merge_prompt484_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT484_DAEMON_LITE_10_CYCLE_NO_ALLOW_BOUNDARY_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt484b_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt484b_role_selection_layer_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt484b_role_selection_layer_state)
+        if isinstance(prompt484b_role_selection_layer_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT484B_ROLE_SELECTION_LAYER_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -86954,6 +87018,125 @@ def _build_prompt484_daemon_lite_10_cycle_no_allow_boundary_state(
         }
     )
     return state
+
+
+def _build_prompt484b_role_selection_layer_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    config_payloads: Sequence[Mapping[str, Any] | None] = (),
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    repo_path = _normalize_text(execution_repo_path, default="")
+    source_payloads: tuple[Mapping[str, Any] | None, ...] = (
+        payload,
+        *tuple(config_payloads),
+    )
+    catalog_path_text = _prompt483_first_text_from_payloads(
+        source_payloads,
+        (
+            "prompt484b_role_catalog_path",
+            "prompt483_role_catalog_path",
+            "prompt_role_catalog_path",
+        ),
+        default=_PROMPT483_DEFAULT_ROLE_CATALOG_PATH,
+    )
+    selected_role_id = _prompt483_first_text_from_payloads(
+        source_payloads,
+        (
+            "prompt484b_selected_role_id",
+            "prompt_role_id",
+            "selected_role_id",
+        ),
+        default=_PROMPT484B_DEFAULT_SELECTED_ROLE_ID,
+    )
+
+    catalog_path = _prompt483_resolve_repo_relative_path(
+        repo_path=repo_path,
+        path_text=catalog_path_text,
+    )
+    catalog_exists = catalog_path.exists()
+    catalog_readable = False
+    catalog_text = ""
+    if catalog_exists:
+        try:
+            catalog_text = catalog_path.read_text(encoding="utf-8")
+            catalog_readable = True
+        except OSError:
+            catalog_readable = False
+            catalog_text = ""
+    catalog_non_empty = bool(catalog_text.strip())
+    selected_role_text = _prompt483_extract_selected_role_text(
+        catalog_text=catalog_text,
+        selected_role_id=selected_role_id,
+    )
+    selected_role_found = bool(selected_role_text)
+    selected_role_text_non_empty = bool(selected_role_text.strip())
+    selected_role_text_length = len(selected_role_text)
+
+    blocked_reasons: list[str] = []
+    if not catalog_exists:
+        blocked_reasons.append("prompt484b_role_catalog_missing")
+    if catalog_exists and not catalog_readable:
+        blocked_reasons.append("prompt484b_role_catalog_not_readable")
+    if catalog_readable and not catalog_non_empty:
+        blocked_reasons.append("prompt484b_role_catalog_empty")
+    if not selected_role_id:
+        blocked_reasons.append("prompt484b_selected_role_id_missing")
+    elif catalog_non_empty and not selected_role_found:
+        blocked_reasons.append("prompt484b_selected_role_not_found")
+    if selected_role_found and not selected_role_text_non_empty:
+        blocked_reasons.append("prompt484b_selected_role_text_empty")
+
+    ready = bool(
+        catalog_exists
+        and catalog_readable
+        and catalog_non_empty
+        and selected_role_id
+        and selected_role_found
+        and selected_role_text_non_empty
+        and not blocked_reasons
+    )
+    status = "ready" if ready else "blocked"
+
+    return {
+        "prompt484b_schema_version": _PROMPT484B_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt484b",
+        "prompt484b_applicable": True,
+        "prompt484b_role_selection_status": status,
+        "prompt484b_role_selection_ready": ready,
+        "prompt484b_role_catalog_path": catalog_path_text,
+        "prompt484b_role_catalog_exists": catalog_exists,
+        "prompt484b_role_catalog_readable": catalog_readable,
+        "prompt484b_role_catalog_non_empty": catalog_non_empty,
+        "prompt484b_selected_role_id": selected_role_id,
+        "prompt484b_selected_role_source": (
+            "payload_or_default_role_to_prompt_selection_layer"
+        ),
+        "prompt484b_selected_role_found": selected_role_found,
+        "prompt484b_selected_role_text": selected_role_text,
+        "prompt484b_selected_role_text_non_empty": selected_role_text_non_empty,
+        "prompt484b_selected_role_text_length": selected_role_text_length,
+        "prompt484b_chatgpt_prompt_generation_required": True,
+        "prompt484b_runner_prompt_generation_allowed": False,
+        "prompt484b_codex_implementation_allowed": False,
+        "prompt484b_codex_invocation_allowed": False,
+        "prompt484b_runtime_execution_allowed": False,
+        "prompt484b_git_mutation_allowed": False,
+        "prompt484b_remote_mutation_allowed": False,
+        "prompt484b_all_roles_iteration_deferred": True,
+        "prompt484b_completion_until_done_deferred": True,
+        "prompt484b_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt484b_blocked_reasons": blocked_reasons,
+        "prompt484b_next_action": (
+            _PROMPT484B_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT484B_BLOCKED_NEXT_ACTION
+        ),
+    }
 
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -267497,6 +267680,24 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt484_daemon_lite_10_cycle_no_allow_boundary_payload,
         }
+        prompt484b_role_selection_layer_payload = (
+            _build_prompt484b_role_selection_layer_state(
+                run_state_payload=run_state_payload,
+                config_payloads=(
+                    approved_restart_payload_for_bounded_local_loop,
+                    prior_approved_restart_execution_contract_payload,
+                    prompt437_runtime_command_artifact_wiring_payload,
+                    prompt437_runtime_command_artifact_wiring_payload.get(
+                        "prompt437_runtime_command_request"
+                    ),
+                ),
+                execution_repo_path=resolved_execution_repo_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt484b_role_selection_layer_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -269975,6 +270176,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt484_daemon_lite_10_cycle_no_allow_boundary_state=(
                     prompt484_daemon_lite_10_cycle_no_allow_boundary_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt484b_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt484b_role_selection_layer_state=(
+                    prompt484b_role_selection_layer_payload
                 ),
             )
         )
@@ -272811,6 +273020,11 @@ class PlannedExecutionRunner:
             if key in prompt484_daemon_lite_10_cycle_no_allow_boundary_payload:
                 manifest["decision_summary"][key] = (
                     prompt484_daemon_lite_10_cycle_no_allow_boundary_payload.get(key)
+                )
+        for key in _PROMPT484B_ROLE_SELECTION_LAYER_KEYS:
+            if key in prompt484b_role_selection_layer_payload:
+                manifest["decision_summary"][key] = (
+                    prompt484b_role_selection_layer_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -279974,6 +280188,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT484_DAEMON_LITE_10_CYCLE_NO_ALLOW_BOUNDARY_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT484B_ROLE_SELECTION_LAYER_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
