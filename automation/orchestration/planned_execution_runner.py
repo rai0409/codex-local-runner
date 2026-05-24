@@ -4221,6 +4221,15 @@ _PROMPT483_SUCCESS_NEXT_ACTION = (
 _PROMPT483_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt483_role_catalog_reader_blocked"
 )
+_PROMPT484_SCHEMA_VERSION = (
+    "prompt484_daemon_lite_10_cycle_no_allow_boundary_v1"
+)
+_PROMPT484_SUCCESS_NEXT_ACTION = (
+    "request_explicit_prompt484_daemon_lite_10_cycle_smoke_execution"
+)
+_PROMPT484_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt484_daemon_lite_10_cycle_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -8754,6 +8763,39 @@ _PROMPT483_ROLE_CATALOG_READER_HANDOFF_KEYS: tuple[str, ...] = (
     "prompt483_blocked_reasons",
     "prompt483_next_action",
 )
+_PROMPT484_DAEMON_LITE_10_CYCLE_NO_ALLOW_BOUNDARY_KEYS: tuple[str, ...] = (
+    "prompt484_schema_version",
+    "prompt484_applicable",
+    "prompt484_daemon_lite_10_cycle_status",
+    "prompt484_daemon_lite_10_cycle_ready",
+    "prompt484_upstream_prompt483_evidence_ready",
+    "prompt484_requested_cycle_count",
+    "prompt484_max_cycles",
+    "prompt484_max_invocations",
+    "prompt484_max_runtime_seconds",
+    "prompt484_runtime_execution_requested",
+    "prompt484_explicit_10_cycle_smoke_allow_present",
+    "prompt484_allow_10_cycle_smoke",
+    "prompt484_total_invocation_attempts",
+    "prompt484_total_invocation_performed",
+    "prompt484_expected_invocation_count",
+    "prompt484_invocation_count_within_limit",
+    "prompt484_no_11th_invocation_attempted",
+    "prompt484_no_unbounded_loop_guard_ready",
+    "prompt484_completed_cycle_count",
+    "prompt484_failed_cycle_count",
+    "prompt484_daemon_lite_10_cycle_smoke_confirmed",
+    "prompt484_completion_until_done_handoff_ready",
+    "prompt484_real_development_deferred",
+    "prompt484_failed_recovery_deferred",
+    "prompt484_auto_continue_allowed",
+    "prompt484_auto_route_allowed",
+    "prompt484_blocked_reason",
+    "prompt484_blocked_reasons",
+    "prompt484_human_review_required",
+    "prompt484_human_intervention_required",
+    "prompt484_next_action",
+)
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
     "prompt386_prompt385_evidence_ready",
@@ -12904,6 +12946,27 @@ def _merge_prompt483_surface_into_approved_restart_payload(
         else {}
     )
     for key in _PROMPT483_ROLE_CATALOG_READER_HANDOFF_KEYS:
+        if key in surface:
+            merged[key] = surface.get(key)
+    return merged
+
+
+def _merge_prompt484_surface_into_approved_restart_payload(
+    *,
+    approved_restart_payload: Mapping[str, Any] | None,
+    prompt484_daemon_lite_10_cycle_no_allow_boundary_state: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    merged = (
+        dict(approved_restart_payload)
+        if isinstance(approved_restart_payload, Mapping)
+        else {}
+    )
+    surface = (
+        dict(prompt484_daemon_lite_10_cycle_no_allow_boundary_state)
+        if isinstance(prompt484_daemon_lite_10_cycle_no_allow_boundary_state, Mapping)
+        else {}
+    )
+    for key in _PROMPT484_DAEMON_LITE_10_CYCLE_NO_ALLOW_BOUNDARY_KEYS:
         if key in surface:
             merged[key] = surface.get(key)
     return merged
@@ -86820,6 +86883,77 @@ def _build_prompt483_role_catalog_reader_handoff_state(
             else _PROMPT483_BLOCKED_NEXT_ACTION
         ),
     }
+
+
+def _build_prompt484_daemon_lite_10_cycle_no_allow_boundary_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = dict(run_state_payload) if isinstance(run_state_payload, Mapping) else {}
+    upstream_ready = bool(
+        payload.get("prompt483_role_catalog_reader_status") == "ready"
+        and payload.get("prompt483_role_catalog_reader_ready") is True
+        and payload.get("prompt483_selected_role_id")
+        == "daemon_lite_10_cycle_no_allow_boundary"
+        and payload.get("prompt483_selected_role_found") is True
+        and payload.get("prompt483_chatgpt_next_prompt_generation_basis_ready") is True
+        and payload.get("prompt483_codex_prompt_implementation_only") is True
+    )
+
+    state: dict[str, Any] = {
+        "prompt484_schema_version": _PROMPT484_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt484",
+        "prompt484_applicable": True,
+        "prompt484_daemon_lite_10_cycle_status": "blocked",
+        "prompt484_daemon_lite_10_cycle_ready": False,
+        "prompt484_upstream_prompt483_evidence_ready": upstream_ready,
+        "prompt484_requested_cycle_count": 10,
+        "prompt484_max_cycles": 10,
+        "prompt484_max_invocations": 10,
+        "prompt484_max_runtime_seconds": 1800,
+        "prompt484_runtime_execution_requested": False,
+        "prompt484_explicit_10_cycle_smoke_allow_present": False,
+        "prompt484_allow_10_cycle_smoke": False,
+        "prompt484_total_invocation_attempts": 0,
+        "prompt484_total_invocation_performed": 0,
+        "prompt484_expected_invocation_count": 10,
+        "prompt484_invocation_count_within_limit": True,
+        "prompt484_no_11th_invocation_attempted": True,
+        "prompt484_no_unbounded_loop_guard_ready": True,
+        "prompt484_completed_cycle_count": 0,
+        "prompt484_failed_cycle_count": 0,
+        "prompt484_daemon_lite_10_cycle_smoke_confirmed": False,
+        "prompt484_completion_until_done_handoff_ready": False,
+        "prompt484_real_development_deferred": True,
+        "prompt484_failed_recovery_deferred": True,
+        "prompt484_auto_continue_allowed": False,
+        "prompt484_auto_route_allowed": False,
+        "prompt484_blocked_reason": "prompt483_evidence_missing",
+        "prompt484_blocked_reasons": ["prompt483_evidence_missing"],
+        "prompt484_human_review_required": True,
+        "prompt484_human_intervention_required": True,
+        "prompt484_next_action": _PROMPT484_BLOCKED_NEXT_ACTION,
+    }
+    if not upstream_ready:
+        return state
+
+    state.update(
+        {
+            "prompt484_daemon_lite_10_cycle_status": (
+                "ready_requires_explicit_allow"
+            ),
+            "prompt484_daemon_lite_10_cycle_ready": True,
+            "prompt484_blocked_reason": "",
+            "prompt484_blocked_reasons": [],
+            "prompt484_human_review_required": False,
+            "prompt484_human_intervention_required": False,
+            "prompt484_auto_continue_allowed": True,
+            "prompt484_auto_route_allowed": True,
+            "prompt484_next_action": _PROMPT484_SUCCESS_NEXT_ACTION,
+        }
+    )
+    return state
 
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -267354,6 +267488,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt483_role_catalog_reader_handoff_payload,
         }
+        prompt484_daemon_lite_10_cycle_no_allow_boundary_payload = (
+            _build_prompt484_daemon_lite_10_cycle_no_allow_boundary_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt484_daemon_lite_10_cycle_no_allow_boundary_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -269824,6 +269967,14 @@ class PlannedExecutionRunner:
                 approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
                 prompt483_role_catalog_reader_handoff_state=(
                     prompt483_role_catalog_reader_handoff_payload
+                ),
+            )
+        )
+        approved_restart_payload_for_bounded_local_loop = (
+            _merge_prompt484_surface_into_approved_restart_payload(
+                approved_restart_payload=approved_restart_payload_for_bounded_local_loop,
+                prompt484_daemon_lite_10_cycle_no_allow_boundary_state=(
+                    prompt484_daemon_lite_10_cycle_no_allow_boundary_payload
                 ),
             )
         )
@@ -272655,6 +272806,11 @@ class PlannedExecutionRunner:
             if key in prompt483_role_catalog_reader_handoff_payload:
                 manifest["decision_summary"][key] = (
                     prompt483_role_catalog_reader_handoff_payload.get(key)
+                )
+        for key in _PROMPT484_DAEMON_LITE_10_CYCLE_NO_ALLOW_BOUNDARY_KEYS:
+            if key in prompt484_daemon_lite_10_cycle_no_allow_boundary_payload:
+                manifest["decision_summary"][key] = (
+                    prompt484_daemon_lite_10_cycle_no_allow_boundary_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -279815,6 +279971,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT483_ROLE_CATALOG_READER_HANDOFF_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT484_DAEMON_LITE_10_CYCLE_NO_ALLOW_BOUNDARY_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
