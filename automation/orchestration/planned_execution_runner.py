@@ -4307,6 +4307,13 @@ _PROMPT484I_SUCCESS_NEXT_ACTION = (
 _PROMPT484I_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt484i_generated_prompt_file_request_blocked"
 )
+_PROMPT485_SCHEMA_VERSION = (
+    "prompt485_prompt378_supply_ready_for_prompt379_live_v1"
+)
+_PROMPT485_SUCCESS_NEXT_ACTION = "run_prompt379_live_execution_once"
+_PROMPT485_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt485_prompt378_supply_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -9185,6 +9192,46 @@ _PROMPT484I_GENERATED_PROMPT_FILE_REQUEST_COMPACT_KEYS: tuple[str, ...] = (
     "prompt484i_blocked_reason",
     "prompt484i_blocked_reasons",
     "prompt484i_next_action",
+)
+_PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS: tuple[str, ...] = (
+    "prompt485_schema_version",
+    "prompt485_applicable",
+    "prompt485_prompt378_supply_status",
+    "prompt485_prompt378_supply_ready",
+    "prompt485_prompt484i_ready",
+    "prompt485_prompt378_generated_prompt_supplied",
+    "prompt485_prompt378_generated_prompt_ready",
+    "prompt485_prompt378_validation_status",
+    "prompt485_prompt378_execution_handoff_ready",
+    "prompt485_prompt379_prompt_ready",
+    "prompt485_prompt379_live_execution_expected",
+    "prompt485_codex_execution_count_limit",
+    "prompt485_auto_commit_allowed",
+    "prompt485_auto_tag_allowed",
+    "prompt485_remote_mutation_allowed",
+    "prompt485_blocked_reason",
+    "prompt485_blocked_reasons",
+    "prompt485_next_action",
+)
+_PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt485_schema_version",
+    "prompt485_applicable",
+    "prompt485_prompt378_supply_status",
+    "prompt485_prompt378_supply_ready",
+    "prompt485_prompt484i_ready",
+    "prompt485_prompt378_generated_prompt_supplied",
+    "prompt485_prompt378_generated_prompt_ready",
+    "prompt485_prompt378_validation_status",
+    "prompt485_prompt378_execution_handoff_ready",
+    "prompt485_prompt379_prompt_ready",
+    "prompt485_prompt379_live_execution_expected",
+    "prompt485_codex_execution_count_limit",
+    "prompt485_auto_commit_allowed",
+    "prompt485_auto_tag_allowed",
+    "prompt485_remote_mutation_allowed",
+    "prompt485_blocked_reason",
+    "prompt485_blocked_reasons",
+    "prompt485_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -88203,6 +88250,152 @@ def _build_prompt484i_generated_prompt_file_request_state(
             _PROMPT484I_SUCCESS_NEXT_ACTION
             if ready
             else _PROMPT484I_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
+def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt484i_generated_prompt_file_request_ready = (
+        payload.get("prompt484i_generated_prompt_file_request_ready") is True
+    )
+    prompt484i_next_action = _normalize_text(
+        payload.get("prompt484i_next_action"),
+        default="",
+    )
+    prompt484i_expected_supply_flag = _normalize_text(
+        payload.get("prompt484i_expected_supply_flag"),
+        default="",
+    )
+    prompt484i_expected_next_action_after_supply = _normalize_text(
+        payload.get("prompt484i_expected_next_action_after_supply"),
+        default="",
+    )
+    prompt378_generated_prompt_supplied = (
+        payload.get("prompt378_generated_prompt_supplied") is True
+    )
+    prompt378_generated_prompt_ready = (
+        payload.get("prompt378_generated_prompt_ready") is True
+    )
+    prompt378_generated_prompt_validation_status = _normalize_text(
+        payload.get("prompt378_generated_prompt_validation_status"),
+        default="",
+    )
+    prompt378_generated_prompt_execution_handoff_ready = (
+        payload.get("prompt378_generated_prompt_execution_handoff_ready")
+        is True
+    )
+    prompt378_next_action = _normalize_text(
+        payload.get("prompt378_next_action"),
+        default="",
+    )
+    prompt378_active_blocked_reasons = payload.get(
+        "prompt378_active_blocked_reasons"
+    )
+    prompt379_prompt378_generated_prompt_ready = (
+        payload.get("prompt379_prompt378_generated_prompt_ready") is True
+    )
+
+    expected_bridge_action = (
+        "prepare_prompt379_generated_prompt_codex_execution_bridge"
+    )
+    blocked_reasons: list[str] = []
+    if not prompt484i_generated_prompt_file_request_ready:
+        blocked_reasons.append(
+            "prompt484i_generated_prompt_file_request_ready_missing_or_not_ready"
+        )
+    if prompt484i_next_action != _PROMPT484I_SUCCESS_NEXT_ACTION:
+        blocked_reasons.append("prompt484i_next_action_unexpected")
+    if prompt484i_expected_supply_flag != "--prompt378-generated-prompt-path":
+        blocked_reasons.append("prompt484i_expected_supply_flag_unexpected")
+    if prompt484i_expected_next_action_after_supply != expected_bridge_action:
+        blocked_reasons.append(
+            "prompt484i_expected_next_action_after_supply_unexpected"
+        )
+    if not prompt378_generated_prompt_supplied:
+        blocked_reasons.append(
+            "prompt378_generated_prompt_supplied_missing_or_not_ready"
+        )
+    if not prompt378_generated_prompt_ready:
+        blocked_reasons.append(
+            "prompt378_generated_prompt_ready_missing_or_not_ready"
+        )
+    if prompt378_generated_prompt_validation_status != "valid":
+        blocked_reasons.append(
+            "prompt378_generated_prompt_validation_status_unexpected"
+        )
+    if not prompt378_generated_prompt_execution_handoff_ready:
+        blocked_reasons.append(
+            "prompt378_generated_prompt_execution_handoff_ready_missing_or_not_ready"
+        )
+    if prompt378_next_action != expected_bridge_action:
+        blocked_reasons.append("prompt378_next_action_unexpected")
+    if prompt378_active_blocked_reasons != []:
+        blocked_reasons.append("prompt378_active_blocked_reasons_unexpected")
+    if not prompt379_prompt378_generated_prompt_ready:
+        blocked_reasons.append(
+            "prompt379_prompt378_generated_prompt_ready_missing_or_not_ready"
+        )
+
+    prompt484i_ready = bool(
+        prompt484i_generated_prompt_file_request_ready
+        and prompt484i_next_action == _PROMPT484I_SUCCESS_NEXT_ACTION
+        and prompt484i_expected_supply_flag == "--prompt378-generated-prompt-path"
+        and prompt484i_expected_next_action_after_supply == expected_bridge_action
+    )
+    ready = bool(
+        prompt484i_ready
+        and prompt378_generated_prompt_supplied
+        and prompt378_generated_prompt_ready
+        and prompt378_generated_prompt_validation_status == "valid"
+        and prompt378_generated_prompt_execution_handoff_ready
+        and prompt378_next_action == expected_bridge_action
+        and prompt378_active_blocked_reasons == []
+        and prompt379_prompt378_generated_prompt_ready
+        and not blocked_reasons
+    )
+
+    return {
+        "prompt485_schema_version": _PROMPT485_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt485",
+        "prompt485_applicable": True,
+        "prompt485_prompt378_supply_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt485_prompt378_supply_ready": ready,
+        "prompt485_prompt484i_ready": prompt484i_ready,
+        "prompt485_prompt378_generated_prompt_supplied": (
+            prompt378_generated_prompt_supplied
+        ),
+        "prompt485_prompt378_generated_prompt_ready": (
+            prompt378_generated_prompt_ready
+        ),
+        "prompt485_prompt378_validation_status": (
+            prompt378_generated_prompt_validation_status
+        ),
+        "prompt485_prompt378_execution_handoff_ready": (
+            prompt378_generated_prompt_execution_handoff_ready
+        ),
+        "prompt485_prompt379_prompt_ready": (
+            prompt379_prompt378_generated_prompt_ready
+        ),
+        "prompt485_prompt379_live_execution_expected": True,
+        "prompt485_codex_execution_count_limit": 1,
+        "prompt485_auto_commit_allowed": False,
+        "prompt485_auto_tag_allowed": False,
+        "prompt485_remote_mutation_allowed": False,
+        "prompt485_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt485_blocked_reasons": blocked_reasons,
+        "prompt485_next_action": (
+            _PROMPT485_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT485_BLOCKED_NEXT_ACTION
         ),
     }
 
@@ -268829,6 +269022,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt484i_generated_prompt_file_request_payload,
         }
+        prompt485_prompt378_supply_ready_for_prompt379_live_payload = (
+            _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt485_prompt378_supply_ready_for_prompt379_live_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -274199,6 +274401,11 @@ class PlannedExecutionRunner:
             if key in prompt484i_generated_prompt_file_request_payload:
                 manifest["decision_summary"][key] = (
                     prompt484i_generated_prompt_file_request_payload.get(key)
+                )
+        for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS:
+            if key in prompt485_prompt378_supply_ready_for_prompt379_live_payload:
+                manifest["decision_summary"][key] = (
+                    prompt485_prompt378_supply_ready_for_prompt379_live_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -281386,6 +281593,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT484I_GENERATED_PROMPT_FILE_REQUEST_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
