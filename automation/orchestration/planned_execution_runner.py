@@ -4323,6 +4323,15 @@ _PROMPT486_SUCCESS_NEXT_ACTION = (
 _PROMPT486_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt486_prompt379_live_preflight_blocked"
 )
+_PROMPT487_SCHEMA_VERSION = (
+    "prompt487_isolated_prompt379_live_route_v1"
+)
+_PROMPT487_SUCCESS_NEXT_ACTION = (
+    "execute_prompt379_generated_prompt_bridge_once"
+)
+_PROMPT487_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt487_isolated_route_blocked"
+)
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -9281,6 +9290,42 @@ _PROMPT486_PROMPT379_LIVE_ISOLATED_PREFLIGHT_COMPACT_KEYS: tuple[str, ...] = (
     "prompt486_blocked_reason",
     "prompt486_blocked_reasons",
     "prompt486_next_action",
+)
+_PROMPT487_ISOLATED_PROMPT379_LIVE_ROUTE_KEYS: tuple[str, ...] = (
+    "prompt487_schema_version",
+    "prompt487_applicable",
+    "prompt487_isolated_prompt379_live_route_status",
+    "prompt487_isolated_prompt379_live_route_ready",
+    "prompt487_prompt486_ready",
+    "prompt487_local_codex_one_shot_path_deferred",
+    "prompt487_unrelated_pre_prompt379_mutation_allowed",
+    "prompt487_prompt379_bridge_selected",
+    "prompt487_prompt379_live_execution_once_expected",
+    "prompt487_codex_execution_count_limit",
+    "prompt487_auto_commit_allowed",
+    "prompt487_auto_tag_allowed",
+    "prompt487_remote_mutation_allowed",
+    "prompt487_blocked_reason",
+    "prompt487_blocked_reasons",
+    "prompt487_next_action",
+)
+_PROMPT487_ISOLATED_PROMPT379_LIVE_ROUTE_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt487_schema_version",
+    "prompt487_applicable",
+    "prompt487_isolated_prompt379_live_route_status",
+    "prompt487_isolated_prompt379_live_route_ready",
+    "prompt487_prompt486_ready",
+    "prompt487_local_codex_one_shot_path_deferred",
+    "prompt487_unrelated_pre_prompt379_mutation_allowed",
+    "prompt487_prompt379_bridge_selected",
+    "prompt487_prompt379_live_execution_once_expected",
+    "prompt487_codex_execution_count_limit",
+    "prompt487_auto_commit_allowed",
+    "prompt487_auto_tag_allowed",
+    "prompt487_remote_mutation_allowed",
+    "prompt487_blocked_reason",
+    "prompt487_blocked_reasons",
+    "prompt487_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -88569,6 +88614,81 @@ def _build_prompt486_prompt379_live_isolated_preflight_state(
             _PROMPT486_SUCCESS_NEXT_ACTION
             if ready
             else _PROMPT486_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
+def _build_prompt487_isolated_prompt379_live_route_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    dry_run: bool,
+    live_transport_enabled: bool,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    blocked_reasons: list[str] = []
+
+    required_prompt486_fields: tuple[tuple[str, Any], ...] = (
+        ("prompt486_prompt379_live_preflight_ready", True),
+        ("prompt486_next_action", _PROMPT486_SUCCESS_NEXT_ACTION),
+        ("prompt486_local_codex_one_shot_path_deferred", True),
+        ("prompt486_unrelated_pre_prompt379_mutation_allowed", False),
+        ("prompt486_codex_execution_count_limit", 1),
+        ("prompt486_auto_commit_allowed", False),
+        ("prompt486_auto_tag_allowed", False),
+        ("prompt486_remote_mutation_allowed", False),
+    )
+    for field_name, expected in required_prompt486_fields:
+        if field_name not in payload:
+            blocked_reasons.append(f"{field_name}_missing")
+            continue
+        value = payload.get(field_name)
+        if value != expected:
+            blocked_reasons.append(f"{field_name}_unexpected")
+
+    if bool(dry_run):
+        blocked_reasons.append("transport_mode_not_live")
+    if not bool(live_transport_enabled):
+        blocked_reasons.append("live_transport_not_explicitly_enabled")
+
+    prompt486_ready = bool(
+        payload.get("prompt486_prompt379_live_preflight_ready") is True
+        and _normalize_text(payload.get("prompt486_next_action"), default="")
+        == _PROMPT486_SUCCESS_NEXT_ACTION
+        and payload.get("prompt486_local_codex_one_shot_path_deferred") is True
+        and payload.get("prompt486_unrelated_pre_prompt379_mutation_allowed") is False
+        and payload.get("prompt486_codex_execution_count_limit") == 1
+        and payload.get("prompt486_auto_commit_allowed") is False
+        and payload.get("prompt486_auto_tag_allowed") is False
+        and payload.get("prompt486_remote_mutation_allowed") is False
+    )
+    ready = bool(prompt486_ready and not blocked_reasons)
+
+    return {
+        "prompt487_schema_version": _PROMPT487_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt487",
+        "prompt487_applicable": True,
+        "prompt487_isolated_prompt379_live_route_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt487_isolated_prompt379_live_route_ready": ready,
+        "prompt487_prompt486_ready": prompt486_ready,
+        "prompt487_local_codex_one_shot_path_deferred": True,
+        "prompt487_unrelated_pre_prompt379_mutation_allowed": False,
+        "prompt487_prompt379_bridge_selected": ready,
+        "prompt487_prompt379_live_execution_once_expected": True,
+        "prompt487_codex_execution_count_limit": 1,
+        "prompt487_auto_commit_allowed": False,
+        "prompt487_auto_tag_allowed": False,
+        "prompt487_remote_mutation_allowed": False,
+        "prompt487_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt487_blocked_reasons": blocked_reasons,
+        "prompt487_next_action": (
+            _PROMPT487_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT487_BLOCKED_NEXT_ACTION
         ),
     }
 
@@ -264130,7 +264250,9 @@ class PlannedExecutionRunner:
                     prompt378_generated_prompt_path,
                     default="",
                 ),
-                prompt379_live_transport_enabled=bool(not dry_run),
+                prompt379_live_transport_enabled=bool(
+                    (not dry_run) and live_transport_enabled
+                ),
             )
         )
         normalized_job_id_for_prompt378_relaxed = resolved_job_id.lower()
@@ -268081,7 +268203,9 @@ class PlannedExecutionRunner:
                     prompt378_relaxed_local_verification_enabled
                 ),
                 prompt379_dry_run_transport_mode=bool(dry_run),
-                prompt379_live_transport_enabled=bool(not dry_run),
+                prompt379_live_transport_enabled=bool(
+                    (not dry_run) and live_transport_enabled
+                ),
                 now=self.now,
             )
         )
@@ -269212,6 +269336,17 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt486_prompt379_live_isolated_preflight_payload,
+        }
+        prompt487_isolated_prompt379_live_route_payload = (
+            _build_prompt487_isolated_prompt379_live_route_state(
+                run_state_payload=run_state_payload,
+                dry_run=bool(dry_run),
+                live_transport_enabled=bool(live_transport_enabled),
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt487_isolated_prompt379_live_route_payload,
         }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
@@ -274593,6 +274728,11 @@ class PlannedExecutionRunner:
             if key in prompt486_prompt379_live_isolated_preflight_payload:
                 manifest["decision_summary"][key] = (
                     prompt486_prompt379_live_isolated_preflight_payload.get(key)
+                )
+        for key in _PROMPT487_ISOLATED_PROMPT379_LIVE_ROUTE_KEYS:
+            if key in prompt487_isolated_prompt379_live_route_payload:
+                manifest["decision_summary"][key] = (
+                    prompt487_isolated_prompt379_live_route_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -281786,6 +281926,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT486_PROMPT379_LIVE_ISOLATED_PREFLIGHT_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT487_ISOLATED_PROMPT379_LIVE_ROUTE_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
