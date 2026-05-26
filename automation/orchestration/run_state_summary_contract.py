@@ -1155,6 +1155,26 @@ PROMPT490_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt490_next_action",
 )
 
+PROMPT491A_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt491a_role_prompt_materialization_status",
+    "prompt491a_role_prompt_materialization_ready",
+    "prompt491a_source_role_ready",
+    "prompt491a_materialized_prompt378_path",
+    "prompt491a_prompt378_canonical_tokens_ready",
+    "prompt491a_materialized_prompt378_write_deferred",
+    "prompt491a_blocked_reason",
+    "prompt491a_blocked_reasons",
+    "prompt491a_next_action",
+)
+
+PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt491_third_success_cycle_status",
+    "prompt491_third_success_cycle_ready",
+    "prompt491_source_prompt490_ready",
+    "prompt491_source_prompt379_success",
+    "prompt491_next_action",
+)
+
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "state",
     "orchestration_state",
@@ -1235,6 +1255,8 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT487_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT489_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT490_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT491A_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
     "prompt356_stale_blockers_present",

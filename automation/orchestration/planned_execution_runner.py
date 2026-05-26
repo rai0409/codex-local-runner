@@ -4307,6 +4307,15 @@ _PROMPT484I_SUCCESS_NEXT_ACTION = (
 _PROMPT484I_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt484i_generated_prompt_file_request_blocked"
 )
+_PROMPT491A_SCHEMA_VERSION = (
+    "prompt491a_role_to_prompt378_materialization_gate_v1"
+)
+_PROMPT491A_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt492_materialized_prompt378_to_prompt379_bridge"
+)
+_PROMPT491A_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt491a_role_prompt_materialization_blocked"
+)
 _PROMPT485_SCHEMA_VERSION = (
     "prompt485_prompt378_supply_ready_for_prompt379_live_v1"
 )
@@ -4334,6 +4343,7 @@ _PROMPT487_BLOCKED_NEXT_ACTION = (
 )
 _PROMPT489_NEXT_ACTION = "prepare_prompt489_diff_review_and_commit_tag_if_valid"
 _PROMPT490_NEXT_ACTION = "prepare_prompt490_diff_review_and_commit_tag_if_valid"
+_PROMPT491_NEXT_ACTION = "prepare_prompt491_diff_review_and_commit_tag_if_valid"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -9213,6 +9223,32 @@ _PROMPT484I_GENERATED_PROMPT_FILE_REQUEST_COMPACT_KEYS: tuple[str, ...] = (
     "prompt484i_blocked_reasons",
     "prompt484i_next_action",
 )
+_PROMPT491A_ROLE_PROMPT_MATERIALIZATION_KEYS: tuple[str, ...] = (
+    "prompt491a_schema_version",
+    "prompt491a_applicable",
+    "prompt491a_role_prompt_materialization_status",
+    "prompt491a_role_prompt_materialization_ready",
+    "prompt491a_source_role_ready",
+    "prompt491a_materialized_prompt378_path",
+    "prompt491a_prompt378_canonical_tokens_ready",
+    "prompt491a_materialized_prompt378_write_deferred",
+    "prompt491a_blocked_reason",
+    "prompt491a_blocked_reasons",
+    "prompt491a_next_action",
+)
+_PROMPT491A_ROLE_PROMPT_MATERIALIZATION_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt491a_schema_version",
+    "prompt491a_applicable",
+    "prompt491a_role_prompt_materialization_status",
+    "prompt491a_role_prompt_materialization_ready",
+    "prompt491a_source_role_ready",
+    "prompt491a_materialized_prompt378_path",
+    "prompt491a_prompt378_canonical_tokens_ready",
+    "prompt491a_materialized_prompt378_write_deferred",
+    "prompt491a_blocked_reason",
+    "prompt491a_blocked_reasons",
+    "prompt491a_next_action",
+)
 _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS: tuple[str, ...] = (
     "prompt485_schema_version",
     "prompt485_applicable",
@@ -9356,6 +9392,20 @@ _PROMPT490_SECOND_SUCCESS_CYCLE_COMPACT_KEYS: tuple[str, ...] = (
     "prompt490_source_prompt489_ready",
     "prompt490_source_prompt379_success",
     "prompt490_next_action",
+)
+_PROMPT491_THIRD_SUCCESS_CYCLE_KEYS: tuple[str, ...] = (
+    "prompt491_third_success_cycle_status",
+    "prompt491_third_success_cycle_ready",
+    "prompt491_source_prompt490_ready",
+    "prompt491_source_prompt379_success",
+    "prompt491_next_action",
+)
+_PROMPT491_THIRD_SUCCESS_CYCLE_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt491_third_success_cycle_status",
+    "prompt491_third_success_cycle_ready",
+    "prompt491_source_prompt490_ready",
+    "prompt491_source_prompt379_success",
+    "prompt491_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -88378,6 +88428,249 @@ def _build_prompt484i_generated_prompt_file_request_state(
     }
 
 
+def _prompt491a_bounded_role_summary(
+    *,
+    selected_role_id: str,
+    selected_role_text: str,
+    fallback: str,
+) -> str:
+    for raw_line in selected_role_text.splitlines():
+        line = raw_line.strip().strip("-").strip()
+        if line:
+            return line[:240]
+    if selected_role_id:
+        return f"role-derived request for {selected_role_id}"
+    return fallback
+
+
+def _prompt491a_materialized_prompt378_markdown(
+    *,
+    selected_role_id: str,
+    selected_role_text: str,
+) -> str:
+    role_summary = _prompt491a_bounded_role_summary(
+        selected_role_id=selected_role_id,
+        selected_role_text=selected_role_text,
+        fallback="role-derived Prompt378 handoff",
+    )
+    role_target = (
+        f"role-derived target: {selected_role_id}"
+        if selected_role_id
+        else "safe placeholder: role-derived implementation target unavailable"
+    )
+    lines = [
+        "Goal:",
+        f"Prepare a Prompt378-compatible local prompt artifact for {role_summary}.",
+        "",
+        "Objective:",
+        (
+            "Materialize one bounded, local-only Prompt378 prompt from the "
+            f"selected role request `{selected_role_id or 'unknown_role'}`."
+        ),
+        "",
+        "success-path-only:",
+        (
+            "This is success-path-only. Do not implement retries, rollback, "
+            "daemon polling, sleep loops, all-role automatic iteration, "
+            "completion-until-done, or failure recovery."
+        ),
+        "",
+        "local-only / no remote mutation:",
+        (
+            "All work must remain local-only. no remote mutation. no git "
+            "during implementation. Do not push, open PRs, merge branches, "
+            "call remote APIs, commit, tag, or mutate remote state."
+        ),
+        "",
+        "Implementation targets:",
+        role_target,
+        "automation/orchestration/planned_execution_runner.py",
+        "",
+        "Required exact fields:",
+        "Preserve Prompt378 acceptance semantics and keep execution outcomes under result.json.execution.",
+        "",
+        "Allowed files:",
+        "automation/orchestration/planned_execution_runner.py",
+        "automation/orchestration/run_state_summary_contract.py",
+        "",
+        "Forbidden files:",
+        "Prompt378 validator, Prompt379 bridge, provider adapters, git metadata, generated caches.",
+        "",
+        "Expected artifacts or fields:",
+        'artifacts_dir / "prompt491a" / "materialized_prompt378.md"',
+        "prompt491a_role_prompt_materialization_status",
+        "prompt491a_prompt378_canonical_tokens_ready",
+        "",
+        "Expected artifact or output:",
+        "A validator-complete materialized Prompt378 markdown artifact and no tests.",
+        "",
+        "Validation commands:",
+        "python -m py_compile automation/orchestration/planned_execution_runner.py automation/orchestration/run_state_summary_contract.py scripts/run_planned_execution.py",
+        "git diff --name-only",
+        'grep -n "Expected artifacts or fields:" automation/orchestration/planned_execution_runner.py',
+        'grep -n "prompt491a_role_prompt_materialization_status" automation/orchestration/run_state_summary_contract.py',
+        "",
+        "out of scope:",
+        "Prompt378 validator changes, Prompt379 bridge changes, Prompt379 execution, tests, commits, tags, pushes, PRs, merges.",
+        "",
+        "next_action:",
+        _PROMPT491A_SUCCESS_NEXT_ACTION,
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _prompt491a_canonical_tokens_ready(prompt_text: str) -> bool:
+    required_headings = (
+        "Goal:",
+        "Objective:",
+        "success-path-only:",
+        "local-only / no remote mutation:",
+        "Implementation targets:",
+        "Required exact fields:",
+        "Allowed files:",
+        "Forbidden files:",
+        "Expected artifacts or fields:",
+        "Expected artifact or output:",
+        "Validation commands:",
+        "out of scope:",
+        "next_action:",
+    )
+    required_safety_tokens = (
+        "success-path-only",
+        "local-only",
+        "no remote mutation",
+        "no tests",
+        "no git",
+        "allowed files",
+        "forbidden files",
+        "expected artifacts or fields",
+        "expected artifact or output",
+        "validation commands",
+        "out of scope",
+        "next_action",
+        "automation/orchestration/planned_execution_runner.py",
+    )
+    prompt_text_lower = prompt_text.lower()
+    return all(heading in prompt_text for heading in required_headings) and all(
+        token in prompt_text_lower for token in required_safety_tokens
+    )
+
+
+def _build_prompt491a_role_prompt_materialization_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    artifacts_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    selected_role_id = _normalize_text(
+        payload.get("prompt483_selected_role_id"),
+        default="",
+    )
+    selected_role_text = _normalize_text(
+        payload.get("prompt483_selected_role_text"),
+        default="",
+    )
+    source_role_ready = bool(
+        payload.get("prompt483_role_catalog_reader_ready") is True
+        and selected_role_id
+        and selected_role_text
+        and payload.get("prompt483_chatgpt_prompt_generation_required") is True
+        and payload.get("prompt483_runner_generated_prompt_allowed") is False
+        and payload.get("prompt484f_role_driven_cycle_ready") is True
+        and payload.get("prompt484g_role_driven_execution_request_ready") is True
+        and payload.get("prompt484h_prompt378_generation_request_ready") is True
+        and payload.get("prompt484i_generated_prompt_file_request_ready") is True
+    )
+
+    prompt_text = _prompt491a_materialized_prompt378_markdown(
+        selected_role_id=selected_role_id,
+        selected_role_text=selected_role_text,
+    )
+    canonical_tokens_ready = _prompt491a_canonical_tokens_ready(prompt_text)
+
+    blocked_reasons: list[str] = []
+    if payload.get("prompt483_role_catalog_reader_ready") is not True:
+        blocked_reasons.append("prompt483_role_catalog_reader_not_ready")
+    if not selected_role_id:
+        blocked_reasons.append("prompt483_selected_role_id_missing")
+    if not selected_role_text:
+        blocked_reasons.append("prompt483_selected_role_text_missing")
+    if payload.get("prompt483_chatgpt_prompt_generation_required") is not True:
+        blocked_reasons.append(
+            "prompt483_chatgpt_prompt_generation_required_missing"
+        )
+    if payload.get("prompt483_runner_generated_prompt_allowed") is not False:
+        blocked_reasons.append(
+            "prompt483_runner_generated_prompt_allowed_not_false"
+        )
+    if payload.get("prompt484f_role_driven_cycle_ready") is not True:
+        blocked_reasons.append("prompt484f_role_driven_cycle_not_ready")
+    if payload.get("prompt484g_role_driven_execution_request_ready") is not True:
+        blocked_reasons.append(
+            "prompt484g_role_driven_execution_request_not_ready"
+        )
+    if payload.get("prompt484h_prompt378_generation_request_ready") is not True:
+        blocked_reasons.append("prompt484h_prompt378_generation_request_not_ready")
+    if payload.get("prompt484i_generated_prompt_file_request_ready") is not True:
+        blocked_reasons.append(
+            "prompt484i_generated_prompt_file_request_not_ready"
+        )
+    if not canonical_tokens_ready:
+        blocked_reasons.append("prompt491a_prompt378_canonical_tokens_missing")
+
+    materialized_path = ""
+    write_deferred = True
+    if source_role_ready and canonical_tokens_ready:
+        if artifacts_dir is None:
+            blocked_reasons.append("prompt491a_safe_artifact_write_location_missing")
+        else:
+            artifact_path = (
+                Path(artifacts_dir)
+                / "prompt491a"
+                / "materialized_prompt378.md"
+            )
+            try:
+                artifact_path.parent.mkdir(parents=True, exist_ok=True)
+                artifact_path.write_text(prompt_text, encoding="utf-8")
+                materialized_path = str(artifact_path)
+                write_deferred = False
+            except OSError:
+                blocked_reasons.append(
+                    "prompt491a_materialized_prompt378_write_failed"
+                )
+
+    ready = bool(
+        source_role_ready
+        and canonical_tokens_ready
+        and materialized_path
+        and not write_deferred
+        and not blocked_reasons
+    )
+    return {
+        "prompt491a_schema_version": _PROMPT491A_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt491a",
+        "prompt491a_applicable": True,
+        "prompt491a_role_prompt_materialization_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt491a_role_prompt_materialization_ready": ready,
+        "prompt491a_source_role_ready": source_role_ready,
+        "prompt491a_materialized_prompt378_path": materialized_path,
+        "prompt491a_prompt378_canonical_tokens_ready": canonical_tokens_ready,
+        "prompt491a_materialized_prompt378_write_deferred": write_deferred,
+        "prompt491a_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt491a_blocked_reasons": blocked_reasons,
+        "prompt491a_next_action": (
+            _PROMPT491A_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT491A_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -88766,6 +89059,29 @@ def _build_prompt490_second_success_cycle_state(
             prompt379_returncode_classification == "success"
         ),
         "prompt490_next_action": _PROMPT490_NEXT_ACTION,
+    }
+
+
+def _build_prompt491_third_success_cycle_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt379_returncode_classification = _normalize_text(
+        payload.get("prompt379_returncode_classification"),
+        default="",
+    )
+
+    return {
+        "prompt491_third_success_cycle_status": "ready",
+        "prompt491_third_success_cycle_ready": True,
+        "prompt491_source_prompt490_ready": bool(
+            payload.get("prompt490_second_success_cycle_ready") is True
+        ),
+        "prompt491_source_prompt379_success": bool(
+            prompt379_returncode_classification == "success"
+        ),
+        "prompt491_next_action": _PROMPT491_NEXT_ACTION,
     }
 
 
@@ -269395,6 +269711,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt484i_generated_prompt_file_request_payload,
         }
+        prompt491a_role_prompt_materialization_payload = (
+            _build_prompt491a_role_prompt_materialization_state(
+                run_state_payload=run_state_payload,
+                artifacts_dir=artifacts_root,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt491a_role_prompt_materialization_payload,
+        }
         prompt485_prompt378_supply_ready_for_prompt379_live_payload = (
             _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
                 run_state_payload=run_state_payload,
@@ -269441,6 +269767,15 @@ class PlannedExecutionRunner:
         run_state_payload = {
             **run_state_payload,
             **prompt490_second_success_cycle_payload,
+        }
+        prompt491_third_success_cycle_payload = (
+            _build_prompt491_third_success_cycle_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt491_third_success_cycle_payload,
         }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
@@ -274813,6 +275148,11 @@ class PlannedExecutionRunner:
                 manifest["decision_summary"][key] = (
                     prompt484i_generated_prompt_file_request_payload.get(key)
                 )
+        for key in _PROMPT491A_ROLE_PROMPT_MATERIALIZATION_KEYS:
+            if key in prompt491a_role_prompt_materialization_payload:
+                manifest["decision_summary"][key] = (
+                    prompt491a_role_prompt_materialization_payload.get(key)
+                )
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS:
             if key in prompt485_prompt378_supply_ready_for_prompt379_live_payload:
                 manifest["decision_summary"][key] = (
@@ -274837,6 +275177,11 @@ class PlannedExecutionRunner:
             if key in prompt490_second_success_cycle_payload:
                 manifest["decision_summary"][key] = (
                     prompt490_second_success_cycle_payload.get(key)
+                )
+        for key in _PROMPT491_THIRD_SUCCESS_CYCLE_KEYS:
+            if key in prompt491_third_success_cycle_payload:
+                manifest["decision_summary"][key] = (
+                    prompt491_third_success_cycle_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -282026,6 +282371,9 @@ class PlannedExecutionRunner:
         for key in _PROMPT484I_GENERATED_PROMPT_FILE_REQUEST_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT491A_ROLE_PROMPT_MATERIALIZATION_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
@@ -282039,6 +282387,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT490_SECOND_SUCCESS_CYCLE_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT491_THIRD_SUCCESS_CYCLE_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
