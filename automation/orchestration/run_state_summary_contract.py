@@ -1167,6 +1167,27 @@ PROMPT491A_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt491a_next_action",
 )
 
+PROMPT492_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt492_role_contract_status",
+    "prompt492_role_contract_ready",
+    "prompt492_source_role_ready",
+    "prompt492_selected_role_id",
+    "prompt492_selected_role_text_present",
+    "prompt492_bounded_scope_ready",
+    "prompt492_allowed_files",
+    "prompt492_forbidden_files",
+    "prompt492_validation_commands",
+    "prompt492_required_canonical_sections",
+    "prompt492_mutation_boundary_ready",
+    "prompt492_remote_mutation_allowed",
+    "prompt492_git_mutation_allowed",
+    "prompt492_tests_allowed",
+    "prompt492_prompt379_execution_allowed",
+    "prompt492_blocked_reason",
+    "prompt492_blocked_reasons",
+    "prompt492_next_action",
+)
+
 PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt491_third_success_cycle_status",
     "prompt491_third_success_cycle_ready",
@@ -1256,6 +1277,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT489_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT490_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT491A_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT492_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",

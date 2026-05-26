@@ -4316,6 +4316,30 @@ _PROMPT491A_SUCCESS_NEXT_ACTION = (
 _PROMPT491A_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt491a_role_prompt_materialization_blocked"
 )
+_PROMPT492_SCHEMA_VERSION = (
+    "prompt492_bounded_role_contract_extraction_gate_v1"
+)
+_PROMPT492_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt493_role_contract_to_prompt378_materialization"
+)
+_PROMPT492_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt492_role_contract_extraction_blocked"
+)
+_PROMPT492_REQUIRED_CANONICAL_SECTIONS: tuple[str, ...] = (
+    "Goal:",
+    "Objective:",
+    "success-path-only:",
+    "local-only / no remote mutation:",
+    "Implementation targets:",
+    "Required exact fields:",
+    "Allowed files:",
+    "Forbidden files:",
+    "Expected artifacts or fields:",
+    "Expected artifact or output:",
+    "Validation commands:",
+    "out of scope:",
+    "next_action:",
+)
 _PROMPT485_SCHEMA_VERSION = (
     "prompt485_prompt378_supply_ready_for_prompt379_live_v1"
 )
@@ -9248,6 +9272,50 @@ _PROMPT491A_ROLE_PROMPT_MATERIALIZATION_COMPACT_KEYS: tuple[str, ...] = (
     "prompt491a_blocked_reason",
     "prompt491a_blocked_reasons",
     "prompt491a_next_action",
+)
+_PROMPT492_BOUNDED_ROLE_CONTRACT_EXTRACTION_KEYS: tuple[str, ...] = (
+    "prompt492_schema_version",
+    "prompt492_applicable",
+    "prompt492_selected_role_id",
+    "prompt492_selected_role_text_present",
+    "prompt492_role_contract_status",
+    "prompt492_role_contract_ready",
+    "prompt492_source_role_ready",
+    "prompt492_bounded_scope_ready",
+    "prompt492_allowed_files",
+    "prompt492_forbidden_files",
+    "prompt492_validation_commands",
+    "prompt492_required_canonical_sections",
+    "prompt492_mutation_boundary_ready",
+    "prompt492_remote_mutation_allowed",
+    "prompt492_git_mutation_allowed",
+    "prompt492_tests_allowed",
+    "prompt492_prompt379_execution_allowed",
+    "prompt492_blocked_reason",
+    "prompt492_blocked_reasons",
+    "prompt492_next_action",
+)
+_PROMPT492_BOUNDED_ROLE_CONTRACT_EXTRACTION_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt492_schema_version",
+    "prompt492_applicable",
+    "prompt492_selected_role_id",
+    "prompt492_selected_role_text_present",
+    "prompt492_role_contract_status",
+    "prompt492_role_contract_ready",
+    "prompt492_source_role_ready",
+    "prompt492_bounded_scope_ready",
+    "prompt492_allowed_files",
+    "prompt492_forbidden_files",
+    "prompt492_validation_commands",
+    "prompt492_required_canonical_sections",
+    "prompt492_mutation_boundary_ready",
+    "prompt492_remote_mutation_allowed",
+    "prompt492_git_mutation_allowed",
+    "prompt492_tests_allowed",
+    "prompt492_prompt379_execution_allowed",
+    "prompt492_blocked_reason",
+    "prompt492_blocked_reasons",
+    "prompt492_next_action",
 )
 _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS: tuple[str, ...] = (
     "prompt485_schema_version",
@@ -88667,6 +88735,292 @@ def _build_prompt491a_role_prompt_materialization_state(
             _PROMPT491A_SUCCESS_NEXT_ACTION
             if ready
             else _PROMPT491A_BLOCKED_NEXT_ACTION
+        ),
+    }
+
+
+def _prompt492_role_text_section_lines(
+    *,
+    selected_role_text: str,
+    section_name: str,
+) -> list[str]:
+    lines: list[str] = []
+    in_section = False
+    section_header = f"{section_name}:"
+    known_headers = (
+        "Use when:",
+        "Goal:",
+        "Required constraints:",
+        "Success:",
+        "Do not:",
+        "ChatGPT note:",
+    )
+    for raw_line in selected_role_text.splitlines():
+        line = raw_line.strip()
+        if line == section_header:
+            in_section = True
+            continue
+        if in_section and line in known_headers:
+            break
+        if in_section and line:
+            lines.append(line)
+    return lines
+
+
+def _prompt492_extract_role_paths(selected_role_text: str) -> list[str]:
+    paths: list[str] = []
+    for raw_line in selected_role_text.splitlines():
+        line = raw_line.strip().strip("-").strip().strip("`").strip()
+        for token in line.replace(",", " ").split():
+            candidate = token.strip().strip("`'\"")
+            if (
+                candidate.startswith("automation/")
+                and "." in candidate.rsplit("/", 1)[-1]
+                and candidate not in paths
+            ):
+                paths.append(candidate)
+    return paths
+
+
+def _prompt492_infer_allowed_files(selected_role_text: str) -> list[str]:
+    explicit_paths = _prompt492_extract_role_paths(selected_role_text)
+    allowed_files = [
+        path
+        for path in explicit_paths
+        if path
+        in {
+            "automation/orchestration/planned_execution_runner.py",
+            "automation/orchestration/run_state_summary_contract.py",
+        }
+    ]
+    lowered = selected_role_text.lower()
+    if (
+        not allowed_files
+        and (
+            "metadata" in lowered
+            or "run_state" in lowered
+            or "prompt" in lowered
+        )
+    ):
+        allowed_files = [
+            "automation/orchestration/planned_execution_runner.py",
+            "automation/orchestration/run_state_summary_contract.py",
+        ]
+    return list(dict.fromkeys(allowed_files))
+
+
+def _prompt492_infer_forbidden_files() -> list[str]:
+    return [
+        "tests",
+        "docs",
+        "README",
+        "examples",
+        "scripts/run_planned_execution.py",
+        ".git",
+        "__pycache__",
+        "*.pyc",
+        "generated artifacts/logs/caches",
+    ]
+
+
+def _prompt492_infer_validation_commands() -> list[str]:
+    return [
+        (
+            "python -m py_compile "
+            "automation/orchestration/planned_execution_runner.py "
+            "automation/orchestration/run_state_summary_contract.py "
+            "scripts/run_planned_execution.py"
+        ),
+        "git diff --name-only",
+        (
+            'grep -n "prompt492_role_contract_status" '
+            "automation/orchestration/planned_execution_runner.py"
+        ),
+        (
+            'grep -n "prompt492_role_contract_status" '
+            "automation/orchestration/run_state_summary_contract.py"
+        ),
+    ]
+
+
+def _build_prompt492_bounded_role_contract_extraction_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    selected_role_id = _normalize_text(
+        payload.get("prompt483_selected_role_id"),
+        default="",
+    )
+    selected_role_text = _normalize_text(
+        payload.get("prompt483_selected_role_text"),
+        default="",
+    )
+    selected_role_text_present = bool(
+        selected_role_text
+        and payload.get("prompt483_selected_role_text_non_empty") is True
+    )
+    contains_use_when = bool(
+        payload.get("prompt483_selected_role_contains_use_when") is True
+    )
+    contains_goal = bool(
+        payload.get("prompt483_selected_role_contains_goal") is True
+    )
+    contains_success = bool(
+        payload.get("prompt483_selected_role_contains_success") is True
+    )
+    contains_do_not = bool(
+        payload.get("prompt483_selected_role_contains_do_not") is True
+    )
+    source_role_ready = bool(
+        payload.get("prompt483_role_catalog_reader_ready") is True
+        and selected_role_id
+        and selected_role_text_present
+        and contains_use_when
+        and contains_goal
+        and contains_success
+        and contains_do_not
+        and payload.get("prompt483_chatgpt_selected_role_handoff_ready") is True
+        and payload.get("prompt484f_role_driven_cycle_ready") is True
+        and payload.get("prompt484g_role_driven_execution_request_ready") is True
+        and payload.get("prompt484h_prompt378_generation_request_ready") is True
+        and payload.get("prompt484i_generated_prompt_file_request_ready") is True
+        and payload.get("prompt491a_prompt378_canonical_tokens_ready") is True
+    )
+
+    use_when_lines = _prompt492_role_text_section_lines(
+        selected_role_text=selected_role_text,
+        section_name="Use when",
+    )
+    goal_lines = _prompt492_role_text_section_lines(
+        selected_role_text=selected_role_text,
+        section_name="Goal",
+    )
+    required_constraint_lines = _prompt492_role_text_section_lines(
+        selected_role_text=selected_role_text,
+        section_name="Required constraints",
+    )
+    success_lines = _prompt492_role_text_section_lines(
+        selected_role_text=selected_role_text,
+        section_name="Success",
+    )
+    do_not_lines = _prompt492_role_text_section_lines(
+        selected_role_text=selected_role_text,
+        section_name="Do not",
+    )
+    bounded_scope_ready = bool(
+        use_when_lines
+        and goal_lines
+        and required_constraint_lines
+        and success_lines
+        and do_not_lines
+    )
+    allowed_files = _prompt492_infer_allowed_files(selected_role_text)
+    forbidden_files = _prompt492_infer_forbidden_files()
+    validation_commands = _prompt492_infer_validation_commands()
+    required_canonical_sections = list(_PROMPT492_REQUIRED_CANONICAL_SECTIONS)
+    remote_mutation_allowed = False
+    git_mutation_allowed = False
+    tests_allowed = False
+    prompt379_execution_allowed = False
+    mutation_boundary_ready = bool(
+        remote_mutation_allowed is False
+        and git_mutation_allowed is False
+        and tests_allowed is False
+        and prompt379_execution_allowed is False
+    )
+
+    blocked_reasons: list[str] = []
+    if payload.get("prompt483_role_catalog_reader_ready") is not True:
+        blocked_reasons.append("prompt483_role_catalog_reader_not_ready")
+    if not selected_role_id:
+        blocked_reasons.append("prompt483_selected_role_id_missing")
+    if not selected_role_text_present:
+        blocked_reasons.append("prompt483_selected_role_text_missing")
+    if not contains_use_when:
+        blocked_reasons.append("prompt483_selected_role_use_when_missing")
+    if not contains_goal:
+        blocked_reasons.append("prompt483_selected_role_goal_missing")
+    if not contains_success:
+        blocked_reasons.append("prompt483_selected_role_success_missing")
+    if not contains_do_not:
+        blocked_reasons.append("prompt483_selected_role_do_not_missing")
+    if payload.get("prompt483_chatgpt_selected_role_handoff_ready") is not True:
+        blocked_reasons.append("prompt483_selected_role_handoff_not_ready")
+    if payload.get("prompt484f_role_driven_cycle_ready") is not True:
+        blocked_reasons.append("prompt484f_role_driven_cycle_not_ready")
+    if payload.get("prompt484g_role_driven_execution_request_ready") is not True:
+        blocked_reasons.append(
+            "prompt484g_role_driven_execution_request_not_ready"
+        )
+    if payload.get("prompt484h_prompt378_generation_request_ready") is not True:
+        blocked_reasons.append("prompt484h_prompt378_generation_request_not_ready")
+    if payload.get("prompt484i_generated_prompt_file_request_ready") is not True:
+        blocked_reasons.append(
+            "prompt484i_generated_prompt_file_request_not_ready"
+        )
+    if payload.get("prompt491a_prompt378_canonical_tokens_ready") is not True:
+        blocked_reasons.append("prompt491a_prompt378_canonical_tokens_not_ready")
+    if not source_role_ready:
+        blocked_reasons.append("prompt492_source_role_not_ready")
+    if not bounded_scope_ready:
+        blocked_reasons.append("prompt492_bounded_scope_evidence_missing")
+    if not allowed_files:
+        blocked_reasons.append("prompt492_allowed_files_missing")
+    if not forbidden_files:
+        blocked_reasons.append("prompt492_forbidden_files_missing")
+    if not validation_commands:
+        blocked_reasons.append("prompt492_validation_commands_missing")
+    if set(_PROMPT492_REQUIRED_CANONICAL_SECTIONS) - set(
+        required_canonical_sections
+    ):
+        blocked_reasons.append("prompt492_required_canonical_sections_missing")
+    if not mutation_boundary_ready:
+        blocked_reasons.append("prompt492_mutation_boundary_not_ready")
+
+    ready = bool(
+        selected_role_id
+        and selected_role_text_present
+        and source_role_ready
+        and bounded_scope_ready
+        and allowed_files
+        and forbidden_files
+        and validation_commands
+        and mutation_boundary_ready
+        and not remote_mutation_allowed
+        and not git_mutation_allowed
+        and not tests_allowed
+        and not prompt379_execution_allowed
+        and not blocked_reasons
+    )
+    return {
+        "prompt492_schema_version": _PROMPT492_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt492",
+        "prompt492_applicable": True,
+        "prompt492_selected_role_id": selected_role_id,
+        "prompt492_selected_role_text_present": selected_role_text_present,
+        "prompt492_role_contract_status": "ready" if ready else "blocked",
+        "prompt492_role_contract_ready": ready,
+        "prompt492_source_role_ready": source_role_ready,
+        "prompt492_bounded_scope_ready": bounded_scope_ready,
+        "prompt492_allowed_files": allowed_files,
+        "prompt492_forbidden_files": forbidden_files,
+        "prompt492_validation_commands": validation_commands,
+        "prompt492_required_canonical_sections": required_canonical_sections,
+        "prompt492_mutation_boundary_ready": mutation_boundary_ready,
+        "prompt492_remote_mutation_allowed": remote_mutation_allowed,
+        "prompt492_git_mutation_allowed": git_mutation_allowed,
+        "prompt492_tests_allowed": tests_allowed,
+        "prompt492_prompt379_execution_allowed": prompt379_execution_allowed,
+        "prompt492_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt492_blocked_reasons": blocked_reasons,
+        "prompt492_next_action": (
+            _PROMPT492_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT492_BLOCKED_NEXT_ACTION
         ),
     }
 
@@ -269721,6 +270075,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt491a_role_prompt_materialization_payload,
         }
+        prompt492_bounded_role_contract_extraction_payload = (
+            _build_prompt492_bounded_role_contract_extraction_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt492_bounded_role_contract_extraction_payload,
+        }
         prompt485_prompt378_supply_ready_for_prompt379_live_payload = (
             _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
                 run_state_payload=run_state_payload,
@@ -275152,6 +275515,11 @@ class PlannedExecutionRunner:
             if key in prompt491a_role_prompt_materialization_payload:
                 manifest["decision_summary"][key] = (
                     prompt491a_role_prompt_materialization_payload.get(key)
+                )
+        for key in _PROMPT492_BOUNDED_ROLE_CONTRACT_EXTRACTION_KEYS:
+            if key in prompt492_bounded_role_contract_extraction_payload:
+                manifest["decision_summary"][key] = (
+                    prompt492_bounded_role_contract_extraction_payload.get(key)
                 )
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS:
             if key in prompt485_prompt378_supply_ready_for_prompt379_live_payload:
@@ -282372,6 +282740,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT491A_ROLE_PROMPT_MATERIALIZATION_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT492_BOUNDED_ROLE_CONTRACT_EXTRACTION_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_COMPACT_KEYS:
