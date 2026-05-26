@@ -4325,6 +4325,15 @@ _PROMPT492_SUCCESS_NEXT_ACTION = (
 _PROMPT492_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt492_role_contract_extraction_blocked"
 )
+_PROMPT493_SCHEMA_VERSION = (
+    "prompt493_role_contract_materialization_bridge_v1"
+)
+_PROMPT493_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt494_prompt493_contract_to_prompt491a_materialized_prompt378"
+)
+_PROMPT493_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt493_bridge_blocked"
+)
 _PROMPT492_REQUIRED_CANONICAL_SECTIONS: tuple[str, ...] = (
     "Goal:",
     "Objective:",
@@ -9316,6 +9325,38 @@ _PROMPT492_BOUNDED_ROLE_CONTRACT_EXTRACTION_COMPACT_KEYS: tuple[str, ...] = (
     "prompt492_blocked_reason",
     "prompt492_blocked_reasons",
     "prompt492_next_action",
+)
+_PROMPT493_ROLE_CONTRACT_MATERIALIZATION_BRIDGE_KEYS: tuple[str, ...] = (
+    "prompt493_schema_version",
+    "prompt493_applicable",
+    "prompt493_bridge_status",
+    "prompt493_bridge_ready",
+    "prompt493_source_prompt492_ready",
+    "prompt493_materialization_contract_ready",
+    "prompt493_materialization_allowed_files",
+    "prompt493_materialization_forbidden_files",
+    "prompt493_materialization_validation_commands",
+    "prompt493_prompt378_sections_ready",
+    "prompt493_mutation_boundary_ready",
+    "prompt493_next_action",
+    "prompt493_blocked_reason",
+    "prompt493_blocked_reasons",
+)
+_PROMPT493_ROLE_CONTRACT_MATERIALIZATION_BRIDGE_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt493_schema_version",
+    "prompt493_applicable",
+    "prompt493_bridge_status",
+    "prompt493_bridge_ready",
+    "prompt493_source_prompt492_ready",
+    "prompt493_materialization_contract_ready",
+    "prompt493_materialization_allowed_files",
+    "prompt493_materialization_forbidden_files",
+    "prompt493_materialization_validation_commands",
+    "prompt493_prompt378_sections_ready",
+    "prompt493_mutation_boundary_ready",
+    "prompt493_next_action",
+    "prompt493_blocked_reason",
+    "prompt493_blocked_reasons",
 )
 _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS: tuple[str, ...] = (
     "prompt485_schema_version",
@@ -89022,6 +89063,131 @@ def _build_prompt492_bounded_role_contract_extraction_state(
             if ready
             else _PROMPT492_BLOCKED_NEXT_ACTION
         ),
+    }
+
+
+def _build_prompt493_role_contract_materialization_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    role_contract_ready = payload.get("prompt492_role_contract_ready") is True
+    role_contract_status = _normalize_text(
+        payload.get("prompt492_role_contract_status"),
+        default="",
+    )
+    selected_role_id = _normalize_text(
+        payload.get("prompt492_selected_role_id"),
+        default="",
+    )
+    allowed_files = _normalize_string_list(
+        payload.get("prompt492_allowed_files"),
+        sort_items=False,
+    )
+    forbidden_files = _normalize_string_list(
+        payload.get("prompt492_forbidden_files"),
+        sort_items=False,
+    )
+    validation_commands = _normalize_string_list(
+        payload.get("prompt492_validation_commands"),
+        sort_items=False,
+    )
+    required_canonical_sections = _normalize_string_list(
+        payload.get("prompt492_required_canonical_sections"),
+        sort_items=False,
+    )
+    source_mutation_boundary_ready = (
+        payload.get("prompt492_mutation_boundary_ready") is True
+    )
+    remote_mutation_allowed = (
+        payload.get("prompt492_remote_mutation_allowed") is True
+    )
+    git_mutation_allowed = (
+        payload.get("prompt492_git_mutation_allowed") is True
+    )
+    tests_allowed = payload.get("prompt492_tests_allowed") is True
+    prompt379_execution_allowed = (
+        payload.get("prompt492_prompt379_execution_allowed") is True
+    )
+    prompt492_next_action = _normalize_text(
+        payload.get("prompt492_next_action"),
+        default="",
+    )
+
+    missing_sections = [
+        section
+        for section in _PROMPT492_REQUIRED_CANONICAL_SECTIONS
+        if section not in required_canonical_sections
+    ]
+    prompt378_sections_ready = not missing_sections
+    materialization_contract_ready = bool(
+        allowed_files
+        and forbidden_files
+        and validation_commands
+        and prompt378_sections_ready
+    )
+    mutation_boundary_ready = bool(
+        source_mutation_boundary_ready
+        and remote_mutation_allowed is False
+        and git_mutation_allowed is False
+        and tests_allowed is False
+        and prompt379_execution_allowed is False
+    )
+    source_prompt492_ready = role_contract_ready
+
+    blocked_reasons: list[str] = []
+    if not role_contract_ready:
+        blocked_reasons.append("prompt492_role_contract_not_ready")
+    if not allowed_files:
+        blocked_reasons.append("prompt492_allowed_files_missing")
+    if not forbidden_files:
+        blocked_reasons.append("prompt492_forbidden_files_missing")
+    if not validation_commands:
+        blocked_reasons.append("prompt492_validation_commands_missing")
+    if missing_sections:
+        blocked_reasons.append("prompt492_required_prompt378_sections_missing")
+    if not source_mutation_boundary_ready:
+        blocked_reasons.append("prompt492_mutation_boundary_not_ready")
+    if remote_mutation_allowed:
+        blocked_reasons.append("prompt492_remote_mutation_allowed_not_false")
+    if git_mutation_allowed:
+        blocked_reasons.append("prompt492_git_mutation_allowed_not_false")
+    if tests_allowed:
+        blocked_reasons.append("prompt492_tests_allowed_not_false")
+    if prompt379_execution_allowed:
+        blocked_reasons.append("prompt492_prompt379_execution_allowed_not_false")
+
+    ready = bool(
+        source_prompt492_ready
+        and materialization_contract_ready
+        and mutation_boundary_ready
+        and not blocked_reasons
+    )
+    return {
+        "prompt493_schema_version": _PROMPT493_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt493",
+        "prompt493_applicable": True,
+        "prompt493_bridge_status": "ready" if ready else "blocked",
+        "prompt493_bridge_ready": ready,
+        "prompt493_source_prompt492_ready": source_prompt492_ready,
+        "prompt493_materialization_contract_ready": (
+            materialization_contract_ready
+        ),
+        "prompt493_materialization_allowed_files": allowed_files,
+        "prompt493_materialization_forbidden_files": forbidden_files,
+        "prompt493_materialization_validation_commands": validation_commands,
+        "prompt493_prompt378_sections_ready": prompt378_sections_ready,
+        "prompt493_mutation_boundary_ready": mutation_boundary_ready,
+        "prompt493_next_action": (
+            _PROMPT493_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT493_BLOCKED_NEXT_ACTION
+        ),
+        "prompt493_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt493_blocked_reasons": blocked_reasons,
     }
 
 
@@ -270084,6 +270250,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt492_bounded_role_contract_extraction_payload,
         }
+        prompt493_role_contract_materialization_bridge_payload = (
+            _build_prompt493_role_contract_materialization_bridge_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt493_role_contract_materialization_bridge_payload,
+        }
         prompt485_prompt378_supply_ready_for_prompt379_live_payload = (
             _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
                 run_state_payload=run_state_payload,
@@ -275520,6 +275695,11 @@ class PlannedExecutionRunner:
             if key in prompt492_bounded_role_contract_extraction_payload:
                 manifest["decision_summary"][key] = (
                     prompt492_bounded_role_contract_extraction_payload.get(key)
+                )
+        for key in _PROMPT493_ROLE_CONTRACT_MATERIALIZATION_BRIDGE_KEYS:
+            if key in prompt493_role_contract_materialization_bridge_payload:
+                manifest["decision_summary"][key] = (
+                    prompt493_role_contract_materialization_bridge_payload.get(key)
                 )
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS:
             if key in prompt485_prompt378_supply_ready_for_prompt379_live_payload:
@@ -282743,6 +282923,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT492_BOUNDED_ROLE_CONTRACT_EXTRACTION_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT493_ROLE_CONTRACT_MATERIALIZATION_BRIDGE_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_COMPACT_KEYS:

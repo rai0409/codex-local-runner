@@ -1188,6 +1188,21 @@ PROMPT492_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt492_next_action",
 )
 
+PROMPT493_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt493_bridge_status",
+    "prompt493_bridge_ready",
+    "prompt493_source_prompt492_ready",
+    "prompt493_materialization_contract_ready",
+    "prompt493_materialization_allowed_files",
+    "prompt493_materialization_forbidden_files",
+    "prompt493_materialization_validation_commands",
+    "prompt493_prompt378_sections_ready",
+    "prompt493_mutation_boundary_ready",
+    "prompt493_next_action",
+    "prompt493_blocked_reason",
+    "prompt493_blocked_reasons",
+)
+
 PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt491_third_success_cycle_status",
     "prompt491_third_success_cycle_ready",
@@ -1278,6 +1293,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT490_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT491A_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT492_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT493_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
@@ -4045,6 +4061,25 @@ def select_manifest_run_state_summary_compact(
             "prompt487_auto_commit_allowed",
             "prompt487_auto_tag_allowed",
             "prompt487_remote_mutation_allowed",
+            "prompt491a_applicable",
+            "prompt491a_role_prompt_materialization_ready",
+            "prompt491a_source_role_ready",
+            "prompt491a_prompt378_canonical_tokens_ready",
+            "prompt491a_materialized_prompt378_write_deferred",
+            "prompt492_role_contract_ready",
+            "prompt492_source_role_ready",
+            "prompt492_selected_role_text_present",
+            "prompt492_bounded_scope_ready",
+            "prompt492_mutation_boundary_ready",
+            "prompt492_remote_mutation_allowed",
+            "prompt492_git_mutation_allowed",
+            "prompt492_tests_allowed",
+            "prompt492_prompt379_execution_allowed",
+            "prompt493_bridge_ready",
+            "prompt493_source_prompt492_ready",
+            "prompt493_materialization_contract_ready",
+            "prompt493_prompt378_sections_ready",
+            "prompt493_mutation_boundary_ready",
         }
     )
     list_fields.update(
@@ -4101,6 +4136,16 @@ def select_manifest_run_state_summary_compact(
             "prompt485_blocked_reasons",
             "prompt486_blocked_reasons",
             "prompt487_blocked_reasons",
+            "prompt491a_blocked_reasons",
+            "prompt492_allowed_files",
+            "prompt492_forbidden_files",
+            "prompt492_validation_commands",
+            "prompt492_required_canonical_sections",
+            "prompt492_blocked_reasons",
+            "prompt493_materialization_allowed_files",
+            "prompt493_materialization_forbidden_files",
+            "prompt493_materialization_validation_commands",
+            "prompt493_blocked_reasons",
         }
     )
     int_fields.update(
@@ -4445,6 +4490,9 @@ def build_manifest_run_state_summary_contract_surface() -> dict[str, Any]:
         ),
         "approval_safety_summary_safe_fields": list(
             APPROVAL_SAFETY_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "prompt493_summary_safe_fields": list(
+            PROMPT493_RUN_STATE_SUMMARY_SAFE_FIELDS
         ),
         "lifecycle_summary_safe_fields": list(LIFECYCLE_SUMMARY_SAFE_FIELDS),
         "rendering_only_operator_fields": list(OPERATOR_RENDERING_ONLY_FIELDS),
