@@ -4333,6 +4333,7 @@ _PROMPT487_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt487_isolated_route_blocked"
 )
 _PROMPT489_NEXT_ACTION = "prepare_prompt489_diff_review_and_commit_tag_if_valid"
+_PROMPT490_NEXT_ACTION = "prepare_prompt490_diff_review_and_commit_tag_if_valid"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -9341,6 +9342,20 @@ _PROMPT489_REAL_TASK_MARKER_COMPACT_KEYS: tuple[str, ...] = (
     "prompt489_source_prompt487_ready",
     "prompt489_source_prompt379_success",
     "prompt489_next_action",
+)
+_PROMPT490_SECOND_SUCCESS_CYCLE_KEYS: tuple[str, ...] = (
+    "prompt490_second_success_cycle_status",
+    "prompt490_second_success_cycle_ready",
+    "prompt490_source_prompt489_ready",
+    "prompt490_source_prompt379_success",
+    "prompt490_next_action",
+)
+_PROMPT490_SECOND_SUCCESS_CYCLE_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt490_second_success_cycle_status",
+    "prompt490_second_success_cycle_ready",
+    "prompt490_source_prompt489_ready",
+    "prompt490_source_prompt379_success",
+    "prompt490_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -88728,6 +88743,29 @@ def _build_prompt489_real_task_marker_state(
             prompt379_returncode_classification == "success"
         ),
         "prompt489_next_action": _PROMPT489_NEXT_ACTION,
+    }
+
+
+def _build_prompt490_second_success_cycle_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt379_returncode_classification = _normalize_text(
+        payload.get("prompt379_returncode_classification"),
+        default="",
+    )
+
+    return {
+        "prompt490_second_success_cycle_status": "ready",
+        "prompt490_second_success_cycle_ready": True,
+        "prompt490_source_prompt489_ready": bool(
+            payload.get("prompt489_real_task_marker_ready") is True
+        ),
+        "prompt490_source_prompt379_success": bool(
+            prompt379_returncode_classification == "success"
+        ),
+        "prompt490_next_action": _PROMPT490_NEXT_ACTION,
     }
 
 
@@ -269395,6 +269433,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt489_real_task_marker_payload,
         }
+        prompt490_second_success_cycle_payload = (
+            _build_prompt490_second_success_cycle_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt490_second_success_cycle_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -274785,6 +274832,11 @@ class PlannedExecutionRunner:
             if key in prompt489_real_task_marker_payload:
                 manifest["decision_summary"][key] = (
                     prompt489_real_task_marker_payload.get(key)
+                )
+        for key in _PROMPT490_SECOND_SUCCESS_CYCLE_KEYS:
+            if key in prompt490_second_success_cycle_payload:
+                manifest["decision_summary"][key] = (
+                    prompt490_second_success_cycle_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -281984,6 +282036,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT489_REAL_TASK_MARKER_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT490_SECOND_SUCCESS_CYCLE_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
