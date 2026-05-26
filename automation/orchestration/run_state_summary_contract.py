@@ -1139,6 +1139,14 @@ PROMPT487_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt487_next_action",
 )
 
+PROMPT489_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt489_real_task_marker_status",
+    "prompt489_real_task_marker_ready",
+    "prompt489_source_prompt487_ready",
+    "prompt489_source_prompt379_success",
+    "prompt489_next_action",
+)
+
 MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "state",
     "orchestration_state",
@@ -1217,6 +1225,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT485_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT486_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT487_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT489_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
     "prompt356_stale_blockers_present",

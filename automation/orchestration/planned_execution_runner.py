@@ -4332,6 +4332,7 @@ _PROMPT487_SUCCESS_NEXT_ACTION = (
 _PROMPT487_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt487_isolated_route_blocked"
 )
+_PROMPT489_NEXT_ACTION = "prepare_prompt489_diff_review_and_commit_tag_if_valid"
 _PROMPT398_COMMITTED_PROMPT379_EXPECTED_TAG = (
     "prompt379-live-oneshot-fast-rerun-approve-candidate"
 )
@@ -9326,6 +9327,20 @@ _PROMPT487_ISOLATED_PROMPT379_LIVE_ROUTE_COMPACT_KEYS: tuple[str, ...] = (
     "prompt487_blocked_reason",
     "prompt487_blocked_reasons",
     "prompt487_next_action",
+)
+_PROMPT489_REAL_TASK_MARKER_KEYS: tuple[str, ...] = (
+    "prompt489_real_task_marker_status",
+    "prompt489_real_task_marker_ready",
+    "prompt489_source_prompt487_ready",
+    "prompt489_source_prompt379_success",
+    "prompt489_next_action",
+)
+_PROMPT489_REAL_TASK_MARKER_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt489_real_task_marker_status",
+    "prompt489_real_task_marker_ready",
+    "prompt489_source_prompt487_ready",
+    "prompt489_source_prompt379_success",
+    "prompt489_next_action",
 )
 _PROMPT386_APPROVED_RESTART_SURFACE_KEYS: tuple[str, ...] = (
     "prompt386_success_path_bounded_loop_controller_status",
@@ -88690,6 +88705,29 @@ def _build_prompt487_isolated_prompt379_live_route_state(
             if ready
             else _PROMPT487_BLOCKED_NEXT_ACTION
         ),
+    }
+
+
+def _build_prompt489_real_task_marker_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt379_returncode_classification = _normalize_text(
+        payload.get("prompt379_returncode_classification"),
+        default="",
+    )
+
+    return {
+        "prompt489_real_task_marker_status": "ready",
+        "prompt489_real_task_marker_ready": True,
+        "prompt489_source_prompt487_ready": bool(
+            payload.get("prompt487_isolated_prompt379_live_route_ready") is True
+        ),
+        "prompt489_source_prompt379_success": bool(
+            prompt379_returncode_classification == "success"
+        ),
+        "prompt489_next_action": _PROMPT489_NEXT_ACTION,
     }
 
 
@@ -269348,6 +269386,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt487_isolated_prompt379_live_route_payload,
         }
+        prompt489_real_task_marker_payload = (
+            _build_prompt489_real_task_marker_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt489_real_task_marker_payload,
+        }
         prompt431_runtime_execution_result_review_route_decision_payload = (
             _build_prompt431_runtime_execution_result_review_route_decision_state(
                 run_state_payload=run_state_payload,
@@ -274733,6 +274780,11 @@ class PlannedExecutionRunner:
             if key in prompt487_isolated_prompt379_live_route_payload:
                 manifest["decision_summary"][key] = (
                     prompt487_isolated_prompt379_live_route_payload.get(key)
+                )
+        for key in _PROMPT489_REAL_TASK_MARKER_KEYS:
+            if key in prompt489_real_task_marker_payload:
+                manifest["decision_summary"][key] = (
+                    prompt489_real_task_marker_payload.get(key)
                 )
         if decision_error:
             manifest["decision_summary"]["decision_error"] = decision_error
@@ -281929,6 +281981,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT487_ISOLATED_PROMPT379_LIVE_ROUTE_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT489_REAL_TASK_MARKER_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT431_RUNTIME_EXECUTION_RESULT_REVIEW_ROUTE_DECISION_KEYS:
