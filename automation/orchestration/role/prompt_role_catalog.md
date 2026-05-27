@@ -285,3 +285,50 @@ The generated prompt must include literal validator tokens:
 - validation commands
 - out of scope
 - next_action
+
+## role: daemon_lite_10_cycle_extension
+
+Use when:
+Prompt484f role-driven single Codex execution cycle is committed and verified, Prompt483 selects daemon_lite_10_cycle_extension, and the next step is to continue role-to-prompt materialization for a bounded daemon-lite success-path extension.
+
+Goal:
+ChatGPT generates a Codex implementation prompt for the next bounded daemon-lite orchestration contract.
+The prompt must describe deterministic, metadata-oriented execution contracts for extending the success path across up to 10 cycles without introducing daemon runtime loops or autonomous background execution.
+
+Required constraints:
+- continue role-to-prompt materialization from the selected role
+- keep the implementation bounded to deterministic orchestration metadata and contracts
+- require post-commit clean rerun verification before readiness is claimed
+- preserve local-only execution with no remote mutation
+- default to no tests unless a generated prompt explicitly narrows validation to allowed commands
+- do not execute Prompt379 as part of this role
+- do not implement daemon runtime behavior
+- do not implement autonomous background execution
+- do not implement completion-until-done semantics
+- do not allow unbounded execution
+
+Success:
+- prompt483_selected_role_id="daemon_lite_10_cycle_extension"
+- prompt483_selected_role_found=True
+- prompt483_selected_role_text_non_empty=True
+- prompt492_source_role_ready=True
+- prompt493_bridge_ready=True
+- prompt494_contract_injection_ready=True
+- next_action="prepare_prompt495b_prompt483_role_catalog_ready_clean_rerun"
+
+Do not:
+- implement daemon runtime loops
+- implement autonomous background execution
+- implement completion-until-done
+- invoke Codex
+- execute Prompt379
+- run tests by default
+- push/PR/merge
+- mutate remote state
+- introduce unbounded execution
+- modify Prompt483 parser behavior
+
+ChatGPT note:
+Use this role as a prompt-generation basis.
+Do not paste this role directly as the Codex prompt.
+Generate a separate detailed Codex implementation prompt for the next bounded daemon-lite orchestration contract.
