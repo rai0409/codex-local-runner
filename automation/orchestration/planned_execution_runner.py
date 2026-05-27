@@ -87340,6 +87340,7 @@ def _prompt483_prompt482_explicit_flags_evidence_ready(
 
 def _prompt483_prompt482_historical_repo_evidence_ready(
     *,
+    repo_path: str,
     current_head_subject: str,
     tags_at_head: Sequence[str],
     changed_tracked_files: Sequence[str],
@@ -87358,6 +87359,36 @@ def _prompt483_prompt482_historical_repo_evidence_ready(
         or tag.startswith("prompt483-")
         for tag in tags_at_head
     )
+    historical_tag_known, historical_tag_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=("tag", "--list", "prompt482-three-cycle-usability-confirmation"),
+    )
+    historical_tag_ok = bool(
+        historical_tag_known
+        and "prompt482-three-cycle-usability-confirmation"
+        in _normalize_string_list(
+            historical_tag_stdout.splitlines(),
+            sort_items=False,
+        )
+    )
+    historical_subject_known, historical_subject_stdout = _prompt472_git_stdout(
+        repo_path=repo_path,
+        argv=(
+            "log",
+            "--all",
+            "--fixed-strings",
+            "--grep=Prompt482 add three cycle usability confirmation",
+            "--format=%s",
+        ),
+    )
+    historical_subject_ok = bool(
+        historical_subject_known
+        and "Prompt482 add three cycle usability confirmation"
+        in _normalize_string_list(
+            historical_subject_stdout.splitlines(),
+            sort_items=False,
+        )
+    )
     tracked_files_limited = bool(
         not unexpected_tracked_files
         and all(
@@ -87365,12 +87396,15 @@ def _prompt483_prompt482_historical_repo_evidence_ready(
             for path in changed_tracked_files
         )
     )
-    return bool(subject_ok and tag_ok and tracked_files_limited)
+    current_head_ready = bool(subject_ok and tag_ok)
+    historical_repo_ready = bool(historical_tag_ok or historical_subject_ok)
+    return bool((current_head_ready or historical_repo_ready) and tracked_files_limited)
 
 
 def _prompt483_prompt482_evidence_bridge(
     *,
     payload: Mapping[str, Any],
+    repo_path: str,
     current_head_subject: str,
     tags_at_head: Sequence[str],
     changed_tracked_files: Sequence[str],
@@ -87379,6 +87413,7 @@ def _prompt483_prompt482_evidence_bridge(
     current_fields_ready = _prompt483_prompt482_current_fields_evidence_ready(payload)
     explicit_flags_ready = _prompt483_prompt482_explicit_flags_evidence_ready(payload)
     historical_repo_ready = _prompt483_prompt482_historical_repo_evidence_ready(
+        repo_path=repo_path,
         current_head_subject=current_head_subject,
         tags_at_head=tags_at_head,
         changed_tracked_files=changed_tracked_files,
@@ -87555,6 +87590,7 @@ def _build_prompt483_role_catalog_reader_handoff_state(
 
     prompt482_evidence = _prompt483_prompt482_evidence_bridge(
         payload=payload,
+        repo_path=repo_path,
         current_head_subject=head_subject,
         tags_at_head=tags_at_head,
         changed_tracked_files=changed_tracked_files,
