@@ -1203,6 +1203,22 @@ PROMPT493_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt493_blocked_reasons",
 )
 
+PROMPT494_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt494_contract_injection_status",
+    "prompt494_contract_injection_ready",
+    "prompt494_source_prompt493_ready",
+    "prompt494_prompt491a_consumes_prompt493_contract",
+    "prompt494_materialized_prompt378_contract_backed",
+    "prompt494_allowed_files_source",
+    "prompt494_forbidden_files_source",
+    "prompt494_validation_commands_source",
+    "prompt494_prompt378_sections_source",
+    "prompt494_mutation_boundary_source",
+    "prompt494_blocked_reason",
+    "prompt494_blocked_reasons",
+    "prompt494_next_action",
+)
+
 PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt491_third_success_cycle_status",
     "prompt491_third_success_cycle_ready",
@@ -1294,6 +1310,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT491A_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT492_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT493_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT494_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
@@ -4080,6 +4097,10 @@ def select_manifest_run_state_summary_compact(
             "prompt493_materialization_contract_ready",
             "prompt493_prompt378_sections_ready",
             "prompt493_mutation_boundary_ready",
+            "prompt494_contract_injection_ready",
+            "prompt494_source_prompt493_ready",
+            "prompt494_prompt491a_consumes_prompt493_contract",
+            "prompt494_materialized_prompt378_contract_backed",
         }
     )
     list_fields.update(
@@ -4146,6 +4167,7 @@ def select_manifest_run_state_summary_compact(
             "prompt493_materialization_forbidden_files",
             "prompt493_materialization_validation_commands",
             "prompt493_blocked_reasons",
+            "prompt494_blocked_reasons",
         }
     )
     int_fields.update(
@@ -4493,6 +4515,9 @@ def build_manifest_run_state_summary_contract_surface() -> dict[str, Any]:
         ),
         "prompt493_summary_safe_fields": list(
             PROMPT493_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "prompt494_summary_safe_fields": list(
+            PROMPT494_RUN_STATE_SUMMARY_SAFE_FIELDS
         ),
         "lifecycle_summary_safe_fields": list(LIFECYCLE_SUMMARY_SAFE_FIELDS),
         "rendering_only_operator_fields": list(OPERATOR_RENDERING_ONLY_FIELDS),

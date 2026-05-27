@@ -4334,6 +4334,15 @@ _PROMPT493_SUCCESS_NEXT_ACTION = (
 _PROMPT493_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt493_bridge_blocked"
 )
+_PROMPT494_SCHEMA_VERSION = (
+    "prompt494_prompt493_contract_to_prompt491a_materialized_prompt378_v1"
+)
+_PROMPT494_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt495_materialized_prompt378_validation_and_prompt379_handoff"
+)
+_PROMPT494_BLOCKED_NEXT_ACTION = (
+    "manual_review_prompt494_contract_injection_blocked"
+)
 _PROMPT492_REQUIRED_CANONICAL_SECTIONS: tuple[str, ...] = (
     "Goal:",
     "Objective:",
@@ -9357,6 +9366,40 @@ _PROMPT493_ROLE_CONTRACT_MATERIALIZATION_BRIDGE_COMPACT_KEYS: tuple[str, ...] = 
     "prompt493_next_action",
     "prompt493_blocked_reason",
     "prompt493_blocked_reasons",
+)
+_PROMPT494_CONTRACT_INJECTION_KEYS: tuple[str, ...] = (
+    "prompt494_schema_version",
+    "prompt494_applicable",
+    "prompt494_contract_injection_status",
+    "prompt494_contract_injection_ready",
+    "prompt494_source_prompt493_ready",
+    "prompt494_prompt491a_consumes_prompt493_contract",
+    "prompt494_materialized_prompt378_contract_backed",
+    "prompt494_allowed_files_source",
+    "prompt494_forbidden_files_source",
+    "prompt494_validation_commands_source",
+    "prompt494_prompt378_sections_source",
+    "prompt494_mutation_boundary_source",
+    "prompt494_blocked_reason",
+    "prompt494_blocked_reasons",
+    "prompt494_next_action",
+)
+_PROMPT494_CONTRACT_INJECTION_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt494_schema_version",
+    "prompt494_applicable",
+    "prompt494_contract_injection_status",
+    "prompt494_contract_injection_ready",
+    "prompt494_source_prompt493_ready",
+    "prompt494_prompt491a_consumes_prompt493_contract",
+    "prompt494_materialized_prompt378_contract_backed",
+    "prompt494_allowed_files_source",
+    "prompt494_forbidden_files_source",
+    "prompt494_validation_commands_source",
+    "prompt494_prompt378_sections_source",
+    "prompt494_mutation_boundary_source",
+    "prompt494_blocked_reason",
+    "prompt494_blocked_reasons",
+    "prompt494_next_action",
 )
 _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS: tuple[str, ...] = (
     "prompt485_schema_version",
@@ -88556,16 +88599,60 @@ def _prompt491a_materialized_prompt378_markdown(
     *,
     selected_role_id: str,
     selected_role_text: str,
+    contract_allowed_files: Sequence[str] | None = None,
+    contract_forbidden_files: Sequence[str] | None = None,
+    contract_validation_commands: Sequence[str] | None = None,
+    contract_backed: bool = False,
 ) -> str:
     role_summary = _prompt491a_bounded_role_summary(
         selected_role_id=selected_role_id,
         selected_role_text=selected_role_text,
         fallback="role-derived Prompt378 handoff",
     )
-    role_target = (
-        f"role-derived target: {selected_role_id}"
-        if selected_role_id
-        else "safe placeholder: role-derived implementation target unavailable"
+    role_target = f"role-derived target: {selected_role_id or 'unknown_role'}"
+    allowed_files = (
+        list(contract_allowed_files or [])
+        if contract_backed
+        else [
+            "automation/orchestration/planned_execution_runner.py",
+            "automation/orchestration/run_state_summary_contract.py",
+        ]
+    )
+    forbidden_files = (
+        list(contract_forbidden_files or [])
+        if contract_backed
+        else [
+            (
+                "Prompt378 validator, Prompt379 bridge, provider adapters, "
+                "git metadata, generated caches."
+            ),
+        ]
+    )
+    validation_commands = (
+        list(contract_validation_commands or [])
+        if contract_backed
+        else [
+            (
+                "python -m py_compile "
+                "automation/orchestration/planned_execution_runner.py "
+                "automation/orchestration/run_state_summary_contract.py "
+                "scripts/run_planned_execution.py"
+            ),
+            "git diff --name-only",
+            (
+                'grep -n "Expected artifacts or fields:" '
+                "automation/orchestration/planned_execution_runner.py"
+            ),
+            (
+                'grep -n "prompt491a_role_prompt_materialization_status" '
+                "automation/orchestration/run_state_summary_contract.py"
+            ),
+        ]
+    )
+    contract_note = (
+        "Prompt493 authoritative bounded materialization contract."
+        if contract_backed
+        else "Prompt491A role-derived materialization contract."
     )
     lines = [
         "Goal:",
@@ -88593,31 +88680,54 @@ def _prompt491a_materialized_prompt378_markdown(
         "",
         "Implementation targets:",
         role_target,
-        "automation/orchestration/planned_execution_runner.py",
+        *allowed_files,
         "",
         "Required exact fields:",
+        "prompt494_contract_injection_status",
+        "prompt494_contract_injection_ready",
+        "prompt494_source_prompt493_ready",
+        "prompt494_prompt491a_consumes_prompt493_contract",
+        "prompt494_materialized_prompt378_contract_backed",
+        "prompt494_allowed_files_source",
+        "prompt494_forbidden_files_source",
+        "prompt494_validation_commands_source",
+        "prompt494_prompt378_sections_source",
+        "prompt494_mutation_boundary_source",
+        "prompt494_blocked_reason",
+        "prompt494_blocked_reasons",
+        "prompt494_next_action",
+        "Preserve Prompt489 and Prompt490 multi-cycle success evidence.",
         "Preserve Prompt378 acceptance semantics and keep execution outcomes under result.json.execution.",
         "",
         "Allowed files:",
-        "automation/orchestration/planned_execution_runner.py",
-        "automation/orchestration/run_state_summary_contract.py",
+        *allowed_files,
         "",
         "Forbidden files:",
-        "Prompt378 validator, Prompt379 bridge, provider adapters, git metadata, generated caches.",
+        *forbidden_files,
         "",
         "Expected artifacts or fields:",
         'artifacts_dir / "prompt491a" / "materialized_prompt378.md"',
+        "prompt494_contract_injection_status",
+        "prompt494_contract_injection_ready",
+        "prompt494_source_prompt493_ready",
+        "prompt494_prompt491a_consumes_prompt493_contract",
+        "prompt494_materialized_prompt378_contract_backed",
+        "prompt494_allowed_files_source",
+        "prompt494_forbidden_files_source",
+        "prompt494_validation_commands_source",
+        "prompt494_prompt378_sections_source",
+        "prompt494_mutation_boundary_source",
+        "prompt494_blocked_reason",
+        "prompt494_blocked_reasons",
+        "prompt494_next_action",
         "prompt491a_role_prompt_materialization_status",
         "prompt491a_prompt378_canonical_tokens_ready",
         "",
         "Expected artifact or output:",
-        "A validator-complete materialized Prompt378 markdown artifact and no tests.",
+        f"A validator-complete materialized Prompt378 markdown artifact backed by {contract_note} no tests.",
         "",
         "Validation commands:",
-        "python -m py_compile automation/orchestration/planned_execution_runner.py automation/orchestration/run_state_summary_contract.py scripts/run_planned_execution.py",
-        "git diff --name-only",
-        'grep -n "Expected artifacts or fields:" automation/orchestration/planned_execution_runner.py',
-        'grep -n "prompt491a_role_prompt_materialization_status" automation/orchestration/run_state_summary_contract.py',
+        *validation_commands,
         "",
         "out of scope:",
         "Prompt378 validator changes, Prompt379 bridge changes, Prompt379 execution, tests, commits, tags, pushes, PRs, merges.",
@@ -89188,6 +89298,150 @@ def _build_prompt493_role_contract_materialization_bridge_state(
             blocked_reasons[0] if blocked_reasons else ""
         ),
         "prompt493_blocked_reasons": blocked_reasons,
+    }
+
+
+def _build_prompt494_contract_injection_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    artifacts_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    selected_role_id = _normalize_text(
+        payload.get("prompt483_selected_role_id"),
+        default="",
+    )
+    selected_role_text = _normalize_text(
+        payload.get("prompt483_selected_role_text"),
+        default="",
+    )
+    allowed_files = _normalize_string_list(
+        payload.get("prompt493_materialization_allowed_files"),
+        sort_items=False,
+    )
+    forbidden_files = _normalize_string_list(
+        payload.get("prompt493_materialization_forbidden_files"),
+        sort_items=False,
+    )
+    validation_commands = _normalize_string_list(
+        payload.get("prompt493_materialization_validation_commands"),
+        sort_items=False,
+    )
+    source_prompt493_ready = bool(
+        payload.get("prompt493_bridge_ready") is True
+        and payload.get("prompt493_materialization_contract_ready") is True
+        and allowed_files
+        and forbidden_files
+        and validation_commands
+        and payload.get("prompt493_prompt378_sections_ready") is True
+        and payload.get("prompt493_mutation_boundary_ready") is True
+    )
+
+    prompt_text = _prompt491a_materialized_prompt378_markdown(
+        selected_role_id=selected_role_id,
+        selected_role_text=selected_role_text,
+        contract_allowed_files=allowed_files,
+        contract_forbidden_files=forbidden_files,
+        contract_validation_commands=validation_commands,
+        contract_backed=True,
+    )
+    prompt491a_consumes_prompt493_contract = bool(
+        source_prompt493_ready
+        and _prompt491a_canonical_tokens_ready(prompt_text)
+        and all(path in prompt_text for path in allowed_files)
+        and all(path in prompt_text for path in forbidden_files)
+        and all(command in prompt_text for command in validation_commands)
+    )
+
+    blocked_reasons: list[str] = []
+    if payload.get("prompt493_bridge_ready") is not True:
+        blocked_reasons.append("prompt493_bridge_not_ready")
+    if payload.get("prompt493_materialization_contract_ready") is not True:
+        blocked_reasons.append("prompt493_materialization_contract_not_ready")
+    if not allowed_files:
+        blocked_reasons.append("prompt493_materialization_allowed_files_missing")
+    if not forbidden_files:
+        blocked_reasons.append("prompt493_materialization_forbidden_files_missing")
+    if not validation_commands:
+        blocked_reasons.append(
+            "prompt493_materialization_validation_commands_missing"
+        )
+    if payload.get("prompt493_prompt378_sections_ready") is not True:
+        blocked_reasons.append("prompt493_prompt378_sections_not_ready")
+    if payload.get("prompt493_mutation_boundary_ready") is not True:
+        blocked_reasons.append("prompt493_mutation_boundary_not_ready")
+    if not prompt491a_consumes_prompt493_contract:
+        blocked_reasons.append("prompt491a_prompt493_contract_consumption_not_ready")
+
+    materialized_prompt378_contract_backed = False
+    if source_prompt493_ready and prompt491a_consumes_prompt493_contract:
+        if artifacts_dir is None:
+            blocked_reasons.append("prompt491a_safe_artifact_write_location_missing")
+        else:
+            artifact_path = (
+                Path(artifacts_dir)
+                / "prompt491a"
+                / "materialized_prompt378.md"
+            )
+            try:
+                artifact_path.parent.mkdir(parents=True, exist_ok=True)
+                artifact_path.write_text(prompt_text, encoding="utf-8")
+                materialized_prompt378_contract_backed = True
+            except OSError:
+                blocked_reasons.append(
+                    "prompt491a_materialized_prompt378_contract_write_failed"
+                )
+
+    ready = bool(
+        source_prompt493_ready
+        and prompt491a_consumes_prompt493_contract
+        and materialized_prompt378_contract_backed
+        and not blocked_reasons
+    )
+    return {
+        "prompt494_schema_version": _PROMPT494_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt494",
+        "prompt494_applicable": True,
+        "prompt494_contract_injection_status": "ready" if ready else "blocked",
+        "prompt494_contract_injection_ready": ready,
+        "prompt494_source_prompt493_ready": source_prompt493_ready,
+        "prompt494_prompt491a_consumes_prompt493_contract": (
+            prompt491a_consumes_prompt493_contract
+        ),
+        "prompt494_materialized_prompt378_contract_backed": (
+            materialized_prompt378_contract_backed
+        ),
+        "prompt494_allowed_files_source": (
+            "prompt493_materialization_allowed_files" if allowed_files else ""
+        ),
+        "prompt494_forbidden_files_source": (
+            "prompt493_materialization_forbidden_files" if forbidden_files else ""
+        ),
+        "prompt494_validation_commands_source": (
+            "prompt493_materialization_validation_commands"
+            if validation_commands
+            else ""
+        ),
+        "prompt494_prompt378_sections_source": (
+            "prompt493_prompt378_sections_ready"
+            if payload.get("prompt493_prompt378_sections_ready") is True
+            else ""
+        ),
+        "prompt494_mutation_boundary_source": (
+            "prompt493_mutation_boundary_ready"
+            if payload.get("prompt493_mutation_boundary_ready") is True
+            else ""
+        ),
+        "prompt494_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else ""
+        ),
+        "prompt494_blocked_reasons": blocked_reasons,
+        "prompt494_next_action": (
+            _PROMPT494_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT494_BLOCKED_NEXT_ACTION
+        ),
     }
 
 
@@ -270259,6 +270513,16 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt493_role_contract_materialization_bridge_payload,
         }
+        prompt494_contract_injection_payload = (
+            _build_prompt494_contract_injection_state(
+                run_state_payload=run_state_payload,
+                artifacts_dir=artifacts_root,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt494_contract_injection_payload,
+        }
         prompt485_prompt378_supply_ready_for_prompt379_live_payload = (
             _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
                 run_state_payload=run_state_payload,
@@ -275700,6 +275964,11 @@ class PlannedExecutionRunner:
             if key in prompt493_role_contract_materialization_bridge_payload:
                 manifest["decision_summary"][key] = (
                     prompt493_role_contract_materialization_bridge_payload.get(key)
+                )
+        for key in _PROMPT494_CONTRACT_INJECTION_KEYS:
+            if key in prompt494_contract_injection_payload:
+                manifest["decision_summary"][key] = (
+                    prompt494_contract_injection_payload.get(key)
                 )
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS:
             if key in prompt485_prompt378_supply_ready_for_prompt379_live_payload:
@@ -282926,6 +283195,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT493_ROLE_CONTRACT_MATERIALIZATION_BRIDGE_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT494_CONTRACT_INJECTION_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_COMPACT_KEYS:
