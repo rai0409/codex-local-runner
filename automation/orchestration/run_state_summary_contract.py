@@ -1219,6 +1219,23 @@ PROMPT494_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt494_next_action",
 )
 
+PROMPT496_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt496_prompt494_adoption_status",
+    "prompt496_prompt494_adoption_ready",
+    "prompt496_source_prompt494_ready",
+    "prompt496_source_prompt493_ready",
+    "prompt496_source_prompt492_ready",
+    "prompt496_source_prompt483_historical_evidence_ready",
+    "prompt496_source_prompt483_role_catalog_reader_ready",
+    "prompt496_source_prompt483_selected_role_found",
+    "prompt496_source_prompt483_role_handoff_ready",
+    "prompt496_role_to_prompt378_chain_ready",
+    "prompt496_authoritative_materialization_handoff_ready",
+    "prompt496_next_action",
+    "prompt496_blocked_reason",
+    "prompt496_blocked_reasons",
+)
+
 PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt491_third_success_cycle_status",
     "prompt491_third_success_cycle_ready",
@@ -1311,6 +1328,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT492_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT493_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT494_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT496_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
@@ -4101,6 +4119,16 @@ def select_manifest_run_state_summary_compact(
             "prompt494_source_prompt493_ready",
             "prompt494_prompt491a_consumes_prompt493_contract",
             "prompt494_materialized_prompt378_contract_backed",
+            "prompt496_prompt494_adoption_ready",
+            "prompt496_source_prompt494_ready",
+            "prompt496_source_prompt493_ready",
+            "prompt496_source_prompt492_ready",
+            "prompt496_source_prompt483_historical_evidence_ready",
+            "prompt496_source_prompt483_role_catalog_reader_ready",
+            "prompt496_source_prompt483_selected_role_found",
+            "prompt496_source_prompt483_role_handoff_ready",
+            "prompt496_role_to_prompt378_chain_ready",
+            "prompt496_authoritative_materialization_handoff_ready",
         }
     )
     list_fields.update(
@@ -4168,6 +4196,7 @@ def select_manifest_run_state_summary_compact(
             "prompt493_materialization_validation_commands",
             "prompt493_blocked_reasons",
             "prompt494_blocked_reasons",
+            "prompt496_blocked_reasons",
         }
     )
     int_fields.update(
@@ -4518,6 +4547,9 @@ def build_manifest_run_state_summary_contract_surface() -> dict[str, Any]:
         ),
         "prompt494_summary_safe_fields": list(
             PROMPT494_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "prompt496_summary_safe_fields": list(
+            PROMPT496_RUN_STATE_SUMMARY_SAFE_FIELDS
         ),
         "lifecycle_summary_safe_fields": list(LIFECYCLE_SUMMARY_SAFE_FIELDS),
         "rendering_only_operator_fields": list(OPERATOR_RENDERING_ONLY_FIELDS),

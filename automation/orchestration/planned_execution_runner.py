@@ -4343,6 +4343,13 @@ _PROMPT494_SUCCESS_NEXT_ACTION = (
 _PROMPT494_BLOCKED_NEXT_ACTION = (
     "manual_review_prompt494_contract_injection_blocked"
 )
+_PROMPT496_SCHEMA_VERSION = (
+    "prompt496_prompt494_readiness_adoption_gate_v1"
+)
+_PROMPT496_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt497_chatgpt_browser_prompt_generation_bridge"
+)
+_PROMPT496_BLOCKED_NEXT_ACTION = "repair_prompt496_adoption_blockers"
 _PROMPT492_REQUIRED_CANONICAL_SECTIONS: tuple[str, ...] = (
     "Goal:",
     "Objective:",
@@ -9400,6 +9407,42 @@ _PROMPT494_CONTRACT_INJECTION_COMPACT_KEYS: tuple[str, ...] = (
     "prompt494_blocked_reason",
     "prompt494_blocked_reasons",
     "prompt494_next_action",
+)
+_PROMPT496_PROMPT494_ADOPTION_KEYS: tuple[str, ...] = (
+    "prompt496_schema_version",
+    "prompt496_applicable",
+    "prompt496_prompt494_adoption_status",
+    "prompt496_prompt494_adoption_ready",
+    "prompt496_source_prompt494_ready",
+    "prompt496_source_prompt493_ready",
+    "prompt496_source_prompt492_ready",
+    "prompt496_source_prompt483_historical_evidence_ready",
+    "prompt496_source_prompt483_role_catalog_reader_ready",
+    "prompt496_source_prompt483_selected_role_found",
+    "prompt496_source_prompt483_role_handoff_ready",
+    "prompt496_role_to_prompt378_chain_ready",
+    "prompt496_authoritative_materialization_handoff_ready",
+    "prompt496_next_action",
+    "prompt496_blocked_reason",
+    "prompt496_blocked_reasons",
+)
+_PROMPT496_PROMPT494_ADOPTION_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt496_schema_version",
+    "prompt496_applicable",
+    "prompt496_prompt494_adoption_status",
+    "prompt496_prompt494_adoption_ready",
+    "prompt496_source_prompt494_ready",
+    "prompt496_source_prompt493_ready",
+    "prompt496_source_prompt492_ready",
+    "prompt496_source_prompt483_historical_evidence_ready",
+    "prompt496_source_prompt483_role_catalog_reader_ready",
+    "prompt496_source_prompt483_selected_role_found",
+    "prompt496_source_prompt483_role_handoff_ready",
+    "prompt496_role_to_prompt378_chain_ready",
+    "prompt496_authoritative_materialization_handoff_ready",
+    "prompt496_next_action",
+    "prompt496_blocked_reason",
+    "prompt496_blocked_reasons",
 )
 _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS: tuple[str, ...] = (
     "prompt485_schema_version",
@@ -89478,6 +89521,82 @@ def _build_prompt494_contract_injection_state(
             if ready
             else _PROMPT494_BLOCKED_NEXT_ACTION
         ),
+    }
+
+
+def _build_prompt496_prompt494_adoption_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    readiness_requirements: tuple[tuple[str, str, str], ...] = (
+        (
+            "prompt496_source_prompt494_ready",
+            "prompt494_contract_injection_ready",
+            "missing_prompt494_contract_injection_ready",
+        ),
+        (
+            "prompt496_source_prompt493_ready",
+            "prompt493_bridge_ready",
+            "missing_prompt493_bridge_ready",
+        ),
+        (
+            "prompt496_source_prompt492_ready",
+            "prompt492_role_contract_ready",
+            "missing_prompt492_role_contract_ready",
+        ),
+        (
+            "prompt496_source_prompt483_historical_evidence_ready",
+            "prompt483_prompt482_historical_repo_evidence_ready",
+            "missing_prompt483_historical_repo_evidence_ready",
+        ),
+        (
+            "prompt496_source_prompt483_role_catalog_reader_ready",
+            "prompt483_role_catalog_reader_ready",
+            "missing_prompt483_role_catalog_reader_ready",
+        ),
+        (
+            "prompt496_source_prompt483_selected_role_found",
+            "prompt483_selected_role_found",
+            "missing_prompt483_selected_role_found",
+        ),
+        (
+            "prompt496_source_prompt483_role_handoff_ready",
+            "prompt483_chatgpt_selected_role_handoff_ready",
+            "missing_prompt483_chatgpt_selected_role_handoff_ready",
+        ),
+    )
+    source_readiness = {
+        output_key: bool(payload.get(source_key))
+        for output_key, source_key, _reason in readiness_requirements
+    }
+    blocked_reasons = [
+        reason
+        for output_key, _source_key, reason in readiness_requirements
+        if not source_readiness[output_key]
+    ]
+    ready = not blocked_reasons
+    return {
+        "prompt496_schema_version": _PROMPT496_SCHEMA_VERSION,
+        "local_only": True,
+        "source_prompt": "prompt496",
+        "prompt496_applicable": True,
+        "prompt496_prompt494_adoption_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt496_prompt494_adoption_ready": ready,
+        **source_readiness,
+        "prompt496_role_to_prompt378_chain_ready": ready,
+        "prompt496_authoritative_materialization_handoff_ready": ready,
+        "prompt496_next_action": (
+            _PROMPT496_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT496_BLOCKED_NEXT_ACTION
+        ),
+        "prompt496_blocked_reason": (
+            None if ready else blocked_reasons[0]
+        ),
+        "prompt496_blocked_reasons": blocked_reasons,
     }
 
 
@@ -270559,6 +270678,15 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt494_contract_injection_payload,
         }
+        prompt496_prompt494_adoption_payload = (
+            _build_prompt496_prompt494_adoption_state(
+                run_state_payload=run_state_payload,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt496_prompt494_adoption_payload,
+        }
         prompt485_prompt378_supply_ready_for_prompt379_live_payload = (
             _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
                 run_state_payload=run_state_payload,
@@ -276005,6 +276133,11 @@ class PlannedExecutionRunner:
             if key in prompt494_contract_injection_payload:
                 manifest["decision_summary"][key] = (
                     prompt494_contract_injection_payload.get(key)
+                )
+        for key in _PROMPT496_PROMPT494_ADOPTION_KEYS:
+            if key in prompt496_prompt494_adoption_payload:
+                manifest["decision_summary"][key] = (
+                    prompt496_prompt494_adoption_payload.get(key)
                 )
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS:
             if key in prompt485_prompt378_supply_ready_for_prompt379_live_payload:
@@ -283234,6 +283367,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT494_CONTRACT_INJECTION_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT496_PROMPT494_ADOPTION_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_COMPACT_KEYS:
