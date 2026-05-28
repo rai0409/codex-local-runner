@@ -1236,6 +1236,25 @@ PROMPT496_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt496_blocked_reasons",
 )
 
+PROMPT497_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt497_chatgpt_browser_bridge_status",
+    "prompt497_chatgpt_browser_bridge_ready",
+    "prompt497_source_prompt496_ready",
+    "prompt497_source_prompt496_next_action_ready",
+    "prompt497_prompt377_request_available",
+    "prompt497_prompt377_request_path",
+    "prompt497_chrome_runner_bridge_queue_ready",
+    "prompt497_chrome_runner_bridge_request_ready",
+    "prompt497_chrome_runner_bridge_one_shot_surface_available",
+    "prompt497_chrome_runner_bridge_request_path_available",
+    "prompt497_chrome_runner_bridge_status_path_available",
+    "prompt497_chrome_runner_bridge_response_path_available",
+    "prompt497_chrome_runner_bridge_request_metadata_ready",
+    "prompt497_next_action",
+    "prompt497_blocked_reason",
+    "prompt497_blocked_reasons",
+)
+
 PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt491_third_success_cycle_status",
     "prompt491_third_success_cycle_ready",
@@ -1329,6 +1348,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT493_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT494_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT496_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT497_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS,
     "prompt356_alignment_status",
     "prompt356_next_cycle_safe",
@@ -4129,6 +4149,17 @@ def select_manifest_run_state_summary_compact(
             "prompt496_source_prompt483_role_handoff_ready",
             "prompt496_role_to_prompt378_chain_ready",
             "prompt496_authoritative_materialization_handoff_ready",
+            "prompt497_chatgpt_browser_bridge_ready",
+            "prompt497_source_prompt496_ready",
+            "prompt497_source_prompt496_next_action_ready",
+            "prompt497_prompt377_request_available",
+            "prompt497_chrome_runner_bridge_queue_ready",
+            "prompt497_chrome_runner_bridge_request_ready",
+            "prompt497_chrome_runner_bridge_one_shot_surface_available",
+            "prompt497_chrome_runner_bridge_request_path_available",
+            "prompt497_chrome_runner_bridge_status_path_available",
+            "prompt497_chrome_runner_bridge_response_path_available",
+            "prompt497_chrome_runner_bridge_request_metadata_ready",
         }
     )
     list_fields.update(
@@ -4197,6 +4228,7 @@ def select_manifest_run_state_summary_compact(
             "prompt493_blocked_reasons",
             "prompt494_blocked_reasons",
             "prompt496_blocked_reasons",
+            "prompt497_blocked_reasons",
         }
     )
     int_fields.update(
@@ -4550,6 +4582,9 @@ def build_manifest_run_state_summary_contract_surface() -> dict[str, Any]:
         ),
         "prompt496_summary_safe_fields": list(
             PROMPT496_RUN_STATE_SUMMARY_SAFE_FIELDS
+        ),
+        "prompt497_summary_safe_fields": list(
+            PROMPT497_RUN_STATE_SUMMARY_SAFE_FIELDS
         ),
         "lifecycle_summary_safe_fields": list(LIFECYCLE_SUMMARY_SAFE_FIELDS),
         "rendering_only_operator_fields": list(OPERATOR_RENDERING_ONLY_FIELDS),

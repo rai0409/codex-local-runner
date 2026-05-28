@@ -4350,6 +4350,12 @@ _PROMPT496_SUCCESS_NEXT_ACTION = (
     "prepare_prompt497_chatgpt_browser_prompt_generation_bridge"
 )
 _PROMPT496_BLOCKED_NEXT_ACTION = "repair_prompt496_adoption_blockers"
+_PROMPT497_SUCCESS_NEXT_ACTION = (
+    "prepare_prompt498_chrome_response_to_prompt378_intake_bridge"
+)
+_PROMPT497_BLOCKED_NEXT_ACTION = (
+    "repair_prompt497_chatgpt_browser_bridge_blockers"
+)
 _PROMPT492_REQUIRED_CANONICAL_SECTIONS: tuple[str, ...] = (
     "Goal:",
     "Objective:",
@@ -9443,6 +9449,42 @@ _PROMPT496_PROMPT494_ADOPTION_COMPACT_KEYS: tuple[str, ...] = (
     "prompt496_next_action",
     "prompt496_blocked_reason",
     "prompt496_blocked_reasons",
+)
+_PROMPT497_CHATGPT_BROWSER_BRIDGE_KEYS: tuple[str, ...] = (
+    "prompt497_chatgpt_browser_bridge_status",
+    "prompt497_chatgpt_browser_bridge_ready",
+    "prompt497_source_prompt496_ready",
+    "prompt497_source_prompt496_next_action_ready",
+    "prompt497_prompt377_request_available",
+    "prompt497_prompt377_request_path",
+    "prompt497_chrome_runner_bridge_queue_ready",
+    "prompt497_chrome_runner_bridge_request_ready",
+    "prompt497_chrome_runner_bridge_one_shot_surface_available",
+    "prompt497_chrome_runner_bridge_request_path_available",
+    "prompt497_chrome_runner_bridge_status_path_available",
+    "prompt497_chrome_runner_bridge_response_path_available",
+    "prompt497_chrome_runner_bridge_request_metadata_ready",
+    "prompt497_next_action",
+    "prompt497_blocked_reason",
+    "prompt497_blocked_reasons",
+)
+_PROMPT497_CHATGPT_BROWSER_BRIDGE_COMPACT_KEYS: tuple[str, ...] = (
+    "prompt497_chatgpt_browser_bridge_status",
+    "prompt497_chatgpt_browser_bridge_ready",
+    "prompt497_source_prompt496_ready",
+    "prompt497_source_prompt496_next_action_ready",
+    "prompt497_prompt377_request_available",
+    "prompt497_prompt377_request_path",
+    "prompt497_chrome_runner_bridge_queue_ready",
+    "prompt497_chrome_runner_bridge_request_ready",
+    "prompt497_chrome_runner_bridge_one_shot_surface_available",
+    "prompt497_chrome_runner_bridge_request_path_available",
+    "prompt497_chrome_runner_bridge_status_path_available",
+    "prompt497_chrome_runner_bridge_response_path_available",
+    "prompt497_chrome_runner_bridge_request_metadata_ready",
+    "prompt497_next_action",
+    "prompt497_blocked_reason",
+    "prompt497_blocked_reasons",
 )
 _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS: tuple[str, ...] = (
     "prompt485_schema_version",
@@ -89597,6 +89639,149 @@ def _build_prompt496_prompt494_adoption_state(
             None if ready else blocked_reasons[0]
         ),
         "prompt496_blocked_reasons": blocked_reasons,
+    }
+
+
+def _build_prompt497_chatgpt_browser_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    prompt377_request_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    chrome_runner_bridge_one_shot_state = payload.get(
+        "project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized"
+    )
+    chrome_runner_bridge_one_shot_payload = (
+        chrome_runner_bridge_one_shot_state
+        if isinstance(chrome_runner_bridge_one_shot_state, Mapping)
+        else {}
+    )
+
+    def _chrome_runner_bridge_text(key: str) -> str:
+        top_level_value = _normalize_text(payload.get(key), default="")
+        if top_level_value:
+            return top_level_value
+        return _normalize_text(
+            chrome_runner_bridge_one_shot_payload.get(key),
+            default="",
+        )
+
+    source_prompt496_ready = (
+        payload.get("prompt496_authoritative_materialization_handoff_ready") is True
+    )
+    source_prompt496_next_action_ready = (
+        _normalize_text(payload.get("prompt496_next_action"), default="")
+        == _PROMPT496_SUCCESS_NEXT_ACTION
+    )
+    prompt377_path = _normalize_text(prompt377_request_path, default="")
+    prompt377_request_ready = (
+        payload.get("prompt377_chatgpt_prompt_generation_request_ready") is True
+    )
+    prompt377_request_available = bool(
+        prompt377_request_ready
+        and prompt377_path
+        and Path(prompt377_path).exists()
+        and Path(prompt377_path).is_file()
+    )
+    chrome_runner_bridge_status = _chrome_runner_bridge_text(
+        "project_browser_autonomous_chrome_runner_bridge_one_shot_status"
+    )
+    chrome_runner_bridge_request_path = _chrome_runner_bridge_text(
+        "project_browser_autonomous_chrome_runner_bridge_request_path"
+    )
+    chrome_runner_bridge_response_path = _chrome_runner_bridge_text(
+        "project_browser_autonomous_chrome_runner_bridge_response_path"
+    )
+    chrome_runner_bridge_status_path = _chrome_runner_bridge_text(
+        "project_browser_autonomous_chrome_runner_bridge_status_path"
+    )
+    chrome_runner_bridge_one_shot_surface_available = bool(
+        chrome_runner_bridge_status
+    )
+    chrome_runner_bridge_request_path_available = bool(
+        chrome_runner_bridge_request_path
+    )
+    chrome_runner_bridge_status_path_available = bool(
+        chrome_runner_bridge_status_path
+    )
+    chrome_runner_bridge_response_path_available = bool(
+        chrome_runner_bridge_response_path
+    )
+    chrome_runner_bridge_request_metadata_ready = bool(
+        chrome_runner_bridge_one_shot_surface_available
+        and chrome_runner_bridge_request_path_available
+        and chrome_runner_bridge_status_path_available
+        and chrome_runner_bridge_response_path_available
+    )
+    chrome_runner_bridge_queue_ready = chrome_runner_bridge_request_metadata_ready
+    chrome_runner_bridge_request_ready = chrome_runner_bridge_request_metadata_ready
+
+    blocked_reasons: list[str] = []
+    if not source_prompt496_ready:
+        blocked_reasons.append(
+            "missing_prompt496_authoritative_materialization_handoff_ready"
+        )
+    if not source_prompt496_next_action_ready:
+        blocked_reasons.append("missing_prompt496_next_action_for_prompt497")
+    if not prompt377_request_available:
+        blocked_reasons.append(
+            "missing_prompt377_chatgpt_prompt_generation_request"
+        )
+    if not chrome_runner_bridge_one_shot_surface_available:
+        blocked_reasons.append("missing_chrome_runner_bridge_one_shot_surface")
+    if not chrome_runner_bridge_request_path_available:
+        blocked_reasons.append("missing_chrome_runner_bridge_request_path_surface")
+    if not chrome_runner_bridge_status_path_available:
+        blocked_reasons.append("missing_chrome_runner_bridge_status_path_surface")
+    if not chrome_runner_bridge_response_path_available:
+        blocked_reasons.append("missing_chrome_runner_bridge_response_path_surface")
+    if not chrome_runner_bridge_request_metadata_ready:
+        blocked_reasons.append("chrome_runner_bridge_request_metadata_not_ready")
+
+    ready = not blocked_reasons
+    return {
+        "local_only": True,
+        "source_prompt": "prompt497",
+        "prompt497_chatgpt_browser_bridge_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt497_chatgpt_browser_bridge_ready": ready,
+        "prompt497_source_prompt496_ready": source_prompt496_ready,
+        "prompt497_source_prompt496_next_action_ready": (
+            source_prompt496_next_action_ready
+        ),
+        "prompt497_prompt377_request_available": prompt377_request_available,
+        "prompt497_prompt377_request_path": (
+            prompt377_path if prompt377_request_available else ""
+        ),
+        "prompt497_chrome_runner_bridge_queue_ready": (
+            chrome_runner_bridge_queue_ready
+        ),
+        "prompt497_chrome_runner_bridge_request_ready": (
+            chrome_runner_bridge_request_ready
+        ),
+        "prompt497_chrome_runner_bridge_one_shot_surface_available": (
+            chrome_runner_bridge_one_shot_surface_available
+        ),
+        "prompt497_chrome_runner_bridge_request_path_available": (
+            chrome_runner_bridge_request_path_available
+        ),
+        "prompt497_chrome_runner_bridge_status_path_available": (
+            chrome_runner_bridge_status_path_available
+        ),
+        "prompt497_chrome_runner_bridge_response_path_available": (
+            chrome_runner_bridge_response_path_available
+        ),
+        "prompt497_chrome_runner_bridge_request_metadata_ready": (
+            chrome_runner_bridge_request_metadata_ready
+        ),
+        "prompt497_next_action": (
+            _PROMPT497_SUCCESS_NEXT_ACTION
+            if ready
+            else _PROMPT497_BLOCKED_NEXT_ACTION
+        ),
+        "prompt497_blocked_reason": None if ready else blocked_reasons[0],
+        "prompt497_blocked_reasons": blocked_reasons,
     }
 
 
@@ -270687,6 +270872,24 @@ class PlannedExecutionRunner:
             **run_state_payload,
             **prompt496_prompt494_adoption_payload,
         }
+        prompt497_chatgpt_browser_bridge_payload = (
+            _build_prompt497_chatgpt_browser_bridge_state(
+                run_state_payload={
+                    **run_state_payload,
+                    "project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized": (
+                        approved_restart_execution_contract_payload.get(
+                            "project_browser_autonomous_chrome_runner_bridge_one_shot_state_normalized",
+                            {},
+                        )
+                    ),
+                },
+                prompt377_request_path=prompt377_chatgpt_prompt_generation_request_path,
+            )
+        )
+        run_state_payload = {
+            **run_state_payload,
+            **prompt497_chatgpt_browser_bridge_payload,
+        }
         prompt485_prompt378_supply_ready_for_prompt379_live_payload = (
             _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
                 run_state_payload=run_state_payload,
@@ -276138,6 +276341,11 @@ class PlannedExecutionRunner:
             if key in prompt496_prompt494_adoption_payload:
                 manifest["decision_summary"][key] = (
                     prompt496_prompt494_adoption_payload.get(key)
+                )
+        for key in _PROMPT497_CHATGPT_BROWSER_BRIDGE_KEYS:
+            if key in prompt497_chatgpt_browser_bridge_payload:
+                manifest["decision_summary"][key] = (
+                    prompt497_chatgpt_browser_bridge_payload.get(key)
                 )
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_KEYS:
             if key in prompt485_prompt378_supply_ready_for_prompt379_live_payload:
@@ -283370,6 +283578,9 @@ class PlannedExecutionRunner:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT496_PROMPT494_ADOPTION_COMPACT_KEYS:
+            if key in run_state_payload:
+                run_state_summary_compact[key] = run_state_payload.get(key)
+        for key in _PROMPT497_CHATGPT_BROWSER_BRIDGE_COMPACT_KEYS:
             if key in run_state_payload:
                 run_state_summary_compact[key] = run_state_payload.get(key)
         for key in _PROMPT485_PROMPT378_SUPPLY_READY_FOR_PROMPT379_LIVE_COMPACT_KEYS:
