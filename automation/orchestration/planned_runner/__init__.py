@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from automation.orchestration.planned_runner.runner import PlannedExecutionRunner
+from .runner import PlannedExecutionRunner
 from automation.orchestration.planned_runner.transports import DryRunCodexExecutionTransport
 
 __all__ = [
