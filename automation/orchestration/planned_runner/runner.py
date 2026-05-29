@@ -2,22 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
-from typing import Callable
-from typing import Mapping
+from typing import Any, Callable, Mapping
 
 from automation.control.next_action_controller import evaluate_next_action_from_run_dir
 from automation.control.retry_context_store import FileRetryContextStore
 from automation.execution.codex_executor_adapter import CodexExecutorAdapter
 from automation.orchestration.objective_contract import build_objective_contract_surface
 from automation.orchestration.objective_contract import build_objective_run_state_summary_surface
+from automation.orchestration.planned_runner.runtime_output_wiring import reconnect_runtime_output_generation
 from automation.orchestration.planned_runner.transports import DryRunCodexExecutionTransport
-from automation.orchestration.planned_runner.utils import _as_non_negative_int
-from automation.orchestration.planned_runner.utils import _iso_now
-from automation.orchestration.planned_runner.utils import _normalize_string_list
-from automation.orchestration.planned_runner.utils import _normalize_text
-from automation.orchestration.planned_runner.utils import _read_json_object_if_exists
-from automation.orchestration.planned_runner.utils import _write_json
+from automation.orchestration.planned_runner.utils import _as_non_negative_int, _iso_now
+from automation.orchestration.planned_runner.utils import _normalize_string_list, _normalize_text
+from automation.orchestration.planned_runner.utils import _read_json_object_if_exists, _write_json
 from automation.planning.prompt_compiler import compile_prompt_units
 from automation.planning.prompt_compiler import load_planning_artifacts
 
@@ -953,22 +949,23 @@ class PlannedExecutionRunner:
             total_units_planned=len(units),
             manifest_units=manifest_units,
         )
-        run_state_payload.update(
-            {
-                "prompt373_live_execution_requested": bool(
-                    kwargs.get("prompt373_live_execution_requested", False)
-                ),
-                "prompt373_live_execution_confirmed": bool(
-                    kwargs.get("prompt373_live_execution_confirmed", False)
-                ),
-                "prompt379_codex_execution_requested": bool(
-                    kwargs.get("prompt379_codex_execution_requested", False)
-                ),
-                "prompt379_codex_execution_confirmed": bool(
-                    kwargs.get("prompt379_codex_execution_confirmed", False)
-                ),
-                "github_read_evidence_present": isinstance(github_read_evidence, Mapping),
-            }
+        run_state_payload["github_read_evidence_present"] = isinstance(github_read_evidence, Mapping)
+        run_state_payload, manifest = reconnect_runtime_output_generation(
+            run_root=run_root,
+            run_state_payload=run_state_payload,
+            manifest_payload=manifest,
+            execution_repo_path=execution_repo,
+            job_id=resolved_job_id,
+            dry_run=dry_run,
+            now=self.now,
+            prompt373_live_execution_requested=bool(kwargs.get("prompt373_live_execution_requested", False)),
+            prompt373_live_execution_confirmed=bool(kwargs.get("prompt373_live_execution_confirmed", False)),
+            prompt379_codex_execution_requested=bool(kwargs.get("prompt379_codex_execution_requested", False)),
+            prompt379_codex_execution_confirmed=bool(kwargs.get("prompt379_codex_execution_confirmed", False)),
+            prompt389_bounded_repeated_success_path_loop_enabled=bool(
+                kwargs.get("prompt389_bounded_repeated_success_path_loop_enabled", False)
+            ),
+            prompt389_max_cycles=kwargs.get("prompt389_max_cycles"),
         )
         _write_json(run_state_path, run_state_payload)
 
