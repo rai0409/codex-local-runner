@@ -51,6 +51,12 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 imp
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
     _build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state,
 )
+from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 import (
+    _prompt491a_canonical_tokens_ready,
+)
+from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 import (
+    _prompt491a_materialized_prompt378_markdown,
+)
 from automation.orchestration.planned_runner.prompt_surfaces.registry import (
     get_prompt_builders,
 )
@@ -421,14 +427,79 @@ def _merge_split_compatible_runtime_surfaces(
     return merged
 
 
+def _merge_prompt491a_current_head_materialization_surfaces(
+    *,
+    run_state: Mapping[str, Any],
+    run_root: Path,
+) -> tuple[dict[str, Any], str]:
+    merged = dict(run_state)
+    builders = get_prompt_builders()
+    if "_build_prompt491a_role_prompt_materialization_state" not in builders:
+        return merged, ""
+
+    selected_role_id = _normalize_text(
+        merged.get("prompt483_selected_role_id"),
+        default="prompt491a_role",
+    )
+    selected_role_text = _normalize_text(
+        merged.get("prompt483_selected_role_text"),
+        default="",
+    )
+    prompt_text = _prompt491a_materialized_prompt378_markdown(
+        selected_role_id=selected_role_id,
+        selected_role_text=selected_role_text,
+    )
+    canonical_tokens_ready = _prompt491a_canonical_tokens_ready(prompt_text)
+    if not canonical_tokens_ready:
+        merged.update(
+            {
+                "prompt491a_current_head_prompt378_override_ready": False,
+                "prompt491a_current_head_prompt378_override_path": "",
+            }
+        )
+        return merged, ""
+
+    materialized_path = run_root / "prompt491a" / "materialized_prompt378.md"
+    try:
+        materialized_path.parent.mkdir(parents=True, exist_ok=True)
+        materialized_path.write_text(prompt_text, encoding="utf-8")
+    except OSError:
+        merged.update(
+            {
+                "prompt491a_current_head_prompt378_override_ready": False,
+                "prompt491a_current_head_prompt378_override_path": "",
+            }
+        )
+        return merged, ""
+
+    materialized_path_text = str(materialized_path)
+    merged.update(
+        {
+            "prompt491a_current_head_prompt378_override_ready": True,
+            "prompt491a_current_head_prompt378_override_path": materialized_path_text,
+            "prompt491a_current_head_prompt378_override_source": "current_head_prompt491a",
+            "prompt491a_current_head_prompt378_override_canonical_tokens_ready": True,
+        }
+    )
+    return merged, materialized_path_text
+
+
 def _resolve_existing_prompt378_generated_prompt_path(
     *,
     explicit_path: str,
+    current_head_prompt491a_path: str = "",
     manifest_payload: Mapping[str, Any],
 ) -> str:
     normalized_explicit_path = _normalize_text(explicit_path, default="")
     if normalized_explicit_path:
         return normalized_explicit_path
+
+    normalized_current_head_path = _normalize_text(
+        current_head_prompt491a_path,
+        default="",
+    )
+    if normalized_current_head_path:
+        return normalized_current_head_path
 
     artifacts_dir = Path(
         _normalize_text(manifest_payload.get("artifact_input_dir"), default="")
@@ -576,9 +647,17 @@ def reconnect_runtime_output_generation(
     )
     run_state.update(prompt373)
 
+    (
+        run_state,
+        current_head_prompt491a_materialized_path,
+    ) = _merge_prompt491a_current_head_materialization_surfaces(
+        run_state=run_state,
+        run_root=run_root,
+    )
     resolved_prompt378_generated_prompt_path = (
         _resolve_existing_prompt378_generated_prompt_path(
             explicit_path=prompt378_generated_prompt_path,
+            current_head_prompt491a_path=current_head_prompt491a_materialized_path,
             manifest_payload=manifest_payload,
         )
     )
@@ -721,7 +800,11 @@ def reconnect_runtime_output_generation(
         "prompt378_generated_prompt_path_source": (
             "explicit"
             if _normalize_text(prompt378_generated_prompt_path, default="")
-            else ("artifact_input_dir" if resolved_prompt378_generated_prompt_path else "")
+            else (
+                "current_head_prompt491a"
+                if current_head_prompt491a_materialized_path
+                else ("artifact_input_dir" if resolved_prompt378_generated_prompt_path else "")
+            )
         ),
         "execution_prompt_alias_emitted": bool(execution_prompt_alias_emitted),
     }

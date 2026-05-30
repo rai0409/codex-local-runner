@@ -398,6 +398,12 @@ _PROMPT491A_REQUIRED_PROMPT_MARKERS = (
 )
 
 
+def _normalize_multiline_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def _prompt491a_list_lines(values: Sequence[str]) -> str:
     return "\n".join(f"- {value}" for value in values)
 
