@@ -13394,7 +13394,8 @@ def _build_prompt489_real_task_marker_state(
             payload.get("prompt487_isolated_prompt379_live_route_ready") is True
         ),
         "prompt489_source_prompt379_success": bool(
-            prompt379_returncode_classification == "success"
+            payload.get("prompt489_source_prompt379_success") is True
+            or prompt379_returncode_classification == "success"
         ),
         "prompt489_next_action": _PROMPT489_NEXT_ACTION,
     }
@@ -13416,7 +13417,8 @@ def _build_prompt490_second_success_cycle_state(
             payload.get("prompt489_real_task_marker_ready") is True
         ),
         "prompt490_source_prompt379_success": bool(
-            prompt379_returncode_classification == "success"
+            payload.get("prompt490_source_prompt379_success") is True
+            or prompt379_returncode_classification == "success"
         ),
         "prompt490_next_action": _PROMPT490_NEXT_ACTION,
     }
@@ -13430,17 +13432,108 @@ def _build_prompt491_third_success_cycle_state(
         payload.get("prompt379_returncode_classification"),
         default="",
     )
+    prompt489_real_task_marker_ready = bool(
+        payload.get("prompt489_real_task_marker_ready") is True
+        or _normalize_text(payload.get("prompt489_real_task_marker_status"), default="")
+        == "ready"
+    )
+    prompt490_second_success_cycle_ready = bool(
+        payload.get("prompt490_second_success_cycle_ready") is True
+        or _normalize_text(
+            payload.get("prompt490_second_success_cycle_status"),
+            default="",
+        )
+        == "ready"
+    )
+    prompt489_source_prompt379_success = bool(
+        payload.get("prompt489_source_prompt379_success") is True
+        or prompt379_returncode_classification == "success"
+    )
+    prompt490_source_prompt379_success = bool(
+        payload.get("prompt490_source_prompt379_success") is True
+        or prompt379_returncode_classification == "success"
+    )
+    two_cycle_success_evidence_ready = bool(
+        prompt489_real_task_marker_ready and prompt490_second_success_cycle_ready
+    )
+    current_prompt379_dry_run_safe = bool(
+        _normalize_text(
+            payload.get("prompt379_generated_prompt_codex_execution_bridge_status"),
+            default="",
+        )
+        == "blocked"
+        and payload.get("prompt379_execution_allowed") is False
+        and payload.get("prompt379_execution_performed") is False
+        and _normalize_text(
+            payload.get("prompt379_active_blocked_reason"),
+            default="",
+        )
+        == "prompt379_dry_run_transport_execution_suppressed"
+    )
+    current_prompt383_non_exec_safe = bool(
+        _normalize_text(
+            payload.get("prompt383_explicit_approve_commit_tag_execution_status"),
+            default="",
+        )
+        == "blocked"
+        and payload.get("prompt383_execution_allowed") is False
+        and payload.get("prompt383_execution_performed") is False
+        and payload.get("prompt383_git_mutation_allowed") is False
+        and payload.get("prompt383_git_mutation_performed") is False
+        and payload.get("prompt383_remote_mutation_allowed") is False
+        and payload.get("prompt383_remote_mutation_performed") is False
+    )
+    local_multi_cycle_success_replay_ready = bool(two_cycle_success_evidence_ready)
+    active_blocked_reasons = _normalize_string_list(
+        payload.get("prompt379_active_blocked_reasons")
+    )
+    for reason in _normalize_string_list(payload.get("prompt383_active_blocked_reasons")):
+        if reason not in active_blocked_reasons:
+            active_blocked_reasons.append(reason)
+    active_blocked_reason = _normalize_text(
+        payload.get("prompt379_active_blocked_reason")
+        or payload.get("prompt383_active_blocked_reason"),
+        default=active_blocked_reasons[0] if active_blocked_reasons else "",
+    )
+    next_action = (
+        "accept_candidate_then_commit_tag"
+        if (
+            two_cycle_success_evidence_ready
+            and current_prompt379_dry_run_safe
+            and current_prompt383_non_exec_safe
+        )
+        else _PROMPT491_NEXT_ACTION
+    )
 
     return {
         "prompt491_third_success_cycle_status": "ready",
         "prompt491_third_success_cycle_ready": True,
         "prompt491_source_prompt490_ready": bool(
-            payload.get("prompt490_second_success_cycle_ready") is True
+            prompt490_second_success_cycle_ready
         ),
         "prompt491_source_prompt379_success": bool(
-            prompt379_returncode_classification == "success"
+            payload.get("prompt491_source_prompt379_success") is True
+            or prompt379_returncode_classification == "success"
         ),
-        "prompt491_next_action": _PROMPT491_NEXT_ACTION,
+        "current_head_sha": _normalize_text(payload.get("current_head_sha"), default=""),
+        "current_head_tags": _normalize_string_list(payload.get("current_head_tags")),
+        "prompt489_real_task_marker_ready": prompt489_real_task_marker_ready,
+        "prompt490_second_success_cycle_ready": prompt490_second_success_cycle_ready,
+        "prompt489_source_prompt379_success": prompt489_source_prompt379_success,
+        "prompt490_source_prompt379_success": prompt490_source_prompt379_success,
+        "two_cycle_success_evidence_ready": two_cycle_success_evidence_ready,
+        "current_prompt379_dry_run_safe": current_prompt379_dry_run_safe,
+        "current_prompt383_non_exec_safe": current_prompt383_non_exec_safe,
+        "local_multi_cycle_success_replay_ready": (
+            local_multi_cycle_success_replay_ready
+        ),
+        "execution_allowed": False,
+        "git_mutation_allowed": False,
+        "remote_mutation_allowed": False,
+        "next_action": next_action,
+        "active_blocked_reason": active_blocked_reason,
+        "active_blocked_reasons": active_blocked_reasons,
+        "prompt491_next_action": next_action,
     }
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(

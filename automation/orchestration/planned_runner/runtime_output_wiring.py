@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import hashlib
 from pathlib import Path
+import subprocess
 from typing import Any
 from typing import Callable
 from typing import Mapping
@@ -15,6 +16,9 @@ from automation.orchestration.run_state_summary_contract import (
 )
 from automation.orchestration.run_state_summary_contract import (
     PROMPT490_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.run_state_summary_contract import (
+    PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS,
 )
 from automation.orchestration.planned_runner.prompt_surfaces import prompts_350_399
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
@@ -87,12 +91,17 @@ _SPLIT_COMPATIBLE_RUNTIME_ARTIFACTS = (
         "prompt490_second_success_cycle_marker.json",
         PROMPT490_RUN_STATE_SUMMARY_SAFE_FIELDS,
     ),
+    (
+        "prompt491_current_head_multi_cycle_success_evidence_bridge.json",
+        PROMPT491_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    ),
 )
 
 _SPLIT_COMPATIBLE_RUNTIME_BUILDER_NAMES = (
     "_build_prompt468_full_no_human_loop_regression_rerun_state",
     "_build_prompt489_real_task_marker_state",
     "_build_prompt490_second_success_cycle_state",
+    "_build_prompt491_third_success_cycle_state",
 )
 
 _PROMPT380_RESULT_REVIEW_ROUTE_FIELDS = (
@@ -308,7 +317,8 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("prompt383_explicit_approve_commit_tag_execution_status")
             or payload.get("prompt468_full_no_human_loop_regression_status")
             or payload.get("prompt489_real_task_marker_status")
-            or payload.get("prompt490_second_success_cycle_status"),
+            or payload.get("prompt490_second_success_cycle_status")
+            or payload.get("prompt491_third_success_cycle_status"),
             default="",
         ),
         "next_action": _normalize_text(
@@ -325,7 +335,8 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("prompt389_next_action")
             or payload.get("prompt468_next_action")
             or payload.get("prompt489_next_action")
-            or payload.get("prompt490_next_action"),
+            or payload.get("prompt490_next_action")
+            or payload.get("prompt491_next_action"),
             default="",
         ),
         "blocked_reason": _normalize_text(
@@ -343,6 +354,45 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("prompt468_blocked_reason"),
             default="",
         ),
+    }
+
+
+def _git_text(
+    *,
+    repo_path: str,
+    args: list[str],
+) -> str:
+    normalized_repo_path = _normalize_text(repo_path, default="")
+    if not normalized_repo_path:
+        return ""
+    try:
+        completed = subprocess.run(
+            ["git", "-C", normalized_repo_path, *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if completed.returncode != 0:
+        return ""
+    return _normalize_text(completed.stdout, default="")
+
+
+def _current_head_metadata(*, repo_path: str) -> dict[str, Any]:
+    head_sha = _git_text(repo_path=repo_path, args=["rev-parse", "HEAD"])
+    head_tags = [
+        tag
+        for tag in _git_text(
+            repo_path=repo_path,
+            args=["tag", "--points-at", "HEAD"],
+        ).splitlines()
+        if tag
+    ]
+    return {
+        "current_head_sha": head_sha,
+        "current_head_tags": sorted(head_tags),
     }
 
 
@@ -463,6 +513,7 @@ def reconnect_runtime_output_generation(
     run_state = dict(run_state_payload)
     run_state.update(
         {
+            **_current_head_metadata(repo_path=execution_repo_path),
             "prompt373_live_execution_requested": bool(
                 prompt373_live_execution_requested
             ),
