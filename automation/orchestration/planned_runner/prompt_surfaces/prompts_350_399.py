@@ -17661,6 +17661,10 @@ def _build_prompt382_approve_commit_tag_execution_gate_state(
     prompt382_execution_allowed = False
     prompt382_execution_attempted = False
     prompt382_execution_performed = False
+    prompt382_approve_commit_tag_allowed = False
+    prompt382_approve_commit_tag_performed = False
+    prompt382_git_mutation_allowed = False
+    prompt382_git_mutation_performed = False
     prompt382_git_add_allowed = False
     prompt382_git_add_performed = False
     prompt382_git_commit_allowed = False
@@ -17824,6 +17828,14 @@ def _build_prompt382_approve_commit_tag_execution_gate_state(
         "prompt382_execution_allowed": prompt382_execution_allowed,
         "prompt382_execution_attempted": prompt382_execution_attempted,
         "prompt382_execution_performed": prompt382_execution_performed,
+        "prompt382_approve_commit_tag_allowed": (
+            prompt382_approve_commit_tag_allowed
+        ),
+        "prompt382_approve_commit_tag_performed": (
+            prompt382_approve_commit_tag_performed
+        ),
+        "prompt382_git_mutation_allowed": prompt382_git_mutation_allowed,
+        "prompt382_git_mutation_performed": prompt382_git_mutation_performed,
         "prompt382_git_add_allowed": prompt382_git_add_allowed,
         "prompt382_git_add_performed": prompt382_git_add_performed,
         "prompt382_git_commit_allowed": prompt382_git_commit_allowed,
