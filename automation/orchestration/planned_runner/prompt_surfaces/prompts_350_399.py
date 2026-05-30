@@ -16663,7 +16663,7 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
     )
 
     prompt380_prompt379_result_review_status = "blocked"
-    prompt380_route_decision = "blocked_retry_or_review"
+    prompt380_route_decision = "blocked_failed_or_not_run"
     prompt380_approve_candidate = False
     prompt380_no_diff_continuation_allowed = False
     prompt380_retry_or_manual_review_required = True
@@ -16671,7 +16671,7 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
     prompt380_git_mutation_performed = False
     prompt380_remote_mutation_allowed = False
     prompt380_remote_mutation_performed = False
-    prompt380_next_action = "review_prompt379_execution_result_before_retry"
+    prompt380_next_action = "wait_for_prompt379_successful_execution_result"
     prompt380_authoritative_next_action = prompt380_next_action
     prompt380_active_blocked_reasons: list[str] = []
 
@@ -16740,25 +16740,25 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
         prompt380_prompt379_result_review_status = "completed"
         prompt380_retry_or_manual_review_required = False
         if prompt380_prompt379_post_execution_tracked_diff_empty:
-            prompt380_route_decision = "no_diff_continuation"
+            prompt380_route_decision = "success_no_tracked_diff"
             prompt380_no_diff_continuation_allowed = True
             prompt380_next_action = "prepare_next_cycle_after_prompt379_no_diff"
             prompt380_authoritative_next_action = prompt380_next_action
         else:
-            prompt380_route_decision = "approve_candidate"
-            prompt380_approve_candidate = True
-            prompt380_next_action = "prepare_prompt381_approve_candidate_boundary"
+            prompt380_route_decision = "success_with_tracked_diff_for_review"
+            prompt380_approve_candidate = False
+            prompt380_next_action = "prepare_prompt381_approve_candidate_boundary_review"
             prompt380_authoritative_next_action = prompt380_next_action
 
     prompt380_active_blocked_reason = (
         prompt380_active_blocked_reasons[0] if prompt380_active_blocked_reasons else ""
     )
     prompt380_summary = (
-        "Prompt380 reviewed Prompt379 execution metadata and selected the approve-candidate route."
-        if prompt380_route_decision == "approve_candidate"
+        "Prompt380 reviewed Prompt379 execution metadata and selected the tracked-diff review route."
+        if prompt380_route_decision == "success_with_tracked_diff_for_review"
         else (
             "Prompt380 reviewed Prompt379 execution metadata and selected the no-diff continuation route."
-            if prompt380_route_decision == "no_diff_continuation"
+            if prompt380_route_decision == "success_no_tracked_diff"
             else (
                 "Prompt380 reviewed Prompt379 execution metadata and blocked continuation pending retry or manual review."
             )
@@ -19592,7 +19592,7 @@ def _build_prompt385_success_path_next_cycle_handoff_state(
                 prompt380_surface.get("prompt380_route_decision"),
                 default="",
             )
-            == "no_diff_continuation",
+            == "success_no_tracked_diff",
             bool(prompt380_surface.get("prompt380_no_diff_continuation_allowed", False)),
             not bool(prompt380_surface.get("prompt380_approve_candidate", False)),
             bool(prompt380_surface.get("prompt380_prompt379_execution_performed", False)),

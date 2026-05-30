@@ -27,6 +27,9 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 imp
     _build_prompt379_generated_prompt_codex_execution_bridge_state,
 )
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
+    _build_prompt380_prompt379_result_review_route_decision_state,
+)
+from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
     _build_prompt385_success_path_next_cycle_handoff_state,
 )
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
@@ -53,6 +56,7 @@ _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt378_generated_prompt_execution_handoff.json",
     "execution_prompt.json",
     "prompt379_generated_prompt_codex_execution_receipt.json",
+    "prompt380_prompt379_result_review_route_decision.json",
     "prompt385_success_path_next_cycle_handoff.json",
     "prompt388_success_path_autonomy_completion_receipt.json",
     "prompt389_bounded_repeated_success_path_loop_execution_receipt.json",
@@ -77,6 +81,22 @@ _SPLIT_COMPATIBLE_RUNTIME_BUILDER_NAMES = (
     "_build_prompt468_full_no_human_loop_regression_rerun_state",
     "_build_prompt489_real_task_marker_state",
     "_build_prompt490_second_success_cycle_state",
+)
+
+_PROMPT380_RESULT_REVIEW_ROUTE_FIELDS = (
+    "prompt380_prompt379_result_review_status",
+    "prompt380_prompt379_evidence_ready",
+    "prompt380_prompt379_execution_performed",
+    "prompt380_prompt379_returncode",
+    "prompt380_prompt379_returncode_classification",
+    "prompt380_prompt379_post_execution_tracked_diff_empty",
+    "prompt380_prompt379_post_execution_changed_files",
+    "prompt380_route_decision",
+    "prompt380_approve_candidate",
+    "prompt380_authoritative_next_action",
+    "prompt380_next_action",
+    "prompt380_active_blocked_reason",
+    "prompt380_active_blocked_reasons",
 )
 
 
@@ -165,6 +185,7 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             payload.get("status")
             or payload.get("execution_status")
             or payload.get("readiness_status")
+            or payload.get("prompt380_prompt379_result_review_status")
             or payload.get("prompt468_full_no_human_loop_regression_status")
             or payload.get("prompt489_real_task_marker_status")
             or payload.get("prompt490_second_success_cycle_status"),
@@ -175,6 +196,7 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("authoritative_next_action")
             or payload.get("prompt373_next_action")
             or payload.get("prompt379_next_action")
+            or payload.get("prompt380_next_action")
             or payload.get("prompt385_next_action")
             or payload.get("prompt388_next_action")
             or payload.get("prompt389_next_action")
@@ -188,6 +210,7 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("active_blocked_reason")
             or payload.get("prompt373_active_blocked_reason")
             or payload.get("prompt379_active_blocked_reason")
+            or payload.get("prompt380_active_blocked_reason")
             or payload.get("prompt385_active_blocked_reason")
             or payload.get("prompt388_active_blocked_reason")
             or payload.get("prompt389_active_blocked_reason")
@@ -397,6 +420,12 @@ def reconnect_runtime_output_generation(
     )
     run_state.update(prompt379)
 
+    prompt380 = _build_prompt380_prompt379_result_review_route_decision_state(
+        run_state_payload=run_state,
+        run_root=run_root,
+    )
+    run_state.update(prompt380)
+
     prompt385 = _build_prompt385_success_path_next_cycle_handoff_state(
         run_state_payload=run_state,
         run_root=run_root,
@@ -429,6 +458,12 @@ def reconnect_runtime_output_generation(
     run_state = _merge_split_compatible_runtime_surfaces(run_state)
 
     split_compatible_artifact_names: list[str] = []
+    _write_filtered_runtime_artifact_if_present(
+        run_root=run_root,
+        run_state=run_state,
+        artifact_name="prompt380_prompt379_result_review_route_decision.json",
+        fields=_PROMPT380_RESULT_REVIEW_ROUTE_FIELDS,
+    )
     for artifact_name, fields in _SPLIT_COMPATIBLE_RUNTIME_ARTIFACTS:
         if _write_filtered_runtime_artifact_if_present(
             run_root=run_root,
@@ -483,7 +518,8 @@ def reconnect_runtime_output_generation(
         default=_normalize_text(run_state.get("selected_route"), default=""),
     )
     run_state["route_decision"] = _normalize_text(
-        run_state.get("prompt379_next_action")
+        run_state.get("prompt380_route_decision")
+        or run_state.get("prompt379_next_action")
         or run_state.get("prompt373_next_action")
         or run_state.get("route_decision"),
         default="",
