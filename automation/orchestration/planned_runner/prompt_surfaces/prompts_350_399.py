@@ -18258,6 +18258,8 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
     prompt383_git_tag_allowed = False
     prompt383_git_tag_attempted = False
     prompt383_git_tag_performed = False
+    prompt383_git_mutation_allowed = False
+    prompt383_git_mutation_performed = False
     prompt383_remote_mutation_allowed = False
     prompt383_remote_mutation_performed = False
     prompt383_commit_message = prompt383_prompt382_commit_message
@@ -18346,13 +18348,13 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
     if not prompt383_prompt382_evidence_ready:
         _append_reason(prompt383_active_blocked_reasons, "prompt382_evidence_missing")
         prompt383_next_action = "prepare_prompt382_explicit_approve_commit_tag_execution_gate"
+    elif not prompt383_prompt382_execution_ready:
+        _append_reason(prompt383_active_blocked_reasons, "prompt382_execution_not_ready")
+        prompt383_next_action = "wait_for_prompt382_approve_commit_tag_execution_ready"
     elif not prompt383_prompt382_plan_ready:
         for reason in prompt382_plan_reasons or ["prompt382_plan_missing"]:
             _append_reason(prompt383_active_blocked_reasons, reason)
         prompt383_next_action = "prepare_prompt382_approve_commit_tag_execution_plan"
-    elif not prompt383_prompt382_execution_ready:
-        _append_reason(prompt383_active_blocked_reasons, "prompt382_execution_not_ready")
-        prompt383_next_action = "wait_for_prompt382_approve_commit_tag_execution_ready"
     elif not prompt383_prompt382_approved_paths:
         _append_reason(
             prompt383_active_blocked_reasons,
@@ -18532,11 +18534,15 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
                 prompt383_git_add_allowed = True
                 prompt383_git_commit_allowed = True
                 prompt383_git_tag_allowed = True
+                prompt383_git_mutation_allowed = True
 
                 add_result = _run_local_git_command(prompt383_git_add_argv)
                 _record_command_result("git_add", add_result)
                 prompt383_git_add_attempted = True
                 prompt383_git_add_performed = bool(add_result.get("performed", False))
+                prompt383_git_mutation_performed = bool(
+                    prompt383_git_mutation_performed or prompt383_git_add_performed
+                )
                 prompt383_git_add_returncode = int(add_result.get("returncode", 1))
                 prompt383_execution_performed = prompt383_git_add_performed
                 if prompt383_git_add_returncode != 0:
@@ -18550,6 +18556,10 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
                     prompt383_git_commit_attempted = True
                     prompt383_git_commit_performed = bool(
                         commit_result.get("performed", False)
+                    )
+                    prompt383_git_mutation_performed = bool(
+                        prompt383_git_mutation_performed
+                        or prompt383_git_commit_performed
                     )
                     prompt383_git_commit_returncode = int(
                         commit_result.get("returncode", 1)
@@ -18572,6 +18582,10 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
                         prompt383_git_tag_attempted = True
                         prompt383_git_tag_performed = bool(
                             tag_result.get("performed", False)
+                        )
+                        prompt383_git_mutation_performed = bool(
+                            prompt383_git_mutation_performed
+                            or prompt383_git_tag_performed
                         )
                         prompt383_git_tag_returncode = int(
                             tag_result.get("returncode", 1)
@@ -18653,6 +18667,8 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
         "prompt383_git_tag_allowed": prompt383_git_tag_allowed,
         "prompt383_git_tag_attempted": prompt383_git_tag_attempted,
         "prompt383_git_tag_performed": prompt383_git_tag_performed,
+        "prompt383_git_mutation_allowed": prompt383_git_mutation_allowed,
+        "prompt383_git_mutation_performed": prompt383_git_mutation_performed,
         "prompt383_remote_mutation_allowed": prompt383_remote_mutation_allowed,
         "prompt383_remote_mutation_performed": prompt383_remote_mutation_performed,
         "prompt383_commit_message": prompt383_commit_message,
