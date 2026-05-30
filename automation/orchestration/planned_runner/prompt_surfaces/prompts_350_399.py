@@ -17588,6 +17588,92 @@ def _build_prompt399_relaxed_committed_result_observation_state(
         "prompt399_strict_reenable_blocked_until": "prompt400_strict_gate_reenable",
     }
 
+_PROMPT382_APPROVE_PLAN_FALLBACK_COMMIT_MESSAGE = (
+    "Apply Prompt379 live approved surface changes"
+)
+_PROMPT382_APPROVE_PLAN_FALLBACK_TAG_NAME = (
+    "prompt379-live-approved-surface-changes"
+)
+
+
+def _prompt382_approve_plan_text(value: Any, *, fallback: str) -> str:
+    if isinstance(value, (list, tuple, dict, set)):
+        return fallback
+    return _normalize_text(value, default=fallback)
+
+
+def _prompt382_approve_plan_ready_from_gate(
+    prompt382_gate_surface: Mapping[str, Any],
+) -> bool:
+    return bool(
+        _normalize_text(
+            prompt382_gate_surface.get(
+                "prompt382_approve_commit_tag_execution_gate_status"
+            ),
+            default="",
+        )
+        == "ready_for_explicit_execution"
+        and _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_prompt381_evidence_ready"),
+            default=False,
+        )
+        and _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_prompt381_approve_candidate_ready"),
+            default=False,
+        )
+        and _prompt357_as_boolish(
+            prompt382_gate_surface.get(
+                "prompt382_prompt381_approve_candidate_contract_ready"
+            ),
+            default=False,
+        )
+        and _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_execution_ready"),
+            default=False,
+        )
+        and not _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_execution_allowed"),
+            default=False,
+        )
+        and not _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_execution_performed"),
+            default=False,
+        )
+        and not _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_approve_commit_tag_allowed"),
+            default=False,
+        )
+        and not _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_approve_commit_tag_performed"),
+            default=False,
+        )
+        and not _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_git_add_performed"),
+            default=False,
+        )
+        and not _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_git_commit_performed"),
+            default=False,
+        )
+        and not _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_git_tag_performed"),
+            default=False,
+        )
+        and not _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_git_mutation_performed"),
+            default=False,
+        )
+        and not _prompt357_as_boolish(
+            prompt382_gate_surface.get("prompt382_remote_mutation_performed"),
+            default=False,
+        )
+        and _normalize_string_list(
+            prompt382_gate_surface.get("prompt382_prompt381_changed_files"),
+            sort_items=False,
+        )
+    )
+
+
 def _build_prompt382_approve_commit_tag_execution_gate_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -17891,6 +17977,25 @@ def _build_prompt382_approve_commit_tag_execution_gate_state(
         if prompt382_execution_ready
         else "Prompt382 blocked because the Prompt381 approve-candidate boundary is not ready for explicit approve commit/tag execution."
     )
+    prompt382_approved_paths = (
+        list(prompt382_prompt381_changed_files) if prompt382_execution_ready else []
+    )
+    prompt382_commit_message = (
+        _prompt382_approve_plan_text(
+            _PROMPT382_COMMIT_MESSAGE,
+            fallback=_PROMPT382_APPROVE_PLAN_FALLBACK_COMMIT_MESSAGE,
+        )
+        if prompt382_execution_ready
+        else ""
+    )
+    prompt382_tag_name = (
+        _prompt382_approve_plan_text(
+            _PROMPT382_TAG_NAME,
+            fallback=_PROMPT382_APPROVE_PLAN_FALLBACK_TAG_NAME,
+        )
+        if prompt382_execution_ready
+        else ""
+    )
 
     prompt382_gate_payload: dict[str, Any] = {
         "prompt382_schema_version": _PROMPT382_SCHEMA_VERSION,
@@ -17908,8 +18013,9 @@ def _build_prompt382_approve_commit_tag_execution_gate_state(
             prompt382_prompt381_approve_candidate_contract_ready
         ),
         "prompt382_prompt381_changed_files": list(prompt382_prompt381_changed_files),
-        "prompt382_commit_message": _PROMPT382_COMMIT_MESSAGE,
-        "prompt382_tag_name": _PROMPT382_TAG_NAME,
+        "prompt382_approved_paths": list(prompt382_approved_paths),
+        "prompt382_commit_message": prompt382_commit_message,
+        "prompt382_tag_name": prompt382_tag_name,
         "prompt382_execution_ready": prompt382_execution_ready,
         "prompt382_execution_allowed": prompt382_execution_allowed,
         "prompt382_execution_attempted": prompt382_execution_attempted,
@@ -17947,19 +18053,20 @@ def _build_prompt382_approve_commit_tag_execution_gate_state(
         "prompt382_plan_is_metadata_only": True,
         "prompt382_explicit_execution_required": True,
         "prompt382_explicit_execution_flags_not_yet_enabled": True,
-        "prompt382_planned_git_add_paths": list(prompt382_prompt381_changed_files),
+        "prompt382_approved_paths": list(prompt382_approved_paths),
+        "prompt382_planned_git_add_paths": list(prompt382_approved_paths),
         "prompt382_planned_git_add_argv": (
-            ["git", "add", *prompt382_prompt381_changed_files]
-            if prompt382_prompt381_changed_files
+            ["git", "add", *prompt382_approved_paths]
+            if prompt382_approved_paths
             else []
         ),
         "prompt382_planned_git_commit_argv": [
             "git",
             "commit",
             "-m",
-            _PROMPT382_COMMIT_MESSAGE,
+            prompt382_commit_message,
         ],
-        "prompt382_planned_git_tag_argv": ["git", "tag", _PROMPT382_TAG_NAME],
+        "prompt382_planned_git_tag_argv": ["git", "tag", prompt382_tag_name],
         "prompt382_plan_execution_allowed": False,
         "prompt382_plan_execution_performed": False,
     }
@@ -18041,13 +18148,17 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
                 source.get("prompt382_prompt381_changed_files"),
                 sort_items=False,
             ),
-            "prompt382_commit_message": _normalize_text(
-                source.get("prompt382_commit_message"),
-                default="",
+            "prompt382_approved_paths": _normalize_string_list(
+                source.get("prompt382_approved_paths"),
+                sort_items=False,
             ),
-            "prompt382_tag_name": _normalize_text(
+            "prompt382_commit_message": _prompt382_approve_plan_text(
+                source.get("prompt382_commit_message"),
+                fallback="",
+            ),
+            "prompt382_tag_name": _prompt382_approve_plan_text(
                 source.get("prompt382_tag_name"),
-                default="",
+                fallback="",
             ),
             "prompt382_execution_ready": _prompt357_as_boolish(
                 source.get("prompt382_execution_ready"),
@@ -18168,17 +18279,21 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
                 source.get("prompt382_follow_on_prompt"),
                 default="",
             ),
-            "prompt382_commit_message": _normalize_text(
+            "prompt382_commit_message": _prompt382_approve_plan_text(
                 source.get("prompt382_commit_message"),
-                default="",
+                fallback="",
             ),
-            "prompt382_tag_name": _normalize_text(
+            "prompt382_tag_name": _prompt382_approve_plan_text(
                 source.get("prompt382_tag_name"),
-                default="",
+                fallback="",
             ),
             "prompt382_execution_ready": _prompt357_as_boolish(
                 source.get("prompt382_execution_ready"),
                 default=False,
+            ),
+            "prompt382_approved_paths": _normalize_string_list(
+                source.get("prompt382_approved_paths"),
+                sort_items=False,
             ),
             "prompt382_planned_git_add_paths": _normalize_string_list(
                 source.get("prompt382_planned_git_add_paths"),
@@ -18198,6 +18313,74 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
     prompt382_gate_surface, prompt382_gate_source_path = _resolve_prompt382_gate_surface()
     prompt382_plan_payload = _read_json_object_if_exists(prompt382_plan_path)
     prompt382_plan_surface = _normalize_prompt382_plan_surface(prompt382_plan_payload)
+    if _prompt382_approve_plan_ready_from_gate(prompt382_gate_surface):
+        deterministic_approved_paths = (
+            _normalize_string_list(
+                prompt382_plan_surface.get("prompt382_planned_git_add_paths"),
+                sort_items=False,
+            )
+            or _normalize_string_list(
+                prompt382_plan_surface.get("prompt382_approved_paths"),
+                sort_items=False,
+            )
+            or _normalize_string_list(
+                prompt382_gate_surface.get("prompt382_approved_paths"),
+                sort_items=False,
+            )
+            or _normalize_string_list(
+                prompt382_gate_surface.get("prompt382_prompt381_changed_files"),
+                sort_items=False,
+            )
+        )
+        deterministic_commit_message = _normalize_text(
+            prompt382_plan_surface.get("prompt382_commit_message"),
+            default=_normalize_text(
+                prompt382_gate_surface.get("prompt382_commit_message"),
+                default="",
+            ),
+        )
+        deterministic_tag_name = _normalize_text(
+            prompt382_plan_surface.get("prompt382_tag_name"),
+            default=_normalize_text(
+                prompt382_gate_surface.get("prompt382_tag_name"),
+                default="",
+            ),
+        )
+        if not deterministic_commit_message:
+            deterministic_commit_message = (
+                _PROMPT382_APPROVE_PLAN_FALLBACK_COMMIT_MESSAGE
+            )
+        if not deterministic_tag_name:
+            deterministic_tag_name = _PROMPT382_APPROVE_PLAN_FALLBACK_TAG_NAME
+        deterministic_plan_surface = {
+            "prompt382_plan_type": "approve_commit_tag_execution_plan",
+            "prompt382_follow_on_prompt": "prompt383",
+            "prompt382_commit_message": deterministic_commit_message,
+            "prompt382_tag_name": deterministic_tag_name,
+            "prompt382_execution_ready": True,
+            "prompt382_approved_paths": list(deterministic_approved_paths),
+            "prompt382_planned_git_add_paths": list(deterministic_approved_paths),
+            "prompt382_planned_git_add_argv": [
+                "git",
+                "add",
+                *deterministic_approved_paths,
+            ],
+            "prompt382_planned_git_commit_argv": [
+                "git",
+                "commit",
+                "-m",
+                deterministic_commit_message,
+            ],
+            "prompt382_planned_git_tag_argv": ["git", "tag", deterministic_tag_name],
+        }
+        if (
+            not prompt382_plan_payload
+            or not prompt382_plan_surface.get("prompt382_commit_message")
+            or not prompt382_plan_surface.get("prompt382_tag_name")
+            or not prompt382_plan_surface.get("prompt382_planned_git_add_paths")
+        ):
+            prompt382_plan_payload = dict(deterministic_plan_surface)
+            prompt382_plan_surface = dict(deterministic_plan_surface)
     prompt383_prompt382_evidence_ready = bool(
         prompt382_gate_source_path or _has_prompt382_gate_evidence(run_state)
     )
@@ -18454,6 +18637,7 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
             and prompt383_approve_commit_tag_confirmed
         ):
             prompt383_status = "ready_for_explicit_execution"
+            prompt383_approved_paths_validation_status = "ready_for_explicit_execution"
             prompt383_active_blocked_reasons = [
                 "prompt383_explicit_execution_flags_not_enabled"
             ]
