@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
 from pathlib import Path
 from typing import Any
 from typing import Callable
@@ -9,6 +10,9 @@ from typing import Mapping
 from automation.orchestration.planned_runner.prompt_surfaces import prompts_350_399
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
     _build_prompt373_selected_step_live_codex_execution_state,
+)
+from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
+    _build_prompt378_chatgpt_generated_prompt_intake_state,
 )
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
     _build_prompt379_generated_prompt_codex_execution_bridge_state,
@@ -24,11 +28,18 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 imp
 )
 from automation.orchestration.planned_runner.utils import _normalize_text
 from automation.orchestration.planned_runner.utils import _read_json_object_if_exists
+from automation.orchestration.planned_runner.utils import _write_json
 
 
 _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt373_codex_execution_request.json",
     "prompt373_codex_execution_receipt.json",
+    "prompt378_generated_prompt_intake_receipt.json",
+    "prompt378_generated_prompt_validation.json",
+    "prompt378_generated_prompt_source.json",
+    "prompt378_chatgpt_generated_prompt_intake.json",
+    "prompt378_generated_prompt_execution_handoff.json",
+    "execution_prompt.json",
     "prompt379_generated_prompt_codex_execution_receipt.json",
     "prompt385_success_path_next_cycle_handoff.json",
     "prompt388_success_path_autonomy_completion_receipt.json",
@@ -51,6 +62,9 @@ def _as_boolish(value: Any, *, default: bool = False) -> bool:
 
 def _install_runtime_surface_helpers() -> None:
     prompts_350_399._prompt357_as_boolish = _as_boolish
+    prompts_350_399._prompt358_candidate_artifact_timestamp = (
+        _candidate_artifact_timestamp
+    )
     prompts_350_399._LOCAL_AUTONOMOUS_CYCLE_V2_MAX_CYCLES = 3
     prompts_350_399._PROMPT388_MAX_CYCLES_ALLOWED = 3
     prompts_350_399._PROMPT389_DEFAULT_MAX_CYCLES = 3
@@ -88,6 +102,13 @@ def _install_runtime_surface_helpers() -> None:
         "prompt389_repeated_cycle_execution_allowed",
         "prompt389_next_action",
     ]
+
+
+def _candidate_artifact_timestamp(path: Any) -> int:
+    try:
+        return int(Path(path).stat().st_mtime_ns)
+    except (OSError, TypeError, ValueError):
+        return 0
 
 
 def _artifact_summary(path: Path) -> dict[str, Any]:
@@ -136,6 +157,74 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
     }
 
 
+def _resolve_existing_prompt378_generated_prompt_path(
+    *,
+    explicit_path: str,
+    manifest_payload: Mapping[str, Any],
+) -> str:
+    normalized_explicit_path = _normalize_text(explicit_path, default="")
+    if normalized_explicit_path:
+        return normalized_explicit_path
+
+    artifacts_dir = Path(
+        _normalize_text(manifest_payload.get("artifact_input_dir"), default="")
+    )
+    if not artifacts_dir.exists() or not artifacts_dir.is_dir():
+        return ""
+
+    prompt_candidates: list[Path] = []
+    for candidate in artifacts_dir.rglob("*.md"):
+        normalized_name = candidate.name.lower()
+        if "prompt378" not in normalized_name:
+            continue
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        prompt_candidates.append(candidate)
+    if len(prompt_candidates) != 1:
+        return ""
+    return str(prompt_candidates[0])
+
+
+def _write_execution_prompt_alias_if_ready(
+    *,
+    run_root: Path,
+    run_state: Mapping[str, Any],
+) -> bool:
+    prompt_path_text = _normalize_text(
+        run_state.get("prompt378_generated_prompt_path"),
+        default="",
+    )
+    prompt_checksum = _normalize_text(
+        run_state.get("prompt378_generated_prompt_checksum"),
+        default="",
+    )
+    prompt_path = Path(prompt_path_text) if prompt_path_text else Path()
+    if not prompt_path_text or not prompt_checksum or not prompt_path.is_file():
+        return False
+    try:
+        actual_checksum = hashlib.sha256(prompt_path.read_bytes()).hexdigest()
+    except OSError:
+        return False
+    if actual_checksum != prompt_checksum:
+        return False
+
+    _write_json(
+        run_root / "execution_prompt.json",
+        {
+            "status": _normalize_text(
+                run_state.get("prompt378_chatgpt_generated_prompt_intake_status"),
+                default="",
+            ),
+            "ready": bool(run_state.get("prompt378_generated_prompt_ready", False)),
+            "prompt_path": prompt_path_text,
+            "prompt_sha256": prompt_checksum,
+            "source": "prompt378_generated_prompt_execution_handoff",
+            "compatibility_stage": "prompt378",
+        },
+    )
+    return True
+
+
 def reconnect_runtime_output_generation(
     *,
     run_root: Path,
@@ -147,6 +236,7 @@ def reconnect_runtime_output_generation(
     now: Callable[[], datetime],
     prompt373_live_execution_requested: bool = False,
     prompt373_live_execution_confirmed: bool = False,
+    prompt378_generated_prompt_path: str = "",
     prompt379_codex_execution_requested: bool = False,
     prompt379_codex_execution_confirmed: bool = False,
     prompt389_bounded_repeated_success_path_loop_enabled: bool = False,
@@ -213,6 +303,23 @@ def reconnect_runtime_output_generation(
     )
     run_state.update(prompt373)
 
+    resolved_prompt378_generated_prompt_path = (
+        _resolve_existing_prompt378_generated_prompt_path(
+            explicit_path=prompt378_generated_prompt_path,
+            manifest_payload=manifest_payload,
+        )
+    )
+    prompt378 = _build_prompt378_chatgpt_generated_prompt_intake_state(
+        run_state_payload=run_state,
+        run_root=run_root,
+        prompt378_generated_prompt_path=resolved_prompt378_generated_prompt_path,
+    )
+    run_state.update(prompt378)
+    execution_prompt_alias_emitted = _write_execution_prompt_alias_if_ready(
+        run_root=run_root,
+        run_state=run_state,
+    )
+
     prompt379 = _build_prompt379_generated_prompt_codex_execution_bridge_state(
         run_state_payload=run_state,
         run_root=run_root,
@@ -265,6 +372,12 @@ def reconnect_runtime_output_generation(
         "generated_artifact_count": sum(
             1 for summary in runtime_artifacts.values() if summary["present"]
         ),
+        "prompt378_generated_prompt_path_source": (
+            "explicit"
+            if _normalize_text(prompt378_generated_prompt_path, default="")
+            else ("artifact_input_dir" if resolved_prompt378_generated_prompt_path else "")
+        ),
+        "execution_prompt_alias_emitted": bool(execution_prompt_alias_emitted),
     }
     for name, summary in runtime_artifacts.items():
         stem = name.removesuffix(".json")

@@ -960,6 +960,7 @@ class PlannedExecutionRunner:
             now=self.now,
             prompt373_live_execution_requested=bool(kwargs.get("prompt373_live_execution_requested", False)),
             prompt373_live_execution_confirmed=bool(kwargs.get("prompt373_live_execution_confirmed", False)),
+            prompt378_generated_prompt_path=_normalize_text(kwargs.get("prompt378_generated_prompt_path"), default=""),
             prompt379_codex_execution_requested=bool(kwargs.get("prompt379_codex_execution_requested", False)),
             prompt379_codex_execution_confirmed=bool(kwargs.get("prompt379_codex_execution_confirmed", False)),
             prompt389_bounded_repeated_success_path_loop_enabled=bool(

@@ -14647,6 +14647,16 @@ def _build_prompt378_chatgpt_generated_prompt_intake_state(
             return False
         if "separate commit/tag step" in normalized_line:
             return False
+        if any(
+            marker in normalized_line
+            for marker in (
+                "## role:",
+                "role request",
+                "role-derived target",
+                "role-derived",
+            )
+        ):
+            return False
         return True
 
     def _validate_generated_prompt(
