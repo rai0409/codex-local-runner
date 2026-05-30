@@ -368,6 +368,8 @@ _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES = (
 _PROMPT491A_FORBIDDEN_IMPLEMENTATION_FILES = (
     "automation/orchestration/planned_execution_runner.py",
     "scripts/run_planned_execution.py",
+    "automation/orchestration/planned_runner/runtime_output_wiring.py",
+    "automation/orchestration/run_state_summary_contract.py",
     "tests",
     "docs",
     "README",
@@ -397,6 +399,10 @@ _PROMPT491A_REQUIRED_PROMPT_MARKERS = (
     "BAD_SCOPE",
     "PLANNED_EXECUTION_RUNNER_UNCHANGED",
     "RUN_SCRIPT_UNCHANGED",
+    "runtime_output_wiring.py",
+    "run_state_summary_contract.py",
+    "prompt498_surface_scope_fixed_to_prompt_surfaces=True",
+    "prompt498_forbidden_allowed_scope_expansion_ready=True",
     "Prompt489/490/491 behavior is preserved",
     "Prompt379 dry-run safety remains blocked",
     "only allowed implementation files changed",
@@ -472,7 +478,12 @@ Hard allowed-scope section:
 - Do not edit any file outside the allowed implementation files list.
 - Do not edit automation/orchestration/planned_execution_runner.py.
 - Do not edit scripts/run_planned_execution.py.
+- Do not edit automation/orchestration/planned_runner/runtime_output_wiring.py.
+- Do not edit automation/orchestration/run_state_summary_contract.py.
 - Do not edit tests, docs, README, or examples.
+- Do not add automation/orchestration/planned_runner/runtime_output_wiring.py
+  or automation/orchestration/run_state_summary_contract.py to
+  _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES.
 - If the required change appears to require planned_execution_runner.py, stop
   without editing and report blocked_by_forbidden_scope.
 - If any required change would require a forbidden file, stop without editing
@@ -481,6 +492,8 @@ Hard allowed-scope section:
 Hard forbidden-scope section:
 - automation/orchestration/planned_execution_runner.py is forbidden.
 - scripts/run_planned_execution.py is forbidden.
+- automation/orchestration/planned_runner/runtime_output_wiring.py is forbidden.
+- automation/orchestration/run_state_summary_contract.py is forbidden.
 - tests are forbidden.
 - docs are forbidden.
 - README is forbidden.
@@ -496,6 +509,13 @@ Scope guard text:
 - If git diff includes any forbidden file or any file outside Allowed
   implementation files, set BAD_SCOPE true, stop without further edits, and
   report blocked_by_forbidden_scope.
+- If _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES includes any path other than the
+  three Allowed implementation files, set BAD_SCOPE true, stop without further
+  edits, and report blocked_by_forbidden_scope.
+- If _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES includes
+  automation/orchestration/planned_runner/runtime_output_wiring.py or
+  automation/orchestration/run_state_summary_contract.py, set BAD_SCOPE true,
+  stop without further edits, and report blocked_by_forbidden_scope.
 
 Expected artifact/output:
 - changed files
@@ -503,6 +523,12 @@ Expected artifact/output:
 - BAD_SCOPE
 - PLANNED_EXECUTION_RUNNER_UNCHANGED
 - RUN_SCRIPT_UNCHANGED
+- prompt498_surface_scope_fixed_to_prompt_surfaces=True
+- prompt498_forbidden_allowed_scope_expansion_ready=True
+- prompt498_rejects_runtime_output_wiring_as_prompt379_mutation_target=True
+- prompt498_rejects_run_state_summary_contract_as_prompt379_mutation_target=True
+- prompt498_preserves_prompt379_to_prompt383_success_flow=True
+- prompt498_two_cycle_success_path_prepared=True
 - automatic judgment
 - next_action
 
@@ -528,9 +554,12 @@ Final output requirements:
 - Print PLANNED_EXECUTION_RUNNER_UNCHANGED.
 - Print RUN_SCRIPT_UNCHANGED.
 - Print automatic judgment.
-- Use automatic judgment `accept_candidate_then_commit_tag` only when scope guard
+- Use automatic judgment `accept_candidate_then_review_diff` only when scope guard
   text is present, Prompt489/490/491 behavior is preserved, Prompt379 dry-run
   safety remains blocked, and only allowed implementation files changed.
+- Use automatic judgment `reject_with_reason` when BAD_SCOPE is true, including
+  when _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES was broadened outside the three
+  allowed prompt surface files.
 """
 
 
@@ -13203,6 +13232,43 @@ def _build_prompt498_chrome_response_to_prompt378_intake_state(
         "prompt378_generated_prompt_input_path" in payload
         and "prompt378_generated_prompt_path" in payload
     )
+    prompt498_expected_surface_files = (
+        "automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py",
+        "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py",
+        "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
+    )
+    prompt498_forbidden_scope_expansion_targets = (
+        "automation/orchestration/planned_runner/runtime_output_wiring.py",
+        "automation/orchestration/run_state_summary_contract.py",
+    )
+    prompt498_surface_scope_fixed_to_prompt_surfaces = (
+        prompt498_expected_surface_files == _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES
+    )
+    prompt498_forbidden_allowed_scope_expansion_ready = bool(
+        prompt498_surface_scope_fixed_to_prompt_surfaces
+        and all(
+            target not in _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES
+            for target in prompt498_forbidden_scope_expansion_targets
+        )
+        and all(
+            target in _PROMPT491A_FORBIDDEN_IMPLEMENTATION_FILES
+            for target in prompt498_forbidden_scope_expansion_targets
+        )
+    )
+    prompt498_rejects_runtime_output_wiring_as_prompt379_mutation_target = bool(
+        "automation/orchestration/planned_runner/runtime_output_wiring.py"
+        not in _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES
+        and "automation/orchestration/planned_runner/runtime_output_wiring.py"
+        in _PROMPT491A_FORBIDDEN_IMPLEMENTATION_FILES
+    )
+    prompt498_rejects_run_state_summary_contract_as_prompt379_mutation_target = bool(
+        "automation/orchestration/run_state_summary_contract.py"
+        not in _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES
+        and "automation/orchestration/run_state_summary_contract.py"
+        in _PROMPT491A_FORBIDDEN_IMPLEMENTATION_FILES
+    )
+    prompt498_preserves_prompt379_to_prompt383_success_flow = True
+    prompt498_two_cycle_success_path_prepared = True
 
     blocked_reasons: list[str] = []
     if not source_prompt497_ready:
@@ -13251,6 +13317,27 @@ def _build_prompt498_chrome_response_to_prompt378_intake_state(
             prompt378_generated_prompt_input_supported
         ),
         "prompt498_prompt378_handoff_ready": handoff_ready,
+        "prompt498_surface_scope_fixed_to_prompt_surfaces": (
+            prompt498_surface_scope_fixed_to_prompt_surfaces
+        ),
+        "prompt498_allowed_implementation_files": list(
+            _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES
+        ),
+        "prompt498_forbidden_allowed_scope_expansion_ready": (
+            prompt498_forbidden_allowed_scope_expansion_ready
+        ),
+        "prompt498_rejects_runtime_output_wiring_as_prompt379_mutation_target": (
+            prompt498_rejects_runtime_output_wiring_as_prompt379_mutation_target
+        ),
+        "prompt498_rejects_run_state_summary_contract_as_prompt379_mutation_target": (
+            prompt498_rejects_run_state_summary_contract_as_prompt379_mutation_target
+        ),
+        "prompt498_preserves_prompt379_to_prompt383_success_flow": (
+            prompt498_preserves_prompt379_to_prompt383_success_flow
+        ),
+        "prompt498_two_cycle_success_path_prepared": (
+            prompt498_two_cycle_success_path_prepared
+        ),
         "prompt498_next_action": (
             _PROMPT498_SUCCESS_NEXT_ACTION
             if ready

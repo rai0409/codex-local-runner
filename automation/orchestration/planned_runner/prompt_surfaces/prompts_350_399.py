@@ -16378,6 +16378,7 @@ def _build_prompt379_generated_prompt_codex_execution_bridge_state(
         ),
         "prompt379_generated_prompt_path": prompt379_generated_prompt_path,
         "prompt379_generated_prompt_checksum": prompt379_generated_prompt_checksum,
+        "prompt379_execution_repo_path": normalized_repo_path,
         "prompt379_codex_execution_ready": prompt379_codex_execution_ready,
         "prompt379_codex_execution_allowed": prompt379_codex_execution_allowed,
         "prompt379_codex_execution_attempted": prompt379_codex_execution_attempted,
@@ -16557,9 +16558,16 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
         "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py",
         "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
     }
+    prompt380_prompt491a_allowed_scope_files = tuple(sorted(prompt380_allowed_changed_files))
+    prompt380_prompt491a_forbidden_scope_expansion_targets = (
+        "automation/orchestration/planned_runner/runtime_output_wiring.py",
+        "automation/orchestration/run_state_summary_contract.py",
+    )
     prompt380_forbidden_path_fragments = (
         "automation/orchestration/planned_execution_runner.py",
         "scripts/run_planned_execution.py",
+        "automation/orchestration/planned_runner/runtime_output_wiring.py",
+        "automation/orchestration/run_state_summary_contract.py",
         "tests/",
         "docs/",
         "README",
@@ -16639,6 +16647,111 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
                 source.get("prompt379_authoritative_next_action"),
                 default="",
             ),
+            "prompt379_execution_repo_path": _normalize_text(
+                source.get("prompt379_execution_repo_path"),
+                default="",
+            ),
+        }
+
+    def _prompt380_prompt491a_allowed_scope_audit(
+        repo_path_text: str,
+    ) -> dict[str, Any]:
+        normalized_repo_path_text = _normalize_text(repo_path_text, default="")
+        if not normalized_repo_path_text:
+            return {
+                "ready": False,
+                "reason": "prompt379_execution_repo_path_not_ready",
+                "allowed_files": [],
+                "unexpected_files": [],
+                "forbidden_targets_present": [],
+            }
+        repo_path = Path(normalized_repo_path_text)
+        prompt_surface_path = (
+            repo_path
+            / "automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py"
+        )
+        if not repo_path.exists() or not repo_path.is_dir():
+            return {
+                "ready": False,
+                "reason": "prompt379_execution_repo_path_not_ready",
+                "allowed_files": [],
+                "unexpected_files": [],
+                "forbidden_targets_present": [],
+            }
+        try:
+            prompt_surface_text = prompt_surface_path.read_text(encoding="utf-8")
+        except OSError:
+            return {
+                "ready": False,
+                "reason": "prompt491a_allowed_scope_source_not_readable",
+                "allowed_files": [],
+                "unexpected_files": [],
+                "forbidden_targets_present": [],
+            }
+
+        marker = "_PROMPT491A_ALLOWED_IMPLEMENTATION_FILES = ("
+        marker_index = prompt_surface_text.find(marker)
+        if marker_index < 0:
+            return {
+                "ready": False,
+                "reason": "prompt491a_allowed_scope_marker_missing",
+                "allowed_files": [],
+                "unexpected_files": [],
+                "forbidden_targets_present": [],
+            }
+        scope_body_start = marker_index + len(marker)
+        scope_body_end = prompt_surface_text.find(")", scope_body_start)
+        if scope_body_end < 0:
+            return {
+                "ready": False,
+                "reason": "prompt491a_allowed_scope_marker_unclosed",
+                "allowed_files": [],
+                "unexpected_files": [],
+                "forbidden_targets_present": [],
+            }
+        scope_body = prompt_surface_text[scope_body_start:scope_body_end]
+        allowed_files: list[str] = []
+        for raw_line in scope_body.splitlines():
+            normalized_line = _normalize_text(raw_line, default="").strip()
+            if not normalized_line or normalized_line.startswith("#"):
+                continue
+            if normalized_line.endswith(","):
+                normalized_line = normalized_line[:-1].strip()
+            if len(normalized_line) < 2:
+                continue
+            if normalized_line[0] == normalized_line[-1] and normalized_line[0] in {"'", '"'}:
+                allowed_files.append(normalized_line[1:-1].replace("\\", "/"))
+
+        expected_files = set(prompt380_prompt491a_allowed_scope_files)
+        unexpected_files = sorted(set(allowed_files) - expected_files)
+        missing_files = sorted(expected_files - set(allowed_files))
+        forbidden_targets_present = sorted(
+            path
+            for path in prompt380_prompt491a_forbidden_scope_expansion_targets
+            if path in allowed_files
+        )
+        ready = bool(
+            allowed_files
+            and not unexpected_files
+            and not missing_files
+            and not forbidden_targets_present
+        )
+        reason = ""
+        if forbidden_targets_present:
+            reason = "prompt491a_allowed_scope_contains_forbidden_target"
+        elif unexpected_files:
+            reason = "prompt491a_allowed_scope_expanded_outside_prompt_surfaces"
+        elif missing_files:
+            reason = "prompt491a_allowed_scope_missing_prompt_surface"
+        elif not allowed_files:
+            reason = "prompt491a_allowed_scope_empty"
+        return {
+            "ready": ready,
+            "reason": reason,
+            "allowed_files": allowed_files,
+            "unexpected_files": unexpected_files,
+            "missing_files": missing_files,
+            "forbidden_targets_present": forbidden_targets_present,
         }
 
     def _has_prompt379_reviewable_evidence(raw_payload: Mapping[str, Any] | None) -> bool:
@@ -16698,6 +16811,26 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
     prompt380_prompt379_post_execution_changed_files = _normalize_string_list(
         prompt379_surface.get("prompt379_post_execution_tracked_source_changed_files"),
         sort_items=False,
+    )
+    prompt380_prompt379_execution_repo_path = _normalize_text(
+        prompt379_surface.get("prompt379_execution_repo_path"),
+        default="",
+    )
+    prompt380_prompt491a_allowed_scope_audit = _prompt380_prompt491a_allowed_scope_audit(
+        prompt380_prompt379_execution_repo_path
+    )
+    prompt380_prompt491a_allowed_scope_ready = bool(
+        prompt380_prompt491a_allowed_scope_audit.get("ready", False)
+    )
+    prompt380_prompt491a_allowed_scope_unexpected_files = _normalize_string_list(
+        prompt380_prompt491a_allowed_scope_audit.get("unexpected_files"),
+        sort_items=True,
+    )
+    prompt380_prompt491a_allowed_scope_forbidden_targets_present = (
+        _normalize_string_list(
+            prompt380_prompt491a_allowed_scope_audit.get("forbidden_targets_present"),
+            sort_items=True,
+        )
     )
 
     prompt380_prompt379_result_review_status = "blocked"
@@ -16811,15 +16944,23 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
                 prompt380_active_blocked_reasons,
                 "prompt383_execution_already_performed",
             )
+        elif prompt380_forbidden_changed_files:
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_changed_files_include_forbidden_paths",
+            )
         elif prompt380_unapproved_changed_files:
             _append_reason(
                 prompt380_active_blocked_reasons,
                 "prompt379_changed_files_outside_approved_paths",
             )
-        elif prompt380_forbidden_changed_files:
+        elif not prompt380_prompt491a_allowed_scope_ready:
             _append_reason(
                 prompt380_active_blocked_reasons,
-                "prompt379_changed_files_include_forbidden_paths",
+                _normalize_text(
+                    prompt380_prompt491a_allowed_scope_audit.get("reason"),
+                    default="prompt491a_allowed_scope_guard_not_ready",
+                ),
             )
 
     if not prompt380_active_blocked_reasons:
@@ -16868,6 +17009,36 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
         ),
         "prompt380_prompt379_post_execution_changed_files": (
             prompt380_prompt379_post_execution_changed_files
+        ),
+        "prompt380_prompt379_execution_repo_path": (
+            prompt380_prompt379_execution_repo_path
+        ),
+        "prompt380_prompt491a_allowed_scope_files": list(
+            prompt380_prompt491a_allowed_scope_files
+        ),
+        "prompt380_prompt491a_allowed_scope_ready": (
+            prompt380_prompt491a_allowed_scope_ready
+        ),
+        "prompt380_prompt491a_allowed_scope_unexpected_files": (
+            prompt380_prompt491a_allowed_scope_unexpected_files
+        ),
+        "prompt380_prompt491a_allowed_scope_forbidden_targets_present": (
+            prompt380_prompt491a_allowed_scope_forbidden_targets_present
+        ),
+        "prompt380_rejects_prompt491a_allowed_scope_expansion": (
+            not prompt380_prompt491a_allowed_scope_ready
+        ),
+        "prompt380_rejects_runtime_output_wiring_as_prompt379_mutation_target": (
+            "automation/orchestration/planned_runner/runtime_output_wiring.py"
+            in prompt380_prompt491a_allowed_scope_forbidden_targets_present
+            or "automation/orchestration/planned_runner/runtime_output_wiring.py"
+            in prompt380_forbidden_path_fragments
+        ),
+        "prompt380_rejects_run_state_summary_contract_as_prompt379_mutation_target": (
+            "automation/orchestration/run_state_summary_contract.py"
+            in prompt380_prompt491a_allowed_scope_forbidden_targets_present
+            or "automation/orchestration/run_state_summary_contract.py"
+            in prompt380_forbidden_path_fragments
         ),
         "prompt380_route_decision": prompt380_route_decision,
         "prompt380_approve_candidate": prompt380_approve_candidate,
