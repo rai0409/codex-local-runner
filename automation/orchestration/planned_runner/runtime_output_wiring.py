@@ -30,6 +30,9 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 imp
     _build_prompt380_prompt379_result_review_route_decision_state,
 )
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
+    _build_prompt381_approve_candidate_boundary_state,
+)
+from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
     _build_prompt385_success_path_next_cycle_handoff_state,
 )
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
@@ -57,6 +60,7 @@ _CRITICAL_RUNTIME_ARTIFACTS = (
     "execution_prompt.json",
     "prompt379_generated_prompt_codex_execution_receipt.json",
     "prompt380_prompt379_result_review_route_decision.json",
+    "prompt381_approve_candidate_boundary.json",
     "prompt385_success_path_next_cycle_handoff.json",
     "prompt388_success_path_autonomy_completion_receipt.json",
     "prompt389_bounded_repeated_success_path_loop_execution_receipt.json",
@@ -97,6 +101,30 @@ _PROMPT380_RESULT_REVIEW_ROUTE_FIELDS = (
     "prompt380_next_action",
     "prompt380_active_blocked_reason",
     "prompt380_active_blocked_reasons",
+)
+
+_PROMPT381_APPROVE_CANDIDATE_BOUNDARY_FIELDS = (
+    "prompt381_approve_candidate_boundary_status",
+    "prompt381_prompt380_evidence_ready",
+    "prompt381_prompt380_route_decision",
+    "prompt381_prompt380_approve_candidate",
+    "prompt381_prompt379_execution_performed",
+    "prompt381_prompt379_returncode",
+    "prompt381_prompt379_returncode_classification",
+    "prompt381_prompt379_post_execution_tracked_diff_empty",
+    "prompt381_prompt379_post_execution_changed_files",
+    "prompt381_approve_candidate_ready",
+    "prompt381_approve_candidate_contract_ready",
+    "prompt381_approve_commit_tag_allowed",
+    "prompt381_approve_commit_tag_performed",
+    "prompt381_git_mutation_allowed",
+    "prompt381_git_mutation_performed",
+    "prompt381_remote_mutation_allowed",
+    "prompt381_remote_mutation_performed",
+    "prompt381_authoritative_next_action",
+    "prompt381_next_action",
+    "prompt381_active_blocked_reason",
+    "prompt381_active_blocked_reasons",
 )
 
 
@@ -186,6 +214,7 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("execution_status")
             or payload.get("readiness_status")
             or payload.get("prompt380_prompt379_result_review_status")
+            or payload.get("prompt381_approve_candidate_boundary_status")
             or payload.get("prompt468_full_no_human_loop_regression_status")
             or payload.get("prompt489_real_task_marker_status")
             or payload.get("prompt490_second_success_cycle_status"),
@@ -197,6 +226,7 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("prompt373_next_action")
             or payload.get("prompt379_next_action")
             or payload.get("prompt380_next_action")
+            or payload.get("prompt381_next_action")
             or payload.get("prompt385_next_action")
             or payload.get("prompt388_next_action")
             or payload.get("prompt389_next_action")
@@ -211,6 +241,7 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("prompt373_active_blocked_reason")
             or payload.get("prompt379_active_blocked_reason")
             or payload.get("prompt380_active_blocked_reason")
+            or payload.get("prompt381_active_blocked_reason")
             or payload.get("prompt385_active_blocked_reason")
             or payload.get("prompt388_active_blocked_reason")
             or payload.get("prompt389_active_blocked_reason")
@@ -426,6 +457,12 @@ def reconnect_runtime_output_generation(
     )
     run_state.update(prompt380)
 
+    prompt381 = _build_prompt381_approve_candidate_boundary_state(
+        run_state_payload=run_state,
+        run_root=run_root,
+    )
+    run_state.update(prompt381)
+
     prompt385 = _build_prompt385_success_path_next_cycle_handoff_state(
         run_state_payload=run_state,
         run_root=run_root,
@@ -463,6 +500,12 @@ def reconnect_runtime_output_generation(
         run_state=run_state,
         artifact_name="prompt380_prompt379_result_review_route_decision.json",
         fields=_PROMPT380_RESULT_REVIEW_ROUTE_FIELDS,
+    )
+    _write_filtered_runtime_artifact_if_present(
+        run_root=run_root,
+        run_state=run_state,
+        artifact_name="prompt381_approve_candidate_boundary.json",
+        fields=_PROMPT381_APPROVE_CANDIDATE_BOUNDARY_FIELDS,
     )
     for artifact_name, fields in _SPLIT_COMPATIBLE_RUNTIME_ARTIFACTS:
         if _write_filtered_runtime_artifact_if_present(
