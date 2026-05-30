@@ -384,6 +384,8 @@ _PROMPT491A_VALIDATION_COMMANDS = (
 
 _PROMPT491A_REQUIRED_PROMPT_MARKERS = (
     "success-path-only",
+    "scope guard text",
+    "split planned_runner prompt surface files",
     "no tests",
     "no git",
     "no remote mutation",
@@ -395,6 +397,9 @@ _PROMPT491A_REQUIRED_PROMPT_MARKERS = (
     "BAD_SCOPE",
     "PLANNED_EXECUTION_RUNNER_UNCHANGED",
     "RUN_SCRIPT_UNCHANGED",
+    "Prompt489/490/491 behavior is preserved",
+    "Prompt379 dry-run safety remains blocked",
+    "only allowed implementation files changed",
 )
 
 
@@ -480,6 +485,17 @@ Hard forbidden-scope section:
 - docs are forbidden.
 - README is forbidden.
 - examples are forbidden.
+
+Scope guard text:
+- Prompt379 live execution changes are allowed only in the split
+  planned_runner prompt surface files listed under Allowed implementation
+  files.
+- Prompt489/490/491 behavior is preserved.
+- Prompt379 dry-run safety remains blocked.
+- Only allowed implementation files changed.
+- If git diff includes any forbidden file or any file outside Allowed
+  implementation files, set BAD_SCOPE true, stop without further edits, and
+  report blocked_by_forbidden_scope.
 
 Expected artifact/output:
 - changed files
