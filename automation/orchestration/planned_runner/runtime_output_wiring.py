@@ -7,6 +7,15 @@ from typing import Any
 from typing import Callable
 from typing import Mapping
 
+from automation.orchestration.run_state_summary_contract import (
+    PROMPT468_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.run_state_summary_contract import (
+    PROMPT489_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
+from automation.orchestration.run_state_summary_contract import (
+    PROMPT490_RUN_STATE_SUMMARY_SAFE_FIELDS,
+)
 from automation.orchestration.planned_runner.prompt_surfaces import prompts_350_399
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
     _build_prompt373_selected_step_live_codex_execution_state,
@@ -26,6 +35,9 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 imp
 from automation.orchestration.planned_runner.prompt_surfaces.prompts_350_399 import (
     _build_prompt389_explicit_bounded_repeated_success_path_loop_execution_state,
 )
+from automation.orchestration.planned_runner.prompt_surfaces.registry import (
+    get_prompt_builders,
+)
 from automation.orchestration.planned_runner.utils import _normalize_text
 from automation.orchestration.planned_runner.utils import _read_json_object_if_exists
 from automation.orchestration.planned_runner.utils import _write_json
@@ -44,6 +56,27 @@ _CRITICAL_RUNTIME_ARTIFACTS = (
     "prompt385_success_path_next_cycle_handoff.json",
     "prompt388_success_path_autonomy_completion_receipt.json",
     "prompt389_bounded_repeated_success_path_loop_execution_receipt.json",
+)
+
+_SPLIT_COMPATIBLE_RUNTIME_ARTIFACTS = (
+    (
+        "prompt468_full_no_human_loop_regression_rerun.json",
+        PROMPT468_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    ),
+    (
+        "prompt489_real_task_marker.json",
+        PROMPT489_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    ),
+    (
+        "prompt490_second_success_cycle_marker.json",
+        PROMPT490_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    ),
+)
+
+_SPLIT_COMPATIBLE_RUNTIME_BUILDER_NAMES = (
+    "_build_prompt468_full_no_human_loop_regression_rerun_state",
+    "_build_prompt489_real_task_marker_state",
+    "_build_prompt490_second_success_cycle_state",
 )
 
 
@@ -131,7 +164,10 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
         "status": _normalize_text(
             payload.get("status")
             or payload.get("execution_status")
-            or payload.get("readiness_status"),
+            or payload.get("readiness_status")
+            or payload.get("prompt468_full_no_human_loop_regression_status")
+            or payload.get("prompt489_real_task_marker_status")
+            or payload.get("prompt490_second_success_cycle_status"),
             default="",
         ),
         "next_action": _normalize_text(
@@ -141,7 +177,10 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("prompt379_next_action")
             or payload.get("prompt385_next_action")
             or payload.get("prompt388_next_action")
-            or payload.get("prompt389_next_action"),
+            or payload.get("prompt389_next_action")
+            or payload.get("prompt468_next_action")
+            or payload.get("prompt489_next_action")
+            or payload.get("prompt490_next_action"),
             default="",
         ),
         "blocked_reason": _normalize_text(
@@ -151,10 +190,36 @@ def _artifact_summary(path: Path) -> dict[str, Any]:
             or payload.get("prompt379_active_blocked_reason")
             or payload.get("prompt385_active_blocked_reason")
             or payload.get("prompt388_active_blocked_reason")
-            or payload.get("prompt389_active_blocked_reason"),
+            or payload.get("prompt389_active_blocked_reason")
+            or payload.get("prompt468_blocked_reason"),
             default="",
         ),
     }
+
+
+def _write_filtered_runtime_artifact_if_present(
+    *,
+    run_root: Path,
+    run_state: Mapping[str, Any],
+    artifact_name: str,
+    fields: tuple[str, ...],
+) -> bool:
+    payload = {field: run_state[field] for field in fields if field in run_state}
+    if not payload:
+        return False
+    _write_json(run_root / artifact_name, payload)
+    return True
+
+
+def _merge_split_compatible_runtime_surfaces(
+    run_state: Mapping[str, Any],
+) -> dict[str, Any]:
+    merged = dict(run_state)
+    builders = get_prompt_builders()
+    for builder_name in _SPLIT_COMPATIBLE_RUNTIME_BUILDER_NAMES:
+        builder = builders[builder_name]
+        merged.update(builder(run_state_payload=merged))
+    return merged
 
 
 def _resolve_existing_prompt378_generated_prompt_path(
@@ -361,17 +426,35 @@ def reconnect_runtime_output_generation(
     )
     run_state.update(prompt389)
 
+    run_state = _merge_split_compatible_runtime_surfaces(run_state)
+
+    split_compatible_artifact_names: list[str] = []
+    for artifact_name, fields in _SPLIT_COMPATIBLE_RUNTIME_ARTIFACTS:
+        if _write_filtered_runtime_artifact_if_present(
+            run_root=run_root,
+            run_state=run_state,
+            artifact_name=artifact_name,
+            fields=fields,
+        ):
+            split_compatible_artifact_names.append(artifact_name)
+
     manifest = dict(manifest_payload)
     runtime_artifacts = {
         name: _artifact_summary(run_root / name) for name in _CRITICAL_RUNTIME_ARTIFACTS
+    }
+    split_compatible_artifacts = {
+        name: _artifact_summary(run_root / name)
+        for name in split_compatible_artifact_names
     }
     manifest["runtime_output_wiring"] = {
         "status": "completed",
         "dry_run": bool(dry_run),
         "critical_artifacts": runtime_artifacts,
+        "split_compatible_artifacts": split_compatible_artifacts,
         "generated_artifact_count": sum(
             1 for summary in runtime_artifacts.values() if summary["present"]
-        ),
+        )
+        + len(split_compatible_artifacts),
         "prompt378_generated_prompt_path_source": (
             "explicit"
             if _normalize_text(prompt378_generated_prompt_path, default="")
@@ -380,6 +463,10 @@ def reconnect_runtime_output_generation(
         "execution_prompt_alias_emitted": bool(execution_prompt_alias_emitted),
     }
     for name, summary in runtime_artifacts.items():
+        stem = name.removesuffix(".json")
+        manifest[f"{stem}_path"] = summary["path"]
+        manifest[f"{stem}_summary"] = summary
+    for name, summary in split_compatible_artifacts.items():
         stem = name.removesuffix(".json")
         manifest[f"{stem}_path"] = summary["path"]
         manifest[f"{stem}_summary"] = summary

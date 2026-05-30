@@ -1139,6 +1139,30 @@ PROMPT487_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt487_next_action",
 )
 
+PROMPT468_RUN_STATE_SUMMARY_SAFE_FIELDS = (
+    "prompt468_schema_version",
+    "prompt468_applicable",
+    "prompt468_full_no_human_loop_regression_status",
+    "prompt468_full_no_human_loop_regression_ready",
+    "prompt468_upstream_evidence_ready",
+    "prompt468_regression_passed",
+    "prompt468_minimal_no_human_loop_revalidated",
+    "prompt468_human_review_required",
+    "prompt468_human_intervention_required",
+    "prompt468_auto_continue_allowed",
+    "prompt468_codex_invocation_allowed",
+    "prompt468_file_creation_allowed",
+    "prompt468_tests_allowed",
+    "prompt468_commit_tag_allowed",
+    "prompt468_push_allowed",
+    "prompt468_pr_allowed",
+    "prompt468_merge_allowed",
+    "prompt468_unbounded_loop_allowed",
+    "prompt468_blocked_reason",
+    "prompt468_blocked_reasons",
+    "prompt468_next_action",
+)
+
 PROMPT489_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     "prompt489_real_task_marker_status",
     "prompt489_real_task_marker_ready",
@@ -1341,6 +1365,7 @@ MANIFEST_RUN_STATE_SUMMARY_SAFE_FIELDS = (
     *PROMPT485_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT486_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT487_RUN_STATE_SUMMARY_SAFE_FIELDS,
+    *PROMPT468_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT489_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT490_RUN_STATE_SUMMARY_SAFE_FIELDS,
     *PROMPT491A_RUN_STATE_SUMMARY_SAFE_FIELDS,
