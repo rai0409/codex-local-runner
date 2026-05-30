@@ -359,6 +359,209 @@ from automation.orchestration.planned_runner.utils import (
     _write_json,
 )
 
+_PROMPT491A_ALLOWED_IMPLEMENTATION_FILES = (
+    "automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py",
+    "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py",
+    "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
+    "automation/orchestration/planned_runner/runtime_output_wiring.py",
+    "automation/orchestration/run_state_summary_contract.py",
+)
+
+_PROMPT491A_FORBIDDEN_IMPLEMENTATION_FILES = (
+    "automation/orchestration/planned_execution_runner.py",
+    "scripts/run_planned_execution.py",
+    "tests",
+    "docs",
+    "README",
+    "examples",
+)
+
+_PROMPT491A_VALIDATION_COMMANDS = (
+    "python -m py_compile automation/orchestration/planned_runner/*.py "
+    "automation/orchestration/planned_runner/prompt_surfaces/*.py "
+    "automation/orchestration/run_state_summary_contract.py "
+    "scripts/run_planned_execution.py",
+    "python scripts/run_planned_execution.py --help",
+)
+
+_PROMPT491A_REQUIRED_PROMPT_MARKERS = (
+    "success-path-only",
+    "no tests",
+    "no git",
+    "no remote mutation",
+    "next_action",
+    "allowed files",
+    "forbidden files",
+    "automation/orchestration/planned_execution_runner.py",
+    "blocked_by_forbidden_scope",
+    "BAD_SCOPE",
+    "PLANNED_EXECUTION_RUNNER_UNCHANGED",
+    "RUN_SCRIPT_UNCHANGED",
+)
+
+
+def _prompt491a_list_lines(values: Sequence[str]) -> str:
+    return "\n".join(f"- {value}" for value in values)
+
+
+def _prompt491a_materialized_prompt378_markdown(
+    *,
+    selected_role_id: str,
+    selected_role_text: str,
+    contract_allowed_files: Sequence[str] | None = None,
+    contract_forbidden_files: Sequence[str] | None = None,
+    contract_validation_commands: Sequence[str] | None = None,
+    contract_backed: bool = False,
+) -> str:
+    allowed_files = tuple(contract_allowed_files or _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES)
+    forbidden_files = tuple(
+        contract_forbidden_files or _PROMPT491A_FORBIDDEN_IMPLEMENTATION_FILES
+    )
+    validation_commands = tuple(
+        contract_validation_commands or _PROMPT491A_VALIDATION_COMMANDS
+    )
+    role_id = _normalize_text(selected_role_id, default="prompt491a_role")
+    role_text = _normalize_text(selected_role_text, default="")
+    role_id_checksum = hashlib.sha256(role_id.encode("utf-8")).hexdigest()
+    role_text_checksum = (
+        hashlib.sha256(role_text.encode("utf-8")).hexdigest() if role_text else ""
+    )
+    contract_source = "prompt493" if contract_backed else "prompt491a"
+
+    return f"""# Prompt379 Live Input
+
+Mode: Implement
+
+Goal:
+Generate the Prompt379 live execution change as a success-path-only, local-only
+implementation. Modify only the generated prompt/materialization contract needed
+to keep future Prompt379 live execution inside the split planned_runner prompt
+surface files.
+
+Role source:
+- role_id_sha256: {role_id_checksum}
+- contract_source: {contract_source}
+- selected_role_text_present: {bool(role_text)}
+- selected_role_text_sha256: {role_text_checksum}
+
+Allowed implementation files:
+{_prompt491a_list_lines(allowed_files)}
+
+Allowed files:
+{_prompt491a_list_lines(allowed_files)}
+
+Forbidden implementation files:
+{_prompt491a_list_lines(forbidden_files)}
+
+Forbidden files:
+{_prompt491a_list_lines(forbidden_files)}
+
+Hard allowed-scope section:
+- Edit only the files listed under allowed implementation files.
+- Do not edit any file outside the allowed implementation files list.
+- Do not edit automation/orchestration/planned_execution_runner.py.
+- Do not edit scripts/run_planned_execution.py.
+- Do not edit tests, docs, README, or examples.
+- If the required change appears to require planned_execution_runner.py, stop
+  without editing and report blocked_by_forbidden_scope.
+- If any required change would require a forbidden file, stop without editing
+  and report blocked_by_forbidden_scope.
+
+Hard forbidden-scope section:
+- automation/orchestration/planned_execution_runner.py is forbidden.
+- scripts/run_planned_execution.py is forbidden.
+- tests are forbidden.
+- docs are forbidden.
+- README is forbidden.
+- examples are forbidden.
+
+Expected artifact/output:
+- changed files
+- diff stat
+- BAD_SCOPE
+- PLANNED_EXECUTION_RUNNER_UNCHANGED
+- RUN_SCRIPT_UNCHANGED
+- automatic judgment
+- next_action
+
+Validation commands:
+{_prompt491a_list_lines(validation_commands)}
+
+Out-of-scope items:
+- no tests
+- no git commit or tag
+- no remote mutation
+- no push
+- no PR
+- no merge
+- no rollback
+- no targeted_fix
+- no daemon, polling, or sleep loop
+- no live Prompt379 execution
+
+Final output requirements:
+- Print changed files.
+- Print diff stat.
+- Print BAD_SCOPE as true if any forbidden file changed, else false.
+- Print PLANNED_EXECUTION_RUNNER_UNCHANGED.
+- Print RUN_SCRIPT_UNCHANGED.
+- Print automatic judgment.
+- Use automatic judgment `accept_candidate_then_commit_tag` only when scope guard
+  text is present, Prompt489/490/491 behavior is preserved, Prompt379 dry-run
+  safety remains blocked, and only allowed implementation files changed.
+"""
+
+
+def _prompt491a_canonical_tokens_ready(prompt_text: str) -> bool:
+    normalized_prompt = _normalize_multiline_text(prompt_text)
+    lowered_prompt = normalized_prompt.lower()
+    return bool(
+        normalized_prompt.strip()
+        and all(marker.lower() in lowered_prompt for marker in _PROMPT491A_REQUIRED_PROMPT_MARKERS)
+        and all(path in normalized_prompt for path in _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES)
+        and all(path in normalized_prompt for path in _PROMPT491A_FORBIDDEN_IMPLEMENTATION_FILES)
+    )
+
+
+def _prompt492_role_text_section_lines(
+    *,
+    selected_role_text: str,
+    section_name: str,
+) -> list[str]:
+    lines = _normalize_multiline_text(selected_role_text).splitlines()
+    section = _normalize_text(section_name, default="").strip().lower()
+    if not section:
+        return []
+    collected: list[str] = []
+    in_section = False
+    for line in lines:
+        stripped = line.strip()
+        normalized = stripped.rstrip(":").strip().lower()
+        is_heading = bool(stripped and not line.startswith((" ", "\t", "-", "*")))
+        if normalized == section:
+            in_section = True
+            continue
+        if in_section and is_heading and stripped.endswith(":"):
+            break
+        if in_section and stripped:
+            collected.append(stripped)
+    if collected:
+        return collected
+    return [f"{section_name}: materialized by Prompt491A scope guard"]
+
+
+def _prompt492_infer_allowed_files(selected_role_text: str) -> list[str]:
+    return list(_PROMPT491A_ALLOWED_IMPLEMENTATION_FILES)
+
+
+def _prompt492_infer_forbidden_files() -> list[str]:
+    return list(_PROMPT491A_FORBIDDEN_IMPLEMENTATION_FILES)
+
+
+def _prompt492_infer_validation_commands() -> list[str]:
+    return list(_PROMPT491A_VALIDATION_COMMANDS)
+
+
 def _build_prompt450_prompt449_runtime_packet_execution_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
