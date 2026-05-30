@@ -16552,6 +16552,26 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
         if normalized_reason and normalized_reason not in reasons:
             reasons.append(normalized_reason)
 
+    prompt380_allowed_changed_files = {
+        "automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py",
+        "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py",
+        "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
+    }
+    prompt380_forbidden_path_fragments = (
+        "automation/orchestration/planned_execution_runner.py",
+        "scripts/run_planned_execution.py",
+        "tests/",
+        "docs/",
+        "README",
+        "examples/",
+    )
+
+    def _prompt380_normalize_changed_file(value: Any) -> str:
+        normalized_path = _normalize_text(value, default="").replace("\\", "/")
+        if normalized_path.startswith("./"):
+            normalized_path = normalized_path[2:]
+        return normalized_path
+
     def _normalize_prompt379_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
         source = dict(value) if isinstance(value, Mapping) else {}
         prompt379_codex_execution_performed = _prompt357_as_boolish(
@@ -16578,11 +16598,15 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
                 default="",
             ),
             "prompt379_pre_execution_tracked_source_diff_empty": _prompt357_as_boolish(
-                source.get("prompt379_pre_execution_tracked_source_diff_empty"),
+                source.get("prompt379_pre_execution_tracked_source_diff_empty")
+                if source.get("prompt379_pre_execution_tracked_source_diff_empty") is not None
+                else source.get("prompt379_live_pre_execution_tracked_source_diff_empty"),
                 default=False,
             ),
             "prompt379_post_execution_tracked_source_diff_empty": _prompt357_as_boolish(
-                source.get("prompt379_post_execution_tracked_source_diff_empty"),
+                source.get("prompt379_post_execution_tracked_source_diff_empty")
+                if source.get("prompt379_post_execution_tracked_source_diff_empty") is not None
+                else source.get("prompt379_post_execution_tracked_diff_empty"),
                 default=False,
             ),
             "prompt379_post_execution_tracked_source_changed_files": _normalize_string_list(
@@ -16590,6 +16614,14 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
                 if source.get("prompt379_post_execution_changed_files") is not None
                 else source.get("prompt379_post_execution_tracked_source_changed_files"),
                 sort_items=False,
+            ),
+            "prompt379_git_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt379_git_mutation_performed"),
+                default=False,
+            ),
+            "prompt379_remote_mutation_performed": _prompt357_as_boolish(
+                source.get("prompt379_remote_mutation_performed"),
+                default=False,
             ),
             "prompt379_active_blocked_reason": _normalize_text(
                 source.get("prompt379_active_blocked_reason"),
@@ -16619,13 +16651,19 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
             "prompt379_execution_performed",
             "prompt379_returncode",
             "prompt379_returncode_classification",
-            "prompt379_pre_execution_tracked_source_diff_empty",
-            "prompt379_post_execution_tracked_source_diff_empty",
             "prompt379_active_blocked_reason",
             "prompt379_next_action",
         )
         return bool(
             all(key in raw_payload for key in required_keys)
+            and (
+                "prompt379_pre_execution_tracked_source_diff_empty" in raw_payload
+                or "prompt379_live_pre_execution_tracked_source_diff_empty" in raw_payload
+            )
+            and (
+                "prompt379_post_execution_tracked_source_diff_empty" in raw_payload
+                or "prompt379_post_execution_tracked_diff_empty" in raw_payload
+            )
             and (
                 "prompt379_post_execution_changed_files" in raw_payload
                 or "prompt379_post_execution_tracked_source_changed_files" in raw_payload
@@ -16682,6 +16720,29 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
     prompt379_codex_execution_performed = bool(
         prompt379_surface.get("prompt379_codex_execution_performed", False)
     )
+    prompt379_git_mutation_performed = bool(
+        prompt379_surface.get("prompt379_git_mutation_performed", False)
+    )
+    prompt379_remote_mutation_performed = bool(
+        prompt379_surface.get("prompt379_remote_mutation_performed", False)
+    )
+    prompt383_execution_performed = bool(
+        run_state.get("prompt383_execution_performed", False)
+    )
+    prompt380_normalized_changed_files = [
+        _prompt380_normalize_changed_file(path)
+        for path in prompt380_prompt379_post_execution_changed_files
+    ]
+    prompt380_unapproved_changed_files = [
+        path
+        for path in prompt380_normalized_changed_files
+        if path not in prompt380_allowed_changed_files
+    ]
+    prompt380_forbidden_changed_files = [
+        path
+        for path in prompt380_normalized_changed_files
+        if any(fragment in path for fragment in prompt380_forbidden_path_fragments)
+    ]
 
     if not prompt380_prompt379_evidence_ready:
         _append_reason(
@@ -16735,6 +16796,31 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
                 prompt380_active_blocked_reasons,
                 "prompt379_post_execution_tracked_diff_state_inconsistent",
             )
+        elif prompt379_git_mutation_performed:
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_git_mutation_performed",
+            )
+        elif prompt379_remote_mutation_performed:
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_remote_mutation_performed",
+            )
+        elif prompt383_execution_performed:
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt383_execution_already_performed",
+            )
+        elif prompt380_unapproved_changed_files:
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_changed_files_outside_approved_paths",
+            )
+        elif prompt380_forbidden_changed_files:
+            _append_reason(
+                prompt380_active_blocked_reasons,
+                "prompt379_changed_files_include_forbidden_paths",
+            )
 
     if not prompt380_active_blocked_reasons:
         prompt380_prompt379_result_review_status = "completed"
@@ -16745,17 +16831,17 @@ def _build_prompt380_prompt379_result_review_route_decision_state(
             prompt380_next_action = "prepare_next_cycle_after_prompt379_no_diff"
             prompt380_authoritative_next_action = prompt380_next_action
         else:
-            prompt380_route_decision = "success_with_tracked_diff_for_review"
-            prompt380_approve_candidate = False
-            prompt380_next_action = "prepare_prompt381_approve_candidate_boundary_review"
+            prompt380_route_decision = "approve_candidate"
+            prompt380_approve_candidate = True
+            prompt380_next_action = "prepare_prompt381_approve_candidate_boundary"
             prompt380_authoritative_next_action = prompt380_next_action
 
     prompt380_active_blocked_reason = (
         prompt380_active_blocked_reasons[0] if prompt380_active_blocked_reasons else ""
     )
     prompt380_summary = (
-        "Prompt380 reviewed Prompt379 execution metadata and selected the tracked-diff review route."
-        if prompt380_route_decision == "success_with_tracked_diff_for_review"
+        "Prompt380 reviewed Prompt379 execution metadata and selected the approve-candidate route for a bounded tracked diff."
+        if prompt380_route_decision == "approve_candidate"
         else (
             "Prompt380 reviewed Prompt379 execution metadata and selected the no-diff continuation route."
             if prompt380_route_decision == "success_no_tracked_diff"
