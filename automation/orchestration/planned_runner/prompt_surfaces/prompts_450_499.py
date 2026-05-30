@@ -363,8 +363,6 @@ _PROMPT491A_ALLOWED_IMPLEMENTATION_FILES = (
     "automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py",
     "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py",
     "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
-    "automation/orchestration/planned_runner/runtime_output_wiring.py",
-    "automation/orchestration/run_state_summary_contract.py",
 )
 
 _PROMPT491A_FORBIDDEN_IMPLEMENTATION_FILES = (
@@ -458,6 +456,8 @@ Forbidden files:
 
 Hard allowed-scope section:
 - Edit only the files listed under allowed implementation files.
+- Allowed implementation files are intentionally limited to split planned_runner
+  prompt surface files.
 - Do not edit any file outside the allowed implementation files list.
 - Do not edit automation/orchestration/planned_execution_runner.py.
 - Do not edit scripts/run_planned_execution.py.
