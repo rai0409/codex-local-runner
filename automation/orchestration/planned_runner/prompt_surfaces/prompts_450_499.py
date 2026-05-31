@@ -13510,6 +13510,96 @@ def _build_prompt500_absorbed_prompt379_candidate_reconciliation_state(
         "prompt500_blocked_reasons": blocked_reasons,
     }
 
+def _build_prompt501_absorbed_candidate_success_continuation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    expected_tag_name = "prompt499-supplied-prompt382-plan-adoption"
+    prompt500_status = _normalize_text(
+        payload.get("prompt500_absorbed_prompt379_candidate_reconciliation_status"),
+        default="",
+    )
+    prompt500_commit_sha = _normalize_text(
+        payload.get("prompt500_absorbed_prompt379_commit_sha"),
+        default="",
+    )
+    prompt500_tag_name = _normalize_text(
+        payload.get("prompt500_absorbed_prompt379_tag_name"),
+        default="",
+    )
+    prompt500_changed_files = _normalize_string_list(
+        payload.get("prompt500_absorbed_prompt379_changed_files")
+    )
+    readiness_checks = (
+        (
+            "prompt500_absorbed_prompt379_candidate_reconciliation_status",
+            prompt500_status == "ready",
+        ),
+        (
+            "prompt500_absorbed_prompt379_candidate_ready",
+            payload.get("prompt500_absorbed_prompt379_candidate_ready") is True,
+        ),
+        (
+            "prompt500_absorbed_prompt379_required_marker_present",
+            payload.get("prompt500_absorbed_prompt379_required_marker_present") is True,
+        ),
+        (
+            "prompt500_absorbed_prompt379_forbidden_files_absent",
+            payload.get("prompt500_absorbed_prompt379_forbidden_files_absent") is True,
+        ),
+        (
+            "prompt500_absorbed_prompt379_worktree_clean",
+            payload.get("prompt500_absorbed_prompt379_worktree_clean") is True,
+        ),
+        (
+            "prompt500_absorbed_prompt379_commit_sha",
+            bool(prompt500_commit_sha),
+        ),
+        (
+            "prompt500_absorbed_prompt379_tag_name",
+            prompt500_tag_name == expected_tag_name,
+        ),
+        (
+            "prompt500_absorbed_prompt379_changed_files",
+            bool(prompt500_changed_files),
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    ready = not blocked_reasons
+    next_action = (
+        "prepare_next_live_cycle_after_absorbed_candidate_success"
+        if ready
+        else "manual_review_prompt501_absorbed_candidate_success_continuation"
+    )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt501",
+        "prompt501_absorbed_candidate_success_continuation_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt501_absorbed_candidate_success_continuation_ready": ready,
+        "prompt501_source_prompt500_ready": ready,
+        "prompt501_absorbed_candidate_commit_sha": prompt500_commit_sha if ready else "",
+        "prompt501_absorbed_candidate_tag_name": prompt500_tag_name if ready else "",
+        "prompt501_absorbed_candidate_changed_files": (
+            prompt500_changed_files if ready else []
+        ),
+        "prompt501_commit_tag_retry_required": False,
+        "prompt501_prompt383_retry_blocked": True,
+        "prompt501_prompt379_execution_allowed": False,
+        "prompt501_prompt383_execution_allowed": False,
+        "prompt501_git_mutation_allowed": False,
+        "prompt501_remote_mutation_allowed": False,
+        "prompt501_next_cycle_handoff_ready": ready,
+        "prompt501_next_action": next_action,
+        "prompt501_blocked_reason": None if ready else blocked_reasons[0],
+        "prompt501_blocked_reasons": blocked_reasons,
+    }
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -13979,15 +14069,34 @@ def _build_prompt491_third_success_cycle_state(
         )
         else _PROMPT491_NEXT_ACTION
     )
-    prompt500_absorbed_candidate_reconciliation = (
-        _build_prompt500_absorbed_prompt379_candidate_reconciliation_state(
-            run_state_payload=payload,
-        )
-    )
     prompt500_absorbed_candidate_fields = {
         key: value
-        for key, value in prompt500_absorbed_candidate_reconciliation.items()
+        for key, value in payload.items()
         if key.startswith("prompt500_")
+    }
+    if not prompt500_absorbed_candidate_fields:
+        prompt500_absorbed_candidate_reconciliation = (
+            _build_prompt500_absorbed_prompt379_candidate_reconciliation_state(
+                run_state_payload=payload,
+            )
+        )
+        prompt500_absorbed_candidate_fields = {
+            key: value
+            for key, value in prompt500_absorbed_candidate_reconciliation.items()
+            if key.startswith("prompt500_")
+        }
+    prompt501_absorbed_candidate_success_continuation = (
+        _build_prompt501_absorbed_candidate_success_continuation_state(
+            run_state_payload={
+                **payload,
+                **prompt500_absorbed_candidate_fields,
+            },
+        )
+    )
+    prompt501_absorbed_candidate_fields = {
+        key: value
+        for key, value in prompt501_absorbed_candidate_success_continuation.items()
+        if key.startswith("prompt501_")
     }
 
     return {
@@ -14020,6 +14129,7 @@ def _build_prompt491_third_success_cycle_state(
         "active_blocked_reasons": active_blocked_reasons,
         "prompt491_next_action": next_action,
         **prompt500_absorbed_candidate_fields,
+        **prompt501_absorbed_candidate_fields,
     }
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -14333,4 +14443,5 @@ __all__ = [
     "_build_prompt497_chatgpt_browser_bridge_state",
     "_build_prompt498_chrome_response_to_prompt378_intake_state",
     "_build_prompt500_absorbed_prompt379_candidate_reconciliation_state",
+    "_build_prompt501_absorbed_candidate_success_continuation_state",
 ]
