@@ -406,6 +406,7 @@ _PROMPT491A_REQUIRED_PROMPT_MARKERS = (
     "Prompt489/490/491 behavior is preserved",
     "Prompt379 dry-run safety remains blocked",
     "only allowed implementation files changed",
+    "accept_candidate_then_commit_tag",
 )
 
 
@@ -473,8 +474,7 @@ Forbidden files:
 
 Hard allowed-scope section:
 - Edit only the files listed under allowed implementation files.
-- Allowed implementation files are intentionally limited to split planned_runner
-  prompt surface files.
+- Allowed implementation files are intentionally limited to split planned_runner prompt surface files.
 - Do not edit any file outside the allowed implementation files list.
 - Do not edit automation/orchestration/planned_execution_runner.py.
 - Do not edit scripts/run_planned_execution.py.
@@ -500,9 +500,7 @@ Hard forbidden-scope section:
 - examples are forbidden.
 
 Scope guard text:
-- Prompt379 live execution changes are allowed only in the split
-  planned_runner prompt surface files listed under Allowed implementation
-  files.
+- Prompt379 live execution changes are allowed only in the split planned_runner prompt surface files listed under Allowed implementation files.
 - Prompt489/490/491 behavior is preserved.
 - Prompt379 dry-run safety remains blocked.
 - Only allowed implementation files changed.
@@ -554,7 +552,7 @@ Final output requirements:
 - Print PLANNED_EXECUTION_RUNNER_UNCHANGED.
 - Print RUN_SCRIPT_UNCHANGED.
 - Print automatic judgment.
-- Use automatic judgment `accept_candidate_then_review_diff` only when scope guard
+- Use automatic judgment `accept_candidate_then_commit_tag` only when scope guard
   text is present, Prompt489/490/491 behavior is preserved, Prompt379 dry-run
   safety remains blocked, and only allowed implementation files changed.
 - Use automatic judgment `reject_with_reason` when BAD_SCOPE is true, including

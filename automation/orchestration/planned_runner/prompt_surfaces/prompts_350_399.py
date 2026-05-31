@@ -18280,6 +18280,27 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
     )
     run_state = dict(run_state_payload or {})
     normalized_repo_path = _normalize_text(execution_repo_path, default="")
+    prompt383_approve_commit_tag_requested = bool(
+        prompt383_approve_commit_tag_requested
+        or "--prompt383-approve-commit-tag-requested" in sys.argv
+    )
+    prompt383_approve_commit_tag_confirmed = bool(
+        prompt383_approve_commit_tag_confirmed
+        or "--prompt383-approve-commit-tag-confirmed" in sys.argv
+    )
+    prompt383_explicit_flags_enabled = bool(
+        prompt383_approve_commit_tag_requested
+        and prompt383_approve_commit_tag_confirmed
+    )
+    prompt499_allowed_prompt383_plan_paths = (
+        "automation/orchestration/planned_runner/prompt_surfaces/prompts_450_499.py",
+        "automation/orchestration/planned_runner/prompt_surfaces/prompts_350_399.py",
+        "automation/orchestration/planned_runner/prompt_surfaces/registry.py",
+    )
+    prompt499_forbidden_prompt383_plan_paths = (
+        "automation/orchestration/planned_execution_runner.py",
+        "scripts/run_planned_execution.py",
+    )
 
     def _append_reason(reasons: list[str], reason: str) -> None:
         normalized_reason = _normalize_text(reason, default="")
@@ -18295,6 +18316,266 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
             if text:
                 normalized.append(text)
         return normalized
+
+    def _artifact_input_dir_from_manifest() -> Path | None:
+        manifest_payload = _read_json_object_if_exists(artifact_root / "manifest.json")
+        if not isinstance(manifest_payload, Mapping):
+            return None
+        artifacts_dir_text = _normalize_text(
+            manifest_payload.get("artifact_input_dir"),
+            default="",
+        )
+        if not artifacts_dir_text:
+            return None
+        artifacts_dir = Path(artifacts_dir_text)
+        if not artifacts_dir.exists() or not artifacts_dir.is_dir():
+            return None
+        return artifacts_dir
+
+    def _runtime_commands_present(value: Any) -> bool:
+        if isinstance(value, Mapping):
+            for key, nested in value.items():
+                normalized_key = _normalize_text(key, default="")
+                if "runtime_commands" in normalized_key and bool(nested):
+                    return True
+                if _runtime_commands_present(nested):
+                    return True
+        elif isinstance(value, (list, tuple)):
+            return any(_runtime_commands_present(item) for item in value)
+        else:
+            normalized_value = _normalize_text(value, default="")
+            return "runtime_commands" in normalized_value
+        return False
+
+    def _remote_mutation_field_true(value: Any) -> bool:
+        if isinstance(value, Mapping):
+            for key, nested in value.items():
+                normalized_key = _normalize_text(key, default="")
+                if "remote_mutation" in normalized_key and _prompt357_as_boolish(
+                    nested,
+                    default=False,
+                ):
+                    return True
+                if _remote_mutation_field_true(nested):
+                    return True
+        elif isinstance(value, (list, tuple)):
+            return any(_remote_mutation_field_true(item) for item in value)
+        return False
+
+    def _normalize_prompt499_supplied_plan_path(
+        raw_path: str,
+        reasons: list[str],
+    ) -> str:
+        normalized_path = _normalize_text(raw_path, default="").replace("\\", "/")
+        if normalized_path.startswith("./"):
+            normalized_path = normalized_path[2:]
+        pure_path = PurePosixPath(normalized_path)
+        if not normalized_path:
+            _append_reason(reasons, "prompt499_supplied_plan_path_empty")
+            return ""
+        if pure_path.is_absolute():
+            _append_reason(
+                reasons,
+                f"prompt499_supplied_plan_path_absolute:{normalized_path}",
+            )
+            return ""
+        if ".." in pure_path.parts:
+            _append_reason(
+                reasons,
+                f"prompt499_supplied_plan_path_traversal:{normalized_path}",
+            )
+            return ""
+        if normalized_path in prompt499_forbidden_prompt383_plan_paths:
+            _append_reason(
+                reasons,
+                f"prompt499_supplied_plan_path_forbidden:{normalized_path}",
+            )
+            return ""
+        if normalized_path not in prompt499_allowed_prompt383_plan_paths:
+            _append_reason(
+                reasons,
+                f"prompt499_supplied_plan_path_not_allowed:{normalized_path}",
+            )
+            return ""
+        return normalized_path
+
+    def _resolve_prompt499_supplied_prompt382_plan(
+        *,
+        supplied_artifact_dir: Path | None,
+    ) -> tuple[dict[str, Any] | None, str, str, list[str]]:
+        reasons: list[str] = []
+        if not prompt383_explicit_flags_enabled:
+            _append_reason(reasons, "prompt499_prompt383_explicit_flags_not_enabled")
+            return None, "", "not_applicable", reasons
+        if supplied_artifact_dir is None:
+            _append_reason(reasons, "prompt499_artifact_input_dir_missing")
+            return None, "", "missing", reasons
+
+        source_names = (
+            "prompt382_approve_commit_tag_execution_plan.json",
+            "prompt382_approve_commit_tag_execution_gate.json",
+            "prompt383_explicit_approve_commit_tag_execution_gate.json",
+            "prompt383_explicit_approve_commit_tag_execution_receipt.json",
+        )
+        source_payloads: dict[str, dict[str, Any]] = {}
+        source_paths: dict[str, Path] = {}
+        for source_name in source_names:
+            source_path = supplied_artifact_dir / source_name
+            source_payload = _read_json_object_if_exists(source_path)
+            if isinstance(source_payload, Mapping):
+                source_payloads[source_name] = dict(source_payload)
+                source_paths[source_name] = source_path
+
+        plan_payload = source_payloads.get(
+            "prompt382_approve_commit_tag_execution_plan.json"
+        )
+        if not isinstance(plan_payload, Mapping):
+            _append_reason(reasons, "prompt499_supplied_prompt382_plan_missing")
+            return None, "", "missing", reasons
+
+        if (
+            _normalize_text(plan_payload.get("prompt382_plan_type"), default="")
+            != "approve_commit_tag_execution_plan"
+        ):
+            _append_reason(reasons, "prompt499_supplied_prompt382_plan_type_invalid")
+        if (
+            _normalize_text(plan_payload.get("prompt382_follow_on_prompt"), default="")
+            != "prompt383"
+        ):
+            _append_reason(
+                reasons,
+                "prompt499_supplied_prompt382_follow_on_prompt_invalid",
+            )
+        if not _prompt357_as_boolish(
+            plan_payload.get("prompt382_execution_ready"),
+            default=False,
+        ):
+            _append_reason(reasons, "prompt499_supplied_prompt382_execution_not_ready")
+
+        commit_message = _prompt382_approve_plan_text(
+            plan_payload.get("prompt382_commit_message"),
+            fallback="",
+        )
+        tag_name = _prompt382_approve_plan_text(
+            plan_payload.get("prompt382_tag_name"),
+            fallback="",
+        )
+        if not commit_message:
+            _append_reason(reasons, "prompt499_supplied_prompt382_commit_message_missing")
+        if not tag_name:
+            _append_reason(reasons, "prompt499_supplied_prompt382_tag_name_missing")
+
+        planned_paths = (
+            _normalize_string_list(
+                plan_payload.get("prompt382_planned_git_add_paths"),
+                sort_items=False,
+            )
+            or _normalize_string_list(
+                plan_payload.get("prompt382_approved_paths"),
+                sort_items=False,
+            )
+        )
+        if not planned_paths:
+            _append_reason(reasons, "prompt499_supplied_prompt382_paths_missing")
+        validated_paths: list[str] = []
+        seen_paths: set[str] = set()
+        for raw_path in planned_paths:
+            normalized_path = _normalize_prompt499_supplied_plan_path(
+                raw_path,
+                reasons,
+            )
+            if not normalized_path:
+                continue
+            if normalized_path in seen_paths:
+                _append_reason(
+                    reasons,
+                    f"prompt499_supplied_plan_path_duplicate:{normalized_path}",
+                )
+                continue
+            seen_paths.add(normalized_path)
+            validated_paths.append(normalized_path)
+
+        planned_git_add_argv = _normalize_argv(
+            plan_payload.get("prompt382_planned_git_add_argv")
+        )
+        if planned_git_add_argv:
+            add_tail = planned_git_add_argv[2:] if planned_git_add_argv[:2] == ["git", "add"] else []
+            if add_tail and add_tail[0] == "--":
+                add_tail = add_tail[1:]
+            normalized_add_tail: list[str] = []
+            for raw_path in add_tail:
+                normalized_path = _normalize_prompt499_supplied_plan_path(
+                    raw_path,
+                    reasons,
+                )
+                if normalized_path:
+                    normalized_add_tail.append(normalized_path)
+            if planned_git_add_argv[:2] != ["git", "add"] or normalized_add_tail != validated_paths:
+                _append_reason(
+                    reasons,
+                    "prompt499_supplied_prompt382_git_add_argv_invalid",
+                )
+
+        expected_commit_argv = ["git", "commit", "-m", commit_message]
+        expected_tag_argv = ["git", "tag", tag_name]
+        if (
+            _normalize_argv(plan_payload.get("prompt382_planned_git_commit_argv"))
+            != expected_commit_argv
+        ):
+            _append_reason(
+                reasons,
+                "prompt499_supplied_prompt382_git_commit_argv_invalid",
+            )
+        if (
+            _normalize_argv(plan_payload.get("prompt382_planned_git_tag_argv"))
+            != expected_tag_argv
+        ):
+            _append_reason(
+                reasons,
+                "prompt499_supplied_prompt382_git_tag_argv_invalid",
+            )
+
+        for source_name, source_payload in source_payloads.items():
+            if _runtime_commands_present(source_payload):
+                _append_reason(
+                    reasons,
+                    f"prompt499_supplied_source_runtime_commands_present:{source_name}",
+                )
+            if _remote_mutation_field_true(source_payload):
+                _append_reason(
+                    reasons,
+                    f"prompt499_supplied_source_remote_mutation_true:{source_name}",
+                )
+
+        if reasons:
+            return (
+                None,
+                str(source_paths["prompt382_approve_commit_tag_execution_plan.json"]),
+                "invalid",
+                reasons,
+            )
+
+        adopted_plan = {
+            **plan_payload,
+            "prompt382_commit_message": commit_message,
+            "prompt382_tag_name": tag_name,
+            "prompt382_execution_ready": True,
+            "prompt382_approved_paths": list(validated_paths),
+            "prompt382_planned_git_add_paths": list(validated_paths),
+            "prompt382_planned_git_add_argv": [
+                "git",
+                "add",
+                *validated_paths,
+            ],
+            "prompt382_planned_git_commit_argv": expected_commit_argv,
+            "prompt382_planned_git_tag_argv": expected_tag_argv,
+        }
+        return (
+            adopted_plan,
+            str(source_paths["prompt382_approve_commit_tag_execution_plan.json"]),
+            "valid",
+            [],
+        )
 
     def _normalize_prompt382_gate_surface(value: Mapping[str, Any] | None) -> dict[str, Any]:
         source = dict(value) if isinstance(value, Mapping) else {}
@@ -18484,6 +18765,48 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
     prompt382_gate_surface, prompt382_gate_source_path = _resolve_prompt382_gate_surface()
     prompt382_plan_payload = _read_json_object_if_exists(prompt382_plan_path)
     prompt382_plan_surface = _normalize_prompt382_plan_surface(prompt382_plan_payload)
+    (
+        prompt499_supplied_prompt382_plan_payload,
+        prompt499_supplied_prompt382_plan_source_path,
+        prompt499_supplied_prompt382_plan_validation_status,
+        prompt499_supplied_prompt382_plan_validation_reasons,
+    ) = _resolve_prompt499_supplied_prompt382_plan(
+        supplied_artifact_dir=_artifact_input_dir_from_manifest(),
+    )
+    prompt499_supplied_prompt382_plan_adoption_ready = bool(
+        prompt499_supplied_prompt382_plan_payload
+    )
+    if prompt499_supplied_prompt382_plan_adoption_ready:
+        prompt382_plan_payload = dict(prompt499_supplied_prompt382_plan_payload or {})
+        prompt382_plan_surface = _normalize_prompt382_plan_surface(
+            prompt382_plan_payload
+        )
+        prompt382_gate_surface = {
+            **prompt382_gate_surface,
+            "prompt382_approve_commit_tag_execution_gate_status": (
+                "ready_for_explicit_execution"
+            ),
+            "prompt382_execution_ready": True,
+            "prompt382_commit_message": prompt382_plan_surface.get(
+                "prompt382_commit_message",
+                "",
+            ),
+            "prompt382_tag_name": prompt382_plan_surface.get(
+                "prompt382_tag_name",
+                "",
+            ),
+            "prompt382_approved_paths": prompt382_plan_surface.get(
+                "prompt382_approved_paths",
+                [],
+            ),
+            "prompt382_prompt381_changed_files": prompt382_plan_surface.get(
+                "prompt382_planned_git_add_paths",
+                [],
+            ),
+            "prompt382_remote_mutation_allowed": False,
+            "prompt382_remote_mutation_performed": False,
+        }
+        prompt382_gate_source_path = prompt499_supplied_prompt382_plan_source_path
     if _prompt382_approve_plan_ready_from_gate(prompt382_gate_surface):
         deterministic_approved_paths = (
             _normalize_string_list(
@@ -18819,6 +19142,19 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
         else:
             validation_reasons: list[str] = []
             validated_paths: list[str] = []
+            prompt383_git_add_argv = (
+                ["git", "add", "--", *prompt383_prompt382_approved_paths]
+                if prompt383_prompt382_approved_paths
+                else []
+            )
+            prompt383_git_commit_argv = (
+                ["git", "commit", "-m", prompt383_commit_message]
+                if prompt383_commit_message
+                else []
+            )
+            prompt383_git_tag_argv = (
+                ["git", "tag", prompt383_tag_name] if prompt383_tag_name else []
+            )
             if not normalized_repo_path:
                 _append_reason(validation_reasons, "prompt383_execution_repo_path_missing")
             else:
@@ -18917,7 +19253,8 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
             if not prompt383_tag_name:
                 _append_reason(validation_reasons, "prompt383_tag_name_missing")
 
-            prompt383_git_add_argv = ["git", "add", "--", *validated_paths] if validated_paths else []
+            if validated_paths:
+                prompt383_git_add_argv = ["git", "add", "--", *validated_paths]
             prompt383_git_commit_argv = (
                 ["git", "commit", "-m", prompt383_commit_message]
                 if prompt383_commit_message
@@ -19056,6 +19393,21 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
         if prompt383_active_blocked_reasons
         else ""
     )
+    prompt499_prompt383_supplied_plan_execution_ready = bool(
+        prompt499_supplied_prompt382_plan_adoption_ready
+        and prompt383_prompt382_execution_ready
+        and prompt383_prompt382_plan_ready
+        and prompt383_prompt382_commit_message
+        and prompt383_prompt382_tag_name
+        and prompt383_prompt382_approved_paths
+    )
+    prompt499_prompt383_allowed_paths_surface_only = bool(
+        prompt383_prompt382_approved_paths
+        and all(
+            path in prompt499_allowed_prompt383_plan_paths
+            for path in prompt383_prompt382_approved_paths
+        )
+    )
     prompt383_summary = {
         "blocked": (
             "Prompt383 blocked because the Prompt382 explicit approve commit/tag execution source of truth is not execution-safe yet."
@@ -19079,7 +19431,32 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
         "source_prompt": "prompt383",
         "prompt383_prompt382_gate_source_path": prompt382_gate_source_path,
         "prompt383_prompt382_plan_source_path": (
-            str(prompt382_plan_path) if prompt382_plan_payload else ""
+            prompt499_supplied_prompt382_plan_source_path
+            if prompt499_supplied_prompt382_plan_adoption_ready
+            else str(prompt382_plan_path) if prompt382_plan_payload else ""
+        ),
+        "prompt499_supplied_prompt382_plan_adoption_ready": (
+            prompt499_supplied_prompt382_plan_adoption_ready
+        ),
+        "prompt499_supplied_prompt382_plan_source_path": (
+            prompt499_supplied_prompt382_plan_source_path
+        ),
+        "prompt499_supplied_prompt382_plan_validation_status": (
+            prompt499_supplied_prompt382_plan_validation_status
+        ),
+        "prompt499_supplied_prompt382_plan_validation_reasons": list(
+            prompt499_supplied_prompt382_plan_validation_reasons
+        ),
+        "prompt499_prompt383_explicit_flags_required": True,
+        "prompt499_prompt383_supplied_plan_execution_ready": (
+            prompt499_prompt383_supplied_plan_execution_ready
+        ),
+        "prompt499_prompt383_remote_mutation_blocked": (
+            prompt383_remote_mutation_allowed is False
+            and prompt383_remote_mutation_performed is False
+        ),
+        "prompt499_prompt383_allowed_paths_surface_only": (
+            prompt499_prompt383_allowed_paths_surface_only
         ),
         "prompt383_explicit_approve_commit_tag_execution_status": prompt383_status,
         "prompt383_prompt382_evidence_ready": prompt383_prompt382_evidence_ready,
@@ -19158,7 +19535,7 @@ def _build_prompt383_explicit_approve_commit_tag_execution_state(
     return {
         key: value
         for key, value in prompt383_gate_payload.items()
-        if key.startswith("prompt383_")
+        if key.startswith("prompt383_") or key.startswith("prompt499_")
     }
 
 def _build_prompt384_commit_tag_reconciliation_state(
