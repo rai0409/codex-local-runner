@@ -13808,6 +13808,92 @@ def _build_prompt503_prompt378_next_cycle_request_state(
         "prompt503_blocked_reasons": blocked_reasons,
     }
 
+def _build_prompt504_materialize_and_validate_next_prompt378_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt503_next_cycle_prompt_kind = _normalize_text(
+        payload.get("prompt503_next_cycle_prompt_kind"),
+        default="",
+    )
+    prompt503_next_action = _normalize_text(
+        payload.get("prompt503_next_action"),
+        default="",
+    )
+    readiness_checks = (
+        (
+            "prompt503_next_prompt378_request_ready",
+            payload.get("prompt503_next_prompt378_request_ready") is True,
+        ),
+        (
+            "prompt503_prompt378_generation_requested",
+            payload.get("prompt503_prompt378_generation_requested") is True,
+        ),
+        (
+            "prompt503_next_cycle_prompt_kind",
+            prompt503_next_cycle_prompt_kind == "prompt378",
+        ),
+        (
+            "prompt503_next_action",
+            prompt503_next_action == "materialize_next_prompt378_request",
+        ),
+        (
+            "prompt503_prompt378_execution_allowed",
+            payload.get("prompt503_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt503_prompt379_execution_allowed",
+            payload.get("prompt503_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt503_git_mutation_allowed",
+            payload.get("prompt503_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt503_remote_mutation_allowed",
+            payload.get("prompt503_remote_mutation_allowed") is False,
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    ready = not blocked_reasons
+    next_action = (
+        "prepare_prompt379_live_request"
+        if ready
+        else "manual_review_prompt504_materialization_validation"
+    )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt504",
+        "prompt504_prompt378_materialization_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt504_prompt378_materialization_ready": ready,
+        "prompt504_source_prompt503_ready": ready,
+        "prompt504_materialized_prompt_kind": "prompt378" if ready else "",
+        "prompt504_materialized_prompt_text_ready": ready,
+        "prompt504_materialized_prompt_scope_ready": ready,
+        "prompt504_materialized_prompt_contract_ready": ready,
+        "prompt504_prompt378_validation_status": (
+            "valid" if ready else "blocked"
+        ),
+        "prompt504_prompt378_validation_ready": ready,
+        "prompt504_allowed_scope_valid": ready,
+        "prompt504_forbidden_scope_absent": ready,
+        "prompt504_execution_boundary_valid": ready,
+        "prompt504_prompt378_execution_allowed": False,
+        "prompt504_prompt379_execution_allowed": False,
+        "prompt504_codex_execution_allowed": False,
+        "prompt504_git_mutation_allowed": False,
+        "prompt504_remote_mutation_allowed": False,
+        "prompt504_next_action": next_action,
+        "prompt504_blocked_reason": None if ready else blocked_reasons[0],
+        "prompt504_blocked_reasons": blocked_reasons,
+    }
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -14333,6 +14419,24 @@ def _build_prompt491_third_success_cycle_state(
         for key, value in prompt503_prompt378_next_cycle_request.items()
         if key.startswith("prompt503_")
     }
+    prompt504_materialize_and_validate_next_prompt378 = (
+        _build_prompt504_materialize_and_validate_next_prompt378_state(
+            run_state_payload={
+                **payload,
+                **prompt500_absorbed_candidate_fields,
+                **prompt501_absorbed_candidate_fields,
+                **prompt502_next_live_cycle_bridge_fields,
+                **prompt503_prompt378_next_cycle_request_fields,
+            },
+        )
+    )
+    prompt504_materialize_and_validate_next_prompt378_fields = {
+        key: value
+        for key, value in (
+            prompt504_materialize_and_validate_next_prompt378.items()
+        )
+        if key.startswith("prompt504_")
+    }
 
     return {
         "prompt491_third_success_cycle_status": "ready",
@@ -14367,6 +14471,7 @@ def _build_prompt491_third_success_cycle_state(
         **prompt501_absorbed_candidate_fields,
         **prompt502_next_live_cycle_bridge_fields,
         **prompt503_prompt378_next_cycle_request_fields,
+        **prompt504_materialize_and_validate_next_prompt378_fields,
     }
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -14683,4 +14788,5 @@ __all__ = [
     "_build_prompt501_absorbed_candidate_success_continuation_state",
     "_build_prompt502_next_live_cycle_bridge_state",
     "_build_prompt503_prompt378_next_cycle_request_state",
+    "_build_prompt504_materialize_and_validate_next_prompt378_state",
 ]
