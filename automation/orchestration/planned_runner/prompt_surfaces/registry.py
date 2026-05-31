@@ -170,6 +170,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt505_prepare_prompt379_live_request_state,
     _build_prompt506_explicit_prompt379_live_enable_gate_state,
     _build_prompt507_one_shot_prompt379_live_execution_state,
+    _build_prompt508_external_enable_dispatch_readiness_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -336,6 +337,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt505_prepare_prompt379_live_request_state": _build_prompt505_prepare_prompt379_live_request_state,
     "_build_prompt506_explicit_prompt379_live_enable_gate_state": _build_prompt506_explicit_prompt379_live_enable_gate_state,
     "_build_prompt507_one_shot_prompt379_live_execution_state": _build_prompt507_one_shot_prompt379_live_execution_state,
+    "_build_prompt508_external_enable_dispatch_readiness_state": _build_prompt508_external_enable_dispatch_readiness_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -507,4 +509,5 @@ __all__ = [
     "_build_prompt505_prepare_prompt379_live_request_state",
     "_build_prompt506_explicit_prompt379_live_enable_gate_state",
     "_build_prompt507_one_shot_prompt379_live_execution_state",
+    "_build_prompt508_external_enable_dispatch_readiness_state",
 ]
