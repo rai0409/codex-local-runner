@@ -14407,6 +14407,159 @@ def _build_prompt508_external_enable_dispatch_readiness_state(
         "prompt508_blocked_reasons": blocked_reasons,
     }
 
+def _build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt508_prompt379_request_kind = _normalize_text(
+        payload.get("prompt508_prompt379_request_kind"),
+        default="",
+    )
+    prompt508_prompt379_request_source_kind = _normalize_text(
+        payload.get("prompt508_prompt379_request_source_kind"),
+        default="",
+    )
+    readiness_checks = (
+        (
+            "prompt508_external_enable_intake_ready",
+            payload.get("prompt508_external_enable_intake_ready") is True,
+        ),
+        (
+            "prompt508_source_prompt507_ready",
+            payload.get("prompt508_source_prompt507_ready") is True,
+        ),
+        (
+            "prompt508_prompt379_live_execution_contract_ready",
+            payload.get("prompt508_prompt379_live_execution_contract_ready") is True,
+        ),
+        (
+            "prompt508_prompt379_request_kind",
+            prompt508_prompt379_request_kind == "prompt379_live",
+        ),
+        (
+            "prompt508_prompt379_request_source_kind",
+            prompt508_prompt379_request_source_kind == "prompt378",
+        ),
+        (
+            "prompt508_one_shot_execution_required",
+            payload.get("prompt508_one_shot_execution_required") is True,
+        ),
+        (
+            "prompt508_one_shot_execution_consumed",
+            payload.get("prompt508_one_shot_execution_consumed") is False,
+        ),
+        (
+            "prompt508_codex_execution_allowed",
+            payload.get("prompt508_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt508_git_mutation_allowed",
+            payload.get("prompt508_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt508_remote_mutation_allowed",
+            payload.get("prompt508_remote_mutation_allowed") is False,
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    base_ready = not blocked_reasons
+    dispatch_ready = (
+        base_ready and payload.get("prompt508_one_shot_dispatch_ready") is True
+    )
+
+    external_result_present = (
+        payload.get("prompt509_external_prompt379_execution_result_present") is True
+    )
+    external_execution_performed = (
+        payload.get("prompt509_external_prompt379_execution_performed") is True
+    )
+    external_returncode = payload.get(
+        "prompt509_external_prompt379_returncode"
+    )
+    external_returncode_classification = _normalize_text(
+        payload.get("prompt509_external_prompt379_returncode_classification"),
+        default="",
+    )
+    external_changed_files = payload.get(
+        "prompt509_external_prompt379_post_execution_changed_files"
+    )
+    external_tracked_diff_empty = (
+        payload.get(
+            "prompt509_external_prompt379_post_execution_tracked_diff_empty"
+        )
+        is True
+    )
+    valid_result_evidence = all(
+        (
+            external_result_present,
+            external_execution_performed,
+            external_returncode_classification
+            in {"success", "failed", "blocked"},
+            isinstance(external_changed_files, list),
+        )
+    )
+    normalized_changed_files = (
+        list(external_changed_files)
+        if valid_result_evidence and isinstance(external_changed_files, list)
+        else []
+    )
+
+    if valid_result_evidence:
+        result_status = "ingested"
+        next_action = "review_prompt379_live_execution_result"
+    elif dispatch_ready:
+        result_status = "dispatch_ready"
+        next_action = "run_external_one_shot_prompt379_live_execution"
+    elif base_ready:
+        result_status = "awaiting_external_enable_or_result"
+        next_action = "await_external_enable_or_execution_result"
+    else:
+        result_status = "blocked"
+        next_action = "manual_review_prompt509_execution_result_ingestion"
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt509",
+        "prompt509_prompt379_execution_result_status": result_status,
+        "prompt509_prompt379_execution_result_ready": valid_result_evidence,
+        "prompt509_dispatch_ready": dispatch_ready,
+        "prompt509_source_prompt508_ready": base_ready,
+        "prompt509_prompt379_execution_performed": valid_result_evidence,
+        "prompt509_prompt379_returncode": (
+            external_returncode if valid_result_evidence else None
+        ),
+        "prompt509_prompt379_returncode_classification": (
+            external_returncode_classification
+            if valid_result_evidence
+            else "not_run"
+        ),
+        "prompt509_prompt379_post_execution_changed_files": (
+            normalized_changed_files
+        ),
+        "prompt509_prompt379_post_execution_tracked_diff_empty": (
+            external_tracked_diff_empty if valid_result_evidence else False
+        ),
+        "prompt509_one_shot_execution_consumed": valid_result_evidence,
+        "prompt509_codex_execution_dispatched_by_prompt509": False,
+        "prompt509_post_execution_review_required": valid_result_evidence,
+        "prompt509_post_execution_review_ready": valid_result_evidence,
+        "prompt509_review_source_kind": (
+            "prompt379_live_execution" if valid_result_evidence else ""
+        ),
+        "prompt509_next_review_prompt_kind": (
+            "prompt510" if valid_result_evidence else ""
+        ),
+        "prompt509_git_mutation_allowed": False,
+        "prompt509_remote_mutation_allowed": False,
+        "prompt509_commit_tag_allowed": False,
+        "prompt509_next_action": next_action,
+        "prompt509_blocked_reason": None if base_ready else blocked_reasons[0],
+        "prompt509_blocked_reasons": blocked_reasons,
+    }
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -15024,6 +15177,27 @@ def _build_prompt491_third_success_cycle_state(
         for key, value in prompt508_external_enable_dispatch_readiness.items()
         if key.startswith("prompt508_")
     }
+    prompt509_dispatch_or_ingest_prompt379_live_execution_result = (
+        _build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state(
+            run_state_payload={
+                **payload,
+                **prompt500_absorbed_candidate_fields,
+                **prompt501_absorbed_candidate_fields,
+                **prompt502_next_live_cycle_bridge_fields,
+                **prompt503_prompt378_next_cycle_request_fields,
+                **prompt504_materialize_and_validate_next_prompt378_fields,
+                **prompt505_prepare_prompt379_live_request_fields,
+                **prompt506_explicit_prompt379_live_enable_gate_fields,
+                **prompt507_one_shot_prompt379_live_execution_fields,
+                **prompt508_external_enable_dispatch_readiness_fields,
+            },
+        )
+    )
+    prompt509_dispatch_or_ingest_prompt379_live_execution_result_fields = {
+        key: value
+        for key, value in prompt509_dispatch_or_ingest_prompt379_live_execution_result.items()
+        if key.startswith("prompt509_")
+    }
 
     return {
         "prompt491_third_success_cycle_status": "ready",
@@ -15063,6 +15237,7 @@ def _build_prompt491_third_success_cycle_state(
         **prompt506_explicit_prompt379_live_enable_gate_fields,
         **prompt507_one_shot_prompt379_live_execution_fields,
         **prompt508_external_enable_dispatch_readiness_fields,
+        **prompt509_dispatch_or_ingest_prompt379_live_execution_result_fields,
     }
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -15384,4 +15559,5 @@ __all__ = [
     "_build_prompt506_explicit_prompt379_live_enable_gate_state",
     "_build_prompt507_one_shot_prompt379_live_execution_state",
     "_build_prompt508_external_enable_dispatch_readiness_state",
+    "_build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state",
 ]
