@@ -13345,6 +13345,171 @@ def _build_prompt498_chrome_response_to_prompt378_intake_state(
         "prompt498_blocked_reasons": blocked_reasons,
     }
 
+def _prompt500_git_stdout(
+    *,
+    repo_path: str | Path | None,
+    argv: Sequence[str],
+) -> tuple[bool, str]:
+    repo_text = _normalize_text(repo_path, default="")
+    cwd = repo_text if repo_text else None
+    try:
+        completed = subprocess.run(
+            ["git", *argv],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, ""
+    return completed.returncode == 0, completed.stdout or ""
+
+def _build_prompt500_absorbed_prompt379_candidate_reconciliation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+    execution_repo_path: str | Path | None = None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    base_ref = "prompt498-split-success-flow-guard"
+    head_ref = "prompt499-supplied-prompt382-plan-adoption"
+    required_changed_file = (
+        "automation/orchestration/planned_runner/prompt_surfaces/"
+        "prompts_450_499.py"
+    )
+    forbidden_files = (
+        "automation/orchestration/planned_execution_runner.py",
+        "scripts/run_planned_execution.py",
+        "automation/orchestration/planned_runner/runtime_output_wiring.py",
+        "automation/orchestration/run_state_summary_contract.py",
+    )
+    required_marker = "accept_candidate_then_commit_tag"
+
+    head_known, head_stdout = _prompt500_git_stdout(
+        repo_path=execution_repo_path,
+        argv=("rev-parse", "HEAD"),
+    )
+    tags_known, tags_stdout = _prompt500_git_stdout(
+        repo_path=execution_repo_path,
+        argv=("tag", "--points-at", "HEAD"),
+    )
+    worktree_known, worktree_stdout = _prompt500_git_stdout(
+        repo_path=execution_repo_path,
+        argv=("status", "--short"),
+    )
+    diff_known, diff_name_stdout = _prompt500_git_stdout(
+        repo_path=execution_repo_path,
+        argv=("diff", "--name-only", f"{base_ref}..HEAD"),
+    )
+    marker_known, marker_diff_stdout = _prompt500_git_stdout(
+        repo_path=execution_repo_path,
+        argv=("diff", f"{base_ref}..HEAD", "--", required_changed_file),
+    )
+
+    commit_sha = (
+        head_stdout.splitlines()[0].strip()
+        if head_known and head_stdout.splitlines()
+        else ""
+    )
+    tags_at_head = (
+        _normalize_string_list(tags_stdout.splitlines(), sort_items=False)
+        if tags_known
+        else []
+    )
+    changed_files = (
+        _normalize_string_list(diff_name_stdout.splitlines(), sort_items=True)
+        if diff_known
+        else []
+    )
+    forbidden_changed_files = [
+        path for path in changed_files if path in forbidden_files
+    ]
+    required_marker_present = bool(
+        marker_known and required_marker in marker_diff_stdout
+    )
+    forbidden_files_absent = bool(diff_known and not forbidden_changed_files)
+    worktree_clean = bool(worktree_known and not worktree_stdout.strip())
+    current_tag_at_head = head_ref in tags_at_head
+    required_file_changed = required_changed_file in changed_files
+    remote_mutation_false = not any(
+        payload.get(key) is True
+        for key in (
+            "remote_mutation_allowed",
+            "remote_mutation_performed",
+            "prompt383_remote_mutation_allowed",
+            "prompt383_remote_mutation_performed",
+            "prompt500_remote_mutation_allowed",
+            "prompt500_remote_mutation_performed",
+        )
+    )
+
+    blocked_reasons: list[str] = []
+    if not worktree_clean:
+        blocked_reasons.append("prompt500_worktree_not_clean")
+    if not current_tag_at_head:
+        blocked_reasons.append("prompt500_current_tag_not_at_head")
+    if not diff_known:
+        blocked_reasons.append("prompt500_absorbed_candidate_diff_unknown")
+    if diff_known and not required_file_changed:
+        blocked_reasons.append("prompt500_required_prompt_surface_diff_missing")
+    if not required_marker_present:
+        blocked_reasons.append("prompt500_required_marker_missing")
+    if not forbidden_files_absent:
+        blocked_reasons.append("prompt500_forbidden_files_changed")
+    if not remote_mutation_false:
+        blocked_reasons.append("prompt500_remote_mutation_not_false")
+
+    ready = not blocked_reasons
+    next_action = (
+        "prepare_success_path_continuation_after_absorbed_candidate"
+        if ready
+        else "manual_review_absorbed_prompt379_candidate_reconciliation"
+    )
+    return {
+        "local_only": True,
+        "source_prompt": "prompt500",
+        "prompt500_applicable": True,
+        "prompt500_absorbed_prompt379_candidate_reconciliation_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt500_absorbed_prompt379_candidate_ready": ready,
+        "prompt500_absorbed_prompt379_base_ref": base_ref,
+        "prompt500_absorbed_prompt379_head_ref": head_ref,
+        "prompt500_absorbed_prompt379_changed_files": changed_files,
+        "prompt500_absorbed_prompt379_required_marker_present": (
+            required_marker_present
+        ),
+        "prompt500_absorbed_prompt379_forbidden_files_absent": (
+            forbidden_files_absent
+        ),
+        "prompt500_absorbed_prompt379_worktree_clean": worktree_clean,
+        "prompt500_absorbed_prompt379_commit_sha": commit_sha,
+        "prompt500_absorbed_prompt379_tag_name": (
+            head_ref if current_tag_at_head else ""
+        ),
+        "prompt500_next_action": next_action,
+        "prompt500_absorbed_prompt379_current_head_tags": tags_at_head,
+        "prompt500_absorbed_prompt379_required_changed_file": (
+            required_changed_file
+        ),
+        "prompt500_absorbed_prompt379_required_file_changed": (
+            required_file_changed
+        ),
+        "prompt500_absorbed_prompt379_forbidden_changed_files": (
+            forbidden_changed_files
+        ),
+        "prompt500_absorbed_prompt379_remote_mutation_false": (
+            remote_mutation_false
+        ),
+        "prompt500_execution_allowed": False,
+        "prompt500_git_mutation_allowed": False,
+        "prompt500_remote_mutation_allowed": False,
+        "prompt500_prompt379_execution_allowed": False,
+        "prompt500_prompt383_execution_allowed": False,
+        "prompt500_blocked_reason": None if ready else blocked_reasons[0],
+        "prompt500_blocked_reasons": blocked_reasons,
+    }
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -13814,6 +13979,16 @@ def _build_prompt491_third_success_cycle_state(
         )
         else _PROMPT491_NEXT_ACTION
     )
+    prompt500_absorbed_candidate_reconciliation = (
+        _build_prompt500_absorbed_prompt379_candidate_reconciliation_state(
+            run_state_payload=payload,
+        )
+    )
+    prompt500_absorbed_candidate_fields = {
+        key: value
+        for key, value in prompt500_absorbed_candidate_reconciliation.items()
+        if key.startswith("prompt500_")
+    }
 
     return {
         "prompt491_third_success_cycle_status": "ready",
@@ -13844,6 +14019,7 @@ def _build_prompt491_third_success_cycle_state(
         "active_blocked_reason": active_blocked_reason,
         "active_blocked_reasons": active_blocked_reasons,
         "prompt491_next_action": next_action,
+        **prompt500_absorbed_candidate_fields,
     }
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -14156,4 +14332,5 @@ __all__ = [
     "_build_prompt496_prompt494_adoption_state",
     "_build_prompt497_chatgpt_browser_bridge_state",
     "_build_prompt498_chrome_response_to_prompt378_intake_state",
+    "_build_prompt500_absorbed_prompt379_candidate_reconciliation_state",
 ]
