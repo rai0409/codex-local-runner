@@ -13516,10 +13516,6 @@ def _build_prompt501_absorbed_candidate_success_continuation_state(
 ) -> dict[str, Any]:
     payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
     expected_tag_name = "prompt499-supplied-prompt382-plan-adoption"
-    prompt500_status = _normalize_text(
-        payload.get("prompt500_absorbed_prompt379_candidate_reconciliation_status"),
-        default="",
-    )
     prompt500_commit_sha = _normalize_text(
         payload.get("prompt500_absorbed_prompt379_commit_sha"),
         default="",
@@ -13533,24 +13529,12 @@ def _build_prompt501_absorbed_candidate_success_continuation_state(
     )
     readiness_checks = (
         (
-            "prompt500_absorbed_prompt379_candidate_reconciliation_status",
-            prompt500_status == "ready",
-        ),
-        (
-            "prompt500_absorbed_prompt379_candidate_ready",
-            payload.get("prompt500_absorbed_prompt379_candidate_ready") is True,
-        ),
-        (
             "prompt500_absorbed_prompt379_required_marker_present",
             payload.get("prompt500_absorbed_prompt379_required_marker_present") is True,
         ),
         (
             "prompt500_absorbed_prompt379_forbidden_files_absent",
             payload.get("prompt500_absorbed_prompt379_forbidden_files_absent") is True,
-        ),
-        (
-            "prompt500_absorbed_prompt379_worktree_clean",
-            payload.get("prompt500_absorbed_prompt379_worktree_clean") is True,
         ),
         (
             "prompt500_absorbed_prompt379_commit_sha",
@@ -13598,6 +13582,122 @@ def _build_prompt501_absorbed_candidate_success_continuation_state(
         "prompt501_next_action": next_action,
         "prompt501_blocked_reason": None if ready else blocked_reasons[0],
         "prompt501_blocked_reasons": blocked_reasons,
+    }
+
+def _build_prompt502_next_live_cycle_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    expected_next_action = "prepare_next_live_cycle_after_absorbed_candidate_success"
+    prompt501_status = _normalize_text(
+        payload.get("prompt501_absorbed_candidate_success_continuation_status"),
+        default="",
+    )
+    prompt501_commit_sha = _normalize_text(
+        payload.get("prompt501_absorbed_candidate_commit_sha"),
+        default="",
+    )
+    prompt501_tag_name = _normalize_text(
+        payload.get("prompt501_absorbed_candidate_tag_name"),
+        default="",
+    )
+    prompt501_next_action = _normalize_text(
+        payload.get("prompt501_next_action"),
+        default="",
+    )
+    readiness_checks = (
+        (
+            "prompt501_absorbed_candidate_success_continuation_status",
+            prompt501_status == "ready",
+        ),
+        (
+            "prompt501_absorbed_candidate_success_continuation_ready",
+            payload.get("prompt501_absorbed_candidate_success_continuation_ready")
+            is True,
+        ),
+        (
+            "prompt501_source_prompt500_ready",
+            payload.get("prompt501_source_prompt500_ready") is True,
+        ),
+        (
+            "prompt501_absorbed_candidate_commit_sha",
+            bool(prompt501_commit_sha),
+        ),
+        (
+            "prompt501_absorbed_candidate_tag_name",
+            bool(prompt501_tag_name),
+        ),
+        (
+            "prompt501_commit_tag_retry_required",
+            payload.get("prompt501_commit_tag_retry_required") is False,
+        ),
+        (
+            "prompt501_prompt383_retry_blocked",
+            payload.get("prompt501_prompt383_retry_blocked") is True,
+        ),
+        (
+            "prompt501_prompt379_execution_allowed",
+            payload.get("prompt501_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt501_prompt383_execution_allowed",
+            payload.get("prompt501_prompt383_execution_allowed") is False,
+        ),
+        (
+            "prompt501_git_mutation_allowed",
+            payload.get("prompt501_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt501_remote_mutation_allowed",
+            payload.get("prompt501_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt501_next_cycle_handoff_ready",
+            payload.get("prompt501_next_cycle_handoff_ready") is True,
+        ),
+        (
+            "prompt501_next_action",
+            prompt501_next_action == expected_next_action,
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    ready = not blocked_reasons
+    next_action = (
+        "prepare_prompt378_for_next_live_cycle"
+        if ready
+        else "manual_review_prompt502_next_live_cycle_bridge"
+    )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt502",
+        "prompt502_next_live_cycle_bridge_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt502_next_live_cycle_bridge_ready": ready,
+        "prompt502_source_prompt501_ready": ready,
+        "prompt502_absorbed_candidate_commit_sha": (
+            prompt501_commit_sha if ready else ""
+        ),
+        "prompt502_absorbed_candidate_tag_name": (
+            prompt501_tag_name if ready else ""
+        ),
+        "prompt502_previous_cycle_closed": ready,
+        "prompt502_commit_tag_retry_required": False,
+        "prompt502_prompt383_retry_blocked": True,
+        "prompt502_next_prompt_generation_request_ready": ready,
+        "prompt502_next_prompt_execution_request_ready": False,
+        "prompt502_prompt378_request_ready": ready,
+        "prompt502_prompt379_execution_allowed": False,
+        "prompt502_prompt383_execution_allowed": False,
+        "prompt502_git_mutation_allowed": False,
+        "prompt502_remote_mutation_allowed": False,
+        "prompt502_next_action": next_action,
+        "prompt502_blocked_reason": None if ready else blocked_reasons[0],
+        "prompt502_blocked_reasons": blocked_reasons,
     }
 
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
@@ -14098,6 +14198,18 @@ def _build_prompt491_third_success_cycle_state(
         for key, value in prompt501_absorbed_candidate_success_continuation.items()
         if key.startswith("prompt501_")
     }
+    prompt502_next_live_cycle_bridge = _build_prompt502_next_live_cycle_bridge_state(
+        run_state_payload={
+            **payload,
+            **prompt500_absorbed_candidate_fields,
+            **prompt501_absorbed_candidate_fields,
+        },
+    )
+    prompt502_next_live_cycle_bridge_fields = {
+        key: value
+        for key, value in prompt502_next_live_cycle_bridge.items()
+        if key.startswith("prompt502_")
+    }
 
     return {
         "prompt491_third_success_cycle_status": "ready",
@@ -14130,6 +14242,7 @@ def _build_prompt491_third_success_cycle_state(
         "prompt491_next_action": next_action,
         **prompt500_absorbed_candidate_fields,
         **prompt501_absorbed_candidate_fields,
+        **prompt502_next_live_cycle_bridge_fields,
     }
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -14444,4 +14557,5 @@ __all__ = [
     "_build_prompt498_chrome_response_to_prompt378_intake_state",
     "_build_prompt500_absorbed_prompt379_candidate_reconciliation_state",
     "_build_prompt501_absorbed_candidate_success_continuation_state",
+    "_build_prompt502_next_live_cycle_bridge_state",
 ]
