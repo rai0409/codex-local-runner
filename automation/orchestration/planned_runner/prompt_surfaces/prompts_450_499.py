@@ -13700,6 +13700,114 @@ def _build_prompt502_next_live_cycle_bridge_state(
         "prompt502_blocked_reasons": blocked_reasons,
     }
 
+def _build_prompt503_prompt378_next_cycle_request_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    expected_next_action = "prepare_prompt378_for_next_live_cycle"
+    prompt502_status = _normalize_text(
+        payload.get("prompt502_next_live_cycle_bridge_status"),
+        default="",
+    )
+    prompt502_next_action = _normalize_text(
+        payload.get("prompt502_next_action"),
+        default="",
+    )
+    readiness_checks = (
+        (
+            "prompt502_next_live_cycle_bridge_status",
+            prompt502_status == "ready",
+        ),
+        (
+            "prompt502_next_live_cycle_bridge_ready",
+            payload.get("prompt502_next_live_cycle_bridge_ready") is True,
+        ),
+        (
+            "prompt502_source_prompt501_ready",
+            payload.get("prompt502_source_prompt501_ready") is True,
+        ),
+        (
+            "prompt502_previous_cycle_closed",
+            payload.get("prompt502_previous_cycle_closed") is True,
+        ),
+        (
+            "prompt502_commit_tag_retry_required",
+            payload.get("prompt502_commit_tag_retry_required") is False,
+        ),
+        (
+            "prompt502_prompt383_retry_blocked",
+            payload.get("prompt502_prompt383_retry_blocked") is True,
+        ),
+        (
+            "prompt502_next_prompt_generation_request_ready",
+            payload.get("prompt502_next_prompt_generation_request_ready") is True,
+        ),
+        (
+            "prompt502_next_prompt_execution_request_ready",
+            payload.get("prompt502_next_prompt_execution_request_ready") is False,
+        ),
+        (
+            "prompt502_prompt378_request_ready",
+            payload.get("prompt502_prompt378_request_ready") is True,
+        ),
+        (
+            "prompt502_prompt379_execution_allowed",
+            payload.get("prompt502_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt502_prompt383_execution_allowed",
+            payload.get("prompt502_prompt383_execution_allowed") is False,
+        ),
+        (
+            "prompt502_git_mutation_allowed",
+            payload.get("prompt502_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt502_remote_mutation_allowed",
+            payload.get("prompt502_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt502_next_action",
+            prompt502_next_action == expected_next_action,
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    ready = not blocked_reasons
+    next_action = (
+        "materialize_next_prompt378_request"
+        if ready
+        else "manual_review_prompt503_prompt378_next_cycle_request"
+    )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt503",
+        "prompt503_next_prompt378_request_status": (
+            "ready" if ready else "blocked"
+        ),
+        "prompt503_next_prompt378_request_ready": ready,
+        "prompt503_source_prompt502_ready": ready,
+        "prompt503_previous_cycle_closed": ready,
+        "prompt503_prompt378_generation_requested": ready,
+        "prompt503_prompt378_execution_allowed": False,
+        "prompt503_prompt379_execution_allowed": False,
+        "prompt503_prompt383_execution_allowed": False,
+        "prompt503_git_mutation_allowed": False,
+        "prompt503_remote_mutation_allowed": False,
+        "prompt503_commit_tag_retry_required": False,
+        "prompt503_prompt383_retry_blocked": True,
+        "prompt503_next_cycle_prompt_kind": "prompt378" if ready else "",
+        "prompt503_next_cycle_request_reason": (
+            "post_absorbed_candidate_success_continuation" if ready else ""
+        ),
+        "prompt503_next_action": next_action,
+        "prompt503_blocked_reason": None if ready else blocked_reasons[0],
+        "prompt503_blocked_reasons": blocked_reasons,
+    }
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -14210,6 +14318,21 @@ def _build_prompt491_third_success_cycle_state(
         for key, value in prompt502_next_live_cycle_bridge.items()
         if key.startswith("prompt502_")
     }
+    prompt503_prompt378_next_cycle_request = (
+        _build_prompt503_prompt378_next_cycle_request_state(
+            run_state_payload={
+                **payload,
+                **prompt500_absorbed_candidate_fields,
+                **prompt501_absorbed_candidate_fields,
+                **prompt502_next_live_cycle_bridge_fields,
+            },
+        )
+    )
+    prompt503_prompt378_next_cycle_request_fields = {
+        key: value
+        for key, value in prompt503_prompt378_next_cycle_request.items()
+        if key.startswith("prompt503_")
+    }
 
     return {
         "prompt491_third_success_cycle_status": "ready",
@@ -14243,6 +14366,7 @@ def _build_prompt491_third_success_cycle_state(
         **prompt500_absorbed_candidate_fields,
         **prompt501_absorbed_candidate_fields,
         **prompt502_next_live_cycle_bridge_fields,
+        **prompt503_prompt378_next_cycle_request_fields,
     }
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -14558,4 +14682,5 @@ __all__ = [
     "_build_prompt500_absorbed_prompt379_candidate_reconciliation_state",
     "_build_prompt501_absorbed_candidate_success_continuation_state",
     "_build_prompt502_next_live_cycle_bridge_state",
+    "_build_prompt503_prompt378_next_cycle_request_state",
 ]
