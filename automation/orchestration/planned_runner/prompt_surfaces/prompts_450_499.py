@@ -13387,11 +13387,11 @@ def _build_prompt500_absorbed_prompt379_candidate_reconciliation_state(
 
     head_known, head_stdout = _prompt500_git_stdout(
         repo_path=execution_repo_path,
-        argv=("rev-parse", "HEAD"),
+        argv=("rev-parse", head_ref),
     )
     tags_known, tags_stdout = _prompt500_git_stdout(
         repo_path=execution_repo_path,
-        argv=("tag", "--points-at", "HEAD"),
+        argv=("tag", "--points-at", head_ref),
     )
     worktree_known, worktree_stdout = _prompt500_git_stdout(
         repo_path=execution_repo_path,
@@ -13399,11 +13399,11 @@ def _build_prompt500_absorbed_prompt379_candidate_reconciliation_state(
     )
     diff_known, diff_name_stdout = _prompt500_git_stdout(
         repo_path=execution_repo_path,
-        argv=("diff", "--name-only", f"{base_ref}..HEAD"),
+        argv=("diff", "--name-only", f"{base_ref}..{head_ref}"),
     )
     marker_known, marker_diff_stdout = _prompt500_git_stdout(
         repo_path=execution_repo_path,
-        argv=("diff", f"{base_ref}..HEAD", "--", required_changed_file),
+        argv=("diff", f"{base_ref}..{head_ref}", "--", required_changed_file),
     )
 
     commit_sha = (
