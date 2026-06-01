@@ -16209,6 +16209,200 @@ def _build_prompt519_actual_execution_connector_state(
     }
 
 
+def _build_prompt520_bounded_actual_execution_enable_gate_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt519_next_action = _normalize_text(
+        payload.get("prompt519_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt519_actual_execution_connector_ready",
+            payload.get("prompt519_actual_execution_connector_ready") is True,
+        ),
+        (
+            "prompt519_source_prompt518_ready",
+            payload.get("prompt519_source_prompt518_ready") is True,
+        ),
+        (
+            "prompt519_prompt378_request_ready",
+            payload.get("prompt519_prompt378_request_ready") is True,
+        ),
+        (
+            "prompt519_prompt379_live_request_required",
+            payload.get("prompt519_prompt379_live_request_required") is True,
+        ),
+        (
+            "prompt519_external_enable_evidence_required",
+            payload.get("prompt519_external_enable_evidence_required") is True,
+        ),
+        (
+            "prompt519_prompt379_execution_result_required",
+            payload.get("prompt519_prompt379_execution_result_required")
+            is True,
+        ),
+        (
+            "prompt519_commit_tag_result_required",
+            payload.get("prompt519_commit_tag_result_required") is True,
+        ),
+        (
+            "prompt519_next_cycle_handoff_required",
+            payload.get("prompt519_next_cycle_handoff_required") is True,
+        ),
+        (
+            "prompt519_actual_codex_execution_connector_ready",
+            payload.get("prompt519_actual_codex_execution_connector_ready")
+            is True,
+        ),
+        (
+            "prompt519_actual_prompt379_execution_connector_ready",
+            payload.get("prompt519_actual_prompt379_execution_connector_ready")
+            is True,
+        ),
+        (
+            "prompt519_actual_commit_tag_connector_ready",
+            payload.get("prompt519_actual_commit_tag_connector_ready") is True,
+        ),
+        (
+            "prompt519_actual_result_ingestion_connector_ready",
+            payload.get("prompt519_actual_result_ingestion_connector_ready")
+            is True,
+        ),
+        (
+            "prompt519_codex_execution_allowed",
+            payload.get("prompt519_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt519_prompt379_execution_allowed",
+            payload.get("prompt519_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt519_git_mutation_allowed",
+            payload.get("prompt519_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt519_remote_mutation_allowed",
+            payload.get("prompt519_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt519_commit_tag_execution_allowed",
+            payload.get("prompt519_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt519_execution_performed_by_prompt519",
+            payload.get("prompt519_execution_performed_by_prompt519")
+            is False,
+        ),
+        (
+            "prompt519_explicit_actual_execution_enable_required",
+            payload.get("prompt519_explicit_actual_execution_enable_required")
+            is True,
+        ),
+        (
+            "prompt519_explicit_actual_execution_enable_received",
+            payload.get("prompt519_explicit_actual_execution_enable_received")
+            is False,
+        ),
+        (
+            "prompt519_actual_execution_one_shot_required",
+            payload.get("prompt519_actual_execution_one_shot_required")
+            is True,
+        ),
+        (
+            "prompt519_actual_execution_one_shot_consumed",
+            payload.get("prompt519_actual_execution_one_shot_consumed")
+            is False,
+        ),
+        (
+            "prompt519_next_action",
+            prompt519_next_action
+            == "prepare_prompt520_bounded_actual_execution_enable_gate",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    enable_evidence_checks = (
+        (
+            "prompt520_input_actual_execution_enable_present",
+            payload.get("prompt520_input_actual_execution_enable_present")
+            is True,
+        ),
+        (
+            "prompt520_input_actual_execution_enable_token_valid",
+            payload.get("prompt520_input_actual_execution_enable_token_valid")
+            is True,
+        ),
+        (
+            "prompt520_input_actual_execution_scope_valid",
+            payload.get("prompt520_input_actual_execution_scope_valid")
+            is True,
+        ),
+        (
+            "prompt520_input_actual_execution_one_shot_confirmed",
+            payload.get("prompt520_input_actual_execution_one_shot_confirmed")
+            is True,
+        ),
+    )
+    enable_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in enable_evidence_checks
+        if not passed
+    ]
+    valid_explicit_enable = not enable_blocked_reasons
+
+    if base_readiness and valid_explicit_enable:
+        gate_status = "ready_with_valid_enable"
+        next_action = "prepare_prompt521_bounded_actual_execution_dispatch"
+        active_blocked_reasons: list[str] = []
+    elif base_readiness:
+        gate_status = "awaiting_explicit_enable"
+        next_action = "await_explicit_actual_execution_enable"
+        active_blocked_reasons = enable_blocked_reasons
+    else:
+        gate_status = "blocked"
+        next_action = "manual_review_prompt520_actual_execution_enable_gate"
+        active_blocked_reasons = base_blocked_reasons
+
+    dispatch_ready = bool(base_readiness and valid_explicit_enable)
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt520",
+        "prompt520_actual_execution_enable_gate_status": gate_status,
+        "prompt520_actual_execution_enable_gate_ready": base_readiness,
+        "prompt520_actual_execution_enable_valid": valid_explicit_enable,
+        "prompt520_source_prompt519_ready": base_readiness,
+        "prompt520_actual_execution_dispatch_ready": dispatch_ready,
+        "prompt520_actual_execution_one_shot_required": base_readiness,
+        "prompt520_actual_execution_one_shot_consumed": False,
+        "prompt520_prompt378_request_ready": base_readiness,
+        "prompt520_prompt379_live_request_ready": base_readiness,
+        "prompt520_external_enable_evidence_ready": valid_explicit_enable,
+        "prompt520_prompt379_execution_result_required": base_readiness,
+        "prompt520_commit_tag_result_required": base_readiness,
+        "prompt520_next_cycle_handoff_required": base_readiness,
+        "prompt520_codex_execution_allowed": False,
+        "prompt520_prompt379_execution_allowed": False,
+        "prompt520_git_mutation_allowed": False,
+        "prompt520_remote_mutation_allowed": False,
+        "prompt520_commit_tag_execution_allowed": False,
+        "prompt520_execution_performed_by_prompt520": False,
+        "prompt520_next_action": next_action,
+        "prompt520_blocked_reason": (
+            active_blocked_reasons[0] if active_blocked_reasons else None
+        ),
+        "prompt520_blocked_reasons": active_blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -17242,4 +17436,5 @@ __all__ = [
     "_build_prompt517_final_autonomous_success_cycle_smoke_state",
     "_build_prompt518_final_runtime_light_success_path_verification_state",
     "_build_prompt519_actual_execution_connector_state",
+    "_build_prompt520_bounded_actual_execution_enable_gate_state",
 ]

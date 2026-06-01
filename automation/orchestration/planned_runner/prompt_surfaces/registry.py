@@ -182,6 +182,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt517_final_autonomous_success_cycle_smoke_state,
     _build_prompt518_final_runtime_light_success_path_verification_state,
     _build_prompt519_actual_execution_connector_state,
+    _build_prompt520_bounded_actual_execution_enable_gate_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -360,6 +361,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt517_final_autonomous_success_cycle_smoke_state": _build_prompt517_final_autonomous_success_cycle_smoke_state,
     "_build_prompt518_final_runtime_light_success_path_verification_state": _build_prompt518_final_runtime_light_success_path_verification_state,
     "_build_prompt519_actual_execution_connector_state": _build_prompt519_actual_execution_connector_state,
+    "_build_prompt520_bounded_actual_execution_enable_gate_state": _build_prompt520_bounded_actual_execution_enable_gate_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -543,4 +545,5 @@ __all__ = [
     "_build_prompt517_final_autonomous_success_cycle_smoke_state",
     "_build_prompt518_final_runtime_light_success_path_verification_state",
     "_build_prompt519_actual_execution_connector_state",
+    "_build_prompt520_bounded_actual_execution_enable_gate_state",
 ]
