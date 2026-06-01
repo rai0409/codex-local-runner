@@ -15901,6 +15901,168 @@ def _build_prompt517_final_autonomous_success_cycle_smoke_state(
     }
 
 
+def _build_prompt518_final_runtime_light_success_path_verification_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt517_smoke_status = _normalize_text(
+        payload.get("prompt517_final_autonomous_success_cycle_smoke_status"),
+        default="",
+    )
+    prompt517_next_action = _normalize_text(
+        payload.get("prompt517_next_action"),
+        default="",
+    )
+    readiness_checks = (
+        (
+            "prompt517_final_autonomous_success_cycle_smoke_status",
+            prompt517_smoke_status == "passed",
+        ),
+        (
+            "prompt517_final_autonomous_success_cycle_smoke_ready",
+            payload.get("prompt517_final_autonomous_success_cycle_smoke_ready")
+            is True,
+        ),
+        (
+            "prompt517_source_prompt516_ready",
+            payload.get("prompt517_source_prompt516_ready") is True,
+        ),
+        (
+            "prompt517_full_success_cycle_ready",
+            payload.get("prompt517_full_success_cycle_ready") is True,
+        ),
+        (
+            "prompt517_autonomous_success_cycle_ready",
+            payload.get("prompt517_autonomous_success_cycle_ready") is True,
+        ),
+        (
+            "prompt517_autonomous_success_cycle_completed",
+            payload.get("prompt517_autonomous_success_cycle_completed")
+            is True,
+        ),
+        (
+            "prompt517_previous_cycle_closed",
+            payload.get("prompt517_previous_cycle_closed") is True,
+        ),
+        (
+            "prompt517_next_cycle_handoff_ready",
+            payload.get("prompt517_next_cycle_handoff_ready") is True,
+        ),
+        (
+            "prompt517_next_live_cycle_bridge_ready",
+            payload.get("prompt517_next_live_cycle_bridge_ready") is True,
+        ),
+        (
+            "prompt517_next_prompt_generation_request_ready",
+            payload.get("prompt517_next_prompt_generation_request_ready")
+            is True,
+        ),
+        (
+            "prompt517_prompt378_request_ready",
+            payload.get("prompt517_prompt378_request_ready") is True,
+        ),
+        (
+            "prompt517_next_prompt_execution_request_ready",
+            payload.get("prompt517_next_prompt_execution_request_ready")
+            is False,
+        ),
+        (
+            "prompt517_enable_evidence_confirmed",
+            payload.get("prompt517_enable_evidence_confirmed") is True,
+        ),
+        (
+            "prompt517_execution_result_evidence_confirmed",
+            payload.get("prompt517_execution_result_evidence_confirmed")
+            is True,
+        ),
+        (
+            "prompt517_commit_tag_result_evidence_confirmed",
+            payload.get("prompt517_commit_tag_result_evidence_confirmed")
+            is True,
+        ),
+        (
+            "prompt517_full_success_evidence_confirmed",
+            payload.get("prompt517_full_success_evidence_confirmed") is True,
+        ),
+        (
+            "prompt517_git_mutation_allowed",
+            payload.get("prompt517_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt517_remote_mutation_allowed",
+            payload.get("prompt517_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt517_codex_execution_allowed",
+            payload.get("prompt517_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt517_prompt379_execution_allowed",
+            payload.get("prompt517_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt517_commit_tag_execution_allowed",
+            payload.get("prompt517_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt517_execution_performed_by_prompt517",
+            payload.get("prompt517_execution_performed_by_prompt517")
+            is False,
+        ),
+        (
+            "prompt517_next_action",
+            prompt517_next_action == "prepare_next_autonomous_live_cycle",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    verification_readiness = not blocked_reasons
+    status = "passed" if verification_readiness else "blocked"
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt518",
+        "prompt518_final_runtime_light_success_path_verification_status": (
+            status
+        ),
+        "prompt518_final_runtime_light_success_path_verification_ready": (
+            verification_readiness
+        ),
+        "prompt518_source_prompt517_ready": (
+            payload.get("prompt517_final_autonomous_success_cycle_smoke_ready")
+            is True
+        ),
+        "prompt518_metadata_success_chain_verified": verification_readiness,
+        "prompt518_autonomous_success_cycle_verified": verification_readiness,
+        "prompt518_next_live_cycle_bridge_verified": verification_readiness,
+        "prompt518_previous_cycle_closed": verification_readiness,
+        "prompt518_next_cycle_handoff_ready": verification_readiness,
+        "prompt518_next_prompt_generation_request_ready": (
+            verification_readiness
+        ),
+        "prompt518_prompt378_request_ready": verification_readiness,
+        "prompt518_actual_execution_connector_required": True,
+        "prompt518_actual_execution_connector_ready": False,
+        "prompt518_git_mutation_allowed": False,
+        "prompt518_remote_mutation_allowed": False,
+        "prompt518_codex_execution_allowed": False,
+        "prompt518_prompt379_execution_allowed": False,
+        "prompt518_commit_tag_execution_allowed": False,
+        "prompt518_execution_performed_by_prompt518": False,
+        "prompt518_next_action": (
+            "prepare_prompt519_actual_execution_connector"
+            if verification_readiness
+            else "manual_review_prompt518_final_runtime_light_success_path_verification"
+        ),
+        "prompt518_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt518_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -16932,4 +17094,5 @@ __all__ = [
     "_build_prompt515_execution_evidence_injection_bridge_state",
     "_build_prompt516_bounded_actual_success_cycle_adapter_state",
     "_build_prompt517_final_autonomous_success_cycle_smoke_state",
+    "_build_prompt518_final_runtime_light_success_path_verification_state",
 ]
