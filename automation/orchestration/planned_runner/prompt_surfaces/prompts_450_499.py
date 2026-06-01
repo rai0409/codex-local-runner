@@ -16977,6 +16977,170 @@ def _build_prompt523_actual_execution_result_review_route_state(
     }
 
 
+def _build_prompt524_next_autonomous_cycle_handoff_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt523_next_action = _normalize_text(
+        payload.get("prompt523_next_action"),
+        default="",
+    )
+    handoff_readiness_checks = (
+        (
+            "prompt523_actual_execution_result_review_route_ready",
+            payload.get("prompt523_actual_execution_result_review_route_ready")
+            is True,
+        ),
+        (
+            "prompt523_actual_execution_result_success_confirmed",
+            payload.get("prompt523_actual_execution_result_success_confirmed")
+            is True,
+        ),
+        (
+            "prompt523_external_dispatch_success_confirmed",
+            payload.get("prompt523_external_dispatch_success_confirmed")
+            is True,
+        ),
+        (
+            "prompt523_codex_execution_success_confirmed",
+            payload.get("prompt523_codex_execution_success_confirmed")
+            is True,
+        ),
+        (
+            "prompt523_prompt379_execution_success_confirmed",
+            payload.get("prompt523_prompt379_execution_success_confirmed")
+            is True,
+        ),
+        (
+            "prompt523_commit_tag_success_confirmed",
+            payload.get("prompt523_commit_tag_success_confirmed") is True,
+        ),
+        (
+            "prompt523_next_cycle_handoff_success_confirmed",
+            payload.get("prompt523_next_cycle_handoff_success_confirmed")
+            is True,
+        ),
+        (
+            "prompt523_no_external_dispatch_error_confirmed",
+            payload.get("prompt523_no_external_dispatch_error_confirmed")
+            is True,
+        ),
+        (
+            "prompt523_previous_actual_execution_cycle_closed",
+            payload.get("prompt523_previous_actual_execution_cycle_closed")
+            is True,
+        ),
+        (
+            "prompt523_next_autonomous_cycle_ready",
+            payload.get("prompt523_next_autonomous_cycle_ready") is True,
+        ),
+        (
+            "prompt523_next_prompt_generation_request_ready",
+            payload.get("prompt523_next_prompt_generation_request_ready")
+            is True,
+        ),
+        (
+            "prompt523_prompt378_request_ready",
+            payload.get("prompt523_prompt378_request_ready") is True,
+        ),
+        (
+            "prompt523_actual_execution_connector_required",
+            payload.get("prompt523_actual_execution_connector_required")
+            is True,
+        ),
+        (
+            "prompt523_codex_execution_allowed",
+            payload.get("prompt523_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt523_prompt379_execution_allowed",
+            payload.get("prompt523_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt523_git_mutation_allowed",
+            payload.get("prompt523_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt523_remote_mutation_allowed",
+            payload.get("prompt523_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt523_commit_tag_execution_allowed",
+            payload.get("prompt523_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt523_execution_performed_by_prompt523",
+            payload.get("prompt523_execution_performed_by_prompt523")
+            is False,
+        ),
+        (
+            "prompt523_next_action",
+            prompt523_next_action
+            == "prepare_prompt524_next_autonomous_cycle_handoff",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in handoff_readiness_checks
+        if not passed
+    ]
+    handoff_readiness = not blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt524",
+        "prompt524_next_autonomous_cycle_handoff_status": (
+            "ready" if handoff_readiness else "blocked"
+        ),
+        "prompt524_next_autonomous_cycle_handoff_ready": (
+            handoff_readiness
+        ),
+        "prompt524_source_prompt523_ready": (
+            payload.get("prompt523_actual_execution_result_review_route_ready")
+            is True
+        ),
+        "prompt524_previous_actual_execution_cycle_closed": (
+            handoff_readiness
+        ),
+        "prompt524_next_autonomous_cycle_ready": handoff_readiness,
+        "prompt524_next_prompt_generation_request_ready": (
+            handoff_readiness
+        ),
+        "prompt524_prompt378_request_ready": handoff_readiness,
+        "prompt524_next_prompt_execution_request_ready": False,
+        "prompt524_actual_execution_connector_required": handoff_readiness,
+        "prompt524_actual_execution_connector_ready": False,
+        "prompt524_actual_execution_result_success_confirmed": (
+            handoff_readiness
+        ),
+        "prompt524_external_dispatch_success_confirmed": handoff_readiness,
+        "prompt524_codex_execution_success_confirmed": handoff_readiness,
+        "prompt524_prompt379_execution_success_confirmed": (
+            handoff_readiness
+        ),
+        "prompt524_commit_tag_success_confirmed": handoff_readiness,
+        "prompt524_next_cycle_handoff_success_confirmed": (
+            handoff_readiness
+        ),
+        "prompt524_codex_execution_allowed": False,
+        "prompt524_prompt379_execution_allowed": False,
+        "prompt524_git_mutation_allowed": False,
+        "prompt524_remote_mutation_allowed": False,
+        "prompt524_commit_tag_execution_allowed": False,
+        "prompt524_execution_performed_by_prompt524": False,
+        "prompt524_next_action": (
+            "prepare_prompt525_next_cycle_prompt378_request_gate"
+            if handoff_readiness
+            else "manual_review_prompt524_next_autonomous_cycle_handoff"
+        ),
+        "prompt524_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt524_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -18014,4 +18178,5 @@ __all__ = [
     "_build_prompt521_bounded_actual_execution_dispatch_state",
     "_build_prompt522_external_actual_execution_dispatch_result_ingestion_state",
     "_build_prompt523_actual_execution_result_review_route_state",
+    "_build_prompt524_next_autonomous_cycle_handoff_state",
 ]
