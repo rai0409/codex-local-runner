@@ -14834,6 +14834,153 @@ def _build_prompt511_prepare_commit_tag_plan_state(
         "prompt511_blocked_reasons": active_blocked_reasons,
     }
 
+def _build_prompt512_explicit_commit_tag_execution_or_branch_continuation_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    allowed_paths = payload.get("prompt511_allowed_paths")
+    changed_files = payload.get("prompt511_changed_files")
+    changed_files_count = payload.get("prompt511_changed_files_count")
+    commit_message = _normalize_text(
+        payload.get("prompt511_commit_message"),
+        default="",
+    )
+    tag_name = _normalize_text(
+        payload.get("prompt511_tag_name"),
+        default="",
+    )
+    next_action = _normalize_text(
+        payload.get("prompt511_next_action"),
+        default="",
+    )
+    approve_readiness_checks = (
+        (
+            "prompt511_commit_tag_plan_ready",
+            payload.get("prompt511_commit_tag_plan_ready") is True,
+        ),
+        (
+            "prompt511_approve_candidate_ready",
+            payload.get("prompt511_approve_candidate_ready") is True,
+        ),
+        (
+            "prompt511_commit_tag_plan_required",
+            payload.get("prompt511_commit_tag_plan_required") is True,
+        ),
+        (
+            "prompt511_commit_tag_execution_required",
+            payload.get("prompt511_commit_tag_execution_required") is True,
+        ),
+        (
+            "prompt511_changed_files_count",
+            isinstance(changed_files_count, int) and changed_files_count > 0,
+        ),
+        (
+            "prompt511_allowed_paths",
+            isinstance(allowed_paths, list) and bool(allowed_paths),
+        ),
+        (
+            "prompt511_changed_files",
+            isinstance(changed_files, list) and bool(changed_files),
+        ),
+        ("prompt511_commit_message", bool(commit_message)),
+        ("prompt511_tag_name", bool(tag_name)),
+        (
+            "prompt511_git_mutation_allowed",
+            payload.get("prompt511_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt511_remote_mutation_allowed",
+            payload.get("prompt511_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt511_commit_tag_allowed",
+            payload.get("prompt511_commit_tag_allowed") is False,
+        ),
+        (
+            "prompt511_codex_execution_allowed",
+            payload.get("prompt511_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt511_commit_tag_execution_performed",
+            payload.get("prompt511_commit_tag_execution_performed") is False,
+        ),
+        (
+            "prompt511_next_action",
+            next_action == "await_explicit_prompt512_commit_tag_execution",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in approve_readiness_checks
+        if not passed
+    ]
+    approve_ready = not blocked_reasons
+    no_change_success_route = (
+        payload.get("prompt511_no_change_success_ready") is True
+    )
+    targeted_fix_route = payload.get("prompt511_targeted_fix_required") is True
+    blocked_retry_or_review_route = (
+        payload.get("prompt511_blocked_retry_or_review_required") is True
+    )
+
+    if approve_ready:
+        gate_status = "ready_for_explicit_execution"
+        prompt512_next_action = "run_prompt512_commit_tag_when_explicitly_enabled"
+    elif no_change_success_route:
+        gate_status = "not_required_no_change_success"
+        prompt512_next_action = "prepare_prompt513_success_continuation_without_commit"
+    elif targeted_fix_route:
+        gate_status = "not_required_targeted_fix"
+        prompt512_next_action = "prepare_targeted_fix_request"
+    elif blocked_retry_or_review_route:
+        gate_status = "not_required_blocked_retry_or_review"
+        prompt512_next_action = "prepare_blocked_retry_or_manual_review"
+    else:
+        gate_status = "blocked"
+        prompt512_next_action = "manual_review_prompt512_commit_tag_execution_gate"
+
+    active_blocked_reasons = [] if gate_status != "blocked" else blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt512",
+        "prompt512_commit_tag_execution_gate_status": gate_status,
+        "prompt512_commit_tag_execution_gate_ready": approve_ready,
+        "prompt512_source_prompt511_ready": bool(
+            payload.get("prompt511_source_prompt510_ready")
+        ),
+        "prompt512_approve_candidate_ready": approve_ready,
+        "prompt512_commit_message": commit_message if approve_ready else "",
+        "prompt512_tag_name": tag_name if approve_ready else "",
+        "prompt512_allowed_paths": list(allowed_paths) if approve_ready else [],
+        "prompt512_changed_files": list(changed_files) if approve_ready else [],
+        "prompt512_changed_files_count": (
+            changed_files_count if approve_ready else 0
+        ),
+        "prompt512_commit_tag_execution_required": approve_ready,
+        "prompt512_explicit_commit_tag_enable_required": approve_ready,
+        "prompt512_explicit_commit_tag_enable_received": False,
+        "prompt512_no_change_success_ready": no_change_success_route,
+        "prompt512_targeted_fix_required": targeted_fix_route,
+        "prompt512_blocked_retry_or_review_required": (
+            blocked_retry_or_review_route
+        ),
+        "prompt512_success_continuation_without_commit_ready": (
+            no_change_success_route
+        ),
+        "prompt512_git_mutation_allowed": False,
+        "prompt512_remote_mutation_allowed": False,
+        "prompt512_commit_tag_allowed": False,
+        "prompt512_codex_execution_allowed": False,
+        "prompt512_commit_tag_execution_performed": False,
+        "prompt512_next_action": prompt512_next_action,
+        "prompt512_blocked_reason": (
+            active_blocked_reasons[0] if active_blocked_reasons else None
+        ),
+        "prompt512_blocked_reasons": active_blocked_reasons,
+    }
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -15859,4 +16006,5 @@ __all__ = [
     "_build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state",
     "_build_prompt510_review_prompt379_live_execution_result_state",
     "_build_prompt511_prepare_commit_tag_plan_state",
+    "_build_prompt512_explicit_commit_tag_execution_or_branch_continuation_state",
 ]

@@ -174,6 +174,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state,
     _build_prompt510_review_prompt379_live_execution_result_state,
     _build_prompt511_prepare_commit_tag_plan_state,
+    _build_prompt512_explicit_commit_tag_execution_or_branch_continuation_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -344,6 +345,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state": _build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state,
     "_build_prompt510_review_prompt379_live_execution_result_state": _build_prompt510_review_prompt379_live_execution_result_state,
     "_build_prompt511_prepare_commit_tag_plan_state": _build_prompt511_prepare_commit_tag_plan_state,
+    "_build_prompt512_explicit_commit_tag_execution_or_branch_continuation_state": _build_prompt512_explicit_commit_tag_execution_or_branch_continuation_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -519,4 +521,5 @@ __all__ = [
     "_build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state",
     "_build_prompt510_review_prompt379_live_execution_result_state",
     "_build_prompt511_prepare_commit_tag_plan_state",
+    "_build_prompt512_explicit_commit_tag_execution_or_branch_continuation_state",
 ]
