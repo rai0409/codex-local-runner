@@ -14560,6 +14560,134 @@ def _build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state(
         "prompt509_blocked_reasons": blocked_reasons,
     }
 
+def _build_prompt510_review_prompt379_live_execution_result_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    returncode_classification = _normalize_text(
+        payload.get("prompt509_prompt379_returncode_classification"),
+        default="",
+    )
+    changed_files = payload.get("prompt509_prompt379_post_execution_changed_files")
+    readiness_checks = (
+        (
+            "prompt509_prompt379_execution_result_ready",
+            payload.get("prompt509_prompt379_execution_result_ready") is True,
+        ),
+        (
+            "prompt509_prompt379_execution_performed",
+            payload.get("prompt509_prompt379_execution_performed") is True,
+        ),
+        (
+            "prompt509_prompt379_returncode_classification",
+            returncode_classification in {"success", "failed", "blocked"},
+        ),
+        (
+            "prompt509_prompt379_post_execution_changed_files",
+            isinstance(changed_files, list),
+        ),
+        (
+            "prompt509_one_shot_execution_consumed",
+            payload.get("prompt509_one_shot_execution_consumed") is True,
+        ),
+        (
+            "prompt509_post_execution_review_required",
+            payload.get("prompt509_post_execution_review_required") is True,
+        ),
+        (
+            "prompt509_post_execution_review_ready",
+            payload.get("prompt509_post_execution_review_ready") is True,
+        ),
+        (
+            "prompt509_review_source_kind",
+            payload.get("prompt509_review_source_kind")
+            == "prompt379_live_execution",
+        ),
+        (
+            "prompt509_next_review_prompt_kind",
+            payload.get("prompt509_next_review_prompt_kind") == "prompt510",
+        ),
+        (
+            "prompt509_git_mutation_allowed",
+            payload.get("prompt509_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt509_remote_mutation_allowed",
+            payload.get("prompt509_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt509_commit_tag_allowed",
+            payload.get("prompt509_commit_tag_allowed") is False,
+        ),
+        (
+            "prompt509_next_action",
+            payload.get("prompt509_next_action")
+            == "review_prompt379_live_execution_result",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    ready = not blocked_reasons
+    normalized_changed_files = list(changed_files) if ready else []
+
+    if ready and returncode_classification == "success" and normalized_changed_files:
+        route = "approve_candidate"
+        next_action = "prepare_prompt511_commit_tag_plan"
+    elif ready and returncode_classification == "success":
+        route = "no_change_success"
+        next_action = "prepare_success_continuation_without_commit"
+    elif ready and returncode_classification == "failed":
+        route = "targeted_fix_required"
+        next_action = "prepare_targeted_fix_request"
+    elif ready and returncode_classification == "blocked":
+        route = "blocked_retry_or_review"
+        next_action = "prepare_blocked_retry_or_manual_review"
+    else:
+        route = "manual_review_prompt510_result_review"
+        next_action = "manual_review_prompt510_result_review"
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt510",
+        "prompt510_live_result_review_status": "ready" if ready else "blocked",
+        "prompt510_live_result_review_ready": ready,
+        "prompt510_source_prompt509_ready": ready,
+        "prompt510_prompt379_execution_performed": (
+            payload.get("prompt509_prompt379_execution_performed") is True
+        ),
+        "prompt510_prompt379_returncode": (
+            payload.get("prompt509_prompt379_returncode") if ready else None
+        ),
+        "prompt510_prompt379_returncode_classification": (
+            returncode_classification if ready else "not_ready"
+        ),
+        "prompt510_prompt379_post_execution_changed_files": (
+            normalized_changed_files
+        ),
+        "prompt510_prompt379_post_execution_tracked_diff_empty": (
+            payload.get("prompt509_prompt379_post_execution_tracked_diff_empty")
+            is True
+            if ready
+            else False
+        ),
+        "prompt510_review_route_decision": route,
+        "prompt510_approve_candidate_ready": route == "approve_candidate",
+        "prompt510_no_change_success_ready": route == "no_change_success",
+        "prompt510_targeted_fix_required": route == "targeted_fix_required",
+        "prompt510_blocked_retry_or_review_required": (
+            route == "blocked_retry_or_review"
+        ),
+        "prompt510_git_mutation_allowed": False,
+        "prompt510_remote_mutation_allowed": False,
+        "prompt510_commit_tag_allowed": False,
+        "prompt510_codex_execution_allowed": False,
+        "prompt510_next_action": next_action,
+        "prompt510_blocked_reason": None if ready else blocked_reasons[0],
+        "prompt510_blocked_reasons": blocked_reasons,
+    }
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -15198,6 +15326,28 @@ def _build_prompt491_third_success_cycle_state(
         for key, value in prompt509_dispatch_or_ingest_prompt379_live_execution_result.items()
         if key.startswith("prompt509_")
     }
+    prompt510_review_prompt379_live_execution_result = (
+        _build_prompt510_review_prompt379_live_execution_result_state(
+            run_state_payload={
+                **payload,
+                **prompt500_absorbed_candidate_fields,
+                **prompt501_absorbed_candidate_fields,
+                **prompt502_next_live_cycle_bridge_fields,
+                **prompt503_prompt378_next_cycle_request_fields,
+                **prompt504_materialize_and_validate_next_prompt378_fields,
+                **prompt505_prepare_prompt379_live_request_fields,
+                **prompt506_explicit_prompt379_live_enable_gate_fields,
+                **prompt507_one_shot_prompt379_live_execution_fields,
+                **prompt508_external_enable_dispatch_readiness_fields,
+                **prompt509_dispatch_or_ingest_prompt379_live_execution_result_fields,
+            },
+        )
+    )
+    prompt510_review_prompt379_live_execution_result_fields = {
+        key: value
+        for key, value in prompt510_review_prompt379_live_execution_result.items()
+        if key.startswith("prompt510_")
+    }
 
     return {
         "prompt491_third_success_cycle_status": "ready",
@@ -15238,6 +15388,7 @@ def _build_prompt491_third_success_cycle_state(
         **prompt507_one_shot_prompt379_live_execution_fields,
         **prompt508_external_enable_dispatch_readiness_fields,
         **prompt509_dispatch_or_ingest_prompt379_live_execution_result_fields,
+        **prompt510_review_prompt379_live_execution_result_fields,
     }
 
 def _build_prompt471_commit_tag_candidate_execution_gate_state(
@@ -15560,4 +15711,5 @@ __all__ = [
     "_build_prompt507_one_shot_prompt379_live_execution_state",
     "_build_prompt508_external_enable_dispatch_readiness_state",
     "_build_prompt509_dispatch_or_ingest_prompt379_live_execution_result_state",
+    "_build_prompt510_review_prompt379_live_execution_result_state",
 ]
