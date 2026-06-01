@@ -179,6 +179,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt514_success_path_runtime_light_chain_smoke_state,
     _build_prompt515_execution_evidence_injection_bridge_state,
     _build_prompt516_bounded_actual_success_cycle_adapter_state,
+    _build_prompt517_final_autonomous_success_cycle_smoke_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -354,6 +355,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt514_success_path_runtime_light_chain_smoke_state": _build_prompt514_success_path_runtime_light_chain_smoke_state,
     "_build_prompt515_execution_evidence_injection_bridge_state": _build_prompt515_execution_evidence_injection_bridge_state,
     "_build_prompt516_bounded_actual_success_cycle_adapter_state": _build_prompt516_bounded_actual_success_cycle_adapter_state,
+    "_build_prompt517_final_autonomous_success_cycle_smoke_state": _build_prompt517_final_autonomous_success_cycle_smoke_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -534,4 +536,5 @@ __all__ = [
     "_build_prompt514_success_path_runtime_light_chain_smoke_state",
     "_build_prompt515_execution_evidence_injection_bridge_state",
     "_build_prompt516_bounded_actual_success_cycle_adapter_state",
+    "_build_prompt517_final_autonomous_success_cycle_smoke_state",
 ]
