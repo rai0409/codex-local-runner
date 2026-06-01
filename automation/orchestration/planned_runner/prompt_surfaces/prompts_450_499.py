@@ -16553,6 +16553,269 @@ def _build_prompt521_bounded_actual_execution_dispatch_state(
     }
 
 
+def _build_prompt522_external_actual_execution_dispatch_result_ingestion_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt521_next_action = _normalize_text(
+        payload.get("prompt521_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt521_actual_execution_dispatch_ready",
+            payload.get("prompt521_actual_execution_dispatch_ready")
+            is True,
+        ),
+        (
+            "prompt521_external_dispatch_required",
+            payload.get("prompt521_external_dispatch_required") is True,
+        ),
+        (
+            "prompt521_external_dispatch_performed",
+            payload.get("prompt521_external_dispatch_performed") is False,
+        ),
+        (
+            "prompt521_codex_execution_dispatch_required",
+            payload.get("prompt521_codex_execution_dispatch_required")
+            is True,
+        ),
+        (
+            "prompt521_prompt379_execution_dispatch_required",
+            payload.get("prompt521_prompt379_execution_dispatch_required")
+            is True,
+        ),
+        (
+            "prompt521_prompt379_result_ingestion_required",
+            payload.get("prompt521_prompt379_result_ingestion_required")
+            is True,
+        ),
+        (
+            "prompt521_commit_tag_execution_dispatch_required",
+            payload.get("prompt521_commit_tag_execution_dispatch_required")
+            is True,
+        ),
+        (
+            "prompt521_commit_tag_result_ingestion_required",
+            payload.get("prompt521_commit_tag_result_ingestion_required")
+            is True,
+        ),
+        (
+            "prompt521_next_cycle_handoff_required",
+            payload.get("prompt521_next_cycle_handoff_required") is True,
+        ),
+        (
+            "prompt521_actual_execution_one_shot_required",
+            payload.get("prompt521_actual_execution_one_shot_required")
+            is True,
+        ),
+        (
+            "prompt521_actual_execution_one_shot_consumed",
+            payload.get("prompt521_actual_execution_one_shot_consumed")
+            is False,
+        ),
+        (
+            "prompt521_dispatch_token_consumed",
+            payload.get("prompt521_dispatch_token_consumed") is False,
+        ),
+        (
+            "prompt521_codex_execution_allowed",
+            payload.get("prompt521_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt521_prompt379_execution_allowed",
+            payload.get("prompt521_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt521_git_mutation_allowed",
+            payload.get("prompt521_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt521_remote_mutation_allowed",
+            payload.get("prompt521_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt521_commit_tag_execution_allowed",
+            payload.get("prompt521_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt521_execution_performed_by_prompt521",
+            payload.get("prompt521_execution_performed_by_prompt521")
+            is False,
+        ),
+        (
+            "prompt521_next_action",
+            prompt521_next_action == "run_external_actual_execution_dispatch",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    external_dispatch_result_present = (
+        payload.get("prompt522_input_external_dispatch_result_present")
+        is True
+    )
+    external_dispatch_completed = (
+        payload.get("prompt522_input_external_dispatch_completed") is True
+    )
+    codex_execution_completed = (
+        payload.get("prompt522_input_codex_execution_completed") is True
+    )
+    prompt379_execution_completed = (
+        payload.get("prompt522_input_prompt379_execution_completed")
+        is True
+    )
+    prompt379_result_present = (
+        payload.get("prompt522_input_prompt379_result_present") is True
+    )
+    commit_tag_execution_completed = (
+        payload.get("prompt522_input_commit_tag_execution_completed")
+        is True
+    )
+    commit_tag_result_present = (
+        payload.get("prompt522_input_commit_tag_result_present") is True
+    )
+    next_cycle_handoff_result_present = (
+        payload.get("prompt522_input_next_cycle_handoff_result_present")
+        is True
+    )
+    external_dispatch_error_present = (
+        payload.get("prompt522_input_external_dispatch_error_present")
+        is True
+    )
+
+    result_success_checks = (
+        (
+            "prompt522_input_external_dispatch_result_present",
+            external_dispatch_result_present,
+        ),
+        (
+            "prompt522_input_external_dispatch_completed",
+            external_dispatch_completed,
+        ),
+        (
+            "prompt522_input_codex_execution_completed",
+            codex_execution_completed,
+        ),
+        (
+            "prompt522_input_prompt379_execution_completed",
+            prompt379_execution_completed,
+        ),
+        (
+            "prompt522_input_prompt379_result_present",
+            prompt379_result_present,
+        ),
+        (
+            "prompt522_input_commit_tag_execution_completed",
+            commit_tag_execution_completed,
+        ),
+        (
+            "prompt522_input_commit_tag_result_present",
+            commit_tag_result_present,
+        ),
+        (
+            "prompt522_input_next_cycle_handoff_result_present",
+            next_cycle_handoff_result_present,
+        ),
+        (
+            "prompt522_input_external_dispatch_error_present_false",
+            external_dispatch_error_present is False,
+        ),
+    )
+    result_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in result_success_checks
+        if not passed
+    ]
+    external_dispatch_success = bool(
+        base_readiness and not result_blocked_reasons
+    )
+
+    if external_dispatch_success:
+        ingestion_status = "ingested_success"
+        next_action = "prepare_prompt523_actual_execution_result_review_route"
+        active_blocked_reasons: list[str] = []
+    elif base_readiness and not external_dispatch_result_present:
+        ingestion_status = "awaiting_external_dispatch_result"
+        next_action = "await_external_actual_execution_dispatch_result"
+        active_blocked_reasons = [
+            "missing_prompt522_input_external_dispatch_result_present"
+        ]
+    elif base_readiness:
+        ingestion_status = "ingested_failure"
+        next_action = (
+            "manual_review_prompt522_external_dispatch_result_failure"
+        )
+        active_blocked_reasons = result_blocked_reasons
+    else:
+        ingestion_status = "blocked"
+        next_action = (
+            "manual_review_prompt522_external_dispatch_result_ingestion"
+        )
+        active_blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt522",
+        "prompt522_external_actual_execution_dispatch_result_ingestion_status": (
+            ingestion_status
+        ),
+        "prompt522_external_actual_execution_dispatch_result_ingestion_ready": (
+            base_readiness
+        ),
+        "prompt522_external_dispatch_result_success": (
+            external_dispatch_success
+        ),
+        "prompt522_source_prompt521_ready": (
+            payload.get("prompt521_actual_execution_dispatch_ready") is True
+        ),
+        "prompt522_external_dispatch_result_present": (
+            external_dispatch_result_present
+        ),
+        "prompt522_external_dispatch_completed": (
+            external_dispatch_completed
+        ),
+        "prompt522_codex_execution_completed": codex_execution_completed,
+        "prompt522_prompt379_execution_completed": (
+            prompt379_execution_completed
+        ),
+        "prompt522_prompt379_result_present": prompt379_result_present,
+        "prompt522_commit_tag_execution_completed": (
+            commit_tag_execution_completed
+        ),
+        "prompt522_commit_tag_result_present": commit_tag_result_present,
+        "prompt522_next_cycle_handoff_result_present": (
+            next_cycle_handoff_result_present
+        ),
+        "prompt522_external_dispatch_error_present": (
+            external_dispatch_error_present
+        ),
+        "prompt522_actual_execution_one_shot_consumed": (
+            external_dispatch_success
+        ),
+        "prompt522_dispatch_token_consumed": external_dispatch_success,
+        "prompt522_external_dispatch_result_consumed": (
+            external_dispatch_success
+        ),
+        "prompt522_codex_execution_allowed": False,
+        "prompt522_prompt379_execution_allowed": False,
+        "prompt522_git_mutation_allowed": False,
+        "prompt522_remote_mutation_allowed": False,
+        "prompt522_commit_tag_execution_allowed": False,
+        "prompt522_execution_performed_by_prompt522": False,
+        "prompt522_next_action": next_action,
+        "prompt522_blocked_reason": (
+            active_blocked_reasons[0] if active_blocked_reasons else None
+        ),
+        "prompt522_blocked_reasons": active_blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -17588,4 +17851,5 @@ __all__ = [
     "_build_prompt519_actual_execution_connector_state",
     "_build_prompt520_bounded_actual_execution_enable_gate_state",
     "_build_prompt521_bounded_actual_execution_dispatch_state",
+    "_build_prompt522_external_actual_execution_dispatch_result_ingestion_state",
 ]
