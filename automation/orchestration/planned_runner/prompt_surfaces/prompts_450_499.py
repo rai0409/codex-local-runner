@@ -15192,6 +15192,143 @@ def _build_prompt513_success_continuation_or_explicit_commit_tag_execution_resul
         "prompt513_blocked_reasons": active_blocked_reasons,
     }
 
+
+def _build_prompt514_success_path_runtime_light_chain_smoke_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    next_action = _normalize_text(payload.get("prompt513_next_action"), default="")
+
+    commit_backed_checks = (
+        (
+            "prompt513_success_continuation_ready",
+            payload.get("prompt513_success_continuation_ready") is True,
+        ),
+        (
+            "prompt513_commit_backed_success_continuation_ready",
+            payload.get("prompt513_commit_backed_success_continuation_ready")
+            is True,
+        ),
+        (
+            "prompt513_commit_tag_result_ready",
+            payload.get("prompt513_commit_tag_result_ready") is True,
+        ),
+        (
+            "prompt513_git_commit_performed",
+            payload.get("prompt513_git_commit_performed") is True,
+        ),
+        (
+            "prompt513_git_tag_performed",
+            payload.get("prompt513_git_tag_performed") is True,
+        ),
+        (
+            "prompt513_post_commit_worktree_clean",
+            payload.get("prompt513_post_commit_worktree_clean") is True,
+        ),
+        (
+            "prompt513_previous_cycle_closed",
+            payload.get("prompt513_previous_cycle_closed") is True,
+        ),
+        (
+            "prompt513_next_cycle_handoff_ready",
+            payload.get("prompt513_next_cycle_handoff_ready") is True,
+        ),
+        (
+            "prompt513_next_live_cycle_bridge_ready",
+            payload.get("prompt513_next_live_cycle_bridge_ready") is True,
+        ),
+        (
+            "prompt513_next_action",
+            next_action == "prepare_next_live_cycle_bridge",
+        ),
+    )
+    no_change_checks = (
+        (
+            "prompt513_success_continuation_ready",
+            payload.get("prompt513_success_continuation_ready") is True,
+        ),
+        (
+            "prompt513_no_change_success_continuation_ready",
+            payload.get("prompt513_no_change_success_continuation_ready")
+            is True,
+        ),
+        (
+            "prompt513_previous_cycle_closed",
+            payload.get("prompt513_previous_cycle_closed") is True,
+        ),
+        (
+            "prompt513_next_cycle_handoff_ready",
+            payload.get("prompt513_next_cycle_handoff_ready") is True,
+        ),
+        (
+            "prompt513_next_live_cycle_bridge_ready",
+            payload.get("prompt513_next_live_cycle_bridge_ready") is True,
+        ),
+        (
+            "prompt513_next_action",
+            next_action == "prepare_next_live_cycle_bridge",
+        ),
+    )
+    commit_backed_success = all(passed for _, passed in commit_backed_checks)
+    no_change_success = all(passed for _, passed in no_change_checks)
+    success_path_ready = bool(commit_backed_success or no_change_success)
+
+    if commit_backed_success:
+        status = "ready_commit_backed_success"
+    elif no_change_success:
+        status = "ready_no_change_success"
+    else:
+        status = "blocked"
+
+    blocked_reasons: list[str] = []
+    if not success_path_ready:
+        blocked_reasons = [
+            "prompt513_commit_backed_success_path_not_ready",
+            "prompt513_no_change_success_path_not_ready",
+        ]
+        if payload.get("prompt513_success_continuation_ready") is not True:
+            blocked_reasons.insert(
+                0,
+                "missing_prompt513_success_continuation_ready",
+            )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt514",
+        "prompt514_success_path_chain_smoke_status": status,
+        "prompt514_success_path_chain_smoke_ready": success_path_ready,
+        "prompt514_source_prompt513_ready": bool(
+            payload.get("prompt513_success_continuation_ready")
+        ),
+        "prompt514_previous_cycle_closed": success_path_ready,
+        "prompt514_next_cycle_handoff_ready": success_path_ready,
+        "prompt514_next_live_cycle_bridge_ready": success_path_ready,
+        "prompt514_runtime_light_check_used": True,
+        "prompt514_full_runner_runtime_required": False,
+        "prompt514_synthetic_payload_supported": True,
+        "prompt514_success_path_metadata_chain_ready": success_path_ready,
+        "prompt514_commit_backed_success_path_ready": commit_backed_success,
+        "prompt514_no_change_success_path_ready": no_change_success,
+        "prompt514_next_prompt_generation_request_ready": success_path_ready,
+        "prompt514_prompt378_request_ready": success_path_ready,
+        "prompt514_next_prompt_execution_request_ready": False,
+        "prompt514_prompt379_execution_allowed": False,
+        "prompt514_git_mutation_allowed": False,
+        "prompt514_remote_mutation_allowed": False,
+        "prompt514_codex_execution_allowed": False,
+        "prompt514_next_action": (
+            "prepare_prompt515_execution_evidence_injection_bridge"
+            if success_path_ready
+            else "manual_review_prompt514_success_path_chain_smoke"
+        ),
+        "prompt514_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt514_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -16219,4 +16356,5 @@ __all__ = [
     "_build_prompt511_prepare_commit_tag_plan_state",
     "_build_prompt512_explicit_commit_tag_execution_or_branch_continuation_state",
     "_build_prompt513_success_continuation_or_explicit_commit_tag_execution_result_state",
+    "_build_prompt514_success_path_runtime_light_chain_smoke_state",
 ]
