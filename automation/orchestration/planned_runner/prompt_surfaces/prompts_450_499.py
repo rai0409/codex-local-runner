@@ -16063,6 +16063,152 @@ def _build_prompt518_final_runtime_light_success_path_verification_state(
     }
 
 
+def _build_prompt519_actual_execution_connector_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt518_next_action = _normalize_text(
+        payload.get("prompt518_next_action"),
+        default="",
+    )
+    readiness_checks = (
+        (
+            "prompt518_final_runtime_light_success_path_verification_ready",
+            payload.get(
+                "prompt518_final_runtime_light_success_path_verification_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt518_metadata_success_chain_verified",
+            payload.get("prompt518_metadata_success_chain_verified") is True,
+        ),
+        (
+            "prompt518_autonomous_success_cycle_verified",
+            payload.get("prompt518_autonomous_success_cycle_verified")
+            is True,
+        ),
+        (
+            "prompt518_next_live_cycle_bridge_verified",
+            payload.get("prompt518_next_live_cycle_bridge_verified") is True,
+        ),
+        (
+            "prompt518_previous_cycle_closed",
+            payload.get("prompt518_previous_cycle_closed") is True,
+        ),
+        (
+            "prompt518_next_cycle_handoff_ready",
+            payload.get("prompt518_next_cycle_handoff_ready") is True,
+        ),
+        (
+            "prompt518_next_prompt_generation_request_ready",
+            payload.get("prompt518_next_prompt_generation_request_ready")
+            is True,
+        ),
+        (
+            "prompt518_prompt378_request_ready",
+            payload.get("prompt518_prompt378_request_ready") is True,
+        ),
+        (
+            "prompt518_actual_execution_connector_required",
+            payload.get("prompt518_actual_execution_connector_required")
+            is True,
+        ),
+        (
+            "prompt518_actual_execution_connector_ready",
+            payload.get("prompt518_actual_execution_connector_ready")
+            is False,
+        ),
+        (
+            "prompt518_git_mutation_allowed",
+            payload.get("prompt518_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt518_remote_mutation_allowed",
+            payload.get("prompt518_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt518_codex_execution_allowed",
+            payload.get("prompt518_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt518_prompt379_execution_allowed",
+            payload.get("prompt518_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt518_commit_tag_execution_allowed",
+            payload.get("prompt518_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt518_execution_performed_by_prompt518",
+            payload.get("prompt518_execution_performed_by_prompt518")
+            is False,
+        ),
+        (
+            "prompt518_next_action",
+            prompt518_next_action
+            == "prepare_prompt519_actual_execution_connector",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    connector_readiness = not blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt519",
+        "prompt519_actual_execution_connector_status": (
+            "ready" if connector_readiness else "blocked"
+        ),
+        "prompt519_actual_execution_connector_ready": connector_readiness,
+        "prompt519_source_prompt518_ready": (
+            payload.get(
+                "prompt518_final_runtime_light_success_path_verification_ready"
+            )
+            is True
+        ),
+        "prompt519_prompt378_request_ready": connector_readiness,
+        "prompt519_prompt379_live_request_required": connector_readiness,
+        "prompt519_external_enable_evidence_required": connector_readiness,
+        "prompt519_prompt379_execution_result_required": connector_readiness,
+        "prompt519_commit_tag_result_required": connector_readiness,
+        "prompt519_next_cycle_handoff_required": connector_readiness,
+        "prompt519_actual_codex_execution_connector_ready": (
+            connector_readiness
+        ),
+        "prompt519_actual_prompt379_execution_connector_ready": (
+            connector_readiness
+        ),
+        "prompt519_actual_commit_tag_connector_ready": connector_readiness,
+        "prompt519_actual_result_ingestion_connector_ready": (
+            connector_readiness
+        ),
+        "prompt519_codex_execution_allowed": False,
+        "prompt519_prompt379_execution_allowed": False,
+        "prompt519_git_mutation_allowed": False,
+        "prompt519_remote_mutation_allowed": False,
+        "prompt519_commit_tag_execution_allowed": False,
+        "prompt519_execution_performed_by_prompt519": False,
+        "prompt519_explicit_actual_execution_enable_required": (
+            connector_readiness
+        ),
+        "prompt519_explicit_actual_execution_enable_received": False,
+        "prompt519_actual_execution_one_shot_required": connector_readiness,
+        "prompt519_actual_execution_one_shot_consumed": False,
+        "prompt519_next_action": (
+            "prepare_prompt520_bounded_actual_execution_enable_gate"
+            if connector_readiness
+            else "manual_review_prompt519_actual_execution_connector"
+        ),
+        "prompt519_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt519_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -17095,4 +17241,5 @@ __all__ = [
     "_build_prompt516_bounded_actual_success_cycle_adapter_state",
     "_build_prompt517_final_autonomous_success_cycle_smoke_state",
     "_build_prompt518_final_runtime_light_success_path_verification_state",
+    "_build_prompt519_actual_execution_connector_state",
 ]
