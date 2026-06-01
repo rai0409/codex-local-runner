@@ -15568,6 +15568,169 @@ def _build_prompt515_execution_evidence_injection_bridge_state(
     }
 
 
+def _build_prompt516_bounded_actual_success_cycle_adapter_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt515_next_action = _normalize_text(
+        payload.get("prompt515_next_action"),
+        default="",
+    )
+    readiness_checks = (
+        (
+            "prompt515_execution_evidence_injection_bridge_ready",
+            payload.get("prompt515_execution_evidence_injection_bridge_ready")
+            is True,
+        ),
+        (
+            "prompt515_source_prompt514_ready",
+            payload.get("prompt515_source_prompt514_ready") is True,
+        ),
+        (
+            "prompt515_git_mutation_allowed",
+            payload.get("prompt515_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt515_remote_mutation_allowed",
+            payload.get("prompt515_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt515_codex_execution_allowed",
+            payload.get("prompt515_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt515_prompt379_execution_allowed",
+            payload.get("prompt515_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt515_commit_tag_execution_allowed",
+            payload.get("prompt515_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt515_execution_performed_by_prompt515",
+            payload.get("prompt515_execution_performed_by_prompt515") is False,
+        ),
+        (
+            "prompt515_next_action",
+            prompt515_next_action
+            == "prepare_prompt516_bounded_actual_success_cycle_adapter",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    base_ready = not blocked_reasons
+
+    enable_evidence_ready = (
+        payload.get("prompt515_enable_evidence_ready") is True
+    )
+    execution_result_evidence_ready = (
+        payload.get("prompt515_execution_result_evidence_ready") is True
+    )
+    commit_tag_result_evidence_ready = (
+        payload.get("prompt515_commit_tag_result_evidence_ready") is True
+    )
+    full_success_evidence_ready = (
+        payload.get("prompt515_full_success_evidence_ready") is True
+    )
+    evidence_group_count = sum(
+        (
+            enable_evidence_ready,
+            execution_result_evidence_ready,
+            commit_tag_result_evidence_ready,
+        )
+    )
+    full_success_readiness = all(
+        (
+            base_ready,
+            full_success_evidence_ready,
+            enable_evidence_ready,
+            execution_result_evidence_ready,
+            commit_tag_result_evidence_ready,
+        )
+    )
+
+    enable_only = base_ready and evidence_group_count == 1 and enable_evidence_ready
+    execution_result_only = (
+        base_ready
+        and evidence_group_count == 1
+        and execution_result_evidence_ready
+    )
+    commit_tag_result_only = (
+        base_ready
+        and evidence_group_count == 1
+        and commit_tag_result_evidence_ready
+    )
+    partial_evidence = base_ready and 1 < evidence_group_count < 3
+    awaiting_external_evidence = base_ready and evidence_group_count == 0
+
+    if full_success_readiness:
+        status = "ready_full_success_cycle"
+    elif enable_only:
+        status = "ready_enable_only"
+    elif execution_result_only:
+        status = "ready_execution_result_only"
+    elif commit_tag_result_only:
+        status = "ready_commit_tag_result_only"
+    elif partial_evidence:
+        status = "ready_partial_evidence"
+    elif awaiting_external_evidence:
+        status = "awaiting_external_evidence"
+    else:
+        status = "blocked"
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt516",
+        "prompt516_actual_success_cycle_adapter_status": status,
+        "prompt516_actual_success_cycle_adapter_ready": base_ready,
+        "prompt516_full_success_cycle_ready": full_success_readiness,
+        "prompt516_source_prompt515_ready": base_ready,
+        "prompt516_enable_evidence_ready": enable_evidence_ready,
+        "prompt516_execution_result_evidence_ready": (
+            execution_result_evidence_ready
+        ),
+        "prompt516_commit_tag_result_evidence_ready": (
+            commit_tag_result_evidence_ready
+        ),
+        "prompt516_full_success_evidence_ready": full_success_evidence_ready,
+        "prompt516_previous_cycle_closed": full_success_readiness,
+        "prompt516_next_cycle_handoff_ready": full_success_readiness,
+        "prompt516_next_live_cycle_bridge_ready": full_success_readiness,
+        "prompt516_autonomous_success_cycle_ready": full_success_readiness,
+        "prompt516_autonomous_success_cycle_completed": False,
+        "prompt516_prompt508_enable_evidence_bridge_ready": (
+            enable_evidence_ready
+        ),
+        "prompt516_prompt509_execution_result_bridge_ready": (
+            execution_result_evidence_ready
+        ),
+        "prompt516_prompt513_commit_tag_result_bridge_ready": (
+            commit_tag_result_evidence_ready
+        ),
+        "prompt516_git_mutation_allowed": False,
+        "prompt516_remote_mutation_allowed": False,
+        "prompt516_codex_execution_allowed": False,
+        "prompt516_prompt379_execution_allowed": False,
+        "prompt516_commit_tag_execution_allowed": False,
+        "prompt516_execution_performed_by_prompt516": False,
+        "prompt516_next_action": (
+            "prepare_prompt517_final_autonomous_success_cycle_smoke"
+            if full_success_readiness
+            else (
+                "await_external_success_cycle_evidence"
+                if base_ready
+                else "manual_review_prompt516_bounded_actual_success_cycle_adapter"
+            )
+        ),
+        "prompt516_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt516_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -16597,4 +16760,5 @@ __all__ = [
     "_build_prompt513_success_continuation_or_explicit_commit_tag_execution_result_state",
     "_build_prompt514_success_path_runtime_light_chain_smoke_state",
     "_build_prompt515_execution_evidence_injection_bridge_state",
+    "_build_prompt516_bounded_actual_success_cycle_adapter_state",
 ]
