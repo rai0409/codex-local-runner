@@ -15329,6 +15329,245 @@ def _build_prompt514_success_path_runtime_light_chain_smoke_state(
     }
 
 
+def _build_prompt515_execution_evidence_injection_bridge_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt514_next_action = _normalize_text(
+        payload.get("prompt514_next_action"),
+        default="",
+    )
+    prompt379_returncode_classification = _normalize_text(
+        payload.get("prompt515_input_prompt379_returncode_classification"),
+        default="",
+    )
+    prompt379_changed_files = payload.get(
+        "prompt515_input_prompt379_post_execution_changed_files"
+    )
+    commit_hash = _normalize_text(
+        payload.get("prompt515_input_commit_hash"),
+        default="",
+    )
+    tag_name = _normalize_text(
+        payload.get("prompt515_input_tag_name"),
+        default="",
+    )
+
+    readiness_checks = (
+        (
+            "prompt514_success_path_chain_smoke_ready",
+            payload.get("prompt514_success_path_chain_smoke_ready") is True,
+        ),
+        (
+            "prompt514_success_path_metadata_chain_ready",
+            payload.get("prompt514_success_path_metadata_chain_ready") is True,
+        ),
+        (
+            "prompt514_next_cycle_handoff_ready",
+            payload.get("prompt514_next_cycle_handoff_ready") is True,
+        ),
+        (
+            "prompt514_next_live_cycle_bridge_ready",
+            payload.get("prompt514_next_live_cycle_bridge_ready") is True,
+        ),
+        (
+            "prompt514_runtime_light_check_used",
+            payload.get("prompt514_runtime_light_check_used") is True,
+        ),
+        (
+            "prompt514_full_runner_runtime_required",
+            payload.get("prompt514_full_runner_runtime_required") is False,
+        ),
+        (
+            "prompt514_synthetic_payload_supported",
+            payload.get("prompt514_synthetic_payload_supported") is True,
+        ),
+        (
+            "prompt514_prompt379_execution_allowed",
+            payload.get("prompt514_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt514_git_mutation_allowed",
+            payload.get("prompt514_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt514_remote_mutation_allowed",
+            payload.get("prompt514_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt514_codex_execution_allowed",
+            payload.get("prompt514_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt514_next_action",
+            prompt514_next_action
+            == "prepare_prompt515_execution_evidence_injection_bridge",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    base_ready = not blocked_reasons
+
+    external_enable_evidence_present = (
+        payload.get("prompt515_input_external_enable_evidence_present") is True
+    )
+    external_enable_token_valid = (
+        payload.get("prompt515_input_external_enable_token_valid") is True
+    )
+    external_enable_scope_valid = (
+        payload.get("prompt515_input_external_enable_scope_valid") is True
+    )
+    external_enable_one_shot_confirmed = (
+        payload.get("prompt515_input_external_enable_one_shot_confirmed") is True
+    )
+    valid_enable_evidence = all(
+        (
+            external_enable_evidence_present,
+            external_enable_token_valid,
+            external_enable_scope_valid,
+            external_enable_one_shot_confirmed,
+        )
+    )
+
+    prompt379_result_present = (
+        payload.get("prompt515_input_prompt379_execution_result_present") is True
+    )
+    prompt379_execution_performed = (
+        payload.get("prompt515_input_prompt379_execution_performed") is True
+    )
+    valid_prompt379_result_evidence = all(
+        (
+            prompt379_result_present,
+            prompt379_execution_performed,
+            prompt379_returncode_classification
+            in {"success", "failed", "blocked"},
+            isinstance(prompt379_changed_files, list),
+        )
+    )
+    normalized_prompt379_changed_files = (
+        list(prompt379_changed_files)
+        if isinstance(prompt379_changed_files, list)
+        else []
+    )
+
+    commit_tag_result_present = (
+        payload.get("prompt515_input_commit_tag_result_present") is True
+    )
+    git_commit_performed = (
+        payload.get("prompt515_input_git_commit_performed") is True
+    )
+    git_tag_performed = payload.get("prompt515_input_git_tag_performed") is True
+    post_commit_worktree_clean = (
+        payload.get("prompt515_input_post_commit_worktree_clean") is True
+    )
+    valid_commit_tag_result_evidence = all(
+        (
+            commit_tag_result_present,
+            git_commit_performed,
+            git_tag_performed,
+            post_commit_worktree_clean,
+            bool(commit_hash),
+            bool(tag_name),
+        )
+    )
+
+    valid_evidence_group_count = sum(
+        (
+            valid_enable_evidence,
+            valid_prompt379_result_evidence,
+            valid_commit_tag_result_evidence,
+        )
+    )
+    full_success_evidence_ready = valid_evidence_group_count == 3
+
+    if not base_ready:
+        status = "blocked"
+    elif full_success_evidence_ready:
+        status = "ready_full_success_evidence"
+    elif valid_evidence_group_count > 1:
+        status = "ready_partial_evidence"
+    elif valid_enable_evidence:
+        status = "ready_enable_only"
+    elif valid_prompt379_result_evidence:
+        status = "ready_execution_result_only"
+    elif valid_commit_tag_result_evidence:
+        status = "ready_commit_tag_result_only"
+    else:
+        status = "awaiting_external_evidence"
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt515",
+        "prompt508_external_enable_evidence_present": (
+            external_enable_evidence_present
+        ),
+        "prompt508_external_enable_token_valid": external_enable_token_valid,
+        "prompt508_external_enable_scope_valid": external_enable_scope_valid,
+        "prompt508_external_enable_one_shot_confirmed": (
+            external_enable_one_shot_confirmed
+        ),
+        "prompt509_external_prompt379_execution_result_present": (
+            prompt379_result_present
+        ),
+        "prompt509_external_prompt379_execution_performed": (
+            prompt379_execution_performed
+        ),
+        "prompt509_external_prompt379_returncode": payload.get(
+            "prompt515_input_prompt379_returncode"
+        ),
+        "prompt509_external_prompt379_returncode_classification": (
+            prompt379_returncode_classification
+        ),
+        "prompt509_external_prompt379_post_execution_changed_files": (
+            normalized_prompt379_changed_files
+        ),
+        "prompt509_external_prompt379_post_execution_tracked_diff_empty": (
+            payload.get(
+                "prompt515_input_prompt379_post_execution_tracked_diff_empty"
+            )
+            is True
+        ),
+        "prompt513_external_commit_tag_result_present": (
+            commit_tag_result_present
+        ),
+        "prompt513_external_git_commit_performed": git_commit_performed,
+        "prompt513_external_git_tag_performed": git_tag_performed,
+        "prompt513_external_post_commit_worktree_clean": (
+            post_commit_worktree_clean
+        ),
+        "prompt513_external_commit_hash": commit_hash,
+        "prompt513_external_tag_name": tag_name,
+        "prompt515_execution_evidence_injection_bridge_status": status,
+        "prompt515_execution_evidence_injection_bridge_ready": base_ready,
+        "prompt515_source_prompt514_ready": base_ready,
+        "prompt515_full_success_evidence_ready": full_success_evidence_ready,
+        "prompt515_enable_evidence_ready": valid_enable_evidence,
+        "prompt515_execution_result_evidence_ready": (
+            valid_prompt379_result_evidence
+        ),
+        "prompt515_commit_tag_result_evidence_ready": (
+            valid_commit_tag_result_evidence
+        ),
+        "prompt515_git_mutation_allowed": False,
+        "prompt515_remote_mutation_allowed": False,
+        "prompt515_codex_execution_allowed": False,
+        "prompt515_prompt379_execution_allowed": False,
+        "prompt515_commit_tag_execution_allowed": False,
+        "prompt515_execution_performed_by_prompt515": False,
+        "prompt515_next_action": (
+            "prepare_prompt516_bounded_actual_success_cycle_adapter"
+            if base_ready
+            else "manual_review_prompt515_execution_evidence_injection_bridge"
+        ),
+        "prompt515_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt515_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -16357,4 +16596,5 @@ __all__ = [
     "_build_prompt512_explicit_commit_tag_execution_or_branch_continuation_state",
     "_build_prompt513_success_continuation_or_explicit_commit_tag_execution_result_state",
     "_build_prompt514_success_path_runtime_light_chain_smoke_state",
+    "_build_prompt515_execution_evidence_injection_bridge_state",
 ]
