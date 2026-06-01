@@ -16403,6 +16403,156 @@ def _build_prompt520_bounded_actual_execution_enable_gate_state(
     }
 
 
+def _build_prompt521_bounded_actual_execution_dispatch_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt520_next_action = _normalize_text(
+        payload.get("prompt520_next_action"),
+        default="",
+    )
+    readiness_checks = (
+        (
+            "prompt520_actual_execution_enable_gate_ready",
+            payload.get("prompt520_actual_execution_enable_gate_ready")
+            is True,
+        ),
+        (
+            "prompt520_actual_execution_enable_valid",
+            payload.get("prompt520_actual_execution_enable_valid") is True,
+        ),
+        (
+            "prompt520_actual_execution_dispatch_ready",
+            payload.get("prompt520_actual_execution_dispatch_ready") is True,
+        ),
+        (
+            "prompt520_source_prompt519_ready",
+            payload.get("prompt520_source_prompt519_ready") is True,
+        ),
+        (
+            "prompt520_actual_execution_one_shot_required",
+            payload.get("prompt520_actual_execution_one_shot_required")
+            is True,
+        ),
+        (
+            "prompt520_actual_execution_one_shot_consumed",
+            payload.get("prompt520_actual_execution_one_shot_consumed")
+            is False,
+        ),
+        (
+            "prompt520_prompt378_request_ready",
+            payload.get("prompt520_prompt378_request_ready") is True,
+        ),
+        (
+            "prompt520_prompt379_live_request_ready",
+            payload.get("prompt520_prompt379_live_request_ready") is True,
+        ),
+        (
+            "prompt520_external_enable_evidence_ready",
+            payload.get("prompt520_external_enable_evidence_ready") is True,
+        ),
+        (
+            "prompt520_prompt379_execution_result_required",
+            payload.get("prompt520_prompt379_execution_result_required")
+            is True,
+        ),
+        (
+            "prompt520_commit_tag_result_required",
+            payload.get("prompt520_commit_tag_result_required") is True,
+        ),
+        (
+            "prompt520_next_cycle_handoff_required",
+            payload.get("prompt520_next_cycle_handoff_required") is True,
+        ),
+        (
+            "prompt520_codex_execution_allowed",
+            payload.get("prompt520_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt520_prompt379_execution_allowed",
+            payload.get("prompt520_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt520_git_mutation_allowed",
+            payload.get("prompt520_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt520_remote_mutation_allowed",
+            payload.get("prompt520_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt520_commit_tag_execution_allowed",
+            payload.get("prompt520_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt520_execution_performed_by_prompt520",
+            payload.get("prompt520_execution_performed_by_prompt520")
+            is False,
+        ),
+        (
+            "prompt520_next_action",
+            prompt520_next_action
+            == "prepare_prompt521_bounded_actual_execution_dispatch",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}" for field, passed in readiness_checks if not passed
+    ]
+    dispatch_readiness = not blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt521",
+        "prompt521_actual_execution_dispatch_status": (
+            "ready_for_external_dispatch"
+            if dispatch_readiness
+            else "blocked"
+        ),
+        "prompt521_actual_execution_dispatch_ready": dispatch_readiness,
+        "prompt521_source_prompt520_ready": (
+            payload.get("prompt520_actual_execution_enable_gate_ready")
+            is True
+        ),
+        "prompt521_external_dispatch_required": dispatch_readiness,
+        "prompt521_external_dispatch_performed": False,
+        "prompt521_codex_execution_dispatch_required": dispatch_readiness,
+        "prompt521_prompt379_execution_dispatch_required": (
+            dispatch_readiness
+        ),
+        "prompt521_prompt379_result_ingestion_required": dispatch_readiness,
+        "prompt521_commit_tag_execution_dispatch_required": (
+            dispatch_readiness
+        ),
+        "prompt521_commit_tag_result_ingestion_required": (
+            dispatch_readiness
+        ),
+        "prompt521_next_cycle_handoff_required": dispatch_readiness,
+        "prompt521_actual_execution_one_shot_required": dispatch_readiness,
+        "prompt521_actual_execution_one_shot_consumed": False,
+        "prompt521_dispatch_token_consumed": False,
+        "prompt521_codex_execution_allowed": False,
+        "prompt521_prompt379_execution_allowed": False,
+        "prompt521_git_mutation_allowed": False,
+        "prompt521_remote_mutation_allowed": False,
+        "prompt521_commit_tag_execution_allowed": False,
+        "prompt521_execution_performed_by_prompt521": False,
+        "prompt521_external_dispatch_result_present": False,
+        "prompt521_prompt379_execution_result_present": False,
+        "prompt521_commit_tag_result_present": False,
+        "prompt521_next_cycle_handoff_result_present": False,
+        "prompt521_next_action": (
+            "run_external_actual_execution_dispatch"
+            if dispatch_readiness
+            else "manual_review_prompt521_actual_execution_dispatch"
+        ),
+        "prompt521_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt521_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -17437,4 +17587,5 @@ __all__ = [
     "_build_prompt518_final_runtime_light_success_path_verification_state",
     "_build_prompt519_actual_execution_connector_state",
     "_build_prompt520_bounded_actual_execution_enable_gate_state",
+    "_build_prompt521_bounded_actual_execution_dispatch_state",
 ]
