@@ -17493,6 +17493,268 @@ def _build_prompt526_next_cycle_prompt378_materialization_state(
     }
 
 
+def _build_prompt527_next_cycle_prompt378_materialization_result_ingestion_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt526_next_action = _normalize_text(
+        payload.get("prompt526_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt526_next_cycle_prompt378_materialization_ready",
+            payload.get("prompt526_next_cycle_prompt378_materialization_ready")
+            is True,
+        ),
+        (
+            "prompt526_source_prompt525_ready",
+            payload.get("prompt526_source_prompt525_ready") is True,
+        ),
+        (
+            "prompt526_prompt378_materialization_required",
+            payload.get("prompt526_prompt378_materialization_required")
+            is True,
+        ),
+        (
+            "prompt526_next_cycle_objective_ready",
+            payload.get("prompt526_next_cycle_objective_ready") is True,
+        ),
+        (
+            "prompt526_next_cycle_scope_ready",
+            payload.get("prompt526_next_cycle_scope_ready") is True,
+        ),
+        (
+            "prompt526_next_cycle_success_criteria_ready",
+            payload.get("prompt526_next_cycle_success_criteria_ready")
+            is True,
+        ),
+        (
+            "prompt526_next_cycle_boundary_ready",
+            payload.get("prompt526_next_cycle_boundary_ready") is True,
+        ),
+        (
+            "prompt526_next_cycle_artifact_contract_ready",
+            payload.get("prompt526_next_cycle_artifact_contract_ready")
+            is True,
+        ),
+        (
+            "prompt526_next_prompt_generation_request_ready",
+            payload.get("prompt526_next_prompt_generation_request_ready")
+            is True,
+        ),
+        (
+            "prompt526_prompt378_request_ready",
+            payload.get("prompt526_prompt378_request_ready") is True,
+        ),
+        (
+            "prompt526_prompt378_generation_allowed",
+            payload.get("prompt526_prompt378_generation_allowed") is False,
+        ),
+        (
+            "prompt526_prompt378_execution_allowed",
+            payload.get("prompt526_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt526_prompt379_execution_allowed",
+            payload.get("prompt526_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt526_codex_execution_allowed",
+            payload.get("prompt526_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt526_git_mutation_allowed",
+            payload.get("prompt526_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt526_remote_mutation_allowed",
+            payload.get("prompt526_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt526_commit_tag_execution_allowed",
+            payload.get("prompt526_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt526_execution_performed_by_prompt526",
+            payload.get("prompt526_execution_performed_by_prompt526")
+            is False,
+        ),
+        (
+            "prompt526_prompt378_materialized",
+            payload.get("prompt526_prompt378_materialized") is False,
+        ),
+        (
+            "prompt526_next_prompt_execution_request_ready",
+            payload.get("prompt526_next_prompt_execution_request_ready")
+            is False,
+        ),
+        (
+            "prompt526_actual_execution_connector_required",
+            payload.get("prompt526_actual_execution_connector_required")
+            is True,
+        ),
+        (
+            "prompt526_actual_execution_connector_ready",
+            payload.get("prompt526_actual_execution_connector_ready")
+            is False,
+        ),
+        (
+            "prompt526_next_autonomous_cycle_ready",
+            payload.get("prompt526_next_autonomous_cycle_ready") is True,
+        ),
+        (
+            "prompt526_next_action",
+            prompt526_next_action
+            == "prepare_prompt527_next_cycle_prompt378_materialization_result_ingestion",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}" for field, passed in base_readiness_checks if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    result_present = bool(
+        payload.get("prompt527_input_prompt378_materialization_result_present")
+    )
+    prompt378_materialized = bool(
+        payload.get("prompt527_input_prompt378_materialized")
+    )
+    materialization_valid = bool(
+        payload.get("prompt527_input_prompt378_materialization_valid")
+    )
+    objective_present = bool(
+        payload.get("prompt527_input_next_cycle_objective_present")
+    )
+    scope_present = bool(
+        payload.get("prompt527_input_next_cycle_scope_present")
+    )
+    success_criteria_present = bool(
+        payload.get("prompt527_input_next_cycle_success_criteria_present")
+    )
+    boundary_present = bool(
+        payload.get("prompt527_input_next_cycle_boundary_present")
+    )
+    artifact_contract_present = bool(
+        payload.get("prompt527_input_next_cycle_artifact_contract_present")
+    )
+    materialization_error_present = bool(
+        payload.get("prompt527_input_prompt378_materialization_error_present")
+    )
+
+    result_success_checks = (
+        (
+            "prompt527_input_prompt378_materialization_result_present",
+            result_present,
+        ),
+        ("prompt527_input_prompt378_materialized", prompt378_materialized),
+        (
+            "prompt527_input_prompt378_materialization_valid",
+            materialization_valid,
+        ),
+        (
+            "prompt527_input_next_cycle_objective_present",
+            objective_present,
+        ),
+        ("prompt527_input_next_cycle_scope_present", scope_present),
+        (
+            "prompt527_input_next_cycle_success_criteria_present",
+            success_criteria_present,
+        ),
+        ("prompt527_input_next_cycle_boundary_present", boundary_present),
+        (
+            "prompt527_input_next_cycle_artifact_contract_present",
+            artifact_contract_present,
+        ),
+        (
+            "prompt527_input_prompt378_materialization_error_present",
+            not materialization_error_present,
+        ),
+    )
+    result_failure_reasons = [
+        f"missing_{field}" for field, passed in result_success_checks if not passed
+    ]
+    materialization_success = base_readiness and not result_failure_reasons
+
+    if materialization_success:
+        ingestion_status = "ingested_success"
+        next_action = "prepare_prompt528_next_cycle_prompt378_execution_request"
+        blocked_reasons: list[str] = []
+    elif base_readiness and not result_present:
+        ingestion_status = "awaiting_prompt378_materialization_result"
+        next_action = "await_prompt378_materialization_result"
+        blocked_reasons = [
+            "missing_prompt527_input_prompt378_materialization_result_present"
+        ]
+    elif base_readiness and result_present:
+        ingestion_status = "ingested_failure"
+        next_action = (
+            "manual_review_prompt527_prompt378_materialization_failure"
+        )
+        blocked_reasons = result_failure_reasons
+    else:
+        ingestion_status = "blocked"
+        next_action = (
+            "manual_review_prompt527_next_cycle_prompt378_materialization_result_ingestion"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt527",
+        "prompt527_next_cycle_prompt378_materialization_result_ingestion_status": (
+            ingestion_status
+        ),
+        "prompt527_next_cycle_prompt378_materialization_result_ingestion_ready": (
+            base_readiness
+        ),
+        "prompt527_prompt378_materialization_success": (
+            materialization_success
+        ),
+        "prompt527_source_prompt526_ready": bool(
+            payload.get("prompt526_next_cycle_prompt378_materialization_ready")
+        ),
+        "prompt527_prompt378_materialization_result_present": result_present,
+        "prompt527_prompt378_materialized": prompt378_materialized,
+        "prompt527_prompt378_materialization_valid": materialization_valid,
+        "prompt527_next_cycle_objective_present": objective_present,
+        "prompt527_next_cycle_scope_present": scope_present,
+        "prompt527_next_cycle_success_criteria_present": (
+            success_criteria_present
+        ),
+        "prompt527_next_cycle_boundary_present": boundary_present,
+        "prompt527_next_cycle_artifact_contract_present": (
+            artifact_contract_present
+        ),
+        "prompt527_prompt378_materialization_error_present": (
+            materialization_error_present
+        ),
+        "prompt527_next_prompt_execution_request_ready": (
+            materialization_success
+        ),
+        "prompt527_prompt378_execution_ready": materialization_success,
+        "prompt527_prompt379_live_request_ready": materialization_success,
+        "prompt527_actual_execution_connector_required": (
+            materialization_success
+        ),
+        "prompt527_actual_execution_connector_ready": False,
+        "prompt527_prompt378_generation_allowed": False,
+        "prompt527_prompt378_execution_allowed": False,
+        "prompt527_prompt379_execution_allowed": False,
+        "prompt527_codex_execution_allowed": False,
+        "prompt527_git_mutation_allowed": False,
+        "prompt527_remote_mutation_allowed": False,
+        "prompt527_commit_tag_execution_allowed": False,
+        "prompt527_execution_performed_by_prompt527": False,
+        "prompt527_next_action": next_action,
+        "prompt527_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt527_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -18533,4 +18795,5 @@ __all__ = [
     "_build_prompt524_next_autonomous_cycle_handoff_state",
     "_build_prompt525_next_cycle_prompt378_request_gate_state",
     "_build_prompt526_next_cycle_prompt378_materialization_state",
+    "_build_prompt527_next_cycle_prompt378_materialization_result_ingestion_state",
 ]
