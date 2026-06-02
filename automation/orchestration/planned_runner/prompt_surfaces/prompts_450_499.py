@@ -19277,6 +19277,342 @@ def _build_prompt533_full_one_cycle_autonomous_smoke_state(
     }
 
 
+def _build_prompt534_runtime_synthetic_full_cycle_payload_verification_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt533_next_action = _normalize_text(
+        payload.get("prompt533_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt533_full_one_cycle_autonomous_smoke_ready",
+            payload.get("prompt533_full_one_cycle_autonomous_smoke_ready")
+            is True,
+        ),
+        (
+            "prompt533_full_one_cycle_autonomous_smoke_success",
+            payload.get("prompt533_full_one_cycle_autonomous_smoke_success")
+            is True,
+        ),
+        (
+            "prompt533_source_prompt532_ready",
+            payload.get("prompt533_source_prompt532_ready") is True,
+        ),
+        (
+            "prompt533_prompt528_chain_verified",
+            payload.get("prompt533_prompt528_chain_verified") is True,
+        ),
+        (
+            "prompt533_prompt529_chain_verified",
+            payload.get("prompt533_prompt529_chain_verified") is True,
+        ),
+        (
+            "prompt533_prompt530_chain_verified",
+            payload.get("prompt533_prompt530_chain_verified") is True,
+        ),
+        (
+            "prompt533_prompt531_chain_verified",
+            payload.get("prompt533_prompt531_chain_verified") is True,
+        ),
+        (
+            "prompt533_prompt532_chain_verified",
+            payload.get("prompt533_prompt532_chain_verified") is True,
+        ),
+        (
+            "prompt533_execution_request_bridge_verified",
+            payload.get("prompt533_execution_request_bridge_verified") is True,
+        ),
+        (
+            "prompt533_dispatch_artifact_contract_verified",
+            payload.get("prompt533_dispatch_artifact_contract_verified")
+            is True,
+        ),
+        (
+            "prompt533_execution_result_diff_review_verified",
+            payload.get("prompt533_execution_result_diff_review_verified")
+            is True,
+        ),
+        (
+            "prompt533_commit_tag_decision_gate_verified",
+            payload.get("prompt533_commit_tag_decision_gate_verified")
+            is True,
+        ),
+        (
+            "prompt533_post_commit_clean_rerun_verified",
+            payload.get("prompt533_post_commit_clean_rerun_verified")
+            is True,
+        ),
+        (
+            "prompt533_next_cycle_handoff_verified",
+            payload.get("prompt533_next_cycle_handoff_verified") is True,
+        ),
+        (
+            "prompt533_smoke_error_present",
+            payload.get("prompt533_smoke_error_present") is False,
+        ),
+        (
+            "prompt533_local_only_autonomous_cycle_ready",
+            payload.get("prompt533_local_only_autonomous_cycle_ready")
+            is True,
+        ),
+        (
+            "prompt533_local_only_autonomous_cycle_minimal_complete",
+            payload.get(
+                "prompt533_local_only_autonomous_cycle_minimal_complete"
+            )
+            is True,
+        ),
+        (
+            "prompt533_next_cycle_prompt378_request_ready",
+            payload.get("prompt533_next_cycle_prompt378_request_ready")
+            is True,
+        ),
+        (
+            "prompt533_next_cycle_prompt378_materialization_ready",
+            payload.get(
+                "prompt533_next_cycle_prompt378_materialization_ready"
+            )
+            is True,
+        ),
+        (
+            "prompt533_next_autonomous_cycle_ready",
+            payload.get("prompt533_next_autonomous_cycle_ready") is True,
+        ),
+        (
+            "prompt533_prompt378_execution_allowed",
+            payload.get("prompt533_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt533_prompt379_execution_allowed",
+            payload.get("prompt533_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt533_codex_execution_allowed",
+            payload.get("prompt533_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt533_git_mutation_allowed",
+            payload.get("prompt533_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt533_remote_mutation_allowed",
+            payload.get("prompt533_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt533_commit_tag_execution_allowed",
+            payload.get("prompt533_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt533_execution_performed_by_prompt533",
+            payload.get("prompt533_execution_performed_by_prompt533")
+            is False,
+        ),
+        (
+            "prompt533_next_action",
+            prompt533_next_action
+            == "prepare_next_autonomous_cycle_prompt378_request_gate",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    runtime_synthetic_payload_present = (
+        payload.get("prompt534_input_runtime_synthetic_payload_present")
+        is True
+    )
+    prompt528_ready_route_verified = (
+        payload.get("prompt534_input_prompt528_ready_route_verified") is True
+    )
+    prompt529_ready_route_verified = (
+        payload.get("prompt534_input_prompt529_ready_route_verified") is True
+    )
+    prompt530_review_passed_route_verified = (
+        payload.get("prompt534_input_prompt530_review_passed_route_verified")
+        is True
+    )
+    prompt531_ready_for_commit_tag_route_verified = (
+        payload.get(
+            "prompt534_input_prompt531_ready_for_commit_tag_route_verified"
+        )
+        is True
+    )
+    prompt532_post_commit_clean_rerun_route_verified = (
+        payload.get(
+            "prompt534_input_prompt532_post_commit_clean_rerun_route_verified"
+        )
+        is True
+    )
+    prompt533_full_cycle_smoke_passed_route_verified = (
+        payload.get(
+            "prompt534_input_prompt533_full_cycle_smoke_passed_route_verified"
+        )
+        is True
+    )
+    next_cycle_request_gate_route_verified = (
+        payload.get(
+            "prompt534_input_next_cycle_request_gate_route_verified"
+        )
+        is True
+    )
+    no_runtime_mutation_performed = (
+        payload.get("prompt534_input_no_runtime_mutation_performed") is True
+    )
+    synthetic_verification_error_present = (
+        payload.get(
+            "prompt534_input_synthetic_verification_error_present"
+        )
+        is True
+    )
+
+    synthetic_verification_checks = (
+        (
+            "prompt534_input_prompt528_ready_route_verified",
+            prompt528_ready_route_verified,
+        ),
+        (
+            "prompt534_input_prompt529_ready_route_verified",
+            prompt529_ready_route_verified,
+        ),
+        (
+            "prompt534_input_prompt530_review_passed_route_verified",
+            prompt530_review_passed_route_verified,
+        ),
+        (
+            "prompt534_input_prompt531_ready_for_commit_tag_route_verified",
+            prompt531_ready_for_commit_tag_route_verified,
+        ),
+        (
+            "prompt534_input_prompt532_post_commit_clean_rerun_route_verified",
+            prompt532_post_commit_clean_rerun_route_verified,
+        ),
+        (
+            "prompt534_input_prompt533_full_cycle_smoke_passed_route_verified",
+            prompt533_full_cycle_smoke_passed_route_verified,
+        ),
+        (
+            "prompt534_input_next_cycle_request_gate_route_verified",
+            next_cycle_request_gate_route_verified,
+        ),
+    )
+    synthetic_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in synthetic_verification_checks
+        if not passed
+    ]
+    if not runtime_synthetic_payload_present:
+        synthetic_blocked_reasons.append(
+            "missing_prompt534_input_runtime_synthetic_payload_present"
+        )
+    if not no_runtime_mutation_performed:
+        synthetic_blocked_reasons.append(
+            "missing_prompt534_input_no_runtime_mutation_performed"
+        )
+    if synthetic_verification_error_present:
+        synthetic_blocked_reasons.append(
+            "prompt534_input_synthetic_verification_error_present"
+        )
+
+    synthetic_inputs_verified = not synthetic_blocked_reasons
+    verification_success = base_readiness and synthetic_inputs_verified
+
+    if verification_success:
+        status = "synthetic_full_cycle_verified"
+        next_action = "prepare_prompt535_bounded_real_dispatch_trial_gate"
+        blocked_reasons: list[str] = []
+    elif base_readiness and not runtime_synthetic_payload_present:
+        status = "awaiting_synthetic_full_cycle_payload"
+        next_action = "await_synthetic_full_cycle_payload"
+        blocked_reasons = synthetic_blocked_reasons
+    elif base_readiness and runtime_synthetic_payload_present:
+        status = "synthetic_full_cycle_verification_failed"
+        next_action = (
+            "manual_review_prompt534_synthetic_full_cycle_verification_failure"
+        )
+        blocked_reasons = synthetic_blocked_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt534_runtime_synthetic_full_cycle_payload_verification"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt534",
+        "prompt534_runtime_synthetic_full_cycle_payload_verification_status": status,
+        "prompt534_runtime_synthetic_full_cycle_payload_verification_ready": (
+            bool(base_readiness)
+        ),
+        "prompt534_runtime_synthetic_full_cycle_payload_verification_success": (
+            bool(verification_success)
+        ),
+        "prompt534_source_prompt533_ready": bool(
+            payload.get("prompt533_full_one_cycle_autonomous_smoke_ready")
+        ),
+        "prompt534_runtime_synthetic_payload_present": (
+            runtime_synthetic_payload_present
+        ),
+        "prompt534_prompt528_ready_route_verified": (
+            prompt528_ready_route_verified
+        ),
+        "prompt534_prompt529_ready_route_verified": (
+            prompt529_ready_route_verified
+        ),
+        "prompt534_prompt530_review_passed_route_verified": (
+            prompt530_review_passed_route_verified
+        ),
+        "prompt534_prompt531_ready_for_commit_tag_route_verified": (
+            prompt531_ready_for_commit_tag_route_verified
+        ),
+        "prompt534_prompt532_post_commit_clean_rerun_route_verified": (
+            prompt532_post_commit_clean_rerun_route_verified
+        ),
+        "prompt534_prompt533_full_cycle_smoke_passed_route_verified": (
+            prompt533_full_cycle_smoke_passed_route_verified
+        ),
+        "prompt534_next_cycle_request_gate_route_verified": (
+            next_cycle_request_gate_route_verified
+        ),
+        "prompt534_no_runtime_mutation_performed": (
+            no_runtime_mutation_performed
+        ),
+        "prompt534_synthetic_verification_error_present": (
+            synthetic_verification_error_present
+        ),
+        "prompt534_local_only_autonomous_flow_runtime_verified": (
+            bool(verification_success)
+        ),
+        "prompt534_local_only_autonomous_flow_minimal_complete": (
+            bool(verification_success)
+        ),
+        "prompt534_ready_for_bounded_real_dispatch_trial": (
+            bool(verification_success)
+        ),
+        "prompt534_next_cycle_prompt378_request_gate_ready": (
+            bool(verification_success)
+        ),
+        "prompt534_prompt378_execution_allowed": False,
+        "prompt534_prompt379_execution_allowed": False,
+        "prompt534_codex_execution_allowed": False,
+        "prompt534_git_mutation_allowed": False,
+        "prompt534_remote_mutation_allowed": False,
+        "prompt534_commit_tag_execution_allowed": False,
+        "prompt534_execution_performed_by_prompt534": False,
+        "prompt534_next_action": next_action,
+        "prompt534_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt534_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -20324,4 +20660,5 @@ __all__ = [
     "_build_prompt531_commit_tag_decision_and_execution_gate_state",
     "_build_prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun_state",
     "_build_prompt533_full_one_cycle_autonomous_smoke_state",
+    "_build_prompt534_runtime_synthetic_full_cycle_payload_verification_state",
 ]

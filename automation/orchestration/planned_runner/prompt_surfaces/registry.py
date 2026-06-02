@@ -196,6 +196,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt531_commit_tag_decision_and_execution_gate_state,
     _build_prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun_state,
     _build_prompt533_full_one_cycle_autonomous_smoke_state,
+    _build_prompt534_runtime_synthetic_full_cycle_payload_verification_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -388,6 +389,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt531_commit_tag_decision_and_execution_gate_state": _build_prompt531_commit_tag_decision_and_execution_gate_state,
     "_build_prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun_state": _build_prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun_state,
     "_build_prompt533_full_one_cycle_autonomous_smoke_state": _build_prompt533_full_one_cycle_autonomous_smoke_state,
+    "_build_prompt534_runtime_synthetic_full_cycle_payload_verification_state": _build_prompt534_runtime_synthetic_full_cycle_payload_verification_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -585,4 +587,5 @@ __all__ = [
     "_build_prompt531_commit_tag_decision_and_execution_gate_state",
     "_build_prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun_state",
     "_build_prompt533_full_one_cycle_autonomous_smoke_state",
+    "_build_prompt534_runtime_synthetic_full_cycle_payload_verification_state",
 ]
