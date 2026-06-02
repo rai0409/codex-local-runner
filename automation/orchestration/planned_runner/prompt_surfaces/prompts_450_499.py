@@ -18164,6 +18164,290 @@ def _build_prompt529_actual_dispatch_command_artifact_state(
     }
 
 
+def _build_prompt530_actual_execution_result_and_diff_review_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt529_next_action = _normalize_text(
+        payload.get("prompt529_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt529_actual_dispatch_command_artifact_ready",
+            payload.get("prompt529_actual_dispatch_command_artifact_ready")
+            is True,
+        ),
+        (
+            "prompt529_source_prompt528_ready",
+            payload.get("prompt529_source_prompt528_ready") is True,
+        ),
+        (
+            "prompt529_codex_exec_command_prepared",
+            payload.get("prompt529_codex_exec_command_prepared") is True,
+        ),
+        (
+            "prompt529_dispatch_command_artifact_required",
+            payload.get("prompt529_dispatch_command_artifact_required")
+            is True,
+        ),
+        (
+            "prompt529_codex_execution_command_required",
+            payload.get("prompt529_codex_execution_command_required")
+            is True,
+        ),
+        (
+            "prompt529_execution_result_artifact_required",
+            payload.get("prompt529_execution_result_artifact_required")
+            is True,
+        ),
+        (
+            "prompt529_diff_review_required",
+            payload.get("prompt529_diff_review_required") is True,
+        ),
+        (
+            "prompt529_commit_tag_decision_required",
+            payload.get("prompt529_commit_tag_decision_required") is True,
+        ),
+        (
+            "prompt529_next_cycle_handoff_required",
+            payload.get("prompt529_next_cycle_handoff_required") is True,
+        ),
+        (
+            "prompt529_pre_execution_clean_worktree_required",
+            payload.get("prompt529_pre_execution_clean_worktree_required")
+            is True,
+        ),
+        (
+            "prompt529_allowed_files_guard_required",
+            payload.get("prompt529_allowed_files_guard_required") is True,
+        ),
+        (
+            "prompt529_one_shot_token_required",
+            payload.get("prompt529_one_shot_token_required") is True,
+        ),
+        (
+            "prompt529_double_run_prevention_required",
+            payload.get("prompt529_double_run_prevention_required") is True,
+        ),
+        (
+            "prompt529_post_execution_artifact_check_required",
+            payload.get("prompt529_post_execution_artifact_check_required")
+            is True,
+        ),
+        (
+            "prompt529_prompt378_execution_allowed",
+            payload.get("prompt529_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt529_prompt379_execution_allowed",
+            payload.get("prompt529_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt529_codex_execution_allowed",
+            payload.get("prompt529_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt529_git_mutation_allowed",
+            payload.get("prompt529_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt529_remote_mutation_allowed",
+            payload.get("prompt529_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt529_commit_tag_execution_allowed",
+            payload.get("prompt529_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt529_execution_performed_by_prompt529",
+            payload.get("prompt529_execution_performed_by_prompt529")
+            is False,
+        ),
+        (
+            "prompt529_next_action",
+            prompt529_next_action
+            == "prepare_prompt530_actual_execution_result_and_diff_review",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    actual_execution_result_present = (
+        payload.get("prompt530_input_actual_execution_result_present")
+        is True
+    )
+    codex_returncode = payload.get("prompt530_input_codex_returncode")
+    codex_returncode_success = codex_returncode == 0
+    codex_stdout_artifact_present = (
+        payload.get("prompt530_input_codex_stdout_artifact_present") is True
+    )
+    codex_stderr_artifact_present = (
+        payload.get("prompt530_input_codex_stderr_artifact_present") is True
+    )
+    execution_result_artifact_present = (
+        payload.get("prompt530_input_execution_result_artifact_present")
+        is True
+    )
+    run_state_artifact_present = (
+        payload.get("prompt530_input_run_state_artifact_present") is True
+    )
+    diff_review_artifact_present = (
+        payload.get("prompt530_input_diff_review_artifact_present") is True
+    )
+    changed_files_artifact_present = (
+        payload.get("prompt530_input_changed_files_artifact_present") is True
+    )
+    tracked_diff_present = (
+        payload.get("prompt530_input_tracked_diff_present") is True
+    )
+    changed_files_allowed = (
+        payload.get("prompt530_input_changed_files_allowed") is True
+    )
+    unexpected_diff_present = (
+        payload.get("prompt530_input_unexpected_diff_present") is True
+    )
+    required_fields_present = (
+        payload.get("prompt530_input_required_fields_present") is True
+    )
+    py_compile_ok = payload.get("prompt530_input_py_compile_ok") is True
+    execution_error_present = (
+        payload.get("prompt530_input_execution_error_present") is True
+    )
+
+    result_checks = (
+        (
+            "prompt530_input_actual_execution_result_present",
+            actual_execution_result_present,
+        ),
+        ("prompt530_input_codex_returncode", codex_returncode_success),
+        (
+            "prompt530_input_codex_stdout_artifact_present",
+            codex_stdout_artifact_present,
+        ),
+        (
+            "prompt530_input_codex_stderr_artifact_present",
+            codex_stderr_artifact_present,
+        ),
+        (
+            "prompt530_input_execution_result_artifact_present",
+            execution_result_artifact_present,
+        ),
+        (
+            "prompt530_input_run_state_artifact_present",
+            run_state_artifact_present,
+        ),
+        (
+            "prompt530_input_diff_review_artifact_present",
+            diff_review_artifact_present,
+        ),
+        (
+            "prompt530_input_changed_files_artifact_present",
+            changed_files_artifact_present,
+        ),
+        ("prompt530_input_tracked_diff_present", tracked_diff_present),
+        ("prompt530_input_changed_files_allowed", changed_files_allowed),
+        (
+            "prompt530_input_unexpected_diff_present",
+            unexpected_diff_present is False,
+        ),
+        ("prompt530_input_required_fields_present", required_fields_present),
+        ("prompt530_input_py_compile_ok", py_compile_ok),
+        (
+            "prompt530_input_execution_error_present",
+            execution_error_present is False,
+        ),
+    )
+    result_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in result_checks
+        if not passed
+    ]
+    execution_result_success = base_readiness and not result_blocked_reasons
+
+    if execution_result_success:
+        status = "review_passed"
+        next_action = "prepare_prompt531_commit_tag_decision_and_execution_gate"
+        blocked_reasons: list[str] = []
+    elif base_readiness and not actual_execution_result_present:
+        status = "awaiting_actual_execution_result"
+        next_action = "await_actual_execution_result"
+        blocked_reasons = []
+    elif base_readiness and actual_execution_result_present:
+        status = "review_failed"
+        next_action = (
+            "manual_review_prompt530_actual_execution_result_or_diff_failure"
+        )
+        blocked_reasons = result_blocked_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt530_actual_execution_result_and_diff_review"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt530",
+        "prompt530_actual_execution_result_and_diff_review_status": status,
+        "prompt530_actual_execution_result_and_diff_review_ready": (
+            base_readiness
+        ),
+        "prompt530_actual_execution_result_success": (
+            execution_result_success
+        ),
+        "prompt530_source_prompt529_ready": bool(
+            payload.get("prompt529_actual_dispatch_command_artifact_ready")
+        ),
+        "prompt530_actual_execution_result_present": (
+            actual_execution_result_present
+        ),
+        "prompt530_codex_returncode": codex_returncode,
+        "prompt530_codex_returncode_success": codex_returncode_success,
+        "prompt530_codex_stdout_artifact_present": (
+            codex_stdout_artifact_present
+        ),
+        "prompt530_codex_stderr_artifact_present": (
+            codex_stderr_artifact_present
+        ),
+        "prompt530_execution_result_artifact_present": (
+            execution_result_artifact_present
+        ),
+        "prompt530_run_state_artifact_present": run_state_artifact_present,
+        "prompt530_diff_review_artifact_present": diff_review_artifact_present,
+        "prompt530_changed_files_artifact_present": (
+            changed_files_artifact_present
+        ),
+        "prompt530_tracked_diff_present": tracked_diff_present,
+        "prompt530_changed_files_allowed": changed_files_allowed,
+        "prompt530_unexpected_diff_present": unexpected_diff_present,
+        "prompt530_required_fields_present": required_fields_present,
+        "prompt530_py_compile_ok": py_compile_ok,
+        "prompt530_execution_error_present": execution_error_present,
+        "prompt530_commit_tag_decision_ready": execution_result_success,
+        "prompt530_commit_tag_candidate_ready": execution_result_success,
+        "prompt530_commit_tag_plan_required": execution_result_success,
+        "prompt530_next_cycle_handoff_required": execution_result_success,
+        "prompt530_prompt378_execution_allowed": False,
+        "prompt530_prompt379_execution_allowed": False,
+        "prompt530_codex_execution_allowed": False,
+        "prompt530_git_mutation_allowed": False,
+        "prompt530_remote_mutation_allowed": False,
+        "prompt530_commit_tag_execution_allowed": False,
+        "prompt530_execution_performed_by_prompt530": False,
+        "prompt530_next_action": next_action,
+        "prompt530_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt530_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -19207,4 +19491,5 @@ __all__ = [
     "_build_prompt527_next_cycle_prompt378_materialization_result_ingestion_state",
     "_build_prompt528_next_cycle_prompt378_execution_request_state",
     "_build_prompt529_actual_dispatch_command_artifact_state",
+    "_build_prompt530_actual_execution_result_and_diff_review_state",
 ]
