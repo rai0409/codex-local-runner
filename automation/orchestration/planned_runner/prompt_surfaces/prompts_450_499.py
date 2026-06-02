@@ -17941,6 +17941,229 @@ def _build_prompt528_next_cycle_prompt378_execution_request_state(
     }
 
 
+def _build_prompt529_actual_dispatch_command_artifact_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt528_next_action = _normalize_text(
+        payload.get("prompt528_next_action"),
+        default="",
+    )
+    artifact_readiness_checks = (
+        (
+            "prompt528_next_cycle_prompt378_execution_request_ready",
+            payload.get("prompt528_next_cycle_prompt378_execution_request_ready")
+            is True,
+        ),
+        (
+            "prompt528_source_prompt527_ready",
+            payload.get("prompt528_source_prompt527_ready") is True,
+        ),
+        (
+            "prompt528_prompt378_execution_request_ready",
+            payload.get("prompt528_prompt378_execution_request_ready") is True,
+        ),
+        (
+            "prompt528_prompt379_live_request_ready",
+            payload.get("prompt528_prompt379_live_request_ready") is True,
+        ),
+        (
+            "prompt528_prompt379_live_request_required",
+            payload.get("prompt528_prompt379_live_request_required") is True,
+        ),
+        (
+            "prompt528_prompt379_live_request_prepared",
+            payload.get("prompt528_prompt379_live_request_prepared") is True,
+        ),
+        (
+            "prompt528_prompt379_execution_result_required",
+            payload.get("prompt528_prompt379_execution_result_required")
+            is True,
+        ),
+        (
+            "prompt528_commit_tag_result_required",
+            payload.get("prompt528_commit_tag_result_required") is True,
+        ),
+        (
+            "prompt528_next_cycle_handoff_required",
+            payload.get("prompt528_next_cycle_handoff_required") is True,
+        ),
+        (
+            "prompt528_actual_execution_connector_required",
+            payload.get("prompt528_actual_execution_connector_required")
+            is True,
+        ),
+        (
+            "prompt528_actual_execution_connector_ready",
+            payload.get("prompt528_actual_execution_connector_ready") is True,
+        ),
+        (
+            "prompt528_actual_dispatch_command_artifact_required",
+            payload.get(
+                "prompt528_actual_dispatch_command_artifact_required"
+            )
+            is True,
+        ),
+        (
+            "prompt528_codex_execution_command_required",
+            payload.get("prompt528_codex_execution_command_required") is True,
+        ),
+        (
+            "prompt528_execution_result_artifact_required",
+            payload.get("prompt528_execution_result_artifact_required")
+            is True,
+        ),
+        (
+            "prompt528_diff_review_required",
+            payload.get("prompt528_diff_review_required") is True,
+        ),
+        (
+            "prompt528_commit_tag_decision_required",
+            payload.get("prompt528_commit_tag_decision_required") is True,
+        ),
+        (
+            "prompt528_next_cycle_handoff_required_for_actual_loop",
+            payload.get(
+                "prompt528_next_cycle_handoff_required_for_actual_loop"
+            )
+            is True,
+        ),
+        (
+            "prompt528_prompt378_execution_allowed",
+            payload.get("prompt528_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt528_prompt379_execution_allowed",
+            payload.get("prompt528_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt528_codex_execution_allowed",
+            payload.get("prompt528_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt528_git_mutation_allowed",
+            payload.get("prompt528_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt528_remote_mutation_allowed",
+            payload.get("prompt528_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt528_commit_tag_execution_allowed",
+            payload.get("prompt528_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt528_execution_performed_by_prompt528",
+            payload.get("prompt528_execution_performed_by_prompt528")
+            is False,
+        ),
+        (
+            "prompt528_next_action",
+            prompt528_next_action
+            == "prepare_prompt529_actual_dispatch_command_artifact",
+        ),
+    )
+    blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in artifact_readiness_checks
+        if not passed
+    ]
+    artifact_readiness = not blocked_reasons
+
+    codex_prompt_artifact_path = (
+        "artifacts/runtime_commands/prompt529_next_cycle_codex_prompt.md"
+    )
+    dispatch_command_artifact_path = (
+        "artifacts/runtime_commands/prompt529_actual_dispatch_command.sh"
+    )
+    execution_result_artifact_path = (
+        "artifacts/runtime_commands/prompt529_actual_execution_result.json"
+    )
+    stdout_artifact_path = (
+        "artifacts/runtime_commands/prompt529_codex_stdout.txt"
+    )
+    stderr_artifact_path = (
+        "artifacts/runtime_commands/prompt529_codex_stderr.txt"
+    )
+    diff_review_artifact_path = (
+        "artifacts/runtime_commands/prompt529_diff_review.txt"
+    )
+    changed_files_artifact_path = (
+        "artifacts/runtime_commands/prompt529_changed_files.txt"
+    )
+    commit_tag_plan_artifact_path = (
+        "artifacts/runtime_commands/prompt529_commit_tag_plan.json"
+    )
+    run_state_artifact_path = (
+        "artifacts/runtime_commands/prompt529_run_state.json"
+    )
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt529",
+        "prompt529_actual_dispatch_command_artifact_status": (
+            "ready" if artifact_readiness else "blocked"
+        ),
+        "prompt529_actual_dispatch_command_artifact_ready": (
+            artifact_readiness
+        ),
+        "prompt529_source_prompt528_ready": bool(
+            payload.get(
+                "prompt528_next_cycle_prompt378_execution_request_ready"
+            )
+        ),
+        "prompt529_codex_prompt_artifact_path": codex_prompt_artifact_path,
+        "prompt529_dispatch_command_artifact_path": (
+            dispatch_command_artifact_path
+        ),
+        "prompt529_execution_result_artifact_path": (
+            execution_result_artifact_path
+        ),
+        "prompt529_stdout_artifact_path": stdout_artifact_path,
+        "prompt529_stderr_artifact_path": stderr_artifact_path,
+        "prompt529_diff_review_artifact_path": diff_review_artifact_path,
+        "prompt529_changed_files_artifact_path": changed_files_artifact_path,
+        "prompt529_commit_tag_plan_artifact_path": (
+            commit_tag_plan_artifact_path
+        ),
+        "prompt529_run_state_artifact_path": run_state_artifact_path,
+        "prompt529_codex_exec_command_prepared": artifact_readiness,
+        "prompt529_codex_exec_command_preview": (
+            "codex exec < artifacts/runtime_commands/prompt529_next_cycle_codex_prompt.md"
+        ),
+        "prompt529_dispatch_command_artifact_required": artifact_readiness,
+        "prompt529_codex_execution_command_required": artifact_readiness,
+        "prompt529_execution_result_artifact_required": artifact_readiness,
+        "prompt529_diff_review_required": artifact_readiness,
+        "prompt529_commit_tag_decision_required": artifact_readiness,
+        "prompt529_next_cycle_handoff_required": artifact_readiness,
+        "prompt529_pre_execution_clean_worktree_required": artifact_readiness,
+        "prompt529_allowed_files_guard_required": artifact_readiness,
+        "prompt529_one_shot_token_required": artifact_readiness,
+        "prompt529_double_run_prevention_required": artifact_readiness,
+        "prompt529_post_execution_artifact_check_required": (
+            artifact_readiness
+        ),
+        "prompt529_prompt378_execution_allowed": False,
+        "prompt529_prompt379_execution_allowed": False,
+        "prompt529_codex_execution_allowed": False,
+        "prompt529_git_mutation_allowed": False,
+        "prompt529_remote_mutation_allowed": False,
+        "prompt529_commit_tag_execution_allowed": False,
+        "prompt529_execution_performed_by_prompt529": False,
+        "prompt529_next_action": (
+            "prepare_prompt530_actual_execution_result_and_diff_review"
+            if artifact_readiness
+            else "manual_review_prompt529_actual_dispatch_command_artifact"
+        ),
+        "prompt529_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt529_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -18983,4 +19206,5 @@ __all__ = [
     "_build_prompt526_next_cycle_prompt378_materialization_state",
     "_build_prompt527_next_cycle_prompt378_materialization_result_ingestion_state",
     "_build_prompt528_next_cycle_prompt378_execution_request_state",
+    "_build_prompt529_actual_dispatch_command_artifact_state",
 ]
