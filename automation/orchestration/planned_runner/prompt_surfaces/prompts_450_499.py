@@ -18702,6 +18702,260 @@ def _build_prompt531_commit_tag_decision_and_execution_gate_state(
     }
 
 
+def _build_prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt531_next_action = _normalize_text(
+        payload.get("prompt531_next_action"),
+        default="",
+    )
+    base_readiness_checks = (
+        (
+            "prompt531_commit_tag_decision_and_execution_gate_ready",
+            payload.get("prompt531_commit_tag_decision_and_execution_gate_ready")
+            is True,
+        ),
+        (
+            "prompt531_commit_tag_execution_candidate_ready",
+            payload.get("prompt531_commit_tag_execution_candidate_ready")
+            is True,
+        ),
+        (
+            "prompt531_source_prompt530_ready",
+            payload.get("prompt531_source_prompt530_ready") is True,
+        ),
+        (
+            "prompt531_commit_message_present",
+            payload.get("prompt531_commit_message_present") is True,
+        ),
+        (
+            "prompt531_tag_name_present",
+            payload.get("prompt531_tag_name_present") is True,
+        ),
+        (
+            "prompt531_commit_tag_plan_artifact_present",
+            payload.get("prompt531_commit_tag_plan_artifact_present") is True,
+        ),
+        (
+            "prompt531_pre_commit_worktree_clean",
+            payload.get("prompt531_pre_commit_worktree_clean") is False,
+        ),
+        (
+            "prompt531_changed_files_allowed",
+            payload.get("prompt531_changed_files_allowed") is True,
+        ),
+        (
+            "prompt531_required_fields_present",
+            payload.get("prompt531_required_fields_present") is True,
+        ),
+        (
+            "prompt531_py_compile_ok",
+            payload.get("prompt531_py_compile_ok") is True,
+        ),
+        (
+            "prompt531_tag_name_available",
+            payload.get("prompt531_tag_name_available") is True,
+        ),
+        (
+            "prompt531_commit_tag_error_present",
+            payload.get("prompt531_commit_tag_error_present") is False,
+        ),
+        (
+            "prompt531_commit_tag_decision_ready",
+            payload.get("prompt531_commit_tag_decision_ready") is True,
+        ),
+        (
+            "prompt531_commit_tag_candidate_ready",
+            payload.get("prompt531_commit_tag_candidate_ready") is True,
+        ),
+        (
+            "prompt531_commit_tag_execution_required",
+            payload.get("prompt531_commit_tag_execution_required") is True,
+        ),
+        (
+            "prompt531_commit_tag_execution_allowed",
+            payload.get("prompt531_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt531_commit_tag_execution_performed",
+            payload.get("prompt531_commit_tag_execution_performed") is False,
+        ),
+        (
+            "prompt531_post_commit_clean_rerun_required",
+            payload.get("prompt531_post_commit_clean_rerun_required") is True,
+        ),
+        (
+            "prompt531_next_cycle_handoff_required",
+            payload.get("prompt531_next_cycle_handoff_required") is True,
+        ),
+        (
+            "prompt531_prompt378_execution_allowed",
+            payload.get("prompt531_prompt378_execution_allowed") is False,
+        ),
+        (
+            "prompt531_prompt379_execution_allowed",
+            payload.get("prompt531_prompt379_execution_allowed") is False,
+        ),
+        (
+            "prompt531_codex_execution_allowed",
+            payload.get("prompt531_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt531_git_mutation_allowed",
+            payload.get("prompt531_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt531_remote_mutation_allowed",
+            payload.get("prompt531_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt531_execution_performed_by_prompt531",
+            payload.get("prompt531_execution_performed_by_prompt531")
+            is False,
+        ),
+        (
+            "prompt531_next_action",
+            prompt531_next_action == "run_external_commit_tag_execution",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    commit_tag_result_present = (
+        payload.get("prompt532_input_commit_tag_result_present") is True
+    )
+    commit_created = payload.get("prompt532_input_commit_created") is True
+    commit_hash_present = (
+        payload.get("prompt532_input_commit_hash_present") is True
+    )
+    tag_created = payload.get("prompt532_input_tag_created") is True
+    tag_name_present = payload.get("prompt532_input_tag_name_present") is True
+    tag_points_at_head = (
+        payload.get("prompt532_input_tag_points_at_head") is True
+    )
+    post_commit_worktree_clean = (
+        payload.get("prompt532_input_post_commit_worktree_clean") is True
+    )
+    post_commit_rerun_performed = (
+        payload.get("prompt532_input_post_commit_rerun_performed") is True
+    )
+    post_commit_rerun_success = (
+        payload.get("prompt532_input_post_commit_rerun_success") is True
+    )
+    head_tag_verified = (
+        payload.get("prompt532_input_head_tag_verified") is True
+    )
+    required_fields_verified = (
+        payload.get("prompt532_input_required_fields_verified") is True
+    )
+    commit_tag_error_present = (
+        payload.get("prompt532_input_commit_tag_error_present") is True
+    )
+
+    result_checks = (
+        ("prompt532_input_commit_tag_result_present", commit_tag_result_present),
+        ("prompt532_input_commit_created", commit_created),
+        ("prompt532_input_commit_hash_present", commit_hash_present),
+        ("prompt532_input_tag_created", tag_created),
+        ("prompt532_input_tag_name_present", tag_name_present),
+        ("prompt532_input_tag_points_at_head", tag_points_at_head),
+        (
+            "prompt532_input_post_commit_worktree_clean",
+            post_commit_worktree_clean,
+        ),
+        (
+            "prompt532_input_post_commit_rerun_performed",
+            post_commit_rerun_performed,
+        ),
+        (
+            "prompt532_input_post_commit_rerun_success",
+            post_commit_rerun_success,
+        ),
+        ("prompt532_input_head_tag_verified", head_tag_verified),
+        (
+            "prompt532_input_required_fields_verified",
+            required_fields_verified,
+        ),
+        (
+            "prompt532_input_commit_tag_error_present",
+            payload.get("prompt532_input_commit_tag_error_present") is False,
+        ),
+    )
+    result_blocked_reasons = [
+        f"missing_{field}" for field, passed in result_checks if not passed
+    ]
+    result_success = base_readiness and not result_blocked_reasons
+
+    if result_success:
+        status = "post_commit_clean_rerun_verified"
+        next_action = "prepare_prompt533_full_one_cycle_autonomous_smoke"
+        blocked_reasons: list[str] = []
+    elif base_readiness and not commit_tag_result_present:
+        status = "awaiting_external_commit_tag_result"
+        next_action = "await_external_commit_tag_result"
+        blocked_reasons = []
+    elif base_readiness and commit_tag_result_present:
+        status = "post_commit_clean_rerun_failed"
+        next_action = (
+            "manual_review_prompt532_commit_tag_or_post_commit_rerun_failure"
+        )
+        blocked_reasons = result_blocked_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt532",
+        "prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun_status": status,
+        "prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun_ready": (
+            base_readiness
+        ),
+        "prompt532_external_commit_tag_result_success": result_success,
+        "prompt532_source_prompt531_ready": bool(
+            payload.get("prompt531_commit_tag_decision_and_execution_gate_ready")
+        ),
+        "prompt532_commit_tag_result_present": commit_tag_result_present,
+        "prompt532_commit_created": commit_created,
+        "prompt532_commit_hash_present": commit_hash_present,
+        "prompt532_tag_created": tag_created,
+        "prompt532_tag_name_present": tag_name_present,
+        "prompt532_tag_points_at_head": tag_points_at_head,
+        "prompt532_post_commit_worktree_clean": post_commit_worktree_clean,
+        "prompt532_post_commit_rerun_performed": post_commit_rerun_performed,
+        "prompt532_post_commit_rerun_success": post_commit_rerun_success,
+        "prompt532_head_tag_verified": head_tag_verified,
+        "prompt532_required_fields_verified": required_fields_verified,
+        "prompt532_commit_tag_error_present": commit_tag_error_present,
+        "prompt532_next_cycle_handoff_ready": result_success,
+        "prompt532_next_autonomous_cycle_ready": result_success,
+        "prompt532_next_prompt378_request_gate_required": result_success,
+        "prompt532_next_prompt378_materialization_required": result_success,
+        "prompt532_full_one_cycle_smoke_required": result_success,
+        "prompt532_prompt378_execution_allowed": False,
+        "prompt532_prompt379_execution_allowed": False,
+        "prompt532_codex_execution_allowed": False,
+        "prompt532_git_mutation_allowed": False,
+        "prompt532_remote_mutation_allowed": False,
+        "prompt532_commit_tag_execution_allowed": False,
+        "prompt532_execution_performed_by_prompt532": False,
+        "prompt532_next_action": next_action,
+        "prompt532_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt532_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -19747,4 +20001,5 @@ __all__ = [
     "_build_prompt529_actual_dispatch_command_artifact_state",
     "_build_prompt530_actual_execution_result_and_diff_review_state",
     "_build_prompt531_commit_tag_decision_and_execution_gate_state",
+    "_build_prompt532_external_commit_tag_result_ingestion_and_post_commit_clean_rerun_state",
 ]
