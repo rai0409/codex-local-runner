@@ -190,6 +190,7 @@ from automation.orchestration.planned_runner.prompt_surfaces.prompts_450_499 imp
     _build_prompt525_next_cycle_prompt378_request_gate_state,
     _build_prompt526_next_cycle_prompt378_materialization_state,
     _build_prompt527_next_cycle_prompt378_materialization_result_ingestion_state,
+    _build_prompt528_next_cycle_prompt378_execution_request_state,
 )
 PromptBuilder = Callable[..., dict[str, Any]]
 
@@ -376,6 +377,7 @@ _PROMPT_BUILDERS: dict[str, PromptBuilder] = {
     "_build_prompt525_next_cycle_prompt378_request_gate_state": _build_prompt525_next_cycle_prompt378_request_gate_state,
     "_build_prompt526_next_cycle_prompt378_materialization_state": _build_prompt526_next_cycle_prompt378_materialization_state,
     "_build_prompt527_next_cycle_prompt378_materialization_result_ingestion_state": _build_prompt527_next_cycle_prompt378_materialization_result_ingestion_state,
+    "_build_prompt528_next_cycle_prompt378_execution_request_state": _build_prompt528_next_cycle_prompt378_execution_request_state,
 }
 
 def get_prompt_builders() -> dict[str, PromptBuilder]:
@@ -567,4 +569,5 @@ __all__ = [
     "_build_prompt525_next_cycle_prompt378_request_gate_state",
     "_build_prompt526_next_cycle_prompt378_materialization_state",
     "_build_prompt527_next_cycle_prompt378_materialization_result_ingestion_state",
+    "_build_prompt528_next_cycle_prompt378_execution_request_state",
 ]
