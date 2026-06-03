@@ -24291,6 +24291,357 @@ def _build_prompt547_real_runtime_internal_codex_smoke_state(
     }
 
 
+def _build_prompt548_runtime_result_injection_to_contract_state(
+    *,
+    run_state_payload: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    payload = run_state_payload if isinstance(run_state_payload, Mapping) else {}
+    prompt547_next_action = _normalize_text(
+        payload.get("prompt547_next_action"),
+        default="",
+    )
+
+    base_readiness_checks = (
+        (
+            "prompt547_real_runtime_internal_codex_smoke_ready",
+            payload.get("prompt547_real_runtime_internal_codex_smoke_ready")
+            is True,
+        ),
+        (
+            "prompt547_real_runtime_internal_codex_smoke_success",
+            payload.get("prompt547_real_runtime_internal_codex_smoke_success")
+            is True,
+        ),
+        (
+            "prompt547_source_prompt546_ready",
+            payload.get("prompt547_source_prompt546_ready") is True,
+        ),
+        (
+            "prompt547_real_runtime_smoke_result_present",
+            payload.get("prompt547_real_runtime_smoke_result_present")
+            is True,
+        ),
+        (
+            "prompt547_internal_codex_subprocess_executed",
+            payload.get("prompt547_internal_codex_subprocess_executed")
+            is True,
+        ),
+        (
+            "prompt547_internal_codex_returncode_success",
+            payload.get("prompt547_internal_codex_returncode_success")
+            is True,
+        ),
+        (
+            "prompt547_internal_codex_stdout_captured",
+            payload.get("prompt547_internal_codex_stdout_captured") is True,
+        ),
+        (
+            "prompt547_internal_codex_stderr_captured",
+            payload.get("prompt547_internal_codex_stderr_captured") is True,
+        ),
+        (
+            "prompt547_internal_changed_files_captured",
+            payload.get("prompt547_internal_changed_files_captured") is True,
+        ),
+        (
+            "prompt547_internal_diff_captured",
+            payload.get("prompt547_internal_diff_captured") is True,
+        ),
+        (
+            "prompt547_internal_changed_files_allowed",
+            payload.get("prompt547_internal_changed_files_allowed") is True,
+        ),
+        (
+            "prompt547_internal_unexpected_changed_files_present",
+            payload.get("prompt547_internal_unexpected_changed_files_present")
+            is False,
+        ),
+        (
+            "prompt547_internal_unexpected_diff_present",
+            payload.get("prompt547_internal_unexpected_diff_present")
+            is False,
+        ),
+        (
+            "prompt547_internal_execution_timeout_occurred",
+            payload.get("prompt547_internal_execution_timeout_occurred")
+            is False,
+        ),
+        (
+            "prompt547_internal_execution_error_present",
+            payload.get("prompt547_internal_execution_error_present") is False,
+        ),
+        (
+            "prompt547_internal_no_remote_mutation_verified",
+            payload.get("prompt547_internal_no_remote_mutation_verified")
+            is True,
+        ),
+        (
+            "prompt547_runtime_artifacts_present",
+            payload.get("prompt547_runtime_artifacts_present") is True,
+        ),
+        (
+            "prompt547_runtime_result_json_present",
+            payload.get("prompt547_runtime_result_json_present") is True,
+        ),
+        (
+            "prompt547_ready_for_prompt548_runtime_result_injection_to_contract",
+            payload.get(
+                "prompt547_ready_for_prompt548_runtime_result_injection_to_contract"
+            )
+            is True,
+        ),
+        (
+            "prompt547_runtime_internal_codex_smoke_artifacts_verified",
+            payload.get(
+                "prompt547_runtime_internal_codex_smoke_artifacts_verified"
+            )
+            is True,
+        ),
+        (
+            "prompt547_runtime_internal_codex_smoke_local_only_verified",
+            payload.get(
+                "prompt547_runtime_internal_codex_smoke_local_only_verified"
+            )
+            is True,
+        ),
+        (
+            "prompt547_codex_execution_allowed",
+            payload.get("prompt547_codex_execution_allowed") is False,
+        ),
+        (
+            "prompt547_subprocess_execution_allowed",
+            payload.get("prompt547_subprocess_execution_allowed") is False,
+        ),
+        (
+            "prompt547_git_mutation_allowed",
+            payload.get("prompt547_git_mutation_allowed") is False,
+        ),
+        (
+            "prompt547_remote_mutation_allowed",
+            payload.get("prompt547_remote_mutation_allowed") is False,
+        ),
+        (
+            "prompt547_commit_tag_execution_allowed",
+            payload.get("prompt547_commit_tag_execution_allowed") is False,
+        ),
+        (
+            "prompt547_execution_performed_by_prompt547",
+            payload.get("prompt547_execution_performed_by_prompt547") is False,
+        ),
+        (
+            "prompt547_next_action",
+            prompt547_next_action
+            == "prepare_prompt548_runtime_result_injection_to_contract",
+        ),
+    )
+    base_blocked_reasons = [
+        f"missing_{field}"
+        for field, passed in base_readiness_checks
+        if not passed
+    ]
+    base_readiness = not base_blocked_reasons
+
+    runtime_result_json_loaded = (
+        payload.get("prompt548_input_runtime_result_json_loaded") is True
+    )
+    runtime_result_json_schema_valid = (
+        payload.get("prompt548_input_runtime_result_json_schema_valid") is True
+    )
+    stdout_artifact_exists = (
+        payload.get("prompt548_input_stdout_artifact_exists") is True
+    )
+    stderr_artifact_exists = (
+        payload.get("prompt548_input_stderr_artifact_exists") is True
+    )
+    returncode_artifact_exists = (
+        payload.get("prompt548_input_returncode_artifact_exists") is True
+    )
+    changed_files_artifact_exists = (
+        payload.get("prompt548_input_changed_files_artifact_exists") is True
+    )
+    diff_artifact_exists = (
+        payload.get("prompt548_input_diff_artifact_exists") is True
+    )
+    result_json_artifact_exists = (
+        payload.get("prompt548_input_result_json_artifact_exists") is True
+    )
+    returncode_zero = payload.get("prompt548_input_returncode_zero") is True
+    subprocess_executed = (
+        payload.get("prompt548_input_subprocess_executed") is True
+    )
+    changed_files_allowed = (
+        payload.get("prompt548_input_changed_files_allowed") is True
+    )
+    unexpected_changed_files_present = (
+        payload.get("prompt548_input_unexpected_changed_files_present") is True
+    )
+    unexpected_diff_present = (
+        payload.get("prompt548_input_unexpected_diff_present") is True
+    )
+    timeout_occurred = (
+        payload.get("prompt548_input_timeout_occurred") is True
+    )
+    execution_error_present = (
+        payload.get("prompt548_input_execution_error_present") is True
+    )
+    no_remote_mutation_verified = (
+        payload.get("prompt548_input_no_remote_mutation_verified") is True
+    )
+    injection_error_present = (
+        payload.get("prompt548_input_injection_error_present") is True
+    )
+
+    injection_checks = (
+        ("base_readiness", base_readiness),
+        (
+            "prompt548_input_runtime_result_json_loaded",
+            runtime_result_json_loaded,
+        ),
+        (
+            "prompt548_input_runtime_result_json_schema_valid",
+            runtime_result_json_schema_valid,
+        ),
+        ("prompt548_input_stdout_artifact_exists", stdout_artifact_exists),
+        ("prompt548_input_stderr_artifact_exists", stderr_artifact_exists),
+        (
+            "prompt548_input_returncode_artifact_exists",
+            returncode_artifact_exists,
+        ),
+        (
+            "prompt548_input_changed_files_artifact_exists",
+            changed_files_artifact_exists,
+        ),
+        ("prompt548_input_diff_artifact_exists", diff_artifact_exists),
+        (
+            "prompt548_input_result_json_artifact_exists",
+            result_json_artifact_exists,
+        ),
+        ("prompt548_input_returncode_zero", returncode_zero),
+        ("prompt548_input_subprocess_executed", subprocess_executed),
+        ("prompt548_input_changed_files_allowed", changed_files_allowed),
+        (
+            "prompt548_input_unexpected_changed_files_present",
+            not unexpected_changed_files_present,
+        ),
+        (
+            "prompt548_input_unexpected_diff_present",
+            not unexpected_diff_present,
+        ),
+        ("prompt548_input_timeout_occurred", not timeout_occurred),
+        (
+            "prompt548_input_execution_error_present",
+            not execution_error_present,
+        ),
+        (
+            "prompt548_input_no_remote_mutation_verified",
+            no_remote_mutation_verified,
+        ),
+        (
+            "prompt548_input_injection_error_present",
+            not injection_error_present,
+        ),
+    )
+    injection_failure_reasons = [
+        f"failed_{field}"
+        for field, passed in injection_checks
+        if not passed
+    ]
+    injection_success = not injection_failure_reasons
+    runtime_smoke_artifacts_loaded = bool(
+        stdout_artifact_exists
+        and stderr_artifact_exists
+        and returncode_artifact_exists
+        and changed_files_artifact_exists
+        and diff_artifact_exists
+        and result_json_artifact_exists
+        and runtime_result_json_loaded
+    )
+
+    if injection_success:
+        status = "runtime_result_injection_to_contract_success"
+        next_action = (
+            "prepare_prompt549_actual_runtime_smoke_artifact_verification"
+        )
+        blocked_reasons: list[str] = []
+    elif base_readiness and not runtime_result_json_loaded:
+        status = "awaiting_runtime_result_injection_to_contract"
+        next_action = "await_runtime_result_injection_to_contract"
+        blocked_reasons = []
+    elif base_readiness and runtime_result_json_loaded:
+        status = "runtime_result_injection_to_contract_failed"
+        next_action = (
+            "manual_review_prompt548_runtime_result_injection_failed"
+        )
+        blocked_reasons = injection_failure_reasons
+    else:
+        status = "blocked"
+        next_action = (
+            "manual_review_prompt548_runtime_result_injection_to_contract"
+        )
+        blocked_reasons = base_blocked_reasons
+
+    return {
+        "local_only": True,
+        "source_prompt": "prompt548",
+        "prompt548_runtime_result_injection_to_contract_status": status,
+        "prompt548_runtime_result_injection_to_contract_ready": bool(
+            base_readiness
+        ),
+        "prompt548_runtime_result_injection_to_contract_success": bool(
+            injection_success
+        ),
+        "prompt548_source_prompt547_ready": bool(base_readiness),
+        "prompt548_runtime_result_json_loaded": runtime_result_json_loaded,
+        "prompt548_runtime_result_json_schema_valid": (
+            runtime_result_json_schema_valid
+        ),
+        "prompt548_stdout_artifact_exists": stdout_artifact_exists,
+        "prompt548_stderr_artifact_exists": stderr_artifact_exists,
+        "prompt548_returncode_artifact_exists": returncode_artifact_exists,
+        "prompt548_changed_files_artifact_exists": (
+            changed_files_artifact_exists
+        ),
+        "prompt548_diff_artifact_exists": diff_artifact_exists,
+        "prompt548_result_json_artifact_exists": result_json_artifact_exists,
+        "prompt548_returncode_zero": returncode_zero,
+        "prompt548_subprocess_executed": subprocess_executed,
+        "prompt548_changed_files_allowed": changed_files_allowed,
+        "prompt548_unexpected_changed_files_present": (
+            unexpected_changed_files_present
+        ),
+        "prompt548_unexpected_diff_present": unexpected_diff_present,
+        "prompt548_timeout_occurred": timeout_occurred,
+        "prompt548_execution_error_present": execution_error_present,
+        "prompt548_no_remote_mutation_verified": no_remote_mutation_verified,
+        "prompt548_injection_error_present": injection_error_present,
+        "prompt548_runtime_smoke_artifacts_loaded": (
+            runtime_smoke_artifacts_loaded
+        ),
+        "prompt548_runtime_smoke_result_injected": bool(injection_success),
+        "prompt548_runtime_smoke_contract_fields_ready": bool(
+            injection_success
+        ),
+        "prompt548_ready_for_prompt549_actual_runtime_smoke_artifact_verification": (
+            bool(injection_success)
+        ),
+        "prompt548_full_autonomous_flow_completed": False,
+        "prompt548_completion_claim_allowed": False,
+        "prompt548_prompt378_execution_allowed": False,
+        "prompt548_prompt379_execution_allowed": False,
+        "prompt548_codex_execution_allowed": False,
+        "prompt548_subprocess_execution_allowed": False,
+        "prompt548_git_mutation_allowed": False,
+        "prompt548_remote_mutation_allowed": False,
+        "prompt548_commit_tag_execution_allowed": False,
+        "prompt548_execution_performed_by_prompt548": False,
+        "prompt548_next_action": next_action,
+        "prompt548_blocked_reason": (
+            blocked_reasons[0] if blocked_reasons else None
+        ),
+        "prompt548_blocked_reasons": blocked_reasons,
+    }
+
+
 def _build_prompt485_prompt378_supply_ready_for_prompt379_live_state(
     *,
     run_state_payload: Mapping[str, Any] | None,
@@ -25352,4 +25703,5 @@ __all__ = [
     "_build_prompt545_end_to_end_local_autonomous_real_smoke_state",
     "_build_prompt546_runtime_internal_execution_adapter_connection_state",
     "_build_prompt547_real_runtime_internal_codex_smoke_state",
+    "_build_prompt548_runtime_result_injection_to_contract_state",
 ]
